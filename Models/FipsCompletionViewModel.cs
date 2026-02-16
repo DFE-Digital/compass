@@ -32,6 +32,8 @@ public class ProductCompletionItem
     public List<string> ContactDetails { get; set; } = new();
     public List<string> UserGroupNames { get; set; } = new();
     public List<int> UserGroupCategoryValueIds { get; set; } = new();
+    public List<string> ChannelNames { get; set; } = new();
+    public List<string> TypeNames { get; set; } = new();
     
     // Completion criteria
     public bool HasPhase { get; set; }

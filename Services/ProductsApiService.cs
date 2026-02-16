@@ -2270,6 +2270,18 @@ public class ProductsApiService : IProductsApiService
                 return false;
             }
 
+            // Log category values before update
+            _logger.LogInformation("Product {FipsId} has {Count} category values before update", 
+                fipsId, product.CategoryValues?.Count ?? 0);
+            if (product.CategoryValues != null && product.CategoryValues.Any())
+            {
+                foreach (var cv in product.CategoryValues)
+                {
+                    _logger.LogInformation("  Category Value: Id={Id}, Name={Name}, Type={Type}", 
+                        cv.Id, cv.Name, cv.CategoryType?.Name ?? "null");
+                }
+            }
+
             var updateData = new Dictionary<string, object>
             {
                 ["fips_id"] = product.FipsId!
@@ -2295,8 +2307,28 @@ public class ProductsApiService : IProductsApiService
                 updateData["cmdb_sys_id"] = cmdbSysId.Trim();
             }
 
+            // CRITICAL: Preserve existing category values to prevent them from being wiped out
+            // When doing a PUT request, Strapi will clear category_values if they're not included
+            var currentCategoryValues = new List<int>();
+            if (product.CategoryValues != null && product.CategoryValues.Any())
+            {
+                foreach (var cv in product.CategoryValues)
+                {
+                    currentCategoryValues.Add(cv.Id);
+                }
+                _logger.LogInformation("Preserving {Count} category values for product {FipsId}: {Ids}", 
+                    currentCategoryValues.Count, fipsId, string.Join(", ", currentCategoryValues));
+            }
+            else
+            {
+                _logger.LogWarning("Product {FipsId} has no category values to preserve. This may indicate a data issue.", fipsId);
+            }
+            updateData["category_values"] = currentCategoryValues;
+
             var dataObject = new { data = updateData };
             var json = JsonSerializer.Serialize(dataObject);
+            _logger.LogInformation("Update payload for product {FipsId} includes {Count} category values: {Json}", 
+                fipsId, currentCategoryValues.Count, json);
             var content = new StringContent(json, Encoding.UTF8, "application/json");
 
             var writeApiKey = _configuration["CmsApi:WriteApiKey"];
@@ -2337,6 +2369,215 @@ public class ProductsApiService : IProductsApiService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error updating product basic info for {FipsId}", fipsId);
+            return false;
+        }
+    }
+
+    public async Task<ProductDto?> GetProductByDocumentIdAsync(string documentId)
+    {
+        if (string.IsNullOrEmpty(documentId))
+        {
+            return null;
+        }
+
+        var cacheKey = $"product_docid_{documentId}";
+        
+        // Clear cache to ensure we get fresh data with all fields
+        _cache.Remove(cacheKey);
+
+        try
+        {
+            // Try using filter approach first (more reliable than direct GET with documentId)
+            // Explicitly populate category_values with category_type to ensure CategoryType is populated
+            var queryParams = new[]
+            {
+                "filters[documentId][$eq]=" + Uri.EscapeDataString(documentId),
+                "populate[category_values][populate][category_type][fields][0]=name",
+                "populate[category_values][fields][0]=id",
+                "populate[category_values][fields][1]=name"
+            };
+
+            var queryString = string.Join("&", queryParams);
+            var url = $"products?{queryString}";
+
+            _logger.LogInformation("Fetching product by documentId: {Url}", url);
+            var response = await _httpClient.GetAsync(url);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                _logger.LogError("Failed to fetch product {DocumentId} from CMS. Status: {StatusCode}, URL: {Url}, Error: {Error}", 
+                    documentId, response.StatusCode, url, errorContent);
+                return null;
+            }
+
+            var content = await response.Content.ReadAsStringAsync();
+            _logger.LogInformation("CMS API Response for {DocumentId}: {Content}", documentId, content);
+
+            // Filter query returns collection
+            var apiResponse = JsonSerializer.Deserialize<ApiCollectionResponse<ProductDto>>(content, _jsonOptions);
+            var product = apiResponse?.Data?.FirstOrDefault();
+
+            if (product != null)
+            {
+                // Extract phase from category_values (like GetProductByFipsIdAsync does)
+                if (product.CategoryValues != null)
+                {
+                    var phaseCategory = product.CategoryValues
+                        .FirstOrDefault(cv => cv.CategoryType?.Name?.Equals("Phase", StringComparison.OrdinalIgnoreCase) == true);
+                    
+                    if (phaseCategory != null && string.IsNullOrEmpty(product.Phase))
+                    {
+                        product.Phase = phaseCategory.Name;
+                    }
+                }
+                
+                // Log category values for debugging
+                _logger.LogInformation("Product {DocumentId} loaded with {Count} category values, Phase={Phase}", 
+                    documentId, product.CategoryValues?.Count ?? 0, product.Phase ?? "null");
+                
+                if (product.CategoryValues != null)
+                {
+                    foreach (var cv in product.CategoryValues)
+                    {
+                        _logger.LogInformation("  - Category Value: Id={Id}, Name={Name}, Type={Type}", 
+                            cv.Id, cv.Name, cv.CategoryType?.Name ?? "null");
+                    }
+                }
+                
+                _cache.Set(cacheKey, product, TimeSpan.FromMinutes(1));
+            }
+
+            return product;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching product {DocumentId} from CMS", documentId);
+            return null;
+        }
+    }
+
+    public async Task<Dictionary<string, List<CategoryValueDto>>> GetAllCategoryValuesByTypeAsync()
+    {
+        const string cacheKey = "AllCategoryValuesByType";
+        if (_cache.TryGetValue(cacheKey, out Dictionary<string, List<CategoryValueDto>>? cachedValues))
+        {
+            if (cachedValues != null) return cachedValues;
+        }
+
+        try
+        {
+            var queryParams = new List<string>
+            {
+                "filters[publishedAt][$notNull]=true",
+                "filters[enabled]=true",
+                "fields[0]=id",
+                "fields[1]=name",
+                "fields[2]=sort_order",
+                "populate[category_type][fields][0]=name",
+                "sort=sort_order:asc",
+                "pagination[pageSize]=1000"
+            };
+
+            var queryString = string.Join("&", queryParams);
+            var url = $"category-values?{queryString}";
+
+            var response = await _httpClient.GetAsync(url);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogError("Failed to fetch all category values from CMS. Status: {StatusCode}", response.StatusCode);
+                return new Dictionary<string, List<CategoryValueDto>>();
+            }
+
+            var content = await response.Content.ReadAsStringAsync();
+            var apiResponse = JsonSerializer.Deserialize<ApiCollectionResponse<CategoryValueDto>>(content, _jsonOptions);
+
+            var allValues = apiResponse?.Data ?? new List<CategoryValueDto>();
+
+            // Group by category type name
+            var grouped = allValues
+                .Where(cv => !string.IsNullOrWhiteSpace(cv.CategoryType?.Name))
+                .GroupBy(cv => cv.CategoryType!.Name)
+                .ToDictionary(
+                    g => g.Key,
+                    g => g.OrderBy(cv => cv.SortOrder ?? int.MaxValue)
+                          .ThenBy(cv => cv.Name)
+                          .ToList()
+                );
+
+            _cache.Set(cacheKey, grouped, TimeSpan.FromHours(1));
+            return grouped;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching all category values from CMS");
+            return new Dictionary<string, List<CategoryValueDto>>();
+        }
+    }
+
+    public async Task<bool> UpdateProductCategoryValuesAsync(string fipsId, List<int> categoryValueIds)
+    {
+        try
+        {
+            var product = await GetProductByFipsIdAsync(fipsId);
+            if (product == null || string.IsNullOrEmpty(product.DocumentId))
+            {
+                _logger.LogError("Product {FipsId} not found or missing documentId", fipsId);
+                return false;
+            }
+
+            var updateData = new
+            {
+                data = new
+                {
+                    fips_id = product.FipsId,
+                    category_values = categoryValueIds
+                }
+            };
+
+            var json = JsonSerializer.Serialize(updateData);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+            var writeApiKey = _configuration["CmsApi:WriteApiKey"];
+            var baseUrl = _configuration["CmsApi:BaseUrl"] ?? "http://localhost:1337/api";
+            
+            using var httpClient = new HttpClient();
+            var baseUri = baseUrl.TrimEnd('/');
+            if (!baseUri.EndsWith("/api", StringComparison.OrdinalIgnoreCase))
+            {
+                baseUri += "/api";
+            }
+            httpClient.BaseAddress = new Uri(baseUri + "/");
+            
+            if (!string.IsNullOrEmpty(writeApiKey))
+            {
+                httpClient.DefaultRequestHeaders.Authorization = 
+                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", writeApiKey);
+            }
+
+            var response = await httpClient.PutAsync($"products/{product.DocumentId}", content);
+            
+            if (response.IsSuccessStatusCode)
+            {
+                // Clear cache for this product
+                _cache.Remove($"product_{fipsId}");
+                _cache.Remove("products_list_all");
+                
+                _logger.LogInformation("Successfully updated category values for {FipsId}", fipsId);
+                return true;
+            }
+            else
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                _logger.LogError("Failed to update category values for {FipsId}. Status: {StatusCode}, Error: {Error}", 
+                    fipsId, response.StatusCode, errorContent);
+                return false;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating category values for {FipsId}", fipsId);
             return false;
         }
     }

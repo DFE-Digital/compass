@@ -1,0 +1,422 @@
+@model Compass.Controllers.FipsManagerIndexViewModel
+@{
+    var actionName = ViewContext.RouteData.Values["action"]?.ToString() ?? "Index";
+    var isNewProducts = actionName == "NewProducts";
+    var pageTitle = isNewProducts ? "FIPS Manager - New Products" : "FIPS Manager - Active Products";
+    var pageSubtitle = isNewProducts ? "Managing new products in FIPS" : "Managing active products in FIPS";
+    ViewData["Title"] = pageTitle;
+    
+    // Get unique values for filters
+    var businessAreas = Model.Products.Select(p => p.BusinessArea).Where(ba => !string.IsNullOrWhiteSpace(ba) && ba != "Not assigned").Distinct().OrderBy(ba => ba).ToList();
+    var phases = Model.Products.Select(p => p.PhaseName).Where(p => !string.IsNullOrWhiteSpace(p)).Distinct().OrderBy(p => p).ToList();
+    var channels = Model.Products.SelectMany(p => p.ChannelNames).Where(c => !string.IsNullOrWhiteSpace(c)).Distinct().OrderBy(c => c).ToList();
+    var types = Model.Products.SelectMany(p => p.TypeNames).Where(t => !string.IsNullOrWhiteSpace(t)).Distinct().OrderBy(t => t).ToList();
+    
+    // Helper function to format list with line breaks and "+ x more"
+    string FormatListWithMore(List<string> items, int maxItems = 4)
+    {
+        if (items == null || !items.Any())
+        {
+            return "-";
+        }
+        
+        if (items.Count <= maxItems)
+        {
+            return string.Join("<br>", items);
+        }
+        
+        var visibleItems = items.Take(maxItems);
+        var remainingCount = items.Count - maxItems;
+        return string.Join("<br>", visibleItems) + $"<br><span class=\"text-muted\">+ {remainingCount} more</span>";
+    }
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-12">
+                <h1 class="m-0">FIPS Manager</h1>
+                <p class="text-muted mb-0">
+                    <small>@pageSubtitle</small>
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @Html.Raw(TempData["SuccessMessage"])
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        <!-- Summary Cards -->
+        <div class="card mb-4 shadow-sm">
+            <div class="card-header bg-white">
+                <h3 class="card-title mb-0">Summary statistics</h3>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="card border-left-primary shadow-sm h-100">
+                            <div class="card-body">
+                                <div class="row no-gutters align-items-center">
+                                    <div class="col mr-2">
+                                        <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">@(isNewProducts ? "New Products" : "Active Products")</div>
+                                        <div class="h5 mb-0 font-weight-bold text-gray-800">@Model.TotalProducts</div>
+                                    </div>
+                                    <div class="col-auto">
+                                        <i class="fas fa-cubes fa-2x text-gray-300"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        @{
+                            string completionBorderClass;
+                            string completionTextClass;
+                            string completionIcon;
+                            
+                            if (Model.AverageCompletionPercentage >= 80)
+                            {
+                                completionBorderClass = "border-left-success";
+                                completionTextClass = "text-success";
+                                completionIcon = "fa-check-circle";
+                            }
+                            else if (Model.AverageCompletionPercentage >= 60)
+                            {
+                                completionBorderClass = "border-left-warning";
+                                completionTextClass = "text-warning";
+                                completionIcon = "fa-exclamation-circle";
+                            }
+                            else
+                            {
+                                completionBorderClass = "border-left-danger";
+                                completionTextClass = "text-danger";
+                                completionIcon = "fa-times-circle";
+                            }
+                        }
+                        <div class="card @completionBorderClass shadow-sm h-100">
+                            <div class="card-body">
+                                <div class="row no-gutters align-items-center">
+                                    <div class="col mr-2">
+                                        <div class="text-xs font-weight-bold @completionTextClass text-uppercase mb-1">Average Completion</div>
+                                        <div class="h5 mb-0 font-weight-bold text-gray-800">@Model.AverageCompletionPercentage.ToString("F1")%</div>
+                                    </div>
+                                    <div class="col-auto">
+                                        <i class="fas @completionIcon fa-2x text-gray-300"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Products Table -->
+        <div class="row">
+            <div class="col-lg-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">@(isNewProducts ? "New Products" : "Active Products")</h3>
+                    </div>
+                    <div class="card-body">
+                        <!-- Filter Section -->
+                        <div class="row mb-3">
+                            <div class="col-md-2">
+                                <label for="searchInput">Search</label>
+                                <input type="text" class="form-control" id="searchInput" placeholder="Search products..." />
+                            </div>
+                            <div class="col-md-2">
+                                <label for="businessAreaFilter">Business Area</label>
+                                <select class="form-control" id="businessAreaFilter">
+                                    <option value="">All</option>
+                                    <option value="__not_set__">Not set</option>
+                                    @foreach (var ba in businessAreas)
+                                    {
+                                        <option value="@ba">@ba</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label for="phaseFilter">Phase</label>
+                                <select class="form-control" id="phaseFilter">
+                                    <option value="">All</option>
+                                    <option value="__not_set__">Not set</option>
+                                    @foreach (var phase in phases)
+                                    {
+                                        <option value="@phase">@phase</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label for="channelFilter">Channel</label>
+                                <select class="form-control" id="channelFilter">
+                                    <option value="">All</option>
+                                    <option value="__not_set__">Not set</option>
+                                    @foreach (var channel in channels)
+                                    {
+                                        <option value="@channel">@channel</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label for="typeFilter">Type</label>
+                                <select class="form-control" id="typeFilter">
+                                    <option value="">All</option>
+                                    <option value="__not_set__">Not set</option>
+                                    @foreach (var type in types)
+                                    {
+                                        <option value="@type">@type</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-md-1">
+                                <label>&nbsp;</label>
+                                <button type="button" class="btn btn-primary btn-block" id="applyFilters">Apply</button>
+                            </div>
+                            <div class="col-md-1">
+                                <label>&nbsp;</label>
+                                <button type="button" class="btn btn-secondary btn-block" id="clearFilters">Clear</button>
+                            </div>
+                        </div>
+                        
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0" id="productsTable">
+                                <thead>
+                                    <tr>
+                                        <th>Product</th>
+                                        <th class="text-center">Completion</th>
+                                        <th>Business Area</th>
+                                        <th>Phase</th>
+                                        <th>User Groups</th>
+                                        <th>Channel</th>
+                                        <th>Type</th>
+                                        <th class="text-center">Product URL</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var product in Model.Products)
+                                    {
+                                        var completionClass = product.CompletionPercentage >= 80 ? "success" : 
+                                                              product.CompletionPercentage >= 60 ? "warning" : "danger";
+                                        <tr data-product-title="@product.ProductTitle.ToLower()" 
+                                            data-fips-id="@(product.FipsId?.ToLower() ?? "")"
+                                            data-business-area="@(string.IsNullOrWhiteSpace(product.BusinessArea) || product.BusinessArea == "Not assigned" ? "" : product.BusinessArea)"
+                                            data-phase="@(product.PhaseName ?? "")"
+                                            data-channels="@string.Join(",", product.ChannelNames)"
+                                            data-types="@string.Join(",", product.TypeNames)">
+                                            <td>
+                                                <a href="@Url.Action("ProductDetails", new { documentId = product.DocumentId })" 
+                                                   class="text-primary font-weight-bold">
+                                                    @product.ProductTitle
+                                                </a>
+                                                @if (!string.IsNullOrEmpty(product.FipsId))
+                                                {
+                                                    <br><small class="text-muted">@product.FipsId</small>
+                                                }
+                                            </td>
+                                            <td class="text-center">
+                                                <span class="badge badge-@completionClass badge-lg">
+                                                    @product.CompletionPercentage.ToString("F1")%
+                                                </span>
+                                            </td>
+                                            <td>@(string.IsNullOrWhiteSpace(product.BusinessArea) || product.BusinessArea == "Not assigned" ? "-" : product.BusinessArea)</td>
+                                            <td>@(string.IsNullOrWhiteSpace(product.PhaseName) ? "-" : product.PhaseName)</td>
+                                            <td>@Html.Raw(FormatListWithMore(product.UserGroupNames))</td>
+                                            <td>@(product.ChannelNames.Any() ? string.Join(", ", product.ChannelNames) : "-")</td>
+                                            <td>@Html.Raw(FormatListWithMore(product.TypeNames))</td>
+                                            <td class="text-center">
+                                                @if (product.HasProductUrl)
+                                                {
+                                                    <span class="badge badge-success">
+                                                        <i class="fas fa-check"></i>
+                                                    </span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge badge-secondary">
+                                                        <i class="fas fa-times"></i>
+                                                    </span>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="mt-3">
+                            <p class="text-muted">
+                                Showing <span id="visibleCount">@Model.Products.Count</span> of @Model.Products.Count products
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<script nonce="@Context.Items["Nonce"]">
+    (function () {
+        // Wait for DOM and jQuery to be ready
+        function initFilters() {
+            if (typeof jQuery === 'undefined') {
+                // If jQuery isn't loaded yet, wait a bit and try again
+                setTimeout(initFilters, 100);
+                return;
+            }
+
+            function filterTable() {
+                var searchInput = document.getElementById('searchInput');
+                var businessAreaFilter = document.getElementById('businessAreaFilter');
+                var phaseFilter = document.getElementById('phaseFilter');
+                var channelFilter = document.getElementById('channelFilter');
+                var typeFilter = document.getElementById('typeFilter');
+                var productsTable = document.getElementById('productsTable');
+                var visibleCountEl = document.getElementById('visibleCount');
+
+                var searchTerm = (searchInput ? searchInput.value : '').toString().toLowerCase();
+                var businessAreaFilterValue = (businessAreaFilter ? businessAreaFilter.value : '').toString();
+                var phaseFilterValue = (phaseFilter ? phaseFilter.value : '').toString();
+                var channelFilterValue = (channelFilter ? channelFilter.value : '').toString();
+                var typeFilterValue = (typeFilter ? typeFilter.value : '').toString();
+
+                var visibleCount = 0;
+
+                if (productsTable && productsTable.tBodies && productsTable.tBodies[0]) {
+                    var rows = productsTable.tBodies[0].rows;
+                    for (var i = 0; i < rows.length; i++) {
+                        var row = rows[i];
+                        var productTitle = (row.getAttribute('data-product-title') || '').toString();
+                        var fipsId = (row.getAttribute('data-fips-id') || '').toString();
+                        var businessArea = (row.getAttribute('data-business-area') || '').toString();
+                        var phase = (row.getAttribute('data-phase') || '').toString();
+                        var channels = (row.getAttribute('data-channels') || '').toString().toLowerCase();
+                        var types = (row.getAttribute('data-types') || '').toString().toLowerCase();
+
+                        var matchesSearch = !searchTerm || 
+                                           productTitle.includes(searchTerm) || 
+                                           fipsId.includes(searchTerm);
+
+                        // Business Area filter
+                        var matchesBusinessArea = true;
+                        if (businessAreaFilterValue) {
+                            if (businessAreaFilterValue === '__not_set__') {
+                                matchesBusinessArea = !businessArea || businessArea === '';
+                            } else {
+                                matchesBusinessArea = businessArea === businessAreaFilterValue;
+                            }
+                        }
+
+                        // Phase filter
+                        var matchesPhase = true;
+                        if (phaseFilterValue) {
+                            if (phaseFilterValue === '__not_set__') {
+                                matchesPhase = !phase || phase === '' || phase === '-';
+                            } else {
+                                matchesPhase = phase === phaseFilterValue;
+                            }
+                        }
+
+                        // Channel filter
+                        var matchesChannel = true;
+                        if (channelFilterValue) {
+                            if (channelFilterValue === '__not_set__') {
+                                matchesChannel = !channels || channels === '' || channels === '-';
+                            } else {
+                                matchesChannel = channels.includes(channelFilterValue.toLowerCase());
+                            }
+                        }
+
+                        // Type filter
+                        var matchesType = true;
+                        if (typeFilterValue) {
+                            if (typeFilterValue === '__not_set__') {
+                                matchesType = !types || types === '' || types === '-';
+                            } else {
+                                matchesType = types.includes(typeFilterValue.toLowerCase());
+                            }
+                        }
+
+                        if (matchesSearch && matchesBusinessArea && matchesPhase && matchesChannel && matchesType) {
+                            row.style.display = '';
+                            visibleCount++;
+                        } else {
+                            row.style.display = 'none';
+                        }
+                    }
+                }
+
+                if (visibleCountEl) {
+                    visibleCountEl.textContent = visibleCount;
+                }
+            }
+
+            // Apply filters button
+            var applyFiltersBtn = document.getElementById('applyFilters');
+            if (applyFiltersBtn) {
+                applyFiltersBtn.addEventListener('click', function () {
+                    filterTable();
+                });
+            }
+
+            // Search input - filter dynamically as you type
+            var searchInput = document.getElementById('searchInput');
+            if (searchInput) {
+                // Filter dynamically as user types
+                searchInput.addEventListener('input', function () {
+                    filterTable();
+                });
+                
+                // Allow Enter key in search input to apply filters (redundant now, but kept for consistency)
+                searchInput.addEventListener('keypress', function (e) {
+                    if (e.which === 13 || e.keyCode === 13) { // Enter key
+                        e.preventDefault();
+                        filterTable();
+                    }
+                });
+            }
+
+            // Clear filters button
+            var clearFiltersBtn = document.getElementById('clearFilters');
+            if (clearFiltersBtn) {
+                clearFiltersBtn.addEventListener('click', function () {
+                    var searchInput = document.getElementById('searchInput');
+                    var businessAreaFilter = document.getElementById('businessAreaFilter');
+                    var phaseFilter = document.getElementById('phaseFilter');
+                    var channelFilter = document.getElementById('channelFilter');
+                    var typeFilter = document.getElementById('typeFilter');
+                    
+                    if (searchInput) searchInput.value = '';
+                    if (businessAreaFilter) businessAreaFilter.value = '';
+                    if (phaseFilter) phaseFilter.value = '';
+                    if (channelFilter) channelFilter.value = '';
+                    if (typeFilter) typeFilter.value = '';
+                    
+                    filterTable();
+                });
+            }
+        }
+
+        // Initialize when DOM is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initFilters);
+        } else {
+            initFilters();
+        }
+    })();
+</script>

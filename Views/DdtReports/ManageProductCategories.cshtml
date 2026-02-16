@@ -1,0 +1,189 @@
+@using Compass.Models
+@using System.Linq
+@{
+    ViewData["Title"] = "Manage Product Categories";
+    var product = ViewBag.Product as ProductDto;
+    var allCategoryValuesByType = ViewBag.AllCategoryValuesByType as Dictionary<string, List<CategoryValueDto>> ?? new Dictionary<string, List<CategoryValueDto>>();
+    
+    // Get current category values grouped by type
+    var currentCategoryValuesByType = new Dictionary<string, List<CategoryValueDto>>();
+    if (product?.CategoryValues != null)
+    {
+        currentCategoryValuesByType = product.CategoryValues
+            .Where(cv => cv.CategoryType != null)
+            .GroupBy(cv => cv.CategoryType!.Name)
+            .ToDictionary(
+                g => g.Key,
+                g => g.ToList()
+            );
+    }
+}
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <li class="breadcrumb-item">
+                <a href="/" style="color: #005ea5; text-decoration: none; font-weight: 500;">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a asp-action="Index" style="color: #005ea5; text-decoration: none; font-weight: 500;">DDT Reports</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a asp-action="FipsCompletion" style="color: #005ea5; text-decoration: none; font-weight: 500;">FIPS Completion %</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page" style="color: #0b0c0c; font-weight: 600;">Manage Categories</li>
+        </ol>
+    </nav>
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-12">
+                <h1 class="m-0">Manage Product Categories</h1>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (product != null)
+        {
+            <div class="row">
+                <div class="col-lg-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">Product: @product.Title</h3>
+                        </div>
+                        <div class="card-body">
+                            <p><strong>FIPS ID:</strong> @product.FipsId</p>
+                            <p><strong>Document ID:</strong> @product.DocumentId</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <form asp-action="UpdateProductCategoryValues" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="documentId" value="@product.DocumentId" />
+                
+                <div class="row">
+                    <div class="col-lg-12">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3 class="card-title">Category Values</h3>
+                            </div>
+                            <div class="card-body">
+                                @if (allCategoryValuesByType.Any())
+                                {
+                                    @foreach (var categoryType in allCategoryValuesByType.OrderBy(kvp => kvp.Key))
+                                    {
+                                        var typeName = categoryType.Key;
+                                        var categoryValues = categoryType.Value.OrderBy(cv => cv.Name).ToList();
+                                        var currentValues = currentCategoryValuesByType.ContainsKey(typeName) 
+                                            ? currentCategoryValuesByType[typeName].Select(cv => cv.Id).ToList() 
+                                            : new List<int>();
+
+                                        <div class="category-type-section mb-4 pb-3 border-bottom">
+                                            <h5 class="font-weight-bold mb-3">@typeName</h5>
+                                            
+                                            @if (currentValues.Any())
+                                            {
+                                                <div class="alert alert-info mb-3">
+                                                    <strong>Currently assigned:</strong> 
+                                                    @string.Join(", ", currentCategoryValuesByType[typeName].Select(cv => cv.Name))
+                                                </div>
+                                            }
+                                            else
+                                            {
+                                                <div class="alert alert-warning mb-3">
+                                                    No @typeName values currently assigned.
+                                                </div>
+                                            }
+
+                                            <div class="category-values-list" style="max-height: 300px; overflow-y: auto;">
+                                                @foreach (var categoryValue in categoryValues)
+                                                {
+                                                    var isChecked = currentValues.Contains(categoryValue.Id);
+                                                    var checkboxId = $"cat-{typeName.Replace(" ", "-").ToLower()}-{categoryValue.Id}";
+                                                    
+                                                    <div class="form-check mb-2">
+                                                        <input type="checkbox" 
+                                                               class="form-check-input category-value-checkbox" 
+                                                               id="@checkboxId" 
+                                                               name="categoryValueIds" 
+                                                               value="@categoryValue.Id"
+                                                               @(isChecked ? "checked" : "") />
+                                                        <label class="form-check-label" for="@checkboxId">
+                                                            @categoryValue.Name
+                                                            @if (isChecked)
+                                                            {
+                                                                <span class="badge badge-success badge-sm ml-2">Assigned</span>
+                                                            }
+                                                        </label>
+                                                    </div>
+                                                }
+                                            </div>
+                                        </div>
+                                    }
+                                }
+                                else
+                                {
+                                    <div class="alert alert-warning">
+                                        No category types available.
+                                    </div>
+                                }
+                            </div>
+                            <div class="card-footer">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-save mr-2"></i>Save Changes
+                                </button>
+                                <a asp-action="FipsCompletion" class="btn btn-secondary">
+                                    <i class="fas fa-times mr-2"></i>Cancel
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </form>
+        }
+        else
+        {
+            <div class="alert alert-danger">
+                Product not found.
+            </div>
+        }
+    </div>
+</section>
+
+<style>
+    .category-values-list {
+        max-height: 300px;
+        overflow-y: auto;
+        padding-right: 5px;
+    }
+
+    .category-values-list::-webkit-scrollbar {
+        width: 6px;
+    }
+
+    .category-values-list::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 3px;
+    }
+
+    .category-values-list::-webkit-scrollbar-thumb {
+        background: #888;
+        border-radius: 3px;
+    }
+
+    .category-values-list::-webkit-scrollbar-thumb:hover {
+        background: #555;
+    }
+
+    .badge-sm {
+        font-size: 0.7rem;
+        padding: 0.2rem 0.4rem;
+    }
+</style>

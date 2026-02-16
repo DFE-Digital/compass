@@ -2364,7 +2364,266 @@ public class DdtReportsController : Controller
             return RedirectToAction("FipsCompletion");
         }
     }
+
+    // GET: DdtReports/GetProductCategoryValues
+    [HttpGet]
+    public async Task<IActionResult> GetProductCategoryValues(string documentId)
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(documentId))
+            {
+                return Json(new { success = false, message = "Document ID is required." });
+            }
+
+            var product = await _productsApiService.GetProductByDocumentIdAsync(documentId);
+            if (product == null)
+            {
+                return Json(new { success = false, message = "Product not found." });
+            }
+
+            // Log the product's category values for debugging
+            _logger.LogInformation("Product {DocumentId} has {Count} category values", 
+                documentId, product.CategoryValues?.Count ?? 0);
+            
+            if (product.CategoryValues != null && product.CategoryValues.Any())
+            {
+                foreach (var cv in product.CategoryValues)
+                {
+                    _logger.LogInformation("Category value: Id={Id}, Name={Name}, CategoryType={CategoryType}", 
+                        cv.Id, cv.Name, cv.CategoryType?.Name ?? "null");
+                }
+            }
+
+            // Get all category values grouped by type
+            var allCategoryValuesByType = await _productsApiService.GetAllCategoryValuesByTypeAsync();
+
+            // Get current category values for the product
+            Dictionary<string, List<dynamic>> currentCategoryValues;
+            if (product.CategoryValues != null && product.CategoryValues.Any())
+            {
+                var grouped = product.CategoryValues
+                    .Where(cv => cv.CategoryType != null && !string.IsNullOrWhiteSpace(cv.CategoryType.Name))
+                    .GroupBy(cv => cv.CategoryType!.Name)
+                    .ToDictionary(
+                        g => g.Key,
+                        g => g.Select(cv => new { Id = cv.Id, Name = cv.Name ?? string.Empty }).ToList<dynamic>()
+                    );
+                currentCategoryValues = grouped.ToDictionary(
+                    kvp => kvp.Key,
+                    kvp => kvp.Value.Cast<dynamic>().ToList()
+                );
+                
+                _logger.LogInformation("Grouped category values into {Count} types: {Types}", 
+                    currentCategoryValues.Count, string.Join(", ", currentCategoryValues.Keys));
+            }
+            else
+            {
+                currentCategoryValues = new Dictionary<string, List<dynamic>>();
+                _logger.LogInformation("No category values found for product {DocumentId}", documentId);
+            }
+
+            // Convert allCategoryValuesByType to a serializable format
+            var allCategoryValuesByTypeSerializable = allCategoryValuesByType.ToDictionary(
+                kvp => kvp.Key,
+                kvp => kvp.Value.Select(cv => new { Id = cv.Id, Name = cv.Name }).ToList()
+            );
+
+            return Json(new
+            {
+                success = true,
+                productTitle = product.Title,
+                fipsId = product.FipsId,
+                currentCategoryValues = currentCategoryValues,
+                allCategoryValuesByType = allCategoryValuesByTypeSerializable
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting product category values for {DocumentId}", documentId);
+            return Json(new { success = false, message = "An error occurred while loading category values." });
+        }
+    }
+
+    // POST: DdtReports/UpdateProductCategoryValues
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdateProductCategoryValues(string documentId, List<int> categoryValueIds, string? returnUrl = null)
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(documentId))
+            {
+                const string errorMessage = "Document ID is required.";
+                if (IsAjaxRequest())
+                {
+                    return Json(new { success = false, message = errorMessage });
+                }
+                TempData["ErrorMessage"] = errorMessage;
+                return RedirectToAction("FipsCompletion");
+            }
+
+            var product = await _productsApiService.GetProductByDocumentIdAsync(documentId);
+            if (product == null)
+            {
+                const string errorMessage = "Product not found.";
+                if (IsAjaxRequest())
+                {
+                    return Json(new { success = false, message = errorMessage });
+                }
+                TempData["ErrorMessage"] = errorMessage;
+                return RedirectToAction("FipsCompletion");
+            }
+
+            var productTitle = product.Title;
+            var fipsId = product.FipsId ?? documentId;
+
+            var success = await _productsApiService.UpdateProductCategoryValuesAsync(fipsId, categoryValueIds ?? new List<int>());
+            
+            if (success)
+            {
+                var updatedProduct = await _productsApiService.GetProductByDocumentIdAsync(documentId);
+                var completionItem = updatedProduct != null ? CreateProductCompletionItem(updatedProduct) : null;
+                var successMessage = $"<strong>{productTitle}</strong> - Category values updated successfully.";
+
+                if (IsAjaxRequest())
+                {
+                    return Json(new { success = true, message = successMessage, product = completionItem });
+                }
+
+                TempData["SuccessMessage"] = successMessage;
+            }
+            else
+            {
+                const string errorMessage = "Failed to update product category values. Please try again.";
+                if (IsAjaxRequest())
+                {
+                    return Json(new { success = false, message = errorMessage });
+                }
+
+                TempData["ErrorMessage"] = errorMessage;
+            }
+            
+            if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
+            {
+                return Redirect(returnUrl);
+            }
+            
+            // Redirect back to the manage categories page
+            return RedirectToAction("ManageProductCategories", new { documentId = documentId });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating product category values for {DocumentId}", documentId);
+            const string errorMessage = "An error occurred while updating the product category values.";
+            if (IsAjaxRequest())
+            {
+                return Json(new { success = false, message = errorMessage });
+            }
+
+            TempData["ErrorMessage"] = errorMessage;
+            return RedirectToAction("FipsCompletion");
+        }
+    }
     
+    // GET: DdtReports/ManageProductCategories
+    [HttpGet]
+    public async Task<IActionResult> ManageProductCategories(string documentId, string? fipsId = null)
+    {
+        try
+        {
+            ProductDto? product = null;
+
+            _logger.LogInformation("ManageProductCategories called with DocumentId: '{DocumentId}', FipsId: '{FipsId}'", 
+                documentId ?? "null", fipsId ?? "null");
+
+            // Try to get product by DocumentId first (if provided and not empty)
+            if (!string.IsNullOrWhiteSpace(documentId))
+            {
+                _logger.LogInformation("Attempting to get product by DocumentId: '{DocumentId}'", documentId);
+                product = await _productsApiService.GetProductByDocumentIdAsync(documentId);
+                if (product != null)
+                {
+                    _logger.LogInformation("Product found by DocumentId: '{DocumentId}', Title: '{Title}', FipsId: '{FipsId}'", 
+                        documentId, product.Title, product.FipsId ?? "null");
+                }
+                else
+                {
+                    _logger.LogWarning("Product not found by DocumentId: '{DocumentId}'", documentId);
+                }
+            }
+
+            // If not found and fipsId is provided, try to get by FipsId
+            if (product == null && !string.IsNullOrWhiteSpace(fipsId))
+            {
+                _logger.LogInformation("Attempting to get product by FipsId: '{FipsId}'", fipsId);
+                product = await _productsApiService.GetProductByFipsIdAsync(fipsId);
+                if (product != null)
+                {
+                    _logger.LogInformation("Product found by FipsId: '{FipsId}', Title: '{Title}', DocumentId: '{DocumentId}'", 
+                        fipsId, product.Title, product.DocumentId ?? "null");
+                }
+                else
+                {
+                    _logger.LogWarning("Product not found by FipsId: '{FipsId}'", fipsId);
+                }
+            }
+
+            // If still not found, try getting all products and finding by FipsId (fallback)
+            if (product == null && !string.IsNullOrWhiteSpace(fipsId))
+            {
+                _logger.LogInformation("Attempting fallback: getting all products and searching by FipsId: '{FipsId}'", fipsId);
+                var allProducts = await _productsApiService.GetProductsAsync(null);
+                product = allProducts?.FirstOrDefault(p => 
+                    !string.IsNullOrEmpty(p.FipsId) && 
+                    p.FipsId.Equals(fipsId, StringComparison.OrdinalIgnoreCase));
+                
+                if (product != null)
+                {
+                    _logger.LogInformation("Product found via fallback search by FipsId: '{FipsId}', Title: '{Title}', DocumentId: '{DocumentId}'", 
+                        fipsId, product.Title, product.DocumentId ?? "null");
+                }
+                else
+                {
+                    _logger.LogWarning("Product not found via fallback search by FipsId: '{FipsId}'", fipsId);
+                }
+            }
+
+            // If still not found, return error
+            if (product == null)
+            {
+                _logger.LogError("Product not found after all lookup attempts. DocumentId: '{DocumentId}', FipsId: '{FipsId}'", 
+                    documentId ?? "null", fipsId ?? "null");
+                TempData["ErrorMessage"] = "Product not found.";
+                return RedirectToAction("FipsCompletion");
+            }
+
+            // Ensure we have a valid DocumentId for the product
+            if (string.IsNullOrEmpty(product.DocumentId))
+            {
+                _logger.LogWarning("Product found but has no DocumentId. FipsId: '{FipsId}', Title: '{Title}'", 
+                    product.FipsId ?? "null", product.Title);
+                TempData["ErrorMessage"] = "Product does not have a valid Document ID. Please contact support.";
+                return RedirectToAction("FipsCompletion");
+            }
+
+            // Get all category values grouped by type
+            var allCategoryValuesByType = await _productsApiService.GetAllCategoryValuesByTypeAsync();
+
+            ViewBag.Product = product;
+            ViewBag.AllCategoryValuesByType = allCategoryValuesByType;
+
+            return View();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading product categories for DocumentId: '{DocumentId}', FipsId: '{FipsId}'", 
+                documentId ?? "null", fipsId ?? "null");
+            TempData["ErrorMessage"] = "An error occurred while loading the product categories.";
+            return RedirectToAction("FipsCompletion");
+        }
+    }
+
     // GET: DdtReports/DesignAndRunBoard
     public async Task<IActionResult> DesignAndRunBoard()
     {
