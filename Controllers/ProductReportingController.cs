@@ -636,6 +636,7 @@ public class ProductReportingController : Controller
         var submission = await _context.CommissionSubmissions
             .Include(cs => cs.Commission)
             .Include(cs => cs.MetricValues)
+                .ThenInclude(cmv => cmv.PerformanceMetric)
             .FirstOrDefaultAsync(cs => cs.Id == id);
 
         if (submission == null)
@@ -647,6 +648,61 @@ public class ProductReportingController : Controller
         {
             TempData["ErrorMessage"] = "This submission has already been submitted.";
             return RedirectToAction("Commission", new { commissionId = submission.CommissionId });
+        }
+
+        // Get the current product to determine which metrics are applicable
+        var products = await _productsApiService.GetProductsAsync();
+        var product = products?.FirstOrDefault(p => p.DocumentId == submission.ProductDocumentId || p.FipsId == submission.FipsId);
+        
+        if (product == null)
+        {
+            TempData["ErrorMessage"] = "Product not found. Please contact support.";
+            return RedirectToAction("Commission", new { commissionId = submission.CommissionId });
+        }
+
+        // Get applicable metrics based on current product category/type
+        var applicableMetrics = await GetApplicableMetricsForProductAsync(product, submission.CommissionId);
+        
+        // Get existing metric values
+        var existingMetricValues = submission.MetricValues
+            .Where(mv => mv.PerformanceMetric != null && applicableMetrics.Any(m => m.Id == mv.PerformanceMetric.Id))
+            .ToList();
+
+        // Validate that all applicable required metrics are complete
+        var incompleteMetrics = new List<string>();
+        foreach (var metric in applicableMetrics)
+        {
+            var metricValue = existingMetricValues.FirstOrDefault(mv => mv.PerformanceMetricId == metric.Id);
+            
+            // Check if metric is required
+            bool isRequired = false;
+            try
+            {
+                var rules = JsonSerializer.Deserialize<ValidationRules>(metric.ValidationRules);
+                isRequired = rules?.Required == true && rules?.AllowNull != true;
+            }
+            catch
+            {
+                // If we can't parse rules, assume not required
+            }
+
+            if (isRequired)
+            {
+                // Metric is required - check if it's complete
+                if (metricValue == null || !metricValue.IsComplete)
+                {
+                    incompleteMetrics.Add(metric.Title);
+                }
+            }
+        }
+
+        if (incompleteMetrics.Any())
+        {
+            TempData["ErrorMessage"] = $"Please complete all required metrics before submitting. Missing: {string.Join(", ", incompleteMetrics)}";
+            return RedirectToAction("SubmitCommission", new { 
+                documentId = submission.ProductDocumentId, 
+                commissionId = submission.CommissionId 
+            });
         }
 
         var now = DateTime.UtcNow;
@@ -809,10 +865,18 @@ public class ProductReportingController : Controller
         await _context.SaveChangesAsync();
 
         // Reload metric values with performance metrics
-        var metricValues = await _context.CommissionMetricValues
+        var allMetricValues = await _context.CommissionMetricValues
             .Include(cmv => cmv.PerformanceMetric)
             .Where(cmv => cmv.CommissionSubmissionId == submission.Id)
             .ToListAsync();
+
+        // Filter metric values to only include those that are currently applicable
+        // This ensures that if the product category changed, we don't show metrics that are no longer applicable
+        var applicableMetricIds = metrics.Select(m => m.Id).ToHashSet();
+        var metricValues = allMetricValues
+            .Where(mv => mv.PerformanceMetric != null && applicableMetricIds.Contains(mv.PerformanceMetric.Id))
+            .OrderBy(mv => mv.PerformanceMetric?.Identifier)
+            .ToList();
 
         // Check if commission is past due
         var isPastDue = now > commission.DueDate;
@@ -826,7 +890,7 @@ public class ProductReportingController : Controller
         ViewBag.IsReadOnly = isReadOnly;
         ViewBag.IsPastDue = isPastDue;
         
-        return View("~/Views/ProductReporting/Commission/Submit.cshtml", metricValues.OrderBy(mv => mv.PerformanceMetric?.Identifier).ToList());
+        return View("~/Views/ProductReporting/Commission/Submit.cshtml", metricValues);
     }
 
     // POST: ProductReporting/SaveCommissionMetricValue
@@ -2276,6 +2340,87 @@ public class ProductReportingController : Controller
             IsPeriodExcluded = periodExcluded,
             HasBusinessAreaOverride = businessAreaReporting
         };
+    }
+
+    /// <summary>
+    /// Gets all applicable performance metrics for a product based on its phase and type categories.
+    /// This method filters metrics by phase, type, and conditional dependencies.
+    /// </summary>
+    private async Task<List<PerformanceMetric>> GetApplicableMetricsForProductAsync(ProductDto product, int commissionId)
+    {
+        // Get commission to determine the reporting period
+        var commission = await _context.Commissions.FindAsync(commissionId);
+        if (commission == null)
+        {
+            return new List<PerformanceMetric>();
+        }
+
+        // Determine the reporting period (use commission end date)
+        var year = commission.EndDate.Year;
+        var month = commission.EndDate.Month;
+
+        // Get all active performance metrics that are valid for this reporting period
+        var allMetrics = await _context.PerformanceMetrics
+            .Where(m => !m.IsDisabled && 
+                   (m.ValidFromYear < year || 
+                   (m.ValidFromYear == year && m.ValidFromMonth <= month)))
+            .OrderBy(m => m.Identifier)
+            .ToListAsync();
+
+        // Filter by phase
+        var phaseFilteredMetrics = allMetrics.Where(m => 
+        {
+            if (string.IsNullOrEmpty(m.ApplicablePhases))
+                return true;
+            if (string.IsNullOrEmpty(product.Phase))
+                return true;
+            var applicablePhases = m.ApplicablePhases.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                .Select(p => p.Trim())
+                .ToList();
+            return applicablePhases.Contains(product.Phase, StringComparer.OrdinalIgnoreCase);
+        }).ToList();
+
+        // Filter by type
+        var productTypes = new List<string>();
+        if (product.CategoryValues != null)
+        {
+            productTypes = product.CategoryValues
+                .Where(cv => cv.CategoryType?.Name?.Equals("Type", StringComparison.OrdinalIgnoreCase) == true)
+                .Select(cv => cv.Name)
+                .ToList();
+        }
+
+        var typeFilteredMetrics = phaseFilteredMetrics.Where(m => 
+        {
+            if (string.IsNullOrEmpty(m.ApplicableTypes))
+                return true;
+            if (!productTypes.Any())
+                return true;
+            var applicableTypes = m.ApplicableTypes.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                .Select(t => t.Trim())
+                .ToList();
+            return productTypes.Any(pt => applicableTypes.Contains(pt, StringComparer.OrdinalIgnoreCase));
+        }).ToList();
+
+        // Get existing metric values to check conditional dependencies
+        var submission = await _context.CommissionSubmissions
+            .Include(cs => cs.MetricValues)
+            .FirstOrDefaultAsync(cs => cs.CommissionId == commissionId && 
+                                      (cs.ProductDocumentId == product.DocumentId || cs.FipsId == product.FipsId));
+
+        var existingMetricValues = submission?.MetricValues?.ToList() ?? new List<CommissionMetricValue>();
+
+        // Filter by conditional dependencies
+        var metrics = typeFilteredMetrics.Where(m => 
+        {
+            if (!m.ConditionalOnMetricId.HasValue)
+                return true;
+            var parentMetricValue = existingMetricValues
+                .FirstOrDefault(mv => mv.PerformanceMetricId == m.ConditionalOnMetricId.Value);
+            return parentMetricValue != null && !string.IsNullOrWhiteSpace(parentMetricValue.Value);
+        }).ToList();
+
+        return metrics;
     }
 
     private (bool IsValid, string? ErrorMessage) ValidateMetricValue(string value, PerformanceMetric metric)
