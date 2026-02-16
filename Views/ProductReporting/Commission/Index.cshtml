@@ -20,15 +20,26 @@
 
 @{
     ViewBag.BrandText = "Performance reporting";
-    // Only show nav links when a commission is selected
+    var currentAction = ViewContext.RouteData.Values["Action"]?.ToString() ?? "";
+    var defaultCommissionId = selectedCommission?.Id ?? activeCommissions.FirstOrDefault()?.Id;
+    
+    // Show nav links - always show Guidance, others only when commission is selected
     if (selectedCommission != null)
     {
-        var currentAction = ViewContext.RouteData.Values["Action"]?.ToString() ?? "";
         ViewBag.NavLinks = new[]
         {
             new { Text = "My services", Action = "Commission", Controller = "ProductReporting", Url = Url.Action("Commission", "ProductReporting", new { view = "mine", commissionId = selectedCommission.Id }), IsButton = false, IsActive = currentAction == "Commission" && (ViewContext.RouteData.Values["view"]?.ToString() == "mine") },
             new { Text = "All services", Action = "Commission", Controller = "ProductReporting", Url = Url.Action("Commission", "ProductReporting", new { view = "all", commissionId = selectedCommission.Id }), IsButton = false, IsActive = currentAction == "Commission" && (ViewContext.RouteData.Values["view"]?.ToString() == "all" || string.IsNullOrEmpty(ViewContext.RouteData.Values["view"]?.ToString())) },
-            new { Text = "Business areas", Action = "BusinessAreasIndex", Controller = "ProductReporting", Url = Url.Action("BusinessAreasIndex", "ProductReporting", new { commissionId = selectedCommission.Id }), IsButton = false, IsActive = currentAction == "BusinessAreasIndex" || currentAction == "BusinessAreasDetails" }
+            new { Text = "Business areas", Action = "BusinessAreasIndex", Controller = "ProductReporting", Url = Url.Action("BusinessAreasIndex", "ProductReporting", new { commissionId = selectedCommission.Id }), IsButton = false, IsActive = currentAction == "BusinessAreasIndex" || currentAction == "BusinessAreasDetails" },
+            new { Text = "Guidance on reporting", Action = "GuidanceOnReporting", Controller = "ProductReporting", Url = Url.Action("GuidanceOnReporting", "ProductReporting", new { commissionId = defaultCommissionId }), IsButton = false, IsActive = currentAction == "GuidanceOnReporting" }
+        };
+    }
+    else if (defaultCommissionId.HasValue)
+    {
+        // Show only Guidance link when no commission selected but commissions are available
+        ViewBag.NavLinks = new[]
+        {
+            new { Text = "Guidance on reporting", Action = "GuidanceOnReporting", Controller = "ProductReporting", Url = Url.Action("GuidanceOnReporting", "ProductReporting", new { commissionId = defaultCommissionId }), IsButton = false, IsActive = currentAction == "GuidanceOnReporting" }
         };
     }
     else
