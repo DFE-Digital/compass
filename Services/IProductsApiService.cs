@@ -10,6 +10,7 @@ public interface IProductsApiService
     Task<List<ProductDto>> GetProductsByReportingUserAsync(string? userEmail);
     Task<List<ProductDto>> GetAllProductsAsync(string? userEmail = null);
     Task<ProductDto?> GetProductByFipsIdAsync(string fipsId);
+    Task<ProductDto?> GetProductByDocumentIdAsync(string documentId);
     Task<List<string>> GetPhasesAsync();
     Task<List<string>> GetTypesAsync();
     Task<List<string>> GetBusinessAreasAsync();
@@ -29,5 +30,7 @@ public interface IProductsApiService
     Task<bool> UpdateProductServiceOwnerAsync(string fipsId, int entraUserId);
     Task<bool> UpdateProductRoleAsync(string fipsId, string roleFieldName, int entraUserId);
     Task<bool> UpdateProductBasicInfoAsync(string fipsId, string? title, string? shortDescription, string? longDescription, string? cmdbSysId);
+    Task<Dictionary<string, List<CategoryValueDto>>> GetAllCategoryValuesByTypeAsync();
+    Task<bool> UpdateProductCategoryValuesAsync(string fipsId, List<int> categoryValueIds);
 }
 

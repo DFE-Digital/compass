@@ -1,4 +1,5 @@
 @model List<Compass.Models.CommissionMetricValue>
+@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
 @{
     ViewData["Title"] = "Submit commission";
     var product = ViewBag.Product as Compass.Models.ProductDto;
@@ -6,6 +7,27 @@
     var submission = ViewBag.Submission as Compass.Models.CommissionSubmission;
     var isReadOnly = ViewBag.IsReadOnly as bool? ?? false;
     var isPastDue = ViewBag.IsPastDue as bool? ?? false;
+    var fipsBaseUrl = Configuration["fipsProduct:baseUrl"] ?? "https://fips.education.gov.uk";
+    
+    // Check if product has Type categories
+    var productTypes = product?.CategoryValues?
+        .Where(cv => cv.CategoryType?.Name?.Equals("Type", StringComparison.OrdinalIgnoreCase) == true)
+        .ToList() ?? new List<Compass.Models.CategoryValueDto>();
+    var hasNoTypes = !productTypes.Any();
+    
+    // Build FIPS product URL
+    string? fipsProductUrl = null;
+    if (product != null)
+    {
+        if (!string.IsNullOrEmpty(product.DocumentId))
+        {
+            fipsProductUrl = $"{fipsBaseUrl.TrimEnd('/')}/product/{product.DocumentId}";
+        }
+        else if (!string.IsNullOrEmpty(product.FipsId))
+        {
+            fipsProductUrl = $"{fipsBaseUrl.TrimEnd('/')}/product/{product.FipsId}";
+        }
+    }
 }
 
 @{
@@ -61,6 +83,19 @@
     }
     .text-gray-300 {
         color: #dddfeb !important;
+    }
+    .no-types-warning a {
+        color: #1d70b8 !important;
+        text-decoration: underline !important;
+    }
+    .no-types-warning a:hover {
+        color: #003078 !important;
+        text-decoration-thickness: 2px !important;
+    }
+    .no-types-warning a:focus {
+        outline: 3px solid #ffdd00 !important;
+        outline-offset: 2px !important;
+        color: #003078 !important;
     }
 </style>
 
@@ -197,8 +232,34 @@
                             </div>
                         </div>
                     </div>
-                    <div class="card-body table-responsive p-0">
-                        <table class="table table-hover">
+                    @if (hasNoTypes)
+                    {
+                        <div class="card-body">
+                            <div class="no-types-warning" style="border: 4px solid #ffdd00; background-color: #fffdf2; padding: 1.25rem 1.5rem; border-radius: 0.375rem;">
+                                <h5 style="margin-top: 0; margin-bottom: 0.75rem; font-weight: 600; color: #0b0c0c;">
+                                    <i class="fas fa-exclamation-triangle" style="color: #f47738;"></i> No product types assigned
+                                </h5>
+                                <p class="mb-2" style="color: #0b0c0c;">This product does not have any types associated with it.</p>
+                                <p class="mb-2" style="color: #0b0c0c;">
+                                    @if (!string.IsNullOrEmpty(fipsProductUrl))
+                                    {
+                                        <text><a href="@fipsProductUrl" target="_blank" rel="noopener noreferrer">Visit the FIPS entry</a>, select "Propose a change" and request the categories to be updated.</text>
+                                    }
+                                    else
+                                    {
+                                        <text>Visit the FIPS entry, select "Propose a change" and request the categories to be updated.</text>
+                                    }
+                                </p>
+                                <p class="mb-0" style="color: #0b0c0c;">
+                                    The types are available <a href="https://fips.education.gov.uk/categories/type" target="_blank" rel="noopener noreferrer">here</a>.
+                                </p>
+                            </div>
+                        </div>
+                    }
+                    @if (!hasNoTypes)
+                    {
+                        <div class="card-body table-responsive p-0">
+                            <table class="table table-hover">
                             <thead>
                                 <tr>
                                     <th>Metric</th>
@@ -261,8 +322,9 @@
                                 }
                             </tbody>
                         </table>
-                    </div>
-                    @if (submission?.Status == CommissionSubmissionStatus.Submitted || submission?.Status == CommissionSubmissionStatus.Late)
+                        </div>
+                    }
+                    @if (!hasNoTypes && (submission?.Status == CommissionSubmissionStatus.Submitted || submission?.Status == CommissionSubmissionStatus.Late))
                     {
                         <div class="card-body border-top">
                             <h5 class="mb-2">Comments or notes</h5>
@@ -326,7 +388,7 @@
                             </a>
                         </div>
                     }
-                    else if (!isReadOnly && Model.All(m => m.IsComplete))
+                    else if (!hasNoTypes && !isReadOnly && Model.All(m => m.IsComplete))
                     {
                         <div class="card-footer">
                             <form asp-action="SubmitCommissionSubmission" method="post" class="submit-commission-form">
@@ -360,13 +422,13 @@
                             <a asp-controller="ProductReporting" asp-action="Commission" asp-route-commissionId="@commission?.Id" class="btn btn-default">
                                 Back to commission
                             </a>
-                            @if (!isReadOnly)
+                            @if (!hasNoTypes && !isReadOnly)
                             {
                                 <span class="text-muted ml-3">
                                     Complete all metrics to enable submission
                                 </span>
                             }
-                            else
+                            else if (!hasNoTypes && isReadOnly)
                             {
                                 <span class="text-muted ml-3">
                                     <i class="fas fa-lock"></i> This submission is locked because the commission due date has passed.
