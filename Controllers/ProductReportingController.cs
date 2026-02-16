@@ -1475,6 +1475,49 @@ public class ProductReportingController : Controller
 
         return View("~/Views/ProductReporting/Commission/BusinessAreasDetails.cshtml", viewModel);
     }
+
+    // GET: ProductReporting/GuidanceOnReporting
+    public async Task<IActionResult> GuidanceOnReporting(int? commissionId = null)
+    {
+        // Get active commissions
+        var activeCommissions = await _context.Commissions
+            .Where(c => c.IsActive)
+            .OrderByDescending(c => c.StartDate)
+            .ToListAsync();
+
+        if (!activeCommissions.Any())
+        {
+            ViewBag.Message = "No active commissions are currently available.";
+            ViewBag.ActiveCommissions = activeCommissions;
+            ViewBag.SelectedCommission = null;
+            return View("~/Views/ProductReporting/Commission/GuidanceOnReporting.cshtml", new List<PerformanceMetric>());
+        }
+
+        // Use selected commission or default to most recent
+        var selectedCommission = commissionId.HasValue
+            ? activeCommissions.FirstOrDefault(c => c.Id == commissionId.Value)
+            : activeCommissions.FirstOrDefault();
+
+        if (selectedCommission == null)
+        {
+            TempData["ErrorMessage"] = "Selected commission not found.";
+            ViewBag.ActiveCommissions = activeCommissions;
+            ViewBag.SelectedCommission = null;
+            return View("~/Views/ProductReporting/Commission/GuidanceOnReporting.cshtml", new List<PerformanceMetric>());
+        }
+
+        // Get all performance metrics (excluding disabled ones)
+        var metrics = await _context.PerformanceMetrics
+            .Where(m => !m.IsDisabled)
+            .OrderBy(m => m.Identifier)
+            .ToListAsync();
+
+        ViewBag.ActiveCommissions = activeCommissions;
+        ViewBag.SelectedCommission = selectedCommission;
+        ViewBag.Metrics = metrics;
+
+        return View("~/Views/ProductReporting/Commission/GuidanceOnReporting.cshtml", metrics);
+    }
     
     // GET: ProductReporting/ReportOtherProduct
     public async Task<IActionResult> ReportOtherProduct()
