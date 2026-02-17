@@ -167,36 +167,36 @@
                     </div>
                 </div>
 
-                <!-- Full Completion Count -->
-                <div class="card @(Model.FullCompletionCount == Model.Products.Count ? "card-success" : "card-info")" id="fullCompletionCard">
+                <!-- Products With Contact Count -->
+                <div class="card @(Model.ProductsWithContactCount == Model.Products.Count ? "card-success" : Model.ProductsWithContactCount > 0 ? "card-warning" : "card-danger")" id="productsWithContactCard">
                     <div class="card-header">
                         <h3 class="card-title">
-                            Products with 100% completion
+                            At least 1 contact
                         </h3>
                     </div>
                     <div class="card-body text-center">
-                        <h2 class="mb-0" style="font-size: 3rem; font-weight: bold;" id="fullCompletionValue">@Model.FullCompletionCount</h2>
+                        <h2 class="mb-0" style="font-size: 3rem; font-weight: bold;" id="productsWithContactValue">@Model.ProductsWithContactCount</h2>
                         <p class="text-muted mb-0 mt-2">
                             @{
-                                var fullPercentage = Model.Products.Any() ? (Model.FullCompletionCount / (double)Model.Products.Count) * 100 : 0;
-                                var fullColorClass = fullPercentage >= 80 ? "success" : fullPercentage >= 50 ? "warning" : "info";
+                                var contactPercentage = Model.Products.Any() ? (Model.ProductsWithContactCount / (double)Model.Products.Count) * 100 : 0;
+                                var contactColorClass = contactPercentage >= 80 ? "success" : contactPercentage >= 50 ? "warning" : "danger";
                             }
-                            @if (Model.FullCompletionCount == 0)
+                            @if (Model.ProductsWithContactCount == 0)
                             {
-                                <span id="fullCompletionText">No products fully complete yet (@fullPercentage.ToString("F1")%)</span>
+                                <span id="productsWithContactText">No products have contacts (@contactPercentage.ToString("F1")%)</span>
                             }
-                            else if (Model.FullCompletionCount == 1)
+                            else if (Model.ProductsWithContactCount == 1)
                             {
-                                <span id="fullCompletionText">product is fully complete (@fullPercentage.ToString("F1")%)</span>
+                                <span id="productsWithContactText">product has at least 1 contact (@contactPercentage.ToString("F1")%)</span>
                             }
                             else
                             {
-                                <span id="fullCompletionText">products are fully complete (@fullPercentage.ToString("F1")%)</span>
+                                <span id="productsWithContactText">products have at least 1 contact (@contactPercentage.ToString("F1")%)</span>
                             }
                         </p>
                         <div class="progress progress-lg mt-3">
-                            <div class="progress-bar bg-@fullColorClass" 
-                                 style="width: @fullPercentage%" id="fullCompletionProgress"></div>
+                            <div class="progress-bar bg-@contactColorClass" 
+                                 style="width: @contactPercentage%" id="productsWithContactProgress"></div>
                         </div>
                     </div>
                 </div>
@@ -1704,7 +1704,7 @@
                 var total = $rows.length;
                 var completionSum = 0;
                 var zeroCount = 0;
-                var fullCount = 0;
+                var productsWithContactCount = 0;
                 var phaseCount = 0;
                 var businessAreaCount = 0;
                 var urlCount = 0;
@@ -1713,9 +1713,10 @@
                 $rows.each(function() {
                     var $row = $(this);
                     var completion = parseFloat($row.attr('data-completion')) || 0;
+                    var contactsCount = parseInt($row.attr('data-contacts-count')) || 0;
                     completionSum += completion;
                     if (Math.abs(completion) < 0.0001) zeroCount++;
-                    if (Math.abs(completion - 100) < 0.0001) fullCount++;
+                    if (contactsCount > 0) productsWithContactCount++;
                     if (isTruthy($row.attr('data-has-phase'))) phaseCount++;
                     if (isTruthy($row.attr('data-has-business-area'))) businessAreaCount++;
                     if (isTruthy($row.attr('data-has-product-url'))) urlCount++;
@@ -1731,7 +1732,7 @@
                 var average = total ? completionSum / total : 0;
                 updateAverageCard(total, average);
                 updateZeroCard(total, zeroCount);
-                updateFullCard(total, fullCount);
+                updateProductsWithContactCard(total, productsWithContactCount);
                 updateCompletionCard('#completedPhaseCard', '#completedPhaseValue', '#completedPhaseText', '#completedPhaseProgress', phaseCount, total);
                 updateCompletionCard('#completedBusinessAreaCard', '#completedBusinessAreaValue', '#completedBusinessAreaText', '#completedBusinessAreaProgress', businessAreaCount, total);
                 updateCompletionCard('#completedUrlCard', '#completedUrlValue', '#completedUrlText', '#completedUrlProgress', urlCount, total);
@@ -1768,24 +1769,24 @@
                 $('#zeroCompletionProgress').removeClass('bg-success bg-danger').addClass(barClass).css('width', zeroPercentage + '%');
             }
 
-            function updateFullCard(total, fullCount) {
-                var fullPercentage = total ? (fullCount / total) * 100 : 0;
-                var cardClass = (fullCount === total && total > 0) ? 'card-success' : 'card-info';
-                var fullColorClass = fullPercentage >= 80 ? 'success' : fullPercentage >= 50 ? 'warning' : 'info';
+            function updateProductsWithContactCard(total, productsWithContactCount) {
+                var contactPercentage = total ? (productsWithContactCount / total) * 100 : 0;
+                var cardClass = (productsWithContactCount === total && total > 0) ? 'card-success' : (productsWithContactCount > 0 ? 'card-warning' : 'card-danger');
+                var contactColorClass = contactPercentage >= 80 ? 'success' : contactPercentage >= 50 ? 'warning' : 'danger';
                 var text;
 
-                if (fullCount === 0) {
-                    text = 'No products fully complete yet';
-                } else if (fullCount === 1) {
-                    text = 'product is fully complete';
+                if (productsWithContactCount === 0) {
+                    text = 'No products have contacts';
+                } else if (productsWithContactCount === 1) {
+                    text = 'product has at least 1 contact';
                 } else {
-                    text = 'products are fully complete';
+                    text = 'products have at least 1 contact';
                 }
 
-                $('#fullCompletionCard').removeClass('card-success card-info').addClass(cardClass);
-                $('#fullCompletionValue').text(fullCount);
-                $('#fullCompletionText').text(text + ' (' + fullPercentage.toFixed(1) + '%)');
-                $('#fullCompletionProgress').removeClass('bg-success bg-warning bg-info').addClass('bg-' + fullColorClass).css('width', fullPercentage + '%');
+                $('#productsWithContactCard').removeClass('card-success card-warning card-danger').addClass(cardClass);
+                $('#productsWithContactValue').text(productsWithContactCount);
+                $('#productsWithContactText').text(text + ' (' + contactPercentage.toFixed(1) + '%)');
+                $('#productsWithContactProgress').removeClass('bg-success bg-warning bg-danger').addClass('bg-' + contactColorClass).css('width', contactPercentage + '%');
             }
 
             function updateCompletionCard(cardSelector, valueSelector, textSelector, progressSelector, completedCount, total) {

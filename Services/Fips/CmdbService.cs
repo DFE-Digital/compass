@@ -42,7 +42,7 @@ public class CmdbService : ICmdbService
             var queryParams = new Dictionary<string, string>
             {
                 ["sysparm_query"] = "active=true",
-                ["sysparm_fields"] = "name,sys_id,parent.name,description,u_delivery_manager,u_information_asset_owner,u_senior_responsible_owner",
+                ["sysparm_fields"] = "name,sys_id,parent.name,description,owned_by,delivery_manager,u_product_manager,u_information_asset_owner,u_senior_responsible_owner",
                 ["sysparm_limit"] = "5000"
             };
 
@@ -124,7 +124,7 @@ public class CmdbService : ICmdbService
             var queryParams = new Dictionary<string, string>
             {
                 ["sysparm_query"] = "active=true",
-                ["sysparm_fields"] = "name,sys_id,parent.name,description,u_delivery_manager,u_information_asset_owner,u_senior_responsible_owner",
+                ["sysparm_fields"] = "name,sys_id,parent.name,description,owned_by,delivery_manager,u_product_manager,u_information_asset_owner,u_senior_responsible_owner",
                 ["sysparm_limit"] = limit.ToString(),
                 ["sysparm_offset"] = offset.ToString()
             };
@@ -198,22 +198,40 @@ public class CmdbService : ICmdbService
 
         try
         {
+            // Extract user IDs from the service offering
+            // Note: CMDB returns these as objects with .value or as direct strings
+            var serviceOwnerId = ExtractUserId(entry.OwnedBy);
+            var productManagerId = ExtractUserId(entry.ProductManagerId);
+            var deliveryManagerId = ExtractUserId(entry.DeliveryManagerId);
+            var assetOwnerId = ExtractUserId(entry.InformationAssetOwnerId);
+            var seniorOwnerId = ExtractUserId(entry.SeniorResponsibleOwnerId);
+
             // Fetch all user details in parallel
             var tasks = new List<Task<(string role, CmdbUser? user)>>();
 
-            if (!string.IsNullOrEmpty(entry.DeliveryManagerId))
+            if (!string.IsNullOrEmpty(serviceOwnerId))
             {
-                tasks.Add(FetchUserWithRole("DeliveryManager", entry.DeliveryManagerId));
+                tasks.Add(FetchUserWithRole("ServiceOwner", serviceOwnerId));
             }
 
-            if (!string.IsNullOrEmpty(entry.InformationAssetOwnerId))
+            if (!string.IsNullOrEmpty(productManagerId))
             {
-                tasks.Add(FetchUserWithRole("InformationAssetOwner", entry.InformationAssetOwnerId));
+                tasks.Add(FetchUserWithRole("ProductManager", productManagerId));
             }
 
-            if (!string.IsNullOrEmpty(entry.SeniorResponsibleOwnerId))
+            if (!string.IsNullOrEmpty(deliveryManagerId))
             {
-                tasks.Add(FetchUserWithRole("SeniorResponsibleOwner", entry.SeniorResponsibleOwnerId));
+                tasks.Add(FetchUserWithRole("DeliveryManager", deliveryManagerId));
+            }
+
+            if (!string.IsNullOrEmpty(assetOwnerId))
+            {
+                tasks.Add(FetchUserWithRole("InformationAssetOwner", assetOwnerId));
+            }
+
+            if (!string.IsNullOrEmpty(seniorOwnerId))
+            {
+                tasks.Add(FetchUserWithRole("SeniorResponsibleOwner", seniorOwnerId));
             }
 
             var results = await Task.WhenAll(tasks);
@@ -224,6 +242,12 @@ public class CmdbService : ICmdbService
                 {
                     switch (role)
                     {
+                        case "ServiceOwner":
+                            users.ServiceOwner = user;
+                            break;
+                        case "ProductManager":
+                            users.ProductManager = user;
+                            break;
                         case "DeliveryManager":
                             users.DeliveryManager = user;
                             break;
@@ -245,9 +269,127 @@ public class CmdbService : ICmdbService
         return users;
     }
 
+    /// <summary>
+    /// Extract user ID from CMDB field which can be a string or an object with .value property
+    /// </summary>
+    private string? ExtractUserId(object? field)
+    {
+        if (field == null) return null;
+        
+        if (field is string str)
+        {
+            return string.IsNullOrWhiteSpace(str) ? null : str;
+        }
+        
+        // Try to extract from JsonElement if it's a JSON object
+        if (field is System.Text.Json.JsonElement jsonElement)
+        {
+            if (jsonElement.ValueKind == System.Text.Json.JsonValueKind.String)
+            {
+                var strValue = jsonElement.GetString();
+                return string.IsNullOrWhiteSpace(strValue) ? null : strValue;
+            }
+            
+            if (jsonElement.ValueKind == System.Text.Json.JsonValueKind.Object)
+            {
+                if (jsonElement.TryGetProperty("value", out var valueElement))
+                {
+                    if (valueElement.ValueKind == System.Text.Json.JsonValueKind.String)
+                    {
+                        var strValue = valueElement.GetString();
+                        return string.IsNullOrWhiteSpace(strValue) ? null : strValue;
+                    }
+                }
+            }
+        }
+        
+        // Try to serialize and deserialize as a dynamic object to extract value
+        try
+        {
+            var json = JsonSerializer.Serialize(field);
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            
+            if (root.ValueKind == System.Text.Json.JsonValueKind.String)
+            {
+                var strValue = root.GetString();
+                return string.IsNullOrWhiteSpace(strValue) ? null : strValue;
+            }
+            
+            if (root.ValueKind == System.Text.Json.JsonValueKind.Object)
+            {
+                if (root.TryGetProperty("value", out var valueElement))
+                {
+                    var strValue = valueElement.GetString();
+                    return string.IsNullOrWhiteSpace(strValue) ? null : strValue;
+                }
+            }
+        }
+        catch
+        {
+            // If serialization fails, return null
+        }
+        
+        return null;
+    }
+
     private async Task<(string role, CmdbUser? user)> FetchUserWithRole(string role, string userId)
     {
         var user = await GetUserDetailsAsync(userId);
         return (role, user);
+    }
+
+    public async Task<CmdbEntry?> GetServiceOfferingBySysIdAsync(string sysId)
+    {
+        if (string.IsNullOrEmpty(sysId))
+            return null;
+
+        try
+        {
+            // ServiceNow API format: GET /api/now/table/{table_name}/{sys_id}
+            // The endpoint is already configured as service_offering (e.g., https://dfe.service-now.com/api/now/table/service_offering)
+            // We just need to append /{sys_id} to get the specific record
+            var baseAddress = _config.Cmdb.Endpoint.TrimEnd('/');
+            var requestUri = $"{baseAddress}/{sysId}";
+            
+            var queryParams = new Dictionary<string, string>
+            {
+                ["sysparm_fields"] = "name,sys_id,parent.name,description,owned_by,delivery_manager,u_product_manager,u_information_asset_owner,u_senior_responsible_owner"
+            };
+
+            var query = string.Join("&", queryParams.Select(kvp => $"{kvp.Key}={Uri.EscapeDataString(kvp.Value)}"));
+            requestUri = $"{requestUri}?{query}";
+            
+            // Create a temporary HttpClient for this request since we're using a different base URI
+            using var tempClient = new HttpClient();
+            var credentials = Convert.ToBase64String(
+                Encoding.UTF8.GetBytes($"{_config.Cmdb.Username}:{_config.Cmdb.Password}"));
+            tempClient.DefaultRequestHeaders.Authorization = 
+                new AuthenticationHeaderValue("Basic", credentials);
+            tempClient.DefaultRequestHeaders.Accept.Add(
+                new MediaTypeWithQualityHeaderValue("application/json"));
+            
+            var response = await tempClient.GetAsync(requestUri);
+            
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                _logger.LogWarning("CMDB API Error for sys_id {SysId}: Status {StatusCode}, Content: {Content}", 
+                    sysId, response.StatusCode, errorContent);
+                return null;
+            }
+            
+            response.EnsureSuccessStatusCode();
+
+            var content = await response.Content.ReadAsStringAsync();
+            var result = JsonSerializer.Deserialize<ServiceNowResponse<CmdbEntry>>(content);
+
+            return result?.Result;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching CMDB entry by sys_id {SysId}", sysId);
+            return null;
+        }
     }
 }

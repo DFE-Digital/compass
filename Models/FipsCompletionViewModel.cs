@@ -6,7 +6,7 @@ public class FipsCompletionViewModel
     public double AverageCompletionPercentage { get; set; }
     public List<FipsBusinessAreaCompletion> BusinessAreaCompletions { get; set; } = new();
     public int ZeroCompletionCount { get; set; }
-    public int FullCompletionCount { get; set; }
+    public int ProductsWithContactCount { get; set; }
     public int CompletedPhaseCount { get; set; }
     public int CompletedBusinessAreaCount { get; set; }
     public int CompletedUrlCount { get; set; }
@@ -16,6 +16,7 @@ public class ProductCompletionItem
 {
     public string FipsId { get; set; } = string.Empty;
     public string DocumentId { get; set; } = string.Empty;
+    public string? CmdbSysId { get; set; }
     public string ProductTitle { get; set; } = string.Empty;
     public string BusinessArea { get; set; } = string.Empty;
     public string? PhaseName { get; set; }
@@ -29,6 +30,7 @@ public class ProductCompletionItem
     public List<string> InformationAssetOwnerContacts { get; set; } = new();
     public List<string> DeliveryManagerContacts { get; set; } = new();
     public List<string> ServiceOwnerContacts { get; set; } = new();
+    public List<string> ProductManagerContacts { get; set; } = new();
     public List<string> ContactDetails { get; set; } = new();
     public List<string> UserGroupNames { get; set; } = new();
     public List<int> UserGroupCategoryValueIds { get; set; } = new();

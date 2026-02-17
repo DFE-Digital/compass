@@ -684,6 +684,7 @@ public class ProductsApiService : IProductsApiService
                     "fields[4]=product_url",
                     "fields[5]=state",
                     "fields[6]=publishedAt",
+                    "fields[7]=cmdb_sys_id",
                     "populate[category_values][fields][0]=name",
                     "populate[category_values][populate][category_type][fields][0]=name",
                     "populate[product_contacts][fields][0]=id",
@@ -2389,12 +2390,53 @@ public class ProductsApiService : IProductsApiService
         {
             // Try using filter approach first (more reliable than direct GET with documentId)
             // Explicitly populate category_values with category_type to ensure CategoryType is populated
+            // Also populate all role fields to display in the UI
             var queryParams = new[]
             {
                 "filters[documentId][$eq]=" + Uri.EscapeDataString(documentId),
                 "populate[category_values][populate][category_type][fields][0]=name",
                 "populate[category_values][fields][0]=id",
-                "populate[category_values][fields][1]=name"
+                "populate[category_values][fields][1]=name",
+                "populate[service_owner][fields][0]=id",
+                "populate[service_owner][fields][1]=emailAddress",
+                "populate[service_owner][fields][2]=displayName",
+                "populate[service_owner][fields][3]=firstName",
+                "populate[service_owner][fields][4]=lastName",
+                "populate[product_manager][fields][0]=id",
+                "populate[product_manager][fields][1]=emailAddress",
+                "populate[product_manager][fields][2]=displayName",
+                "populate[product_manager][fields][3]=firstName",
+                "populate[product_manager][fields][4]=lastName",
+                "populate[delivery_manager][fields][0]=id",
+                "populate[delivery_manager][fields][1]=emailAddress",
+                "populate[delivery_manager][fields][2]=displayName",
+                "populate[delivery_manager][fields][3]=firstName",
+                "populate[delivery_manager][fields][4]=lastName",
+                "populate[Information_asset_owner][fields][0]=id",
+                "populate[Information_asset_owner][fields][1]=emailAddress",
+                "populate[Information_asset_owner][fields][2]=displayName",
+                "populate[Information_asset_owner][fields][3]=firstName",
+                "populate[Information_asset_owner][fields][4]=lastName",
+                "populate[senior_responsible_officer][fields][0]=id",
+                "populate[senior_responsible_officer][fields][1]=emailAddress",
+                "populate[senior_responsible_officer][fields][2]=displayName",
+                "populate[senior_responsible_officer][fields][3]=firstName",
+                "populate[senior_responsible_officer][fields][4]=lastName",
+                "populate[reporting_user][fields][0]=id",
+                "populate[reporting_user][fields][1]=emailAddress",
+                "populate[reporting_user][fields][2]=displayName",
+                "populate[reporting_user][fields][3]=firstName",
+                "populate[reporting_user][fields][4]=lastName",
+                "populate[service_designs][fields][0]=id",
+                "populate[service_designs][fields][1]=emailAddress",
+                "populate[service_designs][fields][2]=displayName",
+                "populate[service_designs][fields][3]=firstName",
+                "populate[service_designs][fields][4]=lastName",
+                "populate[user_researchers][fields][0]=id",
+                "populate[user_researchers][fields][1]=emailAddress",
+                "populate[user_researchers][fields][2]=displayName",
+                "populate[user_researchers][fields][3]=firstName",
+                "populate[user_researchers][fields][4]=lastName"
             };
 
             var queryString = string.Join("&", queryParams);

@@ -1,0 +1,495 @@
+@model Compass.Models.ServiceOwnerSroReportViewModel
+@{
+    ViewData["Title"] = "Service Owner & SRO Report";
+}
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <li class="breadcrumb-item">
+                <a href="/" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a href="@Url.Action("Index", "Reports")" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Reports</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page" style="color: #0b0c0c; font-weight: 600;">Service Owner & SRO Report</li>
+        </ol>
+    </nav>
+}
+
+@functions {
+    string GetRagBadgeClass(string? ragStatus)
+    {
+        if (string.IsNullOrWhiteSpace(ragStatus))
+            return "badge badge-secondary";
+        
+        var normalized = ragStatus.Trim()
+            .Replace(" / ", "-")
+            .Replace("/", "-")
+            .Replace(" /", "-")
+            .Replace("/ ", "-");
+        
+        return normalized switch
+        {
+            "Green" => "badge badge-success",
+            "Amber-Green" => "badge badge-warning",
+            "Amber" => "badge badge-warning",
+            "Amber-Red" => "badge badge-danger",
+            "Red" => "badge badge-danger",
+            _ => "badge badge-secondary"
+        };
+    }
+}
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["SuccessMessage"]
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        <!-- User Switcher (Admin only) -->
+        @if (Model.IsAdmin && Model.AllUsers.Any())
+        {
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h3 class="card-title">View report for</h3>
+                </div>
+                <div class="card-body">
+                    <form method="get" action="@Url.Action("ServiceOwnerSroReport", "Reports")" class="form-inline">
+                        <div class="form-group mr-2">
+                            <label for="userId" class="mr-2">Select user:</label>
+                            <select name="userId" id="userId" class="form-control" onchange="this.form.submit()">
+                                <option value="">-- Select user --</option>
+                                @foreach (var user in Model.AllUsers)
+                                {
+                                    <option value="@user.Id" selected="@(Model.SelectedUser?.Id == user.Id)">@user.Name (@user.Email)</option>
+                                }
+                            </select>
+                        </div>
+                        <button type="submit" class="btn btn-primary">View report</button>
+                    </form>
+                </div>
+            </div>
+        }
+
+        <!-- Header -->
+        <div class="row mb-3">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            Service Owner & SRO Report
+                            @if (Model.SelectedUser != null)
+                            {
+                                <span class="text-muted">- @Model.SelectedUser.Name</span>
+                            }
+                        </h3>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted">
+                            This report shows all products and projects where you are assigned as a Service Owner or Senior Responsible Officer (SRO), 
+                            along with summary information about performance reporting, project reporting, and service assessment data.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Summary Cards -->
+        <div class="row mb-3">
+            <div class="col-md-3">
+                <div class="card card-primary">
+                    <div class="card-body">
+                        <h5 class="card-title">Products</h5>
+                        <h2 class="mb-0">@Model.TotalProducts</h2>
+                        <small class="text-muted">
+                            @Model.ProductsAsServiceOwner as Service Owner<br />
+                            @Model.ProductsAsSro as SRO
+                        </small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card card-info">
+                    <div class="card-body">
+                        <h5 class="card-title">Projects</h5>
+                        <h2 class="mb-0">@Model.TotalProjects</h2>
+                        <small class="text-muted">
+                            @Model.ProjectsAsServiceOwner as Service Owner<br />
+                            @Model.ProjectsAsSro as SRO
+                        </small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card card-success">
+                    <div class="card-body">
+                        <h5 class="card-title">Performance Reporting</h5>
+                        <h2 class="mb-0">@Model.PerformanceReporting.CompletionPercentage.ToString("F1")%</h2>
+                        <small class="text-muted">
+                            @Model.PerformanceReporting.ProductsUpToDate up to date<br />
+                            @Model.PerformanceReporting.ProductsOverdue overdue
+                        </small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card card-warning">
+                    <div class="card-body">
+                        <h5 class="card-title">Service Assessments</h5>
+                        <h2 class="mb-0">@Model.ServiceAssessment.TotalAssessments</h2>
+                        <small class="text-muted">
+                            @Model.ServiceAssessment.AssessmentsPassed passed<br />
+                            @Model.ServiceAssessment.OpenActions open actions
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Performance Reporting Summary -->
+        <div class="row mb-3">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Performance reporting summary</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-3">
+                                <strong>Total products requiring reporting:</strong> @Model.PerformanceReporting.TotalProductsRequiringReporting
+                            </div>
+                            <div class="col-md-3">
+                                <strong>Products with submissions:</strong> @Model.PerformanceReporting.ProductsWithSubmissions
+                            </div>
+                            <div class="col-md-3">
+                                <strong>Products overdue:</strong> 
+                                <span class="@(Model.PerformanceReporting.ProductsOverdue > 0 ? "text-danger" : "text-success")">
+                                    @Model.PerformanceReporting.ProductsOverdue
+                                </span>
+                            </div>
+                            <div class="col-md-3">
+                                <strong>Completion rate:</strong> @Model.PerformanceReporting.CompletionPercentage.ToString("F1")%
+                            </div>
+                        </div>
+                        @if (Model.PerformanceReporting.LastSubmissionDate.HasValue)
+                        {
+                            <div class="mt-2">
+                                <small class="text-muted">Last submission: @Model.PerformanceReporting.LastSubmissionDate.Value.ToString("dd MMM yyyy")</small>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Project Reporting Summary -->
+        <div class="row mb-3">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Project reporting summary</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="row mb-3">
+                            <div class="col-md-3">
+                                <strong>Total milestones:</strong> @Model.ProjectReporting.TotalMilestones<br />
+                                <small class="text-danger">Overdue: @Model.ProjectReporting.OverdueMilestones</small>
+                            </div>
+                            <div class="col-md-3">
+                                <strong>Total issues:</strong> @Model.ProjectReporting.TotalIssues<br />
+                                <small class="text-danger">High priority: @Model.ProjectReporting.HighPriorityIssues</small>
+                            </div>
+                            <div class="col-md-3">
+                                <strong>Total risks:</strong> @Model.ProjectReporting.TotalRisks<br />
+                                <small class="text-danger">High risks: @Model.ProjectReporting.HighRisks</small>
+                            </div>
+                            <div class="col-md-3">
+                                <strong>Total actions:</strong> @Model.ProjectReporting.TotalActions<br />
+                                <small class="text-warning">Open: @Model.ProjectReporting.OpenActions</small>
+                            </div>
+                        </div>
+                        @if (Model.ProjectReporting.ProjectsByRagStatus.Any())
+                        {
+                            <div class="mt-3">
+                                <strong>Projects by RAG status:</strong>
+                                <div class="mt-2">
+                                    @foreach (var rag in Model.ProjectReporting.ProjectsByRagStatus)
+                                    {
+                                        <span class="@GetRagBadgeClass(rag.Key) mr-2">@rag.Key: @rag.Value</span>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Service Assessment Summary -->
+        @if (Model.ServiceAssessment.TotalAssessments > 0)
+        {
+            <div class="row mb-3">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">Service assessment summary</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="row mb-3">
+                                <div class="col-md-3">
+                                    <strong>Total assessments:</strong> @Model.ServiceAssessment.TotalAssessments
+                                </div>
+                                <div class="col-md-3">
+                                    <strong>Passed:</strong> <span class="text-success">@Model.ServiceAssessment.AssessmentsPassed</span>
+                                </div>
+                                <div class="col-md-3">
+                                    <strong>Failed:</strong> <span class="text-danger">@Model.ServiceAssessment.AssessmentsFailed</span>
+                                </div>
+                                <div class="col-md-3">
+                                    <strong>In progress:</strong> <span class="text-warning">@Model.ServiceAssessment.AssessmentsInProgress</span>
+                                </div>
+                            </div>
+                            <div class="row mb-3">
+                                <div class="col-md-4">
+                                    <strong>Total actions:</strong> @Model.ServiceAssessment.TotalActions<br />
+                                    <small class="text-warning">Open: @Model.ServiceAssessment.OpenActions</small><br />
+                                    <small class="text-danger">Overdue: @Model.ServiceAssessment.OverdueActions</small>
+                                </div>
+                                @if (Model.ServiceAssessment.AssessmentsByType.Any())
+                                {
+                                    <div class="col-md-4">
+                                        <strong>By type:</strong>
+                                        <ul class="list-unstyled mt-1">
+                                            @foreach (var type in Model.ServiceAssessment.AssessmentsByType)
+                                            {
+                                                <li><small>@type.Key: @type.Value</small></li>
+                                            }
+                                        </ul>
+                                    </div>
+                                }
+                                @if (Model.ServiceAssessment.AssessmentsByPhase.Any())
+                                {
+                                    <div class="col-md-4">
+                                        <strong>By phase:</strong>
+                                        <ul class="list-unstyled mt-1">
+                                            @foreach (var phase in Model.ServiceAssessment.AssessmentsByPhase)
+                                            {
+                                                <li><small>@phase.Key: @phase.Value</small></li>
+                                            }
+                                        </ul>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <!-- Products Section -->
+        <div class="row mb-3">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Products (@Model.TotalProducts)</h3>
+                    </div>
+                    <div class="card-body">
+                        @if (Model.Products.Any())
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-bordered table-striped table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>FIPS ID</th>
+                                            <th>Title</th>
+                                            <th>Phase</th>
+                                            <th>State</th>
+                                            <th>Roles</th>
+                                            <th>Performance reporting</th>
+                                            <th>Product URL</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var product in Model.Products.OrderBy(p => p.Title))
+                                        {
+                                            <tr>
+                                                <td>@product.FipsId</td>
+                                                <td>
+                                                    <strong>@product.Title</strong>
+                                                    @if (!string.IsNullOrEmpty(product.DocumentId))
+                                                    {
+                                                        <br /><small class="text-muted">ID: @product.DocumentId</small>
+                                                    }
+                                                </td>
+                                                <td>@(product.Phase ?? "N/A")</td>
+                                                <td>
+                                                    <span class="badge badge-@(product.State == "Active" ? "success" : "secondary")">
+                                                        @product.State
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    @foreach (var role in product.Roles)
+                                                    {
+                                                        <span class="badge badge-info mr-1">@role</span>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    @if (product.HasPerformanceReporting)
+                                                    {
+                                                        if (product.IsPerformanceReportingOverdue)
+                                                        {
+                                                            <span class="badge badge-danger">Overdue</span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="badge badge-success">Up to date</span>
+                                                        }
+                                                        @if (product.LastPerformanceSubmission.HasValue)
+                                                        {
+                                                            <br /><small class="text-muted">Last: @product.LastPerformanceSubmission.Value.ToString("dd MMM yyyy")</small>
+                                                        }
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge badge-secondary">Not configured</span>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    @if (!string.IsNullOrEmpty(product.ProductUrl))
+                                                    {
+                                                        <a href="@product.ProductUrl" target="_blank" rel="noopener noreferrer">
+                                                            <i class="fas fa-external-link-alt"></i> View
+                                                        </a>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">N/A</span>
+                                                    }
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                        else
+                        {
+                            <p class="text-muted">No products found where you are assigned as Service Owner or SRO.</p>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Projects Section -->
+        <div class="row mb-3">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Projects (@Model.TotalProjects)</h3>
+                    </div>
+                    <div class="card-body">
+                        @if (Model.Projects.Any())
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-bordered table-striped table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>Project code</th>
+                                            <th>Title</th>
+                                            <th>RAG status</th>
+                                            <th>Phase</th>
+                                            <th>Status</th>
+                                            <th>Roles</th>
+                                            <th>Milestones</th>
+                                            <th>Issues</th>
+                                            <th>Risks</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var project in Model.Projects.OrderBy(p => p.Title))
+                                        {
+                                            <tr>
+                                                <td>@project.ProjectCode</td>
+                                                <td>
+                                                    <strong>@project.Title</strong>
+                                                    <br />
+                                                    <a href="@Url.Action("Details", "Project", new { id = project.Id })" class="btn btn-sm btn-link p-0">
+                                                        View details
+                                                    </a>
+                                                </td>
+                                                <td>
+                                                    @if (!string.IsNullOrEmpty(project.RagStatus))
+                                                    {
+                                                        <span class="@GetRagBadgeClass(project.RagStatus)">@project.RagStatus</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge badge-secondary">N/A</span>
+                                                    }
+                                                </td>
+                                                <td>@(project.Phase ?? "N/A")</td>
+                                                <td>@(project.Status ?? "N/A")</td>
+                                                <td>
+                                                    @foreach (var role in project.Roles)
+                                                    {
+                                                        <span class="badge badge-info mr-1">@role</span>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    @project.MilestoneCount
+                                                    @if (project.OverdueMilestoneCount > 0)
+                                                    {
+                                                        <br /><small class="text-danger">@project.OverdueMilestoneCount overdue</small>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    @project.IssueCount
+                                                    @if (project.HighPriorityIssueCount > 0)
+                                                    {
+                                                        <br /><small class="text-danger">@project.HighPriorityIssueCount high priority</small>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    @project.RiskCount
+                                                    @if (project.HighRiskCount > 0)
+                                                    {
+                                                        <br /><small class="text-danger">@project.HighRiskCount high</small>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    @project.ActionCount
+                                                    @if (project.OpenActionCount > 0)
+                                                    {
+                                                        <br /><small class="text-warning">@project.OpenActionCount open</small>
+                                                    }
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                        else
+                        {
+                            <p class="text-muted">No projects found where you are assigned as Service Owner or SRO.</p>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
