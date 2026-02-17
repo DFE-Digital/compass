@@ -31,4 +31,9 @@ public interface ICmdbService
     /// Get users associated with a service offering
     /// </summary>
     Task<CmdbServiceUsers> GetServiceOfferingUsersAsync(CmdbEntry entry);
+    
+    /// <summary>
+    /// Get a service offering by sys_id
+    /// </summary>
+    Task<CmdbEntry?> GetServiceOfferingBySysIdAsync(string sysId);
 }

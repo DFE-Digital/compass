@@ -570,6 +570,9 @@ public class DdtReportsController : Controller
             var completionItems = products
                 .OrderBy(p => p.Title)
                 .Where(p => !string.IsNullOrEmpty(p.FipsId))
+                .Where(p => string.IsNullOrEmpty(p.Phase) || 
+                           (!p.Phase.Equals("Decommissioned", StringComparison.OrdinalIgnoreCase) &&
+                            !p.Phase.Equals("Decommissioning", StringComparison.OrdinalIgnoreCase)))
                 .Select(CreateProductCompletionItem)
                 .ToList();
 
@@ -589,7 +592,7 @@ public class DdtReportsController : Controller
                 .ToList();
 
             var zeroCompletionCount = completionItems.Count(p => Math.Abs(p.CompletionPercentage) < 0.0001);
-            var fullCompletionCount = completionItems.Count(p => Math.Abs(p.CompletionPercentage - 100) < 0.0001);
+            var productsWithContactCount = completionItems.Count(p => p.ContactsCount > 0);
 
             var completedPhaseCount = completionItems.Count(p => p.HasPhase);
             var completedBusinessAreaCount = completionItems.Count(p => p.HasBusinessArea);
@@ -605,7 +608,7 @@ public class DdtReportsController : Controller
                 AverageCompletionPercentage = averageCompletion,
                 BusinessAreaCompletions = businessAreaCompletions,
                 ZeroCompletionCount = zeroCompletionCount,
-                FullCompletionCount = fullCompletionCount,
+                ProductsWithContactCount = productsWithContactCount,
                 CompletedPhaseCount = completedPhaseCount,
                 CompletedBusinessAreaCount = completedBusinessAreaCount,
                 CompletedUrlCount = completedProductUrlCount
@@ -656,7 +659,7 @@ public class DdtReportsController : Controller
                 .ToList();
 
             var zeroCompletionCount = completionItems.Count(p => Math.Abs(p.CompletionPercentage) < 0.0001);
-            var fullCompletionCount = completionItems.Count(p => Math.Abs(p.CompletionPercentage - 100) < 0.0001);
+            var productsWithContactCount = completionItems.Count(p => p.ContactsCount > 0);
 
             var completedPhaseCount = completionItems.Count(p => p.HasPhase);
             var completedBusinessAreaCount = completionItems.Count(p => p.HasBusinessArea);
@@ -672,7 +675,7 @@ public class DdtReportsController : Controller
                 AverageCompletionPercentage = averageCompletion,
                 BusinessAreaCompletions = businessAreaCompletions,
                 ZeroCompletionCount = zeroCompletionCount,
-                FullCompletionCount = fullCompletionCount,
+                ProductsWithContactCount = productsWithContactCount,
                 CompletedPhaseCount = completedPhaseCount,
                 CompletedBusinessAreaCount = completedBusinessAreaCount,
                 CompletedUrlCount = completedProductUrlCount
@@ -1044,6 +1047,9 @@ public class DdtReportsController : Controller
             var completionItems = products
                 .OrderBy(p => p.Title)
                 .Where(p => includeAll || !string.IsNullOrEmpty(p.FipsId))
+                .Where(p => includeAll || string.IsNullOrEmpty(p.Phase) || 
+                           (!p.Phase.Equals("Decommissioned", StringComparison.OrdinalIgnoreCase) &&
+                            !p.Phase.Equals("Decommissioning", StringComparison.OrdinalIgnoreCase)))
                 .Select(CreateProductCompletionItem)
                 .ToList();
 
@@ -1145,6 +1151,9 @@ public class DdtReportsController : Controller
             var completionItems = products
                 .OrderBy(p => p.Title)
                 .Where(p => !string.IsNullOrEmpty(p.FipsId))
+                .Where(p => string.IsNullOrEmpty(p.Phase) || 
+                           (!p.Phase.Equals("Decommissioned", StringComparison.OrdinalIgnoreCase) &&
+                            !p.Phase.Equals("Decommissioning", StringComparison.OrdinalIgnoreCase)))
                 .Select(CreateProductCompletionItem)
                 .ToList();
 
@@ -1720,7 +1729,7 @@ public class DdtReportsController : Controller
                 .ToList();
 
             var zeroCompletionCount = completionItems.Count(p => Math.Abs(p.CompletionPercentage) < 0.0001);
-            var fullCompletionCount = completionItems.Count(p => Math.Abs(p.CompletionPercentage - 100) < 0.0001);
+            var productsWithContactCount = completionItems.Count(p => p.ContactsCount > 0);
 
             var completedPhaseCount = completionItems.Count(p => p.HasPhase);
             var completedBusinessAreaCount = completionItems.Count(p => p.HasBusinessArea);
@@ -1736,7 +1745,7 @@ public class DdtReportsController : Controller
                 AverageCompletionPercentage = averageCompletion,
                 BusinessAreaCompletions = businessAreaCompletions,
                 ZeroCompletionCount = zeroCompletionCount,
-                FullCompletionCount = fullCompletionCount,
+                ProductsWithContactCount = productsWithContactCount,
                 CompletedPhaseCount = completedPhaseCount,
                 CompletedBusinessAreaCount = completedBusinessAreaCount,
                 CompletedUrlCount = completedProductUrlCount
@@ -3150,9 +3159,22 @@ public class DdtReportsController : Controller
                 if (!string.IsNullOrWhiteSpace(displayName))
                 {
                     AddContactIfMissing(serviceOwnerContacts, displayName);
+                    // Add to contactDetails for counting purposes, avoiding duplicates
+                    // Check if this displayName already exists in contactDetails (which may be in "Name - Role" format)
+                    var alreadyExists = contactDetails.Any(cd => 
+                        cd.Equals(displayName, StringComparison.OrdinalIgnoreCase) ||
+                        cd.StartsWith(displayName + " -", StringComparison.OrdinalIgnoreCase));
+                    
+                    if (!alreadyExists)
+                    {
+                        contactDetails.Add(displayName);
+                    }
                 }
             }
         }
+
+        // Recalculate contactsCount to include all contacts (ProductContacts + ServiceOwners)
+        contactsCount = contactDetails.Count;
 
         var userGroupsCount = userGroupNames.Count;
 

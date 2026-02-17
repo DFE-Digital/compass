@@ -2,7 +2,10 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Compass.Services;
 using Compass.Models;
+using Compass.Services.Fips;
+using Compass.Models.Fips;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Caching.Memory;
 using System.Text;
 using System.Text.Json;
 
@@ -14,15 +17,53 @@ public class FipsManagerController : Controller
     private readonly ILogger<FipsManagerController> _logger;
     private readonly IProductsApiService _productsApiService;
     private readonly IConfiguration _configuration;
+    private readonly ICmdbService _cmdbService;
+    private readonly IMemoryCache _cache;
+    private readonly IPermissionService _permissionService;
 
     public FipsManagerController(
         ILogger<FipsManagerController> logger,
         IProductsApiService productsApiService,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        ICmdbService cmdbService,
+        IMemoryCache cache,
+        IPermissionService permissionService)
     {
         _logger = logger;
         _productsApiService = productsApiService;
         _configuration = configuration;
+        _cmdbService = cmdbService;
+        _cache = cache;
+        _permissionService = permissionService;
+    }
+
+    private async Task<bool> HasFipsManagerAccessAsync()
+    {
+        var userEmail = User?.Identity?.Name ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(userEmail))
+        {
+            return false;
+        }
+
+        try
+        {
+            // Check if user is in allowed groups: "Central Operations Admin", "HOP", or "Design Operations"
+            var allowedGroups = new[] { "Central Operations Admin", "HOP", "Design Operations" };
+            foreach (var groupName in allowedGroups)
+            {
+                if (await _permissionService.IsInGroupAsync(userEmail, groupName))
+                {
+                    return true;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error checking FIPS Manager access for {Email}", userEmail);
+            // Non-blocking: default to false
+        }
+
+        return false;
     }
 
     // GET: FipsManager/Index
@@ -34,16 +75,30 @@ public class FipsManagerController : Controller
             return NotFound();
         }
 
+        // Check user has access to FIPS Manager
+        if (!await HasFipsManagerAccessAsync())
+        {
+            return Forbid();
+        }
+
         try
         {
             ViewData["Title"] = "FIPS Manager - Active Products";
 
-            // Get all products
+            // Clear cache to ensure real-time data
+            _cache.Remove("products_list_all_states");
+            _cache.Remove("products_list_all_states_");
+            
+            // Get all products (will fetch fresh data from CMS)
             var allProducts = await _productsApiService.GetAllProductsAsync(null);
             
-            // Filter to only Active products (State = "Active")
+            // Filter to only Active products (State = "Active"), excluding those with Type or Phase category "Decommissioned" or "Decommissioning"
+            var excludedValues = new[] { "Decommissioned", "Decommissioning" };
             var activeProducts = allProducts
-                .Where(p => !string.IsNullOrEmpty(p.State) && p.State.Equals("Active", StringComparison.OrdinalIgnoreCase))
+                .Where(p => !string.IsNullOrEmpty(p.State) 
+                    && p.State.Equals("Active", StringComparison.OrdinalIgnoreCase)
+                    && !HasCategoryValue(p, "Type", excludedValues)
+                    && !HasCategoryValue(p, "Phase", excludedValues))
                 .OrderBy(p => p.Title)
                 .ToList();
 
@@ -82,16 +137,30 @@ public class FipsManagerController : Controller
             return NotFound();
         }
 
+        // Check user has access to FIPS Manager
+        if (!await HasFipsManagerAccessAsync())
+        {
+            return Forbid();
+        }
+
         try
         {
             ViewData["Title"] = "FIPS Manager - New Products";
 
-            // Get all products
+            // Clear cache to ensure real-time data
+            _cache.Remove("products_list_all_states");
+            _cache.Remove("products_list_all_states_");
+            
+            // Get all products (will fetch fresh data from CMS)
             var allProducts = await _productsApiService.GetAllProductsAsync(null);
             
-            // Filter to only New products (State = "New")
+            // Filter to only New products (State = "New"), excluding those with Type or Phase category "Decommissioned" or "Decommissioning"
+            var excludedValues = new[] { "Decommissioned", "Decommissioning" };
             var newProducts = allProducts
-                .Where(p => !string.IsNullOrEmpty(p.State) && p.State.Equals("New", StringComparison.OrdinalIgnoreCase))
+                .Where(p => !string.IsNullOrEmpty(p.State) 
+                    && p.State.Equals("New", StringComparison.OrdinalIgnoreCase)
+                    && !HasCategoryValue(p, "Type", excludedValues)
+                    && !HasCategoryValue(p, "Phase", excludedValues))
                 .OrderBy(p => p.Title)
                 .ToList();
 
@@ -128,6 +197,12 @@ public class FipsManagerController : Controller
         if (!_configuration.GetValue<bool>("FeatureFlags:EnableFIPSManager", false))
         {
             return NotFound();
+        }
+
+        // Check user has access to FIPS Manager
+        if (!await HasFipsManagerAccessAsync())
+        {
+            return Forbid();
         }
 
         if (string.IsNullOrWhiteSpace(documentId))
@@ -187,6 +262,12 @@ public class FipsManagerController : Controller
         if (!_configuration.GetValue<bool>("FeatureFlags:EnableFIPSManager", false))
         {
             return NotFound();
+        }
+
+        // Check user has access to FIPS Manager
+        if (!await HasFipsManagerAccessAsync())
+        {
+            return Forbid();
         }
 
         if (string.IsNullOrWhiteSpace(documentId))
@@ -321,6 +402,12 @@ public class FipsManagerController : Controller
             return NotFound();
         }
 
+        // Check user has access to FIPS Manager
+        if (!await HasFipsManagerAccessAsync())
+        {
+            return Forbid();
+        }
+
         if (string.IsNullOrWhiteSpace(documentId) || string.IsNullOrWhiteSpace(roleFieldName))
         {
             TempData["ErrorMessage"] = "Product ID and role are required.";
@@ -416,6 +503,438 @@ public class FipsManagerController : Controller
         }
     }
 
+    // POST: FipsManager/SyncRolesFromCmdb
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> SyncRolesFromCmdb(string documentId)
+    {
+        // Check feature flag
+        if (!_configuration.GetValue<bool>("FeatureFlags:EnableFIPSManager", false))
+        {
+            return NotFound();
+        }
+
+        // Check user has access to FIPS Manager
+        if (!await HasFipsManagerAccessAsync())
+        {
+            return Forbid();
+        }
+
+        if (string.IsNullOrWhiteSpace(documentId))
+        {
+            TempData["ErrorMessage"] = "Product ID is required.";
+            return RedirectToAction(nameof(Index));
+        }
+
+        try
+        {
+            // Get product to get cmdb_sys_id
+            var product = await _productsApiService.GetProductByDocumentIdAsync(documentId);
+            if (product == null || string.IsNullOrEmpty(product.CmdbSysId))
+            {
+                TempData["ErrorMessage"] = "Product not found or does not have a CMDB sys_id. Cannot sync roles from CMDB.";
+                return RedirectToAction(nameof(ProductDetails), new { documentId });
+            }
+
+            var cmdbSysId = product.CmdbSysId;
+            _logger.LogInformation("Syncing roles from CMDB for product {DocumentId} with CMDB sys_id {CmdbSysId}", 
+                documentId, cmdbSysId);
+
+            // Get service offering from CMDB
+            var cmdbEntry = await _cmdbService.GetServiceOfferingBySysIdAsync(cmdbSysId);
+            if (cmdbEntry == null)
+            {
+                TempData["ErrorMessage"] = $"Could not find service offering in CMDB with sys_id: {cmdbSysId}";
+                return RedirectToAction(nameof(ProductDetails), new { documentId });
+            }
+
+            // Get users from CMDB
+            var cmdbUsers = await _cmdbService.GetServiceOfferingUsersAsync(cmdbEntry);
+            
+            // Map CMDB roles to Strapi product relation field names
+            var roleMapping = new Dictionary<string, (CmdbUser? user, string strapiFieldName)>
+            {
+                { "service_owner", (cmdbUsers.ServiceOwner, "service_owner") },
+                { "product_manager", (cmdbUsers.ProductManager, "product_manager") },
+                { "delivery_manager", (cmdbUsers.DeliveryManager, "delivery_manager") },
+                { "information_asset_owner", (cmdbUsers.InformationAssetOwner, "Information_asset_owner") },
+                { "senior_responsible_owner", (cmdbUsers.SeniorResponsibleOwner, "senior_responsible_officer") }
+            };
+
+            var entraUserIds = new Dictionary<string, object>(); // Can be string (documentId) or int (numeric ID)
+            var usersProcessed = 0;
+            var rolesUpdated = 0;
+
+            // Create/update entra-users for each role that has a user
+            foreach (var (cmdbRole, (user, strapiFieldName)) in roleMapping)
+            {
+                if (user != null && !string.IsNullOrWhiteSpace(user.Email))
+                {
+                    // Create or update entra-user
+                    var entraUser = await _productsApiService.GetOrCreateEntraUserAsync(
+                        user.Email,
+                        user.FederatedId,
+                        user.Name,
+                        user.FirstName,
+                        user.LastName);
+
+                    if (entraUser != null)
+                    {
+                        // Use documentId if available, otherwise fall back to numeric Id
+                        // Strapi v5 prefers documentId for relations, but accepts numeric ID as fallback
+                        if (!string.IsNullOrEmpty(entraUser.DocumentId))
+                        {
+                            entraUserIds[strapiFieldName] = entraUser.DocumentId;
+                            usersProcessed++;
+                            _logger.LogInformation("Processed entra-user for {Role}: {Email} (DocumentId: {DocumentId})", 
+                                cmdbRole, user.Email, entraUser.DocumentId);
+                        }
+                        else if (entraUser.Id > 0)
+                        {
+                            // Fallback to numeric ID if documentId is not available
+                            entraUserIds[strapiFieldName] = entraUser.Id;
+                            usersProcessed++;
+                            _logger.LogInformation("Processed entra-user for {Role}: {Email} (ID: {Id}, DocumentId not available)", 
+                                cmdbRole, user.Email, entraUser.Id);
+                        }
+                        else
+                        {
+                            _logger.LogWarning("Entra-user for {Role}: {Email} has no valid ID or DocumentId", 
+                                cmdbRole, user.Email);
+                        }
+                    }
+                    else
+                    {
+                        _logger.LogWarning("Failed to create/update entra-user for {Role}: {Email}", 
+                            cmdbRole, user.Email);
+                    }
+                }
+            }
+
+            // Always update product with entra-user relations (even if some are empty to clear them)
+            var updateData = new Dictionary<string, object>
+            {
+                ["fips_id"] = product.FipsId ?? string.Empty
+            };
+
+            // Set each role to array with user ID if user exists, or empty array if not
+            // Strapi v5 accepts either documentId (string) or numeric id for relations
+            foreach (var (cmdbRole, (user, strapiFieldName)) in roleMapping)
+            {
+                if (entraUserIds.ContainsKey(strapiFieldName))
+                {
+                    var userId = entraUserIds[strapiFieldName];
+                    // Create array with single user ID (can be string documentId or int numeric ID)
+                    updateData[strapiFieldName] = new[] { userId };
+                    rolesUpdated++;
+                }
+                else
+                {
+                    // Clear the relation if no user exists for this role in CMDB
+                    updateData[strapiFieldName] = Array.Empty<object>();
+                }
+            }
+
+            var success = await UpdateProductByDocumentIdAsync(documentId, updateData);
+            if (success)
+            {
+                // Clear cache to ensure fresh data is loaded on next page load
+                _cache.Remove($"product_docid_{documentId}");
+                if (!string.IsNullOrEmpty(product.FipsId))
+                {
+                    _cache.Remove($"product_{product.FipsId}");
+                }
+                _cache.Remove("products_list_all");
+                _cache.Remove("products_list_all_states");
+                
+                if (rolesUpdated > 0)
+                {
+                    TempData["SuccessMessage"] = $"Successfully synced {rolesUpdated} role(s) from CMDB. " +
+                        $"Processed {usersProcessed} user(s).";
+                }
+                else
+                {
+                    TempData["InfoMessage"] = "No users found in CMDB for this service offering. Product roles have been cleared.";
+                }
+                _logger.LogInformation("Successfully synced roles from CMDB for product {DocumentId}", documentId);
+            }
+            else
+            {
+                TempData["ErrorMessage"] = "Failed to update product with roles from CMDB.";
+                _logger.LogError("Failed to update product {DocumentId} with roles from CMDB", documentId);
+            }
+
+            return RedirectToAction(nameof(ProductDetails), new { documentId });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error syncing roles from CMDB for product {DocumentId}", documentId);
+            TempData["ErrorMessage"] = "An error occurred while syncing roles from CMDB. Please try again.";
+            return RedirectToAction(nameof(ProductDetails), new { documentId });
+        }
+    }
+
+    // POST: FipsManager/BulkSyncRolesFromCmdb
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> BulkSyncRolesFromCmdb()
+    {
+        // Check user has access to FIPS Manager
+        if (!await HasFipsManagerAccessAsync())
+        {
+            _logger.LogWarning("BulkSyncRolesFromCmdb: Access denied for user {UserEmail}", User?.Identity?.Name);
+            return StatusCode(403, Json(new { error = "Access denied." }));
+        }
+
+        try
+        {
+            // Get all active products with CMDB sys_id
+            var allProducts = await _productsApiService.GetAllProductsAsync(null);
+            var excludedValues = new[] { "Decommissioned", "Decommissioning" };
+            var activeProducts = allProducts
+                .Where(p => !string.IsNullOrEmpty(p.State) 
+                    && p.State.Equals("Active", StringComparison.OrdinalIgnoreCase)
+                    && !HasCategoryValue(p, "Type", excludedValues)
+                    && !HasCategoryValue(p, "Phase", excludedValues)
+                    && !string.IsNullOrEmpty(p.CmdbSysId))
+                .ToList();
+
+            // Store sync progress in cache
+            var syncId = Guid.NewGuid().ToString();
+            var syncProgress = new BulkSyncProgress
+            {
+                Total = activeProducts.Count,
+                Current = 0,
+                SuccessCount = 0,
+                ErrorCount = 0,
+                SkippedCount = 0,
+                LogEntries = new List<BulkSyncLogEntry>(),
+                IsComplete = false
+            };
+            _cache.Set($"bulk_sync_{syncId}", syncProgress, TimeSpan.FromMinutes(30));
+
+            // Start background sync (fire and forget)
+            _ = Task.Run(async () => await ProcessBulkSync(syncId, activeProducts));
+
+            return Json(new { syncId = syncId, total = activeProducts.Count, current = 0, progress = 0, status = "Starting bulk sync...", logEntries = new List<object>(), isComplete = false });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error starting bulk CMDB sync");
+            return Json(new { error = "An error occurred while starting the sync process." });
+        }
+    }
+
+    // GET: FipsManager/GetBulkSyncProgress
+    [HttpGet]
+    public async Task<IActionResult> GetBulkSyncProgress([FromQuery] string syncId)
+    {
+        // Check user has access to FIPS Manager
+        if (!await HasFipsManagerAccessAsync())
+        {
+            return Json(new { error = "Access denied." });
+        }
+
+        if (string.IsNullOrEmpty(syncId))
+        {
+            return Json(new { error = "Sync ID is required." });
+        }
+
+        var cacheKey = $"bulk_sync_{syncId}";
+        if (!_cache.TryGetValue(cacheKey, out BulkSyncProgress? progress) || progress == null)
+        {
+            return Json(new { error = "Sync progress not found." });
+        }
+
+        var progressPercent = progress.Total > 0 ? (progress.Current / (double)progress.Total) * 100 : 0;
+        var status = progress.IsComplete 
+            ? $"Sync completed! {progress.SuccessCount} succeeded, {progress.ErrorCount} errors, {progress.SkippedCount} skipped."
+            : $"Processing product {progress.Current} of {progress.Total}...";
+
+        return Json(new
+        {
+            progress = progressPercent,
+            total = progress.Total,
+            current = progress.Current,
+            status = status,
+            logEntries = progress.LogEntries.Select(e => new { type = e.Type, message = e.Message }).ToList(),
+            isComplete = progress.IsComplete,
+            successCount = progress.SuccessCount,
+            errorCount = progress.ErrorCount,
+            skippedCount = progress.SkippedCount
+        });
+    }
+
+    private async Task ProcessBulkSync(string syncId, List<ProductDto> products)
+    {
+        var cacheKey = $"bulk_sync_{syncId}";
+        var progress = new BulkSyncProgress
+        {
+            Total = products.Count,
+            Current = 0,
+            SuccessCount = 0,
+            ErrorCount = 0,
+            SkippedCount = 0,
+            LogEntries = new List<BulkSyncLogEntry>(),
+            IsComplete = false
+        };
+
+        foreach (var product in products)
+        {
+            try
+            {
+                progress.Current++;
+                progress.LogEntries.Add(new BulkSyncLogEntry 
+                { 
+                    Type = "info", 
+                    Message = $"Processing: {product.Title} (CMDB: {product.CmdbSysId})..." 
+                });
+
+                if (string.IsNullOrEmpty(product.CmdbSysId) || string.IsNullOrEmpty(product.DocumentId))
+                {
+                    progress.SkippedCount++;
+                    progress.LogEntries.Add(new BulkSyncLogEntry 
+                    { 
+                        Type = "info", 
+                        Message = $"Skipped: {product.Title} - No CMDB sys_id or document ID" 
+                    });
+                    _cache.Set(cacheKey, progress, TimeSpan.FromMinutes(30));
+                    continue;
+                }
+
+                // Get service offering from CMDB
+                var cmdbEntry = await _cmdbService.GetServiceOfferingBySysIdAsync(product.CmdbSysId);
+                if (cmdbEntry == null)
+                {
+                    progress.ErrorCount++;
+                    progress.LogEntries.Add(new BulkSyncLogEntry 
+                    { 
+                        Type = "error", 
+                        Message = $"Error: {product.Title} - CMDB entry not found" 
+                    });
+                    _cache.Set(cacheKey, progress, TimeSpan.FromMinutes(30));
+                    continue;
+                }
+
+                // Get users from CMDB
+                var cmdbUsers = await _cmdbService.GetServiceOfferingUsersAsync(cmdbEntry);
+                
+                // Map CMDB roles to Strapi product relation field names
+                var roleMapping = new Dictionary<string, (CmdbUser? user, string strapiFieldName)>
+                {
+                    { "service_owner", (cmdbUsers.ServiceOwner, "service_owner") },
+                    { "product_manager", (cmdbUsers.ProductManager, "product_manager") },
+                    { "delivery_manager", (cmdbUsers.DeliveryManager, "delivery_manager") },
+                    { "information_asset_owner", (cmdbUsers.InformationAssetOwner, "Information_asset_owner") },
+                    { "senior_responsible_owner", (cmdbUsers.SeniorResponsibleOwner, "senior_responsible_officer") }
+                };
+
+                var entraUserIds = new Dictionary<string, object>();
+                var usersProcessed = 0;
+                var rolesUpdated = 0;
+
+                // Create/update entra-users for each role that has a user
+                foreach (var (cmdbRole, (user, strapiFieldName)) in roleMapping)
+                {
+                    if (user != null && !string.IsNullOrWhiteSpace(user.Email))
+                    {
+                        var entraUser = await _productsApiService.GetOrCreateEntraUserAsync(
+                            user.Email,
+                            user.FederatedId,
+                            user.Name,
+                            user.FirstName,
+                            user.LastName);
+
+                        if (entraUser != null)
+                        {
+                            if (!string.IsNullOrEmpty(entraUser.DocumentId))
+                            {
+                                entraUserIds[strapiFieldName] = entraUser.DocumentId;
+                                usersProcessed++;
+                            }
+                            else if (entraUser.Id > 0)
+                            {
+                                entraUserIds[strapiFieldName] = entraUser.Id;
+                                usersProcessed++;
+                            }
+                        }
+                    }
+                }
+
+                // Update product with entra-user relations
+                var updateData = new Dictionary<string, object>
+                {
+                    ["fips_id"] = product.FipsId ?? string.Empty
+                };
+
+                foreach (var (cmdbRole, (user, strapiFieldName)) in roleMapping)
+                {
+                    if (entraUserIds.ContainsKey(strapiFieldName))
+                    {
+                        updateData[strapiFieldName] = new[] { entraUserIds[strapiFieldName] };
+                        rolesUpdated++;
+                    }
+                    else
+                    {
+                        updateData[strapiFieldName] = Array.Empty<object>();
+                    }
+                }
+
+                var success = await UpdateProductByDocumentIdAsync(product.DocumentId!, updateData);
+                if (success)
+                {
+                    progress.SuccessCount++;
+                    progress.LogEntries.Add(new BulkSyncLogEntry 
+                    { 
+                        Type = "success", 
+                        Message = $"Success: {product.Title} - {rolesUpdated} role(s) updated, {usersProcessed} user(s) processed" 
+                    });
+
+                    // Clear cache
+                    _cache.Remove($"product_docid_{product.DocumentId}");
+                    if (!string.IsNullOrEmpty(product.FipsId))
+                    {
+                        _cache.Remove($"product_{product.FipsId}");
+                    }
+                }
+                else
+                {
+                    progress.ErrorCount++;
+                    progress.LogEntries.Add(new BulkSyncLogEntry 
+                    { 
+                        Type = "error", 
+                        Message = $"Error: {product.Title} - Failed to update product" 
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                progress.ErrorCount++;
+                progress.LogEntries.Add(new BulkSyncLogEntry 
+                { 
+                    Type = "error", 
+                    Message = $"Error: {product.Title} - {ex.Message}" 
+                });
+                _logger.LogError(ex, "Error syncing product {DocumentId} in bulk sync", product.DocumentId);
+            }
+
+            _cache.Set(cacheKey, progress, TimeSpan.FromMinutes(30));
+        }
+
+        // Mark as complete
+        progress.IsComplete = true;
+        progress.LogEntries.Add(new BulkSyncLogEntry 
+        { 
+            Type = "success", 
+            Message = $"Bulk sync completed! {progress.SuccessCount} succeeded, {progress.ErrorCount} errors, {progress.SkippedCount} skipped." 
+        });
+        _cache.Set(cacheKey, progress, TimeSpan.FromMinutes(30));
+
+        // Clear main product list cache
+        _cache.Remove("products_list_all");
+        _cache.Remove("products_list_all_states");
+    }
+
     // POST: FipsManager/RemoveProductRole
     [HttpPost]
     [ValidateAntiForgeryToken]
@@ -425,6 +944,12 @@ public class FipsManagerController : Controller
         if (!_configuration.GetValue<bool>("FeatureFlags:EnableFIPSManager", false))
         {
             return NotFound();
+        }
+
+        // Check user has access to FIPS Manager
+        if (!await HasFipsManagerAccessAsync())
+        {
+            return Forbid();
         }
 
         if (string.IsNullOrWhiteSpace(documentId) || string.IsNullOrWhiteSpace(roleFieldName))
@@ -555,6 +1080,7 @@ public class FipsManagerController : Controller
         var iaoContacts = new List<string>();
         var deliveryManagerContacts = new List<string>();
         var serviceOwnerContacts = new List<string>();
+        var productManagerContacts = new List<string>();
 
         // Extract from product roles
         if (product.ServiceOwners != null && product.ServiceOwners.Any())
@@ -650,6 +1176,7 @@ public class FipsManagerController : Controller
                             : pm.EmailAddress;
                     if (!string.IsNullOrWhiteSpace(displayName))
                     {
+                        productManagerContacts.Add(displayName);
                         contactDetails.Add(displayName);
                     }
                 }
@@ -740,6 +1267,7 @@ public class FipsManagerController : Controller
         {
             FipsId = product.FipsId ?? string.Empty,
             DocumentId = product.DocumentId ?? string.Empty,
+            CmdbSysId = product.CmdbSysId,
             ProductTitle = product.Title,
             BusinessArea = businessArea,
             PhaseName = phaseName,
@@ -752,6 +1280,7 @@ public class FipsManagerController : Controller
             InformationAssetOwnerContacts = new List<string>(iaoContacts),
             DeliveryManagerContacts = new List<string>(deliveryManagerContacts),
             ServiceOwnerContacts = new List<string>(serviceOwnerContacts),
+            ProductManagerContacts = new List<string>(productManagerContacts),
             ContactDetails = contactDetails,
             UserGroupNames = userGroupNames,
             UserGroupCategoryValueIds = userGroupIds,
@@ -781,6 +1310,24 @@ public class FipsManagerController : Controller
             "user_researchers" => "User Researchers",
             _ => roleFieldName
         };
+    }
+
+    /// <summary>
+    /// Checks if a product has a category value matching any of the excluded values for the specified category type
+    /// </summary>
+    private static bool HasCategoryValue(ProductDto product, string categoryTypeName, string[] excludedValues)
+    {
+        if (product.CategoryValues == null || !product.CategoryValues.Any())
+        {
+            return false;
+        }
+
+        return product.CategoryValues
+            .Any(cv => cv.CategoryType != null 
+                && cv.CategoryType.Name != null
+                && cv.CategoryType.Name.Equals(categoryTypeName, StringComparison.OrdinalIgnoreCase)
+                && excludedValues.Any(excluded => 
+                    cv.Name != null && cv.Name.Equals(excluded, StringComparison.OrdinalIgnoreCase)));
     }
 
     private async Task<bool> UpdateProductByDocumentIdAsync(string documentId, Dictionary<string, object> updateData)
@@ -818,8 +1365,8 @@ public class FipsManagerController : Controller
             else
             {
                 var errorContent = await response.Content.ReadAsStringAsync();
-                _logger.LogError("Failed to update product {DocumentId}. Status: {StatusCode}, Error: {Error}",
-                    documentId, response.StatusCode, errorContent);
+                _logger.LogError("Failed to update product {DocumentId}. Status: {StatusCode}, Error: {Error}, Request JSON: {RequestJson}",
+                    documentId, response.StatusCode, errorContent, json);
                 return false;
             }
         }
@@ -844,4 +1391,21 @@ public class FipsManagerProductDetailsViewModel
     public Dictionary<string, List<CategoryValueDto>> CategoryTypes { get; set; } = new();
     public List<int> CurrentCategoryValueIds { get; set; } = new();
     public ProductCompletionItem CompletionItem { get; set; } = null!;
+}
+
+public class BulkSyncProgress
+{
+    public int Total { get; set; }
+    public int Current { get; set; }
+    public int SuccessCount { get; set; }
+    public int ErrorCount { get; set; }
+    public int SkippedCount { get; set; }
+    public List<BulkSyncLogEntry> LogEntries { get; set; } = new();
+    public bool IsComplete { get; set; }
+}
+
+public class BulkSyncLogEntry
+{
+    public string Type { get; set; } = "info"; // info, success, error
+    public string Message { get; set; } = string.Empty;
 }
