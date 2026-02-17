@@ -527,35 +527,62 @@
                         <!-- FIPS Manager Section -->
                         @if (Configuration.GetValue<bool>("FeatureFlags:EnableFIPSManager", false))
                         {
-                            var isFipsManagerSectionActive = controllerName == "FipsManager";
-                            var isFipsManagerIndexActive = controllerName == "FipsManager" && actionName == "Index";
-                            var isFipsManagerProductActive = controllerName == "FipsManager" && actionName == "ProductDetails";
-                            <li class="nav-item @(isFipsManagerSectionActive ? "menu-open" : "")">
-                                <a href="#" class="nav-link @(isFipsManagerSectionActive ? "active" : "")" aria-haspopup="true" aria-expanded="@(isFipsManagerSectionActive ? "true" : "false")">
-                                    <i class="nav-icon fas fa-cog" aria-hidden="true"></i>
-                                    <p>
-                                        FIPS Manager
-                                        <i class="right fas fa-angle-left"></i>
-                                    </p>
-                                </a>
-                                <ul class="nav nav-treeview" role="list">
-                                    <li class="nav-item">
-                                        <a href="@Url.Action("Index", "FipsManager")" class="nav-link @(isFipsManagerIndexActive ? "active" : "")">
-                                            <i class="far fa-circle nav-icon" aria-hidden="true"></i>
-                                            <p>Active products</p>
-                                        </a>
-                                    </li>
-                                    <li class="nav-item">
-                                        @{
-                                            var isFipsManagerNewProductsActive = controllerName == "FipsManager" && actionName == "NewProducts";
+                            var hasFipsManagerAccess = false;
+                            
+                            if (currentUser != null && !string.IsNullOrEmpty(currentUserEmail))
+                            {
+                                try
+                                {
+                                    // Check if user is in allowed groups: "Central Operations Admin", "HOP", or "Design Operations"
+                                    var allowedGroups = new[] { "Central Operations Admin", "HOP", "Design Operations" };
+                                    foreach (var groupName in allowedGroups)
+                                    {
+                                        if (await PermissionService.IsInGroupAsync(currentUserEmail, groupName))
+                                        {
+                                            hasFipsManagerAccess = true;
+                                            break;
                                         }
-                                        <a href="@Url.Action("NewProducts", "FipsManager")" class="nav-link @(isFipsManagerNewProductsActive ? "active" : "")">
-                                            <i class="far fa-circle nav-icon" aria-hidden="true"></i>
-                                            <p>New products</p>
-                                        </a>
-                                    </li>
-                                </ul>
-                            </li>
+                                    }
+                                }
+                                catch
+                                {
+                                    // If there's an error checking permissions, default to false
+                                    hasFipsManagerAccess = false;
+                                }
+                            }
+                            
+                            @if (hasFipsManagerAccess)
+                            {
+                                var isFipsManagerSectionActive = controllerName == "FipsManager";
+                                var isFipsManagerIndexActive = controllerName == "FipsManager" && actionName == "Index";
+                                var isFipsManagerProductActive = controllerName == "FipsManager" && actionName == "ProductDetails";
+                                <li class="nav-item @(isFipsManagerSectionActive ? "menu-open" : "")">
+                                    <a href="#" class="nav-link @(isFipsManagerSectionActive ? "active" : "")" aria-haspopup="true" aria-expanded="@(isFipsManagerSectionActive ? "true" : "false")">
+                                        <i class="nav-icon fas fa-cog" aria-hidden="true"></i>
+                                        <p>
+                                            FIPS Manager
+                                            <i class="right fas fa-angle-left"></i>
+                                        </p>
+                                    </a>
+                                    <ul class="nav nav-treeview" role="list">
+                                        <li class="nav-item">
+                                            <a href="@Url.Action("Index", "FipsManager")" class="nav-link @(isFipsManagerIndexActive ? "active" : "")">
+                                                <i class="far fa-circle nav-icon" aria-hidden="true"></i>
+                                                <p>Active products</p>
+                                            </a>
+                                        </li>
+                                        <li class="nav-item">
+                                            @{
+                                                var isFipsManagerNewProductsActive = controllerName == "FipsManager" && actionName == "NewProducts";
+                                            }
+                                            <a href="@Url.Action("NewProducts", "FipsManager")" class="nav-link @(isFipsManagerNewProductsActive ? "active" : "")">
+                                                <i class="far fa-circle nav-icon" aria-hidden="true"></i>
+                                                <p>New products</p>
+                                            </a>
+                                        </li>
+                                    </ul>
+                                </li>
+                            }
                         }
 
                         <!-- Product Governance - Hidden from navigation -->

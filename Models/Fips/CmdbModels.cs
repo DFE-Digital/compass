@@ -1,3 +1,5 @@
+using System;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace Compass.Models.Fips;
@@ -19,14 +21,20 @@ public class CmdbEntry
     [JsonPropertyName("parent.name")]
     public string? ParentName { get; set; }
     
-    [JsonPropertyName("u_delivery_manager")]
-    public string? DeliveryManagerId { get; set; }
+    [JsonPropertyName("owned_by")]
+    public object? OwnedBy { get; set; } // Can be string or object with .value
+    
+    [JsonPropertyName("u_product_manager")]
+    public object? ProductManagerId { get; set; } // Can be string or object with .value
+    
+    [JsonPropertyName("delivery_manager")]
+    public object? DeliveryManagerId { get; set; } // Can be string or object with .value
     
     [JsonPropertyName("u_information_asset_owner")]
-    public string? InformationAssetOwnerId { get; set; }
+    public object? InformationAssetOwnerId { get; set; } // Can be string or object with .value
     
     [JsonPropertyName("u_senior_responsible_owner")]
-    public string? SeniorResponsibleOwnerId { get; set; }
+    public object? SeniorResponsibleOwnerId { get; set; } // Can be string or object with .value
 }
 
 /// <summary>
@@ -52,8 +60,40 @@ public class CmdbUser
     [JsonPropertyName("email")]
     public string Email { get; set; } = string.Empty;
     
+    // ServiceNow returns active as a string ("true"/"false"), not a boolean
     [JsonPropertyName("active")]
+    [JsonConverter(typeof(StringToBoolConverter))]
     public bool Active { get; set; }
+}
+
+/// <summary>
+/// Custom JSON converter to handle ServiceNow's string boolean values
+/// </summary>
+public class StringToBoolConverter : JsonConverter<bool>
+{
+    public override bool Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        if (reader.TokenType == JsonTokenType.String)
+        {
+            var stringValue = reader.GetString();
+            return stringValue?.Equals("true", StringComparison.OrdinalIgnoreCase) == true;
+        }
+        else if (reader.TokenType == JsonTokenType.True)
+        {
+            return true;
+        }
+        else if (reader.TokenType == JsonTokenType.False)
+        {
+            return false;
+        }
+        
+        throw new JsonException($"Unexpected token type {reader.TokenType} when converting to boolean");
+    }
+
+    public override void Write(Utf8JsonWriter writer, bool value, JsonSerializerOptions options)
+    {
+        writer.WriteBooleanValue(value);
+    }
 }
 
 /// <summary>
@@ -61,9 +101,11 @@ public class CmdbUser
 /// </summary>
 public class CmdbServiceUsers
 {
-    public CmdbUser? DeliveryManager { get; set; }
-    public CmdbUser? InformationAssetOwner { get; set; }
-    public CmdbUser? SeniorResponsibleOwner { get; set; }
+    public CmdbUser? ServiceOwner { get; set; } // from owned_by
+    public CmdbUser? ProductManager { get; set; } // from u_product_manager
+    public CmdbUser? DeliveryManager { get; set; } // from delivery_manager
+    public CmdbUser? InformationAssetOwner { get; set; } // from u_information_asset_owner
+    public CmdbUser? SeniorResponsibleOwner { get; set; } // from u_senior_responsible_owner
 }
 
 /// <summary>

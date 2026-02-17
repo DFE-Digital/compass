@@ -11,6 +11,11 @@
     var phases = Model.Products.Select(p => p.PhaseName).Where(p => !string.IsNullOrWhiteSpace(p)).Distinct().OrderBy(p => p).ToList();
     var channels = Model.Products.SelectMany(p => p.ChannelNames).Where(c => !string.IsNullOrWhiteSpace(c)).Distinct().OrderBy(c => c).ToList();
     var types = Model.Products.SelectMany(p => p.TypeNames).Where(t => !string.IsNullOrWhiteSpace(t)).Distinct().OrderBy(t => t).ToList();
+    var serviceOwners = Model.Products.SelectMany(p => p.ServiceOwnerContacts).Where(c => !string.IsNullOrWhiteSpace(c)).Distinct().OrderBy(c => c).ToList();
+    var deliveryManagers = Model.Products.SelectMany(p => p.DeliveryManagerContacts).Where(c => !string.IsNullOrWhiteSpace(c)).Distinct().OrderBy(c => c).ToList();
+    var informationAssetOwners = Model.Products.SelectMany(p => p.InformationAssetOwnerContacts).Where(c => !string.IsNullOrWhiteSpace(c)).Distinct().OrderBy(c => c).ToList();
+    var seniorResponsibleOfficers = Model.Products.SelectMany(p => p.SeniorResponsibleOfficerContacts).Where(c => !string.IsNullOrWhiteSpace(c)).Distinct().OrderBy(c => c).ToList();
+    var productManagers = Model.Products.SelectMany(p => p.ProductManagerContacts).Where(c => !string.IsNullOrWhiteSpace(c)).Distinct().OrderBy(c => c).ToList();
     
     // Helper function to format list with line breaks and "+ x more"
     string FormatListWithMore(List<string> items, int maxItems = 4)
@@ -30,6 +35,8 @@
         return string.Join("<br>", visibleItems) + $"<br><span class=\"text-muted\">+ {remainingCount} more</span>";
     }
 }
+
+@Html.AntiForgeryToken()
 
 <div class="content-header">
     <div class="container-fluid">
@@ -61,136 +68,143 @@
             </div>
         }
 
-        <!-- Summary Cards -->
-        <div class="card mb-4 shadow-sm">
-            <div class="card-header bg-white">
-                <h3 class="card-title mb-0">Summary statistics</h3>
-            </div>
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-md-6">
-                        <div class="card border-left-primary shadow-sm h-100">
-                            <div class="card-body">
-                                <div class="row no-gutters align-items-center">
-                                    <div class="col mr-2">
-                                        <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">@(isNewProducts ? "New Products" : "Active Products")</div>
-                                        <div class="h5 mb-0 font-weight-bold text-gray-800">@Model.TotalProducts</div>
-                                    </div>
-                                    <div class="col-auto">
-                                        <i class="fas fa-cubes fa-2x text-gray-300"></i>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        @{
-                            string completionBorderClass;
-                            string completionTextClass;
-                            string completionIcon;
-                            
-                            if (Model.AverageCompletionPercentage >= 80)
-                            {
-                                completionBorderClass = "border-left-success";
-                                completionTextClass = "text-success";
-                                completionIcon = "fa-check-circle";
-                            }
-                            else if (Model.AverageCompletionPercentage >= 60)
-                            {
-                                completionBorderClass = "border-left-warning";
-                                completionTextClass = "text-warning";
-                                completionIcon = "fa-exclamation-circle";
-                            }
-                            else
-                            {
-                                completionBorderClass = "border-left-danger";
-                                completionTextClass = "text-danger";
-                                completionIcon = "fa-times-circle";
-                            }
-                        }
-                        <div class="card @completionBorderClass shadow-sm h-100">
-                            <div class="card-body">
-                                <div class="row no-gutters align-items-center">
-                                    <div class="col mr-2">
-                                        <div class="text-xs font-weight-bold @completionTextClass text-uppercase mb-1">Average Completion</div>
-                                        <div class="h5 mb-0 font-weight-bold text-gray-800">@Model.AverageCompletionPercentage.ToString("F1")%</div>
-                                    </div>
-                                    <div class="col-auto">
-                                        <i class="fas @completionIcon fa-2x text-gray-300"></i>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
         <!-- Products Table -->
         <div class="row">
             <div class="col-lg-12">
                 <div class="card">
                     <div class="card-header">
                         <h3 class="card-title">@(isNewProducts ? "New Products" : "Active Products")</h3>
+                         <div class="card-tools">
+                                    <button type="button" class="btn btn-primary btn-sm" id="bulkSyncBtn">
+                    <i class="fas fa-sync"></i> Sync All from CMDB
+                </button>
+                                </div>
                     </div>
                     <div class="card-body">
-                        <!-- Filter Section -->
-                        <div class="row mb-3">
-                            <div class="col-md-2">
-                                <label for="searchInput">Search</label>
-                                <input type="text" class="form-control" id="searchInput" placeholder="Search products..." />
-                            </div>
-                            <div class="col-md-2">
-                                <label for="businessAreaFilter">Business Area</label>
-                                <select class="form-control" id="businessAreaFilter">
-                                    <option value="">All</option>
-                                    <option value="__not_set__">Not set</option>
-                                    @foreach (var ba in businessAreas)
-                                    {
-                                        <option value="@ba">@ba</option>
-                                    }
-                                </select>
-                            </div>
-                            <div class="col-md-2">
-                                <label for="phaseFilter">Phase</label>
-                                <select class="form-control" id="phaseFilter">
-                                    <option value="">All</option>
-                                    <option value="__not_set__">Not set</option>
-                                    @foreach (var phase in phases)
-                                    {
-                                        <option value="@phase">@phase</option>
-                                    }
-                                </select>
-                            </div>
-                            <div class="col-md-2">
-                                <label for="channelFilter">Channel</label>
-                                <select class="form-control" id="channelFilter">
-                                    <option value="">All</option>
-                                    <option value="__not_set__">Not set</option>
-                                    @foreach (var channel in channels)
-                                    {
-                                        <option value="@channel">@channel</option>
-                                    }
-                                </select>
-                            </div>
-                            <div class="col-md-2">
-                                <label for="typeFilter">Type</label>
-                                <select class="form-control" id="typeFilter">
-                                    <option value="">All</option>
-                                    <option value="__not_set__">Not set</option>
-                                    @foreach (var type in types)
-                                    {
-                                        <option value="@type">@type</option>
-                                    }
-                                </select>
-                            </div>
-                            <div class="col-md-1">
-                                <label>&nbsp;</label>
-                                <button type="button" class="btn btn-primary btn-block" id="applyFilters">Apply</button>
-                            </div>
-                            <div class="col-md-1">
-                                <label>&nbsp;</label>
-                                <button type="button" class="btn btn-secondary btn-block" id="clearFilters">Clear</button>
+                        <!-- Filter Toggle Button -->
+                        <div class="mb-3">
+                            <button type="button" class="btn btn-outline-primary" data-toggle="collapse" data-target="#filterPanel" aria-expanded="false" aria-controls="filterPanel">
+                                <i class="fas fa-filter"></i> Toggle Filters
+                            </button>
+                        </div>
+                        
+                        <!-- Collapsible Filter Section -->
+                        <div class="collapse" id="filterPanel">
+                            <div class="card card-body mb-3">
+                                <div class="row mb-3">
+                                    <div class="col-md-2">
+                                        <label for="searchInput">Search</label>
+                                        <input type="text" class="form-control" id="searchInput" placeholder="Search products..." />
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label for="businessAreaFilter">Business Area</label>
+                                        <select class="form-control" id="businessAreaFilter">
+                                            <option value="">All</option>
+                                            <option value="__not_set__">Not set</option>
+                                            @foreach (var ba in businessAreas)
+                                            {
+                                                <option value="@ba">@ba</option>
+                                            }
+                                        </select>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label for="phaseFilter">Phase</label>
+                                        <select class="form-control" id="phaseFilter">
+                                            <option value="">All</option>
+                                            <option value="__not_set__">Not set</option>
+                                            @foreach (var phase in phases)
+                                            {
+                                                <option value="@phase">@phase</option>
+                                            }
+                                        </select>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label for="channelFilter">Channel</label>
+                                        <select class="form-control" id="channelFilter">
+                                            <option value="">All</option>
+                                            <option value="__not_set__">Not set</option>
+                                            @foreach (var channel in channels)
+                                            {
+                                                <option value="@channel">@channel</option>
+                                            }
+                                        </select>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label for="typeFilter">Type</label>
+                                        <select class="form-control" id="typeFilter">
+                                            <option value="">All</option>
+                                            <option value="__not_set__">Not set</option>
+                                            @foreach (var type in types)
+                                            {
+                                                <option value="@type">@type</option>
+                                            }
+                                        </select>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label>&nbsp;</label>
+                                        <div>
+                                            <button type="button" class="btn btn-primary btn-block" id="applyFilters">Apply</button>
+                                            <button type="button" class="btn btn-secondary btn-block mt-1" id="clearFilters">Clear</button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-2">
+                                        <label for="serviceOwnerFilter">Service Owner (SO)</label>
+                                        <select class="form-control" id="serviceOwnerFilter">
+                                            <option value="">All</option>
+                                            <option value="__not_set__">Not set</option>
+                                            @foreach (var so in serviceOwners)
+                                            {
+                                                <option value="@so">@so</option>
+                                            }
+                                        </select>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label for="deliveryManagerFilter">Delivery Manager (DM)</label>
+                                        <select class="form-control" id="deliveryManagerFilter">
+                                            <option value="">All</option>
+                                            <option value="__not_set__">Not set</option>
+                                            @foreach (var dm in deliveryManagers)
+                                            {
+                                                <option value="@dm">@dm</option>
+                                            }
+                                        </select>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label for="informationAssetOwnerFilter">Information Asset Owner (IAO)</label>
+                                        <select class="form-control" id="informationAssetOwnerFilter">
+                                            <option value="">All</option>
+                                            <option value="__not_set__">Not set</option>
+                                            @foreach (var iao in informationAssetOwners)
+                                            {
+                                                <option value="@iao">@iao</option>
+                                            }
+                                        </select>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label for="seniorResponsibleOfficerFilter">Senior Responsible Officer (SRO)</label>
+                                        <select class="form-control" id="seniorResponsibleOfficerFilter">
+                                            <option value="">All</option>
+                                            <option value="__not_set__">Not set</option>
+                                            @foreach (var sro in seniorResponsibleOfficers)
+                                            {
+                                                <option value="@sro">@sro</option>
+                                            }
+                                        </select>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label for="productManagerFilter">Product Manager (PM)</label>
+                                        <select class="form-control" id="productManagerFilter">
+                                            <option value="">All</option>
+                                            <option value="__not_set__">Not set</option>
+                                            @foreach (var pm in productManagers)
+                                            {
+                                                <option value="@pm">@pm</option>
+                                            }
+                                        </select>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                         
@@ -198,14 +212,19 @@
                             <table class="table table-hover mb-0" id="productsTable">
                                 <thead>
                                     <tr>
-                                        <th>Product</th>
-                                        <th class="text-center">Completion</th>
-                                        <th>Business Area</th>
-                                        <th>Phase</th>
-                                        <th>User Groups</th>
-                                        <th>Channel</th>
-                                        <th>Type</th>
-                                        <th class="text-center">Product URL</th>
+                                        <th class="sortable" data-column="product" style="cursor: pointer;">Product <i class="fas fa-sort"></i></th>
+                                        <th class="sortable text-center" data-column="completion" style="cursor: pointer;">Completion <i class="fas fa-sort"></i></th>
+                                        <th class="sortable" data-column="businessArea" style="cursor: pointer;">Business Area <i class="fas fa-sort"></i></th>
+                                        <th class="sortable" data-column="phase" style="cursor: pointer;">Phase <i class="fas fa-sort"></i></th>
+                                        <th class="sortable" data-column="userGroups" style="cursor: pointer;">Users <i class="fas fa-sort"></i></th>
+                                        <th class="sortable" data-column="channel" style="cursor: pointer;">Channel <i class="fas fa-sort"></i></th>
+                                        <th class="sortable" data-column="type" style="cursor: pointer;">Type <i class="fas fa-sort"></i></th>
+                                        <th class="sortable" data-column="serviceOwner" style="cursor: pointer;">SO <i class="fas fa-sort"></i></th>
+                                        <th class="sortable" data-column="deliveryManager" style="cursor: pointer;">DM <i class="fas fa-sort"></i></th>
+                                        <th class="sortable" data-column="informationAssetOwner" style="cursor: pointer;">IAO <i class="fas fa-sort"></i></th>
+                                        <th class="sortable" data-column="seniorResponsibleOfficer" style="cursor: pointer;">SRO <i class="fas fa-sort"></i></th>
+                                        <th class="sortable" data-column="productManager" style="cursor: pointer;">PM <i class="fas fa-sort"></i></th>
+                                        <th class="sortable text-center" data-column="productUrl" style="cursor: pointer;">Product URL <i class="fas fa-sort"></i></th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -218,40 +237,117 @@
                                             data-business-area="@(string.IsNullOrWhiteSpace(product.BusinessArea) || product.BusinessArea == "Not assigned" ? "" : product.BusinessArea)"
                                             data-phase="@(product.PhaseName ?? "")"
                                             data-channels="@string.Join(",", product.ChannelNames)"
-                                            data-types="@string.Join(",", product.TypeNames)">
+                                            data-types="@string.Join(",", product.TypeNames)"
+                                            data-service-owner="@string.Join(",", product.ServiceOwnerContacts ?? new List<string>())"
+                                            data-delivery-manager="@string.Join(",", product.DeliveryManagerContacts ?? new List<string>())"
+                                            data-information-asset-owner="@string.Join(",", product.InformationAssetOwnerContacts ?? new List<string>())"
+                                            data-senior-responsible-officer="@string.Join(",", product.SeniorResponsibleOfficerContacts ?? new List<string>())"
+                                            data-product-manager="@string.Join(",", product.ProductManagerContacts ?? new List<string>())"
+                                            data-completion="@product.CompletionPercentage"
+                                            data-user-groups="@string.Join(",", product.UserGroupNames ?? new List<string>())"
+                                            data-product-url="@(product.HasProductUrl ? "yes" : "no")">
                                             <td>
                                                 <a href="@Url.Action("ProductDetails", new { documentId = product.DocumentId })" 
                                                    class="text-primary font-weight-bold">
                                                     @product.ProductTitle
                                                 </a>
-                                                @if (!string.IsNullOrEmpty(product.FipsId))
-                                                {
-                                                    <br><small class="text-muted">@product.FipsId</small>
-                                                }
+                                                <br>
+                                                <small>
+                                                    @if (!string.IsNullOrEmpty(product.CmdbSysId))
+                                                    {
+                                                        <span class="text-muted">CMDB Sync</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">Not on CMDB</span>
+                                                    }
+                                                </small>
                                             </td>
                                             <td class="text-center">
-                                                <span class="badge badge-@completionClass badge-lg">
+                                                <span class="badge badge-@completionClass">
                                                     @product.CompletionPercentage.ToString("F1")%
                                                 </span>
                                             </td>
-                                            <td>@(string.IsNullOrWhiteSpace(product.BusinessArea) || product.BusinessArea == "Not assigned" ? "-" : product.BusinessArea)</td>
-                                            <td>@(string.IsNullOrWhiteSpace(product.PhaseName) ? "-" : product.PhaseName)</td>
-                                            <td>@Html.Raw(FormatListWithMore(product.UserGroupNames))</td>
-                                            <td>@(product.ChannelNames.Any() ? string.Join(", ", product.ChannelNames) : "-")</td>
-                                            <td>@Html.Raw(FormatListWithMore(product.TypeNames))</td>
-                                            <td class="text-center">
-                                                @if (product.HasProductUrl)
+                                            <td>
+                                                <small>@(string.IsNullOrWhiteSpace(product.BusinessArea) || product.BusinessArea == "Not assigned" ? "-" : product.BusinessArea)</small>
+                                            </td>
+                                            <td>
+                                                <small>@(string.IsNullOrWhiteSpace(product.PhaseName) ? "-" : product.PhaseName)</small>
+                                            </td>
+                                            <td>
+                                                <small>@Html.Raw(FormatListWithMore(product.UserGroupNames))</small>
+                                            </td>
+                                            <td>
+                                                <small>@(product.ChannelNames.Any() ? string.Join(", ", product.ChannelNames) : "-")</small>
+                                            </td>
+                                            <td>
+                                                <small>@Html.Raw(FormatListWithMore(product.TypeNames))</small>
+                                            </td>
+                                            <td>
+                                                @if (product.ServiceOwnerContacts != null && product.ServiceOwnerContacts.Any())
                                                 {
-                                                    <span class="badge badge-success">
-                                                        <i class="fas fa-check"></i>
-                                                    </span>
+                                                    <small>@Html.Raw(FormatListWithMore(product.ServiceOwnerContacts, 2))</small>
                                                 }
                                                 else
                                                 {
-                                                    <span class="badge badge-secondary">
-                                                        <i class="fas fa-times"></i>
-                                                    </span>
+                                                    <small class="text-muted">-</small>
                                                 }
+                                            </td>
+                                            <td>
+                                                @if (product.DeliveryManagerContacts != null && product.DeliveryManagerContacts.Any())
+                                                {
+                                                    <small>@Html.Raw(FormatListWithMore(product.DeliveryManagerContacts, 2))</small>
+                                                }
+                                                else
+                                                {
+                                                    <small class="text-muted">-</small>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (product.InformationAssetOwnerContacts != null && product.InformationAssetOwnerContacts.Any())
+                                                {
+                                                    <small>@Html.Raw(FormatListWithMore(product.InformationAssetOwnerContacts, 2))</small>
+                                                }
+                                                else
+                                                {
+                                                    <small class="text-muted">-</small>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (product.SeniorResponsibleOfficerContacts != null && product.SeniorResponsibleOfficerContacts.Any())
+                                                {
+                                                    <small>@Html.Raw(FormatListWithMore(product.SeniorResponsibleOfficerContacts, 2))</small>
+                                                }
+                                                else
+                                                {
+                                                    <small class="text-muted">-</small>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (product.ProductManagerContacts != null && product.ProductManagerContacts.Any())
+                                                {
+                                                    <small>@Html.Raw(FormatListWithMore(product.ProductManagerContacts, 2))</small>
+                                                }
+                                                else
+                                                {
+                                                    <small class="text-muted">-</small>
+                                                }
+                                            </td>
+                                            <td class="text-center">
+                                                <small>
+                                                    @if (product.HasProductUrl)
+                                                    {
+                                                        <span class="badge badge-success">
+                                                            <i class="fas fa-check"></i>
+                                                        </span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge badge-secondary">
+                                                            <i class="fas fa-times"></i>
+                                                        </span>
+                                                    }
+                                                </small>
                                             </td>
                                         </tr>
                                     }
@@ -270,6 +366,53 @@
     </div>
 </section>
 
+<!-- Bulk CMDB Sync Progress Modal -->
+<div class="modal fade" id="bulkSyncModal" tabindex="-1" role="dialog" aria-labelledby="bulkSyncModalLabel" aria-hidden="true" data-backdrop="static" data-keyboard="false">
+    <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="bulkSyncModalLabel">
+                    <i class="fas fa-sync fa-spin mr-2"></i>
+                    Syncing Products from CMDB
+                </h5>
+            </div>
+            <div class="modal-body">
+                <div class="text-center mb-3">
+                    <i class="fas fa-spinner fa-spin text-primary" style="font-size: 2rem;"></i>
+                </div>
+                <p class="mb-2 text-center" id="bulkSyncStatus">Initializing sync process...</p>
+                <div class="mt-3">
+                    <div class="progress" style="height: 25px;">
+                        <div id="bulkSyncProgressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-primary" role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                            <span id="bulkSyncProgressText">0%</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <div class="card">
+                        <div class="card-header">
+                            <h6 class="mb-0">Sync Progress</h6>
+                        </div>
+                        <div class="card-body" style="max-height: 300px; overflow-y: auto;">
+                            <div id="bulkSyncLog" class="small">
+                                <!-- Progress log entries will be added here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-3" id="bulkSyncResults" style="display: none;">
+                    <div class="alert alert-success mb-0">
+                        <strong id="bulkSyncResultsSummary"></strong>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer" id="bulkSyncFooter" style="display: none;">
+                <button type="button" class="btn btn-primary" data-dismiss="modal" id="bulkSyncCloseBtn">Close & Refresh</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script nonce="@Context.Items["Nonce"]">
     (function () {
         // Wait for DOM and jQuery to be ready
@@ -286,6 +429,11 @@
                 var phaseFilter = document.getElementById('phaseFilter');
                 var channelFilter = document.getElementById('channelFilter');
                 var typeFilter = document.getElementById('typeFilter');
+                var serviceOwnerFilter = document.getElementById('serviceOwnerFilter');
+                var deliveryManagerFilter = document.getElementById('deliveryManagerFilter');
+                var informationAssetOwnerFilter = document.getElementById('informationAssetOwnerFilter');
+                var seniorResponsibleOfficerFilter = document.getElementById('seniorResponsibleOfficerFilter');
+                var productManagerFilter = document.getElementById('productManagerFilter');
                 var productsTable = document.getElementById('productsTable');
                 var visibleCountEl = document.getElementById('visibleCount');
 
@@ -294,6 +442,11 @@
                 var phaseFilterValue = (phaseFilter ? phaseFilter.value : '').toString();
                 var channelFilterValue = (channelFilter ? channelFilter.value : '').toString();
                 var typeFilterValue = (typeFilter ? typeFilter.value : '').toString();
+                var serviceOwnerFilterValue = (serviceOwnerFilter ? serviceOwnerFilter.value : '').toString();
+                var deliveryManagerFilterValue = (deliveryManagerFilter ? deliveryManagerFilter.value : '').toString();
+                var informationAssetOwnerFilterValue = (informationAssetOwnerFilter ? informationAssetOwnerFilter.value : '').toString();
+                var seniorResponsibleOfficerFilterValue = (seniorResponsibleOfficerFilter ? seniorResponsibleOfficerFilter.value : '').toString();
+                var productManagerFilterValue = (productManagerFilter ? productManagerFilter.value : '').toString();
 
                 var visibleCount = 0;
 
@@ -307,6 +460,11 @@
                         var phase = (row.getAttribute('data-phase') || '').toString();
                         var channels = (row.getAttribute('data-channels') || '').toString().toLowerCase();
                         var types = (row.getAttribute('data-types') || '').toString().toLowerCase();
+                        var serviceOwner = (row.getAttribute('data-service-owner') || '').toString().toLowerCase();
+                        var deliveryManager = (row.getAttribute('data-delivery-manager') || '').toString().toLowerCase();
+                        var informationAssetOwner = (row.getAttribute('data-information-asset-owner') || '').toString().toLowerCase();
+                        var seniorResponsibleOfficer = (row.getAttribute('data-senior-responsible-officer') || '').toString().toLowerCase();
+                        var productManager = (row.getAttribute('data-product-manager') || '').toString().toLowerCase();
 
                         var matchesSearch = !searchTerm || 
                                            productTitle.includes(searchTerm) || 
@@ -352,7 +510,59 @@
                             }
                         }
 
-                        if (matchesSearch && matchesBusinessArea && matchesPhase && matchesChannel && matchesType) {
+                        // Service Owner filter
+                        var matchesServiceOwner = true;
+                        if (serviceOwnerFilterValue) {
+                            if (serviceOwnerFilterValue === '__not_set__') {
+                                matchesServiceOwner = !serviceOwner || serviceOwner === '';
+                            } else {
+                                matchesServiceOwner = serviceOwner.includes(serviceOwnerFilterValue.toLowerCase());
+                            }
+                        }
+
+                        // Delivery Manager filter
+                        var matchesDeliveryManager = true;
+                        if (deliveryManagerFilterValue) {
+                            if (deliveryManagerFilterValue === '__not_set__') {
+                                matchesDeliveryManager = !deliveryManager || deliveryManager === '';
+                            } else {
+                                matchesDeliveryManager = deliveryManager.includes(deliveryManagerFilterValue.toLowerCase());
+                            }
+                        }
+
+                        // Information Asset Owner filter
+                        var matchesInformationAssetOwner = true;
+                        if (informationAssetOwnerFilterValue) {
+                            if (informationAssetOwnerFilterValue === '__not_set__') {
+                                matchesInformationAssetOwner = !informationAssetOwner || informationAssetOwner === '';
+                            } else {
+                                matchesInformationAssetOwner = informationAssetOwner.includes(informationAssetOwnerFilterValue.toLowerCase());
+                            }
+                        }
+
+                        // Senior Responsible Officer filter
+                        var matchesSeniorResponsibleOfficer = true;
+                        if (seniorResponsibleOfficerFilterValue) {
+                            if (seniorResponsibleOfficerFilterValue === '__not_set__') {
+                                matchesSeniorResponsibleOfficer = !seniorResponsibleOfficer || seniorResponsibleOfficer === '';
+                            } else {
+                                matchesSeniorResponsibleOfficer = seniorResponsibleOfficer.includes(seniorResponsibleOfficerFilterValue.toLowerCase());
+                            }
+                        }
+
+                        // Product Manager filter
+                        var matchesProductManager = true;
+                        if (productManagerFilterValue) {
+                            if (productManagerFilterValue === '__not_set__') {
+                                matchesProductManager = !productManager || productManager === '';
+                            } else {
+                                matchesProductManager = productManager.includes(productManagerFilterValue.toLowerCase());
+                            }
+                        }
+
+                        if (matchesSearch && matchesBusinessArea && matchesPhase && matchesChannel && matchesType && 
+                            matchesServiceOwner && matchesDeliveryManager && matchesInformationAssetOwner && 
+                            matchesSeniorResponsibleOfficer && matchesProductManager) {
                             row.style.display = '';
                             visibleCount++;
                         } else {
@@ -400,16 +610,113 @@
                     var phaseFilter = document.getElementById('phaseFilter');
                     var channelFilter = document.getElementById('channelFilter');
                     var typeFilter = document.getElementById('typeFilter');
+                    var serviceOwnerFilter = document.getElementById('serviceOwnerFilter');
+                    var deliveryManagerFilter = document.getElementById('deliveryManagerFilter');
+                    var informationAssetOwnerFilter = document.getElementById('informationAssetOwnerFilter');
+                    var seniorResponsibleOfficerFilter = document.getElementById('seniorResponsibleOfficerFilter');
+                    var productManagerFilter = document.getElementById('productManagerFilter');
                     
                     if (searchInput) searchInput.value = '';
                     if (businessAreaFilter) businessAreaFilter.value = '';
                     if (phaseFilter) phaseFilter.value = '';
                     if (channelFilter) channelFilter.value = '';
                     if (typeFilter) typeFilter.value = '';
+                    if (serviceOwnerFilter) serviceOwnerFilter.value = '';
+                    if (deliveryManagerFilter) deliveryManagerFilter.value = '';
+                    if (informationAssetOwnerFilter) informationAssetOwnerFilter.value = '';
+                    if (seniorResponsibleOfficerFilter) seniorResponsibleOfficerFilter.value = '';
+                    if (productManagerFilter) productManagerFilter.value = '';
                     
                     filterTable();
                 });
             }
+        }
+
+        // Initialize sorting
+        function initSorting() {
+            var table = document.getElementById('productsTable');
+            if (!table) return;
+
+            var sortableHeaders = table.querySelectorAll('.sortable');
+            var currentSort = { column: null, direction: 'asc' };
+
+            sortableHeaders.forEach(function(header) {
+                header.addEventListener('click', function(e) {
+                    var column = header.getAttribute('data-column');
+                    var direction = 'asc';
+                    
+                    if (currentSort.column === column && currentSort.direction === 'asc') {
+                        direction = 'desc';
+                    }
+                    
+                    sortTable(column, direction);
+                    currentSort = { column: column, direction: direction };
+                    
+                    // Update sort icons
+                    sortableHeaders.forEach(function(h) {
+                        var icon = h.querySelector('i');
+                        if (h === header) {
+                            if (icon) {
+                                icon.className = direction === 'asc' ? 'fas fa-sort-up' : 'fas fa-sort-down';
+                            }
+                        } else {
+                            if (icon) {
+                                icon.className = 'fas fa-sort';
+                            }
+                        }
+                    });
+                });
+            });
+
+            function sortTable(column, direction) {
+                var tbody = table.querySelector('tbody');
+                if (!tbody) return;
+
+                var rows = Array.from(tbody.querySelectorAll('tr'));
+                
+                rows.sort(function(a, b) {
+                    var aVal, bVal;
+                    var colIndex = Array.from(table.querySelectorAll('thead th')).indexOf(
+                        table.querySelector('thead th[data-column="' + column + '"]')
+                    );
+                    
+                    if (column === 'completion') {
+                        aVal = parseFloat(a.getAttribute('data-completion') || '0');
+                        bVal = parseFloat(b.getAttribute('data-completion') || '0');
+                    } else if (column === 'productUrl') {
+                        aVal = a.getAttribute('data-product-url') === 'yes' ? 1 : 0;
+                        bVal = b.getAttribute('data-product-url') === 'yes' ? 1 : 0;
+                    } else {
+                        var aCell = a.querySelectorAll('td')[colIndex];
+                        var bCell = b.querySelectorAll('td')[colIndex];
+                        aVal = aCell ? aCell.textContent.trim().toLowerCase() : '';
+                        bVal = bCell ? bCell.textContent.trim().toLowerCase() : '';
+                    }
+                    
+                    if (direction === 'asc') {
+                        return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+                    } else {
+                        return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
+                    }
+                });
+                
+                // Clear and re-append sorted rows
+                tbody.innerHTML = '';
+                rows.forEach(function(row) {
+                    tbody.appendChild(row);
+                });
+            }
+        }
+
+        // Initialize when DOM is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', function() {
+                initFilters();
+                initSorting();
+            });
+        } else {
+            initFilters();
+            initSorting();
         }
 
         // Initialize when DOM is ready
@@ -417,6 +724,194 @@
             document.addEventListener('DOMContentLoaded', initFilters);
         } else {
             initFilters();
+        }
+
+        // Bulk CMDB Sync functionality
+        var bulkSyncBtn = document.getElementById('bulkSyncBtn');
+        var currentSyncId = null;
+        var syncPollInterval = null;
+
+        if (bulkSyncBtn) {
+            bulkSyncBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                startBulkSync();
+            });
+        }
+
+        // Handle close button click
+        var bulkSyncCloseBtn = document.getElementById('bulkSyncCloseBtn');
+        if (bulkSyncCloseBtn) {
+            bulkSyncCloseBtn.addEventListener('click', function() {
+                location.reload();
+            });
+        }
+
+        function startBulkSync() {
+            // Reset modal state
+            document.getElementById('bulkSyncProgressBar').style.width = '0%';
+            document.getElementById('bulkSyncProgressText').textContent = '0%';
+            document.getElementById('bulkSyncStatus').textContent = 'Starting bulk sync...';
+            document.getElementById('bulkSyncStatus').className = 'mb-2 text-center';
+            document.getElementById('bulkSyncLog').innerHTML = '';
+            document.getElementById('bulkSyncResults').style.display = 'none';
+            document.getElementById('bulkSyncFooter').style.display = 'none';
+            currentSyncId = null;
+
+            // Clear any existing polling
+            if (syncPollInterval) {
+                clearInterval(syncPollInterval);
+                syncPollInterval = null;
+            }
+
+            // Show modal
+            $('#bulkSyncModal').modal('show');
+
+            // Get anti-forgery token
+            var token = document.querySelector('input[name="__RequestVerificationToken"]')?.value || '';
+            if (!token) {
+                // Try to find token in a form
+                var form = document.querySelector('form');
+                if (form) {
+                    token = form.querySelector('input[name="__RequestVerificationToken"]')?.value || '';
+                }
+            }
+
+            if (!token) {
+                console.error('Anti-forgery token not found');
+                document.getElementById('bulkSyncStatus').textContent = 'Error: Security token not found. Please refresh the page.';
+                document.getElementById('bulkSyncStatus').className = 'mb-2 text-center text-danger';
+                document.getElementById('bulkSyncFooter').style.display = 'block';
+                return;
+            }
+
+            // Use FormData to properly send anti-forgery token
+            // Note: Don't set Content-Type header - browser will set it automatically with boundary
+            var formData = new FormData();
+            formData.append('__RequestVerificationToken', token);
+
+            // Start sync process
+            fetch('@Url.Action("BulkSyncRolesFromCmdb", "FipsManager")', {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                credentials: 'same-origin',
+                body: formData
+            })
+            .then(async response => {
+                if (!response.ok) {
+                    var text = await response.text();
+                    var errorMessage = 'Network response was not ok: ' + response.status + ' ' + response.statusText;
+                    try {
+                        var errorData = JSON.parse(text);
+                        errorMessage = errorData.error || errorData.message || errorMessage;
+                    } catch (e) {
+                        // If response is HTML (like anti-forgery token error page), try to extract error
+                        if (text.includes('Antiforgery') || text.includes('token')) {
+                            errorMessage = 'Security token validation failed. Please refresh the page and try again.';
+                        }
+                    }
+                    throw new Error(errorMessage);
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+                currentSyncId = data.syncId;
+                updateSyncProgress(data);
+                // Start polling
+                syncPollInterval = setInterval(function() {
+                    pollSyncProgress();
+                }, 1000);
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                document.getElementById('bulkSyncStatus').textContent = 'Error: ' + error.message;
+                document.getElementById('bulkSyncStatus').className = 'mb-2 text-center text-danger';
+                document.getElementById('bulkSyncFooter').style.display = 'block';
+            });
+        }
+
+        function pollSyncProgress() {
+            if (!currentSyncId) {
+                return;
+            }
+
+            fetch('@Url.Action("GetBulkSyncProgress", "FipsManager")?syncId=' + encodeURIComponent(currentSyncId), {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+                updateSyncProgress(data);
+                if (data.isComplete) {
+                    if (syncPollInterval) {
+                        clearInterval(syncPollInterval);
+                        syncPollInterval = null;
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                document.getElementById('bulkSyncStatus').textContent = 'Error: ' + error.message;
+                document.getElementById('bulkSyncStatus').className = 'mb-2 text-center text-danger';
+                if (syncPollInterval) {
+                    clearInterval(syncPollInterval);
+                    syncPollInterval = null;
+                }
+            });
+        }
+
+        function updateSyncProgress(data) {
+            var progress = data.progress || 0;
+            var total = data.total || 0;
+            var current = data.current || 0;
+            var status = data.status || '';
+            var logEntries = data.logEntries || [];
+            var isComplete = data.isComplete || false;
+
+            // Update progress bar
+            document.getElementById('bulkSyncProgressBar').style.width = progress + '%';
+            document.getElementById('bulkSyncProgressText').textContent = progress.toFixed(1) + '%';
+            document.getElementById('bulkSyncProgressBar').setAttribute('aria-valuenow', progress);
+
+            // Update status
+            document.getElementById('bulkSyncStatus').textContent = status;
+
+            // Update log
+            var logDiv = document.getElementById('bulkSyncLog');
+            logDiv.innerHTML = '';
+            logEntries.forEach(function(entry) {
+                var logEntry = document.createElement('div');
+                logEntry.className = 'mb-1';
+                var icon = entry.type === 'success' ? 'fa-check-circle text-success' : 
+                          entry.type === 'error' ? 'fa-times-circle text-danger' : 
+                          'fa-info-circle text-info';
+                logEntry.innerHTML = '<i class="fas ' + icon + ' mr-2"></i>' + entry.message;
+                logDiv.appendChild(logEntry);
+            });
+            logDiv.scrollTop = logDiv.scrollHeight;
+
+            if (isComplete) {
+                // Show results
+                var successCount = data.successCount || 0;
+                var errorCount = data.errorCount || 0;
+                var skippedCount = data.skippedCount || 0;
+                
+                document.getElementById('bulkSyncResultsSummary').textContent = 
+                    'Sync completed! ' + successCount + ' products updated, ' + 
+                    errorCount + ' errors, ' + skippedCount + ' skipped.';
+                document.getElementById('bulkSyncResults').style.display = 'block';
+                document.getElementById('bulkSyncFooter').style.display = 'block';
+                document.getElementById('bulkSyncStatus').textContent = 'Sync completed!';
+            }
         }
     })();
 </script>
