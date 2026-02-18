@@ -30,7 +30,6 @@ public class ProductDqReview
     [StringLength(4000)]
     public string? ChangesMade { get; set; }
     
-    [StringLength(8000)]
     public string? ContactChangesJson { get; set; }
     
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
