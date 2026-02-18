@@ -2193,8 +2193,7 @@ public partial class CompassDbContext : DbContext
             .HasColumnType("nvarchar(4000)");
         modelBuilder.Entity<ProductDqReview>()
             .Property(r => r.ContactChangesJson)
-            .HasMaxLength(8000)
-            .HasColumnType("nvarchar(8000)");
+            .HasColumnType("nvarchar(MAX)");
 
         modelBuilder.Entity<UserGroup>()
             .HasOne(ug => ug.Group)
