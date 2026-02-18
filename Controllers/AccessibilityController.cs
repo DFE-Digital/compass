@@ -150,11 +150,13 @@ namespace Compass.Controllers
             if (!string.IsNullOrEmpty(currentUserEmail))
             {
                 // Get user's assigned products from CMS
-                var productsByContact = await _productsApiService.GetProductsAsync(currentUserEmail);
                 var productsByServiceOwner = await _productsApiService.GetProductsByServiceOwnerAsync(currentUserEmail);
+                var productsByProductManager = await _productsApiService.GetProductsByProductManagerAsync(currentUserEmail);
+                var productsByDeliveryManager = await _productsApiService.GetProductsByDeliveryManagerAsync(currentUserEmail);
                 
-                var allUserProducts = productsByContact
-                    .Concat(productsByServiceOwner)
+                var allUserProducts = productsByServiceOwner
+                    .Concat(productsByProductManager)
+                    .Concat(productsByDeliveryManager)
                     .GroupBy(p => p.FipsId)
                     .Select(g => g.First())
                     .ToList();
@@ -221,15 +223,19 @@ namespace Compass.Controllers
                     var userAssignedProducts = new List<ProductDto>();
                     if (!string.IsNullOrEmpty(currentUserEmail))
                     {
-                        // Get products where user is a contact (via product_contacts)
-                        var productsByContact = await _productsApiService.GetProductsAsync(currentUserEmail);
-                        
                         // Get products where user is a service owner
                         var productsByServiceOwner = await _productsApiService.GetProductsByServiceOwnerAsync(currentUserEmail);
                         
+                        // Get products where user is a product manager
+                        var productsByProductManager = await _productsApiService.GetProductsByProductManagerAsync(currentUserEmail);
+                        
+                        // Get products where user is a delivery manager
+                        var productsByDeliveryManager = await _productsApiService.GetProductsByDeliveryManagerAsync(currentUserEmail);
+                        
                         // Combine and deduplicate by FipsId
-                        var allUserProducts = productsByContact
-                            .Concat(productsByServiceOwner)
+                        var allUserProducts = productsByServiceOwner
+                            .Concat(productsByProductManager)
+                            .Concat(productsByDeliveryManager)
                             .GroupBy(p => p.FipsId)
                             .Select(g => g.First())
                             .ToList();

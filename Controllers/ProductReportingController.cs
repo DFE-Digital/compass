@@ -55,16 +55,16 @@ public class ProductReportingController : Controller
         // Get the current user's email
         var userEmail = User.Identity?.Name;
         
-        // Fetch user's products - from product_contacts, service_owner, product_manager, and reporting_user
-        var productsByContact = await _productsApiService.GetProductsAsync(userEmail);
+        // Fetch user's products - from service_owner, product_manager, delivery_manager, and reporting_user
         var productsByServiceOwner = await _productsApiService.GetProductsByServiceOwnerAsync(userEmail);
         var productsByProductManager = await _productsApiService.GetProductsByProductManagerAsync(userEmail);
+        var productsByDeliveryManager = await _productsApiService.GetProductsByDeliveryManagerAsync(userEmail);
         var productsByReportingUser = await _productsApiService.GetProductsByReportingUserAsync(userEmail);
         
         // Combine and deduplicate products (by FipsId)
-        var userProducts = productsByContact
-            .Concat(productsByServiceOwner)
+        var userProducts = productsByServiceOwner
             .Concat(productsByProductManager)
+            .Concat(productsByDeliveryManager)
             .Concat(productsByReportingUser)
             .GroupBy(p => p.FipsId)
             .Where(g => !string.IsNullOrEmpty(g.Key))
@@ -382,19 +382,19 @@ public class ProductReportingController : Controller
         var isOpen = now >= selectedCommission.OpenDate && now <= selectedCommission.DueDate.AddDays(1);
         var isPastDue = now > selectedCommission.DueDate;
 
-        // Fetch user's products - from product_contacts, service_owner, product_manager, and reporting_user
-        var productsByContact = await _productsApiService.GetProductsAsync(userEmail);
+        // Fetch user's products - from service_owner, product_manager, delivery_manager, and reporting_user
         var productsByServiceOwner = await _productsApiService.GetProductsByServiceOwnerAsync(userEmail);
         var productsByProductManager = await _productsApiService.GetProductsByProductManagerAsync(userEmail);
+        var productsByDeliveryManager = await _productsApiService.GetProductsByDeliveryManagerAsync(userEmail);
         var productsByReportingUser = await _productsApiService.GetProductsByReportingUserAsync(userEmail);
         
         // Combine and deduplicate products (by FipsId)
         // Then exclude Decommissioned/Decommissioning Phase products
         // Also exclude products where the only Type is "Data" from performance reporting,
         // but keep products that have "Data" alongside another Type.
-        var userProducts = productsByContact
-            .Concat(productsByServiceOwner)
+        var userProducts = productsByServiceOwner
             .Concat(productsByProductManager)
+            .Concat(productsByDeliveryManager)
             .Concat(productsByReportingUser)
             .GroupBy(p => p.FipsId)
             .Where(g => !string.IsNullOrEmpty(g.Key))
@@ -428,8 +428,8 @@ public class ProductReportingController : Controller
             })
             .ToList();
             
-        _logger.LogInformation("Commission: Found {ContactCount} products by contact, {ServiceOwnerCount} by service owner, {ProductManagerCount} by product manager, {ReportingUserCount} by reporting user, {TotalCount} total unique (after Phase filter) for user {UserEmail}", 
-            productsByContact.Count, productsByServiceOwner.Count, productsByProductManager.Count, productsByReportingUser.Count, userProducts.Count, userEmail);
+        _logger.LogInformation("Commission: Found {ServiceOwnerCount} products by service owner, {ProductManagerCount} by product manager, {DeliveryManagerCount} by delivery manager, {ReportingUserCount} by reporting user, {TotalCount} total unique (after Phase filter) for user {UserEmail}", 
+            productsByServiceOwner.Count, productsByProductManager.Count, productsByDeliveryManager.Count, productsByReportingUser.Count, userProducts.Count, userEmail);
 
         // Get all commission submissions for this commission
         var allSubmissions = await _context.CommissionSubmissions
@@ -2547,22 +2547,22 @@ public class ProductReportingController : Controller
         // PERFORMANCE OPTIMIZATION: Load API calls in parallel, but execute database queries sequentially
         // to avoid DbContext concurrency issues
         // Fetch user's products in parallel (these are API calls, not DB queries)
-        var userProductsByContactTask = _productsApiService.GetProductsAsync(userEmail);
         var userProductsByServiceOwnerTask = _productsApiService.GetProductsByServiceOwnerAsync(userEmail);
         var userProductsByProductManagerTask = _productsApiService.GetProductsByProductManagerAsync(userEmail);
+        var userProductsByDeliveryManagerTask = _productsApiService.GetProductsByDeliveryManagerAsync(userEmail);
         var userProductsByReportingUserTask = _productsApiService.GetProductsByReportingUserAsync(userEmail);
         
         // Wait for API calls to complete (these don't use DbContext)
         await Task.WhenAll(
-            userProductsByContactTask,
             userProductsByServiceOwnerTask,
             userProductsByProductManagerTask,
+            userProductsByDeliveryManagerTask,
             userProductsByReportingUserTask);
         
         // Get results from API calls
-        var productsByContact = await userProductsByContactTask;
         var productsByServiceOwner = await userProductsByServiceOwnerTask;
         var productsByProductManager = await userProductsByProductManagerTask;
+        var productsByDeliveryManager = await userProductsByDeliveryManagerTask;
         var productsByReportingUser = await userProductsByReportingUserTask;
         
         // Execute database queries sequentially to avoid DbContext concurrency issues
@@ -2590,9 +2590,9 @@ public class ProductReportingController : Controller
             .ToListAsync();
         
         // Combine and deduplicate user's products
-        var userProducts = productsByContact
-            .Concat(productsByServiceOwner)
+        var userProducts = productsByServiceOwner
             .Concat(productsByProductManager)
+            .Concat(productsByDeliveryManager)
             .Concat(productsByReportingUser)
             .GroupBy(p => p.FipsId)
             .Where(g => !string.IsNullOrEmpty(g.Key))
@@ -2691,24 +2691,24 @@ public class ProductReportingController : Controller
         // PERFORMANCE OPTIMIZATION: Load API calls in parallel, but execute database queries sequentially
         // to avoid DbContext concurrency issues
         // Fetch user's products in parallel (these are API calls, not DB queries)
-        var userProductsByContactTask = _productsApiService.GetProductsAsync(userEmail);
         var userProductsByServiceOwnerTask = _productsApiService.GetProductsByServiceOwnerAsync(userEmail);
         var userProductsByProductManagerTask = _productsApiService.GetProductsByProductManagerAsync(userEmail);
+        var userProductsByDeliveryManagerTask = _productsApiService.GetProductsByDeliveryManagerAsync(userEmail);
         var userProductsByReportingUserTask = _productsApiService.GetProductsByReportingUserAsync(userEmail);
         var eligibilityCacheTask = _eligibilityService.LoadEligibilityCacheAsync();
         
         // Wait for API calls to complete
         await Task.WhenAll(
-            userProductsByContactTask,
             userProductsByServiceOwnerTask,
             userProductsByProductManagerTask,
+            userProductsByDeliveryManagerTask,
             userProductsByReportingUserTask,
             eligibilityCacheTask);
         
         // Get results from API calls
-        var productsByContact = await userProductsByContactTask;
         var productsByServiceOwner = await userProductsByServiceOwnerTask;
         var productsByProductManager = await userProductsByProductManagerTask;
+        var productsByDeliveryManager = await userProductsByDeliveryManagerTask;
         var productsByReportingUser = await userProductsByReportingUserTask;
         var eligibilityCache = await eligibilityCacheTask;
         
@@ -2721,9 +2721,9 @@ public class ProductReportingController : Controller
             .ToListAsync();
         
         // Combine and deduplicate user's products
-        var userProducts = productsByContact
-            .Concat(productsByServiceOwner)
+        var userProducts = productsByServiceOwner
             .Concat(productsByProductManager)
+            .Concat(productsByDeliveryManager)
             .Concat(productsByReportingUser)
             .GroupBy(p => p.FipsId)
             .Where(g => !string.IsNullOrEmpty(g.Key))

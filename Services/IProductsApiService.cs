@@ -7,6 +7,7 @@ public interface IProductsApiService
     Task<List<ProductDto>> GetProductsAsync(string? userEmail = null);
     Task<List<ProductDto>> GetProductsByServiceOwnerAsync(string? userEmail);
     Task<List<ProductDto>> GetProductsByProductManagerAsync(string? userEmail);
+    Task<List<ProductDto>> GetProductsByDeliveryManagerAsync(string? userEmail);
     Task<List<ProductDto>> GetProductsByReportingUserAsync(string? userEmail);
     Task<List<ProductDto>> GetAllProductsAsync(string? userEmail = null);
     Task<ProductDto?> GetProductByFipsIdAsync(string fipsId);

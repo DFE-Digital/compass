@@ -382,16 +382,16 @@ public class HomeController : Controller
             .OrderBy(p => p.Title)
             .ToListAsync();
 
-        // Fetch user's products - from product_contacts, service_owner, product_manager, and reporting_user (same approach as ProductReportingController)
-        var productsByContact = await _productsApiService.GetProductsAsync(userEmail);
+        // Fetch user's products - from service_owner, product_manager, delivery_manager, and reporting_user (same approach as ProductReportingController)
         var productsByServiceOwner = await _productsApiService.GetProductsByServiceOwnerAsync(userEmail);
         var productsByProductManager = await _productsApiService.GetProductsByProductManagerAsync(userEmail);
+        var productsByDeliveryManager = await _productsApiService.GetProductsByDeliveryManagerAsync(userEmail);
         var productsByReportingUser = await _productsApiService.GetProductsByReportingUserAsync(userEmail);
         
         // Combine and deduplicate products (by FipsId)
-        var myProducts = productsByContact
-            .Concat(productsByServiceOwner)
+        var myProducts = productsByServiceOwner
             .Concat(productsByProductManager)
+            .Concat(productsByDeliveryManager)
             .Concat(productsByReportingUser)
             .GroupBy(p => p.FipsId)
             .Where(g => !string.IsNullOrEmpty(g.Key))
