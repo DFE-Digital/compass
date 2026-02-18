@@ -226,6 +226,9 @@ public partial class CompassDbContext : DbContext
     public DbSet<ProjectPmoContact> ProjectPmoContacts { get; set; }
     public DbSet<ProjectWatchlist> ProjectWatchlists { get; set; }
     
+    // Product DQ Reviews
+    public DbSet<ProductDqReview> ProductDqReviews { get; set; }
+    
     // RAID Junction Tables
     public DbSet<RiskAction> RiskActions { get; set; }
     public DbSet<RiskRiskType> RiskRiskTypes { get; set; }
@@ -2182,6 +2185,16 @@ public partial class CompassDbContext : DbContext
             .WithMany(u => u.UserGroups)
             .HasForeignKey(ug => ug.UserId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        // ProductDqReview configuration
+        modelBuilder.Entity<ProductDqReview>()
+            .Property(r => r.ChangesMade)
+            .HasMaxLength(4000)
+            .HasColumnType("nvarchar(4000)");
+        modelBuilder.Entity<ProductDqReview>()
+            .Property(r => r.ContactChangesJson)
+            .HasMaxLength(8000)
+            .HasColumnType("nvarchar(8000)");
 
         modelBuilder.Entity<UserGroup>()
             .HasOne(ug => ug.Group)
