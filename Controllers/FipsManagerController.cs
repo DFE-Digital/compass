@@ -8,6 +8,9 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Caching.Memory;
 using System.Text;
 using System.Text.Json;
+using Compass.Data;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Http;
 
 namespace Compass.Controllers;
 
@@ -20,6 +23,8 @@ public class FipsManagerController : Controller
     private readonly ICmdbService _cmdbService;
     private readonly IMemoryCache _cache;
     private readonly IPermissionService _permissionService;
+    private readonly CompassDbContext _context;
+    private readonly INotificationService _notificationService;
 
     public FipsManagerController(
         ILogger<FipsManagerController> logger,
@@ -27,7 +32,9 @@ public class FipsManagerController : Controller
         IConfiguration configuration,
         ICmdbService cmdbService,
         IMemoryCache cache,
-        IPermissionService permissionService)
+        IPermissionService permissionService,
+        CompassDbContext context,
+        INotificationService notificationService)
     {
         _logger = logger;
         _productsApiService = productsApiService;
@@ -35,6 +42,8 @@ public class FipsManagerController : Controller
         _cmdbService = cmdbService;
         _cache = cache;
         _permissionService = permissionService;
+        _context = context;
+        _notificationService = notificationService;
     }
 
     private async Task<bool> HasFipsManagerAccessAsync()
@@ -1376,6 +1385,1370 @@ public class FipsManagerController : Controller
             return false;
         }
     }
+
+    // GET: FipsManager/ProductDqManager/MyServices
+    [HttpGet]
+    [Route("FipsManager/ProductDqManager/MyServices")]
+    public async Task<IActionResult> ProductDqManagerMyServices()
+    {
+        // Check feature flag
+        if (!_configuration.GetValue<bool>("FeatureFlags:EnableFIPSManager", false))
+        {
+            return NotFound();
+        }
+
+        // Check user has access to FIPS Manager
+        if (!await HasFipsManagerAccessAsync())
+        {
+            return Forbid();
+        }
+
+        try
+        {
+            var userEmail = User?.Identity?.Name ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(userEmail))
+            {
+                TempData["ErrorMessage"] = "User email not found.";
+                return RedirectToAction(nameof(Index));
+            }
+
+            ViewData["Title"] = "Product DQ Manager - My Services";
+
+            // Get products where user is in one of the roles
+            var productsByServiceOwner = await _productsApiService.GetProductsByServiceOwnerAsync(userEmail);
+            var productsByProductManager = await _productsApiService.GetProductsByProductManagerAsync(userEmail);
+            var productsByDeliveryManager = await _productsApiService.GetProductsByDeliveryManagerAsync(userEmail);
+
+            // Get all products and filter by Information Asset Owner and Senior Responsible Officer client-side
+            var allProducts = await _productsApiService.GetAllProductsAsync(null);
+            var productsByInformationAssetOwner = allProducts
+                .Where(p => p.InformationAssetOwners != null && 
+                           p.InformationAssetOwners.Any(iao => 
+                               iao.EmailAddress?.Equals(userEmail, StringComparison.OrdinalIgnoreCase) == true))
+                .ToList();
+            var productsBySeniorResponsibleOfficer = allProducts
+                .Where(p => p.SeniorResponsibleOfficers != null && 
+                           p.SeniorResponsibleOfficers.Any(sro => 
+                               sro.EmailAddress?.Equals(userEmail, StringComparison.OrdinalIgnoreCase) == true))
+                .ToList();
+
+            // Combine and deduplicate by DocumentId
+            var allUserProducts = productsByServiceOwner
+                .Concat(productsByProductManager)
+                .Concat(productsByDeliveryManager)
+                .Concat(productsByInformationAssetOwner)
+                .Concat(productsBySeniorResponsibleOfficer)
+                .Where(p => !string.IsNullOrEmpty(p.DocumentId))
+                .GroupBy(p => p.DocumentId)
+                .Select(g => g.First())
+                .OrderBy(p => p.Title)
+                .ToList();
+
+            // Get DQ reviews for these products
+            var documentIds = allUserProducts.Select(p => p.DocumentId!).ToList();
+            var dqReviews = await _context.ProductDqReviews
+                .Where(r => documentIds.Contains(r.ProductDocumentId))
+                .ToListAsync();
+
+            // Create view model with DQ data
+            var productsWithDq = allUserProducts.Select(p =>
+            {
+                var dqScore = CalculateDqScore(p);
+                var review = dqReviews.FirstOrDefault(r => r.ProductDocumentId == p.DocumentId);
+                
+                DateTime nextDue;
+                if (review != null && review.NextDueDate != default(DateTime))
+                {
+                    nextDue = review.NextDueDate;
+                }
+                else if (review?.LastReviewedDate != null)
+                {
+                    nextDue = review.LastReviewedDate.AddMonths(6);
+                }
+                else
+                {
+                    // Default to 31 Mar 2026 if no review exists
+                    nextDue = new DateTime(2026, 3, 31, 0, 0, 0, DateTimeKind.Utc);
+                }
+
+                return new ProductDqListItem
+                {
+                    Product = p,
+                    DqScore = dqScore,
+                    LastReviewedDate = review?.LastReviewedDate,
+                    NextDueDate = nextDue,
+                    HasReviewInProgress = false // TODO: Track in-progress reviews
+                };
+            }).ToList();
+
+            var viewModel = new ProductDqManagerIndexViewModel
+            {
+                Products = productsWithDq,
+                ViewType = "MyServices"
+            };
+
+            return View("ProductDqManager/Index", viewModel);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading Product DQ Manager My Services");
+            TempData["ErrorMessage"] = "An error occurred while loading products. Please try again.";
+            return View("ProductDqManager/Index", new ProductDqManagerIndexViewModel { ViewType = "MyServices" });
+        }
+    }
+
+    // GET: FipsManager/ProductDqManager/AllProducts
+    [HttpGet]
+    [Route("FipsManager/ProductDqManager/AllProducts")]
+    public async Task<IActionResult> ProductDqManagerAllProducts()
+    {
+        // Check feature flag
+        if (!_configuration.GetValue<bool>("FeatureFlags:EnableFIPSManager", false))
+        {
+            return NotFound();
+        }
+
+        // Check user has access to FIPS Manager
+        if (!await HasFipsManagerAccessAsync())
+        {
+            return Forbid();
+        }
+
+        try
+        {
+            ViewData["Title"] = "Product DQ Manager - All Products";
+
+            // Get all active products
+            var allProducts = await _productsApiService.GetAllProductsAsync(null);
+            var activeProducts = allProducts
+                .Where(p => !string.IsNullOrEmpty(p.State) 
+                    && p.State.Equals("Active", StringComparison.OrdinalIgnoreCase)
+                    && !string.IsNullOrEmpty(p.DocumentId))
+                .OrderBy(p => p.Title)
+                .ToList();
+
+            // Get DQ reviews for these products
+            var documentIds = activeProducts.Select(p => p.DocumentId!).ToList();
+            var dqReviews = await _context.ProductDqReviews
+                .Where(r => documentIds.Contains(r.ProductDocumentId))
+                .ToListAsync();
+
+            // Create view model with DQ data
+            var productsWithDq = activeProducts.Select(p =>
+            {
+                var dqScore = CalculateDqScore(p);
+                var review = dqReviews.FirstOrDefault(r => r.ProductDocumentId == p.DocumentId);
+                
+                DateTime nextDue;
+                if (review != null && review.NextDueDate != default(DateTime))
+                {
+                    nextDue = review.NextDueDate;
+                }
+                else if (review?.LastReviewedDate != null)
+                {
+                    nextDue = review.LastReviewedDate.AddMonths(6);
+                }
+                else
+                {
+                    // Default to 31 Mar 2026 if no review exists
+                    nextDue = new DateTime(2026, 3, 31, 0, 0, 0, DateTimeKind.Utc);
+                }
+
+                return new ProductDqListItem
+                {
+                    Product = p,
+                    DqScore = dqScore,
+                    LastReviewedDate = review?.LastReviewedDate,
+                    NextDueDate = nextDue,
+                    HasReviewInProgress = false // TODO: Track in-progress reviews
+                };
+            }).ToList();
+
+            var viewModel = new ProductDqManagerIndexViewModel
+            {
+                Products = productsWithDq,
+                ViewType = "AllProducts"
+            };
+
+            return View("ProductDqManager/Index", viewModel);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading Product DQ Manager All Products");
+            TempData["ErrorMessage"] = "An error occurred while loading products. Please try again.";
+            return View("ProductDqManager/Index", new ProductDqManagerIndexViewModel { ViewType = "AllProducts" });
+        }
+    }
+
+    // GET: FipsManager/ProductDqManager/StartReview/{documentId}
+    [HttpGet]
+    [Route("FipsManager/ProductDqManager/StartReview/{documentId}")]
+    public async Task<IActionResult> StartDqReview(string documentId)
+    {
+        // Check feature flag
+        if (!_configuration.GetValue<bool>("FeatureFlags:EnableFIPSManager", false))
+        {
+            return NotFound();
+        }
+
+        // Check user has access to FIPS Manager
+        if (!await HasFipsManagerAccessAsync())
+        {
+            return Forbid();
+        }
+
+        if (string.IsNullOrWhiteSpace(documentId))
+        {
+            TempData["ErrorMessage"] = "Product ID is required.";
+            return RedirectToAction(nameof(ProductDqManagerAllProducts));
+        }
+
+        try
+        {
+            var product = await _productsApiService.GetProductByDocumentIdAsync(documentId);
+            if (product == null)
+            {
+                TempData["ErrorMessage"] = "Product not found.";
+                return RedirectToAction(nameof(ProductDqManagerAllProducts));
+            }
+
+            // Store review in session to track in-progress reviews
+            HttpContext.Session.SetString($"DqReview_{documentId}", DateTime.UtcNow.ToString("O"));
+
+            return RedirectToAction(nameof(DqReviewInterstitial), new { documentId });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error starting DQ review for {DocumentId}", documentId);
+            TempData["ErrorMessage"] = "An error occurred while starting the review. Please try again.";
+            return RedirectToAction(nameof(ProductDqManagerAllProducts));
+        }
+    }
+
+    // GET: FipsManager/ProductDqManager/ReviewInterstitial/{documentId}
+    [HttpGet]
+    [Route("FipsManager/ProductDqManager/ReviewInterstitial/{documentId}")]
+    public async Task<IActionResult> DqReviewInterstitial(string documentId)
+    {
+        // Check feature flag
+        if (!_configuration.GetValue<bool>("FeatureFlags:EnableFIPSManager", false))
+        {
+            return NotFound();
+        }
+
+        // Check user has access to FIPS Manager
+        if (!await HasFipsManagerAccessAsync())
+        {
+            return Forbid();
+        }
+
+        if (string.IsNullOrWhiteSpace(documentId))
+        {
+            TempData["ErrorMessage"] = "Product ID is required.";
+            return RedirectToAction(nameof(ProductDqManagerAllProducts));
+        }
+
+        try
+        {
+            var product = await _productsApiService.GetProductByDocumentIdAsync(documentId);
+            if (product == null)
+            {
+                TempData["ErrorMessage"] = "Product not found.";
+                return RedirectToAction(nameof(ProductDqManagerAllProducts));
+            }
+
+            var viewModel = new DqReviewInterstitialViewModel
+            {
+                Product = product,
+                DocumentId = documentId,
+                CurrentStep = 1,
+                TotalSteps = 3
+            };
+
+            ViewData["Title"] = $"Product DQ Review - {product.Title}";
+            return View("ProductDqManager/ReviewInterstitial", viewModel);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading DQ review interstitial for {DocumentId}", documentId);
+            TempData["ErrorMessage"] = "An error occurred while loading the review. Please try again.";
+            return RedirectToAction(nameof(ProductDqManagerAllProducts));
+        }
+    }
+
+    // GET: FipsManager/ProductDqManager/ReviewCheck/{documentId}
+    [HttpGet]
+    [Route("FipsManager/ProductDqManager/ReviewCheck/{documentId}")]
+    public async Task<IActionResult> DqReviewCheck(string documentId)
+    {
+        // Check feature flag
+        if (!_configuration.GetValue<bool>("FeatureFlags:EnableFIPSManager", false))
+        {
+            return NotFound();
+        }
+
+        // Check user has access to FIPS Manager
+        if (!await HasFipsManagerAccessAsync())
+        {
+            return Forbid();
+        }
+
+        if (string.IsNullOrWhiteSpace(documentId))
+        {
+            TempData["ErrorMessage"] = "Product ID is required.";
+            return RedirectToAction(nameof(ProductDqManagerAllProducts));
+        }
+
+        try
+        {
+            var product = await _productsApiService.GetProductByDocumentIdAsync(documentId);
+            if (product == null)
+            {
+                TempData["ErrorMessage"] = "Product not found.";
+                return RedirectToAction(nameof(ProductDqManagerAllProducts));
+            }
+
+            // Get all category values grouped by type
+            var categoryTypes = await _productsApiService.GetAllCategoryValuesByTypeAsync();
+
+            // Get current category values for the product
+            var currentCategoryValueIds = product.CategoryValues?
+                .Select(cv => cv.Id)
+                .ToList() ?? new List<int>();
+
+            var viewModel = new DqReviewCheckViewModel
+            {
+                Product = product,
+                DocumentId = documentId,
+                CategoryTypes = categoryTypes,
+                CurrentCategoryValueIds = currentCategoryValueIds,
+                LongDescription = product.LongDescription,
+                ProductUrl = product.ProductUrl,
+                CurrentStep = 2,
+                TotalSteps = 3
+            };
+
+            ViewData["Title"] = $"Product DQ Review - {product?.Title ?? "Unknown Product"}";
+            return View("ProductDqManager/ReviewCheck", viewModel);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading DQ review check for {DocumentId}", documentId);
+            TempData["ErrorMessage"] = "An error occurred while loading the review. Please try again.";
+            return RedirectToAction(nameof(ProductDqManagerAllProducts));
+        }
+    }
+
+    // POST: FipsManager/ProductDqManager/ReviewCheck/{documentId}
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    [Route("FipsManager/ProductDqManager/ReviewCheck/{documentId}")]
+    public async Task<IActionResult> DqReviewCheck(string documentId, DqReviewCheckViewModel model)
+    {
+        // Check feature flag
+        if (!_configuration.GetValue<bool>("FeatureFlags:EnableFIPSManager", false))
+        {
+            return NotFound();
+        }
+
+        // Check user has access to FIPS Manager
+        if (!await HasFipsManagerAccessAsync())
+        {
+            return Forbid();
+        }
+
+        if (string.IsNullOrWhiteSpace(documentId))
+        {
+            TempData["ErrorMessage"] = "Product ID is required.";
+            return RedirectToAction(nameof(ProductDqManagerAllProducts));
+        }
+
+        try
+        {
+            var product = await _productsApiService.GetProductByDocumentIdAsync(documentId);
+            if (product == null)
+            {
+                TempData["ErrorMessage"] = "Product not found.";
+                return RedirectToAction(nameof(ProductDqManagerAllProducts));
+            }
+
+            // Process contact changes from form
+            // Contact changes come as JSON strings in hidden inputs
+            var serviceOwnerChanges = new List<ContactChange>();
+            var formServiceOwnerChanges = Request.Form["ServiceOwnerChanges"];
+            if (!string.IsNullOrEmpty(formServiceOwnerChanges))
+            {
+                foreach (var changeJson in formServiceOwnerChanges)
+                {
+                    if (!string.IsNullOrWhiteSpace(changeJson))
+                    {
+                        try
+                        {
+                            var change = JsonSerializer.Deserialize<ContactChange>(changeJson);
+                            if (change != null)
+                            {
+                                serviceOwnerChanges.Add(change);
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex, "Failed to parse ServiceOwner change: {ChangeJson}", changeJson);
+                        }
+                    }
+                }
+            }
+
+            // Validate: At least 1 active Service Owner (not marked for removal)
+            var activeServiceOwners = serviceOwnerChanges.Where(c => c.Action != "remove").ToList();
+            if (!activeServiceOwners.Any())
+            {
+                // Check if product has existing service owners that aren't being removed
+                if (product.ServiceOwners == null || !product.ServiceOwners.Any())
+                {
+                    ModelState.AddModelError("ServiceOwnerChanges", "At least one Service Owner is required.");
+                }
+                else
+                {
+                    // Check if all existing service owners are being removed
+                    var existingEmails = product.ServiceOwners.Select(so => so.EmailAddress?.ToLowerInvariant()).Where(e => !string.IsNullOrEmpty(e)).ToList();
+                    var removedEmails = serviceOwnerChanges.Where(c => c.Action == "remove").Select(c => c.Email?.ToLowerInvariant()).Where(e => !string.IsNullOrEmpty(e)).ToList();
+                    if (existingEmails.All(e => removedEmails.Contains(e)))
+                    {
+                        ModelState.AddModelError("ServiceOwnerChanges", "At least one Service Owner is required.");
+                    }
+                }
+            }
+
+            // Process other contact changes
+            var sroChanges = ProcessContactChanges(Request.Form["SeniorResponsibleOfficerChanges"]);
+            var iaoChanges = ProcessContactChanges(Request.Form["InformationAssetOwnerChanges"]);
+            var dmChanges = ProcessContactChanges(Request.Form["DeliveryManagerChanges"]);
+            var pmChanges = ProcessContactChanges(Request.Form["ProductManagerChanges"]);
+
+            model.ServiceOwnerChanges = serviceOwnerChanges;
+            model.SeniorResponsibleOfficerChanges = sroChanges;
+            model.InformationAssetOwnerChanges = iaoChanges;
+            model.DeliveryManagerChanges = dmChanges;
+            model.ProductManagerChanges = pmChanges;
+
+            // Store changes in session for confirmation page
+            // Only track changes for fields that can be updated in CMS:
+            // - long_description
+            // - product_url
+            // - category_values
+            var changes = new Dictionary<string, object>();
+            if (model.LongDescription != product.LongDescription)
+            {
+                changes["Long Description"] = new { Old = product.LongDescription ?? "-", New = model.LongDescription ?? "-" };
+            }
+            if (model.ProductUrl != product.ProductUrl)
+            {
+                changes["Product URL"] = new { Old = product.ProductUrl ?? "-", New = model.ProductUrl ?? "-" };
+            }
+            
+            // Check category value changes
+            var currentCategoryValueIds = product.CategoryValues?.Select(cv => cv.Id).ToList() ?? new List<int>();
+            var newCategoryValueIds = model.CategoryValueIds ?? new List<int>();
+            if (!currentCategoryValueIds.SequenceEqual(newCategoryValueIds))
+            {
+                var currentNames = product.CategoryValues?.Select(cv => cv.Name).ToList() ?? new List<string>();
+                // Get new category value names from the model's category types
+                var newNames = new List<string>();
+                if (model.CategoryTypes != null && newCategoryValueIds.Any())
+                {
+                    foreach (var typeGroup in model.CategoryTypes.Values)
+                    {
+                        foreach (var cv in typeGroup.Where(cv => newCategoryValueIds.Contains(cv.Id)))
+                        {
+                            newNames.Add(cv.Name);
+                        }
+                    }
+                }
+                changes["Category Values"] = new { Old = string.Join(", ", currentNames), New = string.Join(", ", newNames) };
+            }
+
+            // Track contact changes (for display in confirmation, but not updated in CMS)
+            var contactChangesList = new List<string>();
+            if (model.ServiceOwnerChanges != null && model.ServiceOwnerChanges.Any(c => c.Action != "keep"))
+            {
+                var adds = model.ServiceOwnerChanges.Where(c => c.Action == "add").Select(c => $"Add: {c.DisplayName ?? c.Email}").ToList();
+                var removes = model.ServiceOwnerChanges.Where(c => c.Action == "remove").Select(c => $"Remove: {c.DisplayName ?? c.Email}").ToList();
+                if (adds.Any() || removes.Any())
+                {
+                    contactChangesList.Add($"Service Owner: {string.Join(", ", adds.Concat(removes))}");
+                }
+            }
+            if (model.SeniorResponsibleOfficerChanges != null && model.SeniorResponsibleOfficerChanges.Any(c => c.Action != "keep"))
+            {
+                var adds = model.SeniorResponsibleOfficerChanges.Where(c => c.Action == "add").Select(c => $"Add: {c.DisplayName ?? c.Email}").ToList();
+                var removes = model.SeniorResponsibleOfficerChanges.Where(c => c.Action == "remove").Select(c => $"Remove: {c.DisplayName ?? c.Email}").ToList();
+                if (adds.Any() || removes.Any())
+                {
+                    contactChangesList.Add($"SRO: {string.Join(", ", adds.Concat(removes))}");
+                }
+            }
+            if (model.InformationAssetOwnerChanges != null && model.InformationAssetOwnerChanges.Any(c => c.Action != "keep"))
+            {
+                var adds = model.InformationAssetOwnerChanges.Where(c => c.Action == "add").Select(c => $"Add: {c.DisplayName ?? c.Email}").ToList();
+                var removes = model.InformationAssetOwnerChanges.Where(c => c.Action == "remove").Select(c => $"Remove: {c.DisplayName ?? c.Email}").ToList();
+                if (adds.Any() || removes.Any())
+                {
+                    contactChangesList.Add($"IAO: {string.Join(", ", adds.Concat(removes))}");
+                }
+            }
+            if (model.DeliveryManagerChanges != null && model.DeliveryManagerChanges.Any(c => c.Action != "keep"))
+            {
+                var adds = model.DeliveryManagerChanges.Where(c => c.Action == "add").Select(c => $"Add: {c.DisplayName ?? c.Email}").ToList();
+                var removes = model.DeliveryManagerChanges.Where(c => c.Action == "remove").Select(c => $"Remove: {c.DisplayName ?? c.Email}").ToList();
+                if (adds.Any() || removes.Any())
+                {
+                    contactChangesList.Add($"DM: {string.Join(", ", adds.Concat(removes))}");
+                }
+            }
+            if (model.ProductManagerChanges != null && model.ProductManagerChanges.Any(c => c.Action != "keep"))
+            {
+                var adds = model.ProductManagerChanges.Where(c => c.Action == "add").Select(c => $"Add: {c.DisplayName ?? c.Email}").ToList();
+                var removes = model.ProductManagerChanges.Where(c => c.Action == "remove").Select(c => $"Remove: {c.DisplayName ?? c.Email}").ToList();
+                if (adds.Any() || removes.Any())
+                {
+                    contactChangesList.Add($"PM: {string.Join(", ", adds.Concat(removes))}");
+                }
+            }
+
+            if (contactChangesList.Any())
+            {
+                changes["Contacts (offline)"] = new { Old = "Current contacts", New = string.Join("; ", contactChangesList) };
+            }
+
+            // Store in session
+            var changesJson = JsonSerializer.Serialize(changes);
+            HttpContext.Session.SetString($"DqReviewChanges_{documentId}", changesJson);
+            
+            // Serialize model with proper options to handle ContactChange objects
+            var options = new JsonSerializerOptions
+            {
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                WriteIndented = false
+            };
+            HttpContext.Session.SetString($"DqReviewData_{documentId}", JsonSerializer.Serialize(model, options));
+            
+            // Debug logging
+            _logger.LogInformation("DqReviewCheck POST - Stored changes: {ChangesJson}", changesJson);
+            _logger.LogInformation("DqReviewCheck POST - Contact changes list count: {Count}", contactChangesList.Count);
+
+            // Reload product and category types for the view (needed for validation errors)
+            model.Product = product;
+            var categoryTypes = await _productsApiService.GetAllCategoryValuesByTypeAsync();
+            model.CategoryTypes = categoryTypes;
+            model.CurrentCategoryValueIds = model.CategoryValueIds ?? new List<int>();
+            model.CurrentStep = 2;
+            model.TotalSteps = 3;
+
+            if (!ModelState.IsValid)
+            {
+                return View("ProductDqManager/ReviewCheck", model);
+            }
+
+            return RedirectToAction(nameof(DqReviewConfirmation), new { documentId });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error processing DQ review check for {DocumentId}", documentId);
+            TempData["ErrorMessage"] = "An error occurred while processing the review. Please try again.";
+            return RedirectToAction(nameof(ProductDqManagerAllProducts));
+        }
+    }
+
+    // GET: FipsManager/ProductDqManager/ReviewConfirmation/{documentId}
+    [HttpGet]
+    [Route("FipsManager/ProductDqManager/ReviewConfirmation/{documentId}")]
+    public async Task<IActionResult> DqReviewConfirmation(string documentId)
+    {
+        // Check feature flag
+        if (!_configuration.GetValue<bool>("FeatureFlags:EnableFIPSManager", false))
+        {
+            return NotFound();
+        }
+
+        // Check user has access to FIPS Manager
+        if (!await HasFipsManagerAccessAsync())
+        {
+            return Forbid();
+        }
+
+        if (string.IsNullOrWhiteSpace(documentId))
+        {
+            TempData["ErrorMessage"] = "Product ID is required.";
+            return RedirectToAction(nameof(ProductDqManagerAllProducts));
+        }
+
+        try
+        {
+            var product = await _productsApiService.GetProductByDocumentIdAsync(documentId);
+            if (product == null)
+            {
+                TempData["ErrorMessage"] = "Product not found.";
+                return RedirectToAction(nameof(ProductDqManagerAllProducts));
+            }
+
+            // Get stored review data from session to show what will change
+            var reviewDataJson = HttpContext.Session.GetString($"DqReviewData_{documentId}");
+            var reviewData = string.IsNullOrEmpty(reviewDataJson) 
+                ? null 
+                : JsonSerializer.Deserialize<DqReviewCheckViewModel>(reviewDataJson);
+            
+            // Also try to get pre-built changes from session (from POST action)
+            var storedChangesJson = HttpContext.Session.GetString($"DqReviewChanges_{documentId}");
+            Dictionary<string, object>? storedChanges = null;
+            if (!string.IsNullOrEmpty(storedChangesJson))
+            {
+                try
+                {
+                    // Deserialize as JsonElement first, then convert to Dictionary<string, object>
+                    var storedChangesElement = JsonSerializer.Deserialize<JsonElement>(storedChangesJson);
+                    storedChanges = new Dictionary<string, object>();
+                    
+                    foreach (var prop in storedChangesElement.EnumerateObject())
+                    {
+                        storedChanges[prop.Name] = prop.Value;
+                    }
+                    
+                    _logger.LogInformation("ReviewConfirmation - Loaded stored changes with {Count} items: {Keys}", 
+                        storedChanges.Count, string.Join(", ", storedChanges.Keys));
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to deserialize stored changes from session: {Error}", ex.Message);
+                }
+            }
+            else
+            {
+                _logger.LogInformation("ReviewConfirmation - No stored changes found in session");
+            }
+            
+            // Build changes dictionary for display
+            // Only track changes for fields that can be updated in CMS:
+            // - long_description
+            // - product_url
+            // - category_values
+            var changes = new Dictionary<string, object>();
+            if (reviewData != null)
+            {
+                // Only add Long Description if it actually changed
+                var oldLongDesc = product.LongDescription?.Trim() ?? "";
+                var newLongDesc = reviewData.LongDescription?.Trim() ?? "";
+                if (oldLongDesc != newLongDesc)
+                {
+                    changes["Long Description"] = new { 
+                        Old = string.IsNullOrWhiteSpace(oldLongDesc) ? "(empty)" : oldLongDesc, 
+                        New = string.IsNullOrWhiteSpace(newLongDesc) ? "(empty)" : newLongDesc 
+                    };
+                }
+                
+                // Only add Product URL if it actually changed
+                var oldProductUrl = product.ProductUrl?.Trim() ?? "";
+                var newProductUrl = reviewData.ProductUrl?.Trim() ?? "";
+                if (oldProductUrl != newProductUrl)
+                {
+                    changes["Product URL"] = new { 
+                        Old = string.IsNullOrWhiteSpace(oldProductUrl) ? "(empty)" : oldProductUrl, 
+                        New = string.IsNullOrWhiteSpace(newProductUrl) ? "(empty)" : newProductUrl 
+                    };
+                }
+                
+                // Check category value changes
+                var currentCategoryValueIds = product.CategoryValues?.Select(cv => cv.Id).ToList() ?? new List<int>();
+                var newCategoryValueIds = reviewData.CategoryValueIds ?? new List<int>();
+                if (!currentCategoryValueIds.SequenceEqual(newCategoryValueIds))
+                {
+                    var currentNames = product.CategoryValues?.Select(cv => cv.Name).Where(n => !string.IsNullOrWhiteSpace(n)).ToList() ?? new List<string>();
+                    
+                    // Get new category value names
+                    var allCategoryValuesByType = await _productsApiService.GetAllCategoryValuesByTypeAsync();
+                    var newNames = new List<string>();
+                    foreach (var categoryTypeGroup in allCategoryValuesByType.Values)
+                    {
+                        foreach (var cv in categoryTypeGroup)
+                        {
+                            if (newCategoryValueIds.Contains(cv.Id) && !string.IsNullOrWhiteSpace(cv.Name))
+                            {
+                                newNames.Add(cv.Name);
+                            }
+                        }
+                    }
+                    
+                    changes["Category Values"] = new { 
+                        Old = currentNames.Any() ? string.Join(", ", currentNames) : "(none)", 
+                        New = newNames.Any() ? string.Join(", ", newNames) : "(none)" 
+                    };
+                }
+
+                // Add contact changes to display (but note they're not updated in CMS)
+                var contactChangesList = new List<string>();
+                
+                // Debug logging
+                _logger.LogInformation("ReviewConfirmation - reviewData is null: {IsNull}", reviewData == null);
+                if (reviewData != null)
+                {
+                    _logger.LogInformation("ReviewConfirmation - SRO Changes: {IsNull}, Count: {Count}", 
+                        reviewData.SeniorResponsibleOfficerChanges == null,
+                        reviewData.SeniorResponsibleOfficerChanges?.Count ?? 0);
+                    if (reviewData.SeniorResponsibleOfficerChanges != null)
+                    {
+                        foreach (var change in reviewData.SeniorResponsibleOfficerChanges)
+                        {
+                            _logger.LogInformation("ReviewConfirmation - SRO Change: Action={Action}, Email={Email}, DisplayName={DisplayName}", 
+                                change.Action, change.Email, change.DisplayName);
+                        }
+                    }
+                }
+                
+                if (reviewData?.ServiceOwnerChanges != null && reviewData.ServiceOwnerChanges.Any(c => c.Action != "keep"))
+                {
+                    var soChanges = reviewData.ServiceOwnerChanges.Where(c => c.Action != "keep")
+                        .Select(c => $"{c.Action.ToUpperInvariant()}: {c.DisplayName ?? c.Email}").ToList();
+                    if (soChanges.Any())
+                    {
+                        contactChangesList.Add($"Service Owner: {string.Join(", ", soChanges)}");
+                    }
+                }
+                if (reviewData?.SeniorResponsibleOfficerChanges != null && reviewData.SeniorResponsibleOfficerChanges.Any(c => c.Action != "keep"))
+                {
+                    var sroChanges = reviewData.SeniorResponsibleOfficerChanges.Where(c => c.Action != "keep")
+                        .Select(c => $"{c.Action.ToUpperInvariant()}: {c.DisplayName ?? c.Email}").ToList();
+                    if (sroChanges.Any())
+                    {
+                        contactChangesList.Add($"SRO: {string.Join(", ", sroChanges)}");
+                    }
+                }
+                if (reviewData?.InformationAssetOwnerChanges != null && reviewData.InformationAssetOwnerChanges.Any(c => c.Action != "keep"))
+                {
+                    var iaoChanges = reviewData.InformationAssetOwnerChanges.Where(c => c.Action != "keep")
+                        .Select(c => $"{c.Action.ToUpperInvariant()}: {c.DisplayName ?? c.Email}").ToList();
+                    if (iaoChanges.Any())
+                    {
+                        contactChangesList.Add($"IAO: {string.Join(", ", iaoChanges)}");
+                    }
+                }
+                if (reviewData?.DeliveryManagerChanges != null && reviewData.DeliveryManagerChanges.Any(c => c.Action != "keep"))
+                {
+                    var dmChanges = reviewData.DeliveryManagerChanges.Where(c => c.Action != "keep")
+                        .Select(c => $"{c.Action.ToUpperInvariant()}: {c.DisplayName ?? c.Email}").ToList();
+                    if (dmChanges.Any())
+                    {
+                        contactChangesList.Add($"DM: {string.Join(", ", dmChanges)}");
+                    }
+                }
+                if (reviewData?.ProductManagerChanges != null && reviewData.ProductManagerChanges.Any(c => c.Action != "keep"))
+                {
+                    var pmChanges = reviewData.ProductManagerChanges.Where(c => c.Action != "keep")
+                        .Select(c => $"{c.Action.ToUpperInvariant()}: {c.DisplayName ?? c.Email}").ToList();
+                    if (pmChanges.Any())
+                    {
+                        contactChangesList.Add($"PM: {string.Join(", ", pmChanges)}");
+                    }
+                }
+
+                if (contactChangesList.Any())
+                {
+                    changes["Contacts (offline)"] = new { Old = "Current contacts", New = string.Join("; ", contactChangesList) };
+                    _logger.LogInformation("ReviewConfirmation - Added contact changes to changes dict: {Changes}", string.Join("; ", contactChangesList));
+                }
+                else
+                {
+                    _logger.LogInformation("ReviewConfirmation - No contact changes to add (contactChangesList is empty)");
+                }
+            }
+
+            // Use stored changes if available, otherwise use newly built changes
+            var finalChanges = storedChanges ?? changes;
+            
+            var viewModel = new DqReviewConfirmationViewModel
+            {
+                Product = product,
+                DocumentId = documentId,
+                Changes = finalChanges,
+                CurrentStep = 3,
+                TotalSteps = 3
+            };
+            
+            // Debug logging
+            _logger.LogInformation("ReviewConfirmation - Final changes count: {Count}, Keys: {Keys}", 
+                finalChanges.Count,
+                string.Join(", ", finalChanges.Keys));
+
+            ViewData["Title"] = $"Product DQ Review - {product.Title}";
+            return View("ProductDqManager/ReviewConfirmation", viewModel);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading DQ review confirmation for {DocumentId}", documentId);
+            TempData["ErrorMessage"] = "An error occurred while loading the review. Please try again.";
+            return RedirectToAction(nameof(ProductDqManagerAllProducts));
+        }
+    }
+
+    // POST: FipsManager/ProductDqManager/SubmitReview/{documentId}
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    [Route("FipsManager/ProductDqManager/SubmitReview/{documentId}")]
+    public async Task<IActionResult> SubmitDqReview(string documentId)
+    {
+        // Check feature flag
+        if (!_configuration.GetValue<bool>("FeatureFlags:EnableFIPSManager", false))
+        {
+            return NotFound();
+        }
+
+        // Check user has access to FIPS Manager
+        if (!await HasFipsManagerAccessAsync())
+        {
+            return Forbid();
+        }
+
+        if (string.IsNullOrWhiteSpace(documentId))
+        {
+            TempData["ErrorMessage"] = "Product ID is required.";
+            return RedirectToAction(nameof(ProductDqManagerAllProducts));
+        }
+
+        try
+        {
+            var userEmail = User?.Identity?.Name ?? string.Empty;
+            var userName = User?.Identity?.Name ?? "Unknown";
+
+            var product = await _productsApiService.GetProductByDocumentIdAsync(documentId);
+            if (product == null)
+            {
+                TempData["ErrorMessage"] = "Product not found.";
+                return RedirectToAction(nameof(ProductDqManagerAllProducts));
+            }
+
+            // Get stored review data from session
+            var reviewDataJson = HttpContext.Session.GetString($"DqReviewData_{documentId}");
+            if (string.IsNullOrEmpty(reviewDataJson))
+            {
+                TempData["ErrorMessage"] = "Review data not found. Please start the review again.";
+                return RedirectToAction(nameof(ProductDqManagerAllProducts));
+            }
+
+            var reviewData = JsonSerializer.Deserialize<DqReviewCheckViewModel>(reviewDataJson);
+            if (reviewData == null)
+            {
+                TempData["ErrorMessage"] = "Invalid review data. Please start the review again.";
+                return RedirectToAction(nameof(ProductDqManagerAllProducts));
+            }
+
+            var changesList = new List<string>();
+
+            // CRITICAL: Preserve ALL existing fields when updating
+            // Strapi PUT requests replace the entire record, so we must include all fields
+            var updateData = new Dictionary<string, object>
+            {
+                ["fips_id"] = product.FipsId ?? string.Empty,
+                ["title"] = product.Title ?? string.Empty,
+                ["short_description"] = product.ShortDescription ?? string.Empty,
+                ["state"] = product.State ?? "Active",
+                ["cmdb_sys_id"] = product.CmdbSysId ?? string.Empty
+            };
+
+            // Update long_description if changed, otherwise preserve existing
+            if (reviewData.LongDescription != product.LongDescription)
+            {
+                updateData["long_description"] = reviewData.LongDescription?.Trim() ?? string.Empty;
+                changesList.Add("Long description updated");
+            }
+            else
+            {
+                updateData["long_description"] = product.LongDescription ?? string.Empty;
+            }
+
+            // Update product_url if changed, otherwise preserve existing
+            if (reviewData.ProductUrl != product.ProductUrl)
+            {
+                updateData["product_url"] = reviewData.ProductUrl?.Trim() ?? string.Empty;
+                changesList.Add("Product URL updated");
+            }
+            else
+            {
+                updateData["product_url"] = product.ProductUrl ?? string.Empty;
+            }
+
+            // Update category values if changed, otherwise preserve existing
+            var currentCategoryValueIds = product.CategoryValues?.Select(cv => cv.Id).ToList() ?? new List<int>();
+            var newCategoryValueIds = reviewData.CategoryValueIds ?? new List<int>();
+            if (!currentCategoryValueIds.SequenceEqual(newCategoryValueIds))
+            {
+                updateData["category_values"] = newCategoryValueIds;
+                changesList.Add("Category values updated");
+            }
+            else
+            {
+                // Preserve existing category values
+                updateData["category_values"] = currentCategoryValueIds;
+            }
+
+            // Update product in CMS (only if there are actual changes)
+            if (changesList.Any())
+            {
+                var success = await UpdateProductByDocumentIdAsync(documentId, updateData);
+                if (!success)
+                {
+                    TempData["ErrorMessage"] = "Failed to update product. Please try again.";
+                    return RedirectToAction(nameof(ProductDqManagerAllProducts));
+                }
+            }
+
+            // Note: Contacts are NOT updated in the CMS - they are only displayed for review/validation
+
+            // Process and store contact changes (for offline management)
+            var contactChangesSummary = new List<string>();
+            if (reviewData.ServiceOwnerChanges != null && reviewData.ServiceOwnerChanges.Any(c => c.Action != "keep"))
+            {
+                var soChanges = reviewData.ServiceOwnerChanges.Where(c => c.Action != "keep")
+                    .Select(c => $"{c.Action}: {c.DisplayName ?? c.Email}").ToList();
+                contactChangesSummary.Add($"Service Owner: {string.Join(", ", soChanges)}");
+            }
+            if (reviewData.SeniorResponsibleOfficerChanges != null && reviewData.SeniorResponsibleOfficerChanges.Any(c => c.Action != "keep"))
+            {
+                var sroChanges = reviewData.SeniorResponsibleOfficerChanges.Where(c => c.Action != "keep")
+                    .Select(c => $"{c.Action}: {c.DisplayName ?? c.Email}").ToList();
+                contactChangesSummary.Add($"SRO: {string.Join(", ", sroChanges)}");
+            }
+            if (reviewData.InformationAssetOwnerChanges != null && reviewData.InformationAssetOwnerChanges.Any(c => c.Action != "keep"))
+            {
+                var iaoChanges = reviewData.InformationAssetOwnerChanges.Where(c => c.Action != "keep")
+                    .Select(c => $"{c.Action}: {c.DisplayName ?? c.Email}").ToList();
+                contactChangesSummary.Add($"IAO: {string.Join(", ", iaoChanges)}");
+            }
+            if (reviewData.DeliveryManagerChanges != null && reviewData.DeliveryManagerChanges.Any(c => c.Action != "keep"))
+            {
+                var dmChanges = reviewData.DeliveryManagerChanges.Where(c => c.Action != "keep")
+                    .Select(c => $"{c.Action}: {c.DisplayName ?? c.Email}").ToList();
+                contactChangesSummary.Add($"DM: {string.Join(", ", dmChanges)}");
+            }
+            if (reviewData.ProductManagerChanges != null && reviewData.ProductManagerChanges.Any(c => c.Action != "keep"))
+            {
+                var pmChanges = reviewData.ProductManagerChanges.Where(c => c.Action != "keep")
+                    .Select(c => $"{c.Action}: {c.DisplayName ?? c.Email}").ToList();
+                contactChangesSummary.Add($"PM: {string.Join(", ", pmChanges)}");
+            }
+
+            // Store contact changes as JSON for offline management
+            var allContactChanges = new
+            {
+                ServiceOwner = reviewData.ServiceOwnerChanges ?? new List<ContactChange>(),
+                SeniorResponsibleOfficer = reviewData.SeniorResponsibleOfficerChanges ?? new List<ContactChange>(),
+                InformationAssetOwner = reviewData.InformationAssetOwnerChanges ?? new List<ContactChange>(),
+                DeliveryManager = reviewData.DeliveryManagerChanges ?? new List<ContactChange>(),
+                ProductManager = reviewData.ProductManagerChanges ?? new List<ContactChange>()
+            };
+            var contactChangesJson = JsonSerializer.Serialize(allContactChanges);
+
+            // Save DQ review record
+            var now = DateTime.UtcNow;
+            var nextDue = now.AddMonths(6);
+
+            // Build changes summary
+            var allChanges = new List<string>(changesList);
+            if (contactChangesSummary.Any())
+            {
+                allChanges.Add($"Contact changes (offline): {string.Join("; ", contactChangesSummary)}");
+            }
+
+            var dqReview = new ProductDqReview
+            {
+                ProductDocumentId = documentId,
+                ProductFipsId = product.FipsId,
+                LastReviewedDate = now,
+                NextDueDate = nextDue,
+                ReviewedByEmail = userEmail,
+                ReviewedByName = userName,
+                ChangesMade = allChanges.Any() ? string.Join("; ", allChanges) : "No changes made",
+                ContactChangesJson = contactChangesJson
+            };
+
+            // Send email notification if there are contact changes
+            if (contactChangesSummary.Any())
+            {
+                try
+                {
+                    var templateId = _configuration["GovUkNotify:ContactChangeTemplateId"];
+                    var recipientEmail = _configuration["GovUkNotify:ContactChangeRecipientEmail"];
+
+                    if (!string.IsNullOrWhiteSpace(templateId) && !string.IsNullOrWhiteSpace(recipientEmail))
+                    {
+                        // Format contact changes for email
+                        var formattedChanges = new List<string>();
+                        if (reviewData.ServiceOwnerChanges != null)
+                        {
+                            foreach (var change in reviewData.ServiceOwnerChanges.Where(c => c.Action != "keep"))
+                            {
+                                var action = change.Action.ToUpperInvariant();
+                                var name = change.DisplayName ?? change.Email;
+                                formattedChanges.Add($"{name} (Service Owner) - {action}");
+                            }
+                        }
+                        if (reviewData.SeniorResponsibleOfficerChanges != null)
+                        {
+                            foreach (var change in reviewData.SeniorResponsibleOfficerChanges.Where(c => c.Action != "keep"))
+                            {
+                                var action = change.Action.ToUpperInvariant();
+                                var name = change.DisplayName ?? change.Email;
+                                formattedChanges.Add($"{name} (SRO) - {action}");
+                            }
+                        }
+                        if (reviewData.InformationAssetOwnerChanges != null)
+                        {
+                            foreach (var change in reviewData.InformationAssetOwnerChanges.Where(c => c.Action != "keep"))
+                            {
+                                var action = change.Action.ToUpperInvariant();
+                                var name = change.DisplayName ?? change.Email;
+                                formattedChanges.Add($"{name} (IAO) - {action}");
+                            }
+                        }
+                        if (reviewData.DeliveryManagerChanges != null)
+                        {
+                            foreach (var change in reviewData.DeliveryManagerChanges.Where(c => c.Action != "keep"))
+                            {
+                                var action = change.Action.ToUpperInvariant();
+                                var name = change.DisplayName ?? change.Email;
+                                formattedChanges.Add($"{name} (Delivery Manager) - {action}");
+                            }
+                        }
+                        if (reviewData.ProductManagerChanges != null)
+                        {
+                            foreach (var change in reviewData.ProductManagerChanges.Where(c => c.Action != "keep"))
+                            {
+                                var action = change.Action.ToUpperInvariant();
+                                var name = change.DisplayName ?? change.Email;
+                                formattedChanges.Add($"{name} (Product Manager) - {action}");
+                            }
+                        }
+
+                        var personalisation = new Dictionary<string, dynamic>
+                        {
+                            { "product", product.Title ?? product.FipsId ?? "Unknown Product" },
+                            { "changes", string.Join("\n", formattedChanges) }
+                        };
+
+                        var notificationResult = await _notificationService.SendEmailWithTemplateAsync(
+                            recipientEmail,
+                            templateId,
+                            personalisation,
+                            triggerCode: "dq_review_contact_change",
+                            contextData: new Dictionary<string, object>
+                            {
+                                { "productDocumentId", documentId },
+                                { "productFipsId", product.FipsId ?? "" },
+                                { "reviewedBy", userEmail }
+                            });
+
+                        if (notificationResult.Success)
+                        {
+                            _logger.LogInformation(
+                                "Contact change notification sent successfully for product {ProductTitle} (DocumentId: {DocumentId})",
+                                product.Title,
+                                documentId);
+                        }
+                        else
+                        {
+                            _logger.LogWarning(
+                                "Failed to send contact change notification for product {ProductTitle} (DocumentId: {DocumentId}): {Error}",
+                                product.Title,
+                                documentId,
+                                notificationResult.ErrorMessage);
+                        }
+                    }
+                    else
+                    {
+                        _logger.LogWarning(
+                            "Contact change notification not sent - template ID or recipient email not configured. TemplateId: {TemplateId}, RecipientEmail: {RecipientEmail}",
+                            templateId ?? "not set",
+                            recipientEmail ?? "not set");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // Log error but don't fail the review submission
+                    _logger.LogError(
+                        ex,
+                        "Error sending contact change notification for product {ProductTitle} (DocumentId: {DocumentId})",
+                        product.Title,
+                        documentId);
+                }
+            }
+
+            _context.ProductDqReviews.Add(dqReview);
+            await _context.SaveChangesAsync();
+
+            // Send confirmation email to the reviewer with all changes
+            try
+            {
+                var confirmationTemplateId = _configuration["GovUkNotify:ReviewConfirmationTemplateId"];
+
+                if (!string.IsNullOrWhiteSpace(confirmationTemplateId) && !string.IsNullOrWhiteSpace(userEmail))
+                {
+                    // Format all changes for the reviewer email
+                    var allChangesFormatted = new List<string>();
+
+                    // CMS changes
+                    if (reviewData.LongDescription != product.LongDescription)
+                    {
+                        allChangesFormatted.Add("Long Description - UPDATED");
+                    }
+                    if (reviewData.ProductUrl != product.ProductUrl)
+                    {
+                        allChangesFormatted.Add("Product URL - UPDATED");
+                    }
+                    if (!currentCategoryValueIds.SequenceEqual(newCategoryValueIds))
+                    {
+                        var oldNames = product.CategoryValues?.Select(cv => cv.Name).Where(n => !string.IsNullOrWhiteSpace(n)).ToList() ?? new List<string>();
+                        var newNames = new List<string>();
+                        if (reviewData.CategoryValueIds != null && reviewData.CategoryValueIds.Any())
+                        {
+                            // Get all category values to find names for new IDs
+                            var allCategoryValuesByType = await _productsApiService.GetAllCategoryValuesByTypeAsync();
+                            foreach (var categoryTypeGroup in allCategoryValuesByType.Values)
+                            {
+                                foreach (var cv in categoryTypeGroup)
+                                {
+                                    if (reviewData.CategoryValueIds.Contains(cv.Id) && !string.IsNullOrWhiteSpace(cv.Name))
+                                    {
+                                        newNames.Add(cv.Name);
+                                    }
+                                }
+                            }
+                        }
+                        var removed = oldNames.Where(n => !newNames.Contains(n)).ToList();
+                        var added = newNames.Where(n => !oldNames.Contains(n)).ToList();
+                        if (removed.Any())
+                        {
+                            allChangesFormatted.Add($"Category Values - REMOVED: {string.Join(", ", removed)}");
+                        }
+                        if (added.Any())
+                        {
+                            allChangesFormatted.Add($"Category Values - ADDED: {string.Join(", ", added)}");
+                        }
+                        if (!removed.Any() && !added.Any() && oldNames.Any())
+                        {
+                            // Values were reordered or changed but same items
+                            allChangesFormatted.Add("Category Values - UPDATED");
+                        }
+                    }
+
+                    // Contact changes
+                    if (reviewData.ServiceOwnerChanges != null)
+                    {
+                        foreach (var change in reviewData.ServiceOwnerChanges.Where(c => c.Action != "keep"))
+                        {
+                            var action = change.Action.ToUpperInvariant();
+                            var name = change.DisplayName ?? change.Email;
+                            allChangesFormatted.Add($"{name} (Service Owner) - {action}");
+                        }
+                    }
+                    if (reviewData.SeniorResponsibleOfficerChanges != null)
+                    {
+                        foreach (var change in reviewData.SeniorResponsibleOfficerChanges.Where(c => c.Action != "keep"))
+                        {
+                            var action = change.Action.ToUpperInvariant();
+                            var name = change.DisplayName ?? change.Email;
+                            allChangesFormatted.Add($"{name} (SRO) - {action}");
+                        }
+                    }
+                    if (reviewData.InformationAssetOwnerChanges != null)
+                    {
+                        foreach (var change in reviewData.InformationAssetOwnerChanges.Where(c => c.Action != "keep"))
+                        {
+                            var action = change.Action.ToUpperInvariant();
+                            var name = change.DisplayName ?? change.Email;
+                            allChangesFormatted.Add($"{name} (IAO) - {action}");
+                        }
+                    }
+                    if (reviewData.DeliveryManagerChanges != null)
+                    {
+                        foreach (var change in reviewData.DeliveryManagerChanges.Where(c => c.Action != "keep"))
+                        {
+                            var action = change.Action.ToUpperInvariant();
+                            var name = change.DisplayName ?? change.Email;
+                            allChangesFormatted.Add($"{name} (Delivery Manager) - {action}");
+                        }
+                    }
+                    if (reviewData.ProductManagerChanges != null)
+                    {
+                        foreach (var change in reviewData.ProductManagerChanges.Where(c => c.Action != "keep"))
+                        {
+                            var action = change.Action.ToUpperInvariant();
+                            var name = change.DisplayName ?? change.Email;
+                            allChangesFormatted.Add($"{name} (Product Manager) - {action}");
+                        }
+                    }
+
+                    // If there are any changes, send the email
+                    if (allChangesFormatted.Any())
+                    {
+                        var personalisation = new Dictionary<string, dynamic>
+                        {
+                            { "product", product.Title ?? product.FipsId ?? "Unknown Product" },
+                            { "changes", string.Join("\n", allChangesFormatted) }
+                        };
+
+                        var notificationResult = await _notificationService.SendEmailWithTemplateAsync(
+                            userEmail,
+                            confirmationTemplateId,
+                            personalisation,
+                            triggerCode: "dq_review_confirmation",
+                            contextData: new Dictionary<string, object>
+                            {
+                                { "productDocumentId", documentId },
+                                { "productFipsId", product.FipsId ?? "" },
+                                { "reviewedBy", userEmail }
+                            });
+
+                        if (notificationResult.Success)
+                        {
+                            _logger.LogInformation(
+                                "Review confirmation email sent successfully to {UserEmail} for product {ProductTitle} (DocumentId: {DocumentId})",
+                                userEmail,
+                                product.Title,
+                                documentId);
+                        }
+                        else
+                        {
+                            _logger.LogWarning(
+                                "Failed to send review confirmation email to {UserEmail} for product {ProductTitle} (DocumentId: {DocumentId}): {Error}",
+                                userEmail,
+                                product.Title,
+                                documentId,
+                                notificationResult.ErrorMessage);
+                        }
+                    }
+                    else
+                    {
+                        _logger.LogInformation(
+                            "No changes detected for product {ProductTitle} (DocumentId: {DocumentId}), skipping confirmation email",
+                            product.Title,
+                            documentId);
+                    }
+                }
+                else
+                {
+                    _logger.LogWarning(
+                        "Review confirmation email not sent - template ID not configured or user email not available. TemplateId: {TemplateId}, UserEmail: {UserEmail}",
+                        confirmationTemplateId ?? "not set",
+                        userEmail ?? "not set");
+                }
+            }
+            catch (Exception ex)
+            {
+                // Log error but don't fail the review submission
+                _logger.LogError(
+                    ex,
+                    "Error sending review confirmation email to {UserEmail} for product {ProductTitle} (DocumentId: {DocumentId})",
+                    userEmail,
+                    product.Title,
+                    documentId);
+            }
+
+            // Clear session data
+            HttpContext.Session.Remove($"DqReview_{documentId}");
+            HttpContext.Session.Remove($"DqReviewChanges_{documentId}");
+            HttpContext.Session.Remove($"DqReviewData_{documentId}");
+
+            TempData["SuccessMessage"] = "Product DQ review completed successfully.";
+
+            return RedirectToAction(nameof(ProductDqManagerAllProducts));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error submitting DQ review for {DocumentId}", documentId);
+            TempData["ErrorMessage"] = "An error occurred while submitting the review. Please try again.";
+            return RedirectToAction(nameof(ProductDqManagerAllProducts));
+        }
+    }
+
+    private List<ContactChange> ProcessContactChanges(Microsoft.Extensions.Primitives.StringValues formValues)
+    {
+        var changes = new List<ContactChange>();
+        if (!string.IsNullOrEmpty(formValues))
+        {
+            foreach (var changeJson in formValues)
+            {
+                if (!string.IsNullOrWhiteSpace(changeJson))
+                {
+                    try
+                    {
+                        var change = JsonSerializer.Deserialize<ContactChange>(changeJson);
+                        if (change != null)
+                        {
+                            changes.Add(change);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to parse contact change: {ChangeJson}", changeJson);
+                    }
+                }
+            }
+        }
+        return changes;
+    }
+
+    private double CalculateDqScore(ProductDto product)
+    {
+        var criteria = new List<bool>();
+
+        // Key contacts: SRO and SO as minimum
+        var hasSro = product.SeniorResponsibleOfficers != null && product.SeniorResponsibleOfficers.Any();
+        var hasSo = product.ServiceOwners != null && product.ServiceOwners.Any();
+        criteria.Add(hasSro && hasSo);
+
+        // Business area
+        var hasBusinessArea = product.CategoryValues != null &&
+            product.CategoryValues.Any(cv => cv.CategoryType != null && 
+                      cv.CategoryType.Name?.Trim().Equals("Business area", StringComparison.OrdinalIgnoreCase) == true &&
+                      !string.IsNullOrWhiteSpace(cv.Name) &&
+                      cv.Name != "Not assigned");
+        criteria.Add(hasBusinessArea);
+
+        // Phase
+        var hasPhase = !string.IsNullOrEmpty(product.Phase) ||
+                      (product.CategoryValues?.Any(cv => 
+                          cv.CategoryType != null &&
+                          !string.IsNullOrWhiteSpace(cv.CategoryType.Name) &&
+                          cv.CategoryType.Name.Trim().Equals("Phase", StringComparison.OrdinalIgnoreCase) == true) == true);
+        criteria.Add(hasPhase);
+
+        // At least 1 channel
+        var hasChannel = product.CategoryValues != null &&
+            product.CategoryValues.Any(cv => cv.CategoryType != null &&
+                      (cv.CategoryType.Name?.Trim().Equals("Channel", StringComparison.OrdinalIgnoreCase) == true ||
+                       cv.CategoryType.Name?.Trim().Equals("Channels", StringComparison.OrdinalIgnoreCase) == true) &&
+                      !string.IsNullOrWhiteSpace(cv.Name));
+        criteria.Add(hasChannel);
+
+        // At least 1 user group
+        var userGroupVariations = new[] { "User group", "User groups", "User Group", "User Groups" };
+        var hasUserGroup = product.CategoryValues != null &&
+            product.CategoryValues.Any(cv => cv.CategoryType != null &&
+                      userGroupVariations.Any(v => 
+                          cv.CategoryType.Name?.Trim().Equals(v, StringComparison.OrdinalIgnoreCase) == true) &&
+                      !string.IsNullOrWhiteSpace(cv.Name));
+        criteria.Add(hasUserGroup);
+
+        // At least 1 type
+        var typeVariations = new[] { "Type", "Types" };
+        var hasType = product.CategoryValues != null &&
+            product.CategoryValues.Any(cv => cv.CategoryType != null &&
+                      typeVariations.Any(v => 
+                          cv.CategoryType.Name?.Trim().Equals(v, StringComparison.OrdinalIgnoreCase) == true) &&
+                      !string.IsNullOrWhiteSpace(cv.Name));
+        criteria.Add(hasType);
+
+        // Calculate percentage (6 criteria total)
+        var completedCount = criteria.Count(c => c);
+        return (completedCount / 6.0) * 100.0;
+    }
 }
 
 public class FipsManagerIndexViewModel
@@ -1387,7 +2760,7 @@ public class FipsManagerIndexViewModel
 
 public class FipsManagerProductDetailsViewModel
 {
-    public ProductDto Product { get; set; } = null!;
+    public ProductDto? Product { get; set; }
     public Dictionary<string, List<CategoryValueDto>> CategoryTypes { get; set; } = new();
     public List<int> CurrentCategoryValueIds { get; set; } = new();
     public ProductCompletionItem CompletionItem { get; set; } = null!;
@@ -1408,4 +2781,67 @@ public class BulkSyncLogEntry
 {
     public string Type { get; set; } = "info"; // info, success, error
     public string Message { get; set; } = string.Empty;
+}
+
+public class ProductDqManagerIndexViewModel
+{
+    public List<ProductDqListItem> Products { get; set; } = new();
+    public string ViewType { get; set; } = "MyServices"; // MyServices or AllProducts
+}
+
+public class ProductDqListItem
+{
+    public ProductDto? Product { get; set; }
+    public double DqScore { get; set; }
+    public DateTime? LastReviewedDate { get; set; }
+    public DateTime NextDueDate { get; set; }
+    public bool HasReviewInProgress { get; set; }
+}
+
+public class DqReviewInterstitialViewModel
+{
+    public ProductDto? Product { get; set; }
+    public string DocumentId { get; set; } = string.Empty;
+    public int CurrentStep { get; set; }
+    public int TotalSteps { get; set; }
+}
+
+public class DqReviewCheckViewModel
+{
+    public ProductDto? Product { get; set; }
+    public string DocumentId { get; set; } = string.Empty;
+    public Dictionary<string, List<CategoryValueDto>> CategoryTypes { get; set; } = new();
+    public List<int> CurrentCategoryValueIds { get; set; } = new();
+    
+    // Form fields
+    public string? LongDescription { get; set; }
+    public string? ProductUrl { get; set; }
+    public List<int>? CategoryValueIds { get; set; }
+    
+    // Contact changes (stored but not updated in CMS)
+    public List<ContactChange>? ServiceOwnerChanges { get; set; }
+    public List<ContactChange>? ProductManagerChanges { get; set; }
+    public List<ContactChange>? DeliveryManagerChanges { get; set; }
+    public List<ContactChange>? InformationAssetOwnerChanges { get; set; }
+    public List<ContactChange>? SeniorResponsibleOfficerChanges { get; set; }
+    
+    public int CurrentStep { get; set; }
+    public int TotalSteps { get; set; }
+}
+
+public class ContactChange
+{
+    public string Action { get; set; } = string.Empty; // "add" or "remove"
+    public string Email { get; set; } = string.Empty;
+    public string? DisplayName { get; set; }
+    public string? ObjectId { get; set; }
+}
+
+public class DqReviewConfirmationViewModel
+{
+    public ProductDto? Product { get; set; }
+    public string DocumentId { get; set; } = string.Empty;
+    public Dictionary<string, object> Changes { get; set; } = new();
+    public int CurrentStep { get; set; }
+    public int TotalSteps { get; set; }
 }

@@ -3,6 +3,7 @@ using Compass.Models;
 using Microsoft.EntityFrameworkCore;
 using System.Text.RegularExpressions;
 using System.Reflection;
+using System.Linq;
 
 namespace Compass.Services;
 
@@ -142,15 +143,71 @@ public class NotificationService : INotificationService
             object? notifyResponse = null;
             try
             {
-                // Use reflection to call SendEmail method
+                // Find SendEmail method - try different signatures
                 var sendEmailMethod = _notifyClient.GetType().GetMethod("SendEmail", new[] { typeof(string), typeof(string), typeof(Dictionary<string, dynamic>) });
+                
+                // If not found, try with Dictionary<string, object>
+                if (sendEmailMethod == null)
+                {
+                    sendEmailMethod = _notifyClient.GetType().GetMethod("SendEmail", new[] { typeof(string), typeof(string), typeof(Dictionary<string, object>) });
+                }
+                
+                // If still not found, try to find any SendEmail method and match parameters
+                if (sendEmailMethod == null)
+                {
+                    var allMethods = _notifyClient.GetType().GetMethods().Where(m => m.Name == "SendEmail");
+                    foreach (var method in allMethods)
+                    {
+                        var parameters = method.GetParameters();
+                        if (parameters.Length >= 2 && 
+                            parameters[0].ParameterType == typeof(string) && 
+                            parameters[1].ParameterType == typeof(string))
+                        {
+                            sendEmailMethod = method;
+                            break;
+                        }
+                    }
+                }
+                
                 if (sendEmailMethod != null)
                 {
-                    notifyResponse = sendEmailMethod.Invoke(_notifyClient, new object[] { recipientEmail, templateId, personalisation });
+                    // Convert Dictionary<string, dynamic> to the expected type
+                    var methodParams = sendEmailMethod.GetParameters();
+                    object[] invokeParams;
+                    
+                    if (methodParams.Length == 2)
+                    {
+                        invokeParams = new object[] { recipientEmail, templateId };
+                    }
+                    else if (methodParams.Length == 3)
+                    {
+                        // Convert personalisation to match the method's expected type
+                        if (methodParams[2].ParameterType == typeof(Dictionary<string, object>))
+                        {
+                            var personalisationObj = new Dictionary<string, object>();
+                            foreach (var kvp in personalisation)
+                            {
+                                personalisationObj[kvp.Key] = kvp.Value;
+                            }
+                            invokeParams = new object[] { recipientEmail, templateId, personalisationObj };
+                        }
+                        else
+                        {
+                            invokeParams = new object[] { recipientEmail, templateId, personalisation };
+                        }
+                    }
+                    else
+                    {
+                        throw new InvalidOperationException($"SendEmail method has unexpected number of parameters: {methodParams.Length}");
+                    }
+                    
+                    notifyResponse = sendEmailMethod.Invoke(_notifyClient, invokeParams);
                 }
                 else
                 {
-                    throw new InvalidOperationException("SendEmail method not found on NotificationClient");
+                    // Log available methods for debugging
+                    var availableMethods = string.Join(", ", _notifyClient.GetType().GetMethods().Select(m => m.Name));
+                    throw new InvalidOperationException($"SendEmail method not found on NotificationClient. Available methods: {availableMethods}");
                 }
 
                 // Update log with success
@@ -210,6 +267,200 @@ public class NotificationService : INotificationService
             _logger.LogError(
                 ex,
                 "Unexpected error sending notification to {Email}",
+                recipientEmail);
+        }
+
+        return result;
+    }
+
+    public async Task<NotificationResult> SendEmailWithTemplateAsync(
+        string recipientEmail,
+        string templateId,
+        Dictionary<string, dynamic> personalisation,
+        string? triggerCode = null,
+        int? notificationRuleId = null,
+        Dictionary<string, object>? contextData = null,
+        CancellationToken cancellationToken = default)
+    {
+        var result = new NotificationResult();
+
+        // Validate email address
+        if (string.IsNullOrWhiteSpace(recipientEmail) || !recipientEmail.Contains('@'))
+        {
+            result.Success = false;
+            result.ErrorMessage = "Invalid email address";
+            _logger.LogWarning("Attempted to send notification to invalid email: {Email}", recipientEmail);
+            return result;
+        }
+
+        // Validate template ID
+        if (string.IsNullOrWhiteSpace(templateId))
+        {
+            result.Success = false;
+            result.ErrorMessage = "Template ID is required";
+            _logger.LogWarning("Attempted to send notification without template ID");
+            return result;
+        }
+
+        // Log the notification attempt
+        var notificationLog = new NotificationLog
+        {
+            NotificationRuleId = notificationRuleId,
+            TriggerCode = triggerCode ?? "contact_change",
+            RecipientEmail = recipientEmail,
+            Subject = "Contact Change Notification",
+            Body = System.Text.Json.JsonSerializer.Serialize(personalisation),
+            Status = "pending",
+            CreatedAt = DateTime.UtcNow,
+            ContextData = contextData != null ? System.Text.Json.JsonSerializer.Serialize(contextData) : null
+        };
+
+        try
+        {
+            _context.NotificationLogs.Add(notificationLog);
+            await _context.SaveChangesAsync(cancellationToken);
+
+            // If Notify client is not available, mark as failed
+            if (_notifyClient == null)
+            {
+                notificationLog.Status = "failed";
+                notificationLog.StatusMessage = "GOV.UK Notify client not initialized";
+                await _context.SaveChangesAsync(cancellationToken);
+
+                result.Success = false;
+                result.ErrorMessage = "Notification service not configured";
+                _logger.LogWarning("Notification not sent - GOV.UK Notify client not initialized");
+                return result;
+            }
+
+            // Send email via GOV.UK Notify using reflection
+            object? notifyResponse = null;
+            try
+            {
+                // Find SendEmail method - try different signatures
+                var sendEmailMethod = _notifyClient.GetType().GetMethod("SendEmail", new[] { typeof(string), typeof(string), typeof(Dictionary<string, dynamic>) });
+                
+                // If not found, try with Dictionary<string, object>
+                if (sendEmailMethod == null)
+                {
+                    sendEmailMethod = _notifyClient.GetType().GetMethod("SendEmail", new[] { typeof(string), typeof(string), typeof(Dictionary<string, object>) });
+                }
+                
+                // If still not found, try to find any SendEmail method and match parameters
+                if (sendEmailMethod == null)
+                {
+                    var allMethods = _notifyClient.GetType().GetMethods().Where(m => m.Name == "SendEmail");
+                    foreach (var method in allMethods)
+                    {
+                        var parameters = method.GetParameters();
+                        if (parameters.Length >= 2 && 
+                            parameters[0].ParameterType == typeof(string) && 
+                            parameters[1].ParameterType == typeof(string))
+                        {
+                            sendEmailMethod = method;
+                            break;
+                        }
+                    }
+                }
+                
+                if (sendEmailMethod != null)
+                {
+                    // Convert Dictionary<string, dynamic> to the expected type
+                    var methodParams = sendEmailMethod.GetParameters();
+                    object[] invokeParams;
+                    
+                    if (methodParams.Length == 2)
+                    {
+                        invokeParams = new object[] { recipientEmail, templateId };
+                    }
+                    else if (methodParams.Length == 3)
+                    {
+                        // Convert personalisation to match the method's expected type
+                        if (methodParams[2].ParameterType == typeof(Dictionary<string, object>))
+                        {
+                            var personalisationObj = new Dictionary<string, object>();
+                            foreach (var kvp in personalisation)
+                            {
+                                personalisationObj[kvp.Key] = kvp.Value;
+                            }
+                            invokeParams = new object[] { recipientEmail, templateId, personalisationObj };
+                        }
+                        else
+                        {
+                            invokeParams = new object[] { recipientEmail, templateId, personalisation };
+                        }
+                    }
+                    else
+                    {
+                        throw new InvalidOperationException($"SendEmail method has unexpected number of parameters: {methodParams.Length}");
+                    }
+                    
+                    notifyResponse = sendEmailMethod.Invoke(_notifyClient, invokeParams);
+                }
+                else
+                {
+                    // Log available methods for debugging
+                    var availableMethods = string.Join(", ", _notifyClient.GetType().GetMethods().Select(m => m.Name));
+                    throw new InvalidOperationException($"SendEmail method not found on NotificationClient. Available methods: {availableMethods}");
+                }
+
+                // Update log with success
+                notificationLog.Status = "sent";
+                notificationLog.StatusMessage = "Email sent successfully";
+                
+                // Get the id property using reflection
+                if (notifyResponse != null)
+                {
+                    var idProperty = notifyResponse.GetType().GetProperty("id");
+                    if (idProperty != null)
+                    {
+                        var messageId = idProperty.GetValue(notifyResponse)?.ToString();
+                        notificationLog.NotifyMessageId = messageId;
+                        notificationLog.SentAt = DateTime.UtcNow;
+                        await _context.SaveChangesAsync(cancellationToken);
+
+                        result.Success = true;
+                        result.MessageId = messageId;
+                        result.SentAt = DateTime.UtcNow;
+
+                        _logger.LogInformation(
+                            "Contact change notification sent successfully to {Email} via GOV.UK Notify. Message ID: {MessageId}",
+                            recipientEmail,
+                            messageId);
+                    }
+                }
+            }
+            catch (Exception ex) when (ex.GetType().FullName == "Notify.Exceptions.NotifyClientException" || ex.InnerException?.GetType().FullName == "Notify.Exceptions.NotifyClientException")
+            {
+                // Handle GOV.UK Notify specific errors
+                notificationLog.Status = "failed";
+                notificationLog.StatusMessage = ex.Message;
+                await _context.SaveChangesAsync(cancellationToken);
+
+                result.Success = false;
+                result.ErrorMessage = ex.Message;
+
+                _logger.LogError(
+                    ex,
+                    "Failed to send contact change notification via GOV.UK Notify to {Email}",
+                    recipientEmail);
+                
+                return result;
+            }
+        }
+        catch (Exception ex)
+        {
+            // Handle general errors
+            notificationLog.Status = "failed";
+            notificationLog.StatusMessage = ex.Message;
+            await _context.SaveChangesAsync(cancellationToken);
+
+            result.Success = false;
+            result.ErrorMessage = ex.Message;
+
+            _logger.LogError(
+                ex,
+                "Unexpected error sending contact change notification to {Email}",
                 recipientEmail);
         }
 
