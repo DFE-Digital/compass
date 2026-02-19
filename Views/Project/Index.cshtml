@@ -88,7 +88,6 @@
                 _ => ViewBag.ViewAsMode == true ? "ViewAsUser" : "YourWork"
             };
             var statusActive = ViewBag.StatusActiveCount as int? ?? 0;
-            var statusPaused = ViewBag.StatusPausedCount as int? ?? 0;
             var statusCompleted = ViewBag.StatusCompletedCount as int? ?? 0;
             var statusCancelled = ViewBag.StatusCancelledCount as int? ?? 0;
             var currentStatus = ViewBag.CurrentStatus as string;
@@ -117,19 +116,6 @@
                             })" class="list-group-item list-group-item-action @(currentStatus == "Active" ? "active" : "")" style="display: flex !important; justify-content: space-between !important; align-items: center !important;">
                                 <span>Active</span>
                                 <span class="badge @(currentStatus == "Active" ? "badge-light" : "badge-secondary") badge-pill">@statusActive</span>
-                            </a>
-                            <a href="@Url.Action(filterActionName, new { 
-                                userId = targetUserId,
-                                search = ViewBag.CurrentSearch, 
-                                ragStatus = ViewBag.CurrentRagStatus, 
-                                businessArea = ViewBag.CurrentBusinessArea, 
-                                phase = ViewBag.CurrentPhase,
-                                flagship = ViewBag.CurrentFlagship,
-                                priority = currentPriorityId,
-                                status = "Paused"
-                            })" class="list-group-item list-group-item-action @(currentStatus == "Paused" ? "active" : "")" style="display: flex !important; justify-content: space-between !important; align-items: center !important;">
-                                <span>Paused</span>
-                                <span class="badge @(currentStatus == "Paused" ? "badge-light" : "badge-secondary") badge-pill">@statusPaused</span>
                             </a>
                             <a href="@Url.Action(filterActionName, new { 
                                 userId = targetUserId,
@@ -170,7 +156,7 @@
                         <form method="get" id="filterForm" asp-action="@filterActionName" asp-route-userId="@targetUserId">
                             <div class="form-group">
                                 <label>Search</label>
-                                <input type="text" name="search" class="form-control form-control-sm" placeholder="Search work items..." value="@ViewBag.CurrentSearch" />
+                                <input type="text" name="search" id="searchInput" class="form-control form-control-sm" placeholder="Search work items..." value="@ViewBag.CurrentSearch" />
                             </div>
 
                             <div class="form-group">
@@ -304,6 +290,36 @@
                             </div>
 
                             <div class="form-group">
+                                <label for="primaryContactId">Primary Contact</label>
+                                <select name="primaryContactId" id="primaryContactId" class="form-control form-control-sm">
+                                    <option value="">All</option>
+                                    @if (ViewBag.CurrentPrimaryContactId != null && (int)ViewBag.CurrentPrimaryContactId == -1)
+                                    {
+                                        <option value="-1" selected>No primary contact</option>
+                                    }
+                                    else
+                                    {
+                                        <option value="-1">No primary contact</option>
+                                    }
+                                    @if (ViewBag.PrimaryContacts != null)
+                                    {
+                                        @foreach (var contact in ViewBag.PrimaryContacts)
+                                        {
+                                            var contactId = contact.Id;
+                                            @if (ViewBag.CurrentPrimaryContactId != null && (int)ViewBag.CurrentPrimaryContactId == contactId)
+                                            {
+                                                <option value="@contactId" selected>@contact.Name</option>
+                                            }
+                                            else
+                                            {
+                                                <option value="@contactId">@contact.Name</option>
+                                            }
+                                        }
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="form-group">
                                 <button type="submit" class="btn btn-primary btn-sm btn-block">Apply filters</button>
                                 <a asp-action="@filterActionName" asp-route-clearFilters="true" class="btn btn-default btn-sm btn-block">Clear all filters</a>
                             </div>
@@ -315,6 +331,7 @@
                              !string.IsNullOrEmpty(ViewBag.CurrentPhase?.ToString()) || 
                              !string.IsNullOrEmpty(ViewBag.CurrentFlagship?.ToString()) ||
                              currentPriorityId.HasValue ||
+                             ViewBag.CurrentPrimaryContactId != null ||
                              !string.IsNullOrEmpty(currentStatus))
                         {
                             <div class="mt-3 pt-3 border-top">
@@ -329,6 +346,7 @@
                                         phase = ViewBag.CurrentPhase, 
                                         flagship = ViewBag.CurrentFlagship,
                                         priority = currentPriorityId,
+                                        primaryContactId = ViewBag.CurrentPrimaryContactId,
                                         status = (string)null
                                     })" class="badge badge-info mb-2 mr-2 d-inline-flex align-items-center badge-link" title="Remove filter">
                                         Status: @currentStatus <i class="fas fa-times ml-2"></i>
@@ -344,6 +362,7 @@
                                         phase = ViewBag.CurrentPhase, 
                                         flagship = ViewBag.CurrentFlagship,
                                         priority = currentPriorityId,
+                                        primaryContactId = ViewBag.CurrentPrimaryContactId,
                                         status = currentStatus
                                     })" class="badge badge-info mb-2 mr-2 d-inline-flex align-items-center badge-link" title="Remove filter">
                                         Search: @ViewBag.CurrentSearch <i class="fas fa-times ml-2"></i>
@@ -359,6 +378,7 @@
                                         phase = ViewBag.CurrentPhase, 
                                         flagship = ViewBag.CurrentFlagship,
                                         priority = currentPriorityId,
+                                        primaryContactId = ViewBag.CurrentPrimaryContactId,
                                         status = currentStatus
                                     })" class="badge badge-info mb-2 mr-2 d-inline-flex align-items-center badge-link" title="Remove filter">
                                         RAG: @ViewBag.CurrentRagStatus <i class="fas fa-times ml-2"></i>
@@ -374,6 +394,7 @@
                                         phase = ViewBag.CurrentPhase, 
                                         flagship = ViewBag.CurrentFlagship,
                                         priority = currentPriorityId,
+                                        primaryContactId = ViewBag.CurrentPrimaryContactId,
                                         status = currentStatus
                                     })" class="badge badge-info mb-2 mr-2 d-inline-flex align-items-center badge-link" title="Remove filter">
                                         Area: @ViewBag.CurrentBusinessArea <i class="fas fa-times ml-2"></i>
@@ -389,6 +410,7 @@
                                         phase = (string)null,
                                         flagship = ViewBag.CurrentFlagship,
                                         priority = currentPriorityId,
+                                        primaryContactId = ViewBag.CurrentPrimaryContactId,
                                         status = currentStatus
                                     })" class="badge badge-info mb-2 mr-2 d-inline-flex align-items-center badge-link" title="Remove filter">
                                         Phase: @ViewBag.CurrentPhase <i class="fas fa-times ml-2"></i>
@@ -404,6 +426,7 @@
                                         phase = ViewBag.CurrentPhase,
                                         flagship = (string)null,
                                         priority = currentPriorityId,
+                                        primaryContactId = ViewBag.CurrentPrimaryContactId,
                                         status = currentStatus
                                     })" class="badge badge-info mb-2 mr-2 d-inline-flex align-items-center badge-link" title="Remove filter">
                                         Flagship: @(ViewBag.CurrentFlagship == "true" ? "Yes" : "No") <i class="fas fa-times ml-2"></i>
@@ -420,9 +443,33 @@
                                         phase = ViewBag.CurrentPhase,
                                         flagship = ViewBag.CurrentFlagship,
                                         priority = (int?)null,
+                                        primaryContactId = ViewBag.CurrentPrimaryContactId,
                                         status = currentStatus
                                     })" class="badge badge-info mb-2 mr-2 d-inline-flex align-items-center badge-link" title="Remove filter">
                                         Priority: @(currentPriority?.Name ?? currentPriorityId.ToString()) <i class="fas fa-times ml-2"></i>
+                                    </a>
+                                }
+                                @if (ViewBag.CurrentPrimaryContactId != null)
+                                {
+                                    var currentPrimaryContactId = (int)ViewBag.CurrentPrimaryContactId;
+                                    string primaryContactName = "No primary contact";
+                                    if (currentPrimaryContactId != -1 && ViewBag.PrimaryContacts != null)
+                                    {
+                                        var contact = ((List<Compass.Models.User>)ViewBag.PrimaryContacts).FirstOrDefault(c => c.Id == currentPrimaryContactId);
+                                        primaryContactName = contact?.Name ?? "Unknown";
+                                    }
+                                    <a href="@Url.Action(filterActionName, new { 
+                                        userId = targetUserId,
+                                        search = ViewBag.CurrentSearch, 
+                                        ragStatus = ViewBag.CurrentRagStatus, 
+                                        businessArea = ViewBag.CurrentBusinessArea, 
+                                        phase = ViewBag.CurrentPhase,
+                                        flagship = ViewBag.CurrentFlagship,
+                                        priority = currentPriorityId,
+                                        primaryContactId = (int?)null,
+                                        status = currentStatus
+                                    })" class="badge badge-info mb-2 mr-2 d-inline-flex align-items-center badge-link" title="Remove filter">
+                                        Primary Contact: @primaryContactName <i class="fas fa-times ml-2"></i>
                                     </a>
                                 }
                             </div>
@@ -452,14 +499,17 @@
                             <div class="card-header">
                                 <h3 class="card-title">Your work</h3>
                                 <div class="card-tools">
-                                    <a asp-action="ExportUserProjects" 
-                                       asp-route-search="@ViewBag.CurrentSearch"
-                                       asp-route-ragStatus="@ViewBag.CurrentRagStatus"
-                                       asp-route-businessArea="@ViewBag.CurrentBusinessArea"
-                                       asp-route-phase="@ViewBag.CurrentPhase"
-                                       asp-route-flagship="@ViewBag.CurrentFlagship"
-                                       asp-route-priority="@ViewBag.CurrentPriority"
-                                       asp-route-status="@ViewBag.CurrentStatus"
+                                    <a href="#" 
+                                       class="export-link"
+                                       data-export-action="ExportUserProjects"
+                                       data-export-search="@ViewBag.CurrentSearch"
+                                       data-export-ragStatus="@ViewBag.CurrentRagStatus"
+                                       data-export-businessArea="@ViewBag.CurrentBusinessArea"
+                                       data-export-phase="@ViewBag.CurrentPhase"
+                                       data-export-flagship="@ViewBag.CurrentFlagship"
+                                       data-export-priority="@ViewBag.CurrentPriority"
+                                       data-export-primaryContactId="@ViewBag.CurrentPrimaryContactId"
+                                       data-export-status="@ViewBag.CurrentStatus"
                                        style="color: #005ea5; text-decoration: none;">
                                         Export to Excel
                                     </a>
@@ -493,14 +543,17 @@
                             <div class="card-header">
                                 <h3 class="card-title">Watched work</h3>
                                 <div class="card-tools">
-                                    <a asp-action="ExportWatchedProjects" 
-                                       asp-route-search="@ViewBag.CurrentSearch"
-                                       asp-route-ragStatus="@ViewBag.CurrentRagStatus"
-                                       asp-route-businessArea="@ViewBag.CurrentBusinessArea"
-                                       asp-route-phase="@ViewBag.CurrentPhase"
-                                       asp-route-flagship="@ViewBag.CurrentFlagship"
-                                       asp-route-priority="@ViewBag.CurrentPriority"
-                                       asp-route-status="@ViewBag.CurrentStatus"
+                                    <a href="#" 
+                                       class="export-link"
+                                       data-export-action="ExportWatchedProjects"
+                                       data-export-search="@ViewBag.CurrentSearch"
+                                       data-export-ragStatus="@ViewBag.CurrentRagStatus"
+                                       data-export-businessArea="@ViewBag.CurrentBusinessArea"
+                                       data-export-phase="@ViewBag.CurrentPhase"
+                                       data-export-flagship="@ViewBag.CurrentFlagship"
+                                       data-export-priority="@ViewBag.CurrentPriority"
+                                       data-export-primaryContactId="@ViewBag.CurrentPrimaryContactId"
+                                       data-export-status="@ViewBag.CurrentStatus"
                                        style="color: #005ea5; text-decoration: none;">
                                         Export to Excel
                                     </a>
@@ -543,14 +596,16 @@
                                 @(hasFilters ? "Filtered view of work items" : "All work items")
                             </h3>
                             <div class="card-tools">
-                                <a asp-action="ExportAllProjects" 
-                                   asp-route-search="@ViewBag.CurrentSearch"
-                                   asp-route-ragStatus="@ViewBag.CurrentRagStatus"
-                                   asp-route-businessArea="@ViewBag.CurrentBusinessArea"
-                                   asp-route-phase="@ViewBag.CurrentPhase"
-                                   asp-route-flagship="@ViewBag.CurrentFlagship"
-                                   asp-route-priority="@ViewBag.CurrentPriority"
-                                   asp-route-status="@ViewBag.CurrentStatus"
+                                <a href="#" 
+                                   class="export-link"
+                                   data-export-action="ExportAllProjects"
+                                   data-export-search="@ViewBag.CurrentSearch"
+                                   data-export-ragStatus="@ViewBag.CurrentRagStatus"
+                                   data-export-businessArea="@ViewBag.CurrentBusinessArea"
+                                   data-export-phase="@ViewBag.CurrentPhase"
+                                   data-export-flagship="@ViewBag.CurrentFlagship"
+                                   data-export-priority="@ViewBag.CurrentPriority"
+                                   data-export-status="@ViewBag.CurrentStatus"
                                    style="color: #005ea5; text-decoration: none;">
                                     Export to Excel
                                 </a>
@@ -592,6 +647,21 @@
         </div>
     </div>
 </section>
+
+<!-- Export Loading Modal -->
+<div class="modal fade" id="exportLoadingModal" tabindex="-1" role="dialog" aria-labelledby="exportLoadingModalLabel" aria-hidden="true" data-backdrop="static" data-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <div class="modal-body text-center py-4">
+                <div class="mb-3">
+                    <i class="fas fa-spinner fa-spin text-primary" style="font-size: 3rem;"></i>
+                </div>
+                <h5 class="modal-title" id="exportLoadingModalLabel">Generating Excel download</h5>
+                <p class="mb-0 mt-2">This can take a few minutes</p>
+            </div>
+        </div>
+    </div>
+</div>
 
 @section Scripts {
     <script nonce="@Context.Items["Nonce"]">
@@ -879,6 +949,18 @@
                     if (column === 'Flagship') {
                         aVal = $(a).find('td').eq(colIndex).text().trim() === 'Yes' ? 1 : 0;
                         bVal = $(b).find('td').eq(colIndex).text().trim() === 'Yes' ? 1 : 0;
+                    } else if (column === 'Status') {
+                        // Sort by status priority: Active (1) < Paused (2) < Completed (3) < Cancelled (4)
+                        var statusOrder = {
+                            'active': 1,
+                            'paused': 2,
+                            'completed': 3,
+                            'cancelled': 4
+                        };
+                        var aStatus = $(a).find('td').eq(colIndex).text().trim().toLowerCase();
+                        var bStatus = $(b).find('td').eq(colIndex).text().trim().toLowerCase();
+                        aVal = statusOrder[aStatus] || 0;
+                        bVal = statusOrder[bStatus] || 0;
                     } else if (column === 'MonthlyUpdateStatus') {
                         // Sort by status priority: Not started (1) < In progress (2) < Late (3) < Submitted (4)
                         var statusOrder = {
@@ -931,5 +1013,104 @@
         }
         
         })();
+
+        // Export link handler
+        $(document).ready(function() {
+            $('.export-link').on('click', function(e) {
+                e.preventDefault();
+                
+                var $link = $(this);
+                var action = $link.data('export-action');
+                
+                // Build query parameters
+                var params = [];
+                var search = $link.data('export-search');
+                var ragStatus = $link.data('export-ragStatus');
+                var businessArea = $link.data('export-businessArea');
+                var phase = $link.data('export-phase');
+                var flagship = $link.data('export-flagship');
+                var priority = $link.data('export-priority');
+                var primaryContactId = $link.data('export-primarycontactid');
+                var status = $link.data('export-status');
+                
+                if (search) params.push('search=' + encodeURIComponent(search));
+                if (ragStatus) params.push('ragStatus=' + encodeURIComponent(ragStatus));
+                if (businessArea) params.push('businessArea=' + encodeURIComponent(businessArea));
+                if (phase) params.push('phase=' + encodeURIComponent(phase));
+                if (flagship) params.push('flagship=' + encodeURIComponent(flagship));
+                if (priority) params.push('priority=' + encodeURIComponent(priority));
+                if (primaryContactId) params.push('primaryContactId=' + encodeURIComponent(primaryContactId));
+                if (status) params.push('status=' + encodeURIComponent(status));
+                
+                // Build URL
+                var url = '/Project/' + action;
+                if (params.length > 0) {
+                    url += '?' + params.join('&');
+                }
+                
+                // Show loading modal
+                $('#exportLoadingModal').modal('show');
+                
+                // Use fetch to download the file
+                fetch(url, {
+                    method: 'GET',
+                    credentials: 'same-origin'
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Export failed');
+                    }
+                    
+                    // Get filename from response headers or use default
+                    var contentDisposition = response.headers.get('content-disposition');
+                    var filename = 'export.xlsx';
+                    if (contentDisposition) {
+                        var filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+                        if (filenameMatch && filenameMatch[1]) {
+                            filename = filenameMatch[1].replace(/['"]/g, '');
+                        }
+                    }
+                    
+                    return response.blob().then(blob => ({ blob, filename }));
+                })
+                .then(({ blob, filename }) => {
+                    // Create download link
+                    var downloadUrl = window.URL.createObjectURL(blob);
+                    var a = document.createElement('a');
+                    a.href = downloadUrl;
+                    a.download = filename;
+                    
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    window.URL.revokeObjectURL(downloadUrl);
+                    
+                    // Close modal
+                    $('#exportLoadingModal').modal('hide');
+                })
+                .catch(error => {
+                    console.error('Export error:', error);
+                    $('#exportLoadingModal').modal('hide');
+                    alert('An error occurred while generating the export. Please try again.');
+                });
+            });
+
+            // Real-time search filtering - submit to server to search across all paginated items
+            var searchTimeout;
+            $('#searchInput').on('input', function() {
+                var searchValue = $(this).val();
+                var $form = $('#filterForm');
+                
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(function() {
+                    // Update the search input value in the form
+                    $form.find('input[name="search"]').val(searchValue);
+                    // Reset to page 1 when searching
+                    $form.find('input[name="page"]').remove();
+                    // Submit the form to search across all items
+                    $form.submit();
+                }, 500); // Debounce for 500ms
+            });
+        });
     </script>
 }

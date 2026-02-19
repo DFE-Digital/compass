@@ -377,7 +377,6 @@ public class ProjectImportService : IProjectImportService
                 Phase = csvRow.CurrentDeliveryPhase,
                 ServiceUsers = csvRow.ServiceUsers,
                 Aim = csvRow.PurposeBenefits,
-                RagStatus = csvRow.CurrentRAG,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow,
                 CreationMethod = "Bulk"
@@ -416,6 +415,14 @@ public class ProjectImportService : IProjectImportService
                 }
             }
 
+            // Set RAG Status
+            if (!string.IsNullOrWhiteSpace(csvRow.CurrentRAG))
+            {
+                var ragStatusLookup = await _context.RagStatusLookups
+                    .FirstOrDefaultAsync(r => r.Name == csvRow.CurrentRAG && r.IsActive, cancellationToken);
+                project.RagStatusLookupId = ragStatusLookup?.Id;
+            }
+
             _context.Projects.Add(project);
             await _context.SaveChangesAsync(cancellationToken);
         }
@@ -440,7 +447,9 @@ public class ProjectImportService : IProjectImportService
             }
             if (!string.IsNullOrWhiteSpace(csvRow.CurrentRAG))
             {
-                project.RagStatus = csvRow.CurrentRAG;
+                var ragStatusLookup = await _context.RagStatusLookups
+                    .FirstOrDefaultAsync(r => r.Name == csvRow.CurrentRAG && r.IsActive, cancellationToken);
+                project.RagStatusLookupId = ragStatusLookup?.Id;
             }
             project.UpdatedAt = DateTime.UtcNow;
             

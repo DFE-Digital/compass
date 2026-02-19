@@ -226,6 +226,7 @@ public class MilestonesUpdatesSuccessesController : Controller
                 .ThenInclude(pc => pc.User)
             .Include(p => p.PrimaryContactUser)
             .Include(p => p.RagHistory)
+            .Include(p => p.RagStatusLookup)
             .Include(p => p.MonthlyUpdates)
             .Include(p => p.Directorates)
                 .ThenInclude(d => d.Division)
@@ -272,6 +273,13 @@ public class MilestonesUpdatesSuccessesController : Controller
 
         // Check if current user can submit (must be SRO, Service Owner, or Primary Contact)
         var canSubmit = await CanUserSubmitMonthlyUpdate(project);
+
+        // Get RAG statuses from admin settings (RagStatusLookups table)
+        ViewBag.RagStatuses = await _context.RagStatusLookups
+            .Where(r => r.IsActive)
+            .OrderBy(r => r.SortOrder)
+            .ThenBy(r => r.Name)
+            .ToListAsync();
 
         ViewBag.ProjectId = project.Id;
         ViewBag.ProjectTitle = project.Title;
@@ -1018,6 +1026,99 @@ public class MilestonesUpdatesSuccessesController : Controller
             TempData["InfoMessage"] = "This monthly update has already been submitted.";
         }
 
+        return RedirectToAction(redirectAction, new { projectId = projectId.Value, year = year.Value, month = month.Value });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> SaveRagStatus(int? projectId, int? year, int? month, string? ragStatus, string? ragJustification, string? pathToGreen)
+    {
+        if (!projectId.HasValue || !year.HasValue || !month.HasValue)
+        {
+            return NotFound();
+        }
+
+        var project = await _context.Projects
+            .Include(p => p.RagHistory)
+            .Include(p => p.RagStatusLookup)
+            .FirstOrDefaultAsync(p => p.Id == projectId.Value && !p.IsDeleted);
+
+        if (project == null)
+        {
+            return NotFound();
+        }
+
+        // Determine redirect action based on whether update exists
+        var existingUpdate = await _context.ProjectMonthlyUpdates
+            .FirstOrDefaultAsync(u => u.ProjectId == projectId.Value && u.Year == year.Value && u.Month == month.Value);
+        var redirectAction = existingUpdate != null ? "EditUpdate" : "CreateUpdate";
+
+        // Validate RAG status
+        if (string.IsNullOrWhiteSpace(ragStatus))
+        {
+            TempData["ErrorMessage"] = "RAG status is required.";
+            return RedirectToAction(redirectAction, new { projectId = projectId.Value, year = year.Value, month = month.Value });
+        }
+
+        var oldRagStatus = project.RagStatusLookup?.Name ?? project.RagStatus;
+        var ragChanged = oldRagStatus != ragStatus;
+        var isNotGreen = ragStatus != "Green";
+        // If both current RAG and selected RAG are Green, don't require justification or path to green
+        var bothGreen = !string.IsNullOrWhiteSpace(oldRagStatus) && oldRagStatus == "Green" && ragStatus == "Green";
+
+        // Validate justification if RAG changed or not green, but not if both current and selected are Green
+        if (!bothGreen && (ragChanged || isNotGreen) && string.IsNullOrWhiteSpace(ragJustification))
+        {
+            TempData["ErrorMessage"] = "RAG justification is required when RAG status has changed or is not Green.";
+            return RedirectToAction(redirectAction, new { projectId = projectId.Value, year = year.Value, month = month.Value });
+        }
+
+        // Validate path to green if not green, but not if both current and selected are Green
+        if (!bothGreen && isNotGreen && string.IsNullOrWhiteSpace(pathToGreen))
+        {
+            TempData["ErrorMessage"] = "Path to Green is required when RAG status is not Green.";
+            return RedirectToAction(redirectAction, new { projectId = projectId.Value, year = year.Value, month = month.Value });
+        }
+
+        // Find the RAG status lookup by name
+        var ragStatusLookup = await _context.RagStatusLookups
+            .FirstOrDefaultAsync(r => r.Name == ragStatus && r.IsActive);
+
+        // Update RAG status if changed
+        if (ragChanged)
+        {
+            // Create RAG history entry
+            var ragHistory = new ProjectRagHistory
+            {
+                ProjectId = projectId.Value,
+                RagStatusLookupId = ragStatusLookup?.Id,
+                RagStatus = ragStatus, // Keep for backward compatibility
+                Justification = ragJustification,
+                PathToGreen = pathToGreen,
+                ChangedAt = DateTime.UtcNow,
+                ChangedByEmail = User.Identity?.Name ?? "Unknown",
+                ChangedByName = User.Identity?.Name ?? "Unknown"
+            };
+            _context.ProjectRagHistories.Add(ragHistory);
+        }
+
+        // Update project RAG status
+        project.RagStatusLookupId = ragStatusLookup?.Id;
+        project.RagStatus = ragStatus; // Keep for backward compatibility
+        project.RagJustification = ragJustification;
+        if (isNotGreen)
+        {
+            project.PathToGreen = pathToGreen;
+        }
+        else
+        {
+            project.PathToGreen = null; // Clear path to green if status is Green
+        }
+        project.UpdatedAt = DateTime.UtcNow;
+
+        await _context.SaveChangesAsync();
+
+        TempData["SuccessMessage"] = "RAG status saved successfully.";
         return RedirectToAction(redirectAction, new { projectId = projectId.Value, year = year.Value, month = month.Value });
     }
 

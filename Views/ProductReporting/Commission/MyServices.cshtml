@@ -228,6 +228,9 @@
                                             <th class="sortable" data-column="BusinessArea" tabindex="0" role="button" aria-label="Sort by business area">
                                                 Business area <i class="fas fa-sort sort-icon"></i>
                                             </th>
+                                            <th class="sortable" data-column="ServiceOwner" tabindex="0" role="button" aria-label="Sort by service owner">
+                                                Service owner <i class="fas fa-sort sort-icon"></i>
+                                            </th>
                                             <th class="sortable" data-column="Phase" tabindex="0" role="button" aria-label="Sort by phase">
                                                 Phase <i class="fas fa-sort sort-icon"></i>
                                             </th>
@@ -250,8 +253,12 @@
                                                 .Where(cv => cv.CategoryType?.Name?.Equals("Type", StringComparison.OrdinalIgnoreCase) == true)
                                                 .Select(cv => cv.Name)
                                                 .ToList() ?? new List<string>();
+                                            var serviceOwnerNames = item.Product.ServiceOwners != null && item.Product.ServiceOwners.Any()
+                                                ? string.Join(", ", item.Product.ServiceOwners.Select(so => (so.DisplayName ?? so.EmailAddress ?? "-").ToLowerInvariant()))
+                                                : "-";
                                             <tr data-product="@item.Product.Title.ToLowerInvariant()"
                                                 data-business-area="@businessArea.ToLowerInvariant()"
+                                                data-service-owner="@serviceOwnerNames"
                                                 data-phase="@(item.Product.Phase ?? string.Empty).ToLowerInvariant()"
                                                 data-types="@string.Join("||", types.Select(t => t.ToLowerInvariant()))"
                                                 data-status="@item.Status.ToString().ToLowerInvariant()">
@@ -271,6 +278,16 @@
                                                     </small>
                                                 </td>
                                                 <td>@businessArea</td>
+                                                <td>
+                                                    @if (item.Product.ServiceOwners != null && item.Product.ServiceOwners.Any())
+                                                    {
+                                                        @string.Join(", ", item.Product.ServiceOwners.Select(so => so.DisplayName ?? so.EmailAddress ?? "-"))
+                                                    }
+                                                    else
+                                                    {
+                                                        <text>-</text>
+                                                    }
+                                                </td>
                                                 <td>@(item.Product.Phase ?? "-")</td>
                                                 <td>
                                                     @if (types.Any())
@@ -374,6 +391,9 @@
                                             <th class="sortable" data-column="BusinessArea" tabindex="0" role="button" aria-label="Sort by Business Area" style="cursor: pointer;">
                                                 Business area <i class="fas fa-sort sort-icon"></i>
                                             </th>
+                                            <th class="sortable" data-column="ServiceOwner" tabindex="0" role="button" aria-label="Sort by Service Owner" style="cursor: pointer;">
+                                                Service owner <i class="fas fa-sort sort-icon"></i>
+                                            </th>
                                             <th class="sortable" data-column="Phase" tabindex="0" role="button" aria-label="Sort by Phase" style="cursor: pointer;">
                                                 Phase <i class="fas fa-sort sort-icon"></i>
                                             </th>
@@ -400,8 +420,12 @@
                                                              item.Status == CommissionSubmissionStatus.InProgress ? "InProgress" :
                                                              item.Status == CommissionSubmissionStatus.Submitted ? "Submitted" :
                                                              item.Status == CommissionSubmissionStatus.Late ? "Late" : "";
+                                            var serviceOwnerNames = item.Product.ServiceOwners != null && item.Product.ServiceOwners.Any()
+                                                ? string.Join(", ", item.Product.ServiceOwners.Select(so => (so.DisplayName ?? so.EmailAddress ?? "-").ToLowerInvariant()))
+                                                : "-";
                                             <tr data-product-title="@item.Product.Title.ToLowerInvariant()"
                                                 data-business-area="@businessArea.ToLowerInvariant()"
+                                                data-service-owner="@serviceOwnerNames"
                                                 data-phase="@((item.Product.Phase ?? "-").ToLowerInvariant())"
                                                 data-type="@(string.Join(", ", types).ToLowerInvariant())"
                                                 data-status="@statusText.ToLowerInvariant()">
@@ -421,6 +445,16 @@
                                                     </small>
                                                 </td>
                                                 <td>@businessArea</td>
+                                                <td>
+                                                    @if (item.Product.ServiceOwners != null && item.Product.ServiceOwners.Any())
+                                                    {
+                                                        @string.Join(", ", item.Product.ServiceOwners.Select(so => so.DisplayName ?? so.EmailAddress ?? "-"))
+                                                    }
+                                                    else
+                                                    {
+                                                        <text>-</text>
+                                                    }
+                                                </td>
                                                 <td>@(item.Product.Phase ?? "-")</td>
                                                 <td>
                                                     @if (types.Any())
@@ -605,15 +639,18 @@
                         } else if (column === 'BusinessArea') {
                             aVal = $(a).find('td').eq(1).text().trim().toLowerCase();
                             bVal = $(b).find('td').eq(1).text().trim().toLowerCase();
-                        } else if (column === 'Phase') {
+                        } else if (column === 'ServiceOwner') {
                             aVal = $(a).find('td').eq(2).text().trim().toLowerCase();
                             bVal = $(b).find('td').eq(2).text().trim().toLowerCase();
-                        } else if (column === 'Type') {
+                        } else if (column === 'Phase') {
                             aVal = $(a).find('td').eq(3).text().trim().toLowerCase();
                             bVal = $(b).find('td').eq(3).text().trim().toLowerCase();
-                        } else if (column === 'Status') {
+                        } else if (column === 'Type') {
                             aVal = $(a).find('td').eq(4).text().trim().toLowerCase();
                             bVal = $(b).find('td').eq(4).text().trim().toLowerCase();
+                        } else if (column === 'Status') {
+                            aVal = $(a).find('td').eq(5).text().trim().toLowerCase();
+                            bVal = $(b).find('td').eq(5).text().trim().toLowerCase();
                         } else {
                             aVal = $(a).find('td').eq(0).text().trim().toLowerCase();
                             bVal = $(b).find('td').eq(0).text().trim().toLowerCase();
