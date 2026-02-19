@@ -591,32 +591,54 @@ public class DdtReportsController : Controller
                 .OrderByDescending(ba => ba.AverageCompletionPercentage)
                 .ToList();
 
-            var zeroCompletionCount = completionItems.Count(p => Math.Abs(p.CompletionPercentage) < 0.0001);
             var productsWithContactCount = completionItems.Count(p => p.ContactsCount > 0);
 
             var completedPhaseCount = completionItems.Count(p => p.HasPhase);
             var completedBusinessAreaCount = completionItems.Count(p => p.HasBusinessArea);
             var completedProductUrlCount = completionItems.Count(p => p.HasProductUrl);
+            var completedSroCount = completionItems.Count(p => p.SeniorResponsibleOfficerContacts != null && p.SeniorResponsibleOfficerContacts.Any());
+            var completedServiceOwnerCount = completionItems.Count(p => p.ServiceOwnerContacts != null && p.ServiceOwnerContacts.Any());
+            var completedTypeCount = completionItems.Count(p => p.TypeNames != null && p.TypeNames.Any());
 
             var phaseCategoryValues = await _productsApiService.GetPhaseCategoryValuesAsync();
             var businessAreaCategoryValues = await _productsApiService.GetBusinessAreaCategoryValuesAsync();
             var userGroupCategoryValues = await _productsApiService.GetUserGroupCategoryValuesAsync();
+            
+            // Get unique types from products
+            var typeNames = completionItems
+                .SelectMany(p => p.TypeNames ?? new List<string>())
+                .Where(t => !string.IsNullOrWhiteSpace(t))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(t => t)
+                .ToList();
+            
+            // Get unique phases from products
+            var phaseNames = completionItems
+                .Where(p => !string.IsNullOrWhiteSpace(p.PhaseName))
+                .Select(p => p.PhaseName!)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(p => p)
+                .ToList();
 
             var viewModel = new FipsCompletionViewModel
             {
                 Products = completionItems,
                 AverageCompletionPercentage = averageCompletion,
                 BusinessAreaCompletions = businessAreaCompletions,
-                ZeroCompletionCount = zeroCompletionCount,
                 ProductsWithContactCount = productsWithContactCount,
                 CompletedPhaseCount = completedPhaseCount,
                 CompletedBusinessAreaCount = completedBusinessAreaCount,
-                CompletedUrlCount = completedProductUrlCount
+                CompletedUrlCount = completedProductUrlCount,
+                CompletedSroCount = completedSroCount,
+                CompletedServiceOwnerCount = completedServiceOwnerCount,
+                CompletedTypeCount = completedTypeCount
             };
             
             ViewBag.PhaseCategoryValues = phaseCategoryValues;
             ViewBag.BusinessAreaCategoryValues = businessAreaCategoryValues;
             ViewBag.UserGroupCategoryValues = userGroupCategoryValues;
+            ViewBag.TypeNames = typeNames;
+            ViewBag.PhaseNames = phaseNames;
             
             return View(viewModel);
         }
@@ -3073,6 +3095,16 @@ public class DdtReportsController : Controller
             .Distinct()
             .ToList();
 
+        // Extract Type from category values
+        var typeNames = categoryValues
+            .Where(cv => cv.CategoryType != null && 
+                       (cv.CategoryType.Name?.Equals("Type", StringComparison.OrdinalIgnoreCase) == true ||
+                        cv.CategoryType.Name?.Equals("Types", StringComparison.OrdinalIgnoreCase) == true))
+            .Select(cv => cv.Name)
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
         var sroContacts = new List<string>();
         var iaoContacts = new List<string>();
         var deliveryManagerContacts = new List<string>();
@@ -3173,6 +3205,35 @@ public class DdtReportsController : Controller
             }
         }
 
+        // Extract SRO from product.SeniorResponsibleOfficers (new field)
+        if (product.SeniorResponsibleOfficers != null && product.SeniorResponsibleOfficers.Any())
+        {
+            foreach (var sro in product.SeniorResponsibleOfficers)
+            {
+                if (sro == null) continue;
+                
+                var displayName = !string.IsNullOrWhiteSpace(sro.DisplayName)
+                    ? sro.DisplayName
+                    : (!string.IsNullOrWhiteSpace(sro.FirstName) || !string.IsNullOrWhiteSpace(sro.LastName))
+                        ? $"{sro.FirstName} {sro.LastName}".Trim()
+                        : sro.EmailAddress;
+                
+                if (!string.IsNullOrWhiteSpace(displayName))
+                {
+                    AddContactIfMissing(sroContacts, displayName);
+                    // Add to contactDetails for counting purposes, avoiding duplicates
+                    var alreadyExists = contactDetails.Any(cd => 
+                        cd.Equals(displayName, StringComparison.OrdinalIgnoreCase) ||
+                        cd.StartsWith(displayName + " -", StringComparison.OrdinalIgnoreCase));
+                    
+                    if (!alreadyExists)
+                    {
+                        contactDetails.Add(displayName);
+                    }
+                }
+            }
+        }
+
         // Recalculate contactsCount to include all contacts (ProductContacts + ServiceOwners)
         contactsCount = contactDetails.Count;
 
@@ -3206,6 +3267,7 @@ public class DdtReportsController : Controller
             ContactDetails = contactDetails,
             UserGroupNames = userGroupNames,
             UserGroupCategoryValueIds = userGroupIds,
+            TypeNames = typeNames,
             ProductUrl = productUrl,
             HasPhase = hasPhase,
             HasBusinessArea = hasBusinessArea,

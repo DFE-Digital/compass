@@ -4,8 +4,8 @@
 @{
     var monthlyUpdates = Model.MonthlyUpdates.OrderByDescending(u => u.Year).ThenByDescending(u => u.Month).ToList();
     
-    // Generate periods starting from November 2025
-    var startDate = new DateTime(2025, 11, 1);
+    // Generate periods starting from January 2026
+    var startDate = new DateTime(2026, 1, 1);
     var currentDate = DateTime.UtcNow;
     var periods = new List<dynamic>();
     
@@ -30,21 +30,8 @@
         periodDate = periodDate.AddMonths(1);
     }
     
-    // Group periods by status and sort by date (latest first)
-    var dueOrLate = periods
-        .Where(p => p.Status == "Due" || p.Status == "Late")
-        .OrderByDescending(p => p.Year)
-        .ThenByDescending(p => p.Month)
-        .ToList();
-    
-    var upcoming = periods
-        .Where(p => p.Status == "Upcoming")
-        .OrderByDescending(p => p.Year)
-        .ThenByDescending(p => p.Month)
-        .ToList();
-    
-    var completed = periods
-        .Where(p => p.Status == "Submitted")
+    // Sort periods by date (latest first)
+    var sortedPeriods = periods
         .OrderByDescending(p => p.Year)
         .ThenByDescending(p => p.Month)
         .ToList();
@@ -52,172 +39,59 @@
 
 <div class="row">
     <div class="col-12">
-        <!-- Due or Late Updates Card -->
-        <div class="card mb-4">
+        <div class="card">
             <div class="card-header">
-                <h3 class="card-title">Due or Late Updates</h3>
+                <h3 class="card-title">Monthly Updates</h3>
             </div>
             <div class="card-body p-0">
-                @if (dueOrLate.Any())
+                @if (sortedPeriods.Any())
                 {
                     <div class="table-responsive">
                         <table class="table table-hover mb-0">
                             <thead>
                                 <tr>
-                                    <th style="width: 35%;">Period</th>
-                                    <th style="width: 20%;">Due Date</th>
-                                    <th style="width: 15%;">Status</th>
-                                    <th style="width: 30%;">Updates</th>
+                                    <th>Period</th>
+                                    <th>Due date</th>
+                                    <th>Status</th>
+                                    <th>Submitted</th>
+                                    <th>Submitted by</th>
+                                    <th>Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                @foreach (var period in dueOrLate)
+                                @foreach (var period in sortedPeriods)
                                 {
+                                    var update = period.Update as Compass.Models.ProjectMonthlyUpdate;
+                                    var hasUpdate = update != null;
+                                    var isSubmitted = period.Status == "Submitted";
+                                    var isUpcoming = period.Status == "Upcoming";
+                                    var isDueOrLate = period.Status == "Due" || period.Status == "Late";
+                                    
                                     <tr>
-                                        <td>
-                                            @if (period.Update != null)
-                                            {
-                                                <a href="@Url.Action("EditUpdate", "MilestonesUpdatesSuccesses", new { projectId = Model.Id, year = period.Year, month = period.Month })">@period.PeriodName</a>
-                                            }
-                                            else
-                                            {
-                                                <a href="@Url.Action("CreateUpdate", "MilestonesUpdatesSuccesses", new { projectId = Model.Id, year = period.Year, month = period.Month })">@period.PeriodName</a>
-                                            }
-                                        </td>
+                                        <td>@period.PeriodName</td>
                                         <td>@period.DueDate.ToString("dd MMM yyyy")</td>
                                         <td>
                                             @if (period.Status == "Late")
                                             {
                                                 <span class="badge badge-danger">Late</span>
                                             }
-                                            else
+                                            else if (period.Status == "Due")
                                             {
                                                 <span class="badge badge-warning">Due</span>
                                             }
-                                        </td>
-                                        <td>
-                                            @{
-                                                var narrativeCount = period.Update?.MonthlyUpdateNarratives?.Count ?? 0;
-                                            }
-                                            @narrativeCount
-                                        </td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
-                    </div>
-                }
-                else
-                {
-                    <p class="text-muted mb-0 p-3">No due or late updates.</p>
-                }
-            </div>
-        </div>
-
-        <!-- Upcoming Updates Card -->
-        <div class="card mb-4">
-            <div class="card-header">
-                <h3 class="card-title">Upcoming Updates</h3>
-            </div>
-            <div class="card-body p-0">
-                @if (upcoming.Any())
-                {
-                    <div class="table-responsive">
-                        <table class="table table-hover mb-0">
-                            <thead>
-                                <tr>
-                                    <th style="width: 35%;">Period</th>
-                                    <th style="width: 20%;">Due Date</th>
-                                    <th style="width: 15%;">Status</th>
-                                    <th style="width: 30%;">Updates</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach (var period in upcoming)
-                                {
-                                    <tr>
-                                        <td>
-                                            @if (period.Update != null)
+                                            else if (period.Status == "Submitted")
                                             {
-                                                <a href="@Url.Action("EditUpdate", "MilestonesUpdatesSuccesses", new { projectId = Model.Id, year = period.Year, month = period.Month })">@period.PeriodName</a>
+                                                <span class="badge badge-success">Submitted</span>
                                             }
                                             else
                                             {
-                                                <a href="@Url.Action("CreateUpdate", "MilestonesUpdatesSuccesses", new { projectId = Model.Id, year = period.Year, month = period.Month })">@period.PeriodName</a>
+                                                <span class="badge badge-secondary">Upcoming</span>
                                             }
                                         </td>
-                                        <td>@period.DueDate.ToString("dd MMM yyyy")</td>
                                         <td>
-                                            <span class="badge badge-secondary">Upcoming</span>
-                                        </td>
-                                        <td>
-                                            @{
-                                                var narrativeCount = period.Update?.MonthlyUpdateNarratives?.Count ?? 0;
-                                            }
-                                            @narrativeCount
-                                        </td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
-                    </div>
-                }
-                else
-                {
-                    <p class="text-muted mb-0 p-3">No upcoming updates.</p>
-                }
-            </div>
-        </div>
-
-        <!-- Completed Updates Card -->
-        <div class="card mb-4">
-            <div class="card-header">
-                <h3 class="card-title">Completed Updates</h3>
-            </div>
-            <div class="card-body p-0">
-                @if (completed.Any())
-                {
-                    <div class="table-responsive">
-                        <table class="table table-hover mb-0">
-                            <thead>
-                                <tr>
-                                    <th style="width: 25%;">Period</th>
-                                    <th style="width: 15%;">Due Date</th>
-                                    <th style="width: 12%;">Status</th>
-                                    <th style="width: 18%;">Submitted</th>
-                                    <th style="width: 30%;">Updates</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach (var period in completed)
-                                {
-                                    <tr>
-                                        <td>
-                                            @if (period.Update != null)
+                                            @if (update?.SubmittedAt.HasValue == true)
                                             {
-                                                <a href="@Url.Action("EditUpdate", "MilestonesUpdatesSuccesses", new { projectId = Model.Id, year = period.Year, month = period.Month })">@period.PeriodName</a>
-                                            }
-                                            else
-                                            {
-                                                <a href="@Url.Action("CreateUpdate", "MilestonesUpdatesSuccesses", new { projectId = Model.Id, year = period.Year, month = period.Month })">@period.PeriodName</a>
-                                            }
-                                        </td>
-                                        <td>@period.DueDate.ToString("dd MMM yyyy")</td>
-                                        <td>
-                                            <span class="badge badge-success">Complete</span>
-                                        </td>
-                                        <td>
-                                            @if (period.Update != null)
-                                            {
-                                                var update = (Compass.Models.ProjectMonthlyUpdate)period.Update;
-                                                @if (update.SubmittedAt.HasValue)
-                                                {
-                                                    @update.SubmittedAt.Value.ToString("dd MMM yyyy")
-                                                }
-                                                else
-                                                {
-                                                    <span class="text-muted">-</span>
-                                                }
+                                                @update.SubmittedAt.Value.ToString("dd MMM yyyy")
                                             }
                                             else
                                             {
@@ -225,10 +99,32 @@
                                             }
                                         </td>
                                         <td>
-                                            @{
-                                                var narrativeCount = period.Update?.MonthlyUpdateNarratives?.Count ?? 0;
+                                            @if (update?.CreatedByName != null)
+                                            {
+                                                @update.CreatedByName
                                             }
-                                            @narrativeCount
+                                            else
+                                            {
+                                                <span class="text-muted">-</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            @if (isUpcoming)
+                                            {
+                                                <button class="btn btn-sm btn-secondary" disabled>Can't start yet</button>
+                                            }
+                                            else if (isSubmitted)
+                                            {
+                                                <a href="@Url.Action("EditUpdate", "MilestonesUpdatesSuccesses", new { projectId = Model.Id, year = period.Year, month = period.Month })" class="btn btn-sm btn-primary">View</a>
+                                            }
+                                            else if (hasUpdate)
+                                            {
+                                                <a href="@Url.Action("EditUpdate", "MilestonesUpdatesSuccesses", new { projectId = Model.Id, year = period.Year, month = period.Month })" class="btn btn-sm btn-warning">Continue</a>
+                                            }
+                                            else
+                                            {
+                                                <a href="@Url.Action("CreateUpdate", "MilestonesUpdatesSuccesses", new { projectId = Model.Id, year = period.Year, month = period.Month })" class="btn btn-sm btn-success">Start</a>
+                                            }
                                         </td>
                                     </tr>
                                 }
@@ -238,7 +134,7 @@
                 }
                 else
                 {
-                    <p class="text-muted mb-0 p-3">No completed updates.</p>
+                    <p class="text-muted mb-0 p-3">No monthly updates available.</p>
                 }
             </div>
         </div>
