@@ -208,11 +208,18 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var ba in Model.BusinessAreaCompletions)
+                        @{
+                            var sortedBusinessAreas = Model.BusinessAreaCompletions
+                                .OrderByDescending(ba => ba.CompletionPercentage)
+                                .ThenByDescending(ba => ba.CompletedProducts)
+                                .ToList();
+                        }
+                        @foreach (var ba in sortedBusinessAreas)
                         {
-                            var completionBadgeClass = ba.CompletionPercentage >= 80 ? "badge-success" 
-                                : ba.CompletionPercentage >= 50 ? "badge-warning" 
-                                : "badge-danger";
+                            var completionPercentage = (double)ba.CompletionPercentage;
+                            var progressBarClass = completionPercentage >= 80 ? "bg-success" 
+                                : completionPercentage >= 50 ? "bg-warning" 
+                                : "bg-danger";
                             <tr>
                                 <td>
                                     <a href="@Url.Action("BusinessAreasDetails", "ProductReporting", new { businessAreaName = ba.BusinessAreaName, commissionId = selectedCommission?.Id })" style="color: #005ea5; text-decoration: underline; font-weight: 600;">
@@ -229,8 +236,16 @@
                                 <td>
                                     <span class="badge badge-secondary">@ba.NotStartedProducts</span>
                                 </td>
-                                <td>
-                                    <span class="badge @completionBadgeClass">@ba.CompletionPercentage%</span>
+                                <td style="min-width: 150px;">
+                                    <div class="progress" style="height: 20px;">
+                                        <div class="progress-bar @progressBarClass" role="progressbar" 
+                                             style="width: @completionPercentage%;" 
+                                             aria-valuenow="@completionPercentage" 
+                                             aria-valuemin="0" 
+                                             aria-valuemax="100">
+                                            <span style="font-size: 0.75rem; font-weight: 500;">@ba.CompletionPercentage%</span>
+                                        </div>
+                                    </div>
                                 </td>
                             </tr>
                         }

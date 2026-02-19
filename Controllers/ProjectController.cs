@@ -209,9 +209,9 @@ namespace Compass.Controllers
         // GET: Project/YourWork
         [HttpGet]
         [Route("api/project/your-work")]
-        public async Task<IActionResult> YourWork(string search, string ragStatus, string businessArea, string phase, string flagship, int? priority, string status, int page = 1, bool clearFilters = false)
+        public async Task<IActionResult> YourWork(string search, string ragStatus, string businessArea, string phase, string flagship, int? priority, string status, int? primaryContactId, int page = 1, bool clearFilters = false)
         {
-            return await GetProjectsView("your-work", search, ragStatus, businessArea, phase, flagship, priority, status, page, clearFilters);
+            return await GetProjectsView("your-work", search, ragStatus, businessArea, phase, flagship, priority, status, page, clearFilters, null, primaryContactId);
         }
 
         // GET: Project/Watched
@@ -225,13 +225,13 @@ namespace Compass.Controllers
         // GET: Project/All
         [HttpGet]
         [Route("api/project/all")]
-        public async Task<IActionResult> All(string search, string ragStatus, string businessArea, string phase, string flagship, int? priority, string status, int page = 1, bool clearFilters = false)
+        public async Task<IActionResult> All(string search, string ragStatus, string businessArea, string phase, string flagship, int? priority, string status, int? primaryContactId, int page = 1, bool clearFilters = false)
         {
-            return await GetProjectsView("all", search, ragStatus, businessArea, phase, flagship, priority, status, page, clearFilters);
+            return await GetProjectsView("all", search, ragStatus, businessArea, phase, flagship, priority, status, page, clearFilters, null, primaryContactId);
         }
 
         // Helper method to handle the common logic for all project views
-        private async Task<IActionResult> GetProjectsView(string viewType, string search, string ragStatus, string businessArea, string phase, string flagship, int? priority, string status, int page, bool clearFilters, string? targetUserEmail = null)
+        private async Task<IActionResult> GetProjectsView(string viewType, string search, string ragStatus, string businessArea, string phase, string flagship, int? priority, string status, int page, bool clearFilters, string? targetUserEmail = null, int? primaryContactId = null)
         {
             const int pageSize = 15;
             var pageNumber = page < 1 ? 1 : page;
@@ -440,7 +440,10 @@ namespace Compass.Controllers
             // Apply filters to user projects
             if (!string.IsNullOrEmpty(search))
             {
-                userProjectsQuery = userProjectsQuery.Where(p => p.Title.Contains(search) || p.ProjectCode.Contains(search));
+                var searchLower = search.ToLower();
+                userProjectsQuery = userProjectsQuery.Where(p => 
+                    (p.Title != null && p.Title.ToLower().Contains(searchLower)) || 
+                    (p.ProjectCode != null && p.ProjectCode.ToLower().Contains(searchLower)));
             }
             if (!string.IsNullOrEmpty(ragStatus))
             {
@@ -473,7 +476,15 @@ namespace Compass.Controllers
             
             if (!string.IsNullOrEmpty(effectiveStatus))
             {
-                userProjectsQuery = userProjectsQuery.Where(p => p.Status == effectiveStatus);
+                // Merge Paused into Active - when filtering by Active, include both Active and Paused
+                if (effectiveStatus == "Active")
+                {
+                    userProjectsQuery = userProjectsQuery.Where(p => p.Status == "Active" || p.Status == "Paused");
+                }
+                else
+                {
+                    userProjectsQuery = userProjectsQuery.Where(p => p.Status == effectiveStatus);
+                }
             }
 
             var userProjects = await userProjectsQuery
@@ -513,7 +524,10 @@ namespace Compass.Controllers
             // Apply filters to watched projects
             if (!string.IsNullOrEmpty(search))
             {
-                watchedProjectsQuery = watchedProjectsQuery.Where(p => p.Title.Contains(search) || p.ProjectCode.Contains(search));
+                var searchLower = search.ToLower();
+                watchedProjectsQuery = watchedProjectsQuery.Where(p => 
+                    (p.Title != null && p.Title.ToLower().Contains(searchLower)) || 
+                    (p.ProjectCode != null && p.ProjectCode.ToLower().Contains(searchLower)));
             }
             if (!string.IsNullOrEmpty(ragStatus))
             {
@@ -538,7 +552,15 @@ namespace Compass.Controllers
             }
             if (!string.IsNullOrEmpty(status))
             {
-                watchedProjectsQuery = watchedProjectsQuery.Where(p => p.Status == status);
+                // Merge Paused into Active - when filtering by Active, include both Active and Paused
+                if (status == "Active")
+                {
+                    watchedProjectsQuery = watchedProjectsQuery.Where(p => p.Status == "Active" || p.Status == "Paused");
+                }
+                else
+                {
+                    watchedProjectsQuery = watchedProjectsQuery.Where(p => p.Status == status);
+                }
             }
 
             var watchedProjects = await watchedProjectsQuery
@@ -551,6 +573,7 @@ namespace Compass.Controllers
                 .Include(p => p.DeliveryPriority)
                 .Include(p => p.BusinessAreaLookup)
                 .Include(p => p.PhaseLookup)
+                .Include(p => p.PrimaryContactUser)
                 .Include(p => p.ProjectMissions)
                     .ThenInclude(pm => pm.Mission)
                 .Include(p => p.ProjectObjectives)
@@ -563,10 +586,13 @@ namespace Compass.Controllers
                 .Include(p => p.MonthlyUpdates)
                 .AsQueryable();
 
-            // Apply search filter
+            // Apply search filter (case-insensitive)
             if (!string.IsNullOrEmpty(search))
             {
-                query = query.Where(p => p.Title.Contains(search) || p.ProjectCode.Contains(search));
+                var searchLower = search.ToLower();
+                query = query.Where(p => 
+                    (p.Title != null && p.Title.ToLower().Contains(searchLower)) || 
+                    (p.ProjectCode != null && p.ProjectCode.ToLower().Contains(searchLower)));
             }
 
             // Apply RAG Status filter
@@ -599,10 +625,37 @@ namespace Compass.Controllers
                 query = query.Where(p => p.DeliveryPriorityId == priority.Value);
             }
 
-            // Apply Status filter
-            if (!string.IsNullOrEmpty(status))
+            // Apply Primary Contact filter
+            if (primaryContactId.HasValue)
             {
-                query = query.Where(p => p.Status == status);
+                if (primaryContactId.Value == -1)
+                {
+                    // Filter for projects with no primary contact
+                    query = query.Where(p => p.PrimaryContactUserId == null);
+                }
+                else
+                {
+                    query = query.Where(p => p.PrimaryContactUserId == primaryContactId.Value);
+                }
+            }
+
+            // Apply Status filter
+            // For "all" view, default to showing only Active and Paused if no status filter is specified
+            if (viewType == "all" && string.IsNullOrEmpty(status))
+            {
+                query = query.Where(p => p.Status == "Active" || p.Status == "Paused");
+            }
+            else if (!string.IsNullOrEmpty(status))
+            {
+                // Merge Paused into Active - when filtering by Active, include both Active and Paused
+                if (status == "Active")
+                {
+                    query = query.Where(p => p.Status == "Active" || p.Status == "Paused");
+                }
+                else
+                {
+                    query = query.Where(p => p.Status == status);
+                }
             }
 
             var orderedQuery = query
@@ -623,8 +676,9 @@ namespace Compass.Controllers
             ViewBag.CurrentPhase = phase;
             ViewBag.CurrentFlagship = flagship;
             ViewBag.CurrentPriority = priority;
-            // For "Your work" view, show Active as the current status if no explicit status is set
-            ViewBag.CurrentStatus = (viewType == "your-work" && string.IsNullOrEmpty(status)) ? "Active" : status;
+            ViewBag.CurrentPrimaryContactId = primaryContactId;
+            // For "Your work" and "all" views, show Active as the current status if no explicit status is set
+            ViewBag.CurrentStatus = ((viewType == "your-work" || viewType == "all") && string.IsNullOrEmpty(status)) ? "Active" : status;
 
             // Get business areas from admin settings and phases from CMS
             ViewBag.BusinessAreas = await _context.BusinessAreaLookups
@@ -639,6 +693,15 @@ namespace Compass.Controllers
                 .Where(dp => dp.IsActive)
                 .OrderBy(dp => dp.SortOrder)
                 .ThenBy(dp => dp.Name)
+                .AsNoTracking()
+                .ToListAsync();
+
+            // Get primary contacts (users who are primary contacts for at least one project)
+            ViewBag.PrimaryContacts = await _context.Projects
+                .Where(p => !p.IsDeleted && p.PrimaryContactUserId != null)
+                .Select(p => p.PrimaryContactUser)
+                .Distinct()
+                .OrderBy(u => u.Name)
                 .AsNoTracking()
                 .ToListAsync();
 
@@ -736,7 +799,10 @@ namespace Compass.Controllers
             // Apply all filters except status
             if (!string.IsNullOrEmpty(search))
             {
-                statusCountQuery = statusCountQuery.Where(p => p.Title.Contains(search) || p.ProjectCode.Contains(search));
+                var searchLower = search.ToLower();
+                statusCountQuery = statusCountQuery.Where(p => 
+                    (p.Title != null && p.Title.ToLower().Contains(searchLower)) || 
+                    (p.ProjectCode != null && p.ProjectCode.ToLower().Contains(searchLower)));
             }
             if (!string.IsNullOrEmpty(ragStatus))
             {
@@ -759,10 +825,21 @@ namespace Compass.Controllers
             {
                 statusCountQuery = statusCountQuery.Where(p => p.DeliveryPriorityId == priority.Value);
             }
+            if (primaryContactId.HasValue)
+            {
+                if (primaryContactId.Value == -1)
+                {
+                    statusCountQuery = statusCountQuery.Where(p => p.PrimaryContactUserId == null);
+                }
+                else
+                {
+                    statusCountQuery = statusCountQuery.Where(p => p.PrimaryContactUserId == primaryContactId.Value);
+                }
+            }
 
-            // Calculate counts for each status
-            ViewBag.StatusActiveCount = await statusCountQuery.CountAsync(p => p.Status == "Active");
-            ViewBag.StatusPausedCount = await statusCountQuery.CountAsync(p => p.Status == "Paused");
+            // Calculate counts for each status - merge Paused into Active
+            ViewBag.StatusActiveCount = await statusCountQuery.CountAsync(p => p.Status == "Active" || p.Status == "Paused");
+            ViewBag.StatusPausedCount = 0; // No longer shown separately
             ViewBag.StatusCompletedCount = await statusCountQuery.CountAsync(p => p.Status == "Completed");
             ViewBag.StatusCancelledCount = await statusCountQuery.CountAsync(p => p.Status == "Cancelled");
 
@@ -780,7 +857,7 @@ namespace Compass.Controllers
         }
 
         // GET: Project/ExportUserProjects
-        public async Task<IActionResult> ExportUserProjects(string search, string ragStatus, string businessArea, string phase, string flagship, int? priority, string status)
+        public async Task<IActionResult> ExportUserProjects(string search, string ragStatus, string businessArea, string phase, string flagship, int? priority, string status, int? primaryContactId)
         {
             try
             {
@@ -808,6 +885,7 @@ namespace Compass.Controllers
                     .Include(p => p.PrimaryContactUser)
                     .Include(p => p.ActivityTypeLookup)
                     .Include(p => p.RiskAppetiteLookup)
+                    .Include(p => p.RagStatusLookup)
                     .Include(p => p.SeniorResponsibleOfficers)
                         .ThenInclude(sro => sro.User)
                     .Include(p => p.ServiceOwners)
@@ -822,12 +900,17 @@ namespace Compass.Controllers
                     .Include(p => p.Milestones)
                     .Include(p => p.ProjectMissions)
                         .ThenInclude(pm => pm.Mission)
+                    .Include(p => p.MonthlyUpdates)
+                        .ThenInclude(u => u.MonthlyUpdateNarratives)
                     .AsQueryable();
 
                 // Apply filters
                 if (!string.IsNullOrEmpty(search))
                 {
-                    userProjectsQuery = userProjectsQuery.Where(p => p.Title.Contains(search) || p.ProjectCode.Contains(search));
+                    var searchLower = search.ToLower();
+                    userProjectsQuery = userProjectsQuery.Where(p => 
+                        (p.Title != null && p.Title.ToLower().Contains(searchLower)) || 
+                        (p.ProjectCode != null && p.ProjectCode.ToLower().Contains(searchLower)));
                 }
                 if (!string.IsNullOrEmpty(ragStatus))
                 {
@@ -857,6 +940,17 @@ namespace Compass.Controllers
                 if (priority.HasValue)
                 {
                     userProjectsQuery = userProjectsQuery.Where(p => p.DeliveryPriorityId == priority.Value);
+                }
+                if (primaryContactId.HasValue)
+                {
+                    if (primaryContactId.Value == -1)
+                    {
+                        userProjectsQuery = userProjectsQuery.Where(p => p.PrimaryContactUserId == null);
+                    }
+                    else
+                    {
+                        userProjectsQuery = userProjectsQuery.Where(p => p.PrimaryContactUserId == primaryContactId.Value);
+                    }
                 }
 
                 var userProjects = await userProjectsQuery
@@ -919,6 +1013,8 @@ namespace Compass.Controllers
                     "Risk Appetite",
                     "Current Priority",
                     "Current RAG",
+                    "Latest Monthly Update",
+                    "Path to Green",
                     "Subject to Spend Control"
                 };
 
@@ -981,7 +1077,39 @@ namespace Compass.Controllers
                     worksheet.Cell(currentRow, col++).Value = project.ActivityTypeLookup?.Name ?? string.Empty;
                     worksheet.Cell(currentRow, col++).Value = project.RiskAppetiteLookup?.Name ?? string.Empty;
                     worksheet.Cell(currentRow, col++).Value = project.DeliveryPriority?.Name ?? string.Empty;
-                    worksheet.Cell(currentRow, col++).Value = project.RagStatusLookup?.Name ?? string.Empty;
+                    // Current RAG Status - use RagStatusLookup if available, otherwise fall back to RagStatus
+                    worksheet.Cell(currentRow, col++).Value = project.RagStatusLookup?.Name ?? project.RagStatus ?? string.Empty;
+                    
+                    // Latest Monthly Update - get the most recent submitted update, or most recent by date
+                    var latestUpdate = project.MonthlyUpdates?
+                        .OrderByDescending(u => u.Year)
+                        .ThenByDescending(u => u.Month)
+                        .ThenByDescending(u => u.SubmittedAt ?? u.CreatedAt)
+                        .FirstOrDefault();
+                    var latestUpdateText = string.Empty;
+                    if (latestUpdate != null)
+                    {
+                        var narratives = latestUpdate.MonthlyUpdateNarratives?
+                            .OrderBy(n => n.CreatedAt)
+                            .Select(n => n.Narrative)
+                            .ToList() ?? new List<string>();
+                        
+                        if (narratives.Any())
+                        {
+                            latestUpdateText = string.Join(" | ", narratives);
+                        }
+                        else
+                        {
+                            // Fallback to period if no narratives exist
+                            latestUpdateText = $"{new DateTime(latestUpdate.Year, latestUpdate.Month, 1):MMMM yyyy}" + 
+                                (latestUpdate.SubmittedAt.HasValue ? " (Submitted)" : " (In progress)");
+                        }
+                    }
+                    worksheet.Cell(currentRow, col++).Value = latestUpdateText;
+                    
+                    // Path to Green
+                    worksheet.Cell(currentRow, col++).Value = project.PathToGreen ?? string.Empty;
+                    
                     worksheet.Cell(currentRow, col++).Value = project.IsSubjectToSpendControl.HasValue 
                         ? (project.IsSubjectToSpendControl.Value ? "Yes" : "No") 
                         : string.Empty;
@@ -1081,7 +1209,7 @@ namespace Compass.Controllers
                 worksheet.Columns().AdjustToContents();
                 
                 // Wrap text for longer columns
-                var wrapColumns = new[] { "Strategic Alignment", "Team", "Milestones", "Dependencies In", "Dependencies Out", "Linked Products" };
+                var wrapColumns = new[] { "Strategic Alignment", "Team", "Milestones", "Dependencies In", "Dependencies Out", "Linked Products", "Latest Monthly Update" };
                 for (int i = 0; i < headers.Count; i++)
                 {
                     if (wrapColumns.Contains(headers[i]))
@@ -1159,7 +1287,10 @@ namespace Compass.Controllers
                 // Apply filters
                 if (!string.IsNullOrEmpty(search))
                 {
-                    watchedProjectsQuery = watchedProjectsQuery.Where(p => p.Title.Contains(search) || p.ProjectCode.Contains(search));
+                    var searchLower = search.ToLower();
+                    watchedProjectsQuery = watchedProjectsQuery.Where(p => 
+                        (p.Title != null && p.Title.ToLower().Contains(searchLower)) || 
+                        (p.ProjectCode != null && p.ProjectCode.ToLower().Contains(searchLower)));
                 }
                 if (!string.IsNullOrEmpty(ragStatus))
                 {
@@ -1409,7 +1540,7 @@ namespace Compass.Controllers
                 worksheet.Columns().AdjustToContents();
                 
                 // Wrap text for longer columns
-                var wrapColumns = new[] { "Strategic Alignment", "Team", "Milestones", "Dependencies In", "Dependencies Out", "Linked Products" };
+                var wrapColumns = new[] { "Strategic Alignment", "Team", "Milestones", "Dependencies In", "Dependencies Out", "Linked Products", "Latest Monthly Update" };
                 for (int i = 0; i < headers.Count; i++)
                 {
                     if (wrapColumns.Contains(headers[i]))
@@ -1435,7 +1566,7 @@ namespace Compass.Controllers
         }
 
         // GET: Project/ExportAllProjects
-        public async Task<IActionResult> ExportAllProjects(string search, string ragStatus, string businessArea, string phase, string flagship, int? priority, string status)
+        public async Task<IActionResult> ExportAllProjects(string search, string ragStatus, string businessArea, string phase, string flagship, int? priority, string status, int? primaryContactId)
         {
             try
             {
@@ -1447,6 +1578,7 @@ namespace Compass.Controllers
                     .Include(p => p.PrimaryContactUser)
                     .Include(p => p.ActivityTypeLookup)
                     .Include(p => p.RiskAppetiteLookup)
+                    .Include(p => p.RagStatusLookup)
                     .Include(p => p.SeniorResponsibleOfficers)
                         .ThenInclude(sro => sro.User)
                     .Include(p => p.ServiceOwners)
@@ -1461,12 +1593,17 @@ namespace Compass.Controllers
                     .Include(p => p.Milestones)
                     .Include(p => p.ProjectMissions)
                         .ThenInclude(pm => pm.Mission)
+                    .Include(p => p.MonthlyUpdates)
+                        .ThenInclude(u => u.MonthlyUpdateNarratives)
                     .AsQueryable();
 
                 // Apply filters
                 if (!string.IsNullOrEmpty(search))
                 {
-                    query = query.Where(p => p.Title.Contains(search) || p.ProjectCode.Contains(search));
+                    var searchLower = search.ToLower();
+                    query = query.Where(p => 
+                        (p.Title != null && p.Title.ToLower().Contains(searchLower)) || 
+                        (p.ProjectCode != null && p.ProjectCode.ToLower().Contains(searchLower)));
                 }
                 if (!string.IsNullOrEmpty(ragStatus))
                 {
@@ -1488,6 +1625,17 @@ namespace Compass.Controllers
                 if (priority.HasValue)
                 {
                     query = query.Where(p => p.DeliveryPriorityId == priority.Value);
+                }
+                if (primaryContactId.HasValue)
+                {
+                    if (primaryContactId.Value == -1)
+                    {
+                        query = query.Where(p => p.PrimaryContactUserId == null);
+                    }
+                    else
+                    {
+                        query = query.Where(p => p.PrimaryContactUserId == primaryContactId.Value);
+                    }
                 }
                 if (!string.IsNullOrEmpty(status))
                 {
@@ -1554,6 +1702,8 @@ namespace Compass.Controllers
                     "Risk Appetite",
                     "Current Priority",
                     "Current RAG",
+                    "Latest Monthly Update",
+                    "Path to Green",
                     "Subject to Spend Control"
                 };
 
@@ -1616,7 +1766,39 @@ namespace Compass.Controllers
                     worksheet.Cell(currentRow, col++).Value = project.ActivityTypeLookup?.Name ?? string.Empty;
                     worksheet.Cell(currentRow, col++).Value = project.RiskAppetiteLookup?.Name ?? string.Empty;
                     worksheet.Cell(currentRow, col++).Value = project.DeliveryPriority?.Name ?? string.Empty;
-                    worksheet.Cell(currentRow, col++).Value = project.RagStatusLookup?.Name ?? string.Empty;
+                    // Current RAG Status - use RagStatusLookup if available, otherwise fall back to RagStatus
+                    worksheet.Cell(currentRow, col++).Value = project.RagStatusLookup?.Name ?? project.RagStatus ?? string.Empty;
+                    
+                    // Latest Monthly Update - get the most recent submitted update, or most recent by date
+                    var latestUpdate = project.MonthlyUpdates?
+                        .OrderByDescending(u => u.Year)
+                        .ThenByDescending(u => u.Month)
+                        .ThenByDescending(u => u.SubmittedAt ?? u.CreatedAt)
+                        .FirstOrDefault();
+                    var latestUpdateText = string.Empty;
+                    if (latestUpdate != null)
+                    {
+                        var narratives = latestUpdate.MonthlyUpdateNarratives?
+                            .OrderBy(n => n.CreatedAt)
+                            .Select(n => n.Narrative)
+                            .ToList() ?? new List<string>();
+                        
+                        if (narratives.Any())
+                        {
+                            latestUpdateText = string.Join(" | ", narratives);
+                        }
+                        else
+                        {
+                            // Fallback to period if no narratives exist
+                            latestUpdateText = $"{new DateTime(latestUpdate.Year, latestUpdate.Month, 1):MMMM yyyy}" + 
+                                (latestUpdate.SubmittedAt.HasValue ? " (Submitted)" : " (In progress)");
+                        }
+                    }
+                    worksheet.Cell(currentRow, col++).Value = latestUpdateText;
+                    
+                    // Path to Green
+                    worksheet.Cell(currentRow, col++).Value = project.PathToGreen ?? string.Empty;
+                    
                     worksheet.Cell(currentRow, col++).Value = project.IsSubjectToSpendControl.HasValue 
                         ? (project.IsSubjectToSpendControl.Value ? "Yes" : "No") 
                         : string.Empty;
@@ -1716,7 +1898,7 @@ namespace Compass.Controllers
                 worksheet.Columns().AdjustToContents();
                 
                 // Wrap text for longer columns
-                var wrapColumns = new[] { "Strategic Alignment", "Team", "Milestones", "Dependencies In", "Dependencies Out", "Linked Products" };
+                var wrapColumns = new[] { "Strategic Alignment", "Team", "Milestones", "Dependencies In", "Dependencies Out", "Linked Products", "Latest Monthly Update" };
                 for (int i = 0; i < headers.Count; i++)
                 {
                     if (wrapColumns.Contains(headers[i]))

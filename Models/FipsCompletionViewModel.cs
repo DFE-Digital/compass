@@ -10,6 +10,9 @@ public class FipsCompletionViewModel
     public int CompletedPhaseCount { get; set; }
     public int CompletedBusinessAreaCount { get; set; }
     public int CompletedUrlCount { get; set; }
+    public int CompletedSroCount { get; set; }
+    public int CompletedServiceOwnerCount { get; set; }
+    public int CompletedTypeCount { get; set; }
 }
 
 public class ProductCompletionItem

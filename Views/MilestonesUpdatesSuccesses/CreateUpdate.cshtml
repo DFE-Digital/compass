@@ -469,6 +469,24 @@
                             <textarea id="pathToGreen" name="pathToGreen" class="form-control" rows="3" placeholder="Describe the path to achieving Green RAG status..." maxlength="1000">@currentPathToGreen</textarea>
                             <small class="form-text text-muted">Required when RAG status is not Green (max 1000 characters)</small>
                         </div>
+
+                        @if (canEdit)
+                        {
+                            <div class="form-group mb-0">
+                                <form method="post" action="@Url.Action("SaveRagStatus")" id="saveRagStatusForm">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="projectId" value="@projectId" />
+                                    <input type="hidden" name="year" value="@year" />
+                                    <input type="hidden" name="month" value="@month" />
+                                    <input type="hidden" name="ragStatus" id="saveRagStatus" value="" />
+                                    <input type="hidden" name="ragJustification" id="saveRagJustification" value="" />
+                                    <input type="hidden" name="pathToGreen" id="savePathToGreen" value="" />
+                                    <button type="submit" class="btn btn-primary" id="saveRagStatusButton">
+                                        <i class="fas fa-save mr-2"></i>Save RAG status
+                                    </button>
+                                </form>
+                            </div>
+                        }
                     </div>
                 </div>
 
@@ -580,6 +598,44 @@
             
             // Trigger on page load
             $('#ragStatusSelect').trigger('change');
+            
+            // Handle Save RAG Status form submission
+            $('#saveRagStatusForm').on('submit', function(e) {
+                var ragStatus = $('#ragStatusSelect').val();
+                var ragJustification = $('#ragJustification').val().trim();
+                var pathToGreen = $('#pathToGreen').val().trim();
+                var ragChanged = ragStatus !== originalRagStatus;
+                var isNotGreen = ragStatus !== '' && ragStatus !== 'Green';
+                // If both current RAG and selected RAG are Green, don't require justification or path to green
+                var bothGreen = originalRagStatus && originalRagStatus === 'Green' && ragStatus === 'Green';
+                
+                var errors = [];
+                
+                if (!ragStatus) {
+                    errors.push('RAG status is required');
+                }
+                
+                // Don't require justification if both current and selected RAG are Green
+                if (!bothGreen && (ragChanged || isNotGreen) && !ragJustification) {
+                    errors.push('RAG justification is required when RAG status has changed or is not Green');
+                }
+                
+                // Don't require path to green if both current and selected RAG are Green
+                if (!bothGreen && isNotGreen && !pathToGreen) {
+                    errors.push('Path to Green is required when RAG status is not Green');
+                }
+                
+                if (errors.length > 0) {
+                    e.preventDefault();
+                    alert('Please fix the following errors before saving:\n\n' + errors.join('\n'));
+                    return false;
+                }
+                
+                // Update hidden fields
+                $('#saveRagStatus').val(ragStatus);
+                $('#saveRagJustification').val(ragJustification);
+                $('#savePathToGreen').val(pathToGreen);
+            });
             
             // Validate before opening modal
             $('#submitMonthlyUpdateModal').on('show.bs.modal', function(e) {

@@ -133,6 +133,18 @@
             _ => "badge badge-secondary"
         };
     }
+
+    string GetStatusBadgeClass(string status)
+    {
+        return status switch
+        {
+            "Active" => "badge badge-success",
+            "Paused" => "badge badge-warning",
+            "Completed" => "badge badge-primary",
+            "Cancelled" => "badge badge-danger",
+            _ => "badge badge-secondary"
+        };
+    }
 }
 
 <div class="card-body table-responsive p-0">
@@ -140,12 +152,14 @@
         <table class="table table-hover text-nowrap sortable-table mb-0 table-responsive-mobile @tableClass" id="@tableId" style="width: 100%;">
         <thead>
             <tr>
-                <th class="col-project-title sortable" data-column="Title" tabindex="0" role="button" aria-label="Sort by Title" style="width: 25%; min-width: 200px;">Title <i class="fas fa-sort sort-icon"></i></th>
-                <th class="col-project-business-area sortable" data-column="BusinessArea" tabindex="0" role="button" aria-label="Sort by Business Area" style="width: 12%; min-width: 120px;">Business Area <i class="fas fa-sort sort-icon"></i></th>
-                <th class="col-project-priority sortable" data-column="Priority" tabindex="0" role="button" aria-label="Sort by Priority" style="width: 10%; min-width: 100px;">Priority <i class="fas fa-sort sort-icon"></i></th>
+                <th class="col-project-title sortable" data-column="Title" tabindex="0" role="button" aria-label="Sort by Title" style="width: 20%; min-width: 200px;">Title <i class="fas fa-sort sort-icon"></i></th>
+                <th class="col-project-status sortable" data-column="Status" tabindex="0" role="button" aria-label="Sort by Status" style="width: 10%; min-width: 100px;">Status <i class="fas fa-sort sort-icon"></i></th>
+                <th class="col-project-primary-contact sortable" data-column="PrimaryContact" tabindex="0" role="button" aria-label="Sort by Primary Contact" style="width: 12%; min-width: 120px;">Primary Contact <i class="fas fa-sort sort-icon"></i></th>
+                <th class="col-project-business-area sortable" data-column="BusinessArea" tabindex="0" role="button" aria-label="Sort by Business Area" style="width: 10%; min-width: 120px;">Business Area <i class="fas fa-sort sort-icon"></i></th>
+                <th class="col-project-priority sortable" data-column="Priority" tabindex="0" role="button" aria-label="Sort by Priority" style="width: 8%; min-width: 100px;">Priority <i class="fas fa-sort sort-icon"></i></th>
                 <th class="col-project-rag sortable" data-column="RAGStatus" tabindex="0" role="button" aria-label="Sort by RAG Status" style="width: 10%; min-width: 100px;">RAG Status <i class="fas fa-sort sort-icon"></i></th>
                 <th class="col-project-flagship sortable" data-column="Flagship" tabindex="0" role="button" aria-label="Sort by Flagship" style="width: 8%; min-width: 80px;">Flagship <i class="fas fa-sort sort-icon"></i></th>
-                <th class="col-project-monthly-update sortable" data-column="MonthlyUpdateStatus" tabindex="0" role="button" aria-label="Sort by Monthly Update Status" style="width: 13%; min-width: 140px;">@updateStatusHeader <i class="fas fa-sort sort-icon"></i></th>
+                <th class="col-project-monthly-update sortable" data-column="MonthlyUpdateStatus" tabindex="0" role="button" aria-label="Sort by Monthly Update Status" style="width: 12%; min-width: 140px;">@updateStatusHeader <i class="fas fa-sort sort-icon"></i></th>
             </tr>
         </thead>
         <tbody>
@@ -163,6 +177,33 @@
                                 }
                             </span>
                         </div>
+                    </td>
+                        <td data-label="Status">
+                        @if (!string.IsNullOrWhiteSpace(project.Status))
+                        {
+                            <span class="@GetStatusBadgeClass(project.Status)">@project.Status</span>
+                        }
+                        else
+                        {
+                            <span class="badge badge-secondary">Not set</span>
+                        }
+                    </td>
+                        <td data-label="Primary Contact">
+                        @if (project.PrimaryContactUser != null)
+                        {
+                            @if (!string.IsNullOrEmpty(project.PrimaryContactUser.Email))
+                            {
+                                <a href="mailto:@project.PrimaryContactUser.Email">@project.PrimaryContactUser.Name</a>
+                            }
+                            else
+                            {
+                                @project.PrimaryContactUser.Name
+                            }
+                        }
+                        else
+                        {
+                            <span class="text-muted">Not set</span>
+                        }
                     </td>
                         <td data-label="Business Area">@(string.IsNullOrWhiteSpace(project.BusinessArea) ? "-" : project.BusinessArea)</td>
                         <td data-label="Priority">
