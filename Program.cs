@@ -16,6 +16,20 @@ using System.Linq;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Check for finding retired CMDB entries that are active in CMS
+if (args.Length > 0 && args[0] == "--find-retired-mismatch")
+{
+    await Compass.Scripts.RunFindRetiredScript.Main(args);
+    return;
+}
+
+// Check for updating retired products to Decommissioned phase
+if (args.Length > 0 && args[0] == "--update-retired-products")
+{
+    await Compass.Scripts.RunUpdateRetiredProducts.Main(args);
+    return;
+}
+
 // Check for database cleanup command
 if (args.Length > 0 && args[0] == "--clean-database")
 {
