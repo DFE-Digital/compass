@@ -1,6 +1,13 @@
 @model Compass.Controllers.DqReviewCheckViewModel
 @{
     ViewData["Title"] = $"Product DQ Review - {Model.Product?.Title ?? "Unknown Product"}";
+
+    // Category type names that are single-select (radio buttons)
+    var singleSelectTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "Business area",
+        "Phase"
+    };
 }
 
 @section Breadcrumbs {
@@ -65,7 +72,7 @@
                                     <span>1. Overview</span>
                                 </a>
                                 <div class="list-group-item active">
-                                    <span>2. Check & Update</span>
+                                    <span>2. Check &amp; Update</span>
                                 </div>
                                 <div class="list-group-item">
                                     <span>3. Confirmation</span>
@@ -77,37 +84,34 @@
 
                 <!-- Middle Column: Form -->
                 <div class="col-xxl-7 col-xl-7 col-lg-6 col-md-8 col-sm-12 col-12">
+
                     <!-- Product Details -->
                     <div class="card mb-3">
                         <div class="card-header">
-                            <h3 class="card-title">Product Details</h3>
+                            <h3 class="card-title">Product details</h3>
                         </div>
                         <div class="card-body">
+
                             <div class="form-group">
-                                <label>Product Name</label>
+                                <label class="font-weight-bold">Product name</label>
+                                <small class="form-text text-muted">Product name cannot be updated here. If it needs to be changed, raise a separate ticket in ServiceNow for <a href="https://dfe.service-now.com/ithelpcentre?id=sc_cat_item&sys_id=50914e12db58e3403b929334ca96196d&referrer=recent_items" target="_blank" rel="noopener noreferrer">CMDB Service Amendments</a>.</small>
                                 <input type="text" class="form-control" value="@(Model.Product?.Title ?? "Unknown Product")" readonly />
-                                <small class="form-text text-muted">
-                                    <i class="fas fa-info-circle"></i> Product name cannot be updated here. If it needs to be changed, raise a separate ticket in ServiceNow for <a href="https://dfe.service-now.com/ithelpcentre?id=sc_cat_item&sys_id=50914e12db58e3403b929334ca96196d&referrer=recent_items" target="_blank" rel="noopener noreferrer">CMDB Service Amendments</a>.
-                                </small>
                             </div>
 
                             <div class="form-group">
-                                <label asp-for="LongDescription">Long Description</label>
-                                <textarea asp-for="LongDescription" class="form-control" rows="5">@(Model.LongDescription ?? Model.Product?.LongDescription)</textarea>
-                                <span asp-validation-for="LongDescription" class="text-danger"></span>
-                                <small class="form-text text-muted">
-                                    <i class="fas fa-info-circle"></i> This field can be updated in the CMS.
-                                </small>
-                            </div>
-
-                            <div class="form-group">
-                                <label asp-for="ProductUrl">Product URL</label>
-                                <input asp-for="ProductUrl" type="url" class="form-control" value="@(Model.ProductUrl ?? Model.Product?.ProductUrl)" placeholder="https://..." />
+                                <label asp-for="ProductUrl" class="font-weight-bold">Product URL</label>
+                                <small class="form-text text-muted">The start page or main entry point for the product.</small>
                                 <span asp-validation-for="ProductUrl" class="text-danger"></span>
-                                <small class="form-text text-muted">
-                                    <i class="fas fa-info-circle"></i> This field can be updated in the CMS.
-                                </small>
+                                <input asp-for="ProductUrl" type="url" class="form-control" value="@(Model.ProductUrl ?? Model.Product?.ProductUrl)" placeholder="https://..." />
                             </div>
+
+                            <div class="form-group">
+                                <label asp-for="LongDescription" class="font-weight-bold">Description</label>
+                                <small class="form-text text-muted">Help people understand what the service does.</small>
+                                <span asp-validation-for="LongDescription" class="text-danger"></span>
+                                <textarea asp-for="LongDescription" class="form-control" rows="5">@(Model.LongDescription ?? Model.Product?.LongDescription)</textarea>
+                            </div>
+
                         </div>
                     </div>
 
@@ -124,68 +128,68 @@
                                     var typeName = categoryType.Key;
                                     var categoryValues = categoryType.Value.OrderBy(cv => cv.Name).ToList();
                                     var currentValues = Model.CurrentCategoryValueIds;
+                                    var isSingleSelect = singleSelectTypes.Contains(typeName);
+                                    var isUserGroup = string.Equals(typeName, "User group", StringComparison.OrdinalIgnoreCase);
+                                    var inputType = isSingleSelect ? "radio" : "checkbox";
+                                    var inputName = isSingleSelect ? $"SingleCategoryValue_{typeName.Replace(" ", "_")}" : "CategoryValueIds";
 
                                     <div class="category-type-section mb-4 pb-3 border-bottom">
-                                        <h5 class="font-weight-bold mb-3">@typeName</h5>
-                                        
-                                        @if (currentValues.Any(cv => categoryValues.Any(c => c.Id == cv)))
-                                        {
-                                            <div class="alert alert-info mb-3">
-                                                <strong>Currently assigned:</strong> 
-                                                @string.Join(", ", categoryValues.Where(cv => currentValues.Contains(cv.Id)).Select(cv => cv.Name))
-                                            </div>
-                                        }
-                                        
-                                        <div class="category-values-list" style="max-height: 200px; overflow-y: auto;">
+                                        <fieldset>
+                                            <legend class="font-weight-bold mb-1">@typeName</legend>
+
+                                            @if (isSingleSelect)
+                                            {
+                                                <small class="form-text text-muted mb-2 d-block">Only one @typeName.ToLower() can be assigned.</small>
+                                            }
+                                            else if (isUserGroup)
+                                            {
+                                                <small class="form-text text-muted mb-2 d-block">Multiple user groups can be assigned. If you need help with these, see <a href="https://fips.education.gov.uk/categories/user-group" target="_blank" rel="noopener noreferrer">fips.education.gov.uk/categories/user-group</a>.</small>
+                                            }
+                                            else
+                                            {
+                                                <small class="form-text text-muted mb-2 d-block">Multiple @typeName.ToLower() values can be assigned.</small>
+                                            }
+
                                             @foreach (var categoryValue in categoryValues)
                                             {
                                                 var isChecked = currentValues.Contains(categoryValue.Id);
-                                                var checkboxId = $"cat-{typeName.Replace(" ", "-").ToLower()}-{categoryValue.Id}";
-                                                
-                                                <div class="form-check mb-2">
-                                                    <input type="checkbox" 
-                                                           class="form-check-input category-value-checkbox" 
-                                                           id="@checkboxId" 
-                                                           name="CategoryValueIds" 
+                                                var inputId = $"cat-{typeName.Replace(" ", "-").ToLower()}-{categoryValue.Id}";
+
+                                                <div class="form-check mb-1">
+                                                    <input type="@inputType"
+                                                           class="form-check-input"
+                                                           id="@inputId"
+                                                           name="@inputName"
                                                            value="@categoryValue.Id"
                                                            @(isChecked ? "checked" : "") />
-                                                    <label class="form-check-label" for="@checkboxId">
+                                                    <label class="form-check-label" for="@inputId">
                                                         @categoryValue.Name
-                                                        @if (isChecked)
-                                                        {
-                                                            <span class="badge badge-success badge-sm ml-2">Assigned</span>
-                                                        }
                                                     </label>
                                                 </div>
                                             }
-                                        </div>
+                                        </fieldset>
                                     </div>
                                 }
                             }
                             else
                             {
-                                <div class="alert alert-warning">
-                                    No category types available.
-                                </div>
+                                <p class="text-muted">No category types available.</p>
                             }
                         </div>
                     </div>
 
-                    <!-- Contacts (Can be added/removed, but changes stored offline, not updated in CMS) -->
+                    <!-- Contacts -->
                     <div class="card mb-3">
                         <div class="card-header">
                             <h3 class="card-title">Contacts</h3>
                         </div>
                         <div class="card-body">
-                            <div class="alert alert-info">
-                                <i class="fas fa-info-circle"></i> 
-                                <strong>Note:</strong> Contact changes will be stored for offline management. 
-                                Contacts are not updated in the CMS through this review process.
-                            </div>
+                            <p>Only one contact per role can be assigned. A service owner and SRO must be set.</p>
 
                             <!-- Service Owner (SO) -->
                             <div class="form-group">
-                                <label>Service Owner (SO) <span class="text-danger">*</span></label>
+                                <label class="font-weight-bold">Service owner (SO) <span class="text-danger">*</span></label>
+                                <small class="form-text text-muted">Required. Only one service owner can be assigned.</small>
                                 <div id="serviceOwnerList" class="mb-2">
                                     @if (Model.Product?.ServiceOwners != null && Model.Product.ServiceOwners.Any())
                                     {
@@ -193,17 +197,17 @@
                                         <div class="contact-item mb-2" data-email="@so.EmailAddress" data-role="service_owner">
                                             <span class="badge badge-primary mr-2">@(!string.IsNullOrWhiteSpace(so.DisplayName) ? so.DisplayName : so.EmailAddress)</span>
                                             <button type="button" class="btn btn-sm btn-outline-danger remove-contact" data-role="service_owner" data-email="@so.EmailAddress">
-                                                <i class="fas fa-times"></i> Remove
+                                                Remove
                                             </button>
-                                            <input type="hidden" name="ServiceOwnerChanges" class="contact-data" 
+                                            <input type="hidden" name="ServiceOwnerChanges" class="contact-data"
                                                    value='{"Action":"keep","Email":"@so.EmailAddress","DisplayName":"@(so.DisplayName ?? "")","ObjectId":"@(so.EntraId ?? "")"}' />
                                         </div>
                                     }
                                 </div>
                                 <div class="user-picker mb-2" data-user-picker data-search-url="/api/users/search" data-select-url="/api/users/select" data-role="service_owner">
                                     <div class="position-relative">
-                                        <input type="text" class="form-control js-user-picker-input" 
-                                               placeholder="Search for a colleague to add as Service Owner..." autocomplete="off" />
+                                        <input type="text" class="form-control js-user-picker-input"
+                                               placeholder="Search for a colleague to add as service owner..." autocomplete="off" />
                                         <span class="user-picker__spinner js-user-picker-spinner" aria-hidden="true" style="display: none;">Searching…</span>
                                         <div class="user-picker__results js-user-picker-results" role="listbox" aria-live="polite"></div>
                                     </div>
@@ -216,7 +220,8 @@
 
                             <!-- Senior Responsible Officer (SRO) -->
                             <div class="form-group">
-                                <label>Senior Responsible Officer (SRO)</label>
+                                <label class="font-weight-bold">Senior Responsible Officer (SRO) <span class="text-danger">*</span></label>
+                                <small class="form-text text-muted">Required. Only one SRO can be assigned.</small>
                                 <div id="sroList" class="mb-2">
                                     @if (Model.Product?.SeniorResponsibleOfficers != null && Model.Product.SeniorResponsibleOfficers.Any())
                                     {
@@ -224,16 +229,16 @@
                                         <div class="contact-item mb-2" data-email="@sro.EmailAddress" data-role="senior_responsible_officer">
                                             <span class="badge badge-primary mr-2">@(!string.IsNullOrWhiteSpace(sro.DisplayName) ? sro.DisplayName : sro.EmailAddress)</span>
                                             <button type="button" class="btn btn-sm btn-outline-danger remove-contact" data-role="senior_responsible_officer" data-email="@sro.EmailAddress">
-                                                <i class="fas fa-times"></i> Remove
+                                                Remove
                                             </button>
-                                            <input type="hidden" name="SeniorResponsibleOfficerChanges" class="contact-data" 
+                                            <input type="hidden" name="SeniorResponsibleOfficerChanges" class="contact-data"
                                                    value='{"Action":"keep","Email":"@sro.EmailAddress","DisplayName":"@(sro.DisplayName ?? "")","ObjectId":"@(sro.EntraId ?? "")"}' />
                                         </div>
                                     }
                                 </div>
                                 <div class="user-picker mb-2" data-user-picker data-search-url="/api/users/search" data-select-url="/api/users/select" data-role="senior_responsible_officer">
                                     <div class="position-relative">
-                                        <input type="text" class="form-control js-user-picker-input" 
+                                        <input type="text" class="form-control js-user-picker-input"
                                                placeholder="Search for a colleague to add as SRO..." autocomplete="off" />
                                         <span class="user-picker__spinner js-user-picker-spinner" aria-hidden="true" style="display: none;">Searching…</span>
                                         <div class="user-picker__results js-user-picker-results" role="listbox" aria-live="polite"></div>
@@ -242,11 +247,13 @@
                                     <input type="hidden" class="js-user-picker-email" />
                                     <input type="hidden" class="js-user-picker-name" />
                                 </div>
+                                <span class="text-danger field-validation-valid" data-valmsg-for="SeniorResponsibleOfficerChanges" data-valmsg-replace="true"></span>
                             </div>
 
                             <!-- Information Asset Owner (IAO) -->
                             <div class="form-group">
-                                <label>Information Asset Owner (IAO)</label>
+                                <label class="font-weight-bold">Information Asset Owner (IAO)</label>
+                                <small class="form-text text-muted">Only one IAO can be assigned.</small>
                                 <div id="iaoList" class="mb-2">
                                     @if (Model.Product?.InformationAssetOwners != null && Model.Product.InformationAssetOwners.Any())
                                     {
@@ -254,16 +261,16 @@
                                         <div class="contact-item mb-2" data-email="@iao.EmailAddress" data-role="information_asset_owner">
                                             <span class="badge badge-primary mr-2">@(!string.IsNullOrWhiteSpace(iao.DisplayName) ? iao.DisplayName : iao.EmailAddress)</span>
                                             <button type="button" class="btn btn-sm btn-outline-danger remove-contact" data-role="information_asset_owner" data-email="@iao.EmailAddress">
-                                                <i class="fas fa-times"></i> Remove
+                                                Remove
                                             </button>
-                                            <input type="hidden" name="InformationAssetOwnerChanges" class="contact-data" 
+                                            <input type="hidden" name="InformationAssetOwnerChanges" class="contact-data"
                                                    value='{"Action":"keep","Email":"@iao.EmailAddress","DisplayName":"@(iao.DisplayName ?? "")","ObjectId":"@(iao.EntraId ?? "")"}' />
                                         </div>
                                     }
                                 </div>
                                 <div class="user-picker mb-2" data-user-picker data-search-url="/api/users/search" data-select-url="/api/users/select" data-role="information_asset_owner">
                                     <div class="position-relative">
-                                        <input type="text" class="form-control js-user-picker-input" 
+                                        <input type="text" class="form-control js-user-picker-input"
                                                placeholder="Search for a colleague to add as IAO..." autocomplete="off" />
                                         <span class="user-picker__spinner js-user-picker-spinner" aria-hidden="true" style="display: none;">Searching…</span>
                                         <div class="user-picker__results js-user-picker-results" role="listbox" aria-live="polite"></div>
@@ -276,7 +283,8 @@
 
                             <!-- Delivery Manager (DM) -->
                             <div class="form-group">
-                                <label>Delivery Manager (DM)</label>
+                                <label class="font-weight-bold">Delivery Manager (DM)</label>
+                                <small class="form-text text-muted">Only one delivery manager can be assigned.</small>
                                 <div id="dmList" class="mb-2">
                                     @if (Model.Product?.DeliveryManagers != null && Model.Product.DeliveryManagers.Any())
                                     {
@@ -284,17 +292,17 @@
                                         <div class="contact-item mb-2" data-email="@dm.EmailAddress" data-role="delivery_manager">
                                             <span class="badge badge-primary mr-2">@(!string.IsNullOrWhiteSpace(dm.DisplayName) ? dm.DisplayName : dm.EmailAddress)</span>
                                             <button type="button" class="btn btn-sm btn-outline-danger remove-contact" data-role="delivery_manager" data-email="@dm.EmailAddress">
-                                                <i class="fas fa-times"></i> Remove
+                                                Remove
                                             </button>
-                                            <input type="hidden" name="DeliveryManagerChanges" class="contact-data" 
+                                            <input type="hidden" name="DeliveryManagerChanges" class="contact-data"
                                                    value='{"Action":"keep","Email":"@dm.EmailAddress","DisplayName":"@(dm.DisplayName ?? "")","ObjectId":"@(dm.EntraId ?? "")"}' />
                                         </div>
                                     }
                                 </div>
                                 <div class="user-picker mb-2" data-user-picker data-search-url="/api/users/search" data-select-url="/api/users/select" data-role="delivery_manager">
                                     <div class="position-relative">
-                                        <input type="text" class="form-control js-user-picker-input" 
-                                               placeholder="Search for a colleague to add as Delivery Manager..." autocomplete="off" />
+                                        <input type="text" class="form-control js-user-picker-input"
+                                               placeholder="Search for a colleague to add as delivery manager..." autocomplete="off" />
                                         <span class="user-picker__spinner js-user-picker-spinner" aria-hidden="true" style="display: none;">Searching…</span>
                                         <div class="user-picker__results js-user-picker-results" role="listbox" aria-live="polite"></div>
                                     </div>
@@ -306,7 +314,8 @@
 
                             <!-- Product Manager (PM) -->
                             <div class="form-group">
-                                <label>Product Manager (PM)</label>
+                                <label class="font-weight-bold">Product Manager (PM)</label>
+                                <small class="form-text text-muted">Only one product manager can be assigned.</small>
                                 <div id="pmList" class="mb-2">
                                     @if (Model.Product?.ProductManagers != null && Model.Product.ProductManagers.Any())
                                     {
@@ -314,17 +323,17 @@
                                         <div class="contact-item mb-2" data-email="@pm.EmailAddress" data-role="product_manager">
                                             <span class="badge badge-primary mr-2">@(!string.IsNullOrWhiteSpace(pm.DisplayName) ? pm.DisplayName : pm.EmailAddress)</span>
                                             <button type="button" class="btn btn-sm btn-outline-danger remove-contact" data-role="product_manager" data-email="@pm.EmailAddress">
-                                                <i class="fas fa-times"></i> Remove
+                                                Remove
                                             </button>
-                                            <input type="hidden" name="ProductManagerChanges" class="contact-data" 
+                                            <input type="hidden" name="ProductManagerChanges" class="contact-data"
                                                    value='{"Action":"keep","Email":"@pm.EmailAddress","DisplayName":"@(pm.DisplayName ?? "")","ObjectId":"@(pm.EntraId ?? "")"}' />
                                         </div>
                                     }
                                 </div>
                                 <div class="user-picker mb-2" data-user-picker data-search-url="/api/users/search" data-select-url="/api/users/select" data-role="product_manager">
                                     <div class="position-relative">
-                                        <input type="text" class="form-control js-user-picker-input" 
-                                               placeholder="Search for a colleague to add as Product Manager..." autocomplete="off" />
+                                        <input type="text" class="form-control js-user-picker-input"
+                                               placeholder="Search for a colleague to add as product manager..." autocomplete="off" />
                                         <span class="user-picker__spinner js-user-picker-spinner" aria-hidden="true" style="display: none;">Searching…</span>
                                         <div class="user-picker__results js-user-picker-results" role="listbox" aria-live="polite"></div>
                                     </div>
@@ -333,6 +342,7 @@
                                     <input type="hidden" class="js-user-picker-name" />
                                 </div>
                             </div>
+
                         </div>
                     </div>
 
@@ -379,11 +389,9 @@
                     e.preventDefault();
                     const button = e.target.closest('.remove-contact');
                     const role = button.dataset.role;
-                    const email = button.dataset.email;
                     const contactItem = button.closest('.contact-item');
-                    
+
                     if (contactItem) {
-                        // Change action to "remove" instead of deleting
                         const hiddenInput = contactItem.querySelector('.contact-data');
                         if (hiddenInput) {
                             try {
@@ -393,20 +401,19 @@
                                 contactItem.style.opacity = '0.5';
                                 contactItem.style.textDecoration = 'line-through';
                                 button.disabled = true;
-                                button.innerHTML = '<i class="fas fa-undo"></i> Undo';
+                                button.textContent = 'Undo';
                                 button.classList.remove('btn-outline-danger');
                                 button.classList.add('btn-outline-secondary');
-                                const originalOnClick = button.onclick;
                                 button.onclick = function() {
                                     data.Action = 'keep';
                                     hiddenInput.value = JSON.stringify(data);
                                     contactItem.style.opacity = '1';
                                     contactItem.style.textDecoration = 'none';
                                     button.disabled = false;
-                                    button.innerHTML = '<i class="fas fa-times"></i> Remove';
+                                    button.textContent = 'Remove';
                                     button.classList.remove('btn-outline-secondary');
                                     button.classList.add('btn-outline-danger');
-                                    button.onclick = originalOnClick;
+                                    button.onclick = null;
                                 };
                             } catch (err) {
                                 console.error('Error updating contact:', err);
@@ -416,72 +423,71 @@
                 }
             });
 
+            // Shared function to add a contact to a list
+            function addContactToList(listElement, role, email, displayName, objectId, inputName) {
+                // Only one contact per role – remove any existing
+                listElement.querySelectorAll('.contact-item').forEach(function(item) {
+                    item.remove();
+                });
+
+                const contactItem = document.createElement('div');
+                contactItem.className = 'contact-item mb-2';
+                contactItem.dataset.email = email;
+                contactItem.dataset.role = role;
+
+                const badge = document.createElement('span');
+                badge.className = 'badge badge-success mr-2';
+                badge.textContent = displayName || email;
+
+                const removeBtn = document.createElement('button');
+                removeBtn.type = 'button';
+                removeBtn.className = 'btn btn-sm btn-outline-danger remove-contact';
+                removeBtn.dataset.role = role;
+                removeBtn.dataset.email = email;
+                removeBtn.textContent = 'Remove';
+
+                const hiddenInput = document.createElement('input');
+                hiddenInput.type = 'hidden';
+                hiddenInput.name = inputName;
+                hiddenInput.className = 'contact-data';
+                hiddenInput.value = JSON.stringify({
+                    Action: 'add',
+                    Email: email,
+                    DisplayName: displayName || '',
+                    ObjectId: objectId || ''
+                });
+
+                contactItem.appendChild(badge);
+                contactItem.appendChild(removeBtn);
+                contactItem.appendChild(hiddenInput);
+                listElement.appendChild(contactItem);
+            }
+
             // Handle user picker selections for each role
             document.querySelectorAll('[data-user-picker]').forEach(function(picker) {
                 const role = picker.dataset.role;
                 const listId = roleToListId[role];
                 const inputName = roleToInputName[role];
-                
+
                 if (!listId || !inputName) return;
 
                 const listElement = document.getElementById(listId);
                 if (!listElement) return;
 
-                // Listen for user selection from user-picker.js
-                // The user-picker.js triggers a custom event when a user is selected
+                // Listen for custom userSelected event from user-picker.js
                 picker.addEventListener('userSelected', function(e) {
                     const user = e.detail;
                     const emailInput = picker.querySelector('.js-user-picker-email');
                     const nameInput = picker.querySelector('.js-user-picker-name');
                     const objectIdInput = picker.querySelector('.js-user-picker-objectid');
-                    
+
                     const email = user.email || (emailInput ? emailInput.value : '');
                     const displayName = user.name || (nameInput ? nameInput.value : '');
                     const objectId = user.objectId || (objectIdInput ? objectIdInput.value : '');
 
                     if (!email) return;
 
-                    // Only one contact per role allowed - remove any existing contact first
-                    const existingItems = listElement.querySelectorAll('.contact-item');
-                    existingItems.forEach(function(item) {
-                        item.remove();
-                    });
-
-                    // Check if this user was already in the list (to handle undo removal case)
-                    const wasRemoved = false; // We'll check this if needed
-
-                    // Create new contact item
-                    const contactItem = document.createElement('div');
-                    contactItem.className = 'contact-item mb-2';
-                    contactItem.dataset.email = email;
-                    contactItem.dataset.role = role;
-                    
-                    const badge = document.createElement('span');
-                    badge.className = 'badge badge-success mr-2';
-                    badge.textContent = displayName || email;
-                    
-                    const removeBtn = document.createElement('button');
-                    removeBtn.type = 'button';
-                    removeBtn.className = 'btn btn-sm btn-outline-danger remove-contact';
-                    removeBtn.dataset.role = role;
-                    removeBtn.dataset.email = email;
-                    removeBtn.innerHTML = '<i class="fas fa-times"></i> Remove';
-                    
-                    const hiddenInput = document.createElement('input');
-                    hiddenInput.type = 'hidden';
-                    hiddenInput.name = inputName;
-                    hiddenInput.className = 'contact-data';
-                    hiddenInput.value = JSON.stringify({
-                        Action: 'add',
-                        Email: email,
-                        DisplayName: displayName || '',
-                        ObjectId: objectId || ''
-                    });
-
-                    contactItem.appendChild(badge);
-                    contactItem.appendChild(removeBtn);
-                    contactItem.appendChild(hiddenInput);
-                    listElement.appendChild(contactItem);
+                    addContactToList(listElement, role, email, displayName, objectId, inputName);
 
                     // Clear the picker
                     picker.querySelector('.js-user-picker-input').value = '';
@@ -490,11 +496,11 @@
                     if (objectIdInput) objectIdInput.value = '';
                 });
 
-                // Also listen for the standard user picker selection (if user-picker.js uses a different event)
+                // Also listen via the email hidden input change (fallback for user-picker.js implementations)
                 const emailInput = picker.querySelector('.js-user-picker-email');
                 const nameInput = picker.querySelector('.js-user-picker-name');
                 const objectIdInput = picker.querySelector('.js-user-picker-objectid');
-                
+
                 if (emailInput) {
                     emailInput.addEventListener('change', function() {
                         if (this.value) {
@@ -502,44 +508,7 @@
                             const displayName = nameInput ? nameInput.value : '';
                             const objectId = objectIdInput ? objectIdInput.value : '';
 
-                            // Only one contact per role allowed - remove any existing contact first
-                            const existingItems = listElement.querySelectorAll('.contact-item');
-                            existingItems.forEach(function(item) {
-                                item.remove();
-                            });
-
-                            // Create new contact item
-                            const contactItem = document.createElement('div');
-                            contactItem.className = 'contact-item mb-2';
-                            contactItem.dataset.email = email;
-                            contactItem.dataset.role = role;
-                            
-                            const badge = document.createElement('span');
-                            badge.className = 'badge badge-success mr-2';
-                            badge.textContent = displayName || email;
-                            
-                            const removeBtn = document.createElement('button');
-                            removeBtn.type = 'button';
-                            removeBtn.className = 'btn btn-sm btn-outline-danger remove-contact';
-                            removeBtn.dataset.role = role;
-                            removeBtn.dataset.email = email;
-                            removeBtn.innerHTML = '<i class="fas fa-times"></i> Remove';
-                            
-                            const hiddenInput = document.createElement('input');
-                            hiddenInput.type = 'hidden';
-                            hiddenInput.name = inputName;
-                            hiddenInput.className = 'contact-data';
-                            hiddenInput.value = JSON.stringify({
-                                Action: 'add',
-                                Email: email,
-                                DisplayName: displayName || '',
-                                ObjectId: objectId || ''
-                            });
-
-                            contactItem.appendChild(badge);
-                            contactItem.appendChild(removeBtn);
-                            contactItem.appendChild(hiddenInput);
-                            listElement.appendChild(contactItem);
+                            addContactToList(listElement, role, email, displayName, objectId, inputName);
 
                             // Clear the picker
                             picker.querySelector('.js-user-picker-input').value = '';
@@ -551,41 +520,44 @@
                 }
             });
 
-            // Form validation - ensure at least one Service Owner
+            // Form validation – require at least a service owner and SRO
             const form = document.querySelector('form');
             if (form) {
                 form.addEventListener('submit', function(e) {
-                    const serviceOwnerList = document.getElementById('serviceOwnerList');
-                    if (!serviceOwnerList) {
-                        e.preventDefault();
-                        alert('Service Owner list not found.');
-                        return false;
-                    }
+                    const requiredRoles = [
+                        { listId: 'serviceOwnerList', label: 'Service owner' },
+                        { listId: 'sroList', label: 'Senior Responsible Officer (SRO)' }
+                    ];
 
-                    const serviceOwnerItems = serviceOwnerList.querySelectorAll('.contact-item');
-                    let hasActiveServiceOwner = false;
+                    const missing = [];
 
-                    serviceOwnerItems.forEach(function(item) {
-                        const hiddenInput = item.querySelector('.contact-data');
-                        if (hiddenInput) {
-                            try {
-                                const data = JSON.parse(hiddenInput.value);
-                                if (data.Action !== 'remove') {
-                                    hasActiveServiceOwner = true;
-                                }
-                            } catch (err) {
-                                // If we can't parse, assume it's active
-                                hasActiveServiceOwner = true;
-                            }
-                        } else {
-                            // If no hidden input, assume it's active
-                            hasActiveServiceOwner = true;
+                    requiredRoles.forEach(function(r) {
+                        const list = document.getElementById(r.listId);
+                        if (!list) {
+                            missing.push(r.label);
+                            return;
                         }
+                        const items = list.querySelectorAll('.contact-item');
+                        let hasActive = false;
+                        items.forEach(function(item) {
+                            const hiddenInput = item.querySelector('.contact-data');
+                            if (hiddenInput) {
+                                try {
+                                    const data = JSON.parse(hiddenInput.value);
+                                    if (data.Action !== 'remove') hasActive = true;
+                                } catch (err) {
+                                    hasActive = true;
+                                }
+                            } else {
+                                hasActive = true;
+                            }
+                        });
+                        if (!hasActive) missing.push(r.label);
                     });
 
-                    if (!hasActiveServiceOwner) {
+                    if (missing.length > 0) {
                         e.preventDefault();
-                        alert('At least one Service Owner is required.');
+                        alert('The following required contacts are missing: ' + missing.join(', ') + '.');
                         return false;
                     }
                 });

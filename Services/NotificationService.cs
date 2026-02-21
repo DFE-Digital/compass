@@ -196,6 +196,27 @@ public class NotificationService : INotificationService
                             invokeParams = new object[] { recipientEmail, templateId, personalisation };
                         }
                     }
+                    else if (methodParams.Length >= 4)
+                    {
+                        // GOV.UK Notify v7+ signature:
+                        // SendEmail(emailAddress, templateId, personalisation, clientReference, emailReplyToId)
+                        // Pass null for all optional parameters beyond personalisation
+                        var personalisationObj = new Dictionary<string, object>();
+                        foreach (var kvp in personalisation)
+                        {
+                            personalisationObj[kvp.Key] = kvp.Value;
+                        }
+                        invokeParams = new object[methodParams.Length];
+                        invokeParams[0] = recipientEmail;
+                        invokeParams[1] = templateId;
+                        invokeParams[2] = methodParams[2].ParameterType == typeof(Dictionary<string, object>)
+                            ? (object)personalisationObj
+                            : personalisation;
+                        for (int i = 3; i < methodParams.Length; i++)
+                        {
+                            invokeParams[i] = Type.Missing;
+                        }
+                    }
                     else
                     {
                         throw new InvalidOperationException($"SendEmail method has unexpected number of parameters: {methodParams.Length}");
@@ -388,6 +409,27 @@ public class NotificationService : INotificationService
                         else
                         {
                             invokeParams = new object[] { recipientEmail, templateId, personalisation };
+                        }
+                    }
+                    else if (methodParams.Length >= 4)
+                    {
+                        // GOV.UK Notify v7+ signature:
+                        // SendEmail(emailAddress, templateId, personalisation, clientReference, emailReplyToId)
+                        // Pass null for all optional parameters beyond personalisation
+                        var personalisationObj = new Dictionary<string, object>();
+                        foreach (var kvp in personalisation)
+                        {
+                            personalisationObj[kvp.Key] = kvp.Value;
+                        }
+                        invokeParams = new object[methodParams.Length];
+                        invokeParams[0] = recipientEmail;
+                        invokeParams[1] = templateId;
+                        invokeParams[2] = methodParams[2].ParameterType == typeof(Dictionary<string, object>)
+                            ? (object)personalisationObj
+                            : personalisation;
+                        for (int i = 3; i < methodParams.Length; i++)
+                        {
+                            invokeParams[i] = Type.Missing;
                         }
                     }
                     else

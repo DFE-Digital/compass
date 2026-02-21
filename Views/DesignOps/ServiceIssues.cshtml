@@ -1,0 +1,343 @@
+@{
+    ViewData["Title"] = "Accessibility Issues by Service";
+    
+    var services = ViewBag.Services as List<Compass.Services.ServiceDto> ?? new List<Compass.Services.ServiceDto>();
+    var selectedService = ViewBag.SelectedService as Compass.Services.ServiceDto;
+    var serviceWithIssues = ViewBag.ServiceWithIssues as Compass.Services.ServiceWithIssuesDto;
+    var serviceSummary = ViewBag.ServiceSummary as Compass.Services.ServiceSummaryDto;
+}
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="dfe-adminui-breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem;">
+            <li class="dfe-adminui-breadcrumb__item">
+                <a href="@Url.Action("Index", "Home")" style="color: #005ea5; text-decoration: none;">Home</a>
+            </li>
+            <li class="dfe-adminui-breadcrumb__item">
+                <a href="@Url.Action("Dashboard", "DesignOps")" style="color: #005ea5; text-decoration: none;">Design Operations</a>
+            </li>
+            <li class="dfe-adminui-breadcrumb__item">
+                <a href="@Url.Action("AccessibilityOversight", "DesignOps")" style="color: #005ea5; text-decoration: none;">Accessibility Issues</a>
+            </li>
+            <li class="dfe-adminui-breadcrumb__item dfe-adminui-breadcrumb__item--active" aria-current="page">Service Issues</li>
+        </ol>
+    </nav>
+}
+
+<section class="content">
+    <div class="container-fluid">
+        @{
+            var currentAction = ViewContext.RouteData.Values["action"]?.ToString() ?? "";
+            ViewBag.BrandText = "Design Operations";
+            ViewBag.NavLinks = new[]
+            {
+                new { Text = "Dashboard", Action = "Dashboard", Controller = "DesignOps", Url = (string)null, IsButton = false, IsActive = currentAction == "Dashboard" },
+                new { Text = "Accessibility oversight", Action = "AccessibilityOversight", Controller = "DesignOps", Url = (string)null, IsButton = false, IsActive = currentAction == "AccessibilityOversight" }
+            };
+        }
+        @await Html.PartialAsync("_ModuleNavbar")
+
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="dfe-adminui-alert dfe-adminui-alert--success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["SuccessMessage"]
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="dfe-adminui-alert dfe-adminui-alert--danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        <div class="row mb-4">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="dfe-adminui-card__header">
+                        <h3 class="card-title mb-0">Select Service</h3>
+                    </div>
+                    <div class="dfe-adminui-card__body">
+                        <form method="get" action="@Url.Action("ServiceIssues", "DesignOps")">
+                            <div class="form-group">
+                                <label for="serviceId">Service</label>
+                                <select name="serviceId" id="serviceId" class="form-control" onchange="this.form.submit()">
+                                    <option value="">-- Select a service --</option>
+                                    @foreach (var service in services)
+                                    {
+                                        <option value="@service.Id" selected="@(selectedService?.Id == service.Id)">
+                                            @service.Name (@service.DocumentId)
+                                        </option>
+                                    }
+                                </select>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @if (selectedService != null)
+        {
+            <!-- Service Summary -->
+            @if (serviceSummary != null)
+            {
+                <div class="row mb-4">
+                    <div class="col-md-3">
+                        <div class="card dfe-adminui-border-left-primary shadow h-100">
+                            <div class="dfe-adminui-card__body">
+                                <div class="row no-gutters align-items-center">
+                                    <div class="col mr-2">
+                                        <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">Total Issues</div>
+                                        <div class="h5 mb-0 font-weight-bold text-gray-800">@serviceSummary.TotalIssues</div>
+                                    </div>
+                                    <div class="col-auto">
+                                        <i class="fas fa-exclamation-triangle fa-2x text-gray-300"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card dfe-adminui-border-left-warning shadow h-100">
+                            <div class="dfe-adminui-card__body">
+                                <div class="row no-gutters align-items-center">
+                                    <div class="col mr-2">
+                                        <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">Open Issues</div>
+                                        <div class="h5 mb-0 font-weight-bold text-gray-800">@serviceSummary.OpenCount</div>
+                                    </div>
+                                    <div class="col-auto">
+                                        <i class="fas fa-clock fa-2x text-gray-300"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card dfe-adminui-border-left-danger shadow h-100">
+                            <div class="dfe-adminui-card__body">
+                                <div class="row no-gutters align-items-center">
+                                    <div class="col mr-2">
+                                        <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">Overdue</div>
+                                        <div class="h5 mb-0 font-weight-bold text-gray-800">@serviceSummary.OverdueCount</div>
+                                    </div>
+                                    <div class="col-auto">
+                                        <i class="fas fa-exclamation-circle fa-2x text-gray-300"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card dfe-adminui-border-left-success shadow h-100">
+                            <div class="dfe-adminui-card__body">
+                                <div class="row no-gutters align-items-center">
+                                    <div class="col mr-2">
+                                        <div class="text-xs font-weight-bold text-success text-uppercase mb-1">Resolved</div>
+                                        <div class="h5 mb-0 font-weight-bold text-gray-800">@serviceSummary.ResolvedCount</div>
+                                    </div>
+                                    <div class="col-auto">
+                                        <i class="fas fa-check-circle fa-2x text-gray-300"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            <!-- Service Details -->
+            <div class="card mb-4">
+                <div class="dfe-adminui-card__header">
+                    <h3 class="card-title mb-0">Service Details</h3>
+                </div>
+                <div class="dfe-adminui-card__body">
+                    <dl class="row">
+                        <dt class="col-sm-3">Service Name</dt>
+                        <dd class="col-sm-9">@selectedService.Name</dd>
+                        
+                        <dt class="col-sm-3">Document ID</dt>
+                        <dd class="col-sm-9">@selectedService.DocumentId</dd>
+                        
+                        <dt class="col-sm-3">Numeric ID</dt>
+                        <dd class="col-sm-9">@selectedService.NumericId</dd>
+                        
+                        @if (!string.IsNullOrEmpty(selectedService.Url))
+                        {
+                            <dt class="col-sm-3">URL</dt>
+                            <dd class="col-sm-9"><a href="@selectedService.Url" target="_blank">@selectedService.Url</a></dd>
+                        }
+                        
+                        <dt class="col-sm-3">Status</dt>
+                        <dd class="col-sm-9">
+                            @if (selectedService.IsActive)
+                            {
+                                <span class="dfe-adminui-badge dfe-adminui-badge--success">Active</span>
+                            }
+                            else
+                            {
+                                <span class="dfe-adminui-badge dfe-adminui-badge--secondary">Inactive</span>
+                            }
+                        </dd>
+                        
+                        <dt class="col-sm-3">Statement Installed</dt>
+                        <dd class="col-sm-9">
+                            @if (selectedService.StatementInstalled)
+                            {
+                                <span class="dfe-adminui-badge dfe-adminui-badge--success">Yes</span>
+                            }
+                            else
+                            {
+                                <span class="dfe-adminui-badge dfe-adminui-badge--warning">No</span>
+                            }
+                        </dd>
+                    </dl>
+                </div>
+            </div>
+
+            <!-- Issues List -->
+            @if (serviceWithIssues?.Issues?.Issues != null && serviceWithIssues.Issues.Issues.Any())
+            {
+                <div class="card">
+                    <div class="dfe-adminui-card__header">
+                        <h3 class="card-title mb-0">Issues (@serviceWithIssues.Issues.Count)</h3>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Title</th>
+                                        <th>Status</th>
+                                        <th>WCAG Criteria</th>
+                                        <th>Assigned To</th>
+                                        <th>Planned Fix Date</th>
+                                        <th>Overdue</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var issue in serviceWithIssues.Issues.Issues)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <strong>@issue.Title</strong>
+                                                @if (!string.IsNullOrEmpty(issue.Description))
+                                                {
+                                                    <br /><small class="dfe-adminui-text-muted">@(issue.Description.Length > 100 ? issue.Description.Substring(0, 100) + "..." : issue.Description)</small>
+                                                }
+                                            </td>
+                                            <td>
+                                                @{
+                                                    var statusBadgeClass = issue.Status switch
+                                                    {
+                                                        "open" => "badge-warning",
+                                                        "in_progress" => "badge-info",
+                                                        "resolved" => "badge-success",
+                                                        "closed" => "badge-secondary",
+                                                        _ => "badge-secondary"
+                                                    };
+                                                }
+                                                <span class="badge @statusBadgeClass">@issue.Status</span>
+                                            </td>
+                                            <td>
+                                                @if (issue.WcagCriteria != null && issue.WcagCriteria.Any())
+                                                {
+                                                    foreach (var criterion in issue.WcagCriteria.Take(3))
+                                                    {
+                                                        <span class="dfe-adminui-badge dfe-adminui-badge--info">@criterion.Code (@criterion.Level)</span>
+                                                    }
+                                                    @if (issue.WcagCriteria.Count > 3)
+                                                    {
+                                                        <span class="dfe-adminui-text-muted">+@(issue.WcagCriteria.Count - 3) more</span>
+                                                    }
+                                                }
+                                                else
+                                                {
+                                                    <span class="dfe-adminui-text-muted">-</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (issue.AssignedTo != null && !string.IsNullOrEmpty(issue.AssignedTo.Name))
+                                                {
+                                                    @issue.AssignedTo.Name
+                                                }
+                                                else
+                                                {
+                                                    <span class="dfe-adminui-text-muted">Unassigned</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (!string.IsNullOrEmpty(issue.PlannedFixDate))
+                                                {
+                                                    @issue.PlannedFixDate
+                                                }
+                                                else
+                                                {
+                                                    <span class="dfe-adminui-text-muted">-</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (issue.IsOverdue)
+                                                {
+                                                    <span class="dfe-adminui-badge dfe-adminui-badge--danger">Yes</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="dfe-adminui-text-muted">No</span>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="card">
+                    <div class="dfe-adminui-card__body">
+                        <p class="dfe-adminui-text-muted">No issues found for this service.</p>
+                    </div>
+                </div>
+            }
+        }
+        else
+        {
+            <div class="card">
+                <div class="dfe-adminui-card__body">
+                    <p class="dfe-adminui-text-muted">Please select a service to view its issues.</p>
+                </div>
+            </div>
+        }
+    </div>
+</section>
+
+<style>
+    .dfe-adminui-border-left-primary {
+        border-left: 0.25rem solid #4e73df !important;
+    }
+    .dfe-adminui-border-left-success {
+        border-left: 0.25rem solid #1cc88a !important;
+    }
+    .dfe-adminui-border-left-warning {
+        border-left: 0.25rem solid #f6c23e !important;
+    }
+    .dfe-adminui-border-left-danger {
+        border-left: 0.25rem solid #e74a3b !important;
+    }
+    .text-xs {
+        font-size: 0.7rem;
+    }
+    .text-gray-300 {
+        color: #dddfeb !important;
+    }
+    .text-gray-800 {
+        color: #5a5c69 !important;
+    }
+    .shadow {
+        box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15) !important;
+    }
+</style>

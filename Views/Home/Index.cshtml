@@ -4,1193 +4,1349 @@
 @inject Microsoft.AspNetCore.Hosting.IWebHostEnvironment HostEnvironment
 
 @{
-    ViewData["Title"] = "COMPASS Dashboard";
-    var currentUser = Model.CurrentUser;
-    var hasProjects = Model.MyProjects.Any();
-    var hasProducts = Model.MyProducts.Any();
+    ViewData["Title"] = "My dashboard";
+    var hasProjects  = Model.MyProjects.Any();
+    var hasProducts  = Model.MyProducts.Any();
     var hasStandards = Model.MyDdtStandards.Any();
-    var totalItems = Model.MyProjects.Count + Model.MyProducts.Count + Model.MyDdtStandards.Count;
-    var taskCount = Model.OverdueMilestones.Count + Model.AssignedActions.Count + Model.HighPriorityIssues.Count + Model.ProjectsNeedingMonthlyUpdates.Count + Model.ProductsNeedingReturns.Count + Model.ProductsNeedingCommissionReporting.Count;
+    var hasOversight = Model.OversightProjects.Any();
+
+    var overdueCount     = Model.OverdueMilestones.Count;
+    var highIssueCount   = Model.HighPriorityIssues.Count;
+    var atRiskCount      = Model.AtRiskProjects.Count;
+    var updatesDueCount  = Model.ProjectsNeedingMonthlyUpdates.Count;
+    var returnsDueCount  = Model.ProductsNeedingReturns.Count;
+    var commissionCount  = Model.ProductsNeedingCommissionReporting.Count;
+    var unmonRisksCount  = Model.UnmonitoredRisks.Count;
+    var actionCount      = Model.AssignedActions.Count;
+
+    var urgentCount = overdueCount + highIssueCount + atRiskCount;
+    var taskCount   = overdueCount + highIssueCount + updatesDueCount + returnsDueCount + commissionCount + actionCount;
+    var hasUrgent   = urgentCount > 0;
+
+    // RAG breakdown of my projects
+    var ragGroups = Model.MyProjects
+        .GroupBy(p => p.RagStatusLookup?.Name ?? "Not set")
+        .ToDictionary(g => g.Key, g => g.Count());
+    int RagCount(string k) => ragGroups.TryGetValue(k, out var v) ? v : 0;
+
+    // Phase breakdown
+    var phaseGroups = Model.MyProjects
+        .GroupBy(p => p.Phase ?? "Not set")
+        .OrderBy(g => g.Key)
+        .ToList();
 }
 
-@await Html.PartialAsync("_DashboardStyles")
-
 @functions {
-    string GetTimeBasedGreeting()
+    string Greeting()
     {
-        var hour = DateTime.Now.Hour;
-        if (hour < 12)
-            return "Good morning";
-        else if (hour < 17)
-            return "Good afternoon";
-        else
-            return "Good evening";
+        var h = DateTime.Now.Hour;
+        return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
     }
 
-    string GetRagBadgeClass(string ragStatus)
+    string RagBadge(string? rag) => (rag ?? "") switch
     {
-        if (string.IsNullOrWhiteSpace(ragStatus))
-            return "badge badge-secondary";
-        
-        var normalized = ragStatus.Trim()
-            .Replace(" / ", "-")
-            .Replace("/", "-")
-            .Replace(" /", "-")
-            .Replace("/ ", "-");
-        
-        return normalized switch
-        {
-            "Green" => "badge badge-success",
+        "Green"       => "rag-green",
+        "Amber-Green" => "rag-amber-green",
+        "Amber"       => "rag-amber",
+        "Amber-Red"   => "rag-amber-red",
+        "Red"         => "rag-red",
+        _             => "rag-not-set"
+    };
+
+    string RagBadgeClass(string? rag) => (rag ?? "") switch
+    {
+        "Green"       => "badge badge-success",
             "Amber-Green" => "badge badge-warning",
-            "Amber" => "badge badge-warning",
-            "Amber-Red" => "badge badge-danger",
-            "Red" => "badge badge-danger",
-            _ => "badge badge-secondary"
-        };
-    }
+        "Amber"       => "badge badge-warning",
+        "Amber-Red"   => "badge badge-danger",
+        "Red"         => "badge badge-danger",
+        _             => "badge badge-secondary"
+    };
 
-    string GetPriorityBadgeClass(string priorityName)
+    string PriBadge(string? p) => (p?.ToLowerInvariant() ?? "") switch
     {
-        if (string.IsNullOrWhiteSpace(priorityName))
-            return "badge badge-secondary";
+        "high"   => "badge badge-danger",
+        "medium" => "badge badge-warning",
+        "low"    => "badge badge-success",
+        _        => "badge badge-secondary"
+    };
 
-        var normalized = priorityName.Trim().ToLowerInvariant();
-        return normalized switch
-        {
-            "high" => "badge badge-danger",
-            "medium" => "badge badge-warning",
-            "low" => "badge badge-success",
-            _ => "badge badge-secondary"
-        };
-    }
-
-    bool IsOpenStatus(string? status)
+    string RoleLabel(LeadershipRoleTier r) => r switch
     {
-        return !string.Equals(status, "closed", StringComparison.OrdinalIgnoreCase) &&
-               !string.Equals(status, "resolved", StringComparison.OrdinalIgnoreCase) &&
-               !string.Equals(status, "complete", StringComparison.OrdinalIgnoreCase) &&
-               !string.Equals(status, "cancelled", StringComparison.OrdinalIgnoreCase);
-    }
-
-    string GetRoleBadgeClass(LeadershipRoleTier role)
-    {
-        return role switch
-        {
-            LeadershipRoleTier.PermanentSecretary => "badge badge-primary",
-            LeadershipRoleTier.DirectorGeneral => "badge badge-info",
-            LeadershipRoleTier.CLevel => "badge badge-info",
-            LeadershipRoleTier.DeputyDirectorOrSro => "badge badge-success",
-            LeadershipRoleTier.HeadOfProfession => "badge badge-success",
-            LeadershipRoleTier.PortfolioLead => "badge badge-secondary",
-            _ => "badge badge-secondary"
-        };
-    }
-
-    string GetRoleLabel(LeadershipRoleTier role)
-    {
-        return role switch
-        {
-            LeadershipRoleTier.PermanentSecretary => "Permanent Secretary",
-            LeadershipRoleTier.DirectorGeneral => "Director General",
-            LeadershipRoleTier.CLevel => "C-Level",
-            LeadershipRoleTier.DeputyDirectorOrSro => "Deputy Director / SRO",
-            LeadershipRoleTier.HeadOfProfession => "Head of Profession",
-            LeadershipRoleTier.PortfolioLead => "Portfolio Lead / G6",
-            _ => role.ToString()
-        };
-    }
-
-    string GetBusinessAreaOverviewTitle()
-    {
-        if (!Model.HighestLeadershipRole.HasValue)
-        {
-            return "Business area overview";
-        }
-
-        return Model.HighestLeadershipRole.Value switch
-        {
-            LeadershipRoleTier.HeadOfProfession => "Head of profession",
-            LeadershipRoleTier.CLevel => !string.IsNullOrWhiteSpace(Model.CurrentUser.JobTitle) 
-                ? Model.CurrentUser.JobTitle 
-                : "C-level",
-            LeadershipRoleTier.DeputyDirectorOrSro => Model.LeadershipBusinessAreas.Any()
-                ? string.Join(", ", Model.LeadershipBusinessAreas.Take(3))
-                : "Deputy director",
-            LeadershipRoleTier.PortfolioLead => "Portfolio lead",
-            LeadershipRoleTier.DirectorGeneral => "Director general",
-            LeadershipRoleTier.PermanentSecretary => "Permanent secretary",
-            _ => "Business area overview"
-        };
-    }
+        LeadershipRoleTier.PermanentSecretary  => "Permanent Secretary",
+        LeadershipRoleTier.DirectorGeneral     => "Director General",
+        LeadershipRoleTier.CLevel              => "C-Level",
+        LeadershipRoleTier.DeputyDirectorOrSro => "Deputy Director / SRO",
+        LeadershipRoleTier.HeadOfProfession    => "Head of Profession",
+        LeadershipRoleTier.PortfolioLead       => "Portfolio Lead / G6",
+        _                                      => r.ToString()
+    };
 }
 
 <style>
-    /* GOV.UK link styling for task cards */
-    .work-item-card h4 {
-        color: #005ea5;
-        text-decoration: underline;
-        font-weight: 400;
-    }
-    
-    .work-item-card:hover h4 {
-        color: #003078;
-    }
-    
-    /* GOV.UK link styling for task table links */
-    .work-items-table a {
-        color: #005ea5;
-        text-decoration: underline;
-    }
-    
-    .work-items-table a:hover {
-        color: #003078;
-    }
-    
-    .work-items-table a:visited {
-        color: #4c2c92;
-    }
+/* ── Reset / base ─────────────────────────────────────────────────────────── */
+.hp { font-family: 'Inter', system-ui, sans-serif; color: #1f2937; }
+
+/* ── Header ───────────────────────────────────────────────────────────────── */
+.hp-header {
+    background: linear-gradient(135deg, #003078 0%, #005ea5 55%, #1d70b8 100%);
+    border-radius: 14px;
+    padding: 1.75rem 2rem;
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+    box-shadow: 0 4px 20px rgba(0,48,120,0.18);
+}
+.hp-header-left h1 {
+    color: white;
+    font-size: 1.65rem;
+    font-weight: 700;
+    margin: 0 0 0.3rem;
+    line-height: 1.2;
+}
+.hp-header-left p {
+    color: rgba(255,255,255,0.8);
+    margin: 0;
+    font-size: 0.88rem;
+}
+.hp-header-pills {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    align-items: center;
+    margin-top: 0.25rem;
+}
+.hp-pill {
+    background: rgba(255,255,255,0.15);
+    border: 1px solid rgba(255,255,255,0.3);
+    border-radius: 20px;
+    padding: 0.3rem 0.85rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: white;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: background 0.15s;
+}
+.hp-pill:hover { background: rgba(255,255,255,0.28); color: white; text-decoration: none; }
+.hp-pill i { margin-right: 0.3rem; }
+
+/* ── Urgent banner ────────────────────────────────────────────────────────── */
+.hp-urgent {
+    background: #fff7ed;
+    border: 1px solid #fed7aa;
+    border-left: 4px solid #ea580c;
+    border-radius: 10px;
+    padding: 0.85rem 1.25rem;
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    font-size: 0.875rem;
+}
+.hp-urgent i { color: #ea580c; font-size: 1rem; margin-top: 0.1rem; flex-shrink: 0; }
+.hp-urgent strong { color: #9a3412; }
+.hp-urgent-items { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.35rem; }
+.hp-urgent-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    background: #fee2e2;
+    color: #b91c1c;
+    border-radius: 20px;
+    padding: 0.2rem 0.65rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: background 0.1s;
+}
+.hp-urgent-chip:hover { background: #fecaca; color: #991b1b; text-decoration: none; }
+.hp-urgent-chip.amber { background: #fef3c7; color: #92400e; }
+.hp-urgent-chip.amber:hover { background: #fde68a; color: #78350f; }
+
+/* ── Stat row ─────────────────────────────────────────────────────────────── */
+.hp-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 0.875rem;
+    margin-bottom: 1.5rem;
+}
+.hp-stat {
+    border-radius: 12px;
+    padding: 1rem 1.1rem;
+    color: white;
+    position: relative;
+    overflow: hidden;
+    text-decoration: none;
+    display: block;
+    transition: transform 0.15s, box-shadow 0.15s;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+.hp-stat:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.16); color: white; text-decoration: none; }
+.hp-stat-val  { font-size: 1.9rem; font-weight: 700; line-height: 1; }
+.hp-stat-lbl  { font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; opacity: 0.9; margin-top: 0.2rem; }
+.hp-stat-sub  { font-size: 0.72rem; opacity: 0.72; margin-top: 0.15rem; }
+.hp-stat-ico  { position: absolute; right: 0.9rem; top: 50%; transform: translateY(-50%); font-size: 2.2rem; opacity: 0.13; }
+.c-blue   { background: linear-gradient(135deg, #005ea5, #003078); }
+.c-red    { background: linear-gradient(135deg, #d4351c, #aa2a12); }
+.c-amber  { background: linear-gradient(135deg, #b45309, #d97706); }
+.c-green  { background: linear-gradient(135deg, #00703c, #005a30); }
+.c-teal   { background: linear-gradient(135deg, #0f766e, #0d9488); }
+.c-purple { background: linear-gradient(135deg, #4a1d96, #7c3aed); }
+.c-slate  { background: linear-gradient(135deg, #475569, #334155); }
+.c-indigo { background: linear-gradient(135deg, #3730a3, #4f46e5); }
+
+/* ── Two-column layout ────────────────────────────────────────────────────── */
+.hp-layout {
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    gap: 1.25rem;
+    align-items: start;
+}
+@@media (max-width: 1080px) { .hp-layout { grid-template-columns: 1fr; } }
+
+/* ── Section card ─────────────────────────────────────────────────────────── */
+.hp-card {
+    background: white;
+    border-radius: 12px;
+    border: 1px solid #e5e7eb;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    margin-bottom: 1.25rem;
+    overflow: hidden;
+}
+.hp-card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.9rem 1.25rem;
+    border-bottom: 1px solid #f3f4f6;
+}
+.hp-card-head h2 {
+    margin: 0;
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: #1f2937;
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+}
+.hp-card-head h2 i { color: #005ea5; font-size: 0.85rem; }
+.hp-card-head a { font-size: 0.78rem; color: #005ea5; text-decoration: none; font-weight: 500; }
+.hp-card-head a:hover { text-decoration: underline; }
+.hp-card-body { padding: 0.75rem 1.25rem; }
+
+/* ── Tabs ─────────────────────────────────────────────────────────────────── */
+.hp-tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 2px solid #f3f4f6;
+    overflow-x: auto;
+    scrollbar-width: none;
+    padding: 0 1.25rem;
+}
+.hp-tabs::-webkit-scrollbar { display: none; }
+.hp-tab {
+    background: none;
+    border: none;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -2px;
+    padding: 0.6rem 0.9rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #6b7280;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: color 0.12s, border-color 0.12s;
+}
+.hp-tab:hover { color: #005ea5; }
+.hp-tab.active { color: #005ea5; border-bottom-color: #005ea5; }
+.hp-tab .cnt {
+    display: inline-block;
+    background: #f3f4f6;
+    color: #374151;
+    border-radius: 10px;
+    font-size: 0.68rem;
+    padding: 0.05rem 0.4rem;
+    margin-left: 0.25rem;
+    font-weight: 700;
+}
+.hp-tab.active .cnt { background: #dbeafe; color: #1d4ed8; }
+.hp-tab .cnt.hot { background: #fee2e2; color: #b91c1c; }
+.hp-pane { display: none; padding: 1rem 1.25rem; }
+.hp-pane.active { display: block; }
+
+/* ── Item rows ────────────────────────────────────────────────────────────── */
+.hp-rows { display: flex; flex-direction: column; gap: 0.5rem; }
+.hp-row {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    padding: 0.65rem 0.8rem;
+    border-radius: 8px;
+    border: 1px solid #f3f4f6;
+    background: white;
+    text-decoration: none;
+    color: inherit;
+    transition: background 0.1s, border-color 0.1s;
+}
+.hp-row:hover { background: #f0f7ff; border-color: #bfdbfe; color: inherit; text-decoration: none; }
+.hp-row.r-red    { border-left: 3px solid #d4351c; }
+.hp-row.r-amber  { border-left: 3px solid #f47738; }
+.hp-row.r-green  { border-left: 3px solid #00703c; }
+.hp-ico {
+    width: 30px; height: 30px; border-radius: 7px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.78rem; flex-shrink: 0; color: white;
+}
+.i-red    { background: #d4351c; }
+.i-amber  { background: #f47738; }
+.i-blue   { background: #005ea5; }
+.i-green  { background: #00703c; }
+.i-purple { background: #7c3aed; }
+.i-teal   { background: #0d9488; }
+.i-slate  { background: #475569; }
+.i-indigo { background: #4f46e5; }
+.hp-row-body { flex: 1; min-width: 0; }
+.hp-row-title { font-weight: 600; font-size: 0.85rem; color: #1f2937; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hp-row-sub   { font-size: 0.75rem; color: #6b7280; margin-top: 0.05rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hp-row-meta  { display: flex; gap: 0.35rem; align-items: center; flex-shrink: 0; flex-wrap: wrap; }
+
+/* ── View-all row ─────────────────────────────────────────────────────────── */
+.hp-more {
+    text-align: center;
+    padding-top: 0.65rem;
+    border-top: 1px solid #f3f4f6;
+    margin-top: 0.35rem;
+}
+.hp-more a { font-size: 0.78rem; color: #005ea5; font-weight: 500; text-decoration: none; }
+.hp-more a:hover { text-decoration: underline; }
+
+/* ── Empty state ──────────────────────────────────────────────────────────── */
+.hp-empty { text-align: center; padding: 2rem 1rem; color: #9ca3af; }
+.hp-empty-ico { font-size: 2rem; margin-bottom: 0.5rem; }
+.hp-empty h3 { font-size: 0.9rem; color: #6b7280; margin-bottom: 0.25rem; }
+.hp-empty p  { font-size: 0.8rem; margin: 0; }
+
+/* ── RAG mini-bar ─────────────────────────────────────────────────────────── */
+.rag-bar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; gap: 2px; margin: 0.5rem 0; }
+.rag-seg { border-radius: 3px; transition: flex 0.3s; }
+.rag-green      { background: #00703c; }
+.rag-amber-green{ background: #85994b; }
+.rag-amber      { background: #f47738; }
+.rag-amber-red  { background: #d4351c; opacity: 0.7; }
+.rag-red        { background: #d4351c; }
+.rag-not-set    { background: #d1d5db; }
+
+/* ── Sidebar widgets ──────────────────────────────────────────────────────── */
+.hp-widget {
+    background: white;
+    border-radius: 12px;
+    border: 1px solid #e5e7eb;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    margin-bottom: 1.1rem;
+    overflow: hidden;
+}
+.hp-widget-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid #f3f4f6;
+    background: #fafafa;
+}
+.hp-widget-head h3 {
+    margin: 0;
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #374151;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+.hp-widget-head h3 i { color: #005ea5; }
+.hp-widget-head a { font-size: 0.75rem; color: #005ea5; text-decoration: none; }
+.hp-widget-head a:hover { text-decoration: underline; }
+.hp-widget-body { padding: 0.6rem 1rem; }
+
+.hp-stat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.38rem 0;
+    border-bottom: 1px solid #f9fafb;
+    font-size: 0.8rem;
+}
+.hp-stat-row:last-child { border-bottom: none; }
+.hp-stat-row-lbl { color: #6b7280; }
+.hp-stat-row-val { font-weight: 700; color: #1f2937; }
+
+.hp-mini-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 0;
+    border-bottom: 1px solid #f9fafb;
+    font-size: 0.8rem;
+}
+.hp-mini-row:last-child { border-bottom: none; }
+.hp-mini-row a { color: #1f2937; font-weight: 600; text-decoration: none; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hp-mini-row a:hover { color: #005ea5; text-decoration: underline; }
+.hp-mini-date { font-size: 0.72rem; color: #9ca3af; flex-shrink: 0; min-width: 38px; }
+
+/* ── Reminder cards ───────────────────────────────────────────────────────── */
+.hp-reminder {
+    display: flex;
+    gap: 0.65rem;
+    padding: 0.65rem 0;
+    border-bottom: 1px solid #f3f4f6;
+    font-size: 0.8rem;
+}
+.hp-reminder:last-child { border-bottom: none; }
+.hp-reminder-ico {
+    width: 28px; height: 28px; border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.75rem; flex-shrink: 0; color: white;
+}
+.hp-reminder-body { flex: 1; min-width: 0; }
+.hp-reminder-title { font-weight: 600; color: #1f2937; margin-bottom: 0.1rem; }
+.hp-reminder-desc  { color: #6b7280; font-size: 0.75rem; }
+.hp-reminder-link  { font-size: 0.75rem; color: #005ea5; text-decoration: none; font-weight: 500; }
+.hp-reminder-link:hover { text-decoration: underline; }
+.hp-freq {
+    display: inline-block;
+    background: #f3f4f6;
+    color: #6b7280;
+    border-radius: 4px;
+    font-size: 0.65rem;
+    font-weight: 600;
+    padding: 0.1rem 0.35rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    flex-shrink: 0;
+    align-self: flex-start;
+    margin-top: 0.15rem;
+}
+
+/* ── Success items ────────────────────────────────────────────────────────── */
+.hp-success {
+    display: flex;
+    gap: 0.6rem;
+    padding: 0.55rem 0;
+    border-bottom: 1px solid #f3f4f6;
+    font-size: 0.8rem;
+    align-items: flex-start;
+}
+.hp-success:last-child { border-bottom: none; }
+.hp-success-dot { width: 8px; height: 8px; border-radius: 50%; background: #00703c; flex-shrink: 0; margin-top: 0.35rem; }
+.hp-success-body { flex: 1; min-width: 0; }
+.hp-success-title { font-weight: 600; color: #1f2937; }
+.hp-success-proj  { font-size: 0.73rem; color: #6b7280; }
+
+/* ── Oversight section ────────────────────────────────────────────────────── */
+.hp-oversight-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 0.6rem;
+    margin-bottom: 0.75rem;
+}
+.hp-oversight-metric {
+    background: #f8fafc;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 0.65rem 0.85rem;
+    text-align: center;
+}
+.hp-oversight-metric strong { display: block; font-size: 1.4rem; font-weight: 700; color: #1f2937; }
+.hp-oversight-metric span   { font-size: 0.72rem; color: #6b7280; }
+
+/* ── Quick actions ────────────────────────────────────────────────────────── */
+.hp-actions-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+}
+.hp-action-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.6rem 0.75rem;
+    border-radius: 8px;
+    border: 1px solid #e5e7eb;
+    background: white;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #374151;
+    text-decoration: none;
+    transition: background 0.1s, border-color 0.1s;
+}
+.hp-action-btn:hover { background: #f0f7ff; border-color: #93c5fd; color: #1d4ed8; text-decoration: none; }
+.hp-action-btn i { color: #005ea5; font-size: 0.85rem; width: 16px; text-align: center; }
+
+/* ── Path-to-green alert ──────────────────────────────────────────────────── */
+.hp-ptg-row {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid #f9fafb;
+    font-size: 0.8rem;
+}
+.hp-ptg-row:last-child { border-bottom: none; }
+.hp-ptg-row a { color: #1f2937; font-weight: 600; text-decoration: none; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hp-ptg-row a:hover { color: #005ea5; text-decoration: underline; }
 </style>
 
-<section class="content mt-4">
+<div class="hp">
+<section class="content mt-3">
     <div class="container-fluid">
+
         @if (TempData["SuccessMessage"] != null)
         {
-            <div class="alert alert-success alert-dismissible fade show">
+        <div class="alert alert-success alert-dismissible fade show mb-3">
                 <button type="button" class="close" data-dismiss="alert">&times;</button>
                 @TempData["SuccessMessage"]
             </div>
         }
         @if (TempData["ErrorMessage"] != null)
         {
-            <div class="alert alert-danger alert-dismissible fade show">
+        <div class="alert alert-danger alert-dismissible fade show mb-3">
                 <button type="button" class="close" data-dismiss="alert">&times;</button>
                 @TempData["ErrorMessage"]
             </div>
         }
 
-    
-
-        <!-- Dashboard Header -->
-        <div class="dashboard-header">
-            <h1>@GetTimeBasedGreeting(), @Model.FirstName!</h1>
-            <p>Here's an overview of your work, assignments, and responsibilities.</p>
+    <!-- ── Header ──────────────────────────────────────────────────────────── -->
+    <div class="hp-header">
+        <div class="hp-header-left">
+            <h1>@Greeting(), @Model.FirstName</h1>
+            <p>@DateTime.Today.ToString("dddd d MMMM yyyy")</p>
+            <div class="hp-header-pills mt-2">
+                @if (hasProjects)
+                {
+                    <a href="@Url.Action("Index","Project")" class="hp-pill"><i class="fas fa-project-diagram"></i>@Model.MyProjects.Count project@(Model.MyProjects.Count == 1 ? "" : "s")</a>
+                }
+                @if (hasProducts)
+                {
+                    <a href="@Url.Action("Index","Products")" class="hp-pill"><i class="fas fa-box"></i>@Model.MyProducts.Count product@(Model.MyProducts.Count == 1 ? "" : "s")</a>
+                }
+                @if (hasStandards)
+                {
+                    <a href="@Url.Action("Dashboard","DdtStandards")" class="hp-pill"><i class="fas fa-book"></i>@Model.MyDdtStandards.Count standard@(Model.MyDdtStandards.Count == 1 ? "" : "s")</a>
+                }
+                @if (Model.HighestLeadershipRole.HasValue)
+                {
+                    <span class="hp-pill"><i class="fas fa-user-tie"></i>@RoleLabel(Model.HighestLeadershipRole.Value)</span>
+                }
+            </div>
+        </div>
+        <div class="d-flex flex-column align-items-end gap-2">
+            <a href="@Url.Action("Index","Reports")" class="hp-pill" style="font-size:0.82rem;">
+                <i class="fas fa-chart-bar"></i> Reports
+            </a>
+            @if (taskCount > 0)
+            {
+                <span class="hp-pill" style="background:rgba(212,53,28,0.25); border-color:rgba(212,53,28,0.5);">
+                    <i class="fas fa-bell"></i> @taskCount task@(taskCount == 1 ? "" : "s") need attention
+                </span>
+            }
+        </div>
         </div>
 
-        <!-- Quick Stats -->
-        <div class="dashboard-summary-cards">
-            @if (Model.OverdueMilestones.Any())
-            {
-                <a href="@Url.Action("Index", "Project")" class="dashboard-card bg-danger">
-                    <div class="dashboard-card-value">@(Model.OverdueMilestones?.Count ?? 0)</div>
-                    <div class="dashboard-card-label">Overdue Milestones</div>
-                    <div class="dashboard-card-icon"><i class="fas fa-exclamation-triangle"></i></div>
+    <!-- ── Urgent banner ───────────────────────────────────────────────────── -->
+    @if (hasUrgent || updatesDueCount > 0 || returnsDueCount > 0 || commissionCount > 0)
+    {
+        <div class="hp-urgent" role="alert">
+            <i class="fas fa-exclamation-circle" aria-hidden="true"></i>
+            <div style="flex:1;">
+                <strong>Needs your attention</strong>
+                <div class="hp-urgent-items">
+                    @if (overdueCount > 0)
+                    {
+                        <a href="@Url.Action("Index","Project")" class="hp-urgent-chip">
+                            <i class="fas fa-flag-checkered" aria-hidden="true"></i>
+                            @overdueCount overdue milestone@(overdueCount == 1 ? "" : "s")
                 </a>
             }
-            
-            @if (Model.AssignedActions.Any())
-            {
-                <a href="@Url.Action("Index", "Raid", new { viewType = "actions" })" class="dashboard-card bg-warning">
-                    <div class="dashboard-card-value">@(Model.AssignedActions?.Count ?? 0)</div>
-                    <div class="dashboard-card-label">Assigned Actions</div>
-                    <div class="dashboard-card-icon"><i class="fas fa-tasks"></i></div>
+                    @if (highIssueCount > 0)
+                    {
+                        <a href="@Url.Action("Index","Raid", new { viewType = "issues" })" class="hp-urgent-chip">
+                            <i class="fas fa-bug" aria-hidden="true"></i>
+                            @highIssueCount high-priority issue@(highIssueCount == 1 ? "" : "s")
                 </a>
             }
-            
-            @if (Model.HighPriorityIssues.Any())
-            {
-                <a href="@Url.Action("Index", "Raid", new { viewType = "issues" })" class="dashboard-card bg-danger">
-                    <div class="dashboard-card-value">@(Model.HighPriorityIssues?.Count ?? 0)</div>
-                    <div class="dashboard-card-label">High Priority Issues</div>
-                    <div class="dashboard-card-icon"><i class="fas fa-bug"></i></div>
+                    @if (atRiskCount > 0)
+                    {
+                        <a href="@Url.Action("Index","Project")" class="hp-urgent-chip">
+                            <i class="fas fa-exclamation-triangle" aria-hidden="true"></i>
+                            @atRiskCount at-risk project@(atRiskCount == 1 ? "" : "s")
                 </a>
             }
-            
-            @if (Model.MyProjects.Any())
-            {
-                <a href="@Url.Action("Index", "Project")" class="dashboard-card bg-primary">
-                    <div class="dashboard-card-value">@(Model.MyProjects?.Count ?? 0)</div>
-                    <div class="dashboard-card-label">My Projects</div>
-                    <div class="dashboard-card-icon"><i class="fas fa-project-diagram"></i></div>
-                </a>
-            }
-            
+                    @if (updatesDueCount > 0)
+                    {
+                        <a href="@Url.Action("Index","Project")" class="hp-urgent-chip amber">
+                            <i class="fas fa-calendar-check" aria-hidden="true"></i>
+                            @updatesDueCount monthly update@(updatesDueCount == 1 ? "" : "s") due
+                        </a>
+                    }
+                    @if (returnsDueCount > 0)
+                    {
+                        <a href="@Url.Action("Index","Products")" class="hp-urgent-chip amber">
+                            <i class="fas fa-chart-line" aria-hidden="true"></i>
+                            @returnsDueCount performance return@(returnsDueCount == 1 ? "" : "s") due
+                        </a>
+                    }
+                    @if (commissionCount > 0)
+                    {
+                        <a href="@Url.Action("Commission","ProductReporting")" class="hp-urgent-chip amber">
+                            <i class="fas fa-clipboard-list" aria-hidden="true"></i>
+                            @commissionCount commission report@(commissionCount == 1 ? "" : "s") due
+                        </a>
+                    }
+                    @if (unmonRisksCount > 0)
+                    {
+                        <a href="@Url.Action("Index","Raid", new { viewType = "risks" })" class="hp-urgent-chip amber">
+                            <i class="fas fa-shield-alt" aria-hidden="true"></i>
+                            @unmonRisksCount risk@(unmonRisksCount == 1 ? "" : "s") not reviewed in 30 days
+                        </a>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- ── Stat cards ──────────────────────────────────────────────────────── -->
+    <div class="hp-stats">
+        @if (hasProjects)
+        {
+            <a href="@Url.Action("Index","Project")" class="hp-stat c-blue">
+                <div class="hp-stat-val">@Model.MyProjects.Count</div>
+                <div class="hp-stat-lbl">My projects</div>
+                @if (atRiskCount > 0)
+                {
+                    <div class="hp-stat-sub">@atRiskCount at risk</div>
+                }
+                else
+                {
+                    <div class="hp-stat-sub">@RagCount("Green") green · @RagCount("Red") red</div>
+                }
+                <div class="hp-stat-ico"><i class="fas fa-project-diagram" aria-hidden="true"></i></div>
+            </a>
+        }
+        @if (taskCount > 0)
+        {
+            <a href="#" class="hp-stat @(urgentCount > 0 ? "c-red" : "c-amber")" data-jump="tasks">
+                <div class="hp-stat-val">@taskCount</div>
+                <div class="hp-stat-lbl">Tasks to do</div>
+                @if (urgentCount > 0)
+                {
+                    <div class="hp-stat-sub">@urgentCount urgent</div>
+                }
+                <div class="hp-stat-ico"><i class="fas fa-tasks" aria-hidden="true"></i></div>
+            </a>
+        }
+        @if (hasProducts)
+        {
+            <a href="@Url.Action("Index","Products")" class="hp-stat c-teal">
+                <div class="hp-stat-val">@Model.MyProducts.Count</div>
+                <div class="hp-stat-lbl">My products</div>
+                @if (returnsDueCount > 0)
+                {
+                    <div class="hp-stat-sub">@returnsDueCount return@(returnsDueCount == 1 ? "" : "s") due</div>
+                }
+                <div class="hp-stat-ico"><i class="fas fa-box" aria-hidden="true"></i></div>
+            </a>
+        }
             @if (Model.WatchedProjects.Any())
             {
-                <a href="@Url.Action("Index", "Project")" class="dashboard-card bg-info">
-                    <div class="dashboard-card-value">@(Model.WatchedProjects?.Count ?? 0)</div>
-                    <div class="dashboard-card-label">Watched Projects</div>
-                    <div class="dashboard-card-icon"><i class="fas fa-eye"></i></div>
+            <a href="@Url.Action("Index","Project")" class="hp-stat c-slate">
+                <div class="hp-stat-val">@Model.WatchedProjects.Count</div>
+                <div class="hp-stat-lbl">Watching</div>
+                <div class="hp-stat-ico"><i class="fas fa-eye" aria-hidden="true"></i></div>
                 </a>
             }
-            
-            @if (Model.MyProducts.Any())
-            {
-                <a href="@Url.Action("Index", "Products")" class="dashboard-card bg-primary">
-                    <div class="dashboard-card-value">@(Model.MyProducts?.Count ?? 0)</div>
-                    <div class="dashboard-card-label">My Products</div>
-                    <div class="dashboard-card-icon"><i class="fas fa-box"></i></div>
+        @if (actionCount > 0)
+        {
+            <a href="@Url.Action("Index","Raid", new { viewType = "actions" })" class="hp-stat c-indigo">
+                <div class="hp-stat-val">@actionCount</div>
+                <div class="hp-stat-lbl">Assigned actions</div>
+                <div class="hp-stat-ico"><i class="fas fa-check-square" aria-hidden="true"></i></div>
                 </a>
             }
-            
-            @if (Model.MyDdtStandards.Any())
-            {
-                <a href="@Url.Action("Dashboard", "DdtStandards")" class="dashboard-card bg-primary">
-                    <div class="dashboard-card-value">@(Model.MyDdtStandards?.Count ?? 0)</div>
-                    <div class="dashboard-card-label">My DDT Standards</div>
-                    <div class="dashboard-card-icon"><i class="fas fa-book"></i></div>
+        @if (Model.MilestonesDueThisWeek.Any())
+        {
+            <a href="@Url.Action("Index","Project")" class="hp-stat c-green">
+                <div class="hp-stat-val">@Model.MilestonesDueThisWeek.Count</div>
+                <div class="hp-stat-lbl">Milestones this week</div>
+                <div class="hp-stat-ico"><i class="fas fa-flag" aria-hidden="true"></i></div>
+            </a>
+        }
+        @if (hasStandards)
+        {
+            <a href="@Url.Action("Dashboard","DdtStandards")" class="hp-stat c-purple">
+                <div class="hp-stat-val">@Model.MyDdtStandards.Count</div>
+                <div class="hp-stat-lbl">DDT standards</div>
+                <div class="hp-stat-ico"><i class="fas fa-book" aria-hidden="true"></i></div>
                 </a>
             }
         </div>
 
-        <!-- Leadership Views -->
-        @if (Model.IsEnterpriseLeader || Model.IsBusinessAreaLeader)
-        {
+    <!-- ── Enterprise overview (senior leaders only) ───────────────────────── -->
             @if (Model.IsEnterpriseLeader)
             {
-                <div class="dashboard-section">
-                    <div class="dashboard-section-header">
-                        <h2><i class="fas fa-building"></i> Enterprise Overview</h2>
+        <div class="hp-card mb-3">
+            <div class="hp-card-head">
+                <h2><i class="fas fa-building" aria-hidden="true"></i>Enterprise overview</h2>
+                <a href="@Url.Action("Index","Reports")">Full report <i class="fas fa-arrow-right" aria-hidden="true"></i></a>
                     </div>
-                    <div class="row mb-4">
-                        <div class="col-md-3 mb-3">
-                            <div class="metric-pill">
+            <div class="hp-card-body">
+                <div class="hp-oversight-grid">
+                    <div class="hp-oversight-metric">
                                 <strong>@Model.EnterpriseMetrics.TotalAtRiskProjects</strong>
-                                <span>At Risk Projects</span>
+                        <span>At-risk projects</span>
                             </div>
-                        </div>
-                        <div class="col-md-3 mb-3">
-                            <div class="metric-pill">
+                    <div class="hp-oversight-metric">
                                 <strong>@Model.EnterpriseMetrics.TotalOpenIssues</strong>
-                                <span>Open Issues</span>
+                        <span>Open issues</span>
                             </div>
-                        </div>
-                        <div class="col-md-3 mb-3">
-                            <div class="metric-pill">
+                    <div class="hp-oversight-metric">
                                 <strong>@Model.EnterpriseMetrics.TotalOpenRisks</strong>
-                                <span>Open Risks</span>
+                        <span>Open risks</span>
                             </div>
+                    <div class="hp-oversight-metric">
+                        <strong>@Model.EnterpriseMetrics.TotalOpenActions</strong>
+                        <span>Open actions</span>
                         </div>
-                        <div class="col-md-3 mb-3">
-                            <div class="metric-pill">
+                    <div class="hp-oversight-metric">
                                 <strong>@Model.EnterpriseMetrics.ActiveMissionsCount</strong>
-                                <span>Active Missions</span>
+                        <span>Active missions</span>
                             </div>
+                    <div class="hp-oversight-metric">
+                        <strong>@Model.EnterpriseMetrics.ActivePriorityOutcomesCount</strong>
+                        <span>Priority outcomes</span>
                         </div>
                     </div>
                     @if (Model.EnterpriseAtRiskProjects.Any())
                     {
-                        <div class="alert alert-danger">
-                            <strong><i class="fas fa-exclamation-triangle mr-2"></i>@Model.EnterpriseAtRiskProjects.Count At Risk Projects</strong>
-                            <a href="#at-risk-projects" class="ml-2">View details →</a>
+                    <div style="margin-top:0.5rem;">
+                        <div style="font-size:0.78rem; font-weight:700; color:#6b7280; text-transform:uppercase; letter-spacing:0.04em; margin-bottom:0.4rem;">At-risk projects</div>
+                        @foreach (var p in Model.EnterpriseAtRiskProjects.Take(5))
+                        {
+                            var rag = p.RagStatusLookup?.Name ?? "–";
+                            <div class="hp-mini-row">
+                                <span class="@RagBadgeClass(rag)" style="flex-shrink:0;">@rag</span>
+                                <a href="@Url.Action("Details","Project", new { id = p.Id })">@p.Title</a>
                         </div>
+                    }
+                        @if (Model.EnterpriseAtRiskProjects.Count > 5)
+                        {
+                            <div class="hp-more"><a href="@Url.Action("Index","Project")">View all @Model.EnterpriseAtRiskProjects.Count at-risk projects →</a></div>
                     }
                 </div>
             }
+            </div>
+        </div>
+    }
 
-        }
-
-        <!-- My Work Section -->
-        <div class="dashboard-section">
-            <div class="dashboard-section-header">
-                <h2><i class="fas fa-briefcase"></i> My work</h2>
-                <div class="view-toggle">
-                    <button class="view-toggle-btn active" data-view="cards" title="Card view">
-                        <i class="fas fa-th"></i> Cards
-                    </button>
-                    <button class="view-toggle-btn" data-view="list" title="List view">
-                        <i class="fas fa-list"></i> List
-                    </button>
+    <!-- ── Business area oversight (DD / G6 leaders) ──────────────────────── -->
+    @if (Model.IsBusinessAreaLeader && hasOversight)
+    {
+        var oversightAtRisk = Model.OversightProjects.Where(p => p.RagStatusLookup?.Name == "Red" || p.RagStatusLookup?.Name == "Amber-Red").ToList();
+        var oversightIssues = Model.LeadershipMetrics.OpenIssues;
+        var oversightRisks  = Model.LeadershipMetrics.UnreviewedRisks;
+        <div class="hp-card mb-3">
+            <div class="hp-card-head">
+                <h2><i class="fas fa-sitemap" aria-hidden="true"></i>
+                    @(Model.LeadershipBusinessAreas.Any() ? string.Join(", ", Model.LeadershipBusinessAreas.Take(2)) : "Business area") oversight
+                </h2>
+                <a href="@Url.Action("BusinessAreaReport","Reports")">BA report <i class="fas fa-arrow-right" aria-hidden="true"></i></a>
                 </div>
+            <div class="hp-card-body">
+                <div class="hp-oversight-grid">
+                    <div class="hp-oversight-metric">
+                        <strong>@Model.OversightProjects.Count</strong>
+                        <span>Projects</span>
             </div>
-
-            <div class="tabs-container">
-                <button class="tab-button active" data-tab="tasks">Tasks (@taskCount)</button>
-                <button class="tab-button" data-tab="projects">Projects (@Model.MyProjects.Count)</button>
-                <button class="tab-button" data-tab="watching">Watching (@Model.WatchedProjects.Count)</button>
-                <button class="tab-button" data-tab="products">Products (@Model.MyProducts.Count)</button>
-                <button class="tab-button" data-tab="standards">DDT Standards (@Model.MyDdtStandards.Count)</button>
-                <button class="tab-button" data-tab="commission">Performance reporting (@Model.ProductsNeedingCommissionReporting.Count)</button>
+                    <div class="hp-oversight-metric">
+                        <strong>@oversightAtRisk.Count</strong>
+                        <span>At risk</span>
             </div>
-
-            <!-- Tasks Tab -->
-            <div id="tab-tasks" class="tab-content active">
-                @if (!Model.AssignedActions.Any() && !Model.OverdueMilestones.Any() && !Model.HighPriorityIssues.Any() && !Model.ProjectsNeedingMonthlyUpdates.Any() && !Model.ProductsNeedingReturns.Any() && !Model.ProductsNeedingCommissionReporting.Any())
-                {
-                    <div class="empty-state">
-                        <div class="empty-state-icon">✅</div>
-                        <h3>No tasks</h3>
-                        <p>You're all caught up! There are no outstanding tasks or reporting requirements.</p>
+                    <div class="hp-oversight-metric">
+                        <strong>@oversightIssues</strong>
+                        <span>Open issues</span>
                     </div>
+                    <div class="hp-oversight-metric">
+                        <strong>@oversightRisks</strong>
+                        <span>Unreviewed risks</span>
+                    </div>
+                </div>
+                @if (oversightAtRisk.Any())
+                {
+                    <div style="margin-top:0.5rem;">
+                        <div style="font-size:0.78rem; font-weight:700; color:#6b7280; text-transform:uppercase; letter-spacing:0.04em; margin-bottom:0.4rem;">At-risk projects in your area</div>
+                        @foreach (var p in oversightAtRisk.Take(5))
+                        {
+                            var rag = p.RagStatusLookup?.Name ?? "–";
+                            <div class="hp-mini-row">
+                                <span class="@RagBadgeClass(rag)" style="flex-shrink:0;">@rag</span>
+                                <a href="@Url.Action("Details","Project", new { id = p.Id })">@p.Title</a>
+                            </div>
+                        }
+                                    </div>
                 }
-                else
-                {
-                    <!-- Cards View -->
-                    <div class="work-items-grid active" data-view="cards">
-                        @foreach (var milestone in Model.OverdueMilestones.Take(10))
-                        {
-                            <a href="@Url.Action("MilestoneDetails", "Project", new { id = milestone.Id })" class="work-item-card">
-                                <h4>@milestone.Name</h4>
-                                @if (milestone.Project != null)
-                                {
-                                    <p class="work-item-project">@milestone.Project.Title</p>
-                                }
-                                <div class="work-item-meta">
-                                    <div class="work-item-meta-row">
-                                        <span class="badge badge-danger">Overdue milestone</span>
-                                        <span class="text-muted">Due: @milestone.DueDate.ToString("dd MMMM yyyy")</span>
-                                    </div>
                                 </div>
-                            </a>
-                        }
+        </div>
+    }
 
-                        @foreach (var action in Model.AssignedActions.Take(10))
-                        {
-                            <a href="@Url.Action("Details", "Action", new { id = action.Id })" class="work-item-card">
-                                <h4>@action.Title</h4>
-                                @if (action.Project != null)
-                                {
-                                    <p class="work-item-project">@action.Project.Title</p>
-                                }
-                                <div class="work-item-meta">
-                                    <div class="work-item-meta-row">
-                                        <span class="badge badge-warning">Action</span>
-                                        @if (action.PriorityLookup != null)
-                                        {
-                                            <span class="@GetPriorityBadgeClass(action.PriorityLookup.Label)">@action.PriorityLookup.Label</span>
-                                        }
-                                        @if (action.DueDate.HasValue)
-                                        {
-                                            <span class="text-muted">Due: @action.DueDate.Value.ToString("dd MMMM yyyy")</span>
-                                        }
-                                    </div>
-                                </div>
-                            </a>
-                        }
+    <!-- ── Main layout ─────────────────────────────────────────────────────── -->
+    <div class="hp-layout">
 
-                        @foreach (var issue in Model.HighPriorityIssues.Take(10))
-                        {
-                            <a href="@Url.Action("Details", "Issue", new { id = issue.Id })" class="work-item-card">
-                                <h4>@issue.Title</h4>
-                                @if (issue.Project != null)
-                                {
-                                    <p class="work-item-project">@issue.Project.Title</p>
-                                }
-                                <div class="work-item-meta">
-                                    <div class="work-item-meta-row">
-                                        <span class="badge badge-danger">High priority issue</span>
-                                        @if (!string.IsNullOrEmpty(issue.Severity))
-                                        {
-                                            <span class="badge badge-danger">@issue.Severity</span>
+        <!-- Left: tabbed work area -->
+        <div>
+            <div class="hp-card" style="padding: 0;">
+                <div class="hp-card-head" style="padding-bottom: 0; border-bottom: none;">
+                    <h2 style="padding: 0.9rem 1.25rem 0;"><i class="fas fa-briefcase" aria-hidden="true"></i>My work</h2>
+                </div>
+                <div class="hp-tabs" role="tablist">
+                    <button class="hp-tab active" role="tab" aria-selected="true" data-tab="tasks">
+                        Tasks <span class="cnt @(taskCount > 0 ? "hot" : "")">@taskCount</span>
+                    </button>
+                    <button class="hp-tab" role="tab" aria-selected="false" data-tab="projects">
+                        Projects <span class="cnt">@Model.MyProjects.Count</span>
+                    </button>
+                    <button class="hp-tab" role="tab" aria-selected="false" data-tab="watching">
+                        Watching <span class="cnt">@Model.WatchedProjects.Count</span>
+                    </button>
+                    <button class="hp-tab" role="tab" aria-selected="false" data-tab="products">
+                        Products <span class="cnt">@Model.MyProducts.Count</span>
+                    </button>
+                    @if (hasStandards)
+                    {
+                        <button class="hp-tab" role="tab" aria-selected="false" data-tab="standards">
+                            Standards <span class="cnt">@Model.MyDdtStandards.Count</span>
+                        </button>
+                    }
+                    @if (commissionCount > 0)
+                    {
+                        <button class="hp-tab" role="tab" aria-selected="false" data-tab="commission">
+                            Reporting <span class="cnt hot">@commissionCount</span>
+                        </button>
+                    }
+                    @if (Model.RecentSuccesses.Any())
+                    {
+                        <button class="hp-tab" role="tab" aria-selected="false" data-tab="successes">
+                            Successes <span class="cnt">@Model.RecentSuccesses.Count</span>
+                        </button>
                                         }
                                     </div>
+
+                <!-- Tasks -->
+                <div id="hp-tab-tasks" class="hp-pane active" role="tabpanel">
+                    @if (taskCount == 0)
+                    {
+                        <div class="hp-empty">
+                            <div class="hp-empty-ico">✅</div>
+                            <h3>All clear</h3>
+                            <p>No outstanding tasks or reporting requirements.</p>
+                                </div>
+                    }
+                    else
+                    {
+                        <div class="hp-rows">
+                            @foreach (var m in Model.OverdueMilestones.Take(6))
+                            {
+                                <a href="@Url.Action("MilestoneDetails","Project", new { id = m.Id })" class="hp-row r-red">
+                                    <div class="hp-ico i-red"><i class="fas fa-flag-checkered" aria-hidden="true"></i></div>
+                                    <div class="hp-row-body">
+                                        <div class="hp-row-title">@m.Name</div>
+                                        <div class="hp-row-sub">@(m.Project?.Title ?? "–")</div>
+                                    </div>
+                                    <div class="hp-row-meta">
+                                        <span class="badge badge-danger">Overdue</span>
+                                        <span class="text-muted" style="font-size:0.72rem;">@m.DueDate.ToString("d MMM")</span>
+                                    </div>
+                                </a>
+                            }
+                            @foreach (var i in Model.HighPriorityIssues.Take(4))
+                            {
+                                <a href="@Url.Action("Details","Issue", new { id = i.Id })" class="hp-row r-red">
+                                    <div class="hp-ico i-red"><i class="fas fa-bug" aria-hidden="true"></i></div>
+                                    <div class="hp-row-body">
+                                        <div class="hp-row-title">@i.Title</div>
+                                        <div class="hp-row-sub">@(i.Project?.Title ?? "–")</div>
+                                    </div>
+                                    <div class="hp-row-meta">
+                                        <span class="badge badge-danger">@(i.Severity ?? "High")</span>
                                 </div>
                             </a>
                         }
-
-                        @foreach (var item in Model.ProjectsNeedingMonthlyUpdates.Take(10))
-                        {
-                            var updateYear = item.DueDate.Month == 1 ? item.DueDate.Year - 1 : item.DueDate.Year;
-                            var updateMonth = item.DueDate.Month == 1 ? 12 : item.DueDate.Month - 1;
-                            <a href="@Url.Action("EditUpdate", "MilestonesUpdatesSuccesses", new { projectId = item.Project.Id, year = updateYear, month = updateMonth })" class="work-item-card">
-                                <h4>Complete monthly update</h4>
-                                <p class="work-item-project">@item.Project.Title</p>
-                                <div class="work-item-meta">
-                                    <div class="work-item-meta-row">
-                                        <span class="badge @(item.Status == UpdateSubmissionStatus.Late ? "badge-danger" : "badge-warning")">Monthly update @(item.Status == UpdateSubmissionStatus.Late ? "late" : "due")</span>
-                                        <span class="text-muted">Due: @item.DueDate.ToString("dd MMMM yyyy")</span>
+                            @foreach (var item in Model.ProjectsNeedingMonthlyUpdates.Take(4))
+                            {
+                                var uy = item.DueDate.Month == 1 ? item.DueDate.Year - 1 : item.DueDate.Year;
+                                var um = item.DueDate.Month == 1 ? 12 : item.DueDate.Month - 1;
+                                var isLate = item.Status == UpdateSubmissionStatus.Late;
+                                <a href="@Url.Action("EditUpdate","MilestonesUpdatesSuccesses", new { projectId = item.Project.Id, year = uy, month = um })" class="hp-row @(isLate ? "r-red" : "r-amber")">
+                                    <div class="hp-ico @(isLate ? "i-red" : "i-amber")"><i class="fas fa-calendar-check" aria-hidden="true"></i></div>
+                                    <div class="hp-row-body">
+                                        <div class="hp-row-title">Monthly update @(isLate ? "late" : "due")</div>
+                                        <div class="hp-row-sub">@item.Project.Title</div>
                                     </div>
+                                    <div class="hp-row-meta">
+                                        <span class="badge @(isLate ? "badge-danger" : "badge-warning")">@(isLate ? "Late" : "Due")</span>
+                                        <span class="text-muted" style="font-size:0.72rem;">@item.DueDate.ToString("d MMM")</span>
                                 </div>
                             </a>
                         }
-
-                        @foreach (var item in Model.ProductsNeedingReturns.Take(10))
-                        {
-                            var metricsYear = item.DueDate.Month == 1 ? item.DueDate.Year - 1 : item.DueDate.Year;
-                            var metricsMonth = item.DueDate.Month == 1 ? 12 : item.DueDate.Month - 1;
-                            <a href="@Url.Action("SubmitMetrics", "ProductReporting", new { documentId = item.Product.FipsId, year = metricsYear, month = metricsMonth })" class="work-item-card">
-                                <h4>Complete performance reporting</h4>
-                                <p class="work-item-project">@item.Product.Title</p>
-                                <div class="work-item-meta">
-                                    <div class="work-item-meta-row">
-                                        <span class="badge @(item.Status == ReturnStatus.Late ? "badge-danger" : "badge-warning")">Performance @(item.Status == ReturnStatus.Late ? "late" : "due")</span>
-                                        <span class="text-muted">Due: @item.DueDate.ToString("dd MMMM yyyy")</span>
+                            @foreach (var item in Model.ProductsNeedingReturns.Take(4))
+                            {
+                                var my = item.DueDate.Month == 1 ? item.DueDate.Year - 1 : item.DueDate.Year;
+                                var mm = item.DueDate.Month == 1 ? 12 : item.DueDate.Month - 1;
+                                var isLate = item.Status == ReturnStatus.Late;
+                                <a href="@Url.Action("SubmitMetrics","ProductReporting", new { documentId = item.Product.FipsId, year = my, month = mm })" class="hp-row @(isLate ? "r-red" : "r-amber")">
+                                    <div class="hp-ico @(isLate ? "i-red" : "i-amber")"><i class="fas fa-chart-line" aria-hidden="true"></i></div>
+                                    <div class="hp-row-body">
+                                        <div class="hp-row-title">Performance return @(isLate ? "late" : "due")</div>
+                                        <div class="hp-row-sub">@item.Product.Title</div>
                                     </div>
+                                    <div class="hp-row-meta">
+                                        <span class="badge @(isLate ? "badge-danger" : "badge-warning")">@(isLate ? "Late" : "Due")</span>
+                                        <span class="text-muted" style="font-size:0.72rem;">@item.DueDate.ToString("d MMM")</span>
                                 </div>
                             </a>
                         }
-
-                        @foreach (var item in Model.ProductsNeedingCommissionReporting.Take(10))
-                        {
-                            <a href="@Url.Action("SubmitCommission", "ProductReporting", new { documentId = item.Product.DocumentId ?? item.Product.FipsId, commissionId = item.Commission.Id })" class="work-item-card">
-                                <h4>Complete performance reporting</h4>
-                                <p class="work-item-project">@item.Product.Title</p>
-                                <div class="work-item-meta">
-                                    <div class="work-item-meta-row">
-                                        <span class="badge @(item.Status == CommissionSubmissionStatus.Late ? "badge-danger" : item.Status == CommissionSubmissionStatus.InProgress ? "badge-warning" : "badge-info")">Commission @(item.Status == CommissionSubmissionStatus.Late ? "late" : item.Status == CommissionSubmissionStatus.InProgress ? "in progress" : "due")</span>
-                                        <span class="text-muted">Due: @item.DueDate.ToString("dd MMMM yyyy")</span>
+                            @foreach (var a in Model.AssignedActions.Take(4))
+                            {
+                                <a href="@Url.Action("Details","Action", new { id = a.Id })" class="hp-row">
+                                    <div class="hp-ico i-indigo"><i class="fas fa-check-square" aria-hidden="true"></i></div>
+                                    <div class="hp-row-body">
+                                        <div class="hp-row-title">@a.Title</div>
+                                        <div class="hp-row-sub">@(a.Project?.Title ?? "–")</div>
                                     </div>
-                                    <div class="work-item-meta-row">
-                                        <span class="text-muted">@item.Commission.Name</span>
-                                    </div>
+                                    <div class="hp-row-meta">
+                                        <span class="badge badge-secondary">Action</span>
+                                        @if (a.DueDate.HasValue) { <span class="text-muted" style="font-size:0.72rem;">@a.DueDate.Value.ToString("d MMM")</span> }
                                 </div>
                             </a>
                         }
                     </div>
-
-                    <!-- List View -->
-                    <div class="work-items-list" data-view="list">
-                        <table class="work-items-table">
-                            <thead>
-                                <tr>
-                                    <th>Task</th>
-                                    <th>Item</th>
-                                    <th>Type</th>
-                                    <th>Due Date</th>
-                                    <th>Status</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach (var milestone in Model.OverdueMilestones.Take(10))
-                                {
-                                    <tr>
-                                        <td><a href="@Url.Action("MilestoneDetails", "Project", new { id = milestone.Id })">Review overdue milestone</a></td>
-                                        <td>@(milestone.Project?.Title ?? "-")</td>
-                                        <td>Work reporting</td>
-                                        <td>@milestone.DueDate.ToString("dd MMMM yyyy")</td>
-                                        <td><span class="badge badge-danger">Overdue</span></td>
-                                    </tr>
-                                }
-                                @foreach (var action in Model.AssignedActions.Take(10))
-                                {
-                                    <tr>
-                                        <td><a href="@Url.Action("Details", "Action", new { id = action.Id })">@action.Title</a></td>
-                                        <td>@(action.Project?.Title ?? "-")</td>
-                                        <td>Work reporting</td>
-                                        <td>@(action.DueDate?.ToString("dd MMMM yyyy") ?? "-")</td>
-                                        <td>@if (action.PriorityLookup != null) { <span class="@GetPriorityBadgeClass(action.PriorityLookup.Label)">@action.PriorityLookup.Label</span> }</td>
-                                    </tr>
-                                }
-                                @foreach (var issue in Model.HighPriorityIssues.Take(10))
-                                {
-                                    <tr>
-                                        <td><a href="@Url.Action("Details", "Issue", new { id = issue.Id })">@issue.Title</a></td>
-                                        <td>@(issue.Project?.Title ?? "-")</td>
-                                        <td>Work reporting</td>
-                                        <td>-</td>
-                                        <td>@if (!string.IsNullOrEmpty(issue.Severity)) { <span class="badge badge-danger">@issue.Severity</span> }</td>
-                                    </tr>
-                                }
-                                @foreach (var item in Model.ProjectsNeedingMonthlyUpdates.Take(10))
-                                {
-                                    var updateYear = item.DueDate.Month == 1 ? item.DueDate.Year - 1 : item.DueDate.Year;
-                                    var updateMonth = item.DueDate.Month == 1 ? 12 : item.DueDate.Month - 1;
-                                    <tr>
-                                        <td><a href="@Url.Action("EditUpdate", "MilestonesUpdatesSuccesses", new { projectId = item.Project.Id, year = updateYear, month = updateMonth })">Complete monthly update</a></td>
-                                        <td>@item.Project.Title</td>
-                                        <td>Work reporting</td>
-                                        <td>@item.DueDate.ToString("dd MMMM yyyy")</td>
-                                        <td><span class="badge @(item.Status == UpdateSubmissionStatus.Late ? "badge-danger" : "badge-warning")">@(item.Status == UpdateSubmissionStatus.Late ? "Late" : "Due")</span></td>
-                                    </tr>
-                                }
-                                @foreach (var item in Model.ProductsNeedingReturns.Take(10))
-                                {
-                                    var metricsYear = item.DueDate.Month == 1 ? item.DueDate.Year - 1 : item.DueDate.Year;
-                                    var metricsMonth = item.DueDate.Month == 1 ? 12 : item.DueDate.Month - 1;
-                                    <tr>
-                                        <td><a href="@Url.Action("SubmitMetrics", "ProductReporting", new { documentId = item.Product.FipsId, year = metricsYear, month = metricsMonth })">Complete performance reporting</a></td>
-                                        <td>@item.Product.Title</td>
-                                        <td>Operational reporting</td>
-                                        <td>@item.DueDate.ToString("dd MMMM yyyy")</td>
-                                        <td><span class="badge @(item.Status == ReturnStatus.Late ? "badge-danger" : "badge-warning")">@(item.Status == ReturnStatus.Late ? "Late" : "Due")</span></td>
-                                    </tr>
-                                }
-                                @foreach (var item in Model.ProductsNeedingCommissionReporting.Take(10))
-                                {
-                                    <tr>
-                                        <td><a href="@Url.Action("SubmitCommission", "ProductReporting", new { documentId = item.Product.DocumentId ?? item.Product.FipsId, commissionId = item.Commission.Id })">Complete performance reporting</a></td>
-                                        <td>@item.Product.Title</td>
-                                        <td>Performance reporting</td>
-                                        <td>@item.DueDate.ToString("dd MMMM yyyy")</td>
-                                        <td>
-                                            @switch (item.Status)
-                                            {
-                                                case CommissionSubmissionStatus.Late:
-                                                    <span class="badge badge-danger">Late</span>
-                                                    break;
-                                                case CommissionSubmissionStatus.InProgress:
-                                                    <span class="badge badge-warning">In progress</span>
-                                                    break;
-                                                default:
-                                                    <span class="badge badge-info">Due</span>
-                                                    break;
-                                            }
-                                        </td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
-                    </div>
-
                     @if (taskCount > 10)
                     {
-                        <div class="text-center mt-3">
-                            <a href="@Url.Action("Index", "Raid")" class="btn btn-outline-primary">View all @taskCount tasks →</a>
+                            <div class="hp-more mt-2">
+                                <a href="@Url.Action("Index","Raid")">View all @taskCount tasks <i class="fas fa-arrow-right" aria-hidden="true"></i></a>
                         </div>
                     }
                 }
             </div>
 
-            <!-- Projects Tab -->
-            <div id="tab-projects" class="tab-content">
+                <!-- Projects -->
+                <div id="hp-tab-projects" class="hp-pane" role="tabpanel">
                 @if (!hasProjects)
                 {
-                    <div class="empty-state">
-                        <div class="empty-state-icon">📊</div>
+                        <div class="hp-empty">
+                            <div class="hp-empty-ico"><i class="fas fa-project-diagram"></i></div>
                         <h3>No projects assigned</h3>
                         <p>You're not currently listed on any project teams.</p>
-                        <a href="@Url.Action("Index", "Project")" class="btn btn-primary mt-2">Browse Projects</a>
                     </div>
                 }
                 else
                 {
-                    <!-- Cards View -->
-                    <div class="work-items-grid active" data-view="cards">
-                        @foreach (var project in Model.MyProjects.Take(10))
+                        @if (hasProjects)
                         {
-                            <a href="@Url.Action("Details", "Project", new { id = project.Id })" class="work-item-card">
-                                <h4>
-                                    @project.Title
-                                    @if (project.IsFlagship)
-                                    {
-                                        <span class="badge badge-info ml-2">Flagship</span>
-                                    }
-                                </h4>
-                                <div class="work-item-meta">
-                                    <div class="work-item-meta-row">
-                                        @if (!string.IsNullOrEmpty(project.RagStatus))
-                                        {
-                                            <div class="work-item-meta-item">
-                                                <span class="work-item-meta-label">RAG Status</span>
-                                                <span class="@GetRagBadgeClass(project.RagStatus)">@project.RagStatus</span>
+                            var total = Model.MyProjects.Count;
+                            var gCount = RagCount("Green");
+                            var agCount = RagCount("Amber-Green");
+                            var aCount = RagCount("Amber");
+                            var arCount = RagCount("Amber-Red");
+                            var rCount = RagCount("Red");
+                            var nsCount = RagCount("Not set");
+                            <div class="rag-bar mb-1" title="RAG breakdown" aria-label="RAG breakdown bar">
+                                @if (gCount > 0)  { <div class="rag-seg rag-green"       style="flex:@gCount"  title="Green: @gCount"></div> }
+                                @if (agCount > 0) { <div class="rag-seg rag-amber-green" style="flex:@agCount" title="Amber-Green: @agCount"></div> }
+                                @if (aCount > 0)  { <div class="rag-seg rag-amber"       style="flex:@aCount"  title="Amber: @aCount"></div> }
+                                @if (arCount > 0) { <div class="rag-seg rag-amber-red"   style="flex:@arCount" title="Amber-Red: @arCount"></div> }
+                                @if (rCount > 0)  { <div class="rag-seg rag-red"         style="flex:@rCount"  title="Red: @rCount"></div> }
+                                @if (nsCount > 0) { <div class="rag-seg rag-not-set"     style="flex:@nsCount" title="Not set: @nsCount"></div> }
+                                            </div>
+                            <div style="font-size:0.72rem; color:#9ca3af; margin-bottom:0.75rem;">
+                                @if (gCount > 0)  { <span class="mr-2">🟢 @gCount green</span> }
+                                @if (agCount > 0) { <span class="mr-2">🟡 @agCount amber-green</span> }
+                                @if (aCount > 0)  { <span class="mr-2">🟠 @aCount amber</span> }
+                                @if (arCount > 0) { <span class="mr-2">🔴 @arCount amber-red</span> }
+                                @if (rCount > 0)  { <span class="mr-2">🔴 @rCount red</span> }
+                                @if (nsCount > 0) { <span class="mr-2">⚪ @nsCount not set</span> }
                                             </div>
                                         }
-                                        @if (project.DeliveryPriority != null)
-                                        {
-                                            <div class="work-item-meta-item">
-                                                <span class="work-item-meta-label">Priority</span>
-                                                <span class="@GetPriorityBadgeClass(project.DeliveryPriority.Name)">@project.DeliveryPriority.Name</span>
+                        <div class="hp-rows">
+                            @foreach (var p in Model.MyProjects.Take(15))
+                            {
+                                var rag = p.RagStatusLookup?.Name ?? p.RagStatus ?? "";
+                                var rowCls = (rag == "Red" || rag == "Amber-Red") ? "r-red" : (rag == "Amber" || rag == "Amber-Green") ? "r-amber" : rag == "Green" ? "r-green" : "";
+                                var icoCls = (rag == "Red" || rag == "Amber-Red") ? "i-red" : rag == "Green" ? "i-green" : "i-blue";
+                                var openR  = p.Risks?.Count(r => !r.IsDeleted) ?? 0;
+                                var openI  = p.Issues?.Count(i => !i.IsDeleted && i.Status != "resolved" && i.Status != "closed") ?? 0;
+                                var upcoming = p.Milestones?.Count(m => !m.IsDeleted && m.DueDate >= DateTime.Today && m.DueDate <= DateTime.Today.AddDays(14)) ?? 0;
+                                <a href="@Url.Action("Details","Project", new { id = p.Id })" class="hp-row @rowCls">
+                                    <div class="hp-ico @icoCls"><i class="fas fa-project-diagram" aria-hidden="true"></i></div>
+                                    <div class="hp-row-body">
+                                        <div class="hp-row-title">
+                                            @p.Title
+                                            @if (p.IsFlagship) { <i class="fas fa-star ml-1" style="color:#f59e0b; font-size:0.7rem;" title="Flagship" aria-label="Flagship"></i> }
+                                            @if (p.IsAiInitiative) { <i class="fas fa-robot ml-1" style="color:#7c3aed; font-size:0.7rem;" title="AI initiative" aria-label="AI initiative"></i> }
                                             </div>
-                                        }
-                                    </div>
-                                    @if (!string.IsNullOrEmpty(project.BusinessArea))
-                                    {
-                                        <div class="work-item-meta-row">
-                                            <div class="work-item-meta-item">
-                                                <span class="work-item-meta-label">Business Area</span>
-                                                <span class="text-muted">@project.BusinessArea</span>
-                                            </div>
+                                        <div class="hp-row-sub">@(p.BusinessArea ?? "–") @if (!string.IsNullOrEmpty(p.Phase)) { <span>· @p.Phase</span> }</div>
                                         </div>
-                                    }
-                                    @{
-                                        var upcomingCount = project.Milestones?.Count(m => !m.IsDeleted && m.DueDate >= DateTime.Today && m.DueDate <= DateTime.Today.AddDays(14)) ?? 0;
-                                    }
-                                    @if (upcomingCount > 0)
-                                    {
-                                        <div class="work-item-meta-row">
-                                            <div class="work-item-meta-item">
-                                                <span class="work-item-meta-label">Upcoming Milestones</span>
-                                                <span class="badge badge-info"><i class="fas fa-flag"></i> @upcomingCount</span>
-                                            </div>
-                                        </div>
-                                    }
+                                    <div class="hp-row-meta">
+                                        @if (!string.IsNullOrEmpty(rag)) { <span class="@RagBadgeClass(rag)">@rag</span> }
+                                        @if (p.DeliveryPriority != null) { <span class="@PriBadge(p.DeliveryPriority.Name)">@p.DeliveryPriority.Name</span> }
+                                        @if (upcoming > 0) { <span class="badge badge-info" title="Upcoming milestones"><i class="fas fa-flag" aria-hidden="true"></i> @upcoming</span> }
+                                        @if (openR > 0) { <span class="badge badge-warning" title="Open risks">R:@openR</span> }
+                                        @if (openI > 0) { <span class="badge badge-danger" title="Open issues">I:@openI</span> }
                                 </div>
                             </a>
                         }
                     </div>
-
-                    <!-- List View -->
-                    <div class="work-items-list" data-view="list">
-                        <table class="work-items-table">
-                            <thead>
-                                <tr>
-                                    <th>Project</th>
-                                    <th>RAG Status</th>
-                                    <th>Priority</th>
-                                    <th>Business Area</th>
-                                    <th>Upcoming Milestones</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach (var project in Model.MyProjects.Take(10))
+                        @if (Model.MyProjects.Count > 15)
+                        {
+                            <div class="hp-more mt-2">
+                                <a href="@Url.Action("Index","Project")">View all @Model.MyProjects.Count projects <i class="fas fa-arrow-right" aria-hidden="true"></i></a>
+                            </div>
+                        }
+                        @if (Model.ProjectsNeedingPathToGreen.Any())
+                        {
+                            <div style="margin-top:1rem; padding-top:0.75rem; border-top:1px solid #f3f4f6;">
+                                <div style="font-size:0.78rem; font-weight:700; color:#d4351c; margin-bottom:0.4rem;"><i class="fas fa-exclamation-triangle mr-1" aria-hidden="true"></i>Missing path to green</div>
+                                @foreach (var p in Model.ProjectsNeedingPathToGreen.Take(3))
                                 {
-                                    <tr>
-                                        <td>
-                                            <a href="@Url.Action("Details", "Project", new { id = project.Id })">
-                                                @project.Title
-                                                @if (project.IsFlagship)
-                                                {
-                                                    <span class="badge badge-info ml-2">Flagship</span>
-                                                }
-                                            </a>
-                                        </td>
-                                        <td>@if (!string.IsNullOrEmpty(project.RagStatus)) { <span class="@GetRagBadgeClass(project.RagStatus)">@project.RagStatus</span> }</td>
-                                        <td>@if (project.DeliveryPriority != null) { <span class="@GetPriorityBadgeClass(project.DeliveryPriority.Name)">@project.DeliveryPriority.Name</span> }</td>
-                                        <td>@(project.BusinessArea ?? "-")</td>
-                                        <td>
-                                            @{
-                                                var upcomingCount = project.Milestones?.Count(m => !m.IsDeleted && m.DueDate >= DateTime.Today && m.DueDate <= DateTime.Today.AddDays(14)) ?? 0;
-                                            }
-                                            @if (upcomingCount > 0)
-                                            {
-                                                <span class="badge badge-info"><i class="fas fa-flag"></i> @upcomingCount</span>
-                                            }
-                                            else
-                                            {
-                                                <span class="text-muted">-</span>
-                                            }
-                                        </td>
-                                    </tr>
+                                    <div class="hp-ptg-row">
+                                        <span class="@RagBadgeClass(p.RagStatusLookup?.Name ?? "")" style="flex-shrink:0;">@(p.RagStatusLookup?.Name ?? "–")</span>
+                                        <a href="@Url.Action("Details","Project", new { id = p.Id, tab = "rag" })">@p.Title</a>
+                                    </div>
                                 }
-                            </tbody>
-                        </table>
-                    </div>
-
-                    @if (Model.MyProjects.Count > 10)
-                    {
-                        <div class="text-center mt-3">
-                            <a href="@Url.Action("Index", "Project")" class="btn btn-outline-primary">View all @Model.MyProjects.Count projects →</a>
                         </div>
                     }
                 }
             </div>
 
-            <!-- Watching Tab -->
-            <div id="tab-watching" class="tab-content">
+                <!-- Watching -->
+                <div id="hp-tab-watching" class="hp-pane" role="tabpanel">
                 @if (!Model.WatchedProjects.Any())
                 {
-                    <div class="empty-state">
-                        <div class="empty-state-icon">👁️</div>
+                        <div class="hp-empty">
+                            <div class="hp-empty-ico"><i class="fas fa-eye"></i></div>
                         <h3>No watched projects</h3>
-                        <p>You're not currently watching any projects. Add projects to your watchlist to track them here.</p>
-                        <a href="@Url.Action("Index", "Project")" class="btn btn-primary mt-2">Browse Projects</a>
+                            <p>Add projects to your watchlist to track them here.</p>
                     </div>
                 }
                 else
                 {
-                    <!-- Cards View -->
-                    <div class="work-items-grid active" data-view="cards">
-                        @foreach (var project in Model.WatchedProjects.Take(10))
-                        {
-                            <a href="@Url.Action("Details", "Project", new { id = project.Id })" class="work-item-card">
-                                <h4>
-                                    @project.Title
-                                    @if (project.IsFlagship)
-                                    {
-                                        <span class="badge badge-info ml-2">Flagship</span>
-                                    }
-                                </h4>
-                                <div class="work-item-meta">
-                                    <div class="work-item-meta-row">
-                                        @if (!string.IsNullOrEmpty(project.RagStatus))
-                                        {
-                                            <div class="work-item-meta-item">
-                                                <span class="work-item-meta-label">RAG Status</span>
-                                                <span class="@GetRagBadgeClass(project.RagStatus)">@project.RagStatus</span>
+                        <div class="hp-rows">
+                            @foreach (var p in Model.WatchedProjects.Take(12))
+                            {
+                                var rag = p.RagStatusLookup?.Name ?? p.RagStatus ?? "";
+                                var rowCls = (rag == "Red" || rag == "Amber-Red") ? "r-red" : "";
+                                var upcoming = p.Milestones?.Count(m => !m.IsDeleted && m.DueDate >= DateTime.Today && m.DueDate <= DateTime.Today.AddDays(14)) ?? 0;
+                                <a href="@Url.Action("Details","Project", new { id = p.Id })" class="hp-row @rowCls">
+                                    <div class="hp-ico i-slate"><i class="fas fa-eye" aria-hidden="true"></i></div>
+                                    <div class="hp-row-body">
+                                        <div class="hp-row-title">@p.Title</div>
+                                        <div class="hp-row-sub">@(p.BusinessArea ?? "–")</div>
                                             </div>
+                                    <div class="hp-row-meta">
+                                        @if (!string.IsNullOrEmpty(rag)) { <span class="@RagBadgeClass(rag)">@rag</span> }
+                                        @if (upcoming > 0) { <span class="badge badge-info"><i class="fas fa-flag" aria-hidden="true"></i> @upcoming</span> }
+                                    </div>
+                                </a>
                                         }
-                                        @if (project.DeliveryPriority != null)
+                        </div>
+                        @if (Model.WatchedProjects.Count > 12)
                                         {
-                                            <div class="work-item-meta-item">
-                                                <span class="work-item-meta-label">Priority</span>
-                                                <span class="@GetPriorityBadgeClass(project.DeliveryPriority.Name)">@project.DeliveryPriority.Name</span>
+                            <div class="hp-more mt-2">
+                                <a href="@Url.Action("Index","Project")">View all @Model.WatchedProjects.Count watched projects <i class="fas fa-arrow-right" aria-hidden="true"></i></a>
                                             </div>
+                        }
                                         }
                                     </div>
-                                    @if (!string.IsNullOrEmpty(project.BusinessArea))
-                                    {
-                                        <div class="work-item-meta-row">
-                                            <div class="work-item-meta-item">
-                                                <span class="work-item-meta-label">Business Area</span>
-                                                <span class="text-muted">@project.BusinessArea</span>
-                                            </div>
+
+                <!-- Products -->
+                <div id="hp-tab-products" class="hp-pane" role="tabpanel">
+                    @if (!hasProducts)
+                    {
+                        <div class="hp-empty">
+                            <div class="hp-empty-ico"><i class="fas fa-box"></i></div>
+                            <h3>No products assigned</h3>
+                            <p>You're not currently listed as a contact for any products.</p>
                                         </div>
                                     }
-                                    @{
-                                        var upcomingCount = project.Milestones?.Count(m => !m.IsDeleted && m.DueDate >= DateTime.Today && m.DueDate <= DateTime.Today.AddDays(14)) ?? 0;
-                                    }
-                                    @if (upcomingCount > 0)
-                                    {
-                                        <div class="work-item-meta-row">
-                                            <div class="work-item-meta-item">
-                                                <span class="work-item-meta-label">Upcoming Milestones</span>
-                                                <span class="badge badge-info"><i class="fas fa-flag"></i> @upcomingCount</span>
+                    else
+                    {
+                        <div class="hp-rows">
+                            @foreach (var prod in Model.MyProducts.Take(12))
+                            {
+                                var needsReturn = Model.ProductsNeedingReturns.Any(r => r.Product.FipsId == prod.FipsId);
+                                <a href="@Url.Action("Dashboard","Products", new { id = prod.FipsId })" class="hp-row @(needsReturn ? "r-amber" : "")">
+                                    <div class="hp-ico @(needsReturn ? "i-amber" : "i-teal")"><i class="fas fa-box" aria-hidden="true"></i></div>
+                                    <div class="hp-row-body">
+                                        <div class="hp-row-title">@prod.Title</div>
+                                        <div class="hp-row-sub">
+                                            @if (!string.IsNullOrEmpty(prod.Phase)) { <span>@prod.Phase</span> }
+                                            @if (!string.IsNullOrEmpty(prod.FipsId)) { <span class="ml-1">· @prod.FipsId</span> }
                                             </div>
                                         </div>
-                                    }
+                                    <div class="hp-row-meta">
+                                        @if (needsReturn) { <span class="badge badge-warning">Return due</span> }
+                                        @if (!string.IsNullOrEmpty(prod.State)) { <span class="badge badge-light border" style="font-size:0.7rem;">@prod.State</span> }
                                 </div>
                             </a>
                         }
                     </div>
-
-                    <!-- List View -->
-                    <div class="work-items-list" data-view="list">
-                        <table class="work-items-table">
-                            <thead>
-                                <tr>
-                                    <th>Project</th>
-                                    <th>RAG Status</th>
-                                    <th>Priority</th>
-                                    <th>Business Area</th>
-                                    <th>Upcoming Milestones</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach (var project in Model.WatchedProjects.Take(10))
-                                {
-                                    <tr>
-                                        <td>
-                                            <a href="@Url.Action("Details", "Project", new { id = project.Id })">
-                                                @project.Title
-                                                @if (project.IsFlagship)
-                                                {
-                                                    <span class="badge badge-info ml-2">Flagship</span>
-                                                }
-                                            </a>
-                                        </td>
-                                        <td>@if (!string.IsNullOrEmpty(project.RagStatus)) { <span class="@GetRagBadgeClass(project.RagStatus)">@project.RagStatus</span> }</td>
-                                        <td>@if (project.DeliveryPriority != null) { <span class="@GetPriorityBadgeClass(project.DeliveryPriority.Name)">@project.DeliveryPriority.Name</span> }</td>
-                                        <td>@(project.BusinessArea ?? "-")</td>
-                                        <td>
-                                            @{
-                                                var upcomingCount = project.Milestones?.Count(m => !m.IsDeleted && m.DueDate >= DateTime.Today && m.DueDate <= DateTime.Today.AddDays(14)) ?? 0;
-                                            }
-                                            @if (upcomingCount > 0)
-                                            {
-                                                <span class="badge badge-info"><i class="fas fa-flag"></i> @upcomingCount</span>
-                                            }
-                                            else
-                                            {
-                                                <span class="text-muted">-</span>
-                                            }
-                                        </td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
+                        @if (Model.MyProducts.Count > 12)
+                        {
+                            <div class="hp-more mt-2">
+                                <a href="@Url.Action("Index","Products")">View all @Model.MyProducts.Count products <i class="fas fa-arrow-right" aria-hidden="true"></i></a>
+                            </div>
+                        }
+                    }
                     </div>
 
-                    @if (Model.WatchedProjects.Count > 10)
-                    {
-                        <div class="text-center mt-3">
-                            <a href="@Url.Action("Index", "Project")" class="btn btn-outline-primary">View all @Model.WatchedProjects.Count watched projects →</a>
+                <!-- Standards -->
+                @if (hasStandards)
+                {
+                    <div id="hp-tab-standards" class="hp-pane" role="tabpanel">
+                        <div class="hp-rows">
+                            @foreach (var s in Model.MyDdtStandards.Take(10))
+                            {
+                                var isOwner = Model.MyOwnedDdtStandards.Any(x => x.Id == s.Id);
+                                <a href="@Url.Action("Details","DdtStandards", new { id = s.Id })" class="hp-row">
+                                    <div class="hp-ico i-purple"><i class="fas fa-book" aria-hidden="true"></i></div>
+                                    <div class="hp-row-body">
+                                        <div class="hp-row-title">@s.Title</div>
+                                        <div class="hp-row-sub">@(s.Categories.Any() ? string.Join(", ", s.Categories.Take(2).Select(c => c.Category?.Name)) : "–")</div>
                         </div>
-                    }
+                                    <div class="hp-row-meta">
+                                        @if (s.IsPublished) { <span class="badge badge-success">Published</span> }
+                                        else { <span class="badge badge-warning">@s.Stage</span> }
+                                        @if (isOwner) { <span class="badge badge-primary">Owner</span> }
+                                    </div>
+                                </a>
                 }
             </div>
-
-            <!-- Products Tab -->
-            <div id="tab-products" class="tab-content">
-                @if (!hasProducts)
-                {
-                    <div class="empty-state">
-                        <div class="empty-state-icon">🛠️</div>
-                        <h3>No products assigned</h3>
-                        <p>You're not currently listed as a contact for any products.</p>
+                        @if (Model.MyDdtStandards.Count > 10)
+                        {
+                            <div class="hp-more mt-2">
+                                <a href="@Url.Action("Index","DdtStandards")">View all @Model.MyDdtStandards.Count standards <i class="fas fa-arrow-right" aria-hidden="true"></i></a>
                     </div>
                 }
-                else
+                    </div>
+                }
+
+                <!-- Commission reporting -->
+                @if (commissionCount > 0)
                 {
-                    <!-- Cards View -->
-                    <div class="work-items-grid active" data-view="cards">
-                        @foreach (var product in Model.MyProducts.Take(10))
-                        {
-                            <a href="@Url.Action("Dashboard", "Products", new { id = product.FipsId })" class="work-item-card">
-                                <h4>@product.Title</h4>
-                                @if (!string.IsNullOrEmpty(product.ShortDescription))
-                                {
-                                    <p class="work-item-description">@(product.ShortDescription.Length > 150 ? product.ShortDescription.Substring(0, 150) + "..." : product.ShortDescription)</p>
-                                }
-                                <div class="work-item-meta">
-                                    @if (!string.IsNullOrEmpty(product.FipsId))
-                                    {
-                                        <div class="work-item-meta-row">
-                                            <div class="work-item-meta-item">
-                                                <span class="work-item-meta-label">FIPS ID</span>
-                                                <span class="badge badge-info">@product.FipsId</span>
+                    <div id="hp-tab-commission" class="hp-pane" role="tabpanel">
+                        <div class="hp-rows">
+                            @foreach (var item in Model.ProductsNeedingCommissionReporting.Take(10))
+                            {
+                                var isLate = item.Status == CommissionSubmissionStatus.Late;
+                                <a href="@Url.Action("SubmitCommission","ProductReporting", new { documentId = item.Product.DocumentId ?? item.Product.FipsId, commissionId = item.Commission.Id })" class="hp-row @(isLate ? "r-red" : "r-amber")">
+                                    <div class="hp-ico @(isLate ? "i-red" : "i-amber")"><i class="fas fa-clipboard-list" aria-hidden="true"></i></div>
+                                    <div class="hp-row-body">
+                                        <div class="hp-row-title">@item.Product.Title</div>
+                                        <div class="hp-row-sub">@item.Commission.Name</div>
                                             </div>
-                                        </div>
-                                    }
+                                    <div class="hp-row-meta">
+                                        <span class="badge @(isLate ? "badge-danger" : item.Status == CommissionSubmissionStatus.InProgress ? "badge-warning" : "badge-info")">
+                                            @(isLate ? "Late" : item.Status == CommissionSubmissionStatus.InProgress ? "In progress" : "Due")
+                                        </span>
+                                        <span class="text-muted" style="font-size:0.72rem;">@item.DueDate.ToString("d MMM")</span>
                                 </div>
                             </a>
                         }
                     </div>
-
-                    <!-- List View -->
-                    <div class="work-items-list" data-view="list">
-                        <table class="work-items-table">
-                            <thead>
-                                <tr>
-                                    <th>Product</th>
-                                    <th>FIPS ID</th>
-                                    <th>Description</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach (var product in Model.MyProducts.Take(10))
-                                {
-                                    <tr>
-                                        <td><a href="@Url.Action("Dashboard", "Products", new { id = product.FipsId })">@product.Title</a></td>
-                                        <td>@if (!string.IsNullOrEmpty(product.FipsId)) { <span class="badge badge-info">@product.FipsId</span> } else { <span class="text-muted">-</span> }</td>
-                                        <td>@(product.ShortDescription?.Length > 100 ? product.ShortDescription.Substring(0, 100) + "..." : product.ShortDescription ?? "-")</td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
+                        @if (commissionCount > 10)
+                        {
+                            <div class="hp-more mt-2">
+                                <a href="@Url.Action("Commission","ProductReporting")">View all @commissionCount tasks <i class="fas fa-arrow-right" aria-hidden="true"></i></a>
+                            </div>
+                        }
                     </div>
+                }
 
-                    @if (Model.MyProducts.Count > 10)
-                    {
-                        <div class="text-center mt-3">
-                            <a href="@Url.Action("Index", "Products")" class="btn btn-outline-primary">View all @Model.MyProducts.Count products →</a>
+                <!-- Successes -->
+                @if (Model.RecentSuccesses.Any())
+                {
+                    <div id="hp-tab-successes" class="hp-pane" role="tabpanel">
+                        <div style="font-size:0.78rem; color:#6b7280; margin-bottom:0.75rem;">Recent wins from the last 30 days</div>
+                        @foreach (var s in Model.RecentSuccesses.Take(10))
+                        {
+                            <div class="hp-success">
+                                <div class="hp-success-dot" aria-hidden="true"></div>
+                                <div class="hp-success-body">
+                                    <div class="hp-success-title">@s.SuccessDescription</div>
+                                    @if (s.Project != null)
+                                    {
+                                        <div class="hp-success-proj">
+                                            <a href="@Url.Action("Details","Project", new { id = s.ProjectId })" style="color:#6b7280; text-decoration:none;">@s.Project.Title</a>
+                                            · @s.RecordedAt.ToString("d MMM")
                         </div>
                     }
+                                </div>
+                            </div>
                 }
             </div>
-
-            <!-- Standards Tab -->
-            <div id="tab-standards" class="tab-content">
-                @if (!hasStandards)
-                {
-                    <div class="empty-state">
-                        <div class="empty-state-icon">📋</div>
-                        <h3>No DDT Standards assigned</h3>
-                        <p>You're not currently listed as an owner or contact for any DDT standards.</p>
-                        <a href="@Url.Action("Index", "DdtStandards")" class="btn btn-primary mt-2">Browse Standards</a>
-                    </div>
                 }
-                else
-                {
-                    <!-- Cards View -->
-                    <div class="work-items-grid active" data-view="cards">
-                        @foreach (var standard in Model.MyDdtStandards.Take(10))
-                        {
-                            <a href="@Url.Action("Details", "DdtStandards", new { id = standard.Id })" class="work-item-card">
-                                <h4>@standard.Title</h4>
-                                @if (!string.IsNullOrEmpty(standard.Summary))
-                                {
-                                    <p class="work-item-description">@(standard.Summary.Length > 150 ? standard.Summary.Substring(0, 150) + "..." : standard.Summary)</p>
-                                }
-                                <div class="work-item-meta">
-                                    <div class="work-item-meta-row">
-                                        @if (standard.IsPublished)
-                                        {
-                                            <div class="work-item-meta-item">
-                                                <span class="work-item-meta-label">Status</span>
-                                                <span class="badge badge-success">Published</span>
-                                            </div>
-                                        }
-                                        else
-                                        {
-                                            <div class="work-item-meta-item">
-                                                <span class="work-item-meta-label">Status</span>
-                                                <span class="badge badge-warning">@standard.Stage</span>
-                                            </div>
-                                        }
-                                        @if (Model.MyOwnedDdtStandards.Any(s => s.Id == standard.Id))
-                                        {
-                                            <div class="work-item-meta-item">
-                                                <span class="work-item-meta-label">Role</span>
-                                                <span class="badge badge-primary">Owner</span>
-                                            </div>
-                                        }
-                                        else if (Model.MyContactDdtStandards.Any(s => s.Id == standard.Id))
-                                        {
-                                            <div class="work-item-meta-item">
-                                                <span class="work-item-meta-label">Role</span>
-                                                <span class="badge badge-info">Contact</span>
-                                            </div>
-                                        }
-                                    </div>
-                                    @if (standard.Categories.Any())
-                                    {
-                                        <div class="work-item-meta-row">
-                                            <div class="work-item-meta-item">
-                                                <span class="work-item-meta-label">Category</span>
-                                                <span class="text-muted">@string.Join(", ", standard.Categories.Take(2).Select(c => c.Category?.Name))</span>
-                                            </div>
-                                        </div>
-                                    }
-                                </div>
-                            </a>
-                        }
-                    </div>
 
-                    <!-- List View -->
-                    <div class="work-items-list" data-view="list">
-                        <table class="work-items-table">
-                            <thead>
-                                <tr>
-                                    <th>Standard</th>
-                                    <th>Status</th>
-                                    <th>Role</th>
-                                    <th>Category</th>
-                                    <th>Summary</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach (var standard in Model.MyDdtStandards.Take(10))
-                                {
-                                    <tr>
-                                        <td><a href="@Url.Action("Details", "DdtStandards", new { id = standard.Id })">@standard.Title</a></td>
-                                        <td>
-                                            @if (standard.IsPublished)
-                                            {
-                                                <span class="badge badge-success">Published</span>
-                                            }
-                                            else
-                                            {
-                                                <span class="badge badge-warning">@standard.Stage</span>
-                                            }
-                                        </td>
-                                        <td>
-                                            @if (Model.MyOwnedDdtStandards.Any(s => s.Id == standard.Id))
-                                            {
-                                                <span class="badge badge-primary">Owner</span>
-                                            }
-                                            else if (Model.MyContactDdtStandards.Any(s => s.Id == standard.Id))
-                                            {
-                                                <span class="badge badge-info">Contact</span>
-                                            }
-                                            else
-                                            {
-                                                <span class="text-muted">-</span>
-                                            }
-                                        </td>
-                                        <td>@(standard.Categories.Any() ? string.Join(", ", standard.Categories.Take(2).Select(c => c.Category?.Name)) : "-")</td>
-                                        <td>@(standard.Summary?.Length > 100 ? standard.Summary.Substring(0, 100) + "..." : standard.Summary ?? "-")</td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
-                    </div>
-
-                    @if (Model.MyDdtStandards.Count > 10)
-                    {
-                        <div class="text-center mt-3">
-                            <a href="@Url.Action("Index", "DdtStandards")" class="btn btn-outline-primary">View all @Model.MyDdtStandards.Count standards →</a>
-                        </div>
-                    }
-                }
             </div>
 
-            <!-- Performance Reporting Tab -->
-            <div id="tab-commission" class="tab-content">
-                @if (!Model.ProductsNeedingCommissionReporting.Any())
-                {
-                    <div class="empty-state">
-                        <div class="empty-state-icon">✅</div>
-                        <h3>No performance reporting tasks</h3>
-                        <p>You're all caught up! There are no outstanding performance reporting requirements.</p>
+            <!-- Reminders -->
+            @if (Model.Reminders.Any())
+            {
+                <div class="hp-card mt-0">
+                    <div class="hp-card-head">
+                        <h2><i class="fas fa-bell" aria-hidden="true"></i>Reminders &amp; nudges</h2>
                     </div>
-                }
-                else
-                {
-                    <!-- Cards View -->
-                    <div class="work-items-grid active" data-view="cards">
-                        @foreach (var item in Model.ProductsNeedingCommissionReporting.Take(10))
+                    <div class="hp-card-body" style="padding-top:0.25rem;">
+                        @foreach (var r in Model.Reminders.Take(5))
                         {
-                            <a href="@Url.Action("SubmitCommission", "ProductReporting", new { documentId = item.Product.DocumentId ?? item.Product.FipsId, commissionId = item.Commission.Id })" class="work-item-card">
-                                <h4>Complete performance reporting</h4>
-                                <p class="work-item-project">@item.Product.Title</p>
-                                <div class="work-item-meta">
-                                    <div class="work-item-meta-row">
-                                        <span class="badge @(item.Status == CommissionSubmissionStatus.Late ? "badge-danger" : item.Status == CommissionSubmissionStatus.InProgress ? "badge-warning" : "badge-info")">Commission @(item.Status == CommissionSubmissionStatus.Late ? "late" : item.Status == CommissionSubmissionStatus.InProgress ? "in progress" : "due")</span>
-                                        <span class="text-muted">Due: @item.DueDate.ToString("dd MMMM yyyy")</span>
+                            var tone = r.Tone switch
+                            {
+                                "danger"  => "i-red",
+                                "warning" => "i-amber",
+                                "success" => "i-green",
+                                "primary" => "i-blue",
+                                _         => "i-slate"
+                            };
+                            <div class="hp-reminder">
+                                <div class="hp-reminder-ico @tone"><i class="@r.Icon" aria-hidden="true"></i></div>
+                                <div class="hp-reminder-body">
+                                    <div class="hp-reminder-title">@r.Title</div>
+                                    <div class="hp-reminder-desc">@r.Description</div>
+                                    @if (!string.IsNullOrEmpty(r.LinkUrl) && r.LinkUrl != "#")
+                                    {
+                                        <a href="@r.LinkUrl" class="hp-reminder-link">@(r.LinkLabel ?? "View") <i class="fas fa-arrow-right" aria-hidden="true"></i></a>
+                                    }
+                                            </div>
+                                <span class="hp-freq">@r.FrequencyBadge</span>
+                                            </div>
+                                        }
+                                            </div>
+                                            </div>
+                                        }
                                     </div>
-                                    <div class="work-item-meta-row">
-                                        <span class="text-muted">@item.Commission.Name</span>
-                                    </div>
-                                </div>
-                            </a>
+
+        <!-- Right sidebar -->
+        <div>
+
+            <!-- At-risk projects -->
+            @if (Model.AtRiskProjects.Any())
+            {
+                <div class="hp-widget">
+                    <div class="hp-widget-head">
+                        <h3><i class="fas fa-exclamation-triangle" style="color:#d4351c;" aria-hidden="true"></i>At-risk projects</h3>
+                        <a href="@Url.Action("Index","Project")">View all</a>
+                    </div>
+                    <div class="hp-widget-body">
+                        @foreach (var p in Model.AtRiskProjects.Take(6))
+                        {
+                            var rag = p.RagStatusLookup?.Name ?? p.RagStatus ?? "–";
+                            <div class="hp-mini-row">
+                                <span class="@RagBadgeClass(rag)" style="flex-shrink:0;">@rag</span>
+                                <a href="@Url.Action("Details","Project", new { id = p.Id })">@p.Title</a>
+                            </div>
                         }
                     </div>
+                </div>
+            }
 
-                    <!-- List View -->
-                    <div class="work-items-list" data-view="list">
-                        <table class="work-items-table">
-                            <thead>
-                                <tr>
-                                    <th>Task</th>
-                                    <th>Product</th>
-                                    <th>Commission</th>
-                                    <th>Due Date</th>
-                                    <th>Status</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach (var item in Model.ProductsNeedingCommissionReporting.Take(10))
-                                {
-                                    <tr>
-                                        <td><a href="@Url.Action("SubmitCommission", "ProductReporting", new { documentId = item.Product.DocumentId ?? item.Product.FipsId, commissionId = item.Commission.Id })">Complete performance reporting</a></td>
-                                        <td>@item.Product.Title</td>
-                                        <td>@item.Commission.Name</td>
-                                        <td>@item.DueDate.ToString("dd MMMM yyyy")</td>
-                                        <td>
-                                            @switch (item.Status)
-                                            {
-                                                case CommissionSubmissionStatus.Late:
-                                                    <span class="badge badge-danger">Late</span>
-                                                    break;
-                                                case CommissionSubmissionStatus.InProgress:
-                                                    <span class="badge badge-warning">In progress</span>
-                                                    break;
-                                                default:
-                                                    <span class="badge badge-info">Due</span>
-                                                    break;
-                                            }
-                                        </td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
+            <!-- Milestones due this week -->
+            @if (Model.MilestonesDueThisWeek.Any())
+            {
+                <div class="hp-widget">
+                    <div class="hp-widget-head">
+                        <h3><i class="fas fa-calendar-alt" aria-hidden="true"></i>Due this week</h3>
+                        <a href="@Url.Action("Index","Project")">View all</a>
                     </div>
-
-                    @if (Model.ProductsNeedingCommissionReporting.Count > 10)
+                    <div class="hp-widget-body">
+                        @foreach (var m in Model.MilestonesDueThisWeek.Take(6))
                     {
-                        <div class="text-center mt-3">
-                            <a href="@Url.Action("Commission", "ProductReporting")" class="btn btn-outline-primary">View all @Model.ProductsNeedingCommissionReporting.Count performance reporting tasks →</a>
+                            <div class="hp-mini-row">
+                                <span class="hp-mini-date">@m.DueDate.ToString("d MMM")</span>
+                                <a href="@Url.Action("MilestoneDetails","Project", new { id = m.Id })">@m.Name</a>
                         </div>
-                    }
                 }
+            </div>
+                </div>
+            }
+
+            <!-- Unmonitored risks -->
+            @if (Model.UnmonitoredRisks.Any())
+            {
+                <div class="hp-widget">
+                    <div class="hp-widget-head">
+                        <h3><i class="fas fa-shield-alt" style="color:#d4351c;" aria-hidden="true"></i>Risks needing review</h3>
+                        <a href="@Url.Action("Index","Raid", new { viewType = "risks" })">View all</a>
+                    </div>
+                    <div class="hp-widget-body">
+                        @foreach (var r in Model.UnmonitoredRisks.Take(5))
+                        {
+                            <div class="hp-mini-row">
+                                <span class="badge badge-warning" style="flex-shrink:0;">Risk</span>
+                                <a href="@Url.Action("Details","Risk", new { id = r.Id })">@r.Title</a>
+                            </div>
+                        }
+                        @if (Model.UnmonitoredRisks.Count > 5)
+                        {
+                            <div class="hp-more"><a href="@Url.Action("Index","Raid", new { viewType = "risks" })">+@(Model.UnmonitoredRisks.Count - 5) more</a></div>
+                        }
+                    </div>
+                </div>
+            }
+
             </div>
         </div>
 
     </div>
 </section>
-
+</div>
 
 @section Scripts {
     <script nonce="@Context.Items["Nonce"]">
-        (function() {
-            // Get saved view preference or default to 'cards'
-            function getViewPreference() {
-                return localStorage.getItem('homeWorkViewPreference') || 'cards';
-            }
-
-            function saveViewPreference(view) {
-                localStorage.setItem('homeWorkViewPreference', view);
-            }
-
-            function toggleView(view) {
-                // Update toggle buttons
-                document.querySelectorAll('.view-toggle-btn').forEach(function(btn) {
-                    btn.classList.remove('active');
-                    if (btn.getAttribute('data-view') === view) {
-                        btn.classList.add('active');
-                    }
-                });
-
-                // Update all tab views
-                document.querySelectorAll('.tab-content').forEach(function(tab) {
-                    var cardsView = tab.querySelector('.work-items-grid[data-view="cards"]');
-                    var listView = tab.querySelector('.work-items-list[data-view="list"]');
-                    
-                    if (cardsView && listView) {
-                        if (view === 'cards') {
-                            cardsView.classList.add('active');
-                            listView.classList.remove('active');
-                        } else {
-                            cardsView.classList.remove('active');
-                            listView.classList.add('active');
-                        }
-                    }
-                });
-
-                saveViewPreference(view);
-            }
-
-            // Initialize view from preference
-            var initialView = getViewPreference();
-            toggleView(initialView);
-
-            // View toggle buttons
-            document.querySelectorAll('.view-toggle-btn').forEach(function(button) {
-                button.addEventListener('click', function() {
-                    var view = this.getAttribute('data-view');
-                    toggleView(view);
-                });
-            });
-
+    (function () {
             // Tab switching
-            document.querySelectorAll('.tab-button').forEach(function(button) {
-                button.addEventListener('click', function() {
-                    var tabName = this.getAttribute('data-tab');
-                    
-                    // Remove active class from all buttons and tabs
-                    document.querySelectorAll('.tab-button').forEach(function(btn) {
-                        btn.classList.remove('active');
-                    });
-                    document.querySelectorAll('.tab-content').forEach(function(tab) {
-                        tab.classList.remove('active');
-                    });
-                    
-                    // Add active class to clicked button and corresponding tab
+        document.querySelectorAll('.hp-tab').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var tab = this.getAttribute('data-tab');
+                document.querySelectorAll('.hp-tab').forEach(function (b) {
+                    b.classList.remove('active');
+                    b.setAttribute('aria-selected', 'false');
+                });
+                document.querySelectorAll('.hp-pane').forEach(function (p) {
+                    p.classList.remove('active');
+                });
                     this.classList.add('active');
-                    document.getElementById('tab-' + tabName).classList.add('active');
+                this.setAttribute('aria-selected', 'true');
+                var pane = document.getElementById('hp-tab-' + tab);
+                if (pane) pane.classList.add('active');
                 });
             });
 
-            // Test User Selector (Development Only)
-            function loadTestUsers() {
-                var testUserSelect = document.getElementById('testUserSelect');
-                if (!testUserSelect) {
-                    return;
+        // Stat cards that jump to a tab
+        document.querySelectorAll('[data-jump]').forEach(function (card) {
+            card.addEventListener('click', function (e) {
+                e.preventDefault();
+                var tab = this.getAttribute('data-jump');
+                var btn = document.querySelector('.hp-tab[data-tab="' + tab + '"]');
+                if (btn) {
+                    btn.click();
+                    var tabBar = document.querySelector('.hp-tabs');
+                    if (tabBar) {
+                        var top = tabBar.getBoundingClientRect().top + window.pageYOffset - 80;
+                        window.scrollTo({ top: top, behavior: 'smooth' });
+                    }
                 }
-
-                fetch('@Url.Action("GetTestUsers", "Home")')
-                    .then(function(response) {
-                        if (!response.ok) {
-                            console.warn('Test users endpoint returned status:', response.status);
-                            return [];
-                        }
-                        return response.json();
-                    })
-                    .then(function(users) {
-                        if (!users || users.length === 0) {
-                            var option = document.createElement('option');
-                            option.value = '0';
-                            option.textContent = 'No users available';
-                            option.disabled = true;
-                            testUserSelect.appendChild(option);
-                            return;
-                        }
-
-                        var currentTestUserId = '@(Context.Request.Cookies["TestDashboardUserId"])';
-                        users.forEach(function(user) {
-                            var option = document.createElement('option');
-                            option.value = user.id;
-                            option.textContent = user.name + ' (' + user.email + ')';
-                            if (currentTestUserId && currentTestUserId === user.id.toString()) {
-                                option.selected = true;
-                            }
-                            testUserSelect.appendChild(option);
-                        });
-                    })
-                    .catch(function(error) {
-                        console.error('Error loading test users:', error);
-                        var option = document.createElement('option');
-                        option.value = '0';
-                        option.textContent = 'Unable to load users';
-                        option.disabled = true;
-                        testUserSelect.appendChild(option);
-                    });
-            }
-
-            if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', loadTestUsers);
-            } else {
-                loadTestUsers();
-            }
+            });
+        });
         })();
     </script>
 }

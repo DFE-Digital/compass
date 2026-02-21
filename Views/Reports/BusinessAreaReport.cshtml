@@ -1,148 +1,362 @@
 @using Compass.Models
 @{
-    ViewData["Title"] = "Business area report";
-    var userBusinessAreas = ViewBag.UserBusinessAreas as List<BusinessAreaLookup> ?? new List<BusinessAreaLookup>();
+    ViewData["Title"] = ViewBag.SelectedBusinessArea != null ? $"{((BusinessAreaLookup)ViewBag.SelectedBusinessArea).Name} – business area report" : "Business area report";
+    ViewData["BodyClass"] = "reports-page";
+    var availableBusinessAreas = ViewBag.AvailableBusinessAreas as List<BusinessAreaLookup> ?? new List<BusinessAreaLookup>();
+    var allDivisions = ViewBag.AllDivisions as List<Division> ?? new List<Division>();
+    var allBusinessAreas = ViewBag.AllBusinessAreas as List<BusinessAreaLookup> ?? availableBusinessAreas;
+    var selectedBa = ViewBag.SelectedBusinessArea as BusinessAreaLookup;
     var projects = ViewBag.Projects as List<Project> ?? new List<Project>();
     var projectCount = ViewBag.ProjectCount as int? ?? 0;
-}
+    var ragBreakdown = ViewBag.RagBreakdown as Dictionary<string, int> ?? new Dictionary<string, int>();
+    var phaseBreakdown = ViewBag.PhaseBreakdown as Dictionary<string, int> ?? new Dictionary<string, int>();
+    var submittedThisMonth = ViewBag.SubmittedThisMonth as int? ?? 0;
+    var monthName = ViewBag.MonthName as string ?? "";
+    var leadershipAssignments = ViewBag.LeadershipAssignments as List<UserBusinessAreaRoleAssignment> ?? new List<UserBusinessAreaRoleAssignment>();
+    var accessibilityIssues = ViewBag.AccessibilityIssues as List<AccessibilityIssue> ?? new List<AccessibilityIssue>();
+    var flagshipCount = ViewBag.FlagshipCount as int? ?? 0;
+    var multiDeptCount = ViewBag.MultiDeptCount as int? ?? 0;
+    var highRiskCount = ViewBag.HighRiskCount as int? ?? 0;
+    var highIssueCount = ViewBag.HighIssueCount as int? ?? 0;
+    var isAdmin = ViewBag.IsAdmin as bool? ?? false;
 
-@section Breadcrumbs {
-    <nav aria-label="Breadcrumb">
-        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-            <li class="breadcrumb-item">
-                <a href="/" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Home</a>
-            </li>
-            <li class="breadcrumb-item">
-                <a href="@Url.Action("Index", "Reports")" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Reports</a>
-            </li>
-            <li class="breadcrumb-item active" aria-current="page" style="color: #0b0c0c; font-weight: 600;">Business area report</li>
-        </ol>
-    </nav>
+    var redCount = ragBreakdown.GetValueOrDefault("Red", 0);
+    var amberRedCount = ragBreakdown.GetValueOrDefault("Amber-Red", 0);
+    var amberCount = ragBreakdown.GetValueOrDefault("Amber", 0);
+    var greenCount = ragBreakdown.GetValueOrDefault("Green", 0);
+    var amberGreenCount = ragBreakdown.GetValueOrDefault("Amber-Green", 0);
+    var atRiskCount = redCount + amberRedCount;
+    var reportingPct = projectCount > 0 ? (int)Math.Round(submittedThisMonth * 100.0 / projectCount) : 0;
+    var openAccessibilityIssues = accessibilityIssues.Count(i => i.Status != "resolved" && i.Status != "wont_fix");
 }
 
 @functions {
-    string GetRagBadgeClass(RagStatusLookup? ragStatus)
+    string GetRagBadgeClass(RagStatusLookup? ragStatusLookup, string? ragStatusStr = null)
     {
-        if (ragStatus == null || string.IsNullOrWhiteSpace(ragStatus.Name))
-            return "badge badge-secondary";
-        
-        var normalized = ragStatus.Name.Trim()
-            .Replace(" / ", "-")
-            .Replace("/", "-")
-            .Replace(" /", "-")
-            .Replace("/ ", "-");
-        
-        return normalized switch
+        if (ragStatusLookup != null && !string.IsNullOrEmpty(ragStatusLookup.CssClass))
+            return ragStatusLookup.CssClass;
+        var name = ragStatusLookup?.Name?.Trim();
+        if (string.IsNullOrEmpty(name))
+            name = ragStatusStr?.Trim().Replace(" / ", "-").Replace("/", "-").Replace(" /", "-").Replace("/ ", "-");
+        return name switch
         {
-            "Green" => "badge badge-success",
-            "Amber-Green" => "badge badge-warning",
-            "Amber" => "badge badge-warning",
-            "Amber-Red" => "badge badge-danger",
-            "Red" => "badge badge-danger",
+            "Green"       => "badge badge-green",
+            "Amber-Green" => "badge badge-amber-green",
+            "Amber"       => "badge badge-amber",
+            "Amber-Red"   => "badge badge-amber-red",
+            "Red"         => "badge badge-red",
+            _             => "badge badge-secondary"
+        };
+    }
+    string GetRagDisplayName(RagStatusLookup? ragStatusLookup, string? ragStatusStr = null)
+    {
+        if (ragStatusLookup != null && !string.IsNullOrEmpty(ragStatusLookup.Name))
+            return ragStatusLookup.Name;
+        if (!string.IsNullOrEmpty(ragStatusStr))
+            return ragStatusStr.Trim().Replace(" / ", "-").Replace("/", "-");
+        return "Not set";
+    }
+    string GetRagRowClass(RagStatusLookup? ragStatusLookup, string? ragStatusStr = null)
+    {
+        var name = ragStatusLookup?.Name?.Trim() ?? ragStatusStr?.Trim() ?? "";
+        return name switch
+        {
+            "Red"       => "table-danger",
+            "Amber-Red" => "table-warning",
+            _           => ""
+        };
+    }
+    string GetStatusBadgeClass(string? status)
+    {
+        return (status ?? "") switch
+        {
+            "Active" => "badge badge-success",
+            "Paused" => "badge badge-warning",
+            "Completed" => "badge badge-primary",
+            "Cancelled" => "badge badge-danger",
             _ => "badge badge-secondary"
+        };
+    }
+    string GetLeadershipRoleLabel(LeadershipRoleTier role)
+    {
+        return role switch
+        {
+            LeadershipRoleTier.PortfolioLead => "Portfolio lead",
+            LeadershipRoleTier.HeadOfProfession => "Head of profession",
+            LeadershipRoleTier.DeputyDirectorOrSro => "Deputy director / SRO",
+            LeadershipRoleTier.CLevel => "C-level",
+            LeadershipRoleTier.DirectorGeneral => "Director general",
+            LeadershipRoleTier.PermanentSecretary => "Permanent secretary",
+            _ => role.ToString()
         };
     }
 }
 
-<section class="content">
-    <div class="container-fluid">
-        @if (TempData["SuccessMessage"] != null)
-        {
-            <div class="alert alert-success alert-dismissible fade show">
-                <button type="button" class="close" data-dismiss="alert">&times;</button>
-                @TempData["SuccessMessage"]
-            </div>
-        }
-        @if (TempData["ErrorMessage"] != null)
-        {
-            <div class="alert alert-danger alert-dismissible fade show">
-                <button type="button" class="close" data-dismiss="alert">&times;</button>
-                @TempData["ErrorMessage"]
-            </div>
-        }
+@await Html.PartialAsync("_DashboardStyles")
+@await Html.PartialAsync("_ReportsDashboardStyles")
 
-        <div class="row">
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-header">
-                        <h3 class="card-title">Business area report</h3>
-                    </div>
-                    <div class="card-body">
-                        @if (ViewBag.IsAdmin == true)
+<!-- Dashboard header -->
+<div class="reports-dashboard-header">
+    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+        <div>
+            <nav aria-label="Breadcrumb" class="reports-breadcrumb">
+                <a href="/">Home</a> <span aria-hidden="true">/</span>
+                <a href="@Url.Action("Index", "Reports")">Reports overview</a> <span aria-hidden="true">/</span>
+                Business area report
+            </nav>
+            <h1 class="mb-1"><i class="fas fa-building mr-2" aria-hidden="true"></i>
+                @(selectedBa != null ? selectedBa.Name : "Business area report")
+            </h1>
+            <p class="mb-0 opacity-90">Granular view of projects, products, and leadership for this business area</p>
+        </div>
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            <button class="btn btn-intel" data-toggle="modal" data-target="#intelModal" title="Portfolio intelligence summary">
+                <i class="fas fa-brain mr-1" aria-hidden="true"></i> Intel
+            </button>
+            <a href="https://app.powerbi.com/groups/me/reports/d941d6dd-6d6a-40b1-bf66-12ad51522131/ce0a78d00040090301b6?experience=power-bi" target="_blank" rel="noopener noreferrer" class="btn btn-powerbi">
+                <i class="fas fa-external-link-alt mr-1" aria-hidden="true"></i> Standards (SHCA)
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Report navigation tabs -->
+<div class="reports-nav-bar">
+    <ul class="reports-nav-tabs" role="navigation" aria-label="Report sections">
+            <li><a href="@Url.Action("Index", "Reports")"><i class="fas fa-globe mr-1" aria-hidden="true"></i>Overview</a></li>
+            <li class="reports-nav-dropdown">
+                <button class="reports-nav-dropdown-toggle" aria-haspopup="true" aria-expanded="false">
+                    <i class="fas fa-sitemap mr-1" aria-hidden="true"></i>Division
+                    <i class="fas fa-chevron-down caret-icon ml-1" aria-hidden="true"></i>
+                </button>
+                <div class="reports-nav-dropdown-menu" role="menu">
+                    <a href="@Url.Action("DivisionReport", "Reports")" role="menuitem">
+                        <i class="fas fa-th-list mr-1 text-muted" aria-hidden="true"></i>All divisions
+                    </a>
+                    @if (allDivisions.Any())
+                    {
+                        <div class="dropdown-divider"></div>
+                        @foreach (var div in allDivisions)
                         {
-                            <div class="alert alert-success mb-3">
-                                <strong>Administrator view:</strong> You are viewing all business areas and all projects.
-                            </div>
+                            <a href="@Url.Action("DivisionReport", "Reports", new { divisionId = div.Id })" role="menuitem">@div.Name</a>
                         }
-                        <div class="mb-3">
-                            <h4>@(ViewBag.IsAdmin == true ? "All business areas" : "Your business areas")</h4>
-                            <ul class="list-unstyled">
-                                @foreach (var businessArea in userBusinessAreas)
-                                {
-                                    <li><strong>@businessArea.Name</strong></li>
-                                }
-                            </ul>
-                        </div>
+                    }
+                </div>
+                <div class="dropdown-scroll-hint" aria-hidden="true"><i class="fas fa-chevron-down"></i></div>
+            </li>
+            <li class="reports-nav-dropdown">
+                <button class="reports-nav-dropdown-toggle active" aria-haspopup="true" aria-expanded="false" aria-current="page">
+                    <i class="fas fa-building mr-1" aria-hidden="true"></i>Business area
+                    <i class="fas fa-chevron-down caret-icon ml-1" aria-hidden="true"></i>
+                </button>
+                <div class="reports-nav-dropdown-menu" role="menu">
+                    <a href="@Url.Action("BusinessAreaReport", "Reports")" role="menuitem">
+                        <i class="fas fa-th-list mr-1 text-muted" aria-hidden="true"></i>All business areas
+                    </a>
+                    <div class="dropdown-divider"></div>
+                    @foreach (var ba in availableBusinessAreas)
+                    {
+                        <a href="@Url.Action("BusinessAreaReport", "Reports", new { businessAreaId = ba.Id })"
+                           class="@(selectedBa?.Id == ba.Id ? "active" : "")"
+                           role="menuitem">@ba.Name</a>
+                    }
+                </div>
+                <div class="dropdown-scroll-hint" aria-hidden="true"><i class="fas fa-chevron-down"></i></div>
+            </li>
+            <li><a href="@Url.Action("PriorityOutcomes", "Reports")"><i class="fas fa-star mr-1" aria-hidden="true"></i>Priority outcomes</a></li>
+        </ul>
+</div>
 
-                        <div class="mb-3">
-                            <p class="text-muted">Projects in your business areas: <strong>@projectCount</strong></p>
-                        </div>
+<div class="reports-body">
 
+        @if (selectedBa == null)
+        {
+            <div class="alert alert-info">No business area selected. Please choose one from the tabs above.</div>
+        }
+        else
+        {
+            <!-- Stat cards -->
+            <div class="reports-stat-grid mb-4">
+                <button type="button" class="reports-stat-card reports-stat-blue" data-stat="all" data-stat-label="All projects in @selectedBa.Name">
+                    <div class="reports-stat-icon"><i class="fas fa-project-diagram" aria-hidden="true"></i></div>
+                    <div class="reports-stat-value">@projectCount</div>
+                    <div class="reports-stat-label">Projects</div>
+                    <div class="reports-stat-sub">in @selectedBa.Name</div>
+                </button>
+                <button type="button" class="reports-stat-card @(atRiskCount > 0 ? "reports-stat-red" : "reports-stat-green")" data-stat="at-risk" data-stat-label="At-risk projects in @selectedBa.Name">
+                    <div class="reports-stat-icon"><i class="fas fa-traffic-light" aria-hidden="true"></i></div>
+                    <div class="reports-stat-value">@atRiskCount</div>
+                    <div class="reports-stat-label">At risk</div>
+                    <div class="reports-stat-sub">@greenCount green, @amberCount amber</div>
+                </button>
+                <button type="button" class="reports-stat-card @(reportingPct >= 80 ? "reports-stat-green" : reportingPct >= 50 ? "reports-stat-amber" : "reports-stat-red")" data-stat="not-reported" data-stat-label="Projects not yet reported – @monthName">
+                    <div class="reports-stat-icon"><i class="fas fa-file-alt" aria-hidden="true"></i></div>
+                    <div class="reports-stat-value">@reportingPct<span style="font-size:1.2rem">%</span></div>
+                    <div class="reports-stat-label">Monthly reporting</div>
+                    <div class="reports-stat-sub">@submittedThisMonth of @projectCount – @monthName</div>
+                </button>
+                <div class="reports-stat-card @(openAccessibilityIssues > 0 ? "reports-stat-amber" : "reports-stat-green")">
+                    <div class="reports-stat-icon"><i class="fas fa-universal-access" aria-hidden="true"></i></div>
+                    <div class="reports-stat-value">@openAccessibilityIssues</div>
+                    <div class="reports-stat-label">Open accessibility issues</div>
+                    <div class="reports-stat-sub">across business area projects</div>
+                </div>
+                <button type="button" class="reports-stat-card reports-stat-purple" data-stat="flagship" data-stat-label="Flagship projects in @selectedBa.Name">
+                    <div class="reports-stat-icon"><i class="fas fa-star" aria-hidden="true"></i></div>
+                    <div class="reports-stat-value">@flagshipCount</div>
+                    <div class="reports-stat-label">Flagship projects</div>
+                    <div class="reports-stat-sub">@multiDeptCount multi-department</div>
+                </button>
+                <button type="button" class="reports-stat-card @(highRiskCount > 0 ? "reports-stat-red" : "reports-stat-green")" data-stat="high-risk" data-stat-label="Projects with high risks in @selectedBa.Name">
+                    <div class="reports-stat-icon"><i class="fas fa-exclamation-triangle" aria-hidden="true"></i></div>
+                    <div class="reports-stat-value">@highRiskCount</div>
+                    <div class="reports-stat-label">Projects with high risks</div>
+                    <div class="reports-stat-sub">@highIssueCount with high-priority issues</div>
+                </button>
+            </div>
+
+            <div class="row">
+                <!-- Main content -->
+                <div class="col-lg-8">
+
+                    <!-- RAG bar -->
+                    <div class="dashboard-section mb-4">
+                        <div class="dashboard-section-header">
+                            <h2><i class="fas fa-traffic-light" aria-hidden="true"></i>RAG status breakdown</h2>
+                        </div>
+                        @{
+                            var ragTotal = ragBreakdown.Values.Sum();
+                            if (ragTotal == 0) ragTotal = 1;
+                        }
+                        @{
+                            var baRagOrder = new[] { "Green", "Amber-Green", "Amber", "Amber-Red", "Red", "Not set" };
+                            var baSwatchClass = new Dictionary<string, string> {
+                                ["Green"] = "rag-swatch-green", ["Amber-Green"] = "rag-swatch-amber-green",
+                                ["Amber"] = "rag-swatch-amber", ["Amber-Red"] = "rag-swatch-amber-red",
+                                ["Red"] = "rag-swatch-red", ["Not set"] = "rag-swatch-unknown"
+                            };
+                            var baSegClass = new Dictionary<string, string> {
+                                ["Green"] = "rag-green", ["Amber-Green"] = "rag-amber-green",
+                                ["Amber"] = "rag-amber", ["Amber-Red"] = "rag-amber-red",
+                                ["Red"] = "rag-red", ["Not set"] = "rag-unknown"
+                            };
+                        }
+                        <div class="rag-stacked-bar mb-2" role="img" aria-label="RAG status bar">
+                            @foreach (var key in baRagOrder)
+                            {
+                                if (!ragBreakdown.ContainsKey(key) || ragBreakdown[key] == 0) continue;
+                                var cnt = ragBreakdown[key];
+                                var pct = cnt * 100.0 / ragTotal;
+                                <div class="rag-segment @baSegClass.GetValueOrDefault(key, "rag-unknown")" style="width:@(pct.ToString("F1"))%">
+                                    @if (pct > 10) { <span aria-hidden="true">@cnt</span> }
+                                </div>
+                            }
+                        </div>
+                        <div class="rag-legend" role="list" aria-label="RAG status key">
+                            @foreach (var key in baRagOrder)
+                            {
+                                if (!ragBreakdown.ContainsKey(key) || ragBreakdown[key] == 0) continue;
+                                <span class="rag-legend-item" role="listitem">
+                                    <span class="rag-swatch @baSwatchClass.GetValueOrDefault(key, "rag-swatch-unknown")" aria-hidden="true"></span>
+                                    <span>@key</span> <strong>@ragBreakdown[key]</strong>
+                                </span>
+                            }
+                        </div>
+                    </div>
+
+                    <!-- Projects table -->
+                    <div class="dashboard-section mb-4">
+                        <div class="dashboard-section-header">
+                            <h2><i class="fas fa-list" aria-hidden="true"></i>Projects (@projectCount)</h2>
+                            <input type="text" id="baProjectSearch" class="form-control form-control-sm" placeholder="Filter projects…" style="width:200px;" aria-label="Filter projects">
+                        </div>
                         @if (projects.Any())
                         {
                             <div class="table-responsive">
-                                <table class="table table-bordered table-striped table-hover" id="projectsTable">
+                                <table class="table table-hover reports-table" id="baProjectsTable">
                                     <thead>
                                         <tr>
-                                            <th>Project code</th>
-                                            <th>Title</th>
-                                            <th>Business area</th>
-                                            <th>Directorate</th>
+                                            <th>Project</th>
+                                            <th>Status</th>
+                                            <th>Division</th>
                                             <th>Phase</th>
-                                            <th>RAG status</th>
-                                            <th>Primary contact</th>
-                                            <th>Actions</th>
+                                            <th>RAG</th>
+                                            <th>Flags</th>
+                                            <th></th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         @foreach (var project in projects)
                                         {
-                                            <tr>
-                                                <td>@project.ProjectCode</td>
+                                            var rowClass = GetRagRowClass(project.RagStatusLookup, project.RagStatus);
+                                            var overdueMilestones = project.Milestones.Count(m => !m.IsDeleted && m.DueDate < DateTime.Today && m.Status != "complete" && m.Status != "cancelled");
+                                            var divisionNames = string.Join(", ", project.Directorates.Select(d => d.Division?.Name).Where(n => !string.IsNullOrEmpty(n)));
+                                            var ragName = GetRagDisplayName(project.RagStatusLookup, project.RagStatus);
+                                            <tr class="@rowClass" data-project-title="@project.Title.ToLower()">
                                                 <td>
-                                                    <a href="@Url.Action("Details", "Project", new { id = project.Id })">@project.Title</a>
-                                                </td>
-                                                <td>
-                                                    @(project.BusinessAreaLookup?.Name ?? "Not assigned")
-                                                </td>
-                                                <td>
-                                                    @if (project.Directorates.Any())
+                                                    <a href="@Url.Action("Details", "Project", new { id = project.Id })" class="font-weight-bold text-dark project-link">@project.Title</a>
+                                                    @if (!string.IsNullOrEmpty(project.ProjectCode))
                                                     {
-                                                        @string.Join(", ", project.Directorates.Select(d => d.Division?.Name).Where(n => !string.IsNullOrEmpty(n)))
+                                                        <br><small class="text-muted">@project.ProjectCode</small>
+                                                    }
+                                                </td>
+                                                <td><span class="@GetStatusBadgeClass(project.Status)">@(project.Status ?? "–")</span></td>
+                                                <td><small>@(string.IsNullOrEmpty(divisionNames) ? "–" : divisionNames)</small></td>
+                                                <td><small>@(project.PhaseLookup?.Name ?? "–")</small></td>
+                                                <td>
+                                                    @if (ragName != "Not set")
+                                                    {
+                                                        <button type="button"
+                                                                class="@GetRagBadgeClass(project.RagStatusLookup, project.RagStatus) rag-detail-btn"
+                                                                data-toggle="modal" data-target="#ragDetailModal"
+                                                                data-project="@project.Title"
+                                                                data-rag="@ragName"
+                                                                data-justification="@(project.RagJustification ?? "")"
+                                                                data-path="@(project.PathToGreen ?? "")"
+                                                                style="border:none;cursor:pointer;">
+                                                            @ragName
+                                                        </button>
                                                     }
                                                     else
                                                     {
-                                                        <span class="text-muted">Not assigned</span>
+                                                        <span class="badge badge-secondary">Not set</span>
                                                     }
                                                 </td>
                                                 <td>
-                                                    @(project.PhaseLookup?.Name ?? "Not assigned")
-                                                </td>
-                                                <td>
-                                                    @if (project.RagStatusLookup != null)
+                                                    @if (project.IsFlagship)
                                                     {
-                                                        <span class="@GetRagBadgeClass(project.RagStatusLookup)">@project.RagStatusLookup.Name</span>
+                                                        <button type="button" class="badge badge-warning border-0 mr-1 flag-detail-btn"
+                                                                data-toggle="modal" data-target="#flagDetailModal"
+                                                                data-project="@project.Title"
+                                                                data-project-id="@project.Id"
+                                                                data-flag="flagship"
+                                                                style="cursor:pointer;"
+                                                                aria-label="Flagship project – click for details">
+                                                            <i class="fas fa-star" aria-hidden="true"></i> Flagship
+                                                        </button>
                                                     }
-                                                    else
+                                                    @if (project.IsMultiDepartmentProject)
                                                     {
-                                                        <span class="text-muted">Not set</span>
+                                                        <button type="button" class="badge badge-info border-0 flag-detail-btn"
+                                                                data-toggle="modal" data-target="#flagDetailModal"
+                                                                data-project="@project.Title"
+                                                                data-project-id="@project.Id"
+                                                                data-flag="multi-dept"
+                                                                data-other-depts="@(project.OtherDepartments ?? "")"
+                                                                style="cursor:pointer;"
+                                                                aria-label="Multi-department project – click for details">
+                                                            <i class="fas fa-globe" aria-hidden="true"></i> Multi-dept
+                                                        </button>
+                                                    }
+                                                    @if (overdueMilestones > 0)
+                                                    {
+                                                        <span class="badge badge-danger ml-1" title="@overdueMilestones overdue milestone(s)">
+                                                            <i class="fas fa-flag-checkered" aria-hidden="true"></i> @overdueMilestones overdue
+                                                        </span>
                                                     }
                                                 </td>
-                                                <td>
-                                                    @(project.PrimaryContactUser?.Name ?? "Not assigned")
-                                                </td>
-                                                <td>
-                                                    <a href="@Url.Action("Details", "Project", new { id = project.Id })" class="btn btn-sm btn-primary">View</a>
+                                                <td class="text-right">
+                                                    <a href="@Url.Action("Details", "Project", new { id = project.Id })" class="btn btn-xs btn-outline-primary">View</a>
                                                 </td>
                                             </tr>
                                         }
@@ -152,32 +366,434 @@
                         }
                         else
                         {
-                            <div class="alert alert-info">
-                                <p>No projects are currently assigned to your business areas.</p>
+                            <div class="alert alert-info">No projects are currently assigned to this business area.</div>
+                        }
+                    </div>
+
+                </div>
+
+                <!-- Right sidebar -->
+                <div class="col-lg-4">
+
+                    <!-- Leadership scope -->
+                    @if (leadershipAssignments.Any())
+                    {
+                        <div class="dashboard-section mb-4">
+                            <div class="dashboard-section-header">
+                                <h2><i class="fas fa-users-cog" aria-hidden="true"></i>Leadership scope</h2>
+                            </div>
+                            <ul class="list-unstyled mb-0">
+                                @foreach (var assignment in leadershipAssignments)
+                                {
+                                    <li class="d-flex align-items-center py-2 border-bottom">
+                                        <div class="leadership-avatar mr-3">
+                                            @if (assignment.User?.Photo != null && assignment.User.Photo.Length > 0)
+                                            {
+                                                <img src="data:image/png;base64,@Convert.ToBase64String(assignment.User.Photo)" alt="@assignment.User.Name" class="rounded-circle" width="36" height="36">
+                                            }
+                                            else
+                                            {
+                                                <div class="leadership-avatar-placeholder"><i class="fas fa-user" aria-hidden="true"></i></div>
+                                            }
+                                        </div>
+                                        <div>
+                                            <div class="font-weight-bold small">@(assignment.User?.Name ?? "Unknown")</div>
+                                            <div class="text-muted" style="font-size:0.75rem;">@GetLeadershipRoleLabel(assignment.Role)</div>
+                                        </div>
+                                    </li>
+                                }
+                            </ul>
+                        </div>
+                    }
+
+                    <!-- Monthly reporting -->
+                    <div class="dashboard-section mb-4">
+                        <div class="dashboard-section-header">
+                            <h2><i class="fas fa-calendar-check" aria-hidden="true"></i>Monthly reporting</h2>
+                        </div>
+                        <p class="text-muted small mb-2">@monthName</p>
+                        <div class="d-flex justify-content-between mb-1">
+                            <span class="small font-weight-bold">@submittedThisMonth of @projectCount submitted</span>
+                            <span class="small font-weight-bold @(reportingPct >= 80 ? "text-success" : reportingPct >= 50 ? "text-warning" : "text-danger")">@reportingPct%</span>
+                        </div>
+                        <div class="progress mb-3" style="height:10px;border-radius:5px;">
+                            <div class="progress-bar @(reportingPct >= 80 ? "bg-success" : reportingPct >= 50 ? "bg-warning" : "bg-danger")"
+                                 role="progressbar" style="width:@reportingPct%"></div>
+                        </div>
+                        <a href="@Url.Action("MonthlyReporting", "CentralOps")" class="btn btn-sm btn-outline-primary btn-block">View monthly reporting</a>
+                    </div>
+
+                    <!-- Accessibility -->
+                    <div class="dashboard-section mb-4">
+                        <div class="dashboard-section-header">
+                            <h2><i class="fas fa-universal-access" aria-hidden="true"></i>Accessibility</h2>
+                        </div>
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="text-muted small">Open issues</span>
+                            <strong class="@(openAccessibilityIssues > 0 ? "text-warning" : "text-success")">@openAccessibilityIssues</strong>
+                        </div>
+                        <a href="@Url.Action("AccessibilityOversight", "DesignOps")" class="btn btn-sm btn-outline-primary btn-block">View accessibility oversight</a>
+                    </div>
+
+                    <!-- Phase breakdown -->
+                    <div class="dashboard-section mb-4">
+                        <div class="dashboard-section-header">
+                            <h2><i class="fas fa-layer-group" aria-hidden="true"></i>Projects by phase</h2>
+                        </div>
+                        @foreach (var kvp in phaseBreakdown.OrderByDescending(k => k.Value))
+                        {
+                            var phasePct = projectCount > 0 ? (int)Math.Round(kvp.Value * 100.0 / projectCount) : 0;
+                            <div class="mb-2">
+                                <div class="d-flex justify-content-between mb-1">
+                                    <span class="small">@kvp.Key</span>
+                                    <span class="small font-weight-bold">@kvp.Value</span>
+                                </div>
+                                <div class="progress" style="height:6px;border-radius:3px;">
+                                    <div class="progress-bar bg-primary" role="progressbar" style="width:@phasePct%"></div>
+                                </div>
                             </div>
                         }
                     </div>
+
                 </div>
+            </div>
+        }
+
+</div><!-- /.reports-body -->
+
+<!-- Stat detail modal -->
+<div class="modal fade" id="statDetailModal" tabindex="-1" role="dialog" aria-labelledby="statDetailModalLabel">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable" role="document">
+        <div class="modal-content">
+            <div class="modal-header stat-detail-modal-header">
+                <h5 class="modal-title" id="statDetailModalLabel">
+                    <i class="fas fa-list mr-2" aria-hidden="true" id="statDetailModalIcon"></i>
+                    <span id="statDetailModalTitle">Projects</span>
+                </h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+            </div>
+            <div class="modal-body p-0">
+                <div class="px-3 pt-3 pb-2">
+                    <input type="text" id="statDetailSearch" class="form-control form-control-sm" placeholder="Filter by project name…" aria-label="Filter projects">
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover reports-table mb-0">
+                        <thead><tr><th>Project</th><th>RAG</th><th>Status</th><th>Phase</th><th>Business area</th><th></th></tr></thead>
+                        <tbody id="statDetailProjectsList"></tbody>
+                    </table>
+                </div>
+                <p class="text-muted small px-3 py-2 mb-0" id="statDetailEmpty" style="display:none">No projects match this filter.</p>
+            </div>
+            <div class="modal-footer">
+                <span class="text-muted small mr-auto" id="statDetailCount"></span>
+                <button type="button" class="btn btn-secondary btn-sm" data-dismiss="modal">Close</button>
             </div>
         </div>
     </div>
-</section>
+</div>
+
+<!-- RAG detail modal -->
+<div class="modal fade" id="ragDetailModal" tabindex="-1" role="dialog" aria-labelledby="ragDetailModalLabel">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <div class="modal-header" id="ragDetailModalHeader">
+                <h5 class="modal-title" id="ragDetailModalLabel">
+                    <i class="fas fa-traffic-light mr-2" aria-hidden="true"></i>
+                    RAG status – <span id="ragDetailProjectName"></span>
+                </h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <span class="font-weight-bold small text-muted d-block mb-1">Current status</span>
+                    <span id="ragDetailBadge" class="badge"></span>
+                </div>
+                <div class="mb-3" id="ragJustificationBlock">
+                    <span class="font-weight-bold small text-muted d-block mb-1">Justification</span>
+                    <p id="ragDetailJustification" class="mb-0 small"></p>
+                </div>
+                <div id="ragPathToGreenBlock">
+                    <span class="font-weight-bold small text-muted d-block mb-1"><i class="fas fa-road mr-1 text-success" aria-hidden="true"></i>Path to green</span>
+                    <p id="ragDetailPathToGreen" class="mb-0 small"></p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-dismiss="modal">Close</button>
+                <a id="ragDetailProjectLink" href="#" class="btn btn-primary btn-sm">View project <i class="fas fa-arrow-right ml-1" aria-hidden="true"></i></a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Flag detail modal -->
+<div class="modal fade" id="flagDetailModal" tabindex="-1" role="dialog" aria-labelledby="flagDetailModalLabel">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="flagDetailModalLabel">
+                    <i class="fas fa-star mr-2 text-warning" aria-hidden="true" id="flagDetailIcon"></i>
+                    <span id="flagDetailTitle">Project flag</span>
+                </h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-2"><strong id="flagDetailProjectName"></strong></p>
+                <p id="flagDetailDescription" class="text-muted small mb-0"></p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-dismiss="modal">Close</button>
+                <a id="flagDetailProjectLink" href="#" class="btn btn-primary btn-sm">View project <i class="fas fa-arrow-right ml-1" aria-hidden="true"></i></a>
+            </div>
+        </div>
+    </div>
+</div>
+
+@{
+    var baProjectsJson = System.Text.Json.JsonSerializer.Serialize(projects.Select(p => new {
+        id = p.Id,
+        title = p.Title ?? "",
+        rag = !string.IsNullOrEmpty(p.RagStatusLookup?.Name) ? p.RagStatusLookup!.Name
+              : (!string.IsNullOrEmpty(p.RagStatus) ? p.RagStatus.Trim().Replace(" / ", "-").Replace("/", "-") : "Not set"),
+        status = p.Status ?? "",
+        phase = p.PhaseLookup?.Name ?? "",
+        businessArea = p.BusinessAreaLookup?.Name ?? "",
+        isFlagship = p.IsFlagship,
+        hasHighRisk = p.Risks != null && p.Risks.Any(r => r.LikelihoodRating >= 4 || r.ImpactRating >= 4),
+        reportedThisMonth = p.MonthlyUpdates != null && p.MonthlyUpdates.Any(u => u.Year == DateTime.Now.Year && u.Month == DateTime.Now.Month),
+        url = Url.Action("Details", "Project", new { id = p.Id })
+    }));
+}
+
+<!-- Intel modal -->
+@{
+    var intelData = new ViewDataDictionary(Html.ViewData.ModelMetadata, Html.ViewData.ModelState)
+    {
+        { "Context", "businessarea" },
+        { "BusinessAreaName", selectedBa?.Name ?? "Unknown" },
+        { "TotalProjects", projectCount },
+        { "AtRiskCount", atRiskCount },
+        { "RedCount", redCount },
+        { "ReportingPct", reportingPct },
+        { "SubmittedThisMonth", submittedThisMonth },
+        { "MonthName", monthName },
+        { "OpenAccessibilityIssues", openAccessibilityIssues },
+        { "FlagshipCount", flagshipCount },
+        { "HighRiskCount", highRiskCount },
+        { "HighIssueCount", highIssueCount },
+        { "LeadershipCount", leadershipAssignments.Count }
+    };
+}
+@await Html.PartialAsync("_IntelModal", intelData)
 
 @section Scripts {
     <script nonce="@Context.Items["Nonce"]">
-        $(document).ready(function() {
-            $('#projectsTable').DataTable({
-                "pageLength": 25,
-                "order": [[1, "asc"]],
-                "responsive": true,
-                "language": {
-                    "search": "Filter:",
-                    "lengthMenu": "Show _MENU_ projects per page",
-                    "info": "Showing _START_ to _END_ of _TOTAL_ projects",
-                    "infoEmpty": "No projects to show",
-                    "infoFiltered": "(filtered from _MAX_ total projects)"
+    (function () {
+        /* ── Reports nav dropdowns ─────────────────────────────────────────── */
+        var navBar = document.querySelector('.reports-nav-bar');
+        if (navBar) {
+            var toggles = navBar.querySelectorAll('.reports-nav-dropdown-toggle');
+            toggles.forEach(function (toggle) {
+                var menu = toggle.nextElementSibling;
+                if (!menu || !menu.classList.contains('reports-nav-dropdown-menu')) return;
+                var hint = menu.nextElementSibling;
+                var hasHint = hint && hint.classList.contains('dropdown-scroll-hint');
+
+                function updateScrollHint() {
+                    if (!hasHint) return;
+                    var canScroll = menu.scrollHeight > menu.clientHeight;
+                    var atBottom = menu.scrollTop + menu.clientHeight >= menu.scrollHeight - 4;
+                    hint.classList.toggle('visible', canScroll && !atBottom);
+                }
+
+                toggle.addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    var isOpen = menu.classList.contains('open');
+                    navBar.querySelectorAll('.reports-nav-dropdown-menu.open').forEach(function (m) {
+                        m.classList.remove('open');
+                        m.previousElementSibling.setAttribute('aria-expanded', 'false');
+                        var h = m.nextElementSibling;
+                        if (h && h.classList.contains('dropdown-scroll-hint')) h.classList.remove('visible');
+                    });
+                    if (!isOpen) {
+                        menu.classList.add('open');
+                        toggle.setAttribute('aria-expanded', 'true');
+                        updateScrollHint();
+                    }
+                });
+
+                if (hasHint) menu.addEventListener('scroll', updateScrollHint);
+
+                toggle.addEventListener('keydown', function (e) {
+                    if (e.key === 'Escape') {
+                        menu.classList.remove('open');
+                        toggle.setAttribute('aria-expanded', 'false');
+                        if (hasHint) hint.classList.remove('visible');
+                        toggle.focus();
+                    }
+                });
+            });
+            document.addEventListener('click', function () {
+                navBar.querySelectorAll('.reports-nav-dropdown-menu.open').forEach(function (m) {
+                    m.classList.remove('open');
+                    m.previousElementSibling.setAttribute('aria-expanded', 'false');
+                    var h = m.nextElementSibling;
+                    if (h && h.classList.contains('dropdown-scroll-hint')) h.classList.remove('visible');
+                });
+            });
+        }
+
+        /* ── Project search ────────────────────────────────────────────────── */
+        document.getElementById('baProjectSearch')?.addEventListener('input', function () {
+            var val = this.value.toLowerCase();
+            document.querySelectorAll('#baProjectsTable tbody tr').forEach(function (row) {
+                var title = row.getAttribute('data-project-title') || '';
+                row.style.display = title.includes(val) ? '' : 'none';
+            });
+        });
+
+        /* ── Stat detail modal ─────────────────────────────────────────────── */
+        var scopedProjects = @Html.Raw(baProjectsJson);
+
+        var statConfigs = {
+            'all':          { label: document.querySelector('[data-stat="all"]')?.getAttribute('data-stat-label') || 'All projects', icon: 'fa-project-diagram', filter: function(p) { return true; } },
+            'at-risk':      { label: document.querySelector('[data-stat="at-risk"]')?.getAttribute('data-stat-label') || 'At-risk projects', icon: 'fa-traffic-light', filter: function(p) { return p.rag === 'Red' || p.rag === 'Amber-Red'; } },
+            'not-reported': { label: document.querySelector('[data-stat="not-reported"]')?.getAttribute('data-stat-label') || 'Not reported', icon: 'fa-file-alt', filter: function(p) { return p.status === 'Active' && !p.reportedThisMonth; } },
+            'flagship':     { label: document.querySelector('[data-stat="flagship"]')?.getAttribute('data-stat-label') || 'Flagship projects', icon: 'fa-star', filter: function(p) { return p.isFlagship; } },
+            'high-risk':    { label: document.querySelector('[data-stat="high-risk"]')?.getAttribute('data-stat-label') || 'High risks', icon: 'fa-exclamation-triangle', filter: function(p) { return p.hasHighRisk; } }
+        };
+
+        function ragBadgeClass(rag) {
+            if (rag === 'Green') return 'badge-green';
+            if (rag === 'Amber-Green') return 'badge-amber-green';
+            if (rag === 'Amber') return 'badge-amber';
+            if (rag === 'Amber-Red') return 'badge-amber-red';
+            if (rag === 'Red') return 'badge-red';
+            return 'badge-secondary';
+        }
+        function statusBadgeClass(s) {
+            if (s === 'Active') return 'badge-success';
+            if (s === 'Paused') return 'badge-warning';
+            if (s === 'Completed') return 'badge-primary';
+            if (s === 'Cancelled') return 'badge-danger';
+            return 'badge-secondary';
+        }
+        function escHtml(s) {
+            return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        }
+
+        function renderStatModal(filter, label, icon) {
+            var filtered = scopedProjects.filter(filter);
+            var html = '';
+            filtered.forEach(function(p) {
+                html += '<tr><td><a href="' + p.url + '" class="project-link font-weight-bold">' + escHtml(p.title) + '</a>' +
+                    (p.isFlagship ? ' <span class="badge badge-warning ml-1" title="Flagship"><i class="fas fa-star"></i></span>' : '') +
+                    '</td><td><span class="badge ' + ragBadgeClass(p.rag) + '">' + escHtml(p.rag) + '</span></td>' +
+                    '<td><span class="badge ' + statusBadgeClass(p.status) + '">' + escHtml(p.status || '–') + '</span></td>' +
+                    '<td><span class="text-muted small">' + escHtml(p.phase || '–') + '</span></td>' +
+                    '<td><span class="text-muted small">' + escHtml(p.businessArea || '–') + '</span></td>' +
+                    '<td><a href="' + p.url + '" class="section-link">View <i class="fas fa-arrow-right"></i></a></td></tr>';
+            });
+            document.getElementById('statDetailProjectsList').innerHTML = html;
+            document.getElementById('statDetailModalTitle').textContent = label;
+            document.getElementById('statDetailModalIcon').className = 'fas ' + icon + ' mr-2';
+            document.getElementById('statDetailCount').textContent = filtered.length + ' project' + (filtered.length !== 1 ? 's' : '');
+            document.getElementById('statDetailEmpty').style.display = filtered.length === 0 ? '' : 'none';
+            document.getElementById('statDetailSearch').value = '';
+        }
+
+        document.querySelectorAll('[data-stat]').forEach(function(card) {
+            card.addEventListener('click', function() {
+                var key = card.getAttribute('data-stat');
+                var cfg = statConfigs[key];
+                if (!cfg) return;
+                renderStatModal(cfg.filter, cfg.label, cfg.icon);
+                $('#statDetailModal').modal('show');
+            });
+        });
+
+        document.getElementById('statDetailSearch').addEventListener('input', function() {
+            var q = this.value.toLowerCase();
+            var rows = document.querySelectorAll('#statDetailProjectsList tr');
+            var visible = 0;
+            rows.forEach(function(row) {
+                var show = !q || row.textContent.toLowerCase().indexOf(q) !== -1;
+                row.style.display = show ? '' : 'none';
+                if (show) visible++;
+            });
+            document.getElementById('statDetailEmpty').style.display = visible === 0 ? '' : 'none';
+            document.getElementById('statDetailCount').textContent = visible + ' project' + (visible !== 1 ? 's' : '');
+        });
+
+        /* ── RAG detail modal ──────────────────────────────────────────────── */
+        var ragHeaderColors = {
+            'Green': '#1e7e34', 'Amber-Green': '#856404', 'Amber': '#856404',
+            'Amber-Red': '#c0392b', 'Red': '#721c24'
+        };
+        document.querySelectorAll('.rag-detail-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                var project = btn.getAttribute('data-project') || '';
+                var rag = btn.getAttribute('data-rag') || 'Not set';
+                var justification = btn.getAttribute('data-justification') || '';
+                var path = btn.getAttribute('data-path') || '';
+                var projectLink = btn.closest('tr')?.querySelector('a.project-link')?.getAttribute('href') || '#';
+
+                document.getElementById('ragDetailProjectName').textContent = project;
+                var badge = document.getElementById('ragDetailBadge');
+                badge.className = 'badge badge ' + ragBadgeClass(rag);
+                badge.textContent = rag;
+
+                var header = document.getElementById('ragDetailModalHeader');
+                header.style.background = ragHeaderColors[rag] || '#6c757d';
+                header.style.color = '#fff';
+
+                var justBlock = document.getElementById('ragJustificationBlock');
+                var justText = document.getElementById('ragDetailJustification');
+                if (justification) {
+                    justText.textContent = justification;
+                    justBlock.style.display = '';
+                } else {
+                    justBlock.style.display = 'none';
+                }
+
+                var pathBlock = document.getElementById('ragPathToGreenBlock');
+                var pathText = document.getElementById('ragDetailPathToGreen');
+                if (path && rag !== 'Green') {
+                    pathText.textContent = path;
+                    pathBlock.style.display = '';
+                } else {
+                    pathBlock.style.display = 'none';
+                }
+
+                document.getElementById('ragDetailProjectLink').href = projectLink;
+            });
+        });
+
+        /* ── Flag detail modal ─────────────────────────────────────────────── */
+        document.querySelectorAll('.flag-detail-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                var project = btn.getAttribute('data-project') || '';
+                var flag = btn.getAttribute('data-flag') || '';
+                var projectLink = btn.closest('tr')?.querySelector('a.project-link')?.getAttribute('href') || '#';
+
+                document.getElementById('flagDetailProjectName').textContent = project;
+                document.getElementById('flagDetailProjectLink').href = projectLink;
+
+                var icon = document.getElementById('flagDetailIcon');
+                var title = document.getElementById('flagDetailTitle');
+                var desc = document.getElementById('flagDetailDescription');
+
+                if (flag === 'flagship') {
+                    icon.className = 'fas fa-star mr-2 text-warning';
+                    title.textContent = 'Flagship project';
+                    desc.textContent = 'This project has been designated as a flagship project. Flagship projects are high-visibility, strategically important deliverables that receive additional scrutiny and support.';
+                } else if (flag === 'multi-dept') {
+                    icon.className = 'fas fa-globe mr-2 text-info';
+                    title.textContent = 'Multi-department project';
+                    var depts = btn.getAttribute('data-other-depts') || '';
+                    desc.textContent = 'This project involves collaboration across multiple government departments.' + (depts ? ' Other departments: ' + depts : '');
                 }
             });
         });
+    }());
     </script>
 }

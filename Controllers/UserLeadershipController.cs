@@ -153,6 +153,33 @@ public class UserLeadershipController : Controller
         return RedirectToAction(nameof(Index), new { userId });
     }
 
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> DeleteAll(int userId)
+    {
+        var user = await _context.Users.FindAsync(userId);
+        if (user == null)
+        {
+            TempData["ErrorMessage"] = "Unable to find that user.";
+            return RedirectToAction(nameof(Index));
+        }
+
+        var assignments = await _context.UserBusinessAreaRoleAssignments
+            .Where(a => a.UserId == userId)
+            .ToListAsync();
+
+        if (!assignments.Any())
+        {
+            TempData["InfoMessage"] = $"{user.Name} has no leadership assignments to remove.";
+            return RedirectToAction(nameof(Index));
+        }
+
+        _context.UserBusinessAreaRoleAssignments.RemoveRange(assignments);
+        await _context.SaveChangesAsync();
+        TempData["SuccessMessage"] = $"Removed all leadership scope for {user.Name}.";
+        return RedirectToAction(nameof(Index));
+    }
+
     private async Task<UserLeadershipAssignmentPageViewModel> BuildPageViewModelAsync(int? userId)
     {
         var businessAreas = await GetBusinessAreaOptionsAsync();
