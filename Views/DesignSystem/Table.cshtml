@@ -1,0 +1,303 @@
+@{
+    ViewData["Title"] = "Table - Design System";
+}
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="dfe-adminui-breadcrumb mb-0 pl-4">
+            <li class="dfe-adminui-breadcrumb__item">
+                <a href="/">Home</a>
+            </li>
+            <li class="dfe-adminui-breadcrumb__item">
+                <a href="@Url.Action("Index", "DesignSystem")">Design system</a>
+            </li>
+            <li class="dfe-adminui-breadcrumb__item dfe-adminui-breadcrumb__item--active" aria-current="page">Table</li>
+        </ol>
+    </nav>
+}
+
+<h1 class="ds-page-title">Table</h1>
+<p class="ds-page-lead">
+    Tables display structured data in rows and columns. COMPASS supports standard tables, sortable tables, and tables with expandable rows.
+</p>
+
+<h2>Standard table</h2>
+<p>
+    Basic table structure with headers and data rows.
+</p>
+
+<div class="component-example">
+    <div class="component-example-title">Example</div>
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Status</th>
+                <th>Date</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>Project Alpha</td>
+                <td><span class="dfe-adminui-badge dfe-adminui-badge--success">Active</span></td>
+                <td>15 Jan 2025</td>
+            </tr>
+            <tr>
+                <td>Project Beta</td>
+                <td><span class="dfe-adminui-badge dfe-adminui-badge--warning">Pending</span></td>
+                <td>20 Jan 2025</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+<h2>Sortable table</h2>
+<p>
+    Tables with sortable columns allow users to reorder data by clicking column headers.
+</p>
+
+<div class="component-example">
+    <div class="component-example-title">Example - Sortable columns</div>
+    <table class="table table-striped sortable-table" id="exampleSortableTable">
+        <thead>
+            <tr>
+                <th class="sortable" data-column="name" data-sort="asc" tabindex="0" role="button" aria-label="Sort by Name">
+                    Name
+                    <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                </th>
+                <th class="sortable" data-column="status" data-sort="" tabindex="0" role="button" aria-label="Sort by Status">
+                    Status
+                    <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                </th>
+                <th class="sortable" data-column="date" data-sort="" tabindex="0" role="button" aria-label="Sort by Date">
+                    Date
+                    <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                </th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr data-name="Project Alpha" data-status="Active" data-date="2025-01-15">
+                <td>Project Alpha</td>
+                <td><span class="dfe-adminui-badge dfe-adminui-badge--success">Active</span></td>
+                <td>15 Jan 2025</td>
+            </tr>
+            <tr data-name="Project Beta" data-status="Pending" data-date="2025-01-20">
+                <td>Project Beta</td>
+                <td><span class="dfe-adminui-badge dfe-adminui-badge--warning">Pending</span></td>
+                <td>20 Jan 2025</td>
+            </tr>
+            <tr data-name="Project Gamma" data-status="Active" data-date="2025-01-10">
+                <td>Project Gamma</td>
+                <td><span class="dfe-adminui-badge dfe-adminui-badge--success">Active</span></td>
+                <td>10 Jan 2025</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+<script nonce="@Context.Items["Nonce"]">
+    $(document).ready(function() {
+        function initializeSortableTable(table) {
+            table.find('.sortable').on('click', function() {
+                var $this = $(this);
+                var column = $this.data('column');
+                var currentSort = $this.data('sort') || '';
+                var newSort = currentSort === 'asc' ? 'desc' : 'asc';
+                
+                // Reset all sort indicators
+                table.find('.sortable').data('sort', '').find('i').removeClass('fa-sort-up fa-sort-down').addClass('fa-sort').css('opacity', '0.3');
+                
+                // Set new sort
+                $this.data('sort', newSort);
+                var icon = $this.find('i');
+                icon.removeClass('fa-sort').addClass(newSort === 'asc' ? 'fa-sort-up' : 'fa-sort-down').css('opacity', '1');
+                
+                // Sort rows
+                var rows = table.find('tbody tr').toArray();
+                rows.sort(function(a, b) {
+                    var aVal = $(a).data(column) || '';
+                    var bVal = $(b).data(column) || '';
+                    
+                    if (column === 'date') {
+                        aVal = new Date(aVal);
+                        bVal = new Date(bVal);
+                    } else {
+                        aVal = String(aVal).toLowerCase();
+                        bVal = String(bVal).toLowerCase();
+                    }
+                    
+                    if (newSort === 'asc') {
+                        return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+                    } else {
+                        return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
+                    }
+                });
+                
+                table.find('tbody').empty().append(rows);
+            });
+        }
+        
+        initializeSortableTable($('#exampleSortableTable'));
+    });
+</script>
+
+<pre><code>&lt;table class="table table-striped sortable-table"&gt;
+    &lt;thead&gt;
+        &lt;tr&gt;
+            &lt;th class="sortable" data-column="Name" tabindex="0" role="button" aria-label="Sort by Name"&gt;
+                Name
+                &lt;i class="fas fa-sort float-right" style="opacity: 0.3;"&gt;&lt;/i&gt;
+            &lt;/th&gt;
+        &lt;/tr&gt;
+    &lt;/thead&gt;
+    &lt;tbody&gt;
+        &lt;!-- Table rows --&gt;
+    &lt;/tbody&gt;
+&lt;/table&gt;</code></pre>
+
+<h2>Table with toggle rows</h2>
+<p>
+    Tables with expandable rows allow users to view additional details by clicking on a row.
+</p>
+
+<div class="component-example">
+    <div class="component-example-title">Example - Expandable rows</div>
+    <table class="table table-hover mb-0">
+        <thead>
+            <tr>
+                <th style="width: 40px;"></th>
+                <th>Business Area</th>
+                <th>Total Products</th>
+                <th>Onboarded</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr class="business-area-row" style="cursor: pointer;" data-toggle="collapse" data-target="#area-1" aria-expanded="false">
+                <td class="text-center">
+                    <i class="fas fa-plus-circle collapse-icon" style="color: #005ea5;"></i>
+                </td>
+                <td><strong>Digital Services</strong></td>
+                <td>25</td>
+                <td><span class="dfe-adminui-badge dfe-adminui-badge--success">20 of 25</span></td>
+                <td><span class="dfe-adminui-badge dfe-adminui-badge--success">Active</span></td>
+            </tr>
+            <tr class="collapse" id="area-1">
+                <td colspan="5" class="p-0">
+                    <div class="p-4 bg-light border-top">
+                        <h5 class="mb-3">Products in Digital Services</h5>
+                        <table class="table table-sm table-bordered mb-0 bg-white">
+                            <thead class="thead-light">
+                                <tr>
+                                    <th>Product Name</th>
+                                    <th>Status</th>
+                                    <th>Issues</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>Product A</td>
+                                    <td><span class="dfe-adminui-badge dfe-adminui-badge--success">Active</span></td>
+                                    <td>0</td>
+                                </tr>
+                                <tr>
+                                    <td>Product B</td>
+                                    <td><span class="dfe-adminui-badge dfe-adminui-badge--warning">Pending</span></td>
+                                    <td>2</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+<pre><code>&lt;table class="table table-hover mb-0"&gt;
+    &lt;thead&gt;
+        &lt;tr&gt;
+            &lt;th style="width: 40px;"&gt;&lt;/th&gt;
+            &lt;th&gt;Business Area&lt;/th&gt;
+            &lt;th&gt;Total Products&lt;/th&gt;
+        &lt;/tr&gt;
+    &lt;/thead&gt;
+    &lt;tbody&gt;
+        &lt;tr class="business-area-row" style="cursor: pointer;" data-toggle="collapse" data-target="#area-1" aria-expanded="false"&gt;
+            &lt;td class="text-center"&gt;
+                &lt;i class="fas fa-plus-circle collapse-icon" style="color: #005ea5;"&gt;&lt;/i&gt;
+            &lt;/td&gt;
+            &lt;td&gt;&lt;strong&gt;Digital Services&lt;/strong&gt;&lt;/td&gt;
+            &lt;td&gt;25&lt;/td&gt;
+        &lt;/tr&gt;
+        &lt;tr class="collapse" id="area-1"&gt;
+            &lt;td colspan="3" class="p-0"&gt;
+                &lt;div class="p-4 bg-light border-top"&gt;
+                    &lt;!-- Expanded content --&gt;
+                &lt;/div&gt;
+            &lt;/td&gt;
+        &lt;/tr&gt;
+    &lt;/tbody&gt;
+&lt;/table&gt;</code></pre>
+
+<h2>Usage guidelines</h2>
+<ul>
+    <li>Use tables for structured data that benefits from row/column organization</li>
+    <li>Always include table headers for accessibility</li>
+    <li>Use sortable tables when users need to reorder data</li>
+    <li>Use expandable rows for hierarchical or detailed information</li>
+    <li>Keep tables responsive - consider horizontal scrolling on small screens</li>
+    <li>Use appropriate table classes: <code>table-striped</code>, <code>table-hover</code>, <code>table-bordered</code></li>
+    <li>Include badges or status indicators for quick visual scanning</li>
+</ul>
+
+<h2>Accessibility</h2>
+<ul>
+    <li>Always use <code>&lt;thead&gt;</code> and <code>&lt;tbody&gt;</code> elements</li>
+    <li>Use <code>&lt;th&gt;</code> for header cells, not <code>&lt;td&gt;</code></li>
+    <li>For sortable columns, include <code>role="button"</code> and <code>tabindex="0"</code></li>
+    <li>Provide <code>aria-label</code> for sortable column headers</li>
+    <li>Use <code>aria-expanded</code> for expandable rows</li>
+    <li>Ensure sufficient colour contrast for all text</li>
+</ul>
+
+<h2>JavaScript for toggle rows</h2>
+<p>
+    Tables with toggle rows require JavaScript to change the icon when expanded/collapsed.
+</p>
+
+<pre><code>&lt;script&gt;
+    $(document).ready(function() {
+        // Handle icon toggle for expandable rows
+        $('[id^="area-"]').on('show.bs.collapse', function() {
+            var targetId = $(this).attr('id');
+            var row = $('tr[data-target="#' + targetId + '"]');
+            var icon = row.find('.collapse-icon');
+            icon.removeClass('fa-plus-circle').addClass('fa-minus-circle');
+        });
+
+        $('[id^="area-"]').on('hide.bs.collapse', function() {
+            var targetId = $(this).attr('id');
+            var row = $('tr[data-target="#' + targetId + '"]');
+            var icon = row.find('.collapse-icon');
+            icon.removeClass('fa-minus-circle').addClass('fa-plus-circle');
+        });
+    });
+&lt;/script&gt;</code></pre>
+
+<script nonce="@Context.Items["Nonce"]">
+    $(document).ready(function() {
+        // Handle icon toggle for expandable rows in example
+        $('#area-1').on('show.bs.collapse', function() {
+            var row = $('tr[data-target="#area-1"]');
+            var icon = row.find('.collapse-icon');
+            icon.removeClass('fa-plus-circle').addClass('fa-minus-circle');
+        });
+
+        $('#area-1').on('hide.bs.collapse', function() {
+            var row = $('tr[data-target="#area-1"]');
+            var icon = row.find('.collapse-icon');
+            icon.removeClass('fa-minus-circle').addClass('fa-plus-circle');
+        });
+    });
+</script>

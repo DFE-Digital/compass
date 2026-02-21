@@ -1,0 +1,368 @@
+@using Compass.Models
+@{
+    ViewData["Title"] = "Priority outcomes and flagship projects";
+    ViewData["BodyClass"] = "reports-page";
+    var flagshipProjects  = ViewBag.FlagshipProjects  as List<Project> ?? new List<Project>();
+    var multiDeptProjects = ViewBag.MultiDeptProjects as List<Project> ?? new List<Project>();
+    var aiProjects        = ViewBag.AiProjects        as List<Project> ?? new List<Project>();
+    var priorityProjects  = ViewBag.PriorityProjects  as List<Project> ?? new List<Project>();
+    var allProjects       = ViewBag.AllProjects        as List<Project> ?? new List<Project>();
+    var totalFlagship  = ViewBag.TotalFlagship  as int? ?? 0;
+    var totalMultiDept = ViewBag.TotalMultiDept as int? ?? 0;
+    var totalAi        = ViewBag.TotalAi        as int? ?? 0;
+    var totalPriority  = ViewBag.TotalPriority  as int? ?? 0;
+    var isAdmin = ViewBag.IsAdmin as bool? ?? false;
+    var allDivisions = ViewBag.AllDivisions as List<Division> ?? new List<Division>();
+    var allBusinessAreas = ViewBag.AllBusinessAreas as List<BusinessAreaLookup> ?? new List<BusinessAreaLookup>();
+}
+
+@functions {
+    string GetRagBadgeClass(RagStatusLookup? ragStatus)
+    {
+        return (ragStatus?.Name?.Trim() ?? "") switch
+        {
+            "Green" => "badge badge-success",
+            "Amber-Green" => "badge badge-warning",
+            "Amber" => "badge badge-warning",
+            "Amber-Red" => "badge badge-danger",
+            "Red" => "badge badge-danger",
+            _ => "badge badge-secondary"
+        };
+    }
+    string GetRagRowClass(RagStatusLookup? ragStatus)
+    {
+        return (ragStatus?.Name?.Trim() ?? "") switch
+        {
+            "Red" => "table-danger",
+            "Amber-Red" => "table-warning",
+            _ => ""
+        };
+    }
+}
+
+@await Html.PartialAsync("_DashboardStyles")
+@await Html.PartialAsync("_ReportsDashboardStyles")
+
+<!-- Dashboard header -->
+<div class="reports-dashboard-header">
+    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+        <div>
+            <nav aria-label="Breadcrumb" class="reports-breadcrumb">
+                <a href="/">Home</a> <span aria-hidden="true">/</span>
+                <a href="@Url.Action("Index", "Reports")">Reports overview</a> <span aria-hidden="true">/</span>
+                Priority outcomes
+            </nav>
+            <h1 class="mb-1"><i class="fas fa-star mr-2" aria-hidden="true"></i>Priority outcomes and flagship projects</h1>
+            <p class="mb-0 opacity-90">Flagship projects, priority outcomes, multi-department cooperation, and AI initiatives</p>
+        </div>
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            <button class="btn btn-intel" data-toggle="modal" data-target="#intelModal" title="Portfolio intelligence summary">
+                <i class="fas fa-brain mr-1" aria-hidden="true"></i> Intel
+            </button>
+            <a href="https://app.powerbi.com/groups/me/reports/d941d6dd-6d6a-40b1-bf66-12ad51522131/ce0a78d00040090301b6?experience=power-bi" target="_blank" rel="noopener noreferrer" class="btn btn-powerbi">
+                <i class="fas fa-external-link-alt mr-1" aria-hidden="true"></i> Standards (SHCA)
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Report navigation tabs -->
+<div class="reports-nav-bar">
+    <ul class="reports-nav-tabs" role="navigation" aria-label="Report sections">
+            <li><a href="@Url.Action("Index", "Reports")"><i class="fas fa-globe mr-1" aria-hidden="true"></i>Overview</a></li>
+            <li class="reports-nav-dropdown">
+                <button class="reports-nav-dropdown-toggle" aria-haspopup="true" aria-expanded="false">
+                    <i class="fas fa-sitemap mr-1" aria-hidden="true"></i>Division
+                    <i class="fas fa-chevron-down caret-icon ml-1" aria-hidden="true"></i>
+                </button>
+                <div class="reports-nav-dropdown-menu" role="menu">
+                    <a href="@Url.Action("DivisionReport", "Reports")" role="menuitem">
+                        <i class="fas fa-th-list mr-1 text-muted" aria-hidden="true"></i>All divisions
+                    </a>
+                    @if (allDivisions.Any())
+                    {
+                        <div class="dropdown-divider"></div>
+                        @foreach (var div in allDivisions)
+                        {
+                            <a href="@Url.Action("DivisionReport", "Reports", new { divisionId = div.Id })" role="menuitem">@div.Name</a>
+                        }
+                    }
+                </div>
+                <div class="dropdown-scroll-hint" aria-hidden="true"><i class="fas fa-chevron-down"></i></div>
+            </li>
+            <li class="reports-nav-dropdown">
+                <button class="reports-nav-dropdown-toggle" aria-haspopup="true" aria-expanded="false">
+                    <i class="fas fa-building mr-1" aria-hidden="true"></i>Business area
+                    <i class="fas fa-chevron-down caret-icon ml-1" aria-hidden="true"></i>
+                </button>
+                <div class="reports-nav-dropdown-menu" role="menu">
+                    <a href="@Url.Action("BusinessAreaReport", "Reports")" role="menuitem">
+                        <i class="fas fa-th-list mr-1 text-muted" aria-hidden="true"></i>All business areas
+                    </a>
+                    @if (allBusinessAreas.Any())
+                    {
+                        <div class="dropdown-divider"></div>
+                        @foreach (var ba in allBusinessAreas)
+                        {
+                            <a href="@Url.Action("BusinessAreaReport", "Reports", new { businessAreaId = ba.Id })" role="menuitem">@ba.Name</a>
+                        }
+                    }
+                </div>
+                <div class="dropdown-scroll-hint" aria-hidden="true"><i class="fas fa-chevron-down"></i></div>
+            </li>
+            <li><a href="@Url.Action("PriorityOutcomes", "Reports")" class="active" aria-current="page"><i class="fas fa-star mr-1" aria-hidden="true"></i>Priority outcomes</a></li>
+        </ul>
+</div>
+
+<div class="reports-body">
+
+        <!-- Stat cards -->
+        <div class="reports-stat-grid mb-4">
+            <div class="reports-stat-card reports-stat-gold">
+                <div class="reports-stat-icon"><i class="fas fa-star" aria-hidden="true"></i></div>
+                <div class="reports-stat-value">@totalFlagship</div>
+                <div class="reports-stat-label">Flagship projects</div>
+                <div class="reports-stat-sub">highest priority</div>
+            </div>
+            <div class="reports-stat-card reports-stat-blue">
+                <div class="reports-stat-icon"><i class="fas fa-globe" aria-hidden="true"></i></div>
+                <div class="reports-stat-value">@totalMultiDept</div>
+                <div class="reports-stat-label">Multi-department</div>
+                <div class="reports-stat-sub">cross-government cooperation</div>
+            </div>
+            <div class="reports-stat-card reports-stat-purple">
+                <div class="reports-stat-icon"><i class="fas fa-robot" aria-hidden="true"></i></div>
+                <div class="reports-stat-value">@totalAi</div>
+                <div class="reports-stat-label">AI initiatives</div>
+                <div class="reports-stat-sub">artificial intelligence projects</div>
+            </div>
+            <div class="reports-stat-card reports-stat-teal">
+                <div class="reports-stat-icon"><i class="fas fa-sort-amount-up" aria-hidden="true"></i></div>
+                <div class="reports-stat-value">@totalPriority</div>
+                <div class="reports-stat-label">Prioritised projects</div>
+                <div class="reports-stat-sub">with delivery priority set</div>
+            </div>
+        </div>
+
+        <!-- Tab navigation -->
+        @{
+            // Determine which tab to show active – prefer first tab that has data, fall back to "all"
+            var firstActiveTab = totalFlagship > 0  ? "flagship"  :
+                                 totalMultiDept > 0 ? "multidept" :
+                                 totalAi > 0        ? "ai"        :
+                                 totalPriority > 0  ? "priority"  : "all";
+        }
+        <ul class="nav nav-tabs reports-inner-tabs mb-4" id="priorityTabs" role="tablist">
+            <li class="nav-item">
+                <a class="nav-link @(firstActiveTab == "flagship" ? "active" : "")" id="flagship-tab" data-toggle="tab" href="#flagship" role="tab" aria-controls="flagship" aria-selected="@(firstActiveTab == "flagship" ? "true" : "false")">
+                    <i class="fas fa-star mr-1" aria-hidden="true"></i>Flagship <span class="badge badge-warning ml-1">@totalFlagship</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link @(firstActiveTab == "multidept" ? "active" : "")" id="multidept-tab" data-toggle="tab" href="#multidept" role="tab" aria-controls="multidept" aria-selected="@(firstActiveTab == "multidept" ? "true" : "false")">
+                    <i class="fas fa-globe mr-1" aria-hidden="true"></i>Multi-department <span class="badge badge-info ml-1">@totalMultiDept</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link @(firstActiveTab == "ai" ? "active" : "")" id="ai-tab" data-toggle="tab" href="#ai" role="tab" aria-controls="ai" aria-selected="@(firstActiveTab == "ai" ? "true" : "false")">
+                    <i class="fas fa-robot mr-1" aria-hidden="true"></i>AI initiatives <span class="badge badge-primary ml-1">@totalAi</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link @(firstActiveTab == "priority" ? "active" : "")" id="priority-tab" data-toggle="tab" href="#priority" role="tab" aria-controls="priority" aria-selected="@(firstActiveTab == "priority" ? "true" : "false")">
+                    <i class="fas fa-sort-amount-up mr-1" aria-hidden="true"></i>By priority <span class="badge badge-secondary ml-1">@totalPriority</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link @(firstActiveTab == "all" ? "active" : "")" id="all-tab" data-toggle="tab" href="#all" role="tab" aria-controls="all" aria-selected="@(firstActiveTab == "all" ? "true" : "false")">
+                    <i class="fas fa-list mr-1" aria-hidden="true"></i>All projects <span class="badge badge-light border ml-1">@allProjects.Count</span>
+                </a>
+            </li>
+        </ul>
+
+        <div class="tab-content" id="priorityTabContent">
+
+            <!-- Flagship tab -->
+            <div class="tab-pane fade @(firstActiveTab == "flagship" ? "show active" : "")" id="flagship" role="tabpanel" aria-labelledby="flagship-tab">
+                <div class="dashboard-section">
+                    <div class="dashboard-section-header">
+                        <h2><i class="fas fa-star" aria-hidden="true"></i>Flagship projects</h2>
+                        <span class="text-muted small">Highest priority projects across the department</span>
+                    </div>
+                    @if (flagshipProjects.Any())
+                    {
+                        @await Html.PartialAsync("_PriorityProjectCards", flagshipProjects)
+                    }
+                    else
+                    {
+                        <div class="alert alert-info"><i class="fas fa-info-circle mr-2" aria-hidden="true"></i>No projects are currently marked as flagship. Set <strong>IsFlagship</strong> on a project's strategic alignment tab to see them here.</div>
+                    }
+                </div>
+            </div>
+
+            <!-- Multi-department tab -->
+            <div class="tab-pane fade @(firstActiveTab == "multidept" ? "show active" : "")" id="multidept" role="tabpanel" aria-labelledby="multidept-tab">
+                <div class="dashboard-section">
+                    <div class="dashboard-section-header">
+                        <h2><i class="fas fa-globe" aria-hidden="true"></i>Multi-department projects</h2>
+                        <span class="text-muted small">Projects involving cross-government cooperation</span>
+                    </div>
+                    @if (multiDeptProjects.Any())
+                    {
+                        @await Html.PartialAsync("_PriorityProjectCards", multiDeptProjects)
+                    }
+                    else
+                    {
+                        <div class="alert alert-info"><i class="fas fa-info-circle mr-2" aria-hidden="true"></i>No projects are currently marked as multi-department.</div>
+                    }
+                </div>
+            </div>
+
+            <!-- AI initiatives tab -->
+            <div class="tab-pane fade @(firstActiveTab == "ai" ? "show active" : "")" id="ai" role="tabpanel" aria-labelledby="ai-tab">
+                <div class="dashboard-section">
+                    <div class="dashboard-section-header">
+                        <h2><i class="fas fa-robot" aria-hidden="true"></i>AI initiatives</h2>
+                        <span class="text-muted small">Projects using or developing artificial intelligence</span>
+                    </div>
+                    @if (aiProjects.Any())
+                    {
+                        @await Html.PartialAsync("_PriorityProjectCards", aiProjects)
+                    }
+                    else
+                    {
+                        <div class="alert alert-info"><i class="fas fa-info-circle mr-2" aria-hidden="true"></i>No projects are currently marked as AI initiatives.</div>
+                    }
+                </div>
+            </div>
+
+            <!-- By priority tab -->
+            <div class="tab-pane fade @(firstActiveTab == "priority" ? "show active" : "")" id="priority" role="tabpanel" aria-labelledby="priority-tab">
+                <div class="dashboard-section">
+                    <div class="dashboard-section-header">
+                        <h2><i class="fas fa-sort-amount-up" aria-hidden="true"></i>Projects by delivery priority</h2>
+                        <span class="text-muted small">Projects grouped by their assigned delivery priority</span>
+                    </div>
+                    @if (priorityProjects.Any())
+                    {
+                        var projectsByPriority = ViewBag.ProjectsByPriority as dynamic;
+                        if (projectsByPriority != null)
+                        {
+                            foreach (var group in projectsByPriority)
+                            {
+                                <div class="mb-4">
+                                    <h3 class="priority-group-heading">
+                                        <span class="priority-badge">@group.Priority.Name</span>
+                                        <span class="text-muted small ml-2">@group.Projects.Count project@(group.Projects.Count == 1 ? "" : "s")</span>
+                                    </h3>
+                                    @await Html.PartialAsync("_PriorityProjectCards", (List<Project>)group.Projects)
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            @await Html.PartialAsync("_PriorityProjectCards", priorityProjects)
+                        }
+                    }
+                    else
+                    {
+                        <div class="alert alert-info"><i class="fas fa-info-circle mr-2" aria-hidden="true"></i>No projects have a delivery priority set.</div>
+                    }
+                </div>
+            </div>
+
+            <!-- All projects tab – always has data, useful fallback -->
+            <div class="tab-pane fade @(firstActiveTab == "all" ? "show active" : "")" id="all" role="tabpanel" aria-labelledby="all-tab">
+                <div class="dashboard-section">
+                    <div class="dashboard-section-header">
+                        <h2><i class="fas fa-list" aria-hidden="true"></i>All projects</h2>
+                        <span class="text-muted small">Every active project – use the other tabs to filter by strategic category</span>
+                    </div>
+                    @if (allProjects.Any())
+                    {
+                        @await Html.PartialAsync("_PriorityProjectCards", allProjects)
+                    }
+                    else
+                    {
+                        <div class="alert alert-info">No projects found.</div>
+                    }
+                </div>
+            </div>
+
+        </div>
+
+</div><!-- /.reports-body -->
+
+<!-- Intel modal -->
+@{
+    var intelData = new ViewDataDictionary(Html.ViewData.ModelMetadata, Html.ViewData.ModelState)
+    {
+        { "Context", "priority" },
+        { "TotalFlagship", totalFlagship },
+        { "TotalMultiDept", totalMultiDept },
+        { "TotalAi", totalAi },
+        { "TotalPriority", totalPriority },
+        { "FlagshipRedCount", flagshipProjects.Count(p => p.RagStatusLookup?.Name == "Red" || p.RagStatusLookup?.Name == "Amber-Red") }
+    };
+}
+@await Html.PartialAsync("_IntelModal", intelData)
+
+@section Scripts {
+    <script nonce="@Context.Items["Nonce"]">
+    (function () {
+        /* ── Reports nav dropdowns ─────────────────────────────────────────── */
+        var navBar = document.querySelector('.reports-nav-bar');
+        if (navBar) {
+            var toggles = navBar.querySelectorAll('.reports-nav-dropdown-toggle');
+            toggles.forEach(function (toggle) {
+                var menu = toggle.nextElementSibling;
+                if (!menu || !menu.classList.contains('reports-nav-dropdown-menu')) return;
+                var hint = menu.nextElementSibling;
+                var hasHint = hint && hint.classList.contains('dropdown-scroll-hint');
+
+                function updateScrollHint() {
+                    if (!hasHint) return;
+                    var canScroll = menu.scrollHeight > menu.clientHeight;
+                    var atBottom = menu.scrollTop + menu.clientHeight >= menu.scrollHeight - 4;
+                    hint.classList.toggle('visible', canScroll && !atBottom);
+                }
+
+                toggle.addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    var isOpen = menu.classList.contains('open');
+                    navBar.querySelectorAll('.reports-nav-dropdown-menu.open').forEach(function (m) {
+                        m.classList.remove('open');
+                        m.previousElementSibling.setAttribute('aria-expanded', 'false');
+                        var h = m.nextElementSibling;
+                        if (h && h.classList.contains('dropdown-scroll-hint')) h.classList.remove('visible');
+                    });
+                    if (!isOpen) {
+                        menu.classList.add('open');
+                        toggle.setAttribute('aria-expanded', 'true');
+                        updateScrollHint();
+                    }
+                });
+
+                if (hasHint) menu.addEventListener('scroll', updateScrollHint);
+
+                toggle.addEventListener('keydown', function (e) {
+                    if (e.key === 'Escape') {
+                        menu.classList.remove('open');
+                        toggle.setAttribute('aria-expanded', 'false');
+                        if (hasHint) hint.classList.remove('visible');
+                        toggle.focus();
+                    }
+                });
+            });
+            document.addEventListener('click', function () {
+                navBar.querySelectorAll('.reports-nav-dropdown-menu.open').forEach(function (m) {
+                    m.classList.remove('open');
+                    m.previousElementSibling.setAttribute('aria-expanded', 'false');
+                    var h = m.nextElementSibling;
+                    if (h && h.classList.contains('dropdown-scroll-hint')) h.classList.remove('visible');
+                });
+            });
+        }
+    }());
+    </script>
+}

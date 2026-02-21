@@ -2252,6 +2252,18 @@ public class FipsManagerController : Controller
                 ["cmdb_sys_id"] = product.CmdbSysId ?? string.Empty
             };
 
+            // Preserve phase if present
+            if (!string.IsNullOrEmpty(product.Phase))
+            {
+                updateData["phase"] = product.Phase;
+            }
+
+            // Preserve publishedAt to avoid accidentally unpublishing the record
+            if (product.PublishedAt.HasValue)
+            {
+                updateData["publishedAt"] = product.PublishedAt.Value.ToString("o");
+            }
+
             // Update long_description if changed, otherwise preserve existing
             if (reviewData.LongDescription != product.LongDescription)
             {
@@ -2286,6 +2298,40 @@ public class FipsManagerController : Controller
             {
                 // Preserve existing category values
                 updateData["category_values"] = currentCategoryValueIds;
+            }
+
+            // Preserve all relation fields — Strapi PUT will wipe any relation not included in the payload
+            if (product.ServiceOwners?.Any() == true)
+            {
+                updateData["service_owner"] = product.ServiceOwners.Select(u => u.Id).ToList();
+            }
+            if (product.ProductManagers?.Any() == true)
+            {
+                updateData["product_manager"] = product.ProductManagers.Select(u => u.Id).ToList();
+            }
+            if (product.DeliveryManagers?.Any() == true)
+            {
+                updateData["delivery_manager"] = product.DeliveryManagers.Select(u => u.Id).ToList();
+            }
+            if (product.InformationAssetOwners?.Any() == true)
+            {
+                updateData["Information_asset_owner"] = product.InformationAssetOwners.Select(u => u.Id).ToList();
+            }
+            if (product.SeniorResponsibleOfficers?.Any() == true)
+            {
+                updateData["senior_responsible_officer"] = product.SeniorResponsibleOfficers.Select(u => u.Id).ToList();
+            }
+            if (product.ReportingUsers?.Any() == true)
+            {
+                updateData["reporting_user"] = product.ReportingUsers.Select(u => u.Id).ToList();
+            }
+            if (product.ServiceDesigns?.Any() == true)
+            {
+                updateData["service_designs"] = product.ServiceDesigns.Select(u => u.Id).ToList();
+            }
+            if (product.UserResearchers?.Any() == true)
+            {
+                updateData["user_researchers"] = product.UserResearchers.Select(u => u.Id).ToList();
             }
 
             // Update product in CMS (only if there are actual changes)

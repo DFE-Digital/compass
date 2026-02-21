@@ -992,21 +992,6 @@ public class HomeController : Controller
     {
         var reminders = new List<DashboardReminder>();
 
-        if (myProjects.Any())
-        {
-            var nextFriday = NextWeekday(DateTime.Today, DayOfWeek.Friday);
-            reminders.Add(new DashboardReminder
-            {
-                Title = "Share your weekly delivery update",
-                Description = $"Capture blockers and changes across {myProjects.Count} project(s) before {nextFriday:dddd d MMM}.",
-                Icon = "far fa-calendar-check",
-                FrequencyBadge = "Weekly",
-                Tone = "primary",
-                LinkLabel = "Open projects",
-                LinkUrl = Url.Action("Index", "Project") ?? "#"
-            });
-        }
-
         if (productsNeedingReturns.Any())
         {
             var earliestDueDate = productsNeedingReturns.Min(r => r.DueDate);
@@ -1040,13 +1025,13 @@ public class HomeController : Controller
         {
             reminders.Add(new DashboardReminder
             {
-                Title = "Complete DDaT service health check",
+                Title = "Service Health Check App for standards compliance",
                 Description = "Confirm each product still meets the service standard and report gaps.",
                 Icon = "fas fa-notes-medical",
                 FrequencyBadge = "Quarterly",
                 Tone = "info",
-                LinkLabel = "Service health guidance",
-                LinkUrl = Url.Action("Index", "DdtReports") ?? "#"
+                LinkLabel = "Open Service Health Check App",
+                LinkUrl = "https://educationgovuk.sharepoint.com/sites/ServiceHealthCheckHub/SitePages/Service-Health-Check-App.aspx"
             });
         }
 
@@ -1076,36 +1061,6 @@ public class HomeController : Controller
                 FrequencyBadge = "Lifecycle",
                 Tone = "primary",
                 LinkLabel = "Assessment guidance",
-                LinkUrl = "#"
-            });
-        }
-
-        var privateBetaCount = myProducts.Count(p => p.Phase?.Equals("Private beta", StringComparison.OrdinalIgnoreCase) == true);
-        if (privateBetaCount > 0)
-        {
-            reminders.Add(new DashboardReminder
-            {
-                Title = "Complete operational readiness review",
-                Description = $"{privateBetaCount} private beta service(s) must evidence monitoring, alerting and on-call cover.",
-                Icon = "fas fa-clipboard-list",
-                FrequencyBadge = "Lifecycle",
-                Tone = "warning",
-                LinkLabel = "Operational readiness checklist",
-                LinkUrl = "#"
-            });
-        }
-
-        var publicBetaCount = myProducts.Count(p => p.Phase?.Equals("Public beta", StringComparison.OrdinalIgnoreCase) == true);
-        if (publicBetaCount > 0)
-        {
-            reminders.Add(new DashboardReminder
-            {
-                Title = "Arrange public beta assessment",
-                Description = $"{publicBetaCount} service(s) are live to real users – line up the public beta assessment.",
-                Icon = "fas fa-users",
-                FrequencyBadge = "Lifecycle",
-                Tone = "success",
-                LinkLabel = "Book assessment",
                 LinkUrl = "#"
             });
         }
