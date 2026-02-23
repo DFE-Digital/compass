@@ -35,6 +35,5 @@ public class RiskType
     [Required]
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
-    public ICollection<DemandRequestRiskType> DemandRequestLinks { get; set; } = new List<DemandRequestRiskType>();
 }
 

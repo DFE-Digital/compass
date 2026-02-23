@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore.ChangeTracking;
 using System.Data;
 using System.Text.Json;
 using Compass.Models;
+using Compass.Models.DemandTriage;
 using Compass.Services;
 
 namespace Compass.Data;
@@ -242,15 +243,13 @@ public partial class CompassDbContext : DbContext
     public DbSet<MilestoneIssue> MilestoneIssues { get; set; }
     public DbSet<MilestoneUpdate> MilestoneUpdates { get; set; }
     
-    // Demand Management
-    public DbSet<DemandRequest> DemandRequests { get; set; }
-    public DbSet<DemandRequestContact> DemandRequestContacts { get; set; }
-    public DbSet<DemandRequestPrioritisation> DemandRequestPrioritisations { get; set; }
-    public DbSet<DemandRequestNote> DemandRequestNotes { get; set; }
-    public DbSet<DemandRequestAssessment> DemandRequestAssessments { get; set; }
-    public DbSet<DemandRequestSectionCompletion> DemandRequestSectionCompletions { get; set; }
-    public DbSet<DemandRequestRiskType> DemandRequestRiskTypes { get; set; }
-    public DbSet<TriageMeeting> TriageMeetings { get; set; }
+    // Demand Triage (spec-aligned v3)
+    public DbSet<DemandTriageRequest> DemandTriageRequests { get; set; }
+    public DbSet<DemandExploratoryReview> DemandExploratoryReviews { get; set; }
+    public DbSet<DemandScorecard> DemandScorecards { get; set; }
+    public DbSet<DemandAnswer> DemandAnswers { get; set; }
+    public DbSet<DemandTriageOutcome> DemandTriageOutcomes { get; set; }
+    public DbSet<DemandTriageAuditEvent> DemandTriageAuditEvents { get; set; }
     
     // Business Cases
     public DbSet<BusinessCase> BusinessCases { get; set; }
@@ -2233,108 +2232,6 @@ public partial class CompassDbContext : DbContext
         modelBuilder.Entity<GroupFeaturePermission>()
             .HasIndex(gfp => gfp.Permission);
         
-        // ========================================
-        // DEMAND MANAGEMENT CONFIGURATION
-        // ========================================
-        
-        // DemandRequest configuration
-        modelBuilder.Entity<DemandRequest>()
-            .HasIndex(dr => dr.ReferenceNumber)
-            .IsUnique();
-        
-        modelBuilder.Entity<DemandRequest>()
-            .HasIndex(dr => dr.Status);
-        
-        modelBuilder.Entity<DemandRequest>()
-            .HasIndex(dr => dr.AssignedToEmail);
-        
-        modelBuilder.Entity<DemandRequest>()
-            .HasIndex(dr => dr.SubmittedAt);
-        
-        modelBuilder.Entity<DemandRequest>()
-            .HasIndex(dr => dr.ApplicantEmail);
-
-        modelBuilder.Entity<DemandRequest>()
-            .HasIndex(dr => dr.TriageMeetingId);
-
-        modelBuilder.Entity<DemandRequest>()
-            .HasIndex(dr => dr.IsSubmittedToTriage);
-
-        modelBuilder.Entity<DemandRequest>()
-            .HasIndex(dr => dr.ConvertedProjectId);
-
-        modelBuilder.Entity<DemandRequest>()
-            .HasIndex(dr => dr.BusinessCaseId);
-
-        modelBuilder.Entity<DemandRequest>()
-            .HasOne(dr => dr.TriageMeeting)
-            .WithMany(tm => tm.DemandRequests)
-            .HasForeignKey(dr => dr.TriageMeetingId)
-            .OnDelete(DeleteBehavior.SetNull);
-
-        modelBuilder.Entity<DemandRequest>()
-            .HasOne(dr => dr.ConvertedProject)
-            .WithMany()
-            .HasForeignKey(dr => dr.ConvertedProjectId)
-            .OnDelete(DeleteBehavior.Restrict);
-
-        modelBuilder.Entity<DemandRequest>()
-            .HasOne(dr => dr.BusinessCase)
-            .WithMany()
-            .HasForeignKey(dr => dr.BusinessCaseId)
-            .OnDelete(DeleteBehavior.SetNull);
-        
-        // DemandRequestContact configuration
-        modelBuilder.Entity<DemandRequestContact>()
-            .HasOne(drc => drc.DemandRequest)
-            .WithMany(dr => dr.Contacts)
-            .HasForeignKey(drc => drc.DemandRequestId)
-            .OnDelete(DeleteBehavior.Cascade);
-        
-        modelBuilder.Entity<DemandRequestContact>()
-            .HasIndex(drc => drc.DemandRequestId);
-        
-        // DemandRequestPrioritisation configuration
-        modelBuilder.Entity<DemandRequestPrioritisation>()
-            .HasOne(drp => drp.DemandRequest)
-            .WithOne(dr => dr.Prioritisation)
-            .HasForeignKey<DemandRequestPrioritisation>(drp => drp.DemandRequestId)
-            .OnDelete(DeleteBehavior.Cascade);
-        
-        modelBuilder.Entity<DemandRequestPrioritisation>()
-            .HasIndex(drp => drp.TotalPriorityScore)
-            .IsDescending();
-        
-        modelBuilder.Entity<DemandRequestPrioritisation>()
-            .HasIndex(drp => drp.PriorityTier);
-        
-        // DemandRequestNote configuration
-        modelBuilder.Entity<DemandRequestNote>()
-            .HasOne(drn => drn.DemandRequest)
-            .WithMany(dr => dr.Notes)
-            .HasForeignKey(drn => drn.DemandRequestId)
-            .OnDelete(DeleteBehavior.Cascade);
-        
-        modelBuilder.Entity<DemandRequestNote>()
-            .HasIndex(drn => drn.DemandRequestId);
-        
-        // DemandRequestAssessment configuration
-        modelBuilder.Entity<DemandRequestAssessment>()
-            .HasOne(dra => dra.DemandRequest)
-            .WithMany(dr => dr.Assessments)
-            .HasForeignKey(dra => dra.DemandRequestId)
-            .OnDelete(DeleteBehavior.Cascade);
-        
-        modelBuilder.Entity<DemandRequestAssessment>()
-            .HasIndex(dra => new { dra.DemandRequestId, dra.AssessmentType });
-        
-        // DemandRequestSectionCompletion configuration
-        modelBuilder.Entity<DemandRequestSectionCompletion>()
-            .HasOne(drsc => drsc.DemandRequest)
-            .WithMany(dr => dr.SectionCompletions)
-            .HasForeignKey(drsc => drsc.DemandRequestId)
-            .OnDelete(DeleteBehavior.Cascade);
-        
         // BUSINESS CASE CONFIGURATION
         // ========================================
         
@@ -2397,47 +2294,6 @@ public partial class CompassDbContext : DbContext
             .HasIndex(bcp => new { bcp.BusinessCaseId, bcp.ProductFipsId })
             .IsUnique();
         
-        modelBuilder.Entity<DemandRequestSectionCompletion>()
-            .HasIndex(drsc => new { drsc.DemandRequestId, drsc.SectionName })
-            .IsUnique();
-
-        // DemandRequestRiskType configuration
-        modelBuilder.Entity<DemandRequestRiskType>()
-            .HasKey(drrt => new { drrt.DemandRequestId, drrt.RiskTypeId });
-
-        modelBuilder.Entity<DemandRequestRiskType>()
-            .HasOne(drrt => drrt.DemandRequest)
-            .WithMany(dr => dr.RiskTypeLinks)
-            .HasForeignKey(drrt => drrt.DemandRequestId)
-            .OnDelete(DeleteBehavior.Cascade);
-
-        modelBuilder.Entity<DemandRequestRiskType>()
-            .HasOne(drrt => drrt.RiskType)
-            .WithMany(rt => rt.DemandRequestLinks)
-            .HasForeignKey(drrt => drrt.RiskTypeId)
-            .OnDelete(DeleteBehavior.Restrict);
-
-        modelBuilder.Entity<DemandRequestRiskType>()
-            .HasIndex(drrt => drrt.RiskTypeId);
-
-        modelBuilder.Entity<DemandRequestRiskType>()
-            .Property(drrt => drrt.CreatedAt)
-            .HasDefaultValueSql("GETUTCDATE()");
- 
-        // TriageMeeting configuration
-        modelBuilder.Entity<TriageMeeting>()
-            .HasIndex(tm => tm.StartAt);
-
-        modelBuilder.Entity<TriageMeeting>()
-            .HasIndex(tm => tm.EndAt);
-
-        modelBuilder.Entity<TriageMeeting>()
-            .HasIndex(tm => tm.IsActive);
-
-        modelBuilder.Entity<TriageMeeting>()
-            .Property(tm => tm.Title)
-            .HasMaxLength(150);
-
         // DdatProfession configuration - ignore RoleGroup property until migration is created
         modelBuilder.Entity<DdatProfession>()
             .Ignore(d => d.RoleGroup);
@@ -2755,6 +2611,69 @@ public partial class CompassDbContext : DbContext
 
         modelBuilder.Entity<FipsSyncHistory>()
             .HasIndex(fsh => fsh.SyncType);
+
+        // ========================================
+        // DEMAND TRIAGE (spec-aligned v3)
+        // ========================================
+
+        modelBuilder.Entity<DemandTriageRequest>()
+            .HasIndex(r => r.RequestReference).IsUnique();
+        modelBuilder.Entity<DemandTriageRequest>()
+            .HasIndex(r => r.Status);
+        modelBuilder.Entity<DemandTriageRequest>()
+            .HasIndex(r => r.OwnerUserEmail);
+        modelBuilder.Entity<DemandTriageRequest>()
+            .HasIndex(r => r.SubmittedAt);
+        modelBuilder.Entity<DemandTriageRequest>()
+            .HasIndex(r => r.DeletedAt);
+
+        modelBuilder.Entity<DemandTriageRequest>()
+            .HasOne(r => r.BusinessCase)
+            .WithMany()
+            .HasForeignKey(r => r.BusinessCaseId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        modelBuilder.Entity<DemandTriageRequest>()
+            .HasOne(r => r.ConvertedProject)
+            .WithMany()
+            .HasForeignKey(r => r.ConvertedProjectId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<DemandExploratoryReview>()
+            .HasOne(e => e.DemandTriageRequest)
+            .WithOne(r => r.ExploratoryReview)
+            .HasForeignKey<DemandExploratoryReview>(e => e.DemandTriageRequestId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<DemandScorecard>()
+            .HasOne(s => s.DemandTriageRequest)
+            .WithOne(r => r.Scorecard)
+            .HasForeignKey<DemandScorecard>(s => s.DemandTriageRequestId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<DemandAnswer>()
+            .HasOne(a => a.Scorecard)
+            .WithMany(s => s.Answers)
+            .HasForeignKey(a => a.DemandScorecardId)
+            .OnDelete(DeleteBehavior.Cascade);
+        modelBuilder.Entity<DemandAnswer>()
+            .HasIndex(a => new { a.DemandScorecardId, a.QuestionCode });
+
+        modelBuilder.Entity<DemandTriageOutcome>()
+            .HasOne(o => o.DemandTriageRequest)
+            .WithOne(r => r.TriageOutcome)
+            .HasForeignKey<DemandTriageOutcome>(o => o.DemandTriageRequestId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<DemandTriageAuditEvent>()
+            .HasOne(e => e.DemandTriageRequest)
+            .WithMany(r => r.AuditEvents)
+            .HasForeignKey(e => e.DemandTriageRequestId)
+            .OnDelete(DeleteBehavior.Cascade);
+        modelBuilder.Entity<DemandTriageAuditEvent>()
+            .HasIndex(e => e.DemandTriageRequestId);
+        modelBuilder.Entity<DemandTriageAuditEvent>()
+            .HasIndex(e => e.OccurredAt);
 
     }
 }
