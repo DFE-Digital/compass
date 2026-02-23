@@ -1,0 +1,428 @@
+@model Compass.ViewModels.DemandTriage.DemandCaptureFormViewModel
+@using Compass.Models.DemandTriage
+
+@{
+    bool isNew = Model.Id == 0;
+    ViewData["Title"] = isNew ? "New demand request" : $"Edit {Model.RequestReference}";
+    bool isReturn = Model.Status == DemandTriageStatus.ReturnedForClarification;
+}
+
+@await Html.PartialAsync("_DemandTriageStyles")
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb" class="govuk-breadcrumbs">
+        <ol class="govuk-breadcrumbs__list">
+            <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="/">Home</a></li>
+            <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" asp-action="Index" asp-controller="DemandTriage">Demand triage</a></li>
+            @if (!isNew)
+            {
+                <li class="govuk-breadcrumbs__list-item">
+                    <a class="govuk-breadcrumbs__link" asp-action="Detail" asp-controller="DemandTriage" asp-route-id="@Model.Id">@Model.RequestReference</a>
+                </li>
+            }
+            <li class="govuk-breadcrumbs__list-item" aria-current="page">@(isNew ? "New request" : "Edit request")</li>
+        </ol>
+    </nav>
+}
+
+<!-- ── Header ────────────────────────────────────────────────────────────── -->
+<div class="dt-header">
+    <div class="dt-header-inner">
+        <div>
+            <div class="dt-breadcrumb">
+                <a href="@Url.Action("Index","DemandTriage")">Demand triage</a>
+                @if (!isNew) { <span>/</span><a href="@Url.Action("Detail","DemandTriage", new{id=Model.Id})">@Model.RequestReference</a> }
+                <span>/</span> @(isNew ? "New request" : "Edit")
+            </div>
+            <h1>@(isNew ? "Submit a new demand request" : $"Edit request — {Model.RequestReference}")</h1>
+            <p>@(isNew ? "Complete all required sections and submit for review." : "Update the request details below.")</p>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid pt-3">
+
+        @if (isReturn)
+        {
+            <div class="dt-notice dt-notice--warning mb-3">
+                <i class="fas fa-undo"></i>
+                <div>
+                    <strong>This request was returned for clarification.</strong>
+                    Please update the relevant sections and resubmit.
+                </div>
+            </div>
+        }
+
+        @if (Model.ValidationErrors.Any())
+        {
+            <div class="dt-notice dt-notice--danger mb-3">
+                <i class="fas fa-exclamation-circle"></i>
+                <div>
+                    <strong>Please fix the following errors:</strong>
+                    <ul class="mb-0 mt-1">
+                        @foreach (var e in Model.ValidationErrors) { <li>@e</li> }
+                    </ul>
+                </div>
+            </div>
+        }
+
+        <form asp-action="Edit" asp-controller="DemandTriage" asp-route-id="@Model.Id" method="post" novalidate>
+            @Html.AntiForgeryToken()
+
+            <div class="row">
+                <div class="col-lg-8">
+
+                    <!-- 1. About the request -->
+                    <div class="dt-form-section">
+                        <div class="dt-form-section-header">
+                            <div class="dt-section-num">1</div>
+                            <h3>About the request</h3>
+                        </div>
+                        <div class="dt-form-section-body">
+
+                            <div class="dt-form-group">
+                                <label asp-for="RequestName" class="dt-label">
+                                    Request name <span class="text-danger">*</span>
+                                </label>
+                                <span class="dt-label-hint">A short, descriptive name for this request (used in lists and headings)</span>
+                                <input asp-for="RequestName" class="dt-input @(ViewData.ModelState["RequestName"]?.Errors.Any() == true ? "dt-input--error" : "")"
+                                       placeholder="e.g. School attendance data service" />
+                                <span asp-validation-for="RequestName" class="dt-field-error"></span>
+                            </div>
+
+                            <div class="dt-form-group">
+                                <label asp-for="ProposedRequestTitle" class="dt-label">Proposed request title</label>
+                                <span class="dt-label-hint">Full proposed title (10–120 characters)</span>
+                                <input asp-for="ProposedRequestTitle" class="dt-input"
+                                       placeholder="A more formal title for the request" />
+                                <span asp-validation-for="ProposedRequestTitle" class="dt-field-error"></span>
+                            </div>
+
+                            <div class="dt-form-group">
+                                <label asp-for="RequestOverview" class="dt-label">
+                                    Request overview <span class="text-danger">*</span>
+                                </label>
+                                <span class="dt-label-hint">Describe the request and the business need it addresses</span>
+                                <textarea asp-for="RequestOverview" class="dt-input" rows="6"
+                                          placeholder="What is the problem? What is being asked for?"></textarea>
+                                <span asp-validation-for="RequestOverview" class="dt-field-error"></span>
+                            </div>
+
+                            <div class="dt-form-group">
+                                <label asp-for="PreviousResearch" class="dt-label">Previous insight or research</label>
+                                <span class="dt-label-hint">Any prior discovery, user research, or evidence that supports this request</span>
+                                <textarea asp-for="PreviousResearch" class="dt-input" rows="3"
+                                          placeholder="Optional — describe any previous work conducted"></textarea>
+                            </div>
+
+                        </div>
+                    </div>
+
+                    <!-- 2. Requester details -->
+                    <div class="dt-form-section">
+                        <div class="dt-form-section-header">
+                            <div class="dt-section-num">2</div>
+                            <h3>Requester details</h3>
+                        </div>
+                        <div class="dt-form-section-body">
+
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="dt-form-group">
+                                        <label asp-for="RequesterFullName" class="dt-label">
+                                            Your full name <span class="text-danger">*</span>
+                                        </label>
+                                        <input asp-for="RequesterFullName" class="dt-input" />
+                                        <span asp-validation-for="RequesterFullName" class="dt-field-error"></span>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="dt-form-group">
+                                        <label asp-for="DepartmentGroup" class="dt-label">
+                                            Department group <span class="text-danger">*</span>
+                                        </label>
+                                        <input asp-for="DepartmentGroup" class="dt-input"
+                                               placeholder="e.g. Children's Services Group" />
+                                        <span asp-validation-for="DepartmentGroup" class="dt-field-error"></span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="dt-form-group">
+                                        <label asp-for="SroName" class="dt-label">
+                                            Senior responsible officer <span class="text-danger">*</span>
+                                        </label>
+                                        <span class="dt-label-hint">Must be G6 or above</span>
+                                        <input asp-for="SroName" class="dt-input" />
+                                        <span asp-validation-for="SroName" class="dt-field-error"></span>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="dt-form-group">
+                                        <label asp-for="DdtPortfolioSupport" class="dt-label">DDT portfolio support</label>
+                                        <input asp-for="DdtPortfolioSupport" class="dt-input"
+                                               placeholder="Name of DDT portfolio contact (if known)" />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="dt-form-group">
+                                <label asp-for="PointsOfContact" class="dt-label">
+                                    Points of contact <span class="text-danger">*</span>
+                                </label>
+                                <span class="dt-label-hint">Names and email addresses of people who can be contacted about this request</span>
+                                <textarea asp-for="PointsOfContact" class="dt-input" rows="3"
+                                          placeholder="Name — email@education.gov.uk"></textarea>
+                                <span asp-validation-for="PointsOfContact" class="dt-field-error"></span>
+                            </div>
+
+                        </div>
+                    </div>
+
+                    <!-- 3. Strategic context -->
+                    <div class="dt-form-section">
+                        <div class="dt-form-section-header">
+                            <div class="dt-section-num">3</div>
+                            <h3>Strategic context</h3>
+                        </div>
+                        <div class="dt-form-section-body">
+
+                            <div class="dt-form-group">
+                                <label asp-for="ManifestoOrStatute" class="dt-label">Manifesto commitment or statute law</label>
+                                <span class="dt-label-hint">Does this request support a specific manifesto commitment or statutory requirement?</span>
+                                <textarea asp-for="ManifestoOrStatute" class="dt-input" rows="3"></textarea>
+                            </div>
+
+                            <div class="dt-form-group">
+                                <label asp-for="SosOpportunityMissionPillars" class="dt-label">SoS opportunity mission pillars</label>
+                                <span class="dt-label-hint">Which Secretary of State opportunity mission pillars does this support?</span>
+                                <textarea asp-for="SosOpportunityMissionPillars" class="dt-input" rows="2"></textarea>
+                            </div>
+
+                            <div class="dt-form-group">
+                                <label asp-for="DdtStrategicTheme" class="dt-label">DDT strategic framework theme</label>
+                                <span class="dt-label-hint">Which DDT strategic theme does this align to?</span>
+                                <textarea asp-for="DdtStrategicTheme" class="dt-input" rows="2"></textarea>
+                            </div>
+
+                        </div>
+                    </div>
+
+                    <!-- 4. Benefits and risks -->
+                    <div class="dt-form-section">
+                        <div class="dt-form-section-header">
+                            <div class="dt-section-num">4</div>
+                            <h3>Benefits and risks</h3>
+                        </div>
+                        <div class="dt-form-section-body">
+
+                            <div class="dt-form-group">
+                                <label asp-for="ExpectedBenefits" class="dt-label">
+                                    Expected measurable benefits <span class="text-danger">*</span>
+                                </label>
+                                <span class="dt-label-hint">Describe the specific, measurable benefits that will be delivered</span>
+                                <textarea asp-for="ExpectedBenefits" class="dt-input" rows="5"
+                                          placeholder="What outcomes will this deliver? How will success be measured?"></textarea>
+                                <span asp-validation-for="ExpectedBenefits" class="dt-field-error"></span>
+                            </div>
+
+                            <div class="dt-form-group">
+                                <label asp-for="RiskConsequence" class="dt-label">
+                                    Risk / consequence if not delivered <span class="text-danger">*</span>
+                                </label>
+                                <span class="dt-label-hint">What is the risk or consequence if this request is not progressed?</span>
+                                <textarea asp-for="RiskConsequence" class="dt-input" rows="4"
+                                          placeholder="Describe the risk, impact, and likelihood"></textarea>
+                                <span asp-validation-for="RiskConsequence" class="dt-field-error"></span>
+                            </div>
+
+                        </div>
+                    </div>
+
+                    <!-- 5. Funding and headcount -->
+                    <div class="dt-form-section">
+                        <div class="dt-form-section-header">
+                            <div class="dt-section-num">5</div>
+                            <h3>Funding and headcount</h3>
+                        </div>
+                        <div class="dt-form-section-body">
+
+                            <div class="dt-form-group">
+                                <label asp-for="FundingProvided" class="dt-label">Funding provided for delivery</label>
+                                <span class="dt-label-hint">Has funding been identified or committed? Provide details.</span>
+                                <textarea asp-for="FundingProvided" class="dt-input" rows="2"
+                                          placeholder="e.g. £500k confirmed from programme budget"></textarea>
+                            </div>
+
+                            <div class="dt-form-group">
+                                <label asp-for="HeadcountProvided" class="dt-label">Headcount provided for delivery</label>
+                                <span class="dt-label-hint">Has headcount been identified or committed?</span>
+                                <textarea asp-for="HeadcountProvided" class="dt-input" rows="2"></textarea>
+                            </div>
+
+                            <div class="dt-form-group">
+                                <label asp-for="HeadcountDetails" class="dt-label">Headcount details</label>
+                                <textarea asp-for="HeadcountDetails" class="dt-input" rows="2"
+                                          placeholder="Roles, grades, and numbers required"></textarea>
+                            </div>
+
+                        </div>
+                    </div>
+
+                    <!-- 6. Delivery -->
+                    <div class="dt-form-section">
+                        <div class="dt-form-section-header">
+                            <div class="dt-section-num">6</div>
+                            <h3>Delivery</h3>
+                        </div>
+                        <div class="dt-form-section-body">
+
+                            <div class="dt-form-group">
+                                <label asp-for="TargetDeliveryDate" class="dt-label">
+                                    Target delivery date <span class="text-danger">*</span>
+                                </label>
+                                <span class="dt-label-hint">When does this need to be delivered by?</span>
+                                <input asp-for="TargetDeliveryDate" type="date" class="dt-input" style="max-width:220px;" />
+                                <span asp-validation-for="TargetDeliveryDate" class="dt-field-error"></span>
+                            </div>
+
+                            <div class="dt-form-group">
+                                <label class="dt-label">New or significantly changed digital service?</label>
+                                <span class="dt-label-hint">Will this request result in a new or significantly changed digital service?</span>
+                                <div class="dt-radio-group" style="flex-direction:row;gap:0.75rem;">
+                                    <label class="dt-radio-option" style="flex:1;">
+                                        <input type="radio" asp-for="NewOrChangedDigitalService" id="ncdYes" value="True" />
+                                        <span>Yes</span>
+                                    </label>
+                                    <label class="dt-radio-option" style="flex:1;">
+                                        <input type="radio" asp-for="NewOrChangedDigitalService" id="ncdNo" value="False" />
+                                        <span>No</span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="dt-form-group" id="ncdDetailsGroup" style="@(Model.NewOrChangedDigitalService == true ? "" : "display:none")">
+                                <label asp-for="NewOrChangedServiceDetails" class="dt-label">Digital service details</label>
+                                <span class="dt-label-hint">Describe the new or changed digital service</span>
+                                <textarea asp-for="NewOrChangedServiceDetails" class="dt-input" rows="3"></textarea>
+                            </div>
+
+                            <div class="dt-form-group">
+                                <label class="dt-label">Public-facing digital service?</label>
+                                <span class="dt-label-hint">Will this be a service used directly by the public?</span>
+                                <div class="dt-radio-group" style="flex-direction:row;gap:0.75rem;">
+                                    <label class="dt-radio-option" style="flex:1;">
+                                        <input type="radio" asp-for="PublicFacingDigitalService" id="pfYes" value="True" />
+                                        <span>Yes</span>
+                                    </label>
+                                    <label class="dt-radio-option" style="flex:1;">
+                                        <input type="radio" asp-for="PublicFacingDigitalService" id="pfNo" value="False" />
+                                        <span>No</span>
+                                    </label>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- ── Sidebar ──────────────────────────────────────────────── -->
+                <div class="col-lg-4">
+                    <div class="dt-action-panel">
+                        <div class="dt-action-panel-header">
+                            <i class="fas fa-save mr-1" aria-hidden="true"></i> Save options
+                        </div>
+                        <div class="dt-action-panel-body">
+                            <button type="submit" class="dt-action-btn dt-action-btn--primary">
+                                <i class="fas fa-save" aria-hidden="true"></i>
+                                <span>Save @(isNew ? "and continue" : "changes")</span>
+                            </button>
+                            @if (!isNew)
+                            {
+                                <a asp-action="Detail" asp-controller="DemandTriage" asp-route-id="@Model.Id"
+                                   class="dt-action-btn dt-action-btn--secondary">
+                                    <i class="fas fa-times" aria-hidden="true"></i>
+                                    <span>Cancel</span>
+                                </a>
+                            }
+                            else
+                            {
+                                <a asp-action="Index" asp-controller="DemandTriage"
+                                   class="dt-action-btn dt-action-btn--secondary">
+                                    <i class="fas fa-times" aria-hidden="true"></i>
+                                    <span>Cancel</span>
+                                </a>
+                            }
+                        </div>
+                    </div>
+
+                    @if (!isNew)
+                    {
+                        <div class="dt-section-card mt-3">
+                            <div class="dt-section-body" style="font-size:0.82rem;">
+                                <dl class="dt-dl">
+                                    <dt>Reference</dt>
+                                    <dd style="font-family:monospace;">@Model.RequestReference</dd>
+                                    <dt>Status</dt>
+                                    <dd>@DemandTriageStatus.DisplayName(Model.Status)</dd>
+                                </dl>
+                            </div>
+                        </div>
+                    }
+
+                    <div class="dt-section-card mt-3">
+                        <div class="dt-section-header">
+                            <h3><i class="fas fa-info-circle" aria-hidden="true"></i> Required fields</h3>
+                        </div>
+                        <div class="dt-section-body" style="font-size:0.82rem;color:#495057;">
+                            <p class="mb-2">Fields marked <span class="text-danger">*</span> are required before you can submit.</p>
+                            <ul class="mb-0 pl-3">
+                                <li>Request name</li>
+                                <li>Request overview</li>
+                                <li>Your full name</li>
+                                <li>Department group</li>
+                                <li>Senior responsible officer</li>
+                                <li>Points of contact</li>
+                                <li>Expected benefits</li>
+                                <li>Risk / consequence</li>
+                                <li>Target delivery date</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </form>
+
+    </div>
+</section>
+
+@section Scripts {
+    <script>
+        // Toggle digital service details
+        document.querySelectorAll('input[name="NewOrChangedDigitalService"]').forEach(function(radio) {
+            radio.addEventListener('change', function() {
+                document.getElementById('ncdDetailsGroup').style.display =
+                    this.value === 'True' ? '' : 'none';
+            });
+        });
+
+        // Highlight selected radio options
+        document.querySelectorAll('.dt-radio-option input[type="radio"]').forEach(function(radio) {
+            radio.addEventListener('change', function() {
+                var name = this.name;
+                document.querySelectorAll('.dt-radio-option input[name="' + name + '"]').forEach(function(r) {
+                    r.closest('.dt-radio-option').classList.toggle('selected', r.checked);
+                });
+            });
+            // Set initial state
+            if (radio.checked) {
+                radio.closest('.dt-radio-option').classList.add('selected');
+            }
+        });
+    </script>
+}

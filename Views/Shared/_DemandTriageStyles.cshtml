@@ -1,0 +1,762 @@
+@* Shared styles for the Demand Triage module *@
+<style>
+    /* ─── Module header ──────────────────────────────────────────────────────── */
+    .dt-header {
+        background: linear-gradient(135deg, #1a3a5c 0%, #16548a 60%, #1e6fad 100%);
+        color: white;
+        padding: 1.75rem 1.5rem 0;
+        margin-bottom: 0;
+    }
+    .dt-header-inner {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 1rem;
+        margin-bottom: 1.25rem;
+    }
+    .dt-header h1 {
+        color: white;
+        font-size: 1.65rem;
+        font-weight: 700;
+        margin: 0 0 0.25rem;
+    }
+    .dt-header p {
+        color: rgba(255,255,255,0.82);
+        margin: 0;
+        font-size: 0.92rem;
+    }
+    .dt-breadcrumb {
+        font-size: 0.78rem;
+        color: rgba(255,255,255,0.6);
+        margin-bottom: 0.35rem;
+    }
+    .dt-breadcrumb a { color: rgba(255,255,255,0.75); text-decoration: none; }
+    .dt-breadcrumb a:hover { color: white; text-decoration: underline; }
+    .dt-breadcrumb span { margin: 0 0.3rem; opacity: 0.45; }
+
+    /* ─── Stage pipeline (process tracker) ──────────────────────────────────── */
+    .dt-pipeline {
+        display: flex;
+        align-items: stretch;
+        overflow-x: auto;
+        background: rgba(0,0,0,0.18);
+        border-radius: 0;
+        padding: 0;
+        margin: 0 -1.5rem;
+        scrollbar-width: none;
+    }
+    .dt-pipeline::-webkit-scrollbar { display: none; }
+    .dt-stage {
+        flex: 1;
+        min-width: 110px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 0.75rem 0.5rem;
+        font-size: 0.72rem;
+        font-weight: 600;
+        color: rgba(255,255,255,0.5);
+        text-align: center;
+        border-right: 1px solid rgba(255,255,255,0.1);
+        position: relative;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        transition: background 0.2s;
+        cursor: default;
+    }
+    .dt-stage:last-child { border-right: none; }
+    .dt-stage i { font-size: 1rem; margin-bottom: 0.3rem; display: block; }
+    .dt-stage.dt-stage--done {
+        color: rgba(255,255,255,0.75);
+        background: rgba(255,255,255,0.06);
+    }
+    .dt-stage.dt-stage--done i { color: #6fcf97; }
+    .dt-stage.dt-stage--active {
+        color: white;
+        background: rgba(255,255,255,0.14);
+        border-bottom: 3px solid #fff;
+    }
+    .dt-stage.dt-stage--active i { color: #f2c94c; }
+
+    /* ─── Status badges ──────────────────────────────────────────────────────── */
+    .dt-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+        padding: 0.25rem 0.65rem;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        white-space: nowrap;
+    }
+    .dt-badge-draft       { background: #e9ecef; color: #495057; }
+    .dt-badge-submitted   { background: #cce5ff; color: #004085; }
+    .dt-badge-review      { background: #d1ecf1; color: #0c5460; }
+    .dt-badge-scoring     { background: #fff3cd; color: #856404; }
+    .dt-badge-triage      { background: #d4edda; color: #155724; }
+    .dt-badge-triaged     { background: #155724; color: white; }
+    .dt-badge-closed      { background: #6c757d; color: white; }
+    .dt-badge-returned    { background: #f8d7da; color: #721c24; }
+    .dt-badge-override    { background: #f0ad4e; color: #212529; }
+
+    /* ─── Stat cards (register dashboard) ───────────────────────────────────── */
+    .dt-stat-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+    }
+    .dt-stat-card {
+        background: white;
+        border-radius: 10px;
+        padding: 1.1rem 1rem;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+        border-left: 4px solid #dee2e6;
+        transition: box-shadow 0.2s, transform 0.15s;
+    }
+    .dt-stat-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.12); transform: translateY(-1px); }
+    .dt-stat-card--blue   { border-left-color: #16548a; }
+    .dt-stat-card--green  { border-left-color: #28a745; }
+    .dt-stat-card--amber  { border-left-color: #ffc107; }
+    .dt-stat-card--red    { border-left-color: #dc3545; }
+    .dt-stat-card--purple { border-left-color: #6f42c1; }
+    .dt-stat-value {
+        font-size: 2rem;
+        font-weight: 700;
+        line-height: 1;
+        color: #1a3a5c;
+        margin-bottom: 0.2rem;
+    }
+    .dt-stat-label {
+        font-size: 0.78rem;
+        color: #6c757d;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+    .dt-stat-icon {
+        font-size: 1.4rem;
+        margin-bottom: 0.5rem;
+        opacity: 0.6;
+    }
+
+    /* ─── Register table ─────────────────────────────────────────────────────── */
+    .dt-register-table { width: 100%; border-collapse: collapse; }
+    .dt-register-table thead th {
+        background: #f8f9fa;
+        font-size: 0.72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #6c757d;
+        padding: 0.65rem 1rem;
+        border-bottom: 2px solid #dee2e6;
+        white-space: nowrap;
+    }
+    .dt-register-table tbody tr {
+        border-bottom: 1px solid #f0f0f0;
+        transition: background 0.12s;
+    }
+    .dt-register-table tbody tr:hover { background: #f8fbff; }
+    .dt-register-table tbody td {
+        padding: 0.75rem 1rem;
+        vertical-align: middle;
+        font-size: 0.88rem;
+    }
+    .dt-ref-link {
+        font-weight: 700;
+        color: #16548a;
+        text-decoration: none;
+        font-family: 'Courier New', monospace;
+        font-size: 0.82rem;
+    }
+    .dt-ref-link:hover { text-decoration: underline; color: #0d3a6e; }
+    .dt-score-pill {
+        display: inline-flex;
+        align-items: center;
+        background: #f0f4f8;
+        border-radius: 20px;
+        padding: 0.15rem 0.6rem;
+        font-size: 0.8rem;
+        font-weight: 700;
+        color: #1a3a5c;
+        gap: 0.2rem;
+    }
+    .dt-score-pill .dt-score-max { font-weight: 400; color: #adb5bd; font-size: 0.72rem; }
+
+    /* ─── Filter tabs ────────────────────────────────────────────────────────── */
+    .dt-filter-tabs {
+        display: flex;
+        gap: 0.25rem;
+        flex-wrap: wrap;
+        padding: 0.75rem 1rem;
+        background: #f8f9fa;
+        border-bottom: 1px solid #dee2e6;
+    }
+    .dt-filter-tab {
+        padding: 0.3rem 0.85rem;
+        border-radius: 20px;
+        font-size: 0.78rem;
+        font-weight: 600;
+        color: #6c757d;
+        background: white;
+        border: 1px solid #dee2e6;
+        text-decoration: none;
+        transition: all 0.15s;
+        white-space: nowrap;
+    }
+    .dt-filter-tab:hover { background: #e9ecef; color: #495057; text-decoration: none; }
+    .dt-filter-tab.active { background: #16548a; color: white; border-color: #16548a; }
+
+    /* ─── Detail page layout ─────────────────────────────────────────────────── */
+    .dt-detail-header {
+        background: linear-gradient(135deg, #1a3a5c 0%, #16548a 100%);
+        color: white;
+        padding: 1.5rem;
+        border-radius: 10px 10px 0 0;
+        margin-bottom: 0;
+    }
+    .dt-detail-header h2 { color: white; font-size: 1.35rem; font-weight: 700; margin: 0 0 0.3rem; }
+    .dt-detail-header .dt-ref { font-family: monospace; font-size: 0.85rem; opacity: 0.75; }
+
+    /* ─── Stage tracker (detail page) ───────────────────────────────────────── */
+    .dt-stage-tracker {
+        display: flex;
+        align-items: center;
+        padding: 1rem 1.5rem;
+        background: white;
+        border: 1px solid #dee2e6;
+        border-top: none;
+        border-radius: 0 0 10px 10px;
+        overflow-x: auto;
+        margin-bottom: 1.5rem;
+        gap: 0;
+    }
+    .dt-tracker-step {
+        display: flex;
+        align-items: center;
+        flex: 1;
+        min-width: 0;
+    }
+    .dt-tracker-step-inner {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        flex: 1;
+        padding: 0 0.5rem;
+    }
+    .dt-tracker-dot {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.8rem;
+        font-weight: 700;
+        margin-bottom: 0.35rem;
+        flex-shrink: 0;
+        border: 2px solid #dee2e6;
+        background: white;
+        color: #adb5bd;
+        transition: all 0.2s;
+    }
+    .dt-tracker-dot--done { background: #28a745; border-color: #28a745; color: white; }
+    .dt-tracker-dot--active { background: #16548a; border-color: #16548a; color: white; box-shadow: 0 0 0 4px rgba(22,84,138,0.15); }
+    .dt-tracker-label {
+        font-size: 0.68rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: #adb5bd;
+        white-space: nowrap;
+    }
+    .dt-tracker-label--done { color: #28a745; }
+    .dt-tracker-label--active { color: #16548a; }
+    .dt-tracker-connector {
+        flex: 1;
+        height: 2px;
+        background: #dee2e6;
+        margin: 0 0.25rem;
+        margin-bottom: 1.4rem;
+        min-width: 20px;
+    }
+    .dt-tracker-connector--done { background: #28a745; }
+
+    /* ─── Section cards ──────────────────────────────────────────────────────── */
+    .dt-section-card {
+        background: white;
+        border: 1px solid #e9ecef;
+        border-radius: 10px;
+        margin-bottom: 1.25rem;
+        overflow: hidden;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    .dt-section-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.85rem 1.25rem;
+        background: #f8f9fa;
+        border-bottom: 1px solid #e9ecef;
+    }
+    .dt-section-header h3 {
+        font-size: 0.92rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #495057;
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    .dt-section-header h3 i { color: #16548a; font-size: 0.85rem; }
+    .dt-section-body { padding: 1.25rem; }
+
+    /* ─── Definition list (read-only fields) ────────────────────────────────── */
+    .dt-dl { display: grid; grid-template-columns: 180px 1fr; gap: 0.5rem 1rem; }
+    .dt-dl dt {
+        font-size: 0.78rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: #6c757d;
+        padding-top: 0.1rem;
+    }
+    .dt-dl dd {
+        font-size: 0.9rem;
+        color: #212529;
+        margin: 0;
+        word-break: break-word;
+    }
+    .dt-dl dd.dt-empty { color: #adb5bd; font-style: italic; }
+
+    /* ─── Action panel ───────────────────────────────────────────────────────── */
+    .dt-action-panel {
+        background: white;
+        border: 1px solid #e9ecef;
+        border-radius: 10px;
+        overflow: hidden;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        position: sticky;
+        top: 1rem;
+    }
+    .dt-action-panel-header {
+        background: #1a3a5c;
+        color: white;
+        padding: 0.85rem 1.25rem;
+        font-size: 0.82rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+    }
+    .dt-action-panel-body { padding: 1rem; }
+    .dt-action-btn {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        width: 100%;
+        padding: 0.65rem 1rem;
+        border-radius: 8px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+        border: none;
+        cursor: pointer;
+        text-decoration: none;
+        transition: all 0.15s;
+        text-align: left;
+    }
+    .dt-action-btn:last-child { margin-bottom: 0; }
+    .dt-action-btn i { width: 16px; text-align: center; flex-shrink: 0; }
+    .dt-action-btn--primary   { background: #16548a; color: white; }
+    .dt-action-btn--primary:hover { background: #0d3a6e; color: white; text-decoration: none; }
+    .dt-action-btn--success   { background: #28a745; color: white; }
+    .dt-action-btn--success:hover { background: #1e7e34; color: white; text-decoration: none; }
+    .dt-action-btn--warning   { background: #ffc107; color: #212529; }
+    .dt-action-btn--warning:hover { background: #e0a800; color: #212529; text-decoration: none; }
+    .dt-action-btn--info      { background: #17a2b8; color: white; }
+    .dt-action-btn--info:hover { background: #117a8b; color: white; text-decoration: none; }
+    .dt-action-btn--secondary { background: #f8f9fa; color: #495057; border: 1px solid #dee2e6; }
+    .dt-action-btn--secondary:hover { background: #e9ecef; color: #212529; text-decoration: none; }
+    .dt-action-btn--danger    { background: #fff5f5; color: #dc3545; border: 1px solid #f5c6cb; }
+    .dt-action-btn--danger:hover { background: #f8d7da; color: #721c24; text-decoration: none; }
+    .dt-action-divider { border: none; border-top: 1px solid #e9ecef; margin: 0.75rem 0; }
+
+    /* ─── Scorecard heatmap ──────────────────────────────────────────────────── */
+    .dt-heatmap {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.75rem;
+        margin-bottom: 1rem;
+    }
+    .dt-heatmap-cell {
+        border-radius: 8px;
+        padding: 0.85rem 1rem;
+        position: relative;
+        overflow: hidden;
+    }
+    .dt-heatmap-cell--low    { background: #fff3cd; border-left: 4px solid #ffc107; }
+    .dt-heatmap-cell--medium { background: #d1ecf1; border-left: 4px solid #17a2b8; }
+    .dt-heatmap-cell--high   { background: #d4edda; border-left: 4px solid #28a745; }
+    .dt-heatmap-cell-label {
+        font-size: 0.7rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #6c757d;
+        margin-bottom: 0.2rem;
+    }
+    .dt-heatmap-cell-score {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: #1a3a5c;
+        line-height: 1;
+    }
+    .dt-heatmap-cell-max { font-size: 0.75rem; color: #adb5bd; font-weight: 400; }
+    .dt-heatmap-cell-band { font-size: 0.75rem; color: #495057; margin-top: 0.2rem; }
+
+    .dt-total-score-bar {
+        background: #f8f9fa;
+        border-radius: 10px;
+        padding: 1rem 1.25rem;
+        border: 1px solid #e9ecef;
+        display: flex;
+        align-items: center;
+        gap: 1.5rem;
+        flex-wrap: wrap;
+    }
+    .dt-total-score-number {
+        font-size: 2.5rem;
+        font-weight: 800;
+        color: #1a3a5c;
+        line-height: 1;
+    }
+    .dt-total-score-number span { font-size: 1rem; font-weight: 400; color: #adb5bd; }
+    .dt-score-progress {
+        flex: 1;
+        min-width: 120px;
+    }
+    .dt-score-progress-bar {
+        height: 10px;
+        border-radius: 5px;
+        background: #e9ecef;
+        overflow: hidden;
+        margin-bottom: 0.3rem;
+    }
+    .dt-score-progress-fill {
+        height: 100%;
+        border-radius: 5px;
+        transition: width 0.6s ease;
+    }
+    .dt-score-progress-fill--do-not-do { background: #dc3545; }
+    .dt-score-progress-fill--could-do  { background: #ffc107; }
+    .dt-score-progress-fill--must-do   { background: #28a745; }
+
+    /* ─── Suggestion band pills ──────────────────────────────────────────────── */
+    .dt-suggestion {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.4rem 1rem;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+    }
+    .dt-suggestion--must-do   { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+    .dt-suggestion--could-do  { background: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
+    .dt-suggestion--do-not-do { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+
+    /* ─── Form styles ────────────────────────────────────────────────────────── */
+    .dt-form-section {
+        background: white;
+        border: 1px solid #e9ecef;
+        border-radius: 10px;
+        margin-bottom: 1.25rem;
+        overflow: hidden;
+    }
+    .dt-form-section-header {
+        padding: 0.85rem 1.25rem;
+        background: #f8f9fa;
+        border-bottom: 1px solid #e9ecef;
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+    }
+    .dt-form-section-header h3 {
+        font-size: 0.88rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #495057;
+        margin: 0;
+    }
+    .dt-form-section-header .dt-section-num {
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        background: #16548a;
+        color: white;
+        font-size: 0.72rem;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+    .dt-form-section-body { padding: 1.25rem; }
+    .dt-form-group { margin-bottom: 1.25rem; }
+    .dt-form-group:last-child { margin-bottom: 0; }
+    .dt-label {
+        display: block;
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: #212529;
+        margin-bottom: 0.35rem;
+    }
+    .dt-label-hint {
+        display: block;
+        font-size: 0.78rem;
+        color: #6c757d;
+        font-weight: 400;
+        margin-top: 0.1rem;
+        margin-bottom: 0.4rem;
+    }
+    .dt-input {
+        display: block;
+        width: 100%;
+        padding: 0.5rem 0.75rem;
+        font-size: 0.9rem;
+        border: 1px solid #ced4da;
+        border-radius: 6px;
+        background: white;
+        color: #212529;
+        transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .dt-input:focus {
+        border-color: #16548a;
+        box-shadow: 0 0 0 3px rgba(22,84,138,0.15);
+        outline: none;
+    }
+    .dt-input--error { border-color: #dc3545; }
+    .dt-input--error:focus { box-shadow: 0 0 0 3px rgba(220,53,69,0.15); }
+    .dt-field-error { font-size: 0.78rem; color: #dc3545; margin-top: 0.25rem; }
+
+    /* ─── Radio / checkbox groups ────────────────────────────────────────────── */
+    .dt-radio-group, .dt-check-group { display: flex; flex-direction: column; gap: 0.5rem; }
+    .dt-radio-option, .dt-check-option {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.6rem;
+        padding: 0.6rem 0.85rem;
+        border: 1px solid #e9ecef;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: background 0.12s, border-color 0.12s;
+        background: white;
+    }
+    .dt-radio-option:hover, .dt-check-option:hover { background: #f8fbff; border-color: #b8d4f0; }
+    .dt-radio-option input, .dt-check-option input { margin-top: 0.15rem; flex-shrink: 0; accent-color: #16548a; }
+    .dt-radio-option label, .dt-check-option label {
+        cursor: pointer;
+        font-size: 0.88rem;
+        color: #212529;
+        margin: 0;
+        line-height: 1.4;
+    }
+    .dt-radio-option.selected, .dt-check-option.selected {
+        background: #f0f7ff;
+        border-color: #16548a;
+    }
+    .dt-radio-score {
+        margin-left: auto;
+        font-size: 0.72rem;
+        font-weight: 700;
+        color: #16548a;
+        background: #e8f0f8;
+        padding: 0.1rem 0.4rem;
+        border-radius: 4px;
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+
+    /* ─── Scoring wizard ─────────────────────────────────────────────────────── */
+    .dt-scoring-nav {
+        background: white;
+        border: 1px solid #e9ecef;
+        border-radius: 10px;
+        overflow: hidden;
+        margin-bottom: 1rem;
+    }
+    .dt-scoring-nav-item {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.75rem 1rem;
+        border-bottom: 1px solid #f0f0f0;
+        text-decoration: none;
+        color: #495057;
+        font-size: 0.85rem;
+        font-weight: 500;
+        transition: background 0.12s;
+    }
+    .dt-scoring-nav-item:last-child { border-bottom: none; }
+    .dt-scoring-nav-item:hover { background: #f8fbff; text-decoration: none; color: #16548a; }
+    .dt-scoring-nav-item.active { background: #f0f7ff; color: #16548a; font-weight: 700; border-left: 3px solid #16548a; }
+    .dt-scoring-nav-item .dt-nav-num {
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        background: #e9ecef;
+        color: #6c757d;
+        font-size: 0.72rem;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+    .dt-scoring-nav-item.active .dt-nav-num { background: #16548a; color: white; }
+    .dt-scoring-nav-item .dt-nav-score {
+        margin-left: auto;
+        font-size: 0.75rem;
+        font-weight: 700;
+        color: #16548a;
+    }
+
+    /* ─── Live score panel ───────────────────────────────────────────────────── */
+    .dt-live-score {
+        background: white;
+        border: 1px solid #e9ecef;
+        border-radius: 10px;
+        overflow: hidden;
+    }
+    .dt-live-score-header {
+        background: #1a3a5c;
+        color: white;
+        padding: 0.65rem 1rem;
+        font-size: 0.75rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+    }
+    .dt-live-score-body { padding: 0.85rem; }
+    .dt-score-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.4rem 0;
+        border-bottom: 1px solid #f0f0f0;
+        font-size: 0.82rem;
+    }
+    .dt-score-row:last-child { border-bottom: none; }
+    .dt-score-row-label { color: #495057; }
+    .dt-score-row-val { font-weight: 700; color: #1a3a5c; }
+    .dt-score-row-max { color: #adb5bd; font-weight: 400; font-size: 0.72rem; }
+    .dt-score-row--total {
+        background: #f0f7ff;
+        margin: 0.5rem -0.85rem -0.85rem;
+        padding: 0.6rem 0.85rem;
+        border-radius: 0 0 10px 10px;
+    }
+    .dt-score-row--total .dt-score-row-label { font-weight: 700; color: #1a3a5c; }
+    .dt-score-row--total .dt-score-row-val { font-size: 1.1rem; }
+
+    /* ─── Audit timeline ─────────────────────────────────────────────────────── */
+    .dt-timeline { position: relative; padding-left: 2rem; }
+    .dt-timeline::before {
+        content: '';
+        position: absolute;
+        left: 0.6rem;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        background: #e9ecef;
+    }
+    .dt-timeline-item {
+        position: relative;
+        margin-bottom: 1.25rem;
+    }
+    .dt-timeline-item:last-child { margin-bottom: 0; }
+    .dt-timeline-dot {
+        position: absolute;
+        left: -1.6rem;
+        top: 0.2rem;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: #16548a;
+        border: 2px solid white;
+        box-shadow: 0 0 0 2px #16548a;
+    }
+    .dt-timeline-dot--status { background: #28a745; box-shadow: 0 0 0 2px #28a745; }
+    .dt-timeline-dot--return { background: #ffc107; box-shadow: 0 0 0 2px #ffc107; }
+    .dt-timeline-dot--admin  { background: #dc3545; box-shadow: 0 0 0 2px #dc3545; }
+    .dt-timeline-time {
+        font-size: 0.72rem;
+        color: #adb5bd;
+        margin-bottom: 0.15rem;
+    }
+    .dt-timeline-action {
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: #212529;
+    }
+    .dt-timeline-actor { font-size: 0.78rem; color: #6c757d; }
+    .dt-timeline-notes { font-size: 0.82rem; color: #495057; margin-top: 0.2rem; font-style: italic; }
+    .dt-timeline-transition {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+        font-size: 0.72rem;
+        margin-top: 0.2rem;
+    }
+    .dt-timeline-transition .arrow { color: #adb5bd; }
+
+    /* ─── Alert / notice boxes ───────────────────────────────────────────────── */
+    .dt-notice {
+        display: flex;
+        gap: 0.75rem;
+        padding: 0.85rem 1rem;
+        border-radius: 8px;
+        margin-bottom: 1rem;
+        font-size: 0.88rem;
+    }
+    .dt-notice i { flex-shrink: 0; margin-top: 0.1rem; }
+    .dt-notice--warning { background: #fff8e1; border: 1px solid #ffe082; color: #6d4c00; }
+    .dt-notice--warning i { color: #f9a825; }
+    .dt-notice--info    { background: #e3f2fd; border: 1px solid #90caf9; color: #0d47a1; }
+    .dt-notice--info i  { color: #1976d2; }
+    .dt-notice--success { background: #e8f5e9; border: 1px solid #a5d6a7; color: #1b5e20; }
+    .dt-notice--success i { color: #388e3c; }
+    .dt-notice--danger  { background: #fce4ec; border: 1px solid #f48fb1; color: #880e4f; }
+    .dt-notice--danger i { color: #c62828; }
+
+    /* ─── Empty state ────────────────────────────────────────────────────────── */
+    .dt-empty {
+        text-align: center;
+        padding: 3rem 1.5rem;
+        color: #adb5bd;
+    }
+    .dt-empty i { font-size: 2.5rem; margin-bottom: 0.75rem; display: block; }
+    .dt-empty p { font-size: 0.92rem; margin: 0; }
+
+    /* ─── Responsive ─────────────────────────────────────────────────────────── */
+    @@media (max-width: 768px) {
+        .dt-heatmap { grid-template-columns: 1fr 1fr; }
+        .dt-dl { grid-template-columns: 1fr; }
+        .dt-dl dt { padding-bottom: 0; }
+        .dt-stat-grid { grid-template-columns: repeat(2, 1fr); }
+        .dt-pipeline { margin: 0 -1rem; }
+    }
+    @@media (max-width: 480px) {
+        .dt-stat-grid { grid-template-columns: 1fr 1fr; }
+        .dt-heatmap { grid-template-columns: 1fr; }
+    }
+</style>

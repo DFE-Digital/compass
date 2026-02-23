@@ -366,6 +366,7 @@ builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<INudgingService, NudgingService>();
 builder.Services.AddScoped<INotificationRuleService, NotificationRuleService>();
 builder.Services.AddScoped<IAccessibilityTrainingService, AccessibilityTrainingService>();
+builder.Services.AddScoped<Compass.Services.DemandTriage.IDemandTriageService, Compass.Services.DemandTriage.DemandTriageService>();
 
 // Register HttpClientFactory for PerformanceReportingManagementController
 builder.Services.AddHttpClient();

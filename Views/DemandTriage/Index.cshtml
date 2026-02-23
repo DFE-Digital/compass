@@ -1,0 +1,277 @@
+@model Compass.ViewModels.DemandTriage.DemandTriageRegisterViewModel
+@using Compass.Models.DemandTriage
+@using Compass.Services.DemandTriage
+
+@{
+    ViewData["Title"] = "Demand triage";
+
+    // Pipeline stage counts for stat cards
+    var all = Model.Requests;
+    var countDraft      = all.Count(r => r.Status == DemandTriageStatus.Draft);
+    var countSubmitted  = all.Count(r => r.Status == DemandTriageStatus.Submitted);
+    var countReview     = all.Count(r => r.Status is DemandTriageStatus.ExploratoryReviewInProgress or DemandTriageStatus.ExploratoryReviewComplete);
+    var countScoring    = all.Count(r => r.Status is DemandTriageStatus.ScoringInProgress or DemandTriageStatus.ScoredFinalised);
+    var countTriage     = all.Count(r => r.Status is DemandTriageStatus.TriagePending or DemandTriageStatus.Triaged);
+    var countClosed     = all.Count(r => r.Status == DemandTriageStatus.Closed);
+    var countReturned   = all.Count(r => r.Status == DemandTriageStatus.ReturnedForClarification);
+
+    // Stage order for pipeline display
+    var stages = new[]
+    {
+        (Label: "Draft",     Icon: "fa-pencil-alt",      Count: countDraft,     Status: DemandTriageStatus.Draft),
+        (Label: "Submitted", Icon: "fa-paper-plane",     Count: countSubmitted, Status: DemandTriageStatus.Submitted),
+        (Label: "Review",    Icon: "fa-search",          Count: countReview,    Status: DemandTriageStatus.ExploratoryReviewInProgress),
+        (Label: "Scoring",   Icon: "fa-star-half-alt",   Count: countScoring,   Status: DemandTriageStatus.ScoringInProgress),
+        (Label: "Triage",    Icon: "fa-gavel",           Count: countTriage,    Status: DemandTriageStatus.TriagePending),
+        (Label: "Closed",    Icon: "fa-check-circle",    Count: countClosed,    Status: DemandTriageStatus.Closed),
+    };
+
+    string StatusBadge(string status) => status switch
+    {
+        DemandTriageStatus.Draft                       => "dt-badge dt-badge-draft",
+        DemandTriageStatus.Submitted                   => "dt-badge dt-badge-submitted",
+        DemandTriageStatus.ExploratoryReviewInProgress => "dt-badge dt-badge-review",
+        DemandTriageStatus.ExploratoryReviewComplete   => "dt-badge dt-badge-review",
+        DemandTriageStatus.ScoringInProgress           => "dt-badge dt-badge-scoring",
+        DemandTriageStatus.ScoredFinalised             => "dt-badge dt-badge-scoring",
+        DemandTriageStatus.TriagePending               => "dt-badge dt-badge-triage",
+        DemandTriageStatus.Triaged                     => "dt-badge dt-badge-triaged",
+        DemandTriageStatus.Closed                      => "dt-badge dt-badge-closed",
+        DemandTriageStatus.ReturnedForClarification    => "dt-badge dt-badge-returned",
+        _                                              => "dt-badge dt-badge-draft"
+    };
+}
+
+@await Html.PartialAsync("_DemandTriageStyles")
+
+<!-- ── Module header ─────────────────────────────────────────────────────── -->
+<div class="dt-header">
+    <div class="dt-header-inner">
+        <div>
+            <div class="dt-breadcrumb">
+                <a href="/">Home</a> <span>/</span> Demand triage
+            </div>
+            <h1><i class="fas fa-clipboard-list mr-2" aria-hidden="true"></i>Demand triage register</h1>
+            <p>Manage and track DDaT demand requests through the full triage process</p>
+        </div>
+        <div class="d-flex align-items-center gap-2 flex-wrap mt-2 mt-md-0">
+            <a asp-action="Create" asp-controller="DemandTriage" class="btn btn-light font-weight-600">
+                <i class="fas fa-plus mr-1" aria-hidden="true"></i> New request
+            </a>
+        </div>
+    </div>
+
+    <!-- Pipeline stage bar -->
+    <div class="dt-pipeline" role="navigation" aria-label="Pipeline stages">
+        @foreach (var stage in stages)
+        {
+            var isActive = Model.StatusFilter == stage.Status;
+            <a href="@Url.Action("Index", "DemandTriage", new { status = stage.Status })"
+               class="dt-stage @(isActive ? "dt-stage--active" : (stage.Count > 0 ? "dt-stage--done" : ""))"
+               aria-label="@stage.Label: @stage.Count requests">
+                <i class="fas @stage.Icon" aria-hidden="true"></i>
+                @stage.Label
+                @if (stage.Count > 0)
+                {
+                    <span style="font-size:0.9rem;font-weight:800;margin-top:0.1rem;">@stage.Count</span>
+                }
+            </a>
+        }
+    </div>
+</div>
+
+<!-- ── Body ──────────────────────────────────────────────────────────────── -->
+<section class="content">
+    <div class="container-fluid pt-3">
+
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="dt-notice dt-notice--success mb-3">
+                <i class="fas fa-check-circle"></i>
+                <span>@TempData["SuccessMessage"]</span>
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="dt-notice dt-notice--danger mb-3">
+                <i class="fas fa-exclamation-circle"></i>
+                <span>@TempData["ErrorMessage"]</span>
+            </div>
+        }
+
+        <!-- Stat cards -->
+        <div class="dt-stat-grid">
+            <div class="dt-stat-card dt-stat-card--blue">
+                <div class="dt-stat-icon"><i class="fas fa-inbox" aria-hidden="true"></i></div>
+                <div class="dt-stat-value">@all.Count</div>
+                <div class="dt-stat-label">Total requests</div>
+            </div>
+            <div class="dt-stat-card dt-stat-card--amber">
+                <div class="dt-stat-icon"><i class="fas fa-hourglass-half" aria-hidden="true"></i></div>
+                <div class="dt-stat-value">@(countSubmitted + countReview + countScoring + countTriage)</div>
+                <div class="dt-stat-label">In progress</div>
+            </div>
+            <div class="dt-stat-card @(countReturned > 0 ? "dt-stat-card--red" : "dt-stat-card--blue")">
+                <div class="dt-stat-icon"><i class="fas fa-undo" aria-hidden="true"></i></div>
+                <div class="dt-stat-value">@countReturned</div>
+                <div class="dt-stat-label">Awaiting clarification</div>
+            </div>
+            <div class="dt-stat-card dt-stat-card--green">
+                <div class="dt-stat-icon"><i class="fas fa-gavel" aria-hidden="true"></i></div>
+                <div class="dt-stat-value">@countTriage</div>
+                <div class="dt-stat-label">At triage</div>
+            </div>
+            <div class="dt-stat-card dt-stat-card--purple">
+                <div class="dt-stat-icon"><i class="fas fa-check-double" aria-hidden="true"></i></div>
+                <div class="dt-stat-value">@all.Count(r => r.TriageOutcome != null)</div>
+                <div class="dt-stat-label">Decisions made</div>
+            </div>
+        </div>
+
+        <!-- Register card -->
+        <div class="dt-section-card">
+
+            <!-- Filter tabs -->
+            <div class="dt-filter-tabs">
+                <a href="@Url.Action("Index", "DemandTriage")"
+                   class="dt-filter-tab @(string.IsNullOrEmpty(Model.StatusFilter) ? "active" : "")">
+                    All <span style="margin-left:0.25rem;opacity:0.65;">(@all.Count)</span>
+                </a>
+                @foreach (var stage in stages)
+                {
+                    <a href="@Url.Action("Index", "DemandTriage", new { status = stage.Status })"
+                       class="dt-filter-tab @(Model.StatusFilter == stage.Status ? "active" : "")">
+                        @stage.Label
+                        @if (stage.Count > 0)
+                        {
+                            <span style="margin-left:0.25rem;opacity:0.65;">(@stage.Count)</span>
+                        }
+                    </a>
+                }
+                @if (countReturned > 0)
+                {
+                    <a href="@Url.Action("Index", "DemandTriage", new { status = DemandTriageStatus.ReturnedForClarification })"
+                       class="dt-filter-tab @(Model.StatusFilter == DemandTriageStatus.ReturnedForClarification ? "active" : "")"
+                       style="@(countReturned > 0 ? "color:#721c24;border-color:#f5c6cb;" : "")">
+                        <i class="fas fa-undo mr-1" aria-hidden="true"></i>Returned (@countReturned)
+                    </a>
+                }
+            </div>
+
+            <!-- Table -->
+            @{
+                var filtered = string.IsNullOrEmpty(Model.StatusFilter)
+                    ? Model.Requests
+                    : Model.Requests.Where(r => r.Status == Model.StatusFilter).ToList();
+            }
+
+            @if (!filtered.Any())
+            {
+                <div class="dt-empty">
+                    <i class="fas fa-inbox" aria-hidden="true"></i>
+                    <p>No requests found@(string.IsNullOrEmpty(Model.StatusFilter) ? "" : $" with status &ldquo;{DemandTriageStatus.DisplayName(Model.StatusFilter)}&rdquo;").</p>
+                    @if (string.IsNullOrEmpty(Model.StatusFilter))
+                    {
+                        <a asp-action="Create" asp-controller="DemandTriage" class="btn btn-primary mt-2">
+                            <i class="fas fa-plus mr-1"></i> Create the first request
+                        </a>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="dt-register-table" aria-label="Demand requests">
+                        <thead>
+                            <tr>
+                                <th>Reference</th>
+                                <th>Request name</th>
+                                <th>Department group</th>
+                                <th>Submitted</th>
+                                <th>Status</th>
+                                <th>Score</th>
+                                <th>Suggestion</th>
+                                <th>Outcome</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var r in filtered.OrderByDescending(r => r.CreatedAt))
+                            {
+                                <tr>
+                                    <td>
+                                        <a asp-action="Detail" asp-controller="DemandTriage" asp-route-id="@r.Id"
+                                           class="dt-ref-link">@r.RequestReference</a>
+                                    </td>
+                                    <td>
+                                        <span class="font-weight-500">@(r.RequestName ?? r.ProposedRequestTitle ?? "—")</span>
+                                        @if (r.Status == DemandTriageStatus.ReturnedForClarification)
+                                        {
+                                            <br /><small class="text-danger"><i class="fas fa-exclamation-circle mr-1"></i>Awaiting clarification</small>
+                                        }
+                                    </td>
+                                    <td><span class="text-muted">@(r.DepartmentGroup ?? "—")</span></td>
+                                    <td>
+                                        @if (r.SubmittedAt.HasValue)
+                                        {
+                                            <span class="text-muted" style="font-size:0.82rem;">@r.SubmittedAt.Value.ToString("dd MMM yyyy")</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted" style="font-size:0.82rem;">Not submitted</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        <span class="@StatusBadge(r.Status)">@DemandTriageStatus.DisplayName(r.Status)</span>
+                                    </td>
+                                    <td>
+                                        @if (r.Scorecard != null)
+                                        {
+                                            <span class="dt-score-pill">
+                                                @r.Scorecard.TotalScore
+                                                <span class="dt-score-max">/ 100</span>
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">—</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (!string.IsNullOrWhiteSpace(r.Scorecard?.SuggestionBand))
+                                        {
+                                            var sc = r.Scorecard.SuggestionBand;
+                                            var cls = sc == "Must do" ? "dt-suggestion dt-suggestion--must-do"
+                                                    : sc == "Could do" ? "dt-suggestion dt-suggestion--could-do"
+                                                    : "dt-suggestion dt-suggestion--do-not-do";
+                                            <span class="@cls">@sc</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">—</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (!string.IsNullOrWhiteSpace(r.TriageOutcome?.OutcomeSelection))
+                                        {
+                                            <span class="font-weight-600" style="font-size:0.82rem;">@r.TriageOutcome.OutcomeSelection</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">—</span>
+                                        }
+                                    </td>
+                                    <td class="text-right" style="white-space:nowrap;">
+                                        <a asp-action="Detail" asp-controller="DemandTriage" asp-route-id="@r.Id"
+                                           class="btn btn-sm btn-outline-primary">View</a>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+
+    </div>
+</section>

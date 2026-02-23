@@ -1,0 +1,115 @@
+@model Compass.ViewModels.DemandTriage.ReturnForClarificationViewModel
+
+@{
+    ViewData["Title"] = $"Return for clarification — {Model.RequestReference}";
+}
+
+@await Html.PartialAsync("_DemandTriageStyles")
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb" class="govuk-breadcrumbs">
+        <ol class="govuk-breadcrumbs__list">
+            <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="/">Home</a></li>
+            <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" asp-action="Index" asp-controller="DemandTriage">Demand triage</a></li>
+            <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" asp-action="Detail" asp-controller="DemandTriage" asp-route-id="@Model.DemandTriageRequestId">@Model.RequestReference</a></li>
+            <li class="govuk-breadcrumbs__list-item" aria-current="page">Return for clarification</li>
+        </ol>
+    </nav>
+}
+
+<!-- ── Header ────────────────────────────────────────────────────────────── -->
+<div class="dt-header">
+    <div class="dt-header-inner">
+        <div>
+            <div class="dt-breadcrumb">
+                <a href="@Url.Action("Index","DemandTriage")">Demand triage</a>
+                <span>/</span>
+                <a href="@Url.Action("Detail","DemandTriage", new{id=Model.DemandTriageRequestId})">@Model.RequestReference</a>
+                <span>/</span> Return for clarification
+            </div>
+            <h1><i class="fas fa-undo mr-2" aria-hidden="true"></i>Return for clarification</h1>
+            <p>@Model.RequestReference — @Model.RequestName</p>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid pt-3">
+        <div class="row justify-content-center">
+            <div class="col-lg-7">
+
+                <!-- What happens notice -->
+                <div class="dt-notice dt-notice--warning mb-3">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <div>
+                        <strong>What happens next?</strong>
+                        <p class="mb-0 mt-1">
+                            Returning this request will set the status to
+                            <strong>Returned for clarification</strong> and notify the requester
+                            that they need to amend and re-submit. The reason you provide will be
+                            visible to the requester and recorded in the audit log.
+                        </p>
+                    </div>
+                </div>
+
+                @if (!ViewData.ModelState.IsValid)
+                {
+                    <div class="dt-notice dt-notice--danger mb-3">
+                        <i class="fas fa-exclamation-circle"></i>
+                        <div>
+                            <strong>Please fix the following:</strong>
+                            <ul class="mb-0 mt-1">
+                                @foreach (var error in ViewData.ModelState.Values.SelectMany(v => v.Errors))
+                                {
+                                    <li>@error.ErrorMessage</li>
+                                }
+                            </ul>
+                        </div>
+                    </div>
+                }
+
+                <form asp-action="ReturnForClarification" asp-controller="DemandTriage"
+                      asp-route-id="@Model.DemandTriageRequestId" method="post" novalidate>
+                    @Html.AntiForgeryToken()
+
+                    <div class="dt-form-section">
+                        <div class="dt-form-section-header">
+                            <div class="dt-section-num">1</div>
+                            <h3>Reason for returning</h3>
+                        </div>
+                        <div class="dt-form-section-body">
+
+                            <div class="dt-form-group">
+                                <label asp-for="Reason" class="dt-label">
+                                    Reason <span class="text-danger">*</span>
+                                </label>
+                                <span class="dt-label-hint">
+                                    Explain clearly what the requester needs to clarify, correct, or provide
+                                    additional information about. Be specific so they can act on your feedback.
+                                </span>
+                                <textarea asp-for="Reason" class="dt-input" rows="6"
+                                          placeholder="e.g. The business case does not include a cost estimate. Please provide a breakdown of expected costs before re-submitting."></textarea>
+                                <span asp-validation-for="Reason" class="text-danger small"></span>
+                            </div>
+
+                        </div>
+                    </div>
+
+                    <div class="d-flex align-items-center gap-3 flex-wrap">
+                        <button type="submit" class="dt-action-btn dt-action-btn--warning" style="width:auto;padding:0.65rem 1.5rem;">
+                            <i class="fas fa-undo" aria-hidden="true"></i>
+                            <span>Return for clarification</span>
+                        </button>
+                        <a asp-action="Detail" asp-controller="DemandTriage" asp-route-id="@Model.DemandTriageRequestId"
+                           class="dt-action-btn dt-action-btn--secondary" style="width:auto;padding:0.65rem 1.25rem;">
+                            <i class="fas fa-times" aria-hidden="true"></i>
+                            <span>Cancel</span>
+                        </a>
+                    </div>
+
+                </form>
+
+            </div>
+        </div>
+    </div>
+</section>
