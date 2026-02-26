@@ -5,6 +5,8 @@ using Compass.Models;
 using Compass.Services;
 using Microsoft.AspNetCore.Authorization;
 using System.Text.Json;
+using ClosedXML.Excel;
+using System.IO;
 
 namespace Compass.Controllers;
 
@@ -2872,6 +2874,183 @@ public class ProductReportingController : Controller
         ViewBag.BusinessAreaConfigs = businessAreaConfigs;
         
         return View("~/Views/ProductReporting/PerformanceMetrics/Guidance.cshtml");
+    }
+
+    /// <summary>
+    /// Exports commission performance data to Excel for the given commission (default commission 1).
+    /// Quarter is fixed as Q3 2025. Columns match the requested commission report format where we have data.
+    /// </summary>
+    [HttpGet]
+    public async Task<IActionResult> ExportCommission1PerformanceData(int commissionId = 1)
+    {
+        try
+        {
+            // Required format Q#_YYYY/YY per data dictionary (e.g. Q3_2025/26)
+            const string fixedQuarter = "Q3_2025/26";
+
+            var commission = await _context.Commissions.FindAsync(commissionId);
+            if (commission == null)
+            {
+                TempData["ErrorMessage"] = "Commission not found.";
+                return RedirectToAction("Commission", "ProductReporting");
+            }
+
+            var submissions = await _context.CommissionSubmissions
+                .Include(cs => cs.MetricValues)
+                .Where(cs => cs.CommissionId == commissionId)
+                .OrderBy(cs => cs.ProductTitle)
+                .ToListAsync();
+
+            var performanceMetrics = await _context.PerformanceMetrics
+                .Where(pm => !pm.IsDisabled)
+                .OrderBy(pm => pm.Identifier)
+                .ToListAsync();
+
+            // Map requested column names to performance metrics. Known identifier mappings first, then fuzzy by Title/Identifier.
+            var metricsByIdentifier = performanceMetrics.ToDictionary(m => m.Identifier, m => m, StringComparer.OrdinalIgnoreCase);
+            string Normalize(string s) => s?.Replace(" ", "_").Replace("-", "_").ToLowerInvariant() ?? "";
+            var metricColumnMap = new Dictionary<string, PerformanceMetric?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["completed_transactions"] = metricsByIdentifier.GetValueOrDefault("perf-6"),
+                ["completed_digital_transactions"] = metricsByIdentifier.GetValueOrDefault("perf-2"),
+                ["usat_total_number_of_all_responses"] = metricsByIdentifier.GetValueOrDefault("perf-1"),
+                ["started_digital_transactions"] = performanceMetrics.FirstOrDefault(m =>
+                    Normalize(m.Identifier).Contains("started") && (Normalize(m.Identifier).Contains("digital") || Normalize(m.Title).Contains("digital")) ||
+                    Normalize(m.Title).Contains("started") && Normalize(m.Title).Contains("digital")),
+                ["usat_number_of_satisfied_responses"] = performanceMetrics.FirstOrDefault(m =>
+                    (Normalize(m.Identifier).Contains("usat") || Normalize(m.Title).Contains("usat") || Normalize(m.Title).Contains("satisfied")) &&
+                    (Normalize(m.Title).Contains("satisfied") || Normalize(m.Identifier).Contains("satisfied")) &&
+                    !Normalize(m.Title).Contains("very")),
+                ["usat_number_of_very_satisfied_responses"] = performanceMetrics.FirstOrDefault(m =>
+                    (Normalize(m.Identifier).Contains("usat") || Normalize(m.Title).Contains("usat") || Normalize(m.Title).Contains("very")) &&
+                    Normalize(m.Title).Contains("very") && Normalize(m.Title).Contains("satisfied")),
+                ["accessibility_compliance"] = performanceMetrics.FirstOrDefault(m =>
+                    Normalize(m.Identifier).Contains("accessibility") || Normalize(m.Identifier).Contains("acc") ||
+                    Normalize(m.Title).Contains("accessibility") || Normalize(m.Title).Contains("compliance")),
+                ["cost_per_transaction_amount"] = performanceMetrics.FirstOrDefault(m =>
+                    Normalize(m.Identifier).Contains("cost") || Normalize(m.Title).Contains("cost per transaction") ||
+                    (Normalize(m.Title).Contains("cost") && Normalize(m.Title).Contains("transaction"))),
+                ["categories_included_in_cpt"] = performanceMetrics.FirstOrDefault(m =>
+                    Normalize(m.Title).Contains("categories") && (Normalize(m.Title).Contains("cpt") || Normalize(m.Title).Contains("cost"))),
+                ["fte_count"] = performanceMetrics.FirstOrDefault(m =>
+                    Normalize(m.Identifier).Contains("fte") || Normalize(m.Title).Contains("fte count") ||
+                    (Normalize(m.Title).Contains("fte") && Normalize(m.Title).Contains("count"))),
+                ["fte_cost"] = performanceMetrics.FirstOrDefault(m =>
+                    Normalize(m.Identifier).Contains("fte") && Normalize(m.Identifier).Contains("cost") ||
+                    (Normalize(m.Title).Contains("fte") && Normalize(m.Title).Contains("cost"))),
+                ["non_fte_cost"] = performanceMetrics.FirstOrDefault(m =>
+                    Normalize(m.Title).Contains("non") && Normalize(m.Title).Contains("fte") ||
+                    Normalize(m.Identifier).Contains("non_fte") || Normalize(m.Identifier).Contains("non fte")),
+            };
+
+            // Resolve product URLs and type from API (batch by document IDs)
+            var documentIds = submissions.Select(s => s.ProductDocumentId).Distinct().ToList();
+            var allProducts = await _productsApiService.GetAllProductsAsync();
+            var productByDocId = allProducts
+                .Where(p => !string.IsNullOrEmpty(p.DocumentId))
+                .GroupBy(p => p.DocumentId!, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+
+            // Fixed column order: all columns always present (data or empty)
+            var headers = new[]
+            {
+                "quarter",
+                "service_name",
+                "transactional_or_non_transactional",
+                "completed_transactions",
+                "started_digital_transactions",
+                "completed_digital_transactions",
+                "usat_number_of_satisfied_responses",
+                "usat_number_of_very_satisfied_responses",
+                "usat_total_number_of_all_responses",
+                "accessibility_compliance",
+                "cost_per_transaction_amount",
+                "categories_included_in_cpt",
+                "fte_count",
+                "fte_cost",
+                "non_fte_cost",
+                "govuk_url",
+                "comments"
+            };
+
+            using var workbook = new XLWorkbook();
+            var worksheet = workbook.Worksheets.Add("Commission performance");
+
+            for (int col = 0; col < headers.Length; col++)
+            {
+                var cell = worksheet.Cell(1, col + 1);
+                cell.Value = headers[col];
+                cell.Style.Font.Bold = true;
+                cell.Style.Fill.BackgroundColor = XLColor.FromHtml("#f1f3f5");
+                cell.Style.Border.BottomBorder = ClosedXML.Excel.XLBorderStyleValues.Thin;
+            }
+
+            int row = 2;
+            foreach (var submission in submissions)
+            {
+                var product = productByDocId.GetValueOrDefault(submission.ProductDocumentId);
+                var govukUrl = product?.ProductUrl ?? "";
+                var transactionalOrNot = "";
+                if (product?.CategoryValues != null)
+                {
+                    var typeCategory = product.CategoryValues
+                        .FirstOrDefault(cv => cv.CategoryType?.Name?.Trim().Equals("Type", StringComparison.OrdinalIgnoreCase) == true);
+                    if (typeCategory != null)
+                    {
+                        var typeName = typeCategory.Name?.Trim() ?? "";
+                        if (typeName.Equals("Transactional", StringComparison.OrdinalIgnoreCase))
+                            transactionalOrNot = "Transactional";
+                        else if (typeName.Equals("Non-transactional", StringComparison.OrdinalIgnoreCase))
+                            transactionalOrNot = "Non-transactional";
+                    }
+                }
+
+                for (int c = 0; c < headers.Length; c++)
+                {
+                    var header = headers[c];
+                    string cellValue;
+                    if (header == "quarter")
+                        cellValue = fixedQuarter;
+                    else if (header == "service_name")
+                        cellValue = submission.ProductTitle ?? "";
+                    else if (header == "transactional_or_non_transactional")
+                        cellValue = transactionalOrNot;
+                    else if (header == "govuk_url")
+                        cellValue = govukUrl;
+                    else if (header == "comments")
+                        cellValue = submission.Comments?.Trim() ?? "";
+                    else if (metricColumnMap.TryGetValue(header, out var metric) && metric != null)
+                    {
+                        var mv = submission.MetricValues?.FirstOrDefault(m => m.PerformanceMetricId == metric.Id);
+                        cellValue = mv == null || mv.IsNotCaptured ? "" : (mv.Value?.Trim() ?? "");
+                        if (header == "accessibility_compliance" && !string.IsNullOrEmpty(cellValue))
+                        {
+                            cellValue = (decimal.TryParse(cellValue, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var num) && num == 0)
+                                ? "Yes" : "No";
+                        }
+                    }
+                    else
+                        cellValue = "";
+
+                    worksheet.Cell(row, c + 1).Value = cellValue;
+                }
+
+                row++;
+            }
+
+            worksheet.Columns().AdjustToContents();
+
+            using var stream = new MemoryStream();
+            workbook.SaveAs(stream);
+            var fileName = $"commission-{commissionId}-performance-data-{DateTime.UtcNow:yyyyMMdd-HHmmss}.xlsx";
+            return File(stream.ToArray(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error exporting commission {CommissionId} performance data", commissionId);
+            TempData["ErrorMessage"] = "An error occurred while exporting commission performance data.";
+            return RedirectToAction("Commission", "ProductReporting");
+        }
     }
 
     // GET: ProductReporting/ExportUserProducts

@@ -626,6 +626,19 @@ public class FipsManagerController : Controller
                 ["fips_id"] = product.FipsId ?? string.Empty
             };
 
+            // Update product title from CMDB name if different
+            var titleUpdated = false;
+            if (!string.IsNullOrWhiteSpace(cmdbEntry.Name))
+            {
+                var cmdbName = cmdbEntry.Name.Trim();
+                var currentTitle = (product.Title ?? string.Empty).Trim();
+                if (!string.Equals(cmdbName, currentTitle, StringComparison.Ordinal))
+                {
+                    updateData["title"] = cmdbName;
+                    titleUpdated = true;
+                }
+            }
+
             // Set each role to array with user ID if user exists, or empty array if not
             // Strapi v5 accepts either documentId (string) or numeric id for relations
             foreach (var (cmdbRole, (user, strapiFieldName)) in roleMapping)
@@ -656,10 +669,14 @@ public class FipsManagerController : Controller
                 _cache.Remove("products_list_all");
                 _cache.Remove("products_list_all_states");
                 
-                if (rolesUpdated > 0)
+                if (rolesUpdated > 0 || titleUpdated)
                 {
-                    TempData["SuccessMessage"] = $"Successfully synced {rolesUpdated} role(s) from CMDB. " +
-                        $"Processed {usersProcessed} user(s).";
+                    var messageParts = new List<string>();
+                    if (rolesUpdated > 0)
+                        messageParts.Add($"{rolesUpdated} role(s) synced ({usersProcessed} user(s) processed)");
+                    if (titleUpdated)
+                        messageParts.Add("product title updated from CMDB name");
+                    TempData["SuccessMessage"] = "Successfully synced from CMDB. " + string.Join(". ", messageParts) + ".";
                 }
                 else
                 {
@@ -870,11 +887,23 @@ public class FipsManagerController : Controller
                     }
                 }
 
-                // Update product with entra-user relations
+                // Update product with entra-user relations (and title from CMDB name if different)
                 var updateData = new Dictionary<string, object>
                 {
                     ["fips_id"] = product.FipsId ?? string.Empty
                 };
+
+                var titleUpdated = false;
+                if (!string.IsNullOrWhiteSpace(cmdbEntry.Name))
+                {
+                    var cmdbName = cmdbEntry.Name.Trim();
+                    var currentTitle = (product.Title ?? string.Empty).Trim();
+                    if (!string.Equals(cmdbName, currentTitle, StringComparison.Ordinal))
+                    {
+                        updateData["title"] = cmdbName;
+                        titleUpdated = true;
+                    }
+                }
 
                 foreach (var (cmdbRole, (user, strapiFieldName)) in roleMapping)
                 {
@@ -893,10 +922,13 @@ public class FipsManagerController : Controller
                 if (success)
                 {
                     progress.SuccessCount++;
+                    var successParts = new List<string> { $"{rolesUpdated} role(s) updated, {usersProcessed} user(s) processed" };
+                    if (titleUpdated)
+                        successParts.Add("title updated from CMDB");
                     progress.LogEntries.Add(new BulkSyncLogEntry 
                     { 
                         Type = "success", 
-                        Message = $"Success: {product.Title} - {rolesUpdated} role(s) updated, {usersProcessed} user(s) processed" 
+                        Message = $"Success: {product.Title} - {string.Join(", ", successParts)}" 
                     });
 
                     // Clear cache

@@ -427,8 +427,13 @@ public class HomeController : Controller
             .ToList();
 
         var now = DateTime.UtcNow;
-        var currentYear = now.Month == 1 ? now.Year - 1 : now.Year;
-        var currentMonth = now.Month == 1 ? 12 : now.Month - 1;
+        // Use same applicable reporting period logic as your-work /api/project/your-work (and _ProjectTable)
+        var reportYear = now.Year;
+        var reportMonth = now.Month;
+        var currentPeriodDueDate = _monthlyUpdateService.GetMonthlyUpdateDueDate(reportYear, reportMonth);
+        var daysUntilCurrentPeriodDueDate = (currentPeriodDueDate - now).Days;
+        var applicableYear = daysUntilCurrentPeriodDueDate <= 10 ? reportYear : (reportMonth == 1 ? reportYear - 1 : reportYear);
+        var applicableMonth = daysUntilCurrentPeriodDueDate <= 10 ? reportMonth : (reportMonth == 1 ? 12 : reportMonth - 1);
 
         var productsNeedingReturns = new List<(ProductDto Product, ReturnStatus Status, DateTime DueDate)>();
         var enableMonthlyPerformanceReporting = _configuration.GetValue<bool>("FeatureFlags:EnableMonthlyPerformanceReporting", true);
@@ -438,32 +443,32 @@ public class HomeController : Controller
             foreach (var product in myProducts.Where(p => !string.IsNullOrEmpty(p.FipsId)))
             {
                 var productReturn = await _context.ProductReturns
-                    .Where(pr => pr.FipsId == product.FipsId && pr.Year == currentYear && pr.Month == currentMonth)
+                    .Where(pr => pr.FipsId == product.FipsId && pr.Year == applicableYear && pr.Month == applicableMonth)
                     .FirstOrDefaultAsync();
 
                 var status = _returnStatusService.CalculateReturnStatus(
-                    currentYear,
-                    currentMonth,
+                    applicableYear,
+                    applicableMonth,
                     productReturn?.SubmittedDate);
 
                 if (status == ReturnStatus.Due || status == ReturnStatus.Late)
                 {
-                    var dueDate = _returnStatusService.GetReturnDueDate(currentYear, currentMonth);
+                    var dueDate = _returnStatusService.GetReturnDueDate(applicableYear, applicableMonth);
                     productsNeedingReturns.Add((product, status, dueDate));
                 }
             }
         }
 
-        // Calculate projects needing monthly updates
+        // Calculate projects needing monthly updates (same applicable period as your-work)
         var projectsNeedingMonthlyUpdates = new List<(Project Project, UpdateSubmissionStatus Status, DateTime DueDate)>();
         foreach (var project in myProjects)
         {
-            var update = project.MonthlyUpdates?.FirstOrDefault(u => u.Year == currentYear && u.Month == currentMonth);
-            var updateStatus = _monthlyUpdateService.CalculateUpdateStatus(currentYear, currentMonth, update?.SubmittedAt);
+            var update = project.MonthlyUpdates?.FirstOrDefault(u => u.Year == applicableYear && u.Month == applicableMonth);
+            var updateStatus = _monthlyUpdateService.CalculateUpdateStatus(applicableYear, applicableMonth, update?.SubmittedAt);
             
             if (updateStatus == UpdateSubmissionStatus.Due || updateStatus == UpdateSubmissionStatus.Late)
             {
-                var dueDate = _monthlyUpdateService.GetMonthlyUpdateDueDate(currentYear, currentMonth);
+                var dueDate = _monthlyUpdateService.GetMonthlyUpdateDueDate(applicableYear, applicableMonth);
                 projectsNeedingMonthlyUpdates.Add((project, updateStatus, dueDate));
             }
         }

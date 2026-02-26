@@ -28,6 +28,33 @@
     var atRiskCount = redCount + amberRedCount;
     var reportingPct = projectCount > 0 ? (int)Math.Round(submittedThisMonth * 100.0 / projectCount) : 0;
     var openAccessibilityIssues = accessibilityIssues.Count(i => i.Status != "resolved" && i.Status != "wont_fix");
+    var displayScopeName = selectedBa?.Name ?? "All business areas";
+    var productsForBusinessArea = ViewBag.ProductsForBusinessArea as List<ProductDto> ?? new List<ProductDto>();
+    var filteredProjectCount = ViewBag.FilteredProjectCount as int? ?? projectCount;
+    var projectPage = ViewBag.ProjectPage as int? ?? 1;
+    var projectPageSize = ViewBag.ProjectPageSize as int? ?? 15;
+    var projectTotalPages = ViewBag.ProjectTotalPages as int? ?? 1;
+    var projectStatus = ViewBag.ProjectStatus as string;
+    var projectPhase = ViewBag.ProjectPhase as string;
+    var projectRag = ViewBag.ProjectRag as string;
+    var projectDivision = ViewBag.ProjectDivision as string;
+    var projectBusinessArea = ViewBag.ProjectBusinessArea as string;
+    var projectSearch = ViewBag.ProjectSearch as string;
+    var projectDivisionNames = ViewBag.ProjectDivisionNames as List<string> ?? new List<string>();
+    var projectPhaseNames = ViewBag.ProjectPhaseNames as List<string> ?? new List<string>();
+    var projectRagNames = ViewBag.ProjectRagNames as List<string> ?? new List<string>();
+    var projectStatusNames = ViewBag.ProjectStatusNames as List<string> ?? new List<string>();
+    var filteredProductCount = ViewBag.FilteredProductCount as int? ?? productsForBusinessArea.Count;
+    var productPage = ViewBag.ProductPage as int? ?? 1;
+    var productPageSize = ViewBag.ProductPageSize as int? ?? 15;
+    var productTotalPages = ViewBag.ProductTotalPages as int? ?? 1;
+    var productPhaseFilter = ViewBag.ProductPhase as string;
+    var productBusinessAreaFilter = ViewBag.ProductBusinessArea as string;
+    var productSearchFilter = ViewBag.ProductSearch as string;
+    var productPhaseNames = ViewBag.ProductPhaseNames as List<string> ?? new List<string>();
+    var productBusinessAreaNames = ViewBag.ProductBusinessAreaNames as List<string> ?? new List<string>();
+    var allFilteredProjectsForModal = ViewBag.AllFilteredProjectsForModal as List<Project> ?? projects;
+    var hasActiveFilters = !string.IsNullOrWhiteSpace(projectStatus) || !string.IsNullOrWhiteSpace(projectPhase) || !string.IsNullOrWhiteSpace(projectRag) || !string.IsNullOrWhiteSpace(projectDivision) || !string.IsNullOrWhiteSpace(projectBusinessArea) || !string.IsNullOrWhiteSpace(projectSearch) || !string.IsNullOrWhiteSpace(productPhaseFilter) || !string.IsNullOrWhiteSpace(productBusinessAreaFilter) || !string.IsNullOrWhiteSpace(productSearchFilter);
 }
 
 @functions {
@@ -105,7 +132,7 @@
                 Business area report
             </nav>
             <h1 class="mb-1"><i class="fas fa-building mr-2" aria-hidden="true"></i>
-                @(selectedBa != null ? selectedBa.Name : "Business area report")
+                @displayScopeName
             </h1>
             <p class="mb-0 opacity-90">Granular view of projects, products, and leadership for this business area</p>
         </div>
@@ -150,7 +177,9 @@
                     <i class="fas fa-chevron-down caret-icon ml-1" aria-hidden="true"></i>
                 </button>
                 <div class="reports-nav-dropdown-menu" role="menu">
-                    <a href="@Url.Action("BusinessAreaReport", "Reports")" role="menuitem">
+                    <a href="@Url.Action("BusinessAreaReport", "Reports")"
+                       class="@(selectedBa == null ? "active" : "")"
+                       role="menuitem">
                         <i class="fas fa-th-list mr-1 text-muted" aria-hidden="true"></i>All business areas
                     </a>
                     <div class="dropdown-divider"></div>
@@ -164,12 +193,13 @@
                 <div class="dropdown-scroll-hint" aria-hidden="true"><i class="fas fa-chevron-down"></i></div>
             </li>
             <li><a href="@Url.Action("PriorityOutcomes", "Reports")"><i class="fas fa-star mr-1" aria-hidden="true"></i>Priority outcomes</a></li>
+            <li><a href="@Url.Action("PerformanceReporting", "Reports")"><i class="fas fa-chart-line mr-1" aria-hidden="true"></i>Performance reporting</a></li>
         </ul>
 </div>
 
 <div class="reports-body">
 
-        @if (selectedBa == null)
+        @if (selectedBa == null && !projects.Any())
         {
             <div class="alert alert-info">No business area selected. Please choose one from the tabs above.</div>
         }
@@ -177,13 +207,13 @@
         {
             <!-- Stat cards -->
             <div class="reports-stat-grid mb-4">
-                <button type="button" class="reports-stat-card reports-stat-blue" data-stat="all" data-stat-label="All projects in @selectedBa.Name">
+                <button type="button" class="reports-stat-card reports-stat-blue" data-stat="all" data-stat-label="All projects in @displayScopeName">
                     <div class="reports-stat-icon"><i class="fas fa-project-diagram" aria-hidden="true"></i></div>
                     <div class="reports-stat-value">@projectCount</div>
                     <div class="reports-stat-label">Projects</div>
-                    <div class="reports-stat-sub">in @selectedBa.Name</div>
+                    <div class="reports-stat-sub">in @displayScopeName</div>
                 </button>
-                <button type="button" class="reports-stat-card @(atRiskCount > 0 ? "reports-stat-red" : "reports-stat-green")" data-stat="at-risk" data-stat-label="At-risk projects in @selectedBa.Name">
+                <button type="button" class="reports-stat-card @(atRiskCount > 0 ? "reports-stat-red" : "reports-stat-green")" data-stat="at-risk" data-stat-label="At-risk projects in @displayScopeName">
                     <div class="reports-stat-icon"><i class="fas fa-traffic-light" aria-hidden="true"></i></div>
                     <div class="reports-stat-value">@atRiskCount</div>
                     <div class="reports-stat-label">At risk</div>
@@ -201,13 +231,13 @@
                     <div class="reports-stat-label">Open accessibility issues</div>
                     <div class="reports-stat-sub">across business area projects</div>
                 </div>
-                <button type="button" class="reports-stat-card reports-stat-purple" data-stat="flagship" data-stat-label="Flagship projects in @selectedBa.Name">
+                <button type="button" class="reports-stat-card reports-stat-purple" data-stat="flagship" data-stat-label="Flagship projects in @displayScopeName">
                     <div class="reports-stat-icon"><i class="fas fa-star" aria-hidden="true"></i></div>
                     <div class="reports-stat-value">@flagshipCount</div>
                     <div class="reports-stat-label">Flagship projects</div>
                     <div class="reports-stat-sub">@multiDeptCount multi-department</div>
                 </button>
-                <button type="button" class="reports-stat-card @(highRiskCount > 0 ? "reports-stat-red" : "reports-stat-green")" data-stat="high-risk" data-stat-label="Projects with high risks in @selectedBa.Name">
+                <button type="button" class="reports-stat-card @(highRiskCount > 0 ? "reports-stat-red" : "reports-stat-green")" data-stat="high-risk" data-stat-label="Projects with high risks in @displayScopeName">
                     <div class="reports-stat-icon"><i class="fas fa-exclamation-triangle" aria-hidden="true"></i></div>
                     <div class="reports-stat-value">@highRiskCount</div>
                     <div class="reports-stat-label">Projects with high risks</div>
@@ -264,11 +294,163 @@
                         </div>
                     </div>
 
+                    <!-- Expandable filters -->
+                    <div class="dashboard-section mb-4">
+                        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                            <button type="button" class="btn btn-outline-secondary btn-sm" id="baFiltersToggle" aria-expanded="@(hasActiveFilters ? "true" : "false")" aria-controls="baFiltersPanel">
+                                <i class="fas fa-filter mr-1" aria-hidden="true"></i> Filters
+                                @if (hasActiveFilters)
+                                {
+                                    <span class="badge badge-primary ml-1">Active</span>
+                                }
+                            </button>
+                            @if (hasActiveFilters)
+                            {
+                                <a href="@Url.Action("BusinessAreaReport", "Reports", new { businessAreaId = selectedBa?.Id })" class="btn btn-link btn-sm text-muted">Clear all filters</a>
+                            }
+                        </div>
+                        <div id="baFiltersPanel" class="collapse mt-3 @(hasActiveFilters ? "show" : "")" aria-labelledby="baFiltersToggle">
+                            <form method="get" action="@Url.Action("BusinessAreaReport", "Reports")" class="card card-body bg-light">
+                                @if (selectedBa != null)
+                                {
+                                    <input type="hidden" name="businessAreaId" value="@selectedBa.Id" />
+                                }
+                                <input type="hidden" name="projectPage" value="1" />
+                                <input type="hidden" name="productPage" value="1" />
+                                <input type="hidden" name="projectPageSize" value="@projectPageSize" />
+                                <input type="hidden" name="productPageSize" value="@productPageSize" />
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <h6 class="text-muted mb-2"><i class="fas fa-project-diagram mr-1"></i> Projects</h6>
+                                        <div class="form-row">
+                                            <div class="form-group col-6 col-sm-4">
+                                                <label class="small mb-0">Status</label>
+                                                <select name="projectStatus" class="form-control form-control-sm">
+                                                    <option value="">All</option>
+                                                    @foreach (var s in projectStatusNames)
+                                                    {
+                                                        <option value="@s" selected="@(s == projectStatus)">@s</option>
+                                                    }
+                                                </select>
+                                            </div>
+                                            <div class="form-group col-6 col-sm-4">
+                                                <label class="small mb-0">Phase</label>
+                                                <select name="projectPhase" class="form-control form-control-sm">
+                                                    <option value="">All</option>
+                                                    @foreach (var ph in projectPhaseNames)
+                                                    {
+                                                        <option value="@ph" selected="@(ph == projectPhase)">@ph</option>
+                                                    }
+                                                </select>
+                                            </div>
+                                            <div class="form-group col-6 col-sm-4">
+                                                <label class="small mb-0">RAG</label>
+                                                <select name="projectRag" class="form-control form-control-sm">
+                                                    <option value="">All</option>
+                                                    @foreach (var r in projectRagNames)
+                                                    {
+                                                        <option value="@r" selected="@(r == projectRag)">@r</option>
+                                                    }
+                                                </select>
+                                            </div>
+                                            <div class="form-group col-6 col-sm-4">
+                                                <label class="small mb-0">Division</label>
+                                                <select name="projectDivision" class="form-control form-control-sm">
+                                                    <option value="">All</option>
+                                                    @foreach (var d in projectDivisionNames)
+                                                    {
+                                                        <option value="@d" selected="@(d == projectDivision)">@d</option>
+                                                    }
+                                                </select>
+                                            </div>
+                                            @if (selectedBa == null)
+                                            {
+                                                <div class="form-group col-6 col-sm-4">
+                                                    <label class="small mb-0">Business area</label>
+                                                    <select name="projectBusinessArea" class="form-control form-control-sm">
+                                                        <option value="">All</option>
+                                                        @foreach (var ba in allBusinessAreas)
+                                                        {
+                                                            <option value="@ba.Name" selected="@(ba.Name == projectBusinessArea)">@ba.Name</option>
+                                                        }
+                                                    </select>
+                                                </div>
+                                            }
+                                            <div class="form-group col-12 col-sm-4">
+                                                <label class="small mb-0">Search</label>
+                                                <input type="text" name="projectSearch" class="form-control form-control-sm" placeholder="Project name or code" value="@projectSearch" />
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <h6 class="text-muted mb-2"><i class="fas fa-box-open mr-1"></i> Products</h6>
+                                        <div class="form-row">
+                                            <div class="form-group col-6 col-sm-4">
+                                                <label class="small mb-0">Phase</label>
+                                                <select name="productPhase" class="form-control form-control-sm">
+                                                    <option value="">All</option>
+                                                    @foreach (var ph in productPhaseNames)
+                                                    {
+                                                        <option value="@ph" selected="@(ph == productPhaseFilter)">@ph</option>
+                                                    }
+                                                </select>
+                                            </div>
+                                            @if (selectedBa == null && productBusinessAreaNames.Any())
+                                            {
+                                                <div class="form-group col-6 col-sm-4">
+                                                    <label class="small mb-0">Business area</label>
+                                                    <select name="productBusinessArea" class="form-control form-control-sm">
+                                                        <option value="">All</option>
+                                                        @foreach (var ba in productBusinessAreaNames)
+                                                        {
+                                                            <option value="@ba" selected="@(ba == productBusinessAreaFilter)">@ba</option>
+                                                        }
+                                                    </select>
+                                                </div>
+                                            }
+                                            <div class="form-group col-12 col-sm-4">
+                                                <label class="small mb-0">Search</label>
+                                                <input type="text" name="productSearch" class="form-control form-control-sm" placeholder="Product name or FIPS ID" value="@productSearchFilter" />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="mt-2">
+                                    <button type="submit" class="btn btn-primary btn-sm">Apply filters</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+
                     <!-- Projects table -->
                     <div class="dashboard-section mb-4">
-                        <div class="dashboard-section-header">
-                            <h2><i class="fas fa-list" aria-hidden="true"></i>Projects (@projectCount)</h2>
-                            <input type="text" id="baProjectSearch" class="form-control form-control-sm" placeholder="Filter projects…" style="width:200px;" aria-label="Filter projects">
+                        <div class="dashboard-section-header d-flex flex-wrap align-items-center justify-content-between gap-2">
+                            <h2 class="mb-0"><i class="fas fa-list" aria-hidden="true"></i> Projects (@filteredProjectCount@(filteredProjectCount != projectCount ? " of " + projectCount : ""))</h2>
+                            <div class="d-flex align-items-center gap-2">
+                                <form method="get" action="@Url.Action("BusinessAreaReport", "Reports")" class="d-inline" id="projectPageSizeForm">
+                                    @if (selectedBa != null) { <input type="hidden" name="businessAreaId" value="@selectedBa.Id" /> }
+                                    <input type="hidden" name="projectPage" value="1" />
+                                    <input type="hidden" name="productPage" value="@productPage" />
+                                    <input type="hidden" name="projectStatus" value="@projectStatus" />
+                                    <input type="hidden" name="projectPhase" value="@projectPhase" />
+                                    <input type="hidden" name="projectRag" value="@projectRag" />
+                                    <input type="hidden" name="projectDivision" value="@projectDivision" />
+                                    <input type="hidden" name="projectBusinessArea" value="@projectBusinessArea" />
+                                    <input type="hidden" name="projectSearch" value="@projectSearch" />
+                                    <input type="hidden" name="productPageSize" value="@productPageSize" />
+                                    <input type="hidden" name="productPhase" value="@productPhaseFilter" />
+                                    <input type="hidden" name="productBusinessArea" value="@productBusinessAreaFilter" />
+                                    <input type="hidden" name="productSearch" value="@productSearchFilter" />
+                                    <label class="small mb-0 mr-1">Show</label>
+                                    <select name="projectPageSize" class="form-control form-control-sm d-inline-block" style="width:auto;" onchange="this.form.submit()">
+                                        @foreach (var size in new[] { 10, 15, 25, 50 })
+                                        {
+                                            <option value="@size" selected="@(projectPageSize == size)">@size</option>
+                                        }
+                                    </select>
+                                    <span class="small ml-1">per page</span>
+                                </form>
+                            </div>
                         </div>
                         @if (projects.Any())
                         {
@@ -278,6 +460,10 @@
                                         <tr>
                                             <th>Project</th>
                                             <th>Status</th>
+                                            @if (selectedBa == null)
+                                            {
+                                                <th>Business area</th>
+                                            }
                                             <th>Division</th>
                                             <th>Phase</th>
                                             <th>RAG</th>
@@ -301,6 +487,10 @@
                                                     }
                                                 </td>
                                                 <td><span class="@GetStatusBadgeClass(project.Status)">@(project.Status ?? "–")</span></td>
+                                                @if (selectedBa == null)
+                                                {
+                                                    <td><small>@(project.BusinessAreaLookup?.Name ?? "–")</small></td>
+                                                }
                                                 <td><small>@(string.IsNullOrEmpty(divisionNames) ? "–" : divisionNames)</small></td>
                                                 <td><small>@(project.PhaseLookup?.Name ?? "–")</small></td>
                                                 <td>
@@ -363,10 +553,155 @@
                                     </tbody>
                                 </table>
                             </div>
+                            @if (filteredProjectCount > projectPageSize)
+                            {
+                                var projectFrom = (projectPage - 1) * projectPageSize + 1;
+                                var projectTo = Math.Min(projectPage * projectPageSize, filteredProjectCount);
+                                <nav class="d-flex align-items-center justify-content-between flex-wrap gap-2 mt-3" aria-label="Projects pagination">
+                                    <span class="small text-muted">Showing @projectFrom–@projectTo of @filteredProjectCount</span>
+                                    <ul class="pagination pagination-sm mb-0">
+                                        <li class="page-item @(projectPage <= 1 ? "disabled" : "")">
+                                            <a class="page-link" href="@Url.Action("BusinessAreaReport", "Reports", new { businessAreaId = selectedBa?.Id, projectPage = projectPage - 1, projectPageSize, productPage, productPageSize, projectStatus, projectPhase, projectRag, projectDivision, projectBusinessArea, projectSearch, productPhase = productPhaseFilter, productBusinessArea = productBusinessAreaFilter, productSearch = productSearchFilter })" aria-label="Previous">Previous</a>
+                                        </li>
+                                        @for (var i = 1; i <= Math.Min(projectTotalPages, 10); i++)
+                                        {
+                                            var p = i;
+                                            <li class="page-item @(p == projectPage ? "active" : "")">
+                                                <a class="page-link" href="@Url.Action("BusinessAreaReport", "Reports", new { businessAreaId = selectedBa?.Id, projectPage = p, projectPageSize, productPage, productPageSize, projectStatus, projectPhase, projectRag, projectDivision, projectBusinessArea, projectSearch, productPhase = productPhaseFilter, productBusinessArea = productBusinessAreaFilter, productSearch = productSearchFilter })">@p</a>
+                                            </li>
+                                        }
+                                        @if (projectTotalPages > 10)
+                                        {
+                                            <li class="page-item disabled"><span class="page-link">…</span></li>
+                                            <li class="page-item @(projectPage == projectTotalPages ? "active" : "")">
+                                                <a class="page-link" href="@Url.Action("BusinessAreaReport", "Reports", new { businessAreaId = selectedBa?.Id, projectPage = projectTotalPages, projectPageSize, productPage, productPageSize, projectStatus, projectPhase, projectRag, projectDivision, projectBusinessArea, projectSearch, productPhase = productPhaseFilter, productBusinessArea = productBusinessAreaFilter, productSearch = productSearchFilter })">@projectTotalPages</a>
+                                            </li>
+                                        }
+                                        <li class="page-item @(projectPage >= projectTotalPages ? "disabled" : "")">
+                                            <a class="page-link" href="@Url.Action("BusinessAreaReport", "Reports", new { businessAreaId = selectedBa?.Id, projectPage = projectPage + 1, projectPageSize, productPage, productPageSize, projectStatus, projectPhase, projectRag, projectDivision, projectBusinessArea, projectSearch, productPhase = productPhaseFilter, productBusinessArea = productBusinessAreaFilter, productSearch = productSearchFilter })" aria-label="Next">Next</a>
+                                        </li>
+                                    </ul>
+                                </nav>
+                            }
                         }
                         else
                         {
                             <div class="alert alert-info">No projects are currently assigned to this business area.</div>
+                        }
+                    </div>
+
+                    <!-- Products for this business area -->
+                    <div class="dashboard-section mb-4">
+                        <div class="dashboard-section-header d-flex flex-wrap align-items-center justify-content-between gap-2">
+                            <h2 class="mb-0"><i class="fas fa-box-open" aria-hidden="true"></i> Products (@filteredProductCount)</h2>
+                            <div class="d-flex align-items-center gap-2">
+                                <form method="get" action="@Url.Action("BusinessAreaReport", "Reports")" class="d-inline" id="productPageSizeForm">
+                                    @if (selectedBa != null) { <input type="hidden" name="businessAreaId" value="@selectedBa.Id" /> }
+                                    <input type="hidden" name="projectPage" value="@projectPage" />
+                                    <input type="hidden" name="productPage" value="1" />
+                                    <input type="hidden" name="projectPageSize" value="@projectPageSize" />
+                                    <input type="hidden" name="projectStatus" value="@projectStatus" />
+                                    <input type="hidden" name="projectPhase" value="@projectPhase" />
+                                    <input type="hidden" name="projectRag" value="@projectRag" />
+                                    <input type="hidden" name="projectDivision" value="@projectDivision" />
+                                    <input type="hidden" name="projectBusinessArea" value="@projectBusinessArea" />
+                                    <input type="hidden" name="projectSearch" value="@projectSearch" />
+                                    <input type="hidden" name="productPhase" value="@productPhaseFilter" />
+                                    <input type="hidden" name="productBusinessArea" value="@productBusinessAreaFilter" />
+                                    <input type="hidden" name="productSearch" value="@productSearchFilter" />
+                                    <label class="small mb-0 mr-1">Show</label>
+                                    <select name="productPageSize" class="form-control form-control-sm d-inline-block" style="width:auto;" onchange="this.form.submit()">
+                                        @foreach (var size in new[] { 10, 15, 25, 50 })
+                                        {
+                                            <option value="@size" selected="@(productPageSize == size)">@size</option>
+                                        }
+                                    </select>
+                                    <span class="small ml-1">per page</span>
+                                </form>
+                            </div>
+                        </div>
+                        @if (productsForBusinessArea.Any())
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-hover reports-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Product</th>
+                                            @if (selectedBa == null)
+                                            {
+                                                <th>Business area</th>
+                                            }
+                                            <th>Phase</th>
+                                            <th></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var product in productsForBusinessArea)
+                                        {
+                                            var productBaName = product.CategoryValues?
+                                                .FirstOrDefault(cv => cv.CategoryType?.Name?.Equals("Business area", StringComparison.OrdinalIgnoreCase) == true)?.Name;
+                                            <tr>
+                                                <td>
+                                                    @if (!string.IsNullOrEmpty(product.ProductUrl))
+                                                    {
+                                                        <a href="@product.ProductUrl" class="font-weight-bold text-dark" target="_blank" rel="noopener noreferrer">@product.Title</a>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="font-weight-bold text-dark">@product.Title</span>
+                                                    }
+                                                    @if (!string.IsNullOrEmpty(product.FipsId))
+                                                    {
+                                                        <br><small class="text-muted">@product.FipsId</small>
+                                                    }
+                                                </td>
+                                                @if (selectedBa == null)
+                                                {
+                                                    <td><small>@(productBaName ?? "–")</small></td>
+                                                }
+                                                <td><small>@(product.Phase ?? "–")</small></td>
+                                                <td class="text-right">
+                                                    <a href="@Url.Action("Commission", "ProductReporting")" class="btn btn-xs btn-outline-primary">Performance reporting</a>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                            @if (filteredProductCount > productPageSize)
+                            {
+                                var productFrom = (productPage - 1) * productPageSize + 1;
+                                var productTo = Math.Min(productPage * productPageSize, filteredProductCount);
+                                <nav class="d-flex align-items-center justify-content-between flex-wrap gap-2 mt-3" aria-label="Products pagination">
+                                    <span class="small text-muted">Showing @productFrom–@productTo of @filteredProductCount</span>
+                                    <ul class="pagination pagination-sm mb-0">
+                                        <li class="page-item @(productPage <= 1 ? "disabled" : "")">
+                                            <a class="page-link" href="@Url.Action("BusinessAreaReport", "Reports", new { businessAreaId = selectedBa?.Id, projectPage, projectPageSize, productPage = productPage - 1, productPageSize, projectStatus, projectPhase, projectRag, projectDivision, projectBusinessArea, projectSearch, productPhase = productPhaseFilter, productBusinessArea = productBusinessAreaFilter, productSearch = productSearchFilter })" aria-label="Previous">Previous</a>
+                                        </li>
+                                        @for (var i = 1; i <= Math.Min(productTotalPages, 10); i++)
+                                        {
+                                            var p = i;
+                                            <li class="page-item @(p == productPage ? "active" : "")">
+                                                <a class="page-link" href="@Url.Action("BusinessAreaReport", "Reports", new { businessAreaId = selectedBa?.Id, projectPage, projectPageSize, productPage = p, productPageSize, projectStatus, projectPhase, projectRag, projectDivision, projectBusinessArea, projectSearch, productPhase = productPhaseFilter, productBusinessArea = productBusinessAreaFilter, productSearch = productSearchFilter })">@p</a>
+                                            </li>
+                                        }
+                                        @if (productTotalPages > 10)
+                                        {
+                                            <li class="page-item disabled"><span class="page-link">…</span></li>
+                                            <li class="page-item @(productPage == productTotalPages ? "active" : "")">
+                                                <a class="page-link" href="@Url.Action("BusinessAreaReport", "Reports", new { businessAreaId = selectedBa?.Id, projectPage, projectPageSize, productPage = productTotalPages, productPageSize, projectStatus, projectPhase, projectRag, projectDivision, projectBusinessArea, projectSearch, productPhase = productPhaseFilter, productBusinessArea = productBusinessAreaFilter, productSearch = productSearchFilter })">@productTotalPages</a>
+                                            </li>
+                                        }
+                                        <li class="page-item @(productPage >= productTotalPages ? "disabled" : "")">
+                                            <a class="page-link" href="@Url.Action("BusinessAreaReport", "Reports", new { businessAreaId = selectedBa?.Id, projectPage, projectPageSize, productPage = productPage + 1, productPageSize, projectStatus, projectPhase, projectRag, projectDivision, projectBusinessArea, projectSearch, productPhase = productPhaseFilter, productBusinessArea = productBusinessAreaFilter, productSearch = productSearchFilter })" aria-label="Next">Next</a>
+                                        </li>
+                                    </ul>
+                                </nav>
+                            }
+                        }
+                        else
+                        {
+                            <div class="alert alert-info">No products are currently assigned to @(selectedBa != null ? "this business area" : "these business areas").</div>
                         }
                     </div>
 
@@ -549,7 +884,7 @@
 </div>
 
 @{
-    var baProjectsJson = System.Text.Json.JsonSerializer.Serialize(projects.Select(p => new {
+    var baProjectsJson = System.Text.Json.JsonSerializer.Serialize(allFilteredProjectsForModal.Select(p => new {
         id = p.Id,
         title = p.Title ?? "",
         rag = !string.IsNullOrEmpty(p.RagStatusLookup?.Name) ? p.RagStatusLookup!.Name
@@ -642,14 +977,17 @@
             });
         }
 
-        /* ── Project search ────────────────────────────────────────────────── */
-        document.getElementById('baProjectSearch')?.addEventListener('input', function () {
-            var val = this.value.toLowerCase();
-            document.querySelectorAll('#baProjectsTable tbody tr').forEach(function (row) {
-                var title = row.getAttribute('data-project-title') || '';
-                row.style.display = title.includes(val) ? '' : 'none';
-            });
-        });
+        /* ── Filters panel toggle ───────────────────────────────────────────── */
+        (function () {
+            var toggle = document.getElementById('baFiltersToggle');
+            var panel = document.getElementById('baFiltersPanel');
+            if (toggle && panel) {
+                toggle.addEventListener('click', function () {
+                    var expanded = panel.classList.toggle('show');
+                    toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+                });
+            }
+        })();
 
         /* ── Stat detail modal ─────────────────────────────────────────────── */
         var scopedProjects = @Html.Raw(baProjectsJson);

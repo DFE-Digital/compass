@@ -481,7 +481,21 @@ public class ReportsController : Controller
     // ─────────────────────────────────────────────────────────────────────────
     [HttpGet]
     [Route("Reports/BusinessAreaReport")]
-    public async Task<IActionResult> BusinessAreaReport(int? businessAreaId = null)
+    public async Task<IActionResult> BusinessAreaReport(
+        int? businessAreaId = null,
+        int projectPage = 1,
+        int projectPageSize = 15,
+        int productPage = 1,
+        int productPageSize = 15,
+        string? projectStatus = null,
+        string? projectPhase = null,
+        string? projectRag = null,
+        string? projectDivision = null,
+        string? projectBusinessArea = null,
+        string? projectSearch = null,
+        string? productPhase = null,
+        string? productBusinessArea = null,
+        string? productSearch = null)
     {
         var currentUser = await GetCurrentUserAsync();
         if (currentUser == null)
@@ -510,17 +524,14 @@ public class ReportsController : Controller
             }
         }
 
-        // Select business area to show
+        // Select business area to show (null = "All business areas" view)
         BusinessAreaLookup? selectedBa = null;
         if (businessAreaId.HasValue)
         {
             selectedBa = availableBusinessAreas.FirstOrDefault(ba => ba.Id == businessAreaId.Value);
         }
-        if (selectedBa == null)
-        {
-            selectedBa = availableBusinessAreas.FirstOrDefault();
-        }
 
+        var availableBaIds = availableBusinessAreas.Select(ba => ba.Id).ToList();
         List<Project> projects;
         if (selectedBa != null)
         {
@@ -531,7 +542,11 @@ public class ReportsController : Controller
         }
         else
         {
-            projects = new List<Project>();
+            // All business areas: include projects from every available business area
+            projects = await AllProjectsQuery()
+                .Where(p => p.BusinessAreaId != null && availableBaIds.Contains(p.BusinessAreaId.Value))
+                .OrderBy(p => p.Title)
+                .ToListAsync();
         }
 
         // RAG breakdown (with legacy string fallback)
@@ -552,12 +567,14 @@ public class ReportsController : Controller
                 && projectIds.Contains(u.ProjectId))
             .ToListAsync();
 
-        // Leadership for this business area
-        var leadershipAssignments = await _context.Set<UserBusinessAreaRoleAssignment>()
-            .Where(a => a.BusinessAreaName == selectedBa!.Name)
-            .Include(a => a.User)
-            .OrderBy(a => a.Role)
-            .ToListAsync();
+        // Leadership for this business area (only when a single BA is selected)
+        var leadershipAssignments = selectedBa != null
+            ? await _context.Set<UserBusinessAreaRoleAssignment>()
+                .Where(a => a.BusinessAreaName == selectedBa.Name)
+                .Include(a => a.User)
+                .OrderBy(a => a.Role)
+                .ToListAsync()
+            : new List<UserBusinessAreaRoleAssignment>();
 
         // Start external API calls in background (no DbContext involvement)
         var assessmentsTask2 = GetServiceAssessmentSummaryCachedAsync();
@@ -570,6 +587,116 @@ public class ReportsController : Controller
         var (totalAssessments, passedAssessments, failedAssessments, _) = await assessmentsTask2;
         var allProducts = await productsTask2;
 
+        // Products for this business area (or all BAs when viewing "All business areas")
+        var productDtos = allProducts.OfType<ProductDto>().ToList();
+        var baNamesForFilter = selectedBa != null
+            ? new HashSet<string>(StringComparer.OrdinalIgnoreCase) { selectedBa.Name }
+            : availableBusinessAreas.Select(ba => ba.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var productsForBusinessAreaFull = productDtos
+            .Where(p => p.CategoryValues?.Any(cv =>
+                cv.CategoryType?.Name?.Equals("Business area", StringComparison.OrdinalIgnoreCase) == true &&
+                !string.IsNullOrEmpty(cv.Name) &&
+                baNamesForFilter.Contains(cv.Name)) == true)
+            .OrderBy(p => p.Title)
+            .ToList();
+
+        // Filter projects
+        var filteredProjects = projects.AsEnumerable();
+        if (!string.IsNullOrWhiteSpace(projectStatus))
+            filteredProjects = filteredProjects.Where(p => string.Equals(p.Status, projectStatus?.Trim(), StringComparison.OrdinalIgnoreCase));
+        if (!string.IsNullOrWhiteSpace(projectPhase))
+            filteredProjects = filteredProjects.Where(p => string.Equals(p.PhaseLookup?.Name, projectPhase?.Trim(), StringComparison.OrdinalIgnoreCase));
+        if (!string.IsNullOrWhiteSpace(projectRag))
+        {
+            var ragNorm = projectRag.Trim().Replace(" / ", "-").Replace("/", "-");
+            filteredProjects = filteredProjects.Where(p =>
+                string.Equals(GetProjectRagName(p), ragNorm, StringComparison.OrdinalIgnoreCase));
+        }
+        if (!string.IsNullOrWhiteSpace(projectDivision))
+            filteredProjects = filteredProjects.Where(p => p.Directorates.Any(d =>
+                string.Equals(d.Division?.Name, projectDivision?.Trim(), StringComparison.OrdinalIgnoreCase)));
+        if (!string.IsNullOrWhiteSpace(projectBusinessArea))
+            filteredProjects = filteredProjects.Where(p => string.Equals(p.BusinessAreaLookup?.Name, projectBusinessArea?.Trim(), StringComparison.OrdinalIgnoreCase));
+        if (!string.IsNullOrWhiteSpace(projectSearch))
+        {
+            var q = projectSearch.Trim().ToLowerInvariant();
+            filteredProjects = filteredProjects.Where(p =>
+                (p.Title?.ToLowerInvariant().Contains(q) == true) ||
+                (p.ProjectCode?.ToLowerInvariant().Contains(q) == true));
+        }
+        var filteredProjectList = filteredProjects.ToList();
+        var projectTotalFiltered = filteredProjectList.Count;
+        projectPageSize = Math.Clamp(projectPageSize, 5, 100);
+        var projectTotalPages = projectTotalFiltered == 0 ? 1 : (int)Math.Ceiling(projectTotalFiltered / (double)projectPageSize);
+        projectPage = Math.Clamp(projectPage, 1, projectTotalPages);
+        var pagedProjects = filteredProjectList
+            .Skip((projectPage - 1) * projectPageSize)
+            .Take(projectPageSize)
+            .ToList();
+
+        // Filter products
+        var filteredProducts = productsForBusinessAreaFull.AsEnumerable();
+        if (!string.IsNullOrWhiteSpace(productPhase))
+            filteredProducts = filteredProducts.Where(p => string.Equals(p.Phase, productPhase?.Trim(), StringComparison.OrdinalIgnoreCase));
+        if (!string.IsNullOrWhiteSpace(productBusinessArea))
+        {
+            filteredProducts = filteredProducts.Where(p =>
+                p.CategoryValues?.Any(cv =>
+                    cv.CategoryType?.Name?.Equals("Business area", StringComparison.OrdinalIgnoreCase) == true &&
+                    string.Equals(cv.Name, productBusinessArea?.Trim(), StringComparison.OrdinalIgnoreCase)) == true);
+        }
+        if (!string.IsNullOrWhiteSpace(productSearch))
+        {
+            var q = productSearch.Trim().ToLowerInvariant();
+            filteredProducts = filteredProducts.Where(p =>
+                (p.Title?.ToLowerInvariant().Contains(q) == true) ||
+                (p.FipsId?.ToLowerInvariant().Contains(q) == true));
+        }
+        var filteredProductList = filteredProducts.ToList();
+        var productTotalFiltered = filteredProductList.Count;
+        productPageSize = Math.Clamp(productPageSize, 5, 100);
+        var productTotalPages = productTotalFiltered == 0 ? 1 : (int)Math.Ceiling(productTotalFiltered / (double)productPageSize);
+        productPage = Math.Clamp(productPage, 1, productTotalPages);
+        var pagedProducts = filteredProductList
+            .Skip((productPage - 1) * productPageSize)
+            .Take(productPageSize)
+            .ToList();
+
+        // Distinct values for filter dropdowns (from full lists)
+        var projectDivisionNames = projects
+            .SelectMany(p => p.Directorates.Select(d => d.Division?.Name).Where(n => !string.IsNullOrEmpty(n)))
+            .Distinct()
+            .OrderBy(n => n)
+            .ToList();
+        var projectPhaseNames = projects
+            .Select(p => p.PhaseLookup?.Name)
+            .Where(n => !string.IsNullOrWhiteSpace(n))
+            .Distinct()
+            .OrderBy(n => n)
+            .Cast<string>()
+            .ToList();
+        var projectRagNames = ragBreakdown.Keys.OrderBy(k => k).ToList();
+        var projectStatusNames = projects
+            .Select(p => p.Status)
+            .Where(s => !string.IsNullOrWhiteSpace(s))
+            .Distinct()
+            .OrderBy(s => s)
+            .Cast<string>()
+            .ToList();
+        var productPhaseNames = productsForBusinessAreaFull
+            .Select(p => p.Phase)
+            .Where(s => !string.IsNullOrWhiteSpace(s))
+            .Distinct()
+            .OrderBy(s => s)
+            .ToList();
+        var productBusinessAreaNames = productsForBusinessAreaFull
+            .SelectMany(p => p.CategoryValues ?? new List<CategoryValueDto>())
+            .Where(cv => cv.CategoryType?.Name?.Equals("Business area", StringComparison.OrdinalIgnoreCase) == true && !string.IsNullOrWhiteSpace(cv.Name))
+            .Select(cv => cv.Name!)
+            .Distinct()
+            .OrderBy(n => n)
+            .ToList();
+
         var allDivisionsForNav2 = await GetDivisionsCachedAsync();
         var allBusinessAreasForNav2 = await GetBusinessAreasCachedAsync();
 
@@ -579,8 +706,23 @@ public class ReportsController : Controller
         ViewBag.AllDivisions = allDivisionsForNav2;
         ViewBag.AllBusinessAreas = allBusinessAreasForNav2;
         ViewBag.SelectedBusinessArea = selectedBa;
-        ViewBag.Projects = projects;
+        ViewBag.Projects = pagedProjects;
         ViewBag.ProjectCount = projects.Count;
+        ViewBag.FilteredProjectCount = projectTotalFiltered;
+        ViewBag.ProjectPage = projectPage;
+        ViewBag.ProjectPageSize = projectPageSize;
+        ViewBag.ProjectTotalPages = projectTotalPages;
+        ViewBag.ProjectStatus = projectStatus;
+        ViewBag.ProjectPhase = projectPhase;
+        ViewBag.ProjectRag = projectRag;
+        ViewBag.ProjectDivision = projectDivision;
+        ViewBag.ProjectBusinessArea = projectBusinessArea;
+        ViewBag.ProjectSearch = projectSearch;
+        ViewBag.ProjectDivisionNames = projectDivisionNames;
+        ViewBag.ProjectPhaseNames = projectPhaseNames;
+        ViewBag.ProjectRagNames = projectRagNames;
+        ViewBag.ProjectStatusNames = projectStatusNames;
+        ViewBag.AllFilteredProjectsForModal = filteredProjectList;
         ViewBag.RagBreakdown = ragBreakdown;
         ViewBag.PhaseBreakdown = phaseBreakdown;
         ViewBag.SubmittedThisMonth = monthlyUpdates.Count;
@@ -598,6 +740,16 @@ public class ReportsController : Controller
             p.Issues.Any(i => !i.IsDeleted && (i.Severity == "critical" || i.Severity == "high") &&
                 i.Status != "resolved" && i.Status != "closed"));
         ViewBag.Products = allProducts;
+        ViewBag.ProductsForBusinessArea = pagedProducts;
+        ViewBag.FilteredProductCount = productTotalFiltered;
+        ViewBag.ProductPage = productPage;
+        ViewBag.ProductPageSize = productPageSize;
+        ViewBag.ProductTotalPages = productTotalPages;
+        ViewBag.ProductPhase = productPhase;
+        ViewBag.ProductBusinessArea = productBusinessArea;
+        ViewBag.ProductSearch = productSearch;
+        ViewBag.ProductPhaseNames = productPhaseNames;
+        ViewBag.ProductBusinessAreaNames = productBusinessAreaNames;
 
         return View();
     }
@@ -663,6 +815,287 @@ public class ReportsController : Controller
         ViewBag.AllProjects    = allProjects;
 
         return View();
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // PERFORMANCE REPORTING – commission reporting dashboard (portfolio completion, 9 metrics)
+    // ─────────────────────────────────────────────────────────────────────────
+    [HttpGet]
+    [Route("Reports/PerformanceReporting")]
+    public async Task<IActionResult> PerformanceReporting(int? commissionId = null)
+    {
+        var currentUser = await GetCurrentUserAsync();
+        if (currentUser == null)
+        {
+            TempData["ErrorMessage"] = "Unable to identify the current user.";
+            return RedirectToAction("Index", "Home");
+        }
+
+        var viewModel = new PerformanceReportingViewModel();
+
+        var activeCommissions = await _context.Commissions
+            .Where(c => c.IsActive)
+            .OrderByDescending(c => c.DueDate)
+            .ToListAsync();
+
+        viewModel.ActiveCommissions = activeCommissions;
+
+        if (!activeCommissions.Any())
+        {
+            ViewData["Title"] = "Performance reporting";
+            ViewBag.AllDivisions = await GetDivisionsCachedAsync();
+            ViewBag.AllBusinessAreas = await GetBusinessAreasCachedAsync();
+            ViewBag.IsAdmin = await IsAdminUserAsync();
+            return View(viewModel);
+        }
+
+        var selectedCommission = commissionId.HasValue
+            ? activeCommissions.FirstOrDefault(c => c.Id == commissionId.Value)
+            : activeCommissions.FirstOrDefault();
+        viewModel.SelectedCommission = selectedCommission;
+
+        if (selectedCommission == null)
+        {
+            ViewData["Title"] = "Performance reporting";
+            ViewBag.AllDivisions = await GetDivisionsCachedAsync();
+            ViewBag.AllBusinessAreas = await GetBusinessAreasCachedAsync();
+            ViewBag.IsAdmin = await IsAdminUserAsync();
+            return View(viewModel);
+        }
+
+        List<string> productDocumentIdsInScope;
+        List<(string DocumentId, string BusinessAreaName, string ProductTitle)> productBaList;
+        try
+        {
+            var allProducts = await _productsApiService.GetProductsAsync();
+            var inScopeProducts = allProducts
+                .Where(p => !string.IsNullOrEmpty(p.DocumentId))
+                .Where(p => string.IsNullOrEmpty(p.Phase) ||
+                    (!p.Phase.Equals("Decommissioned", StringComparison.OrdinalIgnoreCase) &&
+                     !p.Phase.Equals("Decommissioning", StringComparison.OrdinalIgnoreCase)))
+                .Where(p =>
+                {
+                    var types = p.CategoryValues?
+                        .Where(cv => cv.CategoryType?.Name?.Trim().Equals("Type", StringComparison.OrdinalIgnoreCase) == true)
+                        .Select(cv => cv.Name?.Trim() ?? string.Empty)
+                        .Where(name => !string.IsNullOrWhiteSpace(name))
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .ToList() ?? new List<string>();
+                    if (!types.Any()) return true;
+                    if (types.Count == 1 && types[0].Trim().Equals("Data", StringComparison.OrdinalIgnoreCase)) return false;
+                    if (types.All(t => t.Trim().Equals("Data", StringComparison.OrdinalIgnoreCase))) return false;
+                    return true;
+                })
+                .ToList();
+
+            productDocumentIdsInScope = inScopeProducts.Select(p => p.DocumentId!).Distinct().ToList();
+            viewModel.TotalProductsInScope = productDocumentIdsInScope.Count;
+
+            // Map document ID -> business area name and product title (for expandable product list)
+            productBaList = inScopeProducts.Select(p =>
+            {
+                var baName = p.CategoryValues?
+                    .Where(cv => cv.CategoryType?.Name?.Trim().Equals("Business area", StringComparison.OrdinalIgnoreCase) == true)
+                    .Select(cv => cv.Name?.Trim() ?? string.Empty)
+                    .FirstOrDefault(name => !string.IsNullOrWhiteSpace(name)) ?? "Unassigned";
+                return (p.DocumentId!, baName, p.Title ?? "Untitled");
+            }).ToList();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Performance reporting: failed to load products in scope");
+            productDocumentIdsInScope = new List<string>();
+            productBaList = new List<(string, string, string)>();
+            viewModel.TotalProductsInScope = 0;
+        }
+
+        var submissions = await _context.CommissionSubmissions
+            .Include(cs => cs.MetricValues)
+            .Where(cs => cs.CommissionId == selectedCommission.Id)
+            .ToListAsync();
+
+        var submittedCount = submissions.Count(s => s.Status == CommissionSubmissionStatus.Submitted);
+        var inProgressCount = submissions.Count(s => s.Status == CommissionSubmissionStatus.InProgress);
+        var notStartedCount = submissions.Count(s => s.Status == CommissionSubmissionStatus.NotStarted);
+
+        var submissionDocumentIds = submissions.Select(s => s.ProductDocumentId).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var notStartedFromScope = productDocumentIdsInScope.Count(id => !submissionDocumentIds.Contains(id));
+        notStartedCount += notStartedFromScope;
+
+        // Late = services with no submission (total in scope minus submitted)
+        var lateCount = viewModel.TotalProductsInScope - submittedCount;
+
+        viewModel.SubmittedCount = submittedCount;
+        viewModel.InProgressCount = inProgressCount;
+        viewModel.NotStartedCount = notStartedCount;
+        viewModel.LateCount = lateCount;
+
+        var totalForCompletion = viewModel.TotalProductsInScope;
+        viewModel.SubmissionCompletionPercentage = totalForCompletion > 0
+            ? Math.Round((decimal)submittedCount * 100 / totalForCompletion, 1)
+            : 0;
+
+        // Business area completion: group products by BA, then count submission status per BA
+        var submissionByDocId = submissions.ToDictionary(s => s.ProductDocumentId, s => s, StringComparer.OrdinalIgnoreCase);
+        var performanceMetrics = await _context.PerformanceMetrics
+            .Where(pm => !pm.IsDisabled)
+            .OrderBy(pm => pm.Identifier)
+            .ToListAsync();
+        var baGroups = productBaList.GroupBy(x => x.BusinessAreaName, StringComparer.OrdinalIgnoreCase);
+        foreach (var baGroup in baGroups.OrderByDescending(g =>
+        {
+            var docIdsInBa = g.Select(x => x.DocumentId).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var totalInBa = docIdsInBa.Count;
+            var submittedInBa = docIdsInBa.Count(id => submissionByDocId.TryGetValue(id, out var sub) && sub.Status == CommissionSubmissionStatus.Submitted);
+            return totalInBa > 0 ? (decimal)submittedInBa * 100 / totalInBa : 0;
+        }).ThenBy(g => g.Key))
+        {
+            var baName = baGroup.Key;
+            var docIdsInBa = baGroup.Select(x => x.DocumentId).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var totalInBa = docIdsInBa.Count;
+            var submittedInBa = docIdsInBa.Count(id => submissionByDocId.TryGetValue(id, out var sub) && sub.Status == CommissionSubmissionStatus.Submitted);
+            var inProgressInBa = docIdsInBa.Count(id => submissionByDocId.TryGetValue(id, out var sub) && sub.Status == CommissionSubmissionStatus.InProgress);
+            var notStartedInBa = docIdsInBa.Count(id => !submissionByDocId.ContainsKey(id));
+            // Late = services in this BA with no submission (total in BA minus submitted)
+            var lateInBa = totalInBa - submittedInBa;
+            var productTitles = baGroup.Select(x => x.ProductTitle).OrderBy(t => t, StringComparer.OrdinalIgnoreCase).ToList();
+            var productsWithMetrics = new List<ProductInBusinessAreaMetrics>();
+            foreach (var (docId, _, productTitle) in baGroup.OrderBy(x => x.ProductTitle, StringComparer.OrdinalIgnoreCase))
+            {
+                var submission = submissionByDocId.GetValueOrDefault(docId);
+                var statusStr = submission == null ? "Not started" : submission.Status switch
+                {
+                    CommissionSubmissionStatus.Submitted => "Submitted",
+                    CommissionSubmissionStatus.InProgress => "In progress",
+                    CommissionSubmissionStatus.Late => "Late",
+                    _ => "Not started"
+                };
+                var metricRows = new List<MetricValueForProduct>();
+                foreach (var metric in performanceMetrics)
+                {
+                    var mv = submission?.MetricValues?.FirstOrDefault(m => m.PerformanceMetricId == metric.Id);
+                    var displayValue = mv == null ? "–" : (mv.IsNotCaptured ? "Not captured" : (string.IsNullOrWhiteSpace(mv.Value) ? "–" : mv.Value.Trim()));
+                    var isComplete = mv != null && (mv.IsComplete || (!mv.IsNotCaptured && !string.IsNullOrWhiteSpace(mv.Value)));
+                    metricRows.Add(new MetricValueForProduct
+                    {
+                        PerformanceMetricId = metric.Id,
+                        MetricTitle = metric.Title ?? metric.Identifier,
+                        DisplayValue = displayValue,
+                        IsComplete = isComplete,
+                        ApplicablePhases = metric.ApplicablePhases ?? string.Empty,
+                        ApplicableTypes = metric.ApplicableTypes ?? string.Empty
+                    });
+                }
+                productsWithMetrics.Add(new ProductInBusinessAreaMetrics
+                {
+                    ProductTitle = productTitle,
+                    ProductDocumentId = docId,
+                    SubmissionStatus = statusStr,
+                    MetricRows = metricRows
+                });
+            }
+            viewModel.BusinessAreaCompletions.Add(new BusinessAreaCompletionItem
+            {
+                BusinessAreaName = baName,
+                TotalProducts = totalInBa,
+                SubmittedCount = submittedInBa,
+                InProgressCount = inProgressInBa,
+                NotStartedCount = notStartedInBa,
+                LateCount = lateInBa,
+                CompletionPercentage = totalInBa > 0 ? Math.Round((decimal)submittedInBa * 100 / totalInBa, 1) : 0,
+                ProductTitles = productTitles,
+                Products = productsWithMetrics
+            });
+        }
+
+        // Submission comments (overall comments from submissions)
+        foreach (var sub in submissions.Where(s => !string.IsNullOrWhiteSpace(s.Comments)))
+        {
+            viewModel.SubmissionComments.Add(new SubmissionCommentItem
+            {
+                ProductTitle = sub.ProductTitle,
+                Comments = sub.Comments?.Trim(),
+                SubmittedDate = sub.SubmittedDate,
+                SubmittedBy = sub.SubmittedBy
+            });
+        }
+        viewModel.SubmissionComments = viewModel.SubmissionComments
+            .OrderByDescending(c => c.SubmittedDate)
+            .Take(50)
+            .ToList();
+
+        var totalSubmissions = submissions.Count;
+        foreach (var metric in performanceMetrics)
+        {
+            var metricValues = submissions
+                .SelectMany(s => s.MetricValues?.Where(mv => mv.PerformanceMetricId == metric.Id) ?? Array.Empty<CommissionMetricValue>())
+                .ToList();
+            var completedCount = submissions.Count(s =>
+                s.MetricValues?.Any(mv => mv.PerformanceMetricId == metric.Id && (mv.IsComplete || (!string.IsNullOrWhiteSpace(mv.Value) && !mv.IsNotCaptured))) == true);
+            var pct = totalSubmissions > 0 ? Math.Round((decimal)completedCount * 100 / totalSubmissions, 1) : 0;
+
+            string? dataSummary = null;
+            var valueCount = 0;
+            var numericValues = new List<decimal>();
+            foreach (var mv in metricValues.Where(mv => !mv.IsNotCaptured && !string.IsNullOrWhiteSpace(mv.Value)))
+            {
+                valueCount++;
+                if (decimal.TryParse(mv.Value!.Trim(), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var num))
+                    numericValues.Add(num);
+            }
+            decimal? numericMin = null, numericMax = null, numericAvg = null;
+            if (numericValues.Count > 0)
+            {
+                numericMin = numericValues.Min();
+                numericMax = numericValues.Max();
+                numericAvg = Math.Round(numericValues.Average(), 1);
+                dataSummary = $"{numericValues.Count} value(s)";
+            }
+            else if (valueCount > 0)
+                dataSummary = $"{valueCount} value(s) submitted";
+
+            var comments = new List<MetricCommentItem>();
+            foreach (var sub in submissions)
+            {
+                var subMetricValues = sub.MetricValues?.Where(mv => mv.PerformanceMetricId == metric.Id && (!string.IsNullOrWhiteSpace(mv.NotCapturedReason) || !string.IsNullOrWhiteSpace(mv.ReasonForDifference))) ?? Array.Empty<CommissionMetricValue>();
+                foreach (var mv in subMetricValues)
+                {
+                    comments.Add(new MetricCommentItem
+                    {
+                        ProductTitle = sub.ProductTitle,
+                        Value = mv.Value,
+                        NotCapturedReason = mv.NotCapturedReason?.Trim(),
+                        ReasonForDifference = mv.ReasonForDifference?.Trim()
+                    });
+                }
+            }
+            comments = comments.Take(20).ToList();
+
+            viewModel.MetricCompletions.Add(new MetricCompletionSummary
+            {
+                PerformanceMetricId = metric.Id,
+                Identifier = metric.Identifier,
+                Title = metric.Title,
+                ApplicablePhases = metric.ApplicablePhases ?? string.Empty,
+                ApplicableTypes = metric.ApplicableTypes ?? string.Empty,
+                CompletedCount = completedCount,
+                TotalSubmissions = totalSubmissions,
+                CompletionPercentage = pct,
+                DataSummary = dataSummary,
+                ValueCount = valueCount,
+                NumericMin = numericMin,
+                NumericMax = numericMax,
+                NumericAvg = numericAvg,
+                Comments = comments
+            });
+        }
+        viewModel.MetricCompletions = viewModel.MetricCompletions.OrderByDescending(m => m.CompletionPercentage).ToList();
+
+        ViewData["Title"] = "Performance reporting";
+        ViewBag.AllDivisions = await GetDivisionsCachedAsync();
+        ViewBag.AllBusinessAreas = await GetBusinessAreasCachedAsync();
+        ViewBag.IsAdmin = await IsAdminUserAsync();
+        return View(viewModel);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
