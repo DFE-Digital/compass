@@ -1,0 +1,146 @@
+@model Compass.Models.Division
+@{
+    ViewData["Title"] = $"Manage business areas - {Model.Name}";
+    var allBusinessAreas = ViewBag.AllBusinessAreas as List<Compass.Models.BusinessAreaLookup> ?? new List<Compass.Models.BusinessAreaLookup>();
+    var assignedBusinessAreaIds = Model.DivisionBusinessAreas.Select(dba => dba.BusinessAreaLookupId).ToList();
+    var availableBusinessAreas = allBusinessAreas.Where(ba => !assignedBusinessAreaIds.Contains(ba.Id)).ToList();
+}
+
+@section Breadcrumbs {
+    <style>
+        .breadcrumb a:hover {
+            color: #003078 !important;
+            text-decoration: underline !important;
+        }
+    </style>
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <li class="breadcrumb-item">
+                <a href="@Url.Action("Index", "Home")" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a href="@Url.Action("Index", "Admin")" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Administration</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a href="@Url.Action("Index", "DivisionBusinessAreaUser")" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Division, business area and users</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page" style="color: #0b0c0c; font-weight: 600;">Manage business areas - @Model.Name</li>
+        </ol>
+    </nav>
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1 class="m-0">Manage business areas - @Model.Name</h1>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["SuccessMessage"]
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Add business area to division</h3>
+            </div>
+            <form asp-action="AddBusinessAreaToDivision" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="divisionId" value="@Model.Id" />
+                <div class="card-body">
+                    @if (availableBusinessAreas.Any())
+                    {
+                        <div class="form-group">
+                            <label class="control-label" for="businessAreaId">Select business area</label>
+                            <select name="businessAreaId" id="businessAreaId" class="form-control" required>
+                                <option value="">-- Select a business area --</option>
+                                @foreach (var businessArea in availableBusinessAreas.OrderBy(ba => ba.SortOrder).ThenBy(ba => ba.Name))
+                                {
+                                    <option value="@businessArea.Id">@businessArea.Name</option>
+                                }
+                            </select>
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="text-muted">All business areas are already assigned to this division.</p>
+                    }
+                </div>
+                @if (availableBusinessAreas.Any())
+                {
+                    <div class="card-footer">
+                        <button type="submit" class="btn btn-primary" @(availableBusinessAreas.Any() ? "" : "disabled")>
+                            <i class="fas fa-plus"></i> Add business area
+                        </button>
+                        <a href="@Url.Action("Index", "DivisionBusinessAreaUser")" class="btn btn-secondary">
+                            <i class="fas fa-arrow-left"></i> Back
+                        </a>
+                    </div>
+                }
+            </form>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-header">
+                <h3 class="card-title">Business areas in this division</h3>
+            </div>
+            <div class="card-body">
+                @if (Model.DivisionBusinessAreas.Any())
+                {
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Description</th>
+                                    <th>Assigned</th>
+                                    <th class="col-actions">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var divisionBusinessArea in Model.DivisionBusinessAreas.OrderBy(dba => dba.BusinessAreaLookup.SortOrder).ThenBy(dba => dba.BusinessAreaLookup.Name))
+                                {
+                                    <tr>
+                                        <td><strong>@divisionBusinessArea.BusinessAreaLookup.Name</strong></td>
+                                        <td>@(divisionBusinessArea.BusinessAreaLookup.Description ?? "-")</td>
+                                        <td>@divisionBusinessArea.CreatedAt.ToString("dd/MM/yyyy")</td>
+                                        <td class="col-actions">
+                                            <form asp-action="RemoveBusinessAreaFromDivision" method="post" style="display: inline;">
+                                                @Html.AntiForgeryToken()
+                                                <input type="hidden" name="divisionId" value="@Model.Id" />
+                                                <input type="hidden" name="businessAreaId" value="@divisionBusinessArea.BusinessAreaLookupId" />
+                                                <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Are you sure you want to remove @divisionBusinessArea.BusinessAreaLookup.Name from this division?');">
+                                                    <i class="fas fa-trash"></i> Remove
+                                                </button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                else
+                {
+                    <p class="text-muted">No business areas are currently assigned to this division.</p>
+                }
+            </div>
+        </div>
+    </div>
+</section>

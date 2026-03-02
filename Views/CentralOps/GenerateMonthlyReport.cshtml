@@ -1,0 +1,283 @@
+@using Compass.ViewModels
+@model List<MonthlyReportItem>
+@{
+    ViewData["Title"] = "Monthly Update Report";
+    var monthName = ViewBag.MonthName as string ?? "";
+    var reportYear = ViewBag.ReportYear as int? ?? DateTime.UtcNow.Year;
+    var reportMonth = ViewBag.ReportMonth as int? ?? DateTime.UtcNow.Month;
+    var dueDate = ViewBag.DueDate as DateTime?;
+    var totalSubmissions = ViewBag.TotalSubmissions as int? ?? 0;
+}
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem;">
+            <li class="breadcrumb-item">
+                <a href="/" style="color: #005ea5; text-decoration: none;">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a asp-controller="CentralOps" asp-action="Summary" style="color: #005ea5; text-decoration: none;">Central Operations</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a asp-controller="CentralOps" asp-action="MonthlyReporting" style="color: #005ea5; text-decoration: none;">Monthly Reporting</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page">Monthly Report - @monthName</li>
+        </ol>
+    </nav>
+}
+
+<section class="content">
+    <div class="container-fluid">
+        @await Html.PartialAsync("_CentralOpsNavigation")
+
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                @TempData["ErrorMessage"]
+                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+        }
+
+        <div class="card mb-4">
+            <div class="card-header">
+                <h3 class="card-title mb-0">
+                    <i class="fas fa-file-alt mr-2"></i>Monthly Update Report - @monthName
+                </h3>
+                <div class="card-tools">
+                    <a asp-action="GenerateMonthlyReport" asp-route-year="@reportYear" asp-route-month="@reportMonth" asp-route-format="excel" class="btn btn-sm btn-success">
+                        <i class="fas fa-file-excel mr-1"></i> Export to Excel
+                    </a>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <p><strong>Reporting Period:</strong> @monthName</p>
+                        <p><strong>Due Date:</strong> @(dueDate?.ToString("dd MMMM yyyy") ?? "N/A")</p>
+                    </div>
+                    <div class="col-md-6">
+                        <p><strong>Total Submissions:</strong> @totalSubmissions</p>
+                        <p><strong>Report Generated:</strong> @DateTime.UtcNow.ToString("dd MMMM yyyy HH:mm") UTC</p>
+                    </div>
+                </div>
+                
+                <!-- Period Selection -->
+                <div class="row mb-3">
+                    <div class="col-md-12">
+                        <div class="card border-secondary">
+                            <div class="card-header bg-light">
+                                <h6 class="mb-0">Change Reporting Period</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="row align-items-end">
+                                    <div class="col-md-3">
+                                        <label for="reportYear" class="form-label">Year</label>
+                                        <select id="reportYear" class="form-control">
+                                            @for (int y = DateTime.UtcNow.Year; y >= DateTime.UtcNow.Year - 5; y--)
+                                            {
+                                                @if (y == reportYear)
+                                                {
+                                                    <option value="@y" selected>@y</option>
+                                                }
+                                                else
+                                                {
+                                                    <option value="@y">@y</option>
+                                                }
+                                            }
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label for="reportMonth" class="form-label">Month</label>
+                                        <select id="reportMonth" class="form-control">
+                                            @for (int m = 1; m <= 12; m++)
+                                            {
+                                                var monthDate = new DateTime(2000, m, 1);
+                                                @if (m == reportMonth)
+                                                {
+                                                    <option value="@m" selected>@monthDate.ToString("MMMM")</option>
+                                                }
+                                                else
+                                                {
+                                                    <option value="@m">@monthDate.ToString("MMMM")</option>
+                                                }
+                                            }
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <button type="button" id="changePeriodBtn" class="btn btn-primary">
+                                            <i class="fas fa-search mr-1"></i> View Report
+                                        </button>
+                                    </div>
+                                    <div class="col-md-3">
+                                        @if (ViewBag.HasPreviousMonth == true)
+                                        {
+                                            <a asp-action="GenerateMonthlyReport" asp-route-year="@ViewBag.PreviousYear" asp-route-month="@ViewBag.PreviousMonth" class="btn btn-sm btn-outline-secondary mr-1">
+                                                <i class="fas fa-chevron-left mr-1"></i> Previous month
+                                            </a>
+                                        }
+                                        @if (ViewBag.HasNextMonth == true)
+                                        {
+                                            <a asp-action="GenerateMonthlyReport" asp-route-year="@ViewBag.NextYear" asp-route-month="@ViewBag.NextMonth" class="btn btn-sm btn-outline-secondary">
+                                                Next month <i class="fas fa-chevron-right ml-1"></i>
+                                            </a>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                @if (Model.Any())
+                {
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0" id="reportTable">
+                            <thead>
+                                <tr>
+                                    <th>Project Code</th>
+                                    <th>Project Title</th>
+                                    <th>Business Area</th>
+                                    <th>RAG Status</th>
+                                    <th>Primary Contact</th>
+                                    <th>Service Owner</th>
+                                    <th>Submitted By</th>
+                                    <th>Submitted At</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var item in Model)
+                                {
+                                    var ragClass = item.RagStatus.ToLower().Replace(" ", "-").Replace("not-set", "secondary");
+                                    <tr>
+                                        <td>@item.ProjectCode</td>
+                                        <td>
+                                            <a asp-controller="Project" asp-action="Details" asp-route-id="@item.ProjectId" style="font-weight: bold; color: #005ea5;">
+                                                @item.ProjectTitle
+                                            </a>
+                                        </td>
+                                        <td>@item.BusinessArea</td>
+                                        <td>
+                                            <span class="badge badge-@ragClass">@item.RagStatus</span>
+                                        </td>
+                                        <td>@item.PrimaryContact</td>
+                                        <td>@item.ServiceOwner</td>
+                                        <td>
+                                            @item.SubmittedBy
+                                            @if (!string.IsNullOrEmpty(item.SubmittedByEmail))
+                                            {
+                                                <br /><small class="text-muted">@item.SubmittedByEmail</small>
+                                            }
+                                        </td>
+                                        <td>@item.SubmittedAt.ToString("dd MMM yyyy HH:mm")</td>
+                                        <td>
+                                            <button type="button" class="btn btn-sm btn-info" data-toggle="modal" data-target="#detailsModal@(item.ProjectId)">
+                                                <i class="fas fa-eye"></i> View Details
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Detail Modals -->
+                    @foreach (var item in Model)
+                    {
+                        <div class="modal fade" id="detailsModal@(item.ProjectId)" tabindex="-1" role="dialog">
+                            <div class="modal-dialog modal-lg" role="document">
+                                <div class="modal-content">
+                                    <div class="modal-header">
+                                        <h5 class="modal-title">@item.ProjectCode - @item.ProjectTitle</h5>
+                                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                                            <span aria-hidden="true">&times;</span>
+                                        </button>
+                                    </div>
+                                    <div class="modal-body">
+                                        <div class="row mb-3">
+                                            <div class="col-md-6">
+                                                <p><strong>Business Area:</strong> @item.BusinessArea</p>
+                                                <p><strong>RAG Status:</strong> <span class="badge badge-@(item.RagStatus.ToLower().Replace(" ", "-").Replace("not-set", "secondary"))">@item.RagStatus</span></p>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <p><strong>Primary Contact:</strong> @item.PrimaryContact</p>
+                                                <p><strong>Service Owner:</strong> @item.ServiceOwner</p>
+                                            </div>
+                                        </div>
+                                        <div class="mb-3">
+                                            <p><strong>Submitted:</strong> @item.SubmittedAt.ToString("dd MMMM yyyy HH:mm") UTC</p>
+                                            <p><strong>Submitted By:</strong> @item.SubmittedBy 
+                                                @if (!string.IsNullOrEmpty(item.SubmittedByEmail))
+                                                {
+                                                    <span>(@item.SubmittedByEmail)</span>
+                                                }
+                                            </p>
+                                        </div>
+                                        <hr />
+                                        <h6>Update Narratives:</h6>
+                                        @if (item.UpdateNarratives.Any())
+                                        {
+                                            @foreach (var narrative in item.UpdateNarratives)
+                                            {
+                                                <div class="card mb-3">
+                                                    <div class="card-body">
+                                                        <p class="card-text">@Html.Raw(narrative.Narrative.Replace("\n", "<br/>"))</p>
+                                                        <small class="text-muted">
+                                                            Submitted by <strong>@narrative.SubmittedBy</strong>
+                                                            @if (!string.IsNullOrEmpty(narrative.SubmittedByEmail))
+                                                            {
+                                                                <span>(@narrative.SubmittedByEmail)</span>
+                                                            }
+                                                            on @narrative.SubmittedAt.ToString("dd MMM yyyy HH:mm") UTC
+                                                        </small>
+                                                    </div>
+                                                </div>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <p class="text-muted"><em>No narratives provided.</em></p>
+                                        }
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                }
+                else
+                {
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle mr-2"></i>No submitted monthly updates found for @monthName.
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</section>
+
+@section Scripts {
+    <script nonce="@Context.Items["Nonce"]">
+        $(document).ready(function() {
+            // Initialize DataTables if available, or use basic sorting
+            if ($.fn.DataTable) {
+                $('#reportTable').DataTable({
+                    order: [[1, 'asc']], // Sort by Project Title
+                    pageLength: 25,
+                    responsive: true
+                });
+            }
+            
+            // Handle period change
+            $('#changePeriodBtn').on('click', function() {
+                var year = $('#reportYear').val();
+                var month = $('#reportMonth').val();
+                window.location.href = '@Url.Action("GenerateMonthlyReport", "CentralOps")?year=' + year + '&month=' + month;
+            });
+        });
+    </script>
+}

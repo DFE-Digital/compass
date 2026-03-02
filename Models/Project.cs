@@ -34,18 +34,30 @@ public class Project
     [Required]
     public bool IsAiInitiative { get; set; } = false;
 
-    [MaxLength(20)]
-    public string? RagStatus { get; set; } // Green, Amber-Green, Amber, Amber-Red, Red
+    // RAG Status - using foreign key to RagStatusLookup
+    public int? RagStatusLookupId { get; set; }
+    [ForeignKey(nameof(RagStatusLookupId))]
+    public RagStatusLookup? RagStatusLookup { get; set; }
 
+    [MaxLength(20)]
+    [Obsolete("Use RagStatusLookupId instead. This property is kept for backward compatibility.")]
+    public string? RagStatus { get; set; } // Deprecated: Use RagStatusLookupId
+
+    [MaxLength(1000)]
     public string? RagJustification { get; set; }
 
+    [MaxLength(1000)]
     public string? PathToGreen { get; set; }
 
-    [MaxLength(50)]
-    public string? Phase { get; set; } // Discovery, Alpha, Private beta, Public beta, Live
+    // Phase - using foreign key to PhaseLookup
+    public int? PhaseId { get; set; }
+    [ForeignKey(nameof(PhaseId))]
+    public PhaseLookup? PhaseLookup { get; set; }
 
-    [MaxLength(100)]
-    public string? BusinessArea { get; set; }
+    // BusinessArea - using foreign key to BusinessAreaLookup
+    public int? BusinessAreaId { get; set; }
+    [ForeignKey(nameof(BusinessAreaId))]
+    public BusinessAreaLookup? BusinessAreaLookup { get; set; }
 
     [MaxLength(100)]
     public string? HistoricBuRTId { get; set; }
@@ -71,6 +83,9 @@ public class Project
     
     public string? OtherDepartments { get; set; } // JSON array of government department IDs
 
+    [MaxLength(20)]
+    public string? BusinessCaseApproval { get; set; } // Yes, No, Not applicable
+
     public decimal? TotalPermFte { get; set; }
 
     public decimal? TotalMspFte { get; set; }
@@ -87,6 +102,9 @@ public class Project
 
     [Required]
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+
+    [MaxLength(20)]
+    public string? CreationMethod { get; set; } // Manual, Bulk
 
     // Navigation properties
     public ICollection<ProjectSuccess> Successes { get; set; } = new List<ProjectSuccess>();
@@ -114,4 +132,104 @@ public class Project
     public ICollection<Models.Action> Actions { get; set; } = new List<Models.Action>();
     public ICollection<Decision> Decisions { get; set; } = new List<Decision>();
     public ICollection<Kpi> Kpis { get; set; } = new List<Kpi>();
+
+    // New fields for enhanced project tracking
+    public ICollection<ProjectStatusUpdate> StatusUpdates { get; set; } = new List<ProjectStatusUpdate>();
+    public ICollection<ProjectMonthlyUpdate> MonthlyUpdates { get; set; } = new List<ProjectMonthlyUpdate>();
+    public ICollection<ProjectWeeklySuccessUpdate> WeeklySuccessUpdates { get; set; } = new List<ProjectWeeklySuccessUpdate>();
+    public ICollection<ProjectSeniorResponsibleOfficer> SeniorResponsibleOfficers { get; set; } = new List<ProjectSeniorResponsibleOfficer>();
+    public ICollection<ProjectServiceOwner> ServiceOwners { get; set; } = new List<ProjectServiceOwner>();
+    public ICollection<ProjectDirectorate> Directorates { get; set; } = new List<ProjectDirectorate>();
+    public ICollection<ProjectBudgetOwner> BudgetOwners { get; set; } = new List<ProjectBudgetOwner>();
+    public ICollection<ProjectPmoContact> PmoContacts { get; set; } = new List<ProjectPmoContact>();
+    public ICollection<ProjectArtefact> Artefacts { get; set; } = new List<ProjectArtefact>();
+
+    // Activity Type
+    public int? ActivityTypeLookupId { get; set; }
+    [ForeignKey(nameof(ActivityTypeLookupId))]
+    public ActivityTypeLookup? ActivityTypeLookup { get; set; }
+
+    // Risk Appetite
+    public int? RiskAppetiteLookupId { get; set; }
+    [ForeignKey(nameof(RiskAppetiteLookupId))]
+    public RiskAppetiteLookup? RiskAppetiteLookup { get; set; }
+
+    // Service Users (free text)
+    public string? ServiceUsers { get; set; }
+
+    // Internal/External flags
+    public bool IsInternal { get; set; } = false;
+    public bool IsExternal { get; set; } = false;
+
+    public bool? IsSubjectToSpendControl { get; set; }
+
+    // Phase dates - Discovery
+    public DateTime? DiscoveryStartDatePlanned { get; set; }
+    public DateTime? DiscoveryStartDateActual { get; set; }
+    public DateTime? DiscoveryEndDatePlanned { get; set; }
+    public DateTime? DiscoveryEndDateActual { get; set; }
+
+    // Phase dates - Alpha
+    public DateTime? AlphaStartDatePlanned { get; set; }
+    public DateTime? AlphaStartDateActual { get; set; }
+    public DateTime? AlphaEndDatePlanned { get; set; }
+    public DateTime? AlphaEndDateActual { get; set; }
+
+    // Phase dates - Private Beta
+    public DateTime? PrivateBetaStartDatePlanned { get; set; }
+    public DateTime? PrivateBetaStartDateActual { get; set; }
+    public DateTime? PrivateBetaEndDatePlanned { get; set; }
+    public DateTime? PrivateBetaEndDateActual { get; set; }
+
+    // Phase dates - Public Beta
+    public DateTime? PublicBetaStartDatePlanned { get; set; }
+    public DateTime? PublicBetaStartDateActual { get; set; }
+    public DateTime? PublicBetaEndDatePlanned { get; set; }
+    public DateTime? PublicBetaEndDateActual { get; set; }
+
+    // Computed properties for backward compatibility (will be removed after migration)
+    [NotMapped]
+    public string? Phase
+    {
+        get => PhaseLookup?.Name;
+        set
+        {
+            // This setter is for backward compatibility during migration
+            // In practice, code should set PhaseId directly
+            if (string.IsNullOrEmpty(value))
+            {
+                PhaseId = null;
+            }
+        }
+    }
+
+    [NotMapped]
+    public string? BusinessArea
+    {
+        get => BusinessAreaLookup?.Name;
+        set
+        {
+            // This setter is for backward compatibility during migration
+            // In practice, code should set BusinessAreaId directly
+            if (string.IsNullOrEmpty(value))
+            {
+                BusinessAreaId = null;
+            }
+        }
+    }
+
+    [NotMapped]
+    public string? RagStatusName
+    {
+        get => RagStatusLookup?.Name;
+        set
+        {
+            // This setter is for backward compatibility during migration
+            // In practice, code should set RagStatusLookupId directly
+            if (string.IsNullOrEmpty(value))
+            {
+                RagStatusLookupId = null;
+            }
+        }
+    }
 }

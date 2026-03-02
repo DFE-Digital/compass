@@ -1,0 +1,196 @@
+@model IEnumerable<Compass.Models.DdatFrameworkSkill>
+@using Compass.Models
+
+@{
+    ViewData["Title"] = "DDAT Framework Skills";
+    var activeVersion = ViewBag.ActiveVersion as DdatFrameworkVersion;
+    var versions = ViewBag.Versions as List<DdatFrameworkVersion> ?? new List<DdatFrameworkVersion>();
+    var selectedVersionId = ViewBag.SelectedVersionId as int?;
+}
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem;">
+            <li class="breadcrumb-item"><a href="/" style="color: #005ea5;">Home</a></li>
+            <li class="breadcrumb-item"><a asp-controller="Admin" asp-action="Index" style="color: #005ea5;">Admin</a></li>
+            <li class="breadcrumb-item active">DDAT Framework Skills</li>
+        </ol>
+    </nav>
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1 class="m-0">DDAT Framework Skills</h1>
+            </div>
+            <div class="col-sm-6 text-right">
+                <a href="@Url.Action("DdatFrameworkImport", "Admin")" class="btn btn-info">
+                    <i class="fas fa-sync"></i> Import/Sync Framework
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["SuccessMessage"]
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Framework Version</h3>
+            </div>
+            <div class="card-body">
+                <form method="get" action="@Url.Action("DdatFrameworkSkills", "Admin")" class="form-inline">
+                    <div class="form-group mr-3">
+                        <label for="versionId" class="mr-2">Select version:</label>
+                        <select name="versionId" id="versionId" class="form-control" onchange="this.form.submit()">
+                            @foreach (var version in versions)
+                            {
+                                var isSelected = selectedVersionId == version.Id;
+                                var optionText = version.VersionIdentifier;
+                                if (!string.IsNullOrEmpty(version.VersionName))
+                                {
+                                    optionText += " - " + version.VersionName;
+                                }
+                                if (version.IsActive)
+                                {
+                                    optionText += " (Active)";
+                                }
+                                if (isSelected)
+                                {
+                                    <option value="@version.Id" selected>@optionText</option>
+                                }
+                                else
+                                {
+                                    <option value="@version.Id">@optionText</option>
+                                }
+                            }
+                        </select>
+                    </div>
+                </form>
+                @if (activeVersion != null && selectedVersionId == activeVersion.Id)
+                {
+                    <div class="mt-2">
+                        <small class="text-muted">
+                            <strong>Active version:</strong> @activeVersion.VersionIdentifier
+                            @if (!string.IsNullOrEmpty(activeVersion.VersionName))
+                            {
+                                <text> - @activeVersion.VersionName</text>
+                            }
+                            | Imported: @activeVersion.ImportedAt.ToString("dd MMM yyyy HH:mm")
+                            | Skills: @activeVersion.SkillsCount | Roles: @activeVersion.RolesCount
+                        </small>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Skills (@Model.Count())</h3>
+            </div>
+            <div class="card-body table-responsive p-0">
+                <table class="table table-hover text-nowrap sortable-table mb-0 table-striped">
+                    <thead>
+                        <tr>
+                            <th>Skill Name</th>
+                            <th>Description</th>
+                            <th>Capability Levels</th>
+                            <th>Grade Mappings</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (Model.Any())
+                        {
+                            @foreach (var skill in Model)
+                            {
+                                <tr>
+                                    <td><strong>@skill.SkillName</strong></td>
+                                    <td>
+                                        @if (!string.IsNullOrEmpty(skill.SkillDescription))
+                                        {
+                                            <span title="@skill.SkillDescription">
+                                                @(skill.SkillDescription.Length > 100 ? skill.SkillDescription.Substring(0, 100) + "..." : skill.SkillDescription)
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">No description</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @{
+                                            var levels = new List<string>();
+                                            if (!string.IsNullOrEmpty(skill.AwarenessDescription)) levels.Add("Awareness");
+                                            if (!string.IsNullOrEmpty(skill.WorkingDescription)) levels.Add("Working");
+                                            if (!string.IsNullOrEmpty(skill.PractitionerDescription)) levels.Add("Practitioner");
+                                            if (!string.IsNullOrEmpty(skill.ExpertDescription)) levels.Add("Expert");
+                                        }
+                                        @if (levels.Any())
+                                        {
+                                            @string.Join(", ", levels)
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">None</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (skill.GradeMappings.Any())
+                                        {
+                                            <span class="badge badge-info">@skill.GradeMappings.Count() mapping(s)</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">None</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        <a href="@Url.Action("DdatFrameworkSkillDetails", "Admin", new { id = skill.Id })" class="btn btn-sm btn-info">
+                                            <i class="fas fa-eye"></i> View
+                                        </a>
+                                        <a href="@Url.Action("EditDdatFrameworkSkill", "Admin", new { id = skill.Id })" class="btn btn-sm btn-primary">
+                                            <i class="fas fa-edit"></i> Edit
+                                        </a>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                        else
+                        {
+                            <tr>
+                                <td colspan="5" class="text-center text-muted">
+                                    @if (selectedVersionId.HasValue)
+                                    {
+                                        <text>No skills found for the selected version.</text>
+                                    }
+                                    else
+                                    {
+                                        <text>Please select a framework version to view skills.</text>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</section>
+

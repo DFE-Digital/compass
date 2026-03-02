@@ -1,0 +1,317 @@
+@model Compass.Controllers.RaidSummaryViewModel
+@{
+    ViewData["Title"] = "RAID Summary";
+    var groupBy = ViewBag.GroupBy as string ?? "";
+    var groupValue = ViewBag.GroupValue as string ?? "";
+    var groupDisplayName = ViewBag.GroupDisplayName as string ?? "";
+    var itemType = ViewBag.ItemType as string ?? "all";
+    var status = ViewBag.Status as string;
+    var currentPage = ViewBag.CurrentPage as int? ?? 1;
+    var pageSize = ViewBag.PageSize as int? ?? 50;
+    var totalRisks = ViewBag.TotalRisks as int? ?? 0;
+    var totalIssues = ViewBag.TotalIssues as int? ?? 0;
+    var totalActions = ViewBag.TotalActions as int? ?? 0;
+    var totalDecisions = ViewBag.TotalDecisions as int? ?? 0;
+    var userByEmail = ViewBag.UserByEmail as Dictionary<string, Compass.Models.User> ?? new Dictionary<string, Compass.Models.User>();
+}
+
+@section Breadcrumbs {
+    <style>
+        .breadcrumb a:hover {
+            color: #003078 !important;
+            text-decoration: underline !important;
+        }
+    </style>
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <li class="breadcrumb-item">
+                <a href="/" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a href="@Url.Action("Index", "Raid")" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">RAID Management</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page" style="color: #0b0c0c; font-weight: 600;">Summary</li>
+        </ol>
+    </nav>
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1 class="m-0">RAID Summary</h1>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        <div class="row mb-3">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body">
+                        <h4>
+                            @if (groupBy == "business_area")
+                            {
+                                <text>Business Area: <strong>@groupDisplayName</strong></text>
+                            }
+                            else if (groupBy == "owner")
+                            {
+                                <text>Owner: <strong>@groupDisplayName</strong></text>
+                            }
+                            else if (groupBy == "project")
+                            {
+                                <text>Project: <strong>@groupDisplayName</strong></text>
+                            }
+                        </h4>
+                        <div class="row mt-3">
+                            <div class="col-md-3">
+                                <a href="@Url.Action("Summary", new { groupBy, groupValue, itemType = "all", status })" 
+                                   class="btn btn-sm @(itemType == "all" ? "btn-primary" : "btn-outline-primary") btn-block">
+                                    All
+                                    <span class="badge badge-light">@(totalRisks + totalIssues + totalActions + totalDecisions)</span>
+                                </a>
+                            </div>
+                            <div class="col-md-3">
+                                <a href="@Url.Action("Summary", new { groupBy, groupValue, itemType = "risks", status })" 
+                                   class="btn btn-sm @(itemType == "risks" ? "btn-info" : "btn-outline-info") btn-block">
+                                    Risks
+                                    <span class="badge badge-light">@totalRisks</span>
+                                </a>
+                            </div>
+                            <div class="col-md-3">
+                                <a href="@Url.Action("Summary", new { groupBy, groupValue, itemType = "issues", status })" 
+                                   class="btn btn-sm @(itemType == "issues" ? "btn-warning" : "btn-outline-warning") btn-block">
+                                    Issues
+                                    <span class="badge badge-light">@totalIssues</span>
+                                </a>
+                            </div>
+                            <div class="col-md-3">
+                                <a href="@Url.Action("Summary", new { groupBy, groupValue, itemType = "actions", status })" 
+                                   class="btn btn-sm @(itemType == "actions" ? "btn-primary" : "btn-outline-primary") btn-block">
+                                    Actions
+                                    <span class="badge badge-light">@totalActions</span>
+                                </a>
+                            </div>
+                        </div>
+                        <div class="row mt-2">
+                            <div class="col-md-3">
+                                <a href="@Url.Action("Summary", new { groupBy, groupValue, itemType = "decisions", status })" 
+                                   class="btn btn-sm @(itemType == "decisions" ? "btn-success" : "btn-outline-success") btn-block">
+                                    Decisions
+                                    <span class="badge badge-light">@totalDecisions</span>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Risks Table -->
+        @if (itemType == "all" || itemType == "risks")
+        {
+            <div class="card @(itemType == "all" ? "mb-3" : "")">
+                <div class="card-header">
+                    <h3 class="card-title">Risks (@Model.Risks.Count of @totalRisks)</h3>
+                </div>
+                <div class="card-body table-responsive p-0">
+                    <table class="table table-hover text-nowrap sortable-table mb-0">
+                        <thead>
+                            <tr>
+                                <th>Title</th>
+                                <th>Risk Score</th>
+                                <th>Business Area</th>
+                                <th>Status</th>
+                                <th>Owner</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var risk in Model.Risks)
+                            {
+                                var riskOwner = risk.OwnerEmail != null && userByEmail.ContainsKey(risk.OwnerEmail.ToLower()) 
+                                    ? userByEmail[risk.OwnerEmail.ToLower()] 
+                                    : null;
+                                var riskScoreClass = risk.RiskScore >= 20 ? "badge-danger" : risk.RiskScore >= 15 ? "badge-warning" : risk.RiskScore >= 10 ? "badge-info" : "badge-secondary";
+                                <tr>
+                                    <td><a href="@Url.Action("Details", "Risk", new { id = risk.Id })">@risk.Title</a></td>
+                                    <td><span class="badge @riskScoreClass">@risk.RiskScore</span></td>
+                                    <td>@(risk.BusinessArea ?? "-")</td>
+                                    <td><span class="badge badge-secondary">@risk.Status</span></td>
+                                    <td>@(riskOwner?.Name ?? risk.OwnerEmail ?? "Unassigned")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+
+        <!-- Issues Table -->
+        @if (itemType == "all" || itemType == "issues")
+        {
+            <div class="card @(itemType == "all" ? "mb-3" : "")">
+                <div class="card-header">
+                    <h3 class="card-title">Issues (@Model.Issues.Count of @totalIssues)</h3>
+                </div>
+                <div class="card-body table-responsive p-0">
+                    <table class="table table-hover text-nowrap sortable-table mb-0">
+                        <thead>
+                            <tr>
+                                <th>Title</th>
+                                <th>Severity</th>
+                                <th>Business Area</th>
+                                <th>Status</th>
+                                <th>Owner</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var issue in Model.Issues)
+                            {
+                                <tr>
+                                    <td><a href="@Url.Action("Details", "Issue", new { id = issue.Id })">@issue.Title</a></td>
+                                    <td><span class="badge badge-@(issue.Severity == "critical" ? "danger" : issue.Severity == "high" ? "warning" : "info")">@issue.Severity</span></td>
+                                    <td>@(issue.BusinessArea ?? "-")</td>
+                                    <td><span class="badge badge-secondary">@issue.Status</span></td>
+                                    <td>@(issue.OwnerUser?.Name ?? issue.OwnerUser?.Email ?? "Unassigned")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+
+        <!-- Actions Table -->
+        @if (itemType == "all" || itemType == "actions")
+        {
+            <div class="card @(itemType == "all" ? "mb-3" : "")">
+                <div class="card-header">
+                    <h3 class="card-title">Actions (@Model.Actions.Count of @totalActions)</h3>
+                </div>
+                <div class="card-body table-responsive p-0">
+                    <table class="table table-hover text-nowrap sortable-table mb-0">
+                        <thead>
+                            <tr>
+                                <th>Title</th>
+                                <th>Priority</th>
+                                <th>Business Area</th>
+                                <th>Status</th>
+                                <th>Assigned To</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var action in Model.Actions)
+                            {
+                                <tr>
+                                    <td><a href="@Url.Action("Details", "Action", new { id = action.Id })">@action.Title</a></td>
+                                    <td><span class="badge badge-@(action.Priority == "high" ? "danger" : action.Priority == "medium" ? "warning" : "info")">@action.Priority</span></td>
+                                    <td>@(action.BusinessArea ?? "-")</td>
+                                    <td><span class="badge badge-secondary">@action.Status</span></td>
+                                    <td>@(action.AssignedToUser?.Name ?? action.AssignedToUser?.Email ?? action.AssignedToEmail ?? "Unassigned")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+
+        <!-- Decisions Table -->
+        @if (itemType == "all" || itemType == "decisions")
+        {
+            <div class="card @(itemType == "all" ? "mb-3" : "")">
+                <div class="card-header">
+                    <h3 class="card-title">Decisions (@Model.Decisions.Count of @totalDecisions)</h3>
+                </div>
+                <div class="card-body table-responsive p-0">
+                    <table class="table table-hover text-nowrap sortable-table mb-0">
+                        <thead>
+                            <tr>
+                                <th>Title</th>
+                                <th>Status</th>
+                                <th>Business Area</th>
+                                <th>Decision Date</th>
+                                <th>Owner</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var decision in Model.Decisions)
+                            {
+                                <tr>
+                                    <td>
+                                        @if (decision.ProjectId.HasValue)
+                                        {
+                                            <a href="@Url.Action("DecisionDetails", "Project", new { projectId = decision.ProjectId.Value, decisionId = decision.Id })">@decision.Title</a>
+                                        }
+                                        else
+                                        {
+                                            @decision.Title
+                                        }
+                                    </td>
+                                    <td><span class="badge badge-secondary">@decision.Status</span></td>
+                                    <td>@(decision.BusinessArea ?? "-")</td>
+                                    <td>@(decision.DecisionDate?.ToString("dd/MM/yyyy") ?? decision.CreatedAt.ToString("dd/MM/yyyy"))</td>
+                                    <td>@(decision.OwnerUser?.Name ?? decision.OwnerUser?.Email ?? decision.OwnerEmail ?? "Unassigned")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+
+        <!-- Pagination -->
+        @{
+            var totalPages = (int)Math.Ceiling((double)Math.Max(Math.Max(totalRisks, totalIssues), Math.Max(totalActions, totalDecisions)) / pageSize);
+        }
+        @if (totalPages > 1)
+        {
+            <div class="card mt-3">
+                <div class="card-footer">
+                    <nav aria-label="RAID summary pagination">
+                        <ul class="pagination justify-content-center mb-0">
+                            <li class="page-item @(currentPage > 1 ? string.Empty : "disabled")">
+                                <a class="page-link"
+                                   asp-action="Summary"
+                                   asp-route-groupBy="@groupBy"
+                                   asp-route-groupValue="@groupValue"
+                                   asp-route-itemType="@itemType"
+                                   asp-route-status="@status"
+                                   asp-route-page="@(currentPage > 1 ? currentPage - 1 : 1)"
+                                   asp-route-pageSize="@pageSize"
+                                   rel="prev">Previous</a>
+                            </li>
+                            @for (var i = 1; i <= totalPages; i++)
+                            {
+                                <li class="page-item @(i == currentPage ? "active" : string.Empty)">
+                                    <a class="page-link"
+                                       asp-action="Summary"
+                                       asp-route-groupBy="@groupBy"
+                                       asp-route-groupValue="@groupValue"
+                                       asp-route-itemType="@itemType"
+                                       asp-route-status="@status"
+                                       asp-route-page="@i"
+                                       asp-route-pageSize="@pageSize">@i</a>
+                                </li>
+                            }
+                            <li class="page-item @(currentPage < totalPages ? string.Empty : "disabled")">
+                                <a class="page-link"
+                                   asp-action="Summary"
+                                   asp-route-groupBy="@groupBy"
+                                   asp-route-groupValue="@groupValue"
+                                   asp-route-itemType="@itemType"
+                                   asp-route-status="@status"
+                                   asp-route-page="@(currentPage < totalPages ? currentPage + 1 : totalPages)"
+                                   asp-route-pageSize="@pageSize"
+                                   rel="next">Next</a>
+                            </li>
+                        </ul>
+                    </nav>
+                </div>
+            </div>
+        }
+    </div>
+</section>
+

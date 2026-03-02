@@ -12,34 +12,49 @@
 
 <div class="card">
     <div class="card-header">
-        <h3 class="card-title">Deliverables</h3>
+        <h3 class="card-title">Work Items</h3>
         <div class="card-tools">
             <a href="#" data-toggle="modal" data-target="#addDeliverableModal">
-                Add deliverable
+                Add work item
             </a>
         </div>
     </div>
     <div class="card-body p-0">
         @if (!deliverableProjects.Any())
         {
-            <div class="p-4">
-                <p class="text-muted mb-2">No deliverables recorded.</p>
-                <button type="button" class="btn btn-success" data-toggle="modal" data-target="#addDeliverableModal">
-                    <i class="fas fa-plus"></i> Add first deliverable
-                </button>
+            <div class="p-3">
+                <p class="text-muted mb-2">No work items recorded.</p>
+                <a href="#" data-toggle="modal" data-target="#addDeliverableModal">
+                    Add first work item
+                </a>
             </div>
         }
         else
         {
             <div class="table-responsive">
-                <table class="table table-hover">
+                <table class="table table-hover text-nowrap sortable-table">
                     <thead>
                         <tr>
-                            <th>Project Name</th>
-                            <th>RAG Status</th>
-                            <th>Phase</th>
-                            <th>Business Area</th>
-                            <th>Milestones</th>
+                            <th class="sortable" data-column="Name" tabindex="0" role="button" aria-label="Sort by Name">
+                                Work Item Name
+                                <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                            </th>
+                            <th class="sortable" data-column="RAGStatus" tabindex="0" role="button" aria-label="Sort by RAG Status">
+                                RAG Status
+                                <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                            </th>
+                            <th class="sortable" data-column="Phase" tabindex="0" role="button" aria-label="Sort by Phase">
+                                Phase
+                                <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                            </th>
+                            <th class="sortable" data-column="BusinessArea" tabindex="0" role="button" aria-label="Sort by Business Area">
+                                Business Area
+                                <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                            </th>
+                            <th class="sortable" data-column="Milestones" tabindex="0" role="button" aria-label="Sort by Milestones">
+                                Milestones
+                                <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                            </th>
                             <th>Actions</th>
                         </tr>
                     </thead>
@@ -48,7 +63,7 @@
                         {
                             var milestoneCount = project.Milestones?.Count(m => !m.IsDeleted) ?? 0;
                             var completedMilestones = project.Milestones?.Count(m => !m.IsDeleted && m.Status == "complete") ?? 0;
-                            var deliverableCode = $"DEL-DDT-{project.Id}";
+                            var deliverableCode = $"DFE-DDT-{project.Id}";
                             
                             <tr>
                                 <td>
@@ -86,7 +101,7 @@
                                     }
                                 </td>
                                 <td>
-                                    <form asp-action="RemoveDeliverable" method="post" style="display: inline;" onsubmit="return confirm('Are you sure you want to remove this deliverable from the flagship project?');">
+                                    <form asp-action="RemoveDeliverable" method="post" style="display: inline;" onsubmit="return confirm('Are you sure you want to remove this work item from the flagship work?');">
                                         <input type="hidden" name="flagshipProjectId" value="@Model.Id" />
                                         <input type="hidden" name="deliverableProjectId" value="@project.Id" />
                                         <button type="submit" class="btn btn-sm btn-outline-danger">
@@ -108,7 +123,7 @@
     <div class="modal-dialog modal-lg" role="document">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="addDeliverableModalLabel">Add Deliverable Project</h5>
+                <h5 class="modal-title" id="addDeliverableModalLabel">Add Work Item</h5>
                 <button type="button" class="close" data-dismiss="modal" aria-label="Close">
                     <span aria-hidden="true">&times;</span>
                 </button>
@@ -117,9 +132,9 @@
                 <input type="hidden" name="flagshipProjectId" value="@Model.Id" />
                 <div class="modal-body">
                     <div class="form-group">
-                        <label for="deliverableProjectId">Select Project</label>
+                        <label for="deliverableProjectId">Select Work Item</label>
                         <select class="form-control" id="deliverableProjectId" name="deliverableProjectId" required>
-                            <option value="">-- Select a project --</option>
+                            <option value="">-- Select a work item --</option>
                             @{
                                 var availableProjects = ViewBag.AllProjects as IEnumerable<dynamic>;
                                 var existingDeliverableIds = deliverableProjects.Select(p => p.Id).ToList();
@@ -137,24 +152,122 @@
                                 }
                                 else
                                 {
-                                    <option value="" disabled>No projects available</option>
+                                    <option value="" disabled>No work items available</option>
                                 }
                             }
                         </select>
-                        <small class="form-text text-muted">Select a project to add as a deliverable to this flagship project.</small>
+                        <small class="form-text text-muted">Select a work item to add to this flagship work.</small>
                     </div>
                     
                     <div class="form-group">
                         <label for="deliverableDescription">Description (Optional)</label>
-                        <textarea class="form-control" id="deliverableDescription" name="description" rows="3" placeholder="Describe the relationship or role of this deliverable..."></textarea>
+                        <textarea class="form-control" id="deliverableDescription" name="description" rows="3" placeholder="Describe the relationship or role of this work item..."></textarea>
                     </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Add Deliverable</button>
+                    <button type="submit" class="btn btn-success">Add Work Item</button>
                 </div>
             </form>
         </div>
     </div>
 </div>
+
+<script nonce="@Context.Items["Nonce"]">
+    (function() {
+        function initializeSortableTable(table) {
+            var currentSort = { column: null, direction: 'asc' };
+            var sortableHeaders = table.querySelectorAll('.sortable');
+            
+            sortableHeaders.forEach(function(header) {
+                header.style.cursor = 'pointer';
+                
+                header.addEventListener('click', function(e) {
+                    handleSort(e, header);
+                });
+                
+                header.addEventListener('keypress', function(e) {
+                    if (e.which === 13 || e.which === 32) {
+                        e.preventDefault();
+                        handleSort(e, header);
+                    }
+                });
+            });
+            
+            function handleSort(e, header) {
+                var column = header.getAttribute('data-column');
+                var direction = 'asc';
+                
+                if (currentSort.column === column && currentSort.direction === 'asc') {
+                    direction = 'desc';
+                }
+                
+                sortTable(column, direction);
+                currentSort = { column: column, direction: direction };
+            }
+            
+            function sortTable(column, direction) {
+                var tbody = table.querySelector('tbody');
+                var rows = Array.from(tbody.querySelectorAll('tr'));
+                var colIndex = Array.from(table.querySelectorAll('thead th')).findIndex(function(th) {
+                    return th.getAttribute('data-column') === column;
+                });
+                
+                rows.sort(function(a, b) {
+                    var aVal, bVal;
+                    var aCell = a.querySelectorAll('td')[colIndex];
+                    var bCell = b.querySelectorAll('td')[colIndex];
+                    
+                    if (column === 'Milestones') {
+                        // Extract numbers from "X / Y" format
+                        var aText = aCell.textContent.trim();
+                        var bText = bCell.textContent.trim();
+                        var aMatch = aText.match(/(\d+)\s*\/\s*(\d+)/);
+                        var bMatch = bText.match(/(\d+)\s*\/\s*(\d+)/);
+                        aVal = aMatch ? parseInt(aMatch[1]) : 0;
+                        bVal = bMatch ? parseInt(bMatch[1]) : 0;
+                    } else {
+                        aVal = aCell.textContent.trim().toLowerCase();
+                        bVal = bCell.textContent.trim().toLowerCase();
+                    }
+                    
+                    if (direction === 'asc') {
+                        return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+                    } else {
+                        return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
+                    }
+                });
+                
+                tbody.innerHTML = '';
+                rows.forEach(function(row) {
+                    tbody.appendChild(row);
+                });
+                
+                updateSortIcons(column, direction);
+            }
+            
+            function updateSortIcons(column, direction) {
+                var allHeaders = table.querySelectorAll('.sortable i');
+                allHeaders.forEach(function(icon) {
+                    icon.className = 'fas fa-sort float-right';
+                    icon.style.opacity = '0.3';
+                });
+                
+                var activeHeader = table.querySelector('.sortable[data-column="' + column + '"]');
+                if (activeHeader) {
+                    var icon = activeHeader.querySelector('i');
+                    if (icon) {
+                        icon.className = direction === 'asc' ? 'fas fa-sort-up float-right' : 'fas fa-sort-down float-right';
+                        icon.style.opacity = '1';
+                    }
+                }
+            }
+        }
+        
+        var table = document.querySelector('#deliverables .sortable-table');
+        if (table) {
+            initializeSortableTable(table);
+        }
+    })();
+</script>
 

@@ -14,7 +14,12 @@
  *@
 
 @using System
+@using Compass.Services
+@using Compass.Data
 @inject IConfiguration Configuration
+@inject IPermissionService PermissionService
+@inject CompassDbContext DbContext
+@inject IWebHostEnvironment env
 
 <!DOCTYPE html>
 <html lang="en">
@@ -40,7 +45,19 @@
     <link href="~/css/compass-theme.css" rel="stylesheet" nonce="@Context.Items["Nonce"]" />
     <!-- Custom styles -->
     <link href="~/css/custom.css" rel="stylesheet" nonce="@Context.Items["Nonce"]" />
-    
+    <!-- Help Chatbot styles -->
+    <!-- <link href="~/css/chatbot.css" rel="stylesheet" nonce="@Context.Items["Nonce"]" /> -->
+    @if (env.IsProduction())
+    {
+        <script type="text/javascript" nonce="@Context.Items["Nonce"]">
+        (function(c,l,a,r,i,t,y){
+            c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+            t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
+            t.setAttribute("nonce", "@Context.Items["Nonce"]");
+            y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+        })(window, document, "clarity", "script", "ug8dgpkuqz");
+        </script>
+    }
     @await RenderSectionAsync("Styles", required: false)
 </head>
 <body class="hold-transition sidebar-mini layout-fixed compass-theme">
@@ -50,60 +67,18 @@
 
         @{
             Compass.Models.User? currentUser = null;
-            string? userPhotoDataUrl = null;
-            string? currentUserDisplayName = User.Identity?.Name;
             string? currentUserEmail = null;
-            bool hasAdminRole = false;
-        }
-
-        <!-- Preloader -->
-        <div class="preloader flex-column justify-content-center align-items-center">
-            <img class="animation__shake" src="~/images/govuk-crown.svg" alt="GOV.UK Crown" height="60" width="60">
-        </div>
-
-        <!-- Navbar -->
-        <nav class="main-header navbar navbar-expand navbar-white navbar-light navbar-gov">
-            <div class="container-fluid">
-                <!-- Left navbar links -->
-                <ul class="navbar-nav">
-                    <li class="nav-item">
-                        <a class="nav-link" data-widget="pushmenu" href="#" role="button" aria-label="Toggle sidebar menu"><i class="fas fa-bars" aria-hidden="true"></i></a>
-                    </li>
-                    <li class="nav-item d-none d-sm-inline-block">
-                        <a href="@Url.Action("Index", "Home")" class="nav-link">Home</a>
-                    </li>
-                    <li class="nav-item dropdown d-none d-sm-inline-block">
-                        <a class="nav-link dropdown-toggle" href="#" id="appsDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                            Apps
-                        </a>
-                        <div class="dropdown-menu" aria-labelledby="appsDropdown">
-                            <a class="dropdown-item" href="@Url.Action("Index", "Apps")">
-                                <i class="fas fa-th mr-2" aria-hidden="true"></i>
-                                All Apps
-                            </a>
-                            <div class="dropdown-divider"></div>
-                            <a class="dropdown-item" href="https://find-products-services.education.gov.uk" target="_blank" rel="noopener noreferrer">
-                                <i class="fas fa-search mr-2" aria-hidden="true"></i>
-                                Find information about Products and Services
-                            </a>
-                            <a class="dropdown-item" href="@Url.Action("Index", "Accessibility")">
-                                <i class="fas fa-universal-access mr-2" aria-hidden="true"></i>
-                                Accessibility issues and statements
-                            </a>
-                        </div>
-                    </li>
-                    @{
+            int taskCount = 0;
+            
+            // Variables needed for sidebar navigation
                         var controllerName = ViewContext.RouteData.Values["Controller"]?.ToString();
                         var actionName = ViewContext.RouteData.Values["Action"]?.ToString();
                         var isAdminView = controllerName == "Admin";
-                        var isStandardController = controllerName == "Standard";
                         var functionalStandardsActions = new[] { "FunctionalStandards", "SelectStandard", "ConductAssessment", "ViewAssessmentSummary", "StartAssessment" };
-                        var isFunctionalStandardsContext = controllerName == "EnterpriseReporting" && functionalStandardsActions.Contains(actionName ?? string.Empty);
-                        var isServiceStandardsContext = isStandardController && string.Equals(actionName, "Service", StringComparison.OrdinalIgnoreCase);
-                        var isStandardsHome = isStandardController && string.Equals(actionName, "Index", StringComparison.OrdinalIgnoreCase);
-                        var isStandardsDropdownActive = isStandardsHome || isStandardController || isFunctionalStandardsContext || isServiceStandardsContext;
-                        var isDdtReportsController = controllerName == "DdtReports";
-
+            
+            // Calculate task count for standard layout only
+            if (!isAdminView)
+            {
                         try
                         {
                             currentUserEmail = User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value
@@ -116,190 +91,48 @@
                                     .FirstOrDefault(u => u.Email.ToLower() == currentUserEmail.ToLower());
 
                                 if (currentUser != null)
-                                {
-                                    currentUserDisplayName = currentUser.Name;
-                                    hasAdminRole = currentUser.Role == UserRole.Admin ||
-                                        currentUser.Role == UserRole.SuperAdmin;
-
-                                    if (currentUser.Photo != null && currentUser.Photo.Length > 0)
                                     {
-                                        userPhotoDataUrl = $"data:image/png;base64,{Convert.ToBase64String(currentUser.Photo)}";
-                                    }
-                                }
-                            }
-                        }
-                        catch
-                        {
-                            // Non-blocking: fallback handled below.
-                        }
-                    }
-                    @if (!isAdminView)
-                    {
-                        <li class="nav-item dropdown d-none d-sm-inline-block">
-                            <a class="nav-link dropdown-toggle @(isStandardsDropdownActive ? "active" : "")" href="#" id="standardsDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                                Standards
-                            </a>
-                            <div class="dropdown-menu" aria-labelledby="standardsDropdown">
-                                <a class="dropdown-item @(isStandardsHome ? "active" : "")" href="@Url.Action("Index", "Standard")">
-                                    <i class="fas fa-compass mr-2" aria-hidden="true"></i>
-                                    Standards overview
-                                </a>
-                                <div class="dropdown-divider"></div>
-                                <a class="dropdown-item @(ViewContext.RouteData.Values["Controller"]?.ToString() == "Standard" && ViewContext.RouteData.Values["Action"]?.ToString() == "Published" ? "active" : "")" href="@Url.Action("Published", "Standard")">
-                                    <i class="fas fa-check-circle mr-2" aria-hidden="true"></i>
-                                    Published DDT Standards
-                                </a>
-                                <a class="dropdown-item @(ViewContext.RouteData.Values["Controller"]?.ToString() == "Standard" && ViewContext.RouteData.Values["Action"]?.ToString() == "Draft" ? "active" : "")" href="@Url.Action("Draft", "Standard")">
-                                    <i class="fas fa-file-alt mr-2" aria-hidden="true"></i>
-                                    Draft DDT Standards
-                                </a>
-                                <div class="dropdown-divider"></div>
-                                <a class="dropdown-item @(ViewContext.RouteData.Values["Controller"]?.ToString() == "Standard" && ViewContext.RouteData.Values["Action"]?.ToString() == "Create" ? "active" : "")" href="@Url.Action("Create", "Standard")">
-                                    <i class="fas fa-plus-circle mr-2" aria-hidden="true"></i>
-                                    Create DDT Standard
-                                </a>
-                                <div class="dropdown-divider"></div>
-                                <a class="dropdown-item @(isFunctionalStandardsContext ? "active" : "")" href="@Url.Action("FunctionalStandards", "EnterpriseReporting")">
-                                    <i class="fas fa-clipboard-check mr-2" aria-hidden="true"></i>
-                                    Functional Standards
-                                </a>
-                                <a class="dropdown-item @(isServiceStandardsContext ? "active" : "")" href="@Url.Action("Service", "Standard")">
-                                    <i class="fas fa-seedling mr-2" aria-hidden="true"></i>
-                                    Service Standards
-                                </a>
-                            </div>
-                        </li>
-                    }
-                    <li class="nav-item dropdown d-none d-sm-inline-block">
-                        <a class="nav-link dropdown-toggle @(isDdtReportsController ? "active" : "")" href="#" id="reportsDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                            Reports
-                        </a>
-                        <div class="dropdown-menu" aria-labelledby="reportsDropdown">
-                            <a class="dropdown-item @(controllerName == "DdtReports" && actionName == "Index" ? "active" : "")" href="@Url.Action("Index", "DdtReports")">
-                                <i class="fas fa-chart-line mr-2" aria-hidden="true"></i>
-                                Reports overview
-                            </a>
-                            <a class="dropdown-item @(controllerName == "DdtReports" && actionName == "MyReports" ? "active" : "")" href="@Url.Action("MyReports", "DdtReports")">
-                                <i class="fas fa-user-circle mr-2" aria-hidden="true"></i>
-                                My reports
-                            </a>
-                            <a class="dropdown-item @(controllerName == "DdtReports" && actionName == "ViewReport" ? "active" : "")" href="@Url.Action("ViewReport", "DdtReports")">
-                                <i class="fas fa-chart-line mr-2" aria-hidden="true"></i>
-                                All DDT
-                            </a>
-                            <a class="dropdown-item @(controllerName == "DdtReports" && actionName == "FlagshipProjects" ? "active" : "")" href="@Url.Action("FlagshipProjects", "DdtReports")">
-                                <i class="fas fa-flag mr-2" aria-hidden="true"></i>
-                                Flagship projects
-                            </a>
-                            <a class="dropdown-item @(controllerName == "DdtReports" && actionName == "AccessibilityReport" ? "active" : "")" href="@Url.Action("AccessibilityReport", "DdtReports")">
-                                <i class="fas fa-universal-access mr-2" aria-hidden="true"></i>
-                                Accessibility report
-                            </a>
-                            <a class="dropdown-item @(controllerName == "DdtReports" && actionName == "BusinessArea" ? "active" : "")" href="@Url.Action("BusinessArea", "DdtReports")">
-                                <i class="fas fa-building mr-2" aria-hidden="true"></i>
-                                Business area reports
-                            </a>
-                        </div>
-                    </li>
-                    @{
-                        if (!hasAdminRole && User?.Identity?.IsAuthenticated == true)
-                        {
-                            var roleClaims = User.FindAll(System.Security.Claims.ClaimTypes.Role)
-                                .Concat(User.FindAll("role"))
-                                .Concat(User.FindAll("roles"))
-                                .Select(c => c.Value)
-                                .Distinct()
-                                .ToList();
-
-                            var validRoles = new[] { "super_admin", "admin", "Super admin", "SuperAdmin", "Admin", "Super Admin" };
-                            hasAdminRole = validRoles.Any(role =>
-                                User.IsInRole(role) ||
-                                roleClaims.Any(rc => rc.Equals(role, StringComparison.OrdinalIgnoreCase)));
-
-                            if (!hasAdminRole)
-                            {
-                                hasAdminRole = roleClaims.Any(role =>
-                                    role.Contains("super", StringComparison.OrdinalIgnoreCase) &&
-                                    role.Contains("admin", StringComparison.OrdinalIgnoreCase));
-                            }
-
-                            if (!hasAdminRole)
-                            {
-                                var fallbackEmail = User.Identity?.Name
-                                    ?? User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value
-                                    ?? User.FindFirst("preferred_username")?.Value
-                                    ?? User.FindFirst("email")?.Value
-                                    ?? string.Empty;
-
-                                if (!string.IsNullOrEmpty(fallbackEmail))
-                                {
-                                    try
-                                    {
-                                        var user = DbContext.Users
-                                            .FirstOrDefault(u => u.Email.ToLower() == fallbackEmail.ToLower());
-
-                                        if (user != null)
+                                        var userProjects = DbContext.Projects
+                                            .Where(p => !p.IsDeleted && (
+                                                p.PrimaryContactUserId == currentUser.Id ||
+                                                p.SeniorResponsibleOfficers.Any(sro => sro.UserId == currentUser.Id) ||
+                                                p.ServiceOwners.Any(so => so.UserId == currentUser.Id)
+                                            ))
+                                            .Include(p => p.ProjectContacts)
+                                            .Include(p => p.SeniorResponsibleOfficers)
+                                            .Include(p => p.ServiceOwners)
+                                            .Include(p => p.Directorates)
+                                            .Include(p => p.BudgetOwners)
+                                            .AsNoTracking()
+                                            .ToList();
+                                        
+                                        foreach (var project in userProjects)
                                         {
-                                            hasAdminRole = user.Role == UserRole.Admin ||
-                                                user.Role == UserRole.SuperAdmin;
+                                            var currentTeamMembers = project.ProjectContacts
+                                                .Where(pc => string.IsNullOrEmpty(pc.TeamStatus) || 
+                                                             pc.TeamStatus.ToLower() == "current")
+                                                .ToList();
+                                            if (!currentTeamMembers.Any()) taskCount++;
+                                            if (!project.SeniorResponsibleOfficers.Any()) taskCount++;
+                                            if (!project.Directorates.Any()) taskCount++;
+                                            if (project.ActivityTypeLookupId == null) taskCount++;
+                                            if (string.IsNullOrWhiteSpace(project.RagStatus)) taskCount++;
+                                            if (project.BusinessAreaId == null) taskCount++;
+                                            if (string.IsNullOrWhiteSpace(project.Aim)) taskCount++;
+                                            if (project.PrimaryContactUserId == null) taskCount++;
+                                            if (!project.BudgetOwners.Any()) taskCount++;
+                            }
+                        }
                                         }
                                     }
                                     catch
                                     {
-                                        // ignore
+                                        // Non-blocking: task count will remain 0
                                     }
                                 }
                             }
-                        }
-                    }
-                    @if (hasAdminRole)
-                    {
-                        <li class="nav-item d-none d-sm-inline-block">
-                            <a class="nav-link @(ViewContext.RouteData.Values["Controller"]?.ToString() == "Admin" ? "active" : "")" href="@Url.Action("Index", "Admin")">
-                                Admin
-                            </a>
-                        </li>
-                    }
-                </ul>
 
-                <!-- Right navbar links -->
-                <ul class="navbar-nav ml-auto">
-                <li class="nav-item dropdown">
-                    <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" aria-label="User menu">
-                        @if (!string.IsNullOrEmpty(userPhotoDataUrl))
-                        {
-                            <img src="@userPhotoDataUrl" alt="User profile" class="navbar-user-avatar" />
-                        }
-                        else
-                        {
-                            <i class="fas fa-user" aria-hidden="true"></i>
-                        }
-                    </a>
-                    <div class="dropdown-menu dropdown-menu-right" aria-labelledby="userDropdown">
-                        <h6 class="dropdown-header">
-                            @(currentUserDisplayName ?? "Signed in user")
-                            @if (!string.IsNullOrWhiteSpace(currentUserEmail))
-                            {
-                                <br />
-                                <small class="text-muted">@currentUserEmail</small>
-                            }
-                        </h6>
-                        <div class="dropdown-divider"></div>
-                        <a class="dropdown-item @(ViewContext.RouteData.Values["Controller"]?.ToString() == "StaffRoleReturn" ? "active" : "")" href="@Url.Action("Index", "StaffRoleReturn")">
-                            <i class="fas fa-id-card" aria-hidden="true"></i> Role profile
-                        </a>
-                        <a class="dropdown-item" href="~/User/MySettings">
-                            <i class="fas fa-cog" aria-hidden="true"></i> My settings
-                        </a>
-                        <div class="dropdown-divider"></div>
-                        <a class="dropdown-item" href="~/MicrosoftIdentity/Account/SignOut">
-                            <i class="fas fa-sign-out-alt" aria-hidden="true"></i> Sign out
-                        </a>
-                    </div>
-                </li>
-                </ul>
-            </div>
-        </nav>
+        @await Html.PartialAsync("_TopNav")
 
         <!-- Main Sidebar Container -->
         <aside class="main-sidebar sidebar-dark-primary elevation-4">
@@ -322,72 +155,59 @@
                             </a>
                         </li>
 
-                        <!-- Demand Management Section -->
+
+                        <!-- Demand Triage Section -->
                         @if (Configuration.GetValue<bool>("FeatureFlags:EnableDemandManagement", false))
                         {
-                            var demandRequestActions = new[] { "Requests", "CreateRequest", "Details", "Edit" };
-                            var demandPrioritisationActions = new[] { "Prioritisation", "ScoreRequest" };
-                            var demandTriageActions = new[] { "Triage" };
-                            var isDemandSectionActive = controllerName == "DemandManagement";
-                            var isDemandRequestsActive = controllerName == "DemandManagement" && demandRequestActions.Contains(actionName ?? string.Empty);
-                            var isDemandPrioritisationActive = controllerName == "DemandManagement" && demandPrioritisationActions.Contains(actionName ?? string.Empty);
-                            var isDemandTriageActive = controllerName == "DemandManagement" && demandTriageActions.Contains(actionName ?? string.Empty);
-                            var isDemandReportingActive = controllerName == "DemandManagement" && string.Equals(actionName, "Reporting", StringComparison.OrdinalIgnoreCase);
-                            <li class="nav-header">Demand management</li>
-                            <li class="nav-item @(isDemandSectionActive ? "menu-open" : "")">
-                                <a href="#" class="nav-link @(isDemandSectionActive ? "active" : "")" aria-haspopup="true" aria-expanded="@(isDemandSectionActive ? "true" : "false")">
+                            var isDemandTriageSectionActive = controllerName == "DemandTriage";
+                            <li class="nav-item">
+                                <a href="@Url.Action("Index", "DemandTriage")" class="nav-link @(isDemandTriageSectionActive ? "active" : "")">
                                     <i class="nav-icon fas fa-clipboard-list" aria-hidden="true"></i>
-                                    <p>
-                                        Demand management
-                                        <i class="right fas fa-angle-left"></i>
-                                    </p>
+                                    <p>Demand triage</p>
                                 </a>
-                                <ul class="nav nav-treeview" role="list">
-                                    <li class="nav-item">
-                                        <a href="@Url.Action("Requests", "DemandManagement")" class="nav-link @(isDemandRequestsActive ? "active" : "")">
-                                            <i class="far fa-circle nav-icon" aria-hidden="true"></i>
-                                            <p>Requests</p>
-                                        </a>
-                                    </li>
-                                    <li class="nav-item">
-                                        <a href="@Url.Action("Prioritisation", "DemandManagement")" class="nav-link @(isDemandPrioritisationActive ? "active" : "")">
-                                            <i class="far fa-circle nav-icon" aria-hidden="true"></i>
-                                            <p>Prioritisation</p>
-                                        </a>
-                                    </li>
-                                    <li class="nav-item">
-                                        <a href="@Url.Action("Triage", "DemandManagement")" class="nav-link @(isDemandTriageActive ? "active" : "")">
-                                            <i class="far fa-circle nav-icon" aria-hidden="true"></i>
-                                            <p>Triage</p>
-                                        </a>
-                                    </li>
-                                    <li class="nav-item">
-                                        <a href="@Url.Action("Reporting", "DemandManagement")" class="nav-link @(isDemandReportingActive ? "active" : "")">
-                                            <i class="far fa-circle nav-icon" aria-hidden="true"></i>
-                                            <p>Reporting</p>
-                                        </a>
-                                    </li>
-                                </ul>
+                            </li>
+                        }
+
+                        <!-- RAID Management Section -->
+                        @if (Configuration.GetValue<bool>("FeatureFlags:EnableRAIDManagement", false))
+                        {
+                            var isRaidSectionActive = controllerName == "Raid";
+                            <li class="nav-item">
+                                <a href="@Url.Action("Index", "Raid")" class="nav-link @(isRaidSectionActive ? "active" : "")">
+                                    <i class="nav-icon fas fa-shield-alt" aria-hidden="true"></i>
+                                    <p>RAID Management</p>
+                                </a>
                             </li>
                         }
 
                         <!-- Reporting Section -->
-                        <li class="nav-header">Reporting</li>
                         <li class="nav-item">
                             <a href="@Url.Action("Index", "Project")" class="nav-link @(ViewContext.RouteData.Values["Controller"]?.ToString() == "Project" && ViewContext.RouteData.Values["Action"]?.ToString() == "Index" ? "active" : "")">
                                 <i class="nav-icon fas fa-hammer" aria-hidden="true"></i>
-                                <p>Delivery reporting</p>
+                                <p>Work reporting</p>
                             </a>
                         </li>
-                        @{
+                        @if (Configuration.GetValue<bool>("FeatureFlags:EnableMonthlyPerformanceReporting", true))
+                        {
                             var operationalReportingActions = new[] { "PerformanceMetrics", "Index", "ProductHistory", "SubmitMetrics" };
                             var isOperationalReportingActive = ViewContext.RouteData.Values["Controller"]?.ToString() == "ProductReporting" && 
                                                                operationalReportingActions.Contains(ViewContext.RouteData.Values["Action"]?.ToString());
+                            <li class="nav-item">
+                                <a href="@Url.Action("PerformanceMetrics", "ProductReporting")" class="nav-link @(isOperationalReportingActive ? "active" : "")">
+                                    <i class="nav-icon fas fa-square-check" aria-hidden="true"></i>
+                                    <p>Operational reporting</p>
+                                </a>
+                            </li>
+                        }
+                        @{
+                            var commissionReportingActions = new[] { "Commission", "CommissionReporting", "SubmitCommission", "SubmitCommissionSubmission", "SaveCommissionMetricValue" };
+                            var isCommissionReportingActive = ViewContext.RouteData.Values["Controller"]?.ToString() == "ProductReporting" && 
+                                                              commissionReportingActions.Contains(ViewContext.RouteData.Values["Action"]?.ToString());
                         }
                         <li class="nav-item">
-                            <a href="@Url.Action("PerformanceMetrics", "ProductReporting")" class="nav-link @(isOperationalReportingActive ? "active" : "")">
-                                <i class="nav-icon fas fa-square-check" aria-hidden="true"></i>
-                                <p>Operational reporting</p>
+                            <a href="@Url.Action("Commission", "ProductReporting")" class="nav-link @(isCommissionReportingActive ? "active" : "")">
+                                <i class="nav-icon fas fa-file-invoice" aria-hidden="true"></i>
+                                <p>Performance reporting</p>
                             </a>
                         </li>
                         @{
@@ -396,6 +216,328 @@
                         }
                         @* Functional standards navigation moved to the header dropdown *@
 
+                        <!-- Standards Section -->
+                        @{
+                            bool canDraftStandards = false;
+                            bool canManageStandards = false;
+                            bool canApproveStandards = false;
+                            bool canPublishStandards = false;
+                            try
+                            {
+                                if (currentUser != null && !string.IsNullOrEmpty(currentUserEmail))
+                                {
+                                    canDraftStandards = await Compass.Helpers.StandardsPermissionHelper.CanDraftStandardsAsync(PermissionService, User);
+                                    canManageStandards = await Compass.Helpers.StandardsPermissionHelper.CanManageStandardsAsync(PermissionService, User);
+                                    canApproveStandards = await Compass.Helpers.StandardsPermissionHelper.CanApproveStandardsAsync(PermissionService, User);
+                                    canPublishStandards = await Compass.Helpers.StandardsPermissionHelper.CanPublishStandardsAsync(PermissionService, User);
+                                }
+                            }
+                            catch
+                            {
+                                // Non-blocking: section will not be shown
+                            }
+                            
+                            // User has management permissions if they can manage, approve, or publish
+                            bool hasManagementPermissions = canManageStandards || canApproveStandards || canPublishStandards;
+                        }
+                        @{
+                            var isStandardsSectionActive = controllerName == "DdtStandards" || controllerName == "DdtStandardsView" || (controllerName == "DdtStandardsManagement" && (actionName == "Drafts" || actionName == "Create"));
+                            var isStandardsViewActive = controllerName == "DdtStandardsView" && actionName == "Published";
+                            var isStandardsDraftActive = controllerName == "DdtStandardsManagement" && (actionName == "Drafts" || actionName == "Create");
+                            
+                            var isStandardsManagementSectionActive = controllerName == "DdtStandardsManagement" && actionName != "Drafts" && actionName != "Create" || controllerName == "DdtStandards" && (actionName == "ApprovedProducts" || actionName == "Exceptions");
+                            var isStandardsManageActive = controllerName == "DdtStandardsManagement" && actionName == "Index";
+                            var isProductsActive = controllerName == "DdtStandards" && actionName == "ApprovedProducts";
+                            var isExceptionsActive = controllerName == "DdtStandards" && actionName == "Exceptions";
+                        }
+                        
+                        <!-- Standards Section (for all users) -->
+                        <li class="nav-item @(isStandardsSectionActive ? "menu-open" : "")">
+                            <a href="#" class="nav-link @(isStandardsSectionActive ? "active" : "")" aria-haspopup="true" aria-expanded="@(isStandardsSectionActive ? "true" : "false")">
+                                <i class="nav-icon fas fa-book" aria-hidden="true"></i>
+                                <p>
+                                    Standards
+                                    <i class="right fas fa-angle-left"></i>
+                                </p>
+                            </a>
+                            <ul class="nav nav-treeview" role="list">
+                                <li class="nav-item">
+                                    <a href="@Url.Action("Published", "DdtStandardsView")" class="nav-link @(isStandardsViewActive ? "active" : "")">
+                                        <i class="far fa-circle nav-icon" aria-hidden="true"></i>
+                                        <p>Standards</p>
+                                    </a>
+                                </li>
+                                @if (canDraftStandards)
+                                {
+                                <li class="nav-item">
+                                    <a href="@Url.Action("Drafts", "DdtStandardsManagement")" class="nav-link @(isStandardsDraftActive ? "active" : "")">
+                                        <i class="far fa-circle nav-icon" aria-hidden="true"></i>
+                                        <p>Draft a standard</p>
+                                    </a>
+                                </li>
+                                }
+                            </ul>
+                        </li>
+                        
+                        <!-- Standards Management Section (for users with management permissions) -->
+                        @if (hasManagementPermissions)
+                        {
+                            <li class="nav-item @(isStandardsManagementSectionActive ? "menu-open" : "")">
+                                <a href="#" class="nav-link @(isStandardsManagementSectionActive ? "active" : "")" aria-haspopup="true" aria-expanded="@(isStandardsManagementSectionActive ? "true" : "false")">
+                                    <i class="nav-icon fas fa-cog" aria-hidden="true"></i>
+                                    <p>
+                                        Standards management
+                                        <i class="right fas fa-angle-left"></i>
+                                    </p>
+                                </a>
+                                <ul class="nav nav-treeview" role="list">
+                                    <li class="nav-item">
+                                        <a href="@Url.Action("Index", "DdtStandardsManagement")" class="nav-link @(isStandardsManageActive ? "active" : "")">
+                                            <i class="far fa-circle nav-icon" aria-hidden="true"></i>
+                                            <p>Manage standards</p>
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a href="@Url.Action("ApprovedProducts", "DdtStandards")" class="nav-link @(isProductsActive ? "active" : "")">
+                                            <i class="far fa-circle nav-icon" aria-hidden="true"></i>
+                                            <p>Products</p>
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a href="@Url.Action("Exceptions", "DdtStandards")" class="nav-link @(isExceptionsActive ? "active" : "")">
+                                            <i class="far fa-circle nav-icon" aria-hidden="true"></i>
+                                            <p>Exemptions</p>
+                                        </a>
+                                    </li>
+                            </ul>
+                        </li>
+                        }
+
+                        <!-- Central Operations Section -->
+                        @{
+                            bool isCentralOpsAdmin = false;
+                            bool enableCentralOps = Configuration.GetValue<bool>("FeatureFlags:EnableCentralOps", false);
+                            try
+                            {
+                                if (currentUser != null && !string.IsNullOrEmpty(currentUserEmail) && enableCentralOps)
+                                {
+                                    isCentralOpsAdmin = await PermissionService.IsSuperAdminAsync(currentUserEmail) ||
+                                                       await PermissionService.IsInGroupAsync(currentUserEmail, "Central Operations Admin");
+                                }
+                            }
+                            catch
+                            {
+                                // Non-blocking: section will not be shown
+                            }
+                        }
+                        @if (isCentralOpsAdmin && enableCentralOps)
+                        {
+                            var isCentralOpsSectionActive = controllerName == "CentralOps";
+                            var isCentralOpsDashboardActive = controllerName == "CentralOps" && actionName == "Dashboard";
+                            var isCentralOpsManageWorkActive = controllerName == "CentralOps" && actionName == "ManageWork";
+                            var isCentralOpsMonthlySummaryActive = controllerName == "CentralOps" && (actionName == "MonthlySummaryV2" || actionName == "MonthlySummary");
+                            var isCentralOpsPerformanceReportingActive = controllerName == "CentralOps" && actionName == "PerformanceReporting";
+                            var isCentralOpsSltReportActive = controllerName == "CentralOps" && actionName == "SltWeeklyReport";
+                            <li class="nav-item @(isCentralOpsSectionActive ? "menu-open" : "")">
+                                <a href="#" class="nav-link @(isCentralOpsSectionActive ? "active" : "")" aria-haspopup="true" aria-expanded="@(isCentralOpsSectionActive ? "true" : "false")">
+                                    <i class="nav-icon fas fa-cog" aria-hidden="true"></i>
+                                    <p>
+                                        Central Operations
+                                        <i class="right fas fa-angle-left"></i>
+                                    </p>
+                                </a>
+                                <ul class="nav nav-treeview" role="list">
+                                    <li class="nav-item">
+                                        <a href="@Url.Action("Dashboard", "CentralOps")" class="nav-link @(isCentralOpsDashboardActive ? "active" : "")">
+                                            <i class="far fa-circle nav-icon" aria-hidden="true"></i>
+                                            <p>Dashboard</p>
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a href="@Url.Action("ManageWork", "CentralOps")" class="nav-link @(isCentralOpsManageWorkActive ? "active" : "")">
+                                            <i class="far fa-circle nav-icon" aria-hidden="true"></i>
+                                            <p>Manage work</p>
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a href="@Url.Action("MonthlySummaryV2", "CentralOps")" class="nav-link @(isCentralOpsMonthlySummaryActive ? "active" : "")">
+                                            <i class="far fa-circle nav-icon" aria-hidden="true"></i>
+                                            <p>Monthly Summary</p>
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a href="@Url.Action("PerformanceReporting", "CentralOps")" class="nav-link @(isCentralOpsPerformanceReportingActive ? "active" : "")">
+                                            <i class="far fa-circle nav-icon" aria-hidden="true"></i>
+                                            <p>Performance reporting</p>
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a href="@Url.Action("SltWeeklyReport", "CentralOps")" class="nav-link @(isCentralOpsSltReportActive ? "active" : "")">
+                                            <i class="far fa-circle nav-icon" aria-hidden="true"></i>
+                                            <p>SLT weekly report</p>
+                                        </a>
+                                    </li>
+                                </ul>
+                            </li>
+                        }
+
+                        <!-- Design Operations Section -->
+                        @{
+                            bool isDesignOpsAdmin = false;
+                            try
+                            {
+                                if (currentUser != null && !string.IsNullOrEmpty(currentUserEmail))
+                                {
+                                    isDesignOpsAdmin = await PermissionService.IsSuperAdminAsync(currentUserEmail) ||
+                                                       await PermissionService.IsInGroupAsync(currentUserEmail, "Design Operations");
+                                }
+                            }
+                            catch
+                            {
+                                // Non-blocking: section will not be shown
+                            }
+                        }
+                        @if (isDesignOpsAdmin)
+                        {
+                            var isDesignOpsSectionActive = controllerName == "DesignOps";
+                            var isDesignOpsDashboardActive = controllerName == "DesignOps" && actionName == "Dashboard";
+                            var isDesignOpsAccessibilityActive = controllerName == "DesignOps" && actionName == "AccessibilityOversight";
+                            <li class="nav-item @(isDesignOpsSectionActive ? "menu-open" : "")">
+                                <a href="#" class="nav-link @(isDesignOpsSectionActive ? "active" : "")" aria-haspopup="true" aria-expanded="@(isDesignOpsSectionActive ? "true" : "false")">
+                                    <i class="nav-icon fas fa-palette" aria-hidden="true"></i>
+                                    <p>
+                                        Design Operations
+                                        <i class="right fas fa-angle-left"></i>
+                                    </p>
+                                </a>
+                                <ul class="nav nav-treeview" role="list">
+                                    <li class="nav-item">
+                                        <a href="@Url.Action("Dashboard", "DesignOps")" class="nav-link @(isDesignOpsDashboardActive ? "active" : "")">
+                                            <i class="far fa-circle nav-icon" aria-hidden="true"></i>
+                                            <p>Dashboard</p>
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a href="@Url.Action("AccessibilityOversight", "DesignOps")" class="nav-link @(isDesignOpsAccessibilityActive ? "active" : "")">
+                                            <i class="far fa-circle nav-icon" aria-hidden="true"></i>
+                                            <p>Accessibility issues</p>
+                                        </a>
+                                    </li>
+                                </ul>
+                            </li>
+                        }
+
+                        <!-- Reports Section -->
+                        @{
+                            var isReportsSectionActive = controllerName == "Reports";
+                            var isReportsIndexActive = controllerName == "Reports" && actionName == "Index";
+                            var isReportsDivisionActive = controllerName == "Reports" && actionName == "DivisionReport";
+                            var isReportsBusinessAreaActive = controllerName == "Reports" && actionName == "BusinessAreaReport";
+                            var isReportsPriorityActive = controllerName == "Reports" && actionName == "PriorityOutcomes";
+                        }
+                        <li class="nav-item @(isReportsSectionActive ? "menu-open" : "")">
+                            <a href="#" class="nav-link @(isReportsSectionActive ? "active" : "")" aria-haspopup="true" aria-expanded="@(isReportsSectionActive ? "true" : "false")">
+                                <i class="nav-icon fas fa-chart-bar" aria-hidden="true"></i>
+                                <p>
+                                    Reports
+                                    <i class="right fas fa-angle-left"></i>
+                                </p>
+                            </a>
+                            <ul class="nav nav-treeview" role="list">
+                                <li class="nav-item">
+                                    <a href="@Url.Action("Index", "Reports")" class="nav-link @(isReportsIndexActive ? "active" : "")">
+                                        <i class="far fa-circle nav-icon" aria-hidden="true"></i>
+                                        <p>Overview</p>
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a href="@Url.Action("DivisionReport", "Reports")" class="nav-link @(isReportsDivisionActive ? "active" : "")">
+                                        <i class="far fa-circle nav-icon" aria-hidden="true"></i>
+                                        <p>Division report</p>
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a href="@Url.Action("BusinessAreaReport", "Reports")" class="nav-link @(isReportsBusinessAreaActive ? "active" : "")">
+                                        <i class="far fa-circle nav-icon" aria-hidden="true"></i>
+                                        <p>Business area report</p>
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a href="@Url.Action("PriorityOutcomes", "Reports")" class="nav-link @(isReportsPriorityActive ? "active" : "")">
+                                        <i class="far fa-circle nav-icon" aria-hidden="true"></i>
+                                        <p>Priority outcomes</p>
+                                    </a>
+                                </li>
+                            </ul>
+                        </li>
+
+                        <!-- FIPS Manager Section -->
+                        @if (Configuration.GetValue<bool>("FeatureFlags:EnableFIPSManager", false))
+                        {
+                            var hasFipsManagerAccess = false;
+                            
+                            if (currentUser != null && !string.IsNullOrEmpty(currentUserEmail))
+                            {
+                                try
+                                {
+                                    // Check if user is in allowed groups: "Central Operations Admin", "HOP", or "Design Operations"
+                                    var allowedGroups = new[] { "Central Operations Admin", "HOP", "Design Operations" };
+                                    foreach (var groupName in allowedGroups)
+                                    {
+                                        if (await PermissionService.IsInGroupAsync(currentUserEmail, groupName))
+                                        {
+                                            hasFipsManagerAccess = true;
+                                            break;
+                                        }
+                                    }
+                                }
+                                catch
+                                {
+                                    // If there's an error checking permissions, default to false
+                                    hasFipsManagerAccess = false;
+                                }
+                            }
+                            
+                            @if (hasFipsManagerAccess)
+                            {
+                                var isFipsManagerSectionActive = controllerName == "FipsManager";
+                                var isFipsManagerIndexActive = controllerName == "FipsManager" && actionName == "Index";
+                                var isFipsManagerProductActive = controllerName == "FipsManager" && actionName == "ProductDetails";
+                                var isFipsManagerDqManagerActive = controllerName == "FipsManager" && (actionName == "ProductDqManagerMyServices" || actionName == "ProductDqManagerAllProducts" || actionName == "StartDqReview" || actionName == "DqReviewInterstitial" || actionName == "DqReviewCheck" || actionName == "DqReviewConfirmation" || actionName == "SubmitDqReview");
+                                <li class="nav-item @(isFipsManagerSectionActive ? "menu-open" : "")">
+                                    <a href="#" class="nav-link @(isFipsManagerSectionActive ? "active" : "")" aria-haspopup="true" aria-expanded="@(isFipsManagerSectionActive ? "true" : "false")">
+                                        <i class="nav-icon fas fa-cog" aria-hidden="true"></i>
+                                        <p>
+                                            FIPS Manager
+                                            <i class="right fas fa-angle-left"></i>
+                                        </p>
+                                    </a>
+                                    <ul class="nav nav-treeview" role="list">
+                                        <li class="nav-item">
+                                            <a href="@Url.Action("Index", "FipsManager")" class="nav-link @(isFipsManagerIndexActive ? "active" : "")">
+                                                <i class="far fa-circle nav-icon" aria-hidden="true"></i>
+                                                <p>Active products</p>
+                                            </a>
+                                        </li>
+                                        <li class="nav-item">
+                                            @{
+                                                var isFipsManagerNewProductsActive = controllerName == "FipsManager" && actionName == "NewProducts";
+                                            }
+                                            <a href="@Url.Action("NewProducts", "FipsManager")" class="nav-link @(isFipsManagerNewProductsActive ? "active" : "")">
+                                                <i class="far fa-circle nav-icon" aria-hidden="true"></i>
+                                                <p>New products</p>
+                                            </a>
+                                        </li>
+                                        <li class="nav-item">
+                                            <a href="@Url.Action("ProductDqManagerMyServices", "FipsManager")" class="nav-link @(isFipsManagerDqManagerActive ? "active" : "")">
+                                                <i class="far fa-circle nav-icon" aria-hidden="true"></i>
+                                                <p>Product DQ Manager</p>
+                                            </a>
+                                        </li>
+                                    </ul>
+                                </li>
+                            }
+                        }
 
                         <!-- Product Governance - Hidden from navigation -->
                         <!--
@@ -452,18 +594,21 @@
         <!-- Content Wrapper. Contains page content -->
         <div class="content-wrapper p-0">
             <!-- Breadcrumb Section -->
+            @if (ViewData["BodyClass"]?.ToString() != "reports-page")
+            {
             <div class="content-header p-0">
                 <div class="container-fluid p-0">
                     <div class="row mb-2">
-                        <div class="col-sm-12 ">
+                        <div class="col-sm-12">
                             @RenderSection("Breadcrumbs", required: false)
                         </div>
                     </div>
                 </div>
             </div>
+            }
 
             <!-- Main content -->
-            <section class="content" id="main-content">
+            <section class="content @(ViewData["BodyClass"])" id="main-content">
                 
                     @RenderBody()
               
@@ -472,14 +617,10 @@
         </div>
         <!-- /.content-wrapper -->
         <footer class="main-footer">
-            <a href="#" class="footer-link">Cookies</a>
-            <a href="@Url.Action("Accessibility", "Home")" class="footer-link">Accessibility</a>
+            <a href="https://accessibility-statements.education.gov.uk/s/52" class="footer-link">Accessibility</a>
             <a href="@Url.Action("Index", "Documentation")" class="footer-link">Documentation</a>
-            <a href="@Url.Action("Roadmap", "Home")" class="footer-link">Roadmap</a>
-            <a href="#" class="footer-link">Support</a>
-            <a href="#" class="footer-link">Feedback</a>
-
-            <a href="@Url.Action("UserInfo", "Profile")" class="footer-link">User</a>
+            <a href="@Url.Action("Support", "Home")" class="footer-link">Support</a>
+            <a href="https://forms.office.com/e/FvpYB3NdeZ" class="footer-link">Feedback</a>
         </footer>
 
         <!-- Control Sidebar -->
@@ -506,6 +647,8 @@
     <!-- Custom scripts -->
     <script src="~/js/custom.js" nonce="@Context.Items["Nonce"]"></script>
     <script src="~/js/staff-autocomplete.js" nonce="@Context.Items["Nonce"]"></script>
+    <!-- Help Chatbot -->
+    <!-- <script src="~/js/chatbot.js" nonce="@Context.Items["Nonce"]"></script> -->
     
     <!-- Sidebar state persistence -->
     <script nonce="@Context.Items["Nonce"]">

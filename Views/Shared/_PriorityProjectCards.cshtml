@@ -1,0 +1,147 @@
+@using Compass.Models
+@model List<Project>
+
+@functions {
+    string GetRagBadgeClass(RagStatusLookup? ragStatus)
+    {
+        return (ragStatus?.Name?.Trim() ?? "") switch
+        {
+            "Green" => "badge badge-success",
+            "Amber-Green" => "badge badge-warning",
+            "Amber" => "badge badge-warning",
+            "Amber-Red" => "badge badge-danger",
+            "Red" => "badge badge-danger",
+            _ => "badge badge-secondary"
+        };
+    }
+    string GetRagBorderClass(RagStatusLookup? ragStatus)
+    {
+        return (ragStatus?.Name?.Trim() ?? "") switch
+        {
+            "Green" => "border-left-success",
+            "Amber-Green" => "border-left-warning",
+            "Amber" => "border-left-warning",
+            "Amber-Red" => "border-left-danger",
+            "Red" => "border-left-danger",
+            _ => "border-left-secondary"
+        };
+    }
+}
+
+<div class="priority-cards-grid">
+    @foreach (var project in Model)
+    {
+        var openRisks = project.Risks?.Count(r => !r.IsDeleted) ?? 0;
+        var openIssues = project.Issues?.Count(i => !i.IsDeleted && i.Status != "resolved" && i.Status != "closed") ?? 0;
+        var overdueMilestones = project.Milestones?.Count(m => !m.IsDeleted && m.DueDate < DateTime.Today && m.Status != "complete" && m.Status != "cancelled") ?? 0;
+        var sros = project.SeniorResponsibleOfficers?.Select(s => s.User?.Name).Where(n => !string.IsNullOrEmpty(n)).ToList() ?? new List<string?>();
+        var serviceOwners = project.ServiceOwners?.Select(s => s.User?.Name).Where(n => !string.IsNullOrEmpty(n)).ToList() ?? new List<string?>();
+        var divisions = project.Directorates?.Select(d => d.Division?.Name).Where(n => !string.IsNullOrEmpty(n)).Distinct().ToList() ?? new List<string?>();
+        var borderClass = GetRagBorderClass(project.RagStatusLookup);
+
+        <div class="priority-card @borderClass">
+            <div class="priority-card-header">
+                <div class="priority-card-title-row">
+                    <a href="@Url.Action("Details", "Project", new { id = project.Id })" class="priority-card-title">
+                        @project.Title
+                    </a>
+                    <div class="priority-card-badges">
+                        @if (project.RagStatusLookup != null)
+                        {
+                            <span class="@GetRagBadgeClass(project.RagStatusLookup)">@project.RagStatusLookup.Name</span>
+                        }
+                        @if (project.IsFlagship)
+                        {
+                            <span class="badge badge-warning" title="Flagship"><i class="fas fa-star" aria-hidden="true"></i></span>
+                        }
+                        @if (project.IsMultiDepartmentProject)
+                        {
+                            <span class="badge badge-info" title="Multi-department"><i class="fas fa-globe" aria-hidden="true"></i></span>
+                        }
+                        @if (project.IsAiInitiative)
+                        {
+                            <span class="badge badge-primary" title="AI initiative"><i class="fas fa-robot" aria-hidden="true"></i></span>
+                        }
+                    </div>
+                </div>
+                @if (!string.IsNullOrEmpty(project.ProjectCode))
+                {
+                    <small class="text-muted">@project.ProjectCode</small>
+                }
+            </div>
+
+            <div class="priority-card-body">
+                <div class="priority-card-meta">
+                    @{
+                        var cardStatusClass = project.Status == "Active" ? "status-active" : "status-paused";
+                    }
+                    <span class="priority-meta-item"><span class="status-badge @cardStatusClass">@project.Status</span></span>
+                    @if (project.PhaseLookup != null)
+                    {
+                        <span class="priority-meta-item"><i class="fas fa-layer-group mr-1" aria-hidden="true"></i>@project.PhaseLookup.Name</span>
+                    }
+                    @if (project.BusinessAreaLookup != null)
+                    {
+                        <span class="priority-meta-item">
+                            <i class="fas fa-building mr-1" aria-hidden="true"></i>
+                            <a href="@Url.Action("BusinessAreaReport", "Reports", new { businessAreaId = project.BusinessAreaId })" class="text-muted">@project.BusinessAreaLookup.Name</a>
+                        </span>
+                    }
+                    @if (divisions.Any())
+                    {
+                        <span class="priority-meta-item"><i class="fas fa-sitemap mr-1" aria-hidden="true"></i>@string.Join(", ", divisions)</span>
+                    }
+                </div>
+
+                @if (!string.IsNullOrEmpty(project.Aim))
+                {
+                    <p class="priority-card-aim">@(project.Aim.Length > 150 ? project.Aim.Substring(0, 150) + "…" : project.Aim)</p>
+                }
+
+                @if (sros.Any() || serviceOwners.Any())
+                {
+                    <div class="priority-card-people">
+                        @if (sros.Any())
+                        {
+                            <span class="priority-person-item"><i class="fas fa-user-tie mr-1" aria-hidden="true"></i><strong>SRO:</strong> @string.Join(", ", sros)</span>
+                        }
+                        @if (serviceOwners.Any())
+                        {
+                            <span class="priority-person-item"><i class="fas fa-user mr-1" aria-hidden="true"></i><strong>Service owner:</strong> @string.Join(", ", serviceOwners)</span>
+                        }
+                    </div>
+                }
+            </div>
+
+            <div class="priority-card-footer">
+                <div class="priority-card-indicators">
+                    @if (overdueMilestones > 0)
+                    {
+                        <span class="priority-indicator priority-indicator-danger" title="Overdue milestones">
+                            <i class="fas fa-flag-checkered" aria-hidden="true"></i> @overdueMilestones overdue
+                        </span>
+                    }
+                    @if (openRisks > 0)
+                    {
+                        <span class="priority-indicator priority-indicator-warning" title="Open risks">
+                            <i class="fas fa-exclamation-triangle" aria-hidden="true"></i> @openRisks risk@(openRisks == 1 ? "" : "s")
+                        </span>
+                    }
+                    @if (openIssues > 0)
+                    {
+                        <span class="priority-indicator priority-indicator-danger" title="Open issues">
+                            <i class="fas fa-bug" aria-hidden="true"></i> @openIssues issue@(openIssues == 1 ? "" : "s")
+                        </span>
+                    }
+                    @if (overdueMilestones == 0 && openRisks == 0 && openIssues == 0)
+                    {
+                        <span class="priority-indicator priority-indicator-success">
+                            <i class="fas fa-check-circle" aria-hidden="true"></i> No open concerns
+                        </span>
+                    }
+                </div>
+                <a href="@Url.Action("Details", "Project", new { id = project.Id })" class="btn btn-xs btn-outline-primary">View project</a>
+            </div>
+        </div>
+    }
+</div>

@@ -15,12 +15,19 @@ public class ProjectRagHistory
     [ForeignKey(nameof(ProjectId))]
     public Project Project { get; set; } = null!;
 
-    [Required]
-    [MaxLength(20)]
-    public string RagStatus { get; set; } = string.Empty; // Green, Amber-Green, Amber-Red, Red
+    // RAG Status - using foreign key to RagStatusLookup
+    public int? RagStatusLookupId { get; set; }
+    [ForeignKey(nameof(RagStatusLookupId))]
+    public RagStatusLookup? RagStatusLookup { get; set; }
 
+    [MaxLength(20)]
+    [Obsolete("Use RagStatusLookupId instead. This property is kept for backward compatibility.")]
+    public string RagStatus { get; set; } = string.Empty; // Deprecated: Use RagStatusLookupId
+
+    [MaxLength(1000)]
     public string? Justification { get; set; }
 
+    [MaxLength(1000)]
     public string? PathToGreen { get; set; }
 
     [Required]

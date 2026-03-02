@@ -2,7 +2,7 @@
 
 @if (Model?.Id > 0)
 {
-    var deliveryCode = $"DEL-DDT-{Model.Id}";
+    var deliveryCode = $"DFE-DDT-{Model.Id}";
 
     <div class="card project-summary-card mb-4">
         <div class="card-header">
@@ -36,7 +36,7 @@
                     <small class="text-muted d-block">RAG status</small>
                     @if (!string.IsNullOrWhiteSpace(Model.RagStatus))
                     {
-                        <span class="@GetRagBadgeClass(Model.RagStatus)">@Model.RagStatus</span>
+                        <span class="@GetRagBadgeClass(Model.RagStatus)">@FormatRagStatusText(Model.RagStatus)</span>
                     }
                     else
                     {
@@ -60,13 +60,24 @@
                     <span>@(Model.TargetDeliveryDate.HasValue ? Model.TargetDeliveryDate.Value.ToString("d MMMM yyyy") : "Not set")</span>
                 </li>
                 <li class="list-group-item">
-                    <small class="text-muted d-block">Primary contact</small>
-                    @if (!string.IsNullOrWhiteSpace(Model.PrimaryContactName))
+                    <small class="text-muted d-block">Primary contacts</small>
+                    @if (Model.PmoContacts?.Any() == true)
+                    {
+                        @foreach (var pmo in Model.PmoContacts.Take(2))
                     {
                         <div>
-                            <span class="font-weight-medium">@Model.PrimaryContactName</span><br />
-                            <span class="text-muted">@Model.PrimaryContactEmail</span>
+                                <span class="font-weight-medium">@pmo.Name</span>
+                                @if (!string.IsNullOrWhiteSpace(pmo.Email))
+                                {
+                                    <br />
+                                    <span class="text-muted">@pmo.Email</span>
+                                }
                         </div>
+                        }
+                        @if (Model.PmoContacts.Count > 2)
+                        {
+                            <small class="text-muted">+ @(Model.PmoContacts.Count - 2) more</small>
+                        }
                     }
                     else
                     {
@@ -103,7 +114,30 @@
 
     string GetRagBadgeClass(string ragStatus)
     {
-        return ragStatus switch
+        if (string.IsNullOrWhiteSpace(ragStatus))
+        {
+            return "badge badge-secondary";
+        }
+        
+        // Normalize the status - handle both "Amber-Green" and "Amber/Green" formats
+        var normalized = ragStatus.Trim()
+            .Replace(" / ", "-")
+            .Replace("/", "-")
+            .Replace(" /", "-")
+            .Replace("/ ", "-");
+        
+        // Capitalize first letter of each word for consistency
+        var parts = normalized.Split('-');
+        for (int i = 0; i < parts.Length; i++)
+        {
+            if (parts[i].Length > 0)
+            {
+                parts[i] = char.ToUpperInvariant(parts[i][0]) + (parts[i].Length > 1 ? parts[i].Substring(1).ToLowerInvariant() : "");
+            }
+        }
+        var displayRagStatus = string.Join("-", parts);
+        
+        return displayRagStatus switch
         {
             "Green" => "badge badge-green",
             "Amber-Green" => "badge badge-amber-green",
@@ -112,6 +146,32 @@
             "Red" => "badge badge-red",
             _ => "badge badge-secondary"
         };
+    }
+    
+    string FormatRagStatusText(string ragStatus)
+    {
+        if (string.IsNullOrWhiteSpace(ragStatus))
+        {
+            return ragStatus;
+        }
+
+        // Normalize to always use "Amber-Green" and "Amber-Red" format
+        var normalized = ragStatus.Trim()
+            .Replace(" / ", "-")
+            .Replace("/", "-")
+            .Replace(" /", "-")
+            .Replace("/ ", "-");
+        
+        // Capitalize first letter of each word for consistency
+        var parts = normalized.Split('-');
+        for (int i = 0; i < parts.Length; i++)
+        {
+            if (parts[i].Length > 0)
+            {
+                parts[i] = char.ToUpperInvariant(parts[i][0]) + (parts[i].Length > 1 ? parts[i].Substring(1).ToLowerInvariant() : "");
+            }
+        }
+        return string.Join("-", parts);
     }
 }
 

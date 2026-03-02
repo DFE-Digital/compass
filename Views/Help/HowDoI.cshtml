@@ -1,0 +1,141 @@
+@{
+    ViewData["Title"] = "How do I...";
+    string topic = (ViewBag.Topic?.ToString() ?? ViewContext.RouteData.Values["topic"]?.ToString() ?? "").ToString();
+    var viewName = ViewBag.ViewName?.ToString() ?? topic.ToLowerInvariant().Replace(" ", "").Replace("-", "");
+    var topicTitle = topic.Replace("-", " ").Replace("_", " ");
+    topicTitle = System.Globalization.CultureInfo.CurrentCulture.TextInfo.ToTitleCase(topicTitle);
+    
+    // Map topics to sections
+    var workManagementTopics = new[] { "create-project", "add-team-member", "complete-project-info" };
+    var workTrackingTopics = new[] { "update-rag-status", "add-milestone", "add-status-update", "manage-milestones-updates-successes" };
+    var accessibilityTopics = new[] { "enrol-product-accessibility", "create-accessibility-issue", "manage-accessibility-statement", "track-accessibility-audits", "link-wcag-criteria" };
+    var workReportingTopics = new[] { "view-delivery-projects", "view-project-details", "manage-project-deliverables", "track-project-dependencies" };
+    var productReportingTopics = new[] { "submit-performance-metrics", "view-product-history", "understand-reporting-requirements", "report-other-product" };
+    
+    // Determine current section and get related topics
+    string currentSection = "";
+    string[] relatedTopics = Array.Empty<string>();
+    
+    if (workManagementTopics.Contains(topic, StringComparer.OrdinalIgnoreCase))
+    {
+        currentSection = "Work management";
+        relatedTopics = workManagementTopics.Where(t => !t.Equals(topic, StringComparison.OrdinalIgnoreCase)).ToArray();
+    }
+    else if (workTrackingTopics.Contains(topic, StringComparer.OrdinalIgnoreCase))
+    {
+        currentSection = "Work tracking";
+        relatedTopics = workTrackingTopics.Where(t => !t.Equals(topic, StringComparison.OrdinalIgnoreCase)).ToArray();
+    }
+    else if (accessibilityTopics.Contains(topic, StringComparer.OrdinalIgnoreCase))
+    {
+        currentSection = "Accessibility management";
+        relatedTopics = accessibilityTopics.Where(t => !t.Equals(topic, StringComparison.OrdinalIgnoreCase)).ToArray();
+    }
+    else if (workReportingTopics.Contains(topic, StringComparer.OrdinalIgnoreCase))
+    {
+        currentSection = "Work reporting";
+        relatedTopics = workReportingTopics.Where(t => !t.Equals(topic, StringComparison.OrdinalIgnoreCase)).ToArray();
+    }
+    else if (productReportingTopics.Contains(topic, StringComparer.OrdinalIgnoreCase))
+    {
+        currentSection = "Product operational reporting";
+        relatedTopics = productReportingTopics.Where(t => !t.Equals(topic, StringComparison.OrdinalIgnoreCase)).ToArray();
+    }
+    
+    // Helper function to format topic titles
+    string FormatTopicTitle(string topicName)
+    {
+        return System.Globalization.CultureInfo.CurrentCulture.TextInfo.ToTitleCase(topicName.Replace("-", " ").Replace("_", " "));
+    }
+}
+
+@{
+    ViewBag.BrandText = "Help";
+    ViewBag.NavLinks = new object[] { };
+}
+@await Html.PartialAsync("_ModuleNavbar")
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb" class="mb-3">
+        <ol class="breadcrumb mb-0 pl-4 breadcrumb-standard">
+            <li class="breadcrumb-item">
+                <a href="/" class="breadcrumb-link-standard">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a href="@Url.Action("Index", "Help")" class="breadcrumb-link-standard">Help</a>
+            </li>
+            <li class="breadcrumb-item active breadcrumb-active-standard" aria-current="page">@topicTitle</li>
+        </ol>
+    </nav>
+}
+
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-3 align-items-center">
+            <div class="col-lg-8 col-md-7 col-sm-12">
+                <h1 class="m-0">How do I @topicTitle?</h1>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-lg-8">
+                <div class="card help-content-card">
+                    <div class="card-body">
+                        @{
+                            // Render the specific guidance view if it exists
+                            try
+                            {
+                                await Html.RenderPartialAsync($"_{viewName}");
+                            }
+                            catch
+                            {
+                                <div class="alert alert-info">
+                                    <p><strong>Guidance coming soon</strong></p>
+                                    <p>Guidance for this topic is being prepared. Please check back soon.</p>
+                                    <p>For immediate assistance, please contact your system administrator.</p>
+                                </div>
+                            }
+                        }
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-4">
+                <div class="card help-sidebar-card mb-3">
+                    <div class="card-header">
+                        <h3 class="card-title font-size-11rem font-weight-600">Navigation</h3>
+                    </div>
+                    <div class="card-body p-0">
+                        <a href="@Url.Action("Index", "Help")" class="help-sidebar-link">
+                            <i class="fas fa-arrow-left"></i>
+                            Back to help index
+                        </a>
+                    </div>
+                </div>
+                
+                @if (!string.IsNullOrEmpty(currentSection) && relatedTopics.Any())
+                {
+                    <div class="card help-sidebar-card">
+                        <div class="card-header">
+                            <h3 class="card-title font-size-11rem font-weight-600">Also in this section</h3>
+                        </div>
+                        <div class="card-body p-0">
+                            @foreach (var relatedTopic in relatedTopics)
+                            {
+                                <a href="@Url.Action("HowDoI", "Help", new { topic = relatedTopic })" class="help-sidebar-link">
+                                    <i class="fas fa-chevron-right"></i>
+                                    @FormatTopicTitle(relatedTopic)
+                                </a>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</section>
+

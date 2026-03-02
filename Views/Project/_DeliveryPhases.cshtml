@@ -1,0 +1,263 @@
+@model Compass.Models.Project
+@using System.Linq
+
+@{
+    var deliveryCode = $"DFE-DDT-{Model.Id:D3}";
+    var projectCode = Model.ProjectCode;
+    var assessments = ViewBag.ServiceAssessments as List<dynamic> ?? new List<dynamic>();
+    
+    // Define phases
+    var phases = new[]
+    {
+        new { Name = "Discovery", StartPlanned = Model.DiscoveryStartDatePlanned, StartActual = Model.DiscoveryStartDateActual, EndPlanned = Model.DiscoveryEndDatePlanned, EndActual = Model.DiscoveryEndDateActual },
+        new { Name = "Alpha", StartPlanned = Model.AlphaStartDatePlanned, StartActual = Model.AlphaStartDateActual, EndPlanned = Model.AlphaEndDatePlanned, EndActual = Model.AlphaEndDateActual },
+        new { Name = "Private Beta", StartPlanned = Model.PrivateBetaStartDatePlanned, StartActual = Model.PrivateBetaStartDateActual, EndPlanned = Model.PrivateBetaEndDatePlanned, EndActual = Model.PrivateBetaEndDateActual },
+        new { Name = "Public Beta", StartPlanned = Model.PublicBetaStartDatePlanned, StartActual = Model.PublicBetaStartDateActual, EndPlanned = Model.PublicBetaEndDatePlanned, EndActual = Model.PublicBetaEndDateActual }
+    };
+    
+    // Helper function to get assessment for a phase
+    dynamic? GetAssessmentForPhase(string phaseName)
+    {
+        var phaseAssessments = assessments
+            .Where(a => 
+            {
+                try
+                {
+                    var phase = a.Phase?.ToString();
+                    return !string.IsNullOrEmpty(phase) && 
+                           string.Equals(phase, phaseName, StringComparison.OrdinalIgnoreCase);
+                }
+                catch
+                {
+                    return false;
+                }
+            })
+            .ToList();
+        
+        if (phaseAssessments.Any())
+        {
+            // Get the most recent assessment
+            var latest = phaseAssessments
+                .OrderByDescending(a => 
+                {
+                    try
+                    {
+                        if (a.AssessmentDateTime != null)
+                        {
+                            var dateStr = a.AssessmentDateTime.ToString();
+                            if (DateTime.TryParse(dateStr, out DateTime date))
+                                return date;
+                        }
+                    }
+                    catch
+                    {
+                        // Ignore parsing errors
+                    }
+                    return DateTime.MinValue;
+                })
+                .FirstOrDefault();
+            
+            return latest;
+        }
+        return null;
+    }
+    
+    string GetOutcomeBadgeClass(string? outcome, string? status)
+    {
+        // Handle "Upcoming assessment" case
+        if (string.Equals(status, "Active", StringComparison.OrdinalIgnoreCase) && 
+            string.Equals(outcome, "not rated", StringComparison.OrdinalIgnoreCase))
+        {
+            return "badge-info";
+        }
+        
+        if (string.IsNullOrEmpty(outcome))
+            return "badge-secondary";
+            
+        var normalized = outcome.Trim().ToLowerInvariant();
+        
+        return normalized switch
+        {
+            "met" => "badge-success",
+            "met with conditions" => "badge-warning",
+            "not met" => "badge-danger",
+            "green" => "badge-success",
+            "amber" => "badge-warning",
+            "red" => "badge-danger",
+            "not rated" => "badge-secondary",
+            "not applicable" => "badge-secondary",
+            _ => "badge-secondary"
+        };
+    }
+    
+    string GetAssessmentDisplayText(string? outcome, string? status)
+    {
+        // Handle "Upcoming assessment" case
+        if (string.Equals(status, "Active", StringComparison.OrdinalIgnoreCase) && 
+            string.Equals(outcome, "not rated", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Upcoming assessment";
+        }
+        
+        return outcome ?? "No assessment";
+    }
+    
+    int? CalculateDays(DateTime? startDate, DateTime? endDate)
+    {
+        if (startDate.HasValue && endDate.HasValue)
+        {
+            return (endDate.Value - startDate.Value).Days;
+        }
+        return null;
+    }
+}
+
+<div class="row">
+    <div class="col-lg-12">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h3 class="card-title">Work phases</h3>
+                <div class="card-tools">
+                    <a asp-action="EditDeliveryPhases" asp-route-projectId="@Model.Id">Edit</a>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th style="width: 10%;">Phase</th>
+                                <th style="width: 11%;">Start date (planned)</th>
+                                <th style="width: 11%;">Start date (actual)</th>
+                                <th style="width: 11%;">End date (planned)</th>
+                                <th style="width: 11%;">End date (actual)</th>
+                                <th style="width: 12%;">Planned days</th>
+                                <th style="width: 12%;">Actual days</th>
+                                <th style="width: 22%;">Assessment outcome</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var phase in phases)
+                            {
+                                var assessment = GetAssessmentForPhase(phase.Name);
+                                var plannedDays = CalculateDays(phase.StartPlanned, phase.EndPlanned);
+                                var actualDays = CalculateDays(phase.StartActual, phase.EndActual);
+                                string? assessmentOutcome = null;
+                                string? assessmentStatus = null;
+                                int? assessmentId = null;
+                                
+                                if (assessment != null)
+                                {
+                                    try
+                                    {
+                                        assessmentOutcome = assessment.Outcome?.ToString();
+                                        assessmentStatus = assessment.Status?.ToString();
+                                        if (assessment.AssessmentID != null)
+                                        {
+                                            if (int.TryParse(assessment.AssessmentID.ToString(), out int id))
+                                            {
+                                                assessmentId = id;
+                                            }
+                                        }
+                                    }
+                                    catch
+                                    {
+                                        // Ignore errors accessing dynamic properties
+                                    }
+                                }
+                                
+                                var isPublished = string.Equals(assessmentStatus, "Published", StringComparison.OrdinalIgnoreCase);
+                                <tr>
+                                    <td class="font-weight-bold">
+                                            @phase.Name
+                                    </td>
+                                    <td>
+                                        @if (phase.StartPlanned.HasValue)
+                                        {
+                                            @phase.StartPlanned.Value.ToString("dd MMM yyyy")
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">Not set</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (phase.StartActual.HasValue)
+                                        {
+                                            @phase.StartActual.Value.ToString("dd MMM yyyy")
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">Not set</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (phase.EndPlanned.HasValue)
+                                        {
+                                            @phase.EndPlanned.Value.ToString("dd MMM yyyy")
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">Not set</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (phase.EndActual.HasValue)
+                                        {
+                                            @phase.EndActual.Value.ToString("dd MMM yyyy")
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">Not set</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (plannedDays.HasValue)
+                                        {
+                                            @plannedDays.Value
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">-</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (actualDays.HasValue)
+                                        {
+                                            @actualDays.Value
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">-</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (assessment != null)
+                                        {
+                                            <span class="badge @GetOutcomeBadgeClass(assessmentOutcome, assessmentStatus)">@GetAssessmentDisplayText(assessmentOutcome, assessmentStatus)</span>
+                                            @if (isPublished && assessmentId != null)
+                                            {
+                                                <a href="https://service-assessments.education.gov.uk/reports/report/@assessmentId" target="_blank" rel="noopener noreferrer" class="ml-2" title="View assessment report">
+                                                    <i class="fas fa-external-link-alt"></i>
+                                                </a>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">No assessment</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <div class="p-3 border-top">
+                    <small class="text-muted">
+                        Assessment outcomes are retrieved from Service Assessment Service for project code: <strong>@deliveryCode</strong>
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

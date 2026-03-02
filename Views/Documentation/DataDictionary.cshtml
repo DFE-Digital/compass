@@ -9,8 +9,21 @@
             text-decoration: underline !important;
         }
     </style>
+}
+
+<style nonce="@Context.Items["Nonce"]">
+    code {
+        background-color: #f6f8fa;
+        padding: 0.2rem 0.4rem;
+        border-radius: 3px;
+        font-size: 1em;
+        font-family: 'Courier New', Courier, monospace;
+        color: #d4351c;
+        font-weight: 700;
+    }
+</style>
     <nav aria-label="Breadcrumb">
-        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f8f9fa; padding: 0.75rem 1rem; border-radius: 0.375rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
             <li class="breadcrumb-item">
                 <a href="@Url.Action("Index", "Home")" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Home</a>
             </li>
@@ -31,7 +44,15 @@
             <a class="nav-link" href="#issues">Issues</a>
             <a class="nav-link" href="#actions">Actions</a>
             <a class="nav-link" href="#milestones">Milestones</a>
+            <a class="nav-link" href="#decisions">Decisions</a>
             <a class="nav-link" href="#projects">Projects</a>
+            <a class="nav-link" href="#demand-management">Demand Management</a>
+            <a class="nav-link" href="#ddt-standards">DDT Standards</a>
+            <a class="nav-link" href="#accessibility">Accessibility</a>
+            <a class="nav-link" href="#surveys">Surveys</a>
+            <a class="nav-link" href="#api-management">API Management</a>
+            <a class="nav-link" href="#rbac">Role-Based Access</a>
+            <a class="nav-link" href="#organizational">Organizational</a>
             <a class="nav-link" href="#junction">Junction tables</a>
             <a class="nav-link" href="#lookups">Lookups</a>
             <a class="nav-link" href="#users">Users</a>
@@ -45,8 +66,8 @@
 <h1 class="doc-page-title">Data dictionary</h1>
 <p class="doc-page-lead">Complete reference of COMPASS database tables, columns, data types, and constraints.</p>
 
-<div class="alert alert-info">
-    <p class="mb-0"><i class="fas fa-info-circle"></i> This data dictionary is automatically generated from the Entity Framework Core model and reflects the current database schema.</p>
+<div class="inset-text">
+    <p class="mb-0">This data dictionary is automatically generated from the Entity Framework Core model and reflects the current database schema.</p>
 </div>
 
 <h2 id="conventions">How to read the data dictionary</h2>
@@ -79,7 +100,7 @@
     </div>
 </div>
 
-<div class="alert alert-secondary">
+<div class="inset-text">
     <p class="mb-0"><strong>Tip:</strong> Soft-deleted rows remain in the database with <code>IsDeleted = 1</code>. API endpoints and UI queries filter them automatically, but analysts can include them when producing historical reports.</p>
 </div>
 
@@ -940,9 +961,686 @@
                     <li>INDEX on <code>Status</code></li>
                 </ul>
 
-                <div class="alert alert-info mt-3">
+                <div class="inset-text mt-3">
                     <p class="mb-0"><strong>Related tables:</strong> Projects can have associated milestones, deliverables, outcomes, dependencies, issues, and products through separate junction/relationship tables.</p>
                 </div>
+
+                <hr class="my-4">
+
+                <h2 id="decisions">Decisions table</h2>
+                
+                <p>Stores information about decisions made in relation to projects, objectives, risks, issues, and actions.</p>
+
+                <table class="table table-bordered table-sm">
+                    <thead class="thead-dark">
+                        <tr>
+                            <th>Column name</th>
+                            <th>Data type</th>
+                            <th>Null</th>
+                            <th>Default</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>Id</code></td>
+                            <td>INTEGER</td>
+                            <td>NO</td>
+                            <td>AUTO</td>
+                            <td>Primary key, auto-incremented unique identifier</td>
+                        </tr>
+                        <tr>
+                            <td><code>Title</code></td>
+                            <td>VARCHAR(200)</td>
+                            <td>NO</td>
+                            <td>-</td>
+                            <td>Decision title</td>
+                        </tr>
+                        <tr>
+                            <td><code>Description</code></td>
+                            <td>TEXT</td>
+                            <td>YES</td>
+                            <td>NULL</td>
+                            <td>Detailed decision description</td>
+                        </tr>
+                        <tr>
+                            <td><code>FipsId</code></td>
+                            <td>VARCHAR(50)</td>
+                            <td>YES</td>
+                            <td>NULL</td>
+                            <td>Associated FIPS product identifier</td>
+                        </tr>
+                        <tr>
+                            <td><code>ObjectiveId</code></td>
+                            <td>INTEGER</td>
+                            <td>YES</td>
+                            <td>NULL</td>
+                            <td>Foreign key to Objectives table</td>
+                        </tr>
+                        <tr>
+                            <td><code>ProjectId</code></td>
+                            <td>INTEGER</td>
+                            <td>YES</td>
+                            <td>NULL</td>
+                            <td>Foreign key to Projects table</td>
+                        </tr>
+                        <tr>
+                            <td><code>OwnerUserId</code></td>
+                            <td>INTEGER</td>
+                            <td>YES</td>
+                            <td>NULL</td>
+                            <td>Foreign key to Users table</td>
+                        </tr>
+                        <tr>
+                            <td><code>DecisionDate</code></td>
+                            <td>DATETIME</td>
+                            <td>YES</td>
+                            <td>NULL</td>
+                            <td>Date when decision was made</td>
+                        </tr>
+                        <tr>
+                            <td><code>Status</code></td>
+                            <td>VARCHAR(20)</td>
+                            <td>YES</td>
+                            <td>NULL</td>
+                            <td>Current status</td>
+                        </tr>
+                        <tr>
+                            <td><code>Outcome</code></td>
+                            <td>VARCHAR(50)</td>
+                            <td>YES</td>
+                            <td>NULL</td>
+                            <td>Decision outcome</td>
+                        </tr>
+                        <tr>
+                            <td><code>ImplementationStatus</code></td>
+                            <td>VARCHAR(50)</td>
+                            <td>YES</td>
+                            <td>NULL</td>
+                            <td>Implementation status</td>
+                        </tr>
+                        <tr>
+                            <td><code>IsDeleted</code></td>
+                            <td>BOOLEAN</td>
+                            <td>NO</td>
+                            <td>false</td>
+                            <td>Soft delete flag</td>
+                        </tr>
+                        <tr>
+                            <td><code>CreatedAt</code></td>
+                            <td>DATETIME</td>
+                            <td>NO</td>
+                            <td>UTC NOW</td>
+                            <td>Record creation timestamp</td>
+                        </tr>
+                        <tr>
+                            <td><code>UpdatedAt</code></td>
+                            <td>DATETIME</td>
+                            <td>NO</td>
+                            <td>UTC NOW</td>
+                            <td>Last update timestamp</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h4 class="h6 mt-3">Indexes:</h4>
+                <ul>
+                    <li>PRIMARY KEY on <code>Id</code></li>
+                    <li>INDEX on <code>ObjectiveId</code></li>
+                    <li>INDEX on <code>ProjectId</code></li>
+                    <li>INDEX on <code>OwnerUserId</code></li>
+                    <li>INDEX on <code>FipsId</code></li>
+                    <li>INDEX on <code>Status</code></li>
+                    <li>INDEX on <code>DecisionDate</code></li>
+                    <li>FOREIGN KEY on <code>ObjectiveId</code> references <code>Objectives(Id)</code></li>
+                    <li>FOREIGN KEY on <code>ProjectId</code> references <code>Projects(Id)</code></li>
+                    <li>FOREIGN KEY on <code>OwnerUserId</code> references <code>Users(Id)</code></li>
+                </ul>
+
+                <hr class="my-4">
+
+                <h2 id="demand-management">Demand Management tables</h2>
+                
+                <h3 class="h6 mt-3">DemandRequests</h3>
+                <p>Demand requests submitted by policy or delivery teams for DDaT support.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>ReferenceNumber</code> - VARCHAR(50), unique reference (e.g., DR-2025-001)</li>
+                    <li><code>ApplicantName</code> - VARCHAR(255), applicant name</li>
+                    <li><code>ApplicantEmail</code> - VARCHAR(255), applicant email</li>
+                    <li><code>BusinessArea</code> - VARCHAR(100), business area</li>
+                    <li><code>ProposedTitle</code> - VARCHAR(120), proposed project title</li>
+                    <li><code>OverviewAndBusinessNeed</code> - NVARCHAR(MAX), overview and business need</li>
+                    <li><code>ExpectedBenefits</code> - NVARCHAR(MAX), expected benefits</li>
+                    <li><code>RiskIfNotDelivered</code> - NVARCHAR(MAX), risk if not delivered</li>
+                    <li><code>Status</code> - VARCHAR(50), status (Draft/Submitted/Under Review/Approved/Deferred/Rejected)</li>
+                    <li><code>IsSubmittedToTriage</code> - BOOLEAN, whether submitted to triage</li>
+                    <li><code>TriageMeetingId</code> - INTEGER, foreign key to TriageMeetings</li>
+                    <li><code>ConvertedProjectId</code> - INTEGER, foreign key to Projects (if converted)</li>
+                    <li><code>CreatedAt</code>, <code>UpdatedAt</code> - DATETIME, audit timestamps</li>
+                </ul>
+
+                <h3 class="h6 mt-3">DemandRequestContacts</h3>
+                <p>Points of contact for demand requests.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>DemandRequestId</code> - INTEGER, foreign key to DemandRequests</li>
+                    <li><code>Name</code> - VARCHAR(255), contact name</li>
+                    <li><code>Email</code> - VARCHAR(255), contact email</li>
+                    <li><code>Role</code> - VARCHAR(100), contact role</li>
+                    <li><code>CreatedAt</code> - DATETIME, creation timestamp</li>
+                </ul>
+
+                <h3 class="h6 mt-3">DemandRequestPrioritisations</h3>
+                <p>Prioritisation scoring for demand requests.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>DemandRequestId</code> - INTEGER, foreign key to DemandRequests (one-to-one)</li>
+                    <li><code>TotalPriorityScore</code> - INTEGER, overall priority score (out of 100)</li>
+                    <li><code>PriorityTier</code> - VARCHAR(50), priority tier (Tier 1-4)</li>
+                    <li><code>StrategicAlignmentTotal</code>, <code>UserImpactTotal</code>, <code>RiskUrgencyTotal</code>, <code>FeasibilityTotal</code>, <code>ValueOutcomeTotal</code> - INTEGER, category totals</li>
+                    <li><code>CreatedAt</code>, <code>UpdatedAt</code> - DATETIME, audit timestamps</li>
+                </ul>
+
+                <h3 class="h6 mt-3">DemandRequestNotes</h3>
+                <p>Notes and comments on demand requests.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>DemandRequestId</code> - INTEGER, foreign key to DemandRequests</li>
+                    <li><code>Note</code> - NVARCHAR(MAX), note text</li>
+                    <li><code>CreatedBy</code> - VARCHAR(255), creator</li>
+                    <li><code>CreatedAt</code> - DATETIME, creation timestamp</li>
+                </ul>
+
+                <h3 class="h6 mt-3">DemandRequestAssessments</h3>
+                <p>Assessments conducted on demand requests.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>DemandRequestId</code> - INTEGER, foreign key to DemandRequests</li>
+                    <li><code>AssessmentType</code> - VARCHAR(50), type of assessment</li>
+                    <li><code>AssessmentData</code> - NVARCHAR(MAX), assessment data (JSON)</li>
+                </ul>
+
+                <h3 class="h6 mt-3">DemandRequestSectionCompletions</h3>
+                <p>Tracks completion status of demand request form sections.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>DemandRequestId</code> - INTEGER, foreign key to DemandRequests</li>
+                    <li><code>SectionName</code> - VARCHAR(100), section name</li>
+                    <li><code>IsCompleted</code> - BOOLEAN, completion status</li>
+                </ul>
+
+                <h3 class="h6 mt-3">DemandRequestRiskTypes</h3>
+                <p>Junction table linking demand requests to risk types.</p>
+                <ul class="small">
+                    <li><code>DemandRequestId</code> - INTEGER, composite primary key part 1</li>
+                    <li><code>RiskTypeId</code> - INTEGER, composite primary key part 2</li>
+                    <li><code>CreatedAt</code> - DATETIME, creation timestamp</li>
+                </ul>
+
+                <h3 class="h6 mt-3">TriageMeetings</h3>
+                <p>Triage meetings where demand requests are reviewed.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>Title</code> - VARCHAR(150), meeting title</li>
+                    <li><code>StartAt</code> - DATETIME, meeting start time</li>
+                    <li><code>EndAt</code> - DATETIME, meeting end time</li>
+                    <li><code>IsActive</code> - BOOLEAN, whether meeting is active</li>
+                </ul>
+
+                <hr class="my-4">
+
+                <h2 id="ddt-standards">DDT Standards Management tables</h2>
+                
+                <h3 class="h6 mt-3">DdtStandards</h3>
+                <p>DDaT standards with versioning and validation rules.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>StandardUuid</code> - VARCHAR(36), UUID for standards as code</li>
+                    <li><code>Title</code> - VARCHAR(500), standard title (required, unique)</li>
+                    <li><code>Slug</code> - VARCHAR(500), URL-friendly slug</li>
+                    <li><code>Summary</code> - VARCHAR(2000), brief summary</li>
+                    <li><code>Purpose</code> - NVARCHAR(MAX), purpose and rationale (markdown)</li>
+                    <li><code>Criteria</code> - NVARCHAR(MAX), criteria for meeting standard (JSON array)</li>
+                    <li><code>HowToMeet</code> - NVARCHAR(MAX), how to meet requirements (markdown)</li>
+                    <li><code>Governance</code> - NVARCHAR(MAX), governance information (markdown)</li>
+                    <li><code>Version</code> - VARCHAR(20), semantic version (MAJOR.MINOR.PATCH)</li>
+                    <li><code>Stage</code> - VARCHAR(50), lifecycle stage (Draft/Under Review/Approved/Published/Rejected/Archived)</li>
+                    <li><code>IsPublished</code> - BOOLEAN, whether standard is published</li>
+                    <li><code>PublishedAt</code> - DATETIME, publication date</li>
+                    <li><code>LegalStandard</code> - BOOLEAN, whether this is a legal requirement</li>
+                    <li><code>ValidityPeriod</code> - INTEGER, validity period in months</li>
+                    <li><code>CreatedAt</code>, <code>UpdatedAt</code> - DATETIME, audit timestamps</li>
+                    <li><code>IsDeleted</code> - BOOLEAN, soft delete flag</li>
+                </ul>
+
+                <h3 class="h6 mt-3">DdtStandardOwners, DdtStandardContacts</h3>
+                <p>Many-to-many relationships for standard owners and contacts.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>DdtStandardId</code> - INTEGER, foreign key to DdtStandards</li>
+                    <li><code>UserId</code> / <code>Name</code>, <code>Email</code> - Owner/contact information</li>
+                    <li><code>Role</code> - VARCHAR(100), role description</li>
+                </ul>
+
+                <h3 class="h6 mt-3">DdtStandardCategories, DdtStandardSubCategories, DdtStandardPhases</h3>
+                <p>Many-to-many relationships for standard categorisation and phase allocation.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>DdtStandardId</code> - INTEGER, foreign key to DdtStandards</li>
+                    <li><code>StandardCategoryId</code> / <code>StandardSubCategoryId</code> / <code>Phase</code> - Category/subcategory/phase reference</li>
+                </ul>
+
+                <h3 class="h6 mt-3">DdtStandardValidationRules</h3>
+                <p>Validation rules for standards as code.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>DdtStandardId</code> - INTEGER, foreign key to DdtStandards</li>
+                    <li><code>RuleType</code> - VARCHAR(50), type of validation rule</li>
+                    <li><code>RuleDefinition</code> - NVARCHAR(MAX), rule definition (JSON)</li>
+                </ul>
+
+                <h3 class="h6 mt-3">DdtStandardVersions</h3>
+                <p>Version history for standards.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>DdtStandardId</code> - INTEGER, foreign key to DdtStandards</li>
+                    <li><code>Version</code> - VARCHAR(20), version number</li>
+                    <li><code>ChangeSummary</code> - NVARCHAR(MAX), summary of changes</li>
+                    <li><code>CreatedAt</code> - DATETIME, creation timestamp</li>
+                </ul>
+
+                <h3 class="h6 mt-3">DdtStandardComments</h3>
+                <p>Comments on standards during review process.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>DdtStandardId</code> - INTEGER, foreign key to DdtStandards</li>
+                    <li><code>Comment</code> - NVARCHAR(MAX), comment text</li>
+                    <li><code>CreatedByUserId</code> - INTEGER, foreign key to Users</li>
+                    <li><code>CreatedAt</code> - DATETIME, creation timestamp</li>
+                </ul>
+
+                <h3 class="h6 mt-3">DdtStandardProducts</h3>
+                <p>Products (approved and tolerated) for standards.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>DdtStandardId</code> - INTEGER, foreign key to DdtStandards</li>
+                    <li><code>ProductFipsId</code> - VARCHAR(50), product identifier</li>
+                    <li><code>Status</code> - VARCHAR(20), status (approved/tolerated)</li>
+                </ul>
+
+                <h3 class="h6 mt-3">DdtStandardExceptions</h3>
+                <p>Known exceptions to standards.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>DdtStandardId</code> - INTEGER, foreign key to DdtStandards</li>
+                    <li><code>ProductFipsId</code> - VARCHAR(50), product identifier</li>
+                    <li><code>Reason</code> - NVARCHAR(MAX), exception reason</li>
+                    <li><code>ApprovedBy</code> - VARCHAR(255), approver</li>
+                    <li><code>ApprovedAt</code> - DATETIME, approval date</li>
+                </ul>
+
+                <h3 class="h6 mt-3">DdtStandardUnpublishAudits</h3>
+                <p>Audit log for standard unpublishing events.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>DdtStandardId</code> - INTEGER, foreign key to DdtStandards</li>
+                    <li><code>UnpublishedBy</code> - VARCHAR(255), user who unpublished</li>
+                    <li><code>UnpublishedAt</code> - DATETIME, unpublish date</li>
+                    <li><code>Reason</code> - NVARCHAR(MAX), unpublish reason</li>
+                </ul>
+
+                <h3 class="h6 mt-3">StandardCategories, StandardSubCategories, StandardProducts</h3>
+                <p>Lookup tables for standard categorisation.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>Name</code> - VARCHAR(200), category/subcategory/product name</li>
+                    <li><code>Description</code> - TEXT, description</li>
+                    <li><code>IsActive</code> - BOOLEAN, active flag</li>
+                    <li><code>StandardCategoryId</code> - INTEGER, foreign key (for subcategories only)</li>
+                </ul>
+
+                <h3 class="h6 mt-3">ServiceStandards, ServiceStandardPhaseGuidance</h3>
+                <p>GOV.UK Service Standards definitions and phase-specific guidance.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>StandardId</code> - VARCHAR(50), unique standard identifier</li>
+                    <li><code>Name</code> - VARCHAR(200), standard name</li>
+                    <li><code>Description</code>, <code>Purpose</code>, <code>HowToMeet</code> - TEXT/NVARCHAR(MAX), standard content</li>
+                    <li><code>Phase</code> - VARCHAR(50), phase (for phase guidance)</li>
+                    <li><code>Guidance</code> - NVARCHAR(MAX), phase-specific guidance</li>
+                    <li><code>IsActive</code> - BOOLEAN, active flag</li>
+                </ul>
+
+                <h3 class="h6 mt-3">TechnologyCodeOfPractice, TechnologyCodeOfPracticePhaseGuidance</h3>
+                <p>Technology Code of Practice standards and phase-specific guidance.</p>
+                <ul class="small">
+                    <li>Similar structure to ServiceStandards</li>
+                </ul>
+
+                <h3 class="h6 mt-3">DdatProfessions</h3>
+                <p>DDaT profession definitions.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>ProfessionName</code> - VARCHAR(200), profession name</li>
+                    <li><code>Description</code> - TEXT, profession description</li>
+                    <li><code>IsActive</code> - BOOLEAN, active flag</li>
+                </ul>
+
+                <hr class="my-4">
+
+                <h2 id="accessibility">Accessibility Management tables</h2>
+                
+                <h3 class="h6 mt-3">ProductAccessibilities</h3>
+                <p>Accessibility statements and compliance information for products.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>FipsId</code> - VARCHAR(50), product identifier</li>
+                    <li><code>StatementUrl</code> - VARCHAR(500), URL to accessibility statement</li>
+                    <li><code>ComplianceLevel</code> - VARCHAR(20), WCAG compliance level (A/AA/AAA)</li>
+                    <li><code>LastTestedDate</code> - DATETIME, last testing date</li>
+                    <li><code>NextTestDate</code> - DATETIME, next scheduled test date</li>
+                    <li><code>IsActive</code> - BOOLEAN, active flag</li>
+                </ul>
+
+                <h3 class="h6 mt-3">AccessibilityIssues</h3>
+                <p>Accessibility issues identified during testing.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>ProductAccessibilityId</code> - INTEGER, foreign key to ProductAccessibilities</li>
+                    <li><code>IssueType</code> - VARCHAR(50), type of issue</li>
+                    <li><code>Severity</code> - VARCHAR(20), severity level</li>
+                    <li><code>Description</code> - NVARCHAR(MAX), issue description</li>
+                    <li><code>Status</code> - VARCHAR(20), current status</li>
+                    <li><code>DetectedDate</code> - DATETIME, when issue was detected</li>
+                    <li><code>ResolvedDate</code> - DATETIME, when issue was resolved</li>
+                </ul>
+
+                <h3 class="h6 mt-3">IssueComments, IssueHistories</h3>
+                <p>Comments and history for accessibility issues.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>AccessibilityIssueId</code> - INTEGER, foreign key to AccessibilityIssues</li>
+                    <li><code>Comment</code> / <code>ChangeDetails</code> - NVARCHAR(MAX), comment or change details</li>
+                    <li><code>CreatedBy</code> / <code>ChangedBy</code> - VARCHAR(255), user who created/changed</li>
+                    <li><code>CreatedAt</code> / <code>ChangedAt</code> - DATETIME, timestamp</li>
+                </ul>
+
+                <h3 class="h6 mt-3">WcagCriteria</h3>
+                <p>WCAG criteria definitions.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>CriterionCode</code> - VARCHAR(20), WCAG criterion code</li>
+                    <li><code>Title</code> - VARCHAR(200), criterion title</li>
+                    <li><code>Description</code> - TEXT, criterion description</li>
+                    <li><code>Level</code> - VARCHAR(10), WCAG level (A/AA/AAA)</li>
+                </ul>
+
+                <h3 class="h6 mt-3">IssueWcagCriteria</h3>
+                <p>Junction table linking accessibility issues to WCAG criteria.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>AccessibilityIssueId</code> - INTEGER, foreign key to AccessibilityIssues</li>
+                    <li><code>WcagCriterionId</code> - INTEGER, foreign key to WcagCriteria</li>
+                </ul>
+
+                <h3 class="h6 mt-3">AccessibilityRetestRequests</h3>
+                <p>Requests for retesting accessibility issues.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>AccessibilityIssueId</code> - INTEGER, foreign key to AccessibilityIssues</li>
+                    <li><code>RequestedBy</code> - VARCHAR(255), requester</li>
+                    <li><code>RequestedAt</code> - DATETIME, request date</li>
+                    <li><code>IsCompleted</code> - BOOLEAN, completion status</li>
+                </ul>
+
+                <h3 class="h6 mt-3">AccessibilityEmailConfigurations</h3>
+                <p>Email configuration for accessibility notifications.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>Purpose</code> - VARCHAR(100), email purpose</li>
+                    <li><code>EmailAddress</code> - VARCHAR(255), email address</li>
+                    <li><code>IsActive</code> - BOOLEAN, active flag</li>
+                </ul>
+
+                <h3 class="h6 mt-3">StatementTemplates</h3>
+                <p>Templates for accessibility statements.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>Name</code> - VARCHAR(200), template name</li>
+                    <li><code>Version</code> - VARCHAR(20), template version</li>
+                    <li><code>Content</code> - NVARCHAR(MAX), template content</li>
+                    <li><code>IsActive</code> - BOOLEAN, active flag</li>
+                </ul>
+
+                <h3 class="h6 mt-3">ContactMethods, AuditHistories</h3>
+                <p>Contact methods for accessibility feedback and audit history.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>ProductAccessibilityId</code> - INTEGER, foreign key to ProductAccessibilities</li>
+                    <li><code>MethodType</code> / <code>AuditDate</code> - Contact method type or audit date</li>
+                    <li><code>ContactDetails</code> / <code>Findings</code> - NVARCHAR(MAX), contact details or audit findings</li>
+                </ul>
+
+                <hr class="my-4">
+
+                <h2 id="surveys">Survey tables</h2>
+                
+                <h3 class="h6 mt-3">Services (FipsServices)</h3>
+                <p>Services (products) that can have surveys.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>FipsId</code> - VARCHAR(50), unique product identifier</li>
+                    <li><code>Name</code> - VARCHAR(200), service name</li>
+                    <li><code>Description</code> - TEXT, service description</li>
+                </ul>
+
+                <h3 class="h6 mt-3">SurveyTemplates</h3>
+                <p>Survey template definitions.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>Name</code> - VARCHAR(200), template name</li>
+                    <li><code>Version</code> - VARCHAR(20), template version</li>
+                    <li><code>Description</code> - TEXT, template description</li>
+                    <li><code>IsActive</code> - BOOLEAN, active flag</li>
+                </ul>
+
+                <h3 class="h6 mt-3">SurveyQuestions, SurveyOptions</h3>
+                <p>Questions within survey templates and their answer options.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>SurveyTemplateId</code> / <code>SurveyQuestionId</code> - INTEGER, foreign key</li>
+                    <li><code>Code</code> - VARCHAR(50), question code (unique per template)</li>
+                    <li><code>QuestionText</code> / <code>OptionText</code> - NVARCHAR(MAX), question or option text</li>
+                    <li><code>QuestionType</code> - VARCHAR(50), question type</li>
+                    <li><code>Value</code> - VARCHAR(100), option value</li>
+                    <li><code>SortOrder</code> - INTEGER, display order</li>
+                </ul>
+
+                <h3 class="h6 mt-3">ResponseScales, ResponseScaleOptions</h3>
+                <p>Response scales for survey questions.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>ResponseScaleId</code> - INTEGER, foreign key (for options)</li>
+                    <li><code>Name</code> / <code>Label</code> - VARCHAR(200), scale name or option label</li>
+                    <li><code>Description</code> - TEXT, scale description</li>
+                    <li><code>Value</code> - INTEGER, option value</li>
+                    <li><code>SortOrder</code> - INTEGER, display order</li>
+                </ul>
+
+                <h3 class="h6 mt-3">JourneySteps</h3>
+                <p>Journey steps within survey templates.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>SurveyTemplateId</code> - INTEGER, foreign key to SurveyTemplates</li>
+                    <li><code>Ordinal</code> - INTEGER, step order (unique per template)</li>
+                    <li><code>StepName</code> - VARCHAR(200), step name</li>
+                    <li><code>Description</code> - TEXT, step description</li>
+                </ul>
+
+                <h3 class="h6 mt-3">SurveyInstances</h3>
+                <p>Active survey instances for services.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>ServiceId</code> - INTEGER, foreign key to Services</li>
+                    <li><code>SurveyTemplateId</code> - INTEGER, foreign key to SurveyTemplates</li>
+                    <li><code>IsActive</code> - BOOLEAN, active flag</li>
+                    <li><code>StartDate</code>, <code>EndDate</code> - DATETIME, survey period</li>
+                </ul>
+
+                <h3 class="h6 mt-3">SurveyResponses, ResponseAnswers</h3>
+                <p>Individual survey responses and answers to questions.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>SurveyInstanceId</code> / <code>SurveyResponseId</code> - INTEGER, foreign key</li>
+                    <li><code>SurveyQuestionId</code> - INTEGER, foreign key (for answers)</li>
+                    <li><code>SubmittedAt</code> - DATETIME, submission timestamp</li>
+                    <li><code>UserIdentifier</code> - VARCHAR(255), user identifier</li>
+                    <li><code>AnswerValue</code>, <code>AnswerText</code> - VARCHAR(500) / NVARCHAR(MAX), answer data</li>
+                </ul>
+
+                <h3 class="h6 mt-3">ScoreSnapshots</h3>
+                <p>Snapshots of survey scores over time.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>ServiceId</code> - INTEGER, foreign key to Services</li>
+                    <li><code>SnapshotDate</code> - DATETIME, snapshot date</li>
+                    <li><code>Score</code> - DECIMAL(18,2), calculated score</li>
+                    <li><code>ResponseCount</code> - INTEGER, number of responses</li>
+                </ul>
+
+                <h3 class="h6 mt-3">AuditLogs</h3>
+                <p>Audit log for survey-related actions.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>Entity</code> - VARCHAR(100), entity name</li>
+                    <li><code>EntityId</code> - VARCHAR(100), entity identifier</li>
+                    <li><code>Action</code> - VARCHAR(50), action type (Create/Update/Delete)</li>
+                    <li><code>ChangedBy</code> - VARCHAR(255), user who made change</li>
+                    <li><code>ChangedAt</code> - DATETIME, change timestamp</li>
+                    <li><code>BeforeJson</code>, <code>AfterJson</code> - NVARCHAR(MAX), change data (JSON)</li>
+                </ul>
+
+                <hr class="my-4">
+
+                <h2 id="api-management">API Management tables</h2>
+                
+                <h3 class="h6 mt-3">ApiTokens</h3>
+                <p>API tokens for programmatic access.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>Token</code> - VARCHAR(255), unique token value</li>
+                    <li><code>Name</code> - VARCHAR(200), token name</li>
+                    <li><code>Description</code> - TEXT, token description</li>
+                    <li><code>IsActive</code> - BOOLEAN, active flag</li>
+                    <li><code>CreatedAt</code> - DATETIME, creation timestamp</li>
+                    <li><code>ExpiresAt</code> - DATETIME, expiration date</li>
+                </ul>
+
+                <h3 class="h6 mt-3">ApiTokenPermissions</h3>
+                <p>Permissions granted to API tokens.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>ApiTokenId</code> - INTEGER, foreign key to ApiTokens</li>
+                    <li><code>Resource</code> - VARCHAR(100), resource name</li>
+                    <li><code>Permission</code> - VARCHAR(20), permission level (read/write)</li>
+                </ul>
+
+                <h3 class="h6 mt-3">ApiRequestLogs</h3>
+                <p>Log of API requests for audit and rate limiting.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>ApiTokenId</code> - INTEGER, foreign key to ApiTokens</li>
+                    <li><code>RequestTimestamp</code> - DATETIME, request timestamp</li>
+                    <li><code>HttpMethod</code> - VARCHAR(10), HTTP method</li>
+                    <li><code>Endpoint</code> - VARCHAR(500), API endpoint</li>
+                    <li><code>StatusCode</code> - INTEGER, HTTP status code</li>
+                    <li><code>IsSuccess</code> - BOOLEAN, success flag</li>
+                    <li><code>ResponseTimeMs</code> - INTEGER, response time in milliseconds</li>
+                </ul>
+
+                <hr class="my-4">
+
+                <h2 id="rbac">Role-Based Access Control tables</h2>
+                
+                <h3 class="h6 mt-3">Groups</h3>
+                <p>User groups for role-based access control.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>Name</code> - VARCHAR(200), unique group name</li>
+                    <li><code>Description</code> - TEXT, group description</li>
+                    <li><code>IsActive</code> - BOOLEAN, active flag</li>
+                    <li><code>IsSystemGroup</code> - BOOLEAN, system group flag</li>
+                </ul>
+
+                <h3 class="h6 mt-3">Features</h3>
+                <p>Features that can be permission-controlled.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>Code</code> - VARCHAR(100), unique feature code</li>
+                    <li><code>Name</code> - VARCHAR(200), feature name</li>
+                    <li><code>Description</code> - TEXT, feature description</li>
+                    <li><code>IsActive</code> - BOOLEAN, active flag</li>
+                </ul>
+
+                <h3 class="h6 mt-3">UserGroups</h3>
+                <p>Junction table linking users to groups (many-to-many).</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>UserId</code> - INTEGER, foreign key to Users</li>
+                    <li><code>GroupId</code> - INTEGER, foreign key to Groups</li>
+                </ul>
+
+                <h3 class="h6 mt-3">GroupFeaturePermissions</h3>
+                <p>Junction table linking groups to features with permission levels (many-to-many).</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>GroupId</code> - INTEGER, foreign key to Groups</li>
+                    <li><code>FeatureId</code> - INTEGER, foreign key to Features</li>
+                    <li><code>Permission</code> - VARCHAR(20), permission level (read/write/admin)</li>
+                </ul>
+
+                <h3 class="h6 mt-3">UserBusinessAreaRoleAssignments</h3>
+                <p>Business area role assignments for users.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>UserId</code> - INTEGER, foreign key to Users</li>
+                    <li><code>BusinessAreaKey</code> - VARCHAR(100), business area key</li>
+                    <li><code>Role</code> - VARCHAR(100), role name</li>
+                </ul>
+
+                <hr class="my-4">
+
+                <h2 id="organizational">Organizational Structure tables</h2>
+                
+                <h3 class="h6 mt-3">OrganizationalGroups</h3>
+                <p>Organizational groups within the department.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>Name</code> - VARCHAR(200), group name</li>
+                    <li><code>Description</code> - TEXT, group description</li>
+                    <li><code>ParentGroupId</code> - INTEGER, foreign key to OrganizationalGroups (self-referencing)</li>
+                    <li><code>IsActive</code> - BOOLEAN, active flag</li>
+                </ul>
+
+                <h3 class="h6 mt-3">OrganizationalRoles</h3>
+                <p>Roles within organizational groups.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>OrganizationalGroupId</code> - INTEGER, foreign key to OrganizationalGroups</li>
+                    <li><code>RoleName</code> - VARCHAR(200), role name</li>
+                    <li><code>Description</code> - TEXT, role description</li>
+                </ul>
+
+                <h3 class="h6 mt-3">GovernmentDepartments</h3>
+                <p>Government departments for cross-departmental projects.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>Name</code> - VARCHAR(200), department name</li>
+                    <li><code>Code</code> - VARCHAR(50), department code</li>
+                    <li><code>Description</code> - TEXT, department description</li>
+                    <li><code>IsActive</code> - BOOLEAN, active flag</li>
+                </ul>
 
                 <hr class="my-4">
 
@@ -1205,7 +1903,357 @@
                     <li><code>CreatedAt</code>, <code>UpdatedAt</code> - DATETIME, audit timestamps</li>
                 </ul>
 
-                <p class="small text-muted">Related tables include CriterionAssessments for individual criterion results within each assessment.</p>
+                <p class="small text-muted">Related tables include AssessmentCriteriaResponses for individual criterion results within each assessment.</p>
+
+                <h3 class="h6 mt-3">AssessmentCriteriaResponses</h3>
+                <p>Individual criterion responses within functional standard assessments.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>AssessmentId</code> - INTEGER, foreign key to FunctionalStandardAssessments</li>
+                    <li><code>FunctionalStandardId</code>, <code>ThemeId</code>, <code>PracticeAreaId</code>, <code>CriteriaCode</code> - Composite foreign key to Criteria</li>
+                    <li><code>Response</code> - VARCHAR(50), response value</li>
+                    <li><code>Evidence</code> - NVARCHAR(MAX), supporting evidence</li>
+                </ul>
+
+                <hr class="my-4">
+
+                <h2 id="enterprise-reporting">Enterprise Reporting tables</h2>
+                
+                <h3 class="h6 mt-3">EnterpriseReturns</h3>
+                <p>Enterprise returns for reporting periods.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>Year</code> - INTEGER, reporting year</li>
+                    <li><code>Month</code> - INTEGER, reporting month</li>
+                    <li><code>Status</code> - VARCHAR(50), return status</li>
+                    <li><code>SubmittedAt</code> - DATETIME, submission timestamp</li>
+                </ul>
+
+                <h3 class="h6 mt-3">EnterpriseMetricValues</h3>
+                <p>Metric values within enterprise returns.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>EnterpriseReturnId</code> - INTEGER, foreign key to EnterpriseReturns</li>
+                    <li><code>EnterpriseMetricId</code> - INTEGER, foreign key to EnterpriseMetrics</li>
+                    <li><code>Value</code> - TEXT, metric value</li>
+                    <li><code>TargetValue</code> - TEXT, target value</li>
+                </ul>
+
+                <h3 class="h6 mt-3">StaffRoleReturns</h3>
+                <p>Annual GDD role returns for staff.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>UserId</code> - INTEGER, foreign key to Users</li>
+                    <li><code>Year</code> - INTEGER, return year (unique per user/year)</li>
+                    <li><code>GddRoleId</code> - INTEGER, foreign key to GddRoles</li>
+                    <li><code>SubmittedAt</code> - DATETIME, submission timestamp</li>
+                </ul>
+
+                <h3 class="h6 mt-3">StaffRoleReturnSkills</h3>
+                <p>Secondary skills for staff role returns.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>StaffRoleReturnId</code> - INTEGER, foreign key to StaffRoleReturns</li>
+                    <li><code>SkillId</code> - INTEGER, foreign key to Skills</li>
+                </ul>
+
+                <h3 class="h6 mt-3">GddRoles</h3>
+                <p>GDD role definitions.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>RoleFamily</code> - VARCHAR(200), role family</li>
+                    <li><code>RoleName</code> - VARCHAR(200), role name</li>
+                    <li><code>RoleLevel</code> - VARCHAR(50), role level</li>
+                    <li><code>Description</code> - NVARCHAR(MAX), role description</li>
+                </ul>
+
+                <h3 class="h6 mt-3">Skills</h3>
+                <p>Skill definitions for staff role returns.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>SkillName</code> - VARCHAR(200), unique skill name</li>
+                    <li><code>Description</code> - NVARCHAR(MAX), skill description</li>
+                </ul>
+
+                <h3 class="h6 mt-3">Kpis</h3>
+                <p>Key Performance Indicators for projects, objectives, and milestones.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>Code</code> - VARCHAR(50), unique KPI code</li>
+                    <li><code>Name</code> - VARCHAR(200), KPI name</li>
+                    <li><code>Description</code> - NVARCHAR(MAX), KPI description</li>
+                    <li><code>Category</code> - VARCHAR(100), KPI category</li>
+                    <li><code>UnitOfMeasure</code> - VARCHAR(50), unit of measurement</li>
+                    <li><code>TargetValue</code> - DECIMAL(18,4), target value</li>
+                    <li><code>ProjectId</code>, <code>ObjectiveId</code>, <code>MilestoneId</code> - INTEGER, optional foreign keys</li>
+                    <li><code>OwnerUserId</code> - INTEGER, foreign key to Users</li>
+                    <li><code>Active</code> - BOOLEAN, active flag</li>
+                </ul>
+
+                <h3 class="h6 mt-3">KpiDataPoints</h3>
+                <p>Performance data points for KPIs.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>KpiId</code> - INTEGER, foreign key to Kpis</li>
+                    <li><code>ReportingPeriodStart</code> - DATETIME, period start</li>
+                    <li><code>ReportingPeriodEnd</code> - DATETIME, period end</li>
+                    <li><code>Value</code> - DECIMAL(20,4), metric value</li>
+                    <li><code>ValueNarrative</code> - NVARCHAR(MAX), narrative description</li>
+                    <li><code>TargetValue</code> - DECIMAL(20,4), target value</li>
+                    <li><code>SubmissionStatus</code> - VARCHAR(30), submission status</li>
+                    <li><code>SubmittedByUserId</code> - INTEGER, foreign key to Users</li>
+                    <li><code>SubmittedAt</code> - DATETIME, submission timestamp</li>
+                </ul>
+
+                <h3 class="h6 mt-3">ProductReturns</h3>
+                <p>Product returns for performance reporting periods.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>FipsId</code> - VARCHAR(50), product identifier</li>
+                    <li><code>Year</code> - INTEGER, reporting year</li>
+                    <li><code>Month</code> - INTEGER, reporting month (unique per FipsId/Year/Month)</li>
+                    <li><code>Status</code> - VARCHAR(50), return status</li>
+                    <li><code>SubmittedAt</code> - DATETIME, submission timestamp</li>
+                </ul>
+
+                <h3 class="h6 mt-3">PerformanceReportingDueDateOverrides</h3>
+                <p>Overrides for performance reporting due dates.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>ReportingYear</code> - INTEGER, reporting year</li>
+                    <li><code>ReportingMonth</code> - INTEGER, reporting month (unique per Year/Month)</li>
+                    <li><code>DueDate</code> - DATETIME, override due date</li>
+                    <li><code>IsActive</code> - BOOLEAN, active flag</li>
+                </ul>
+
+                <h3 class="h6 mt-3">PerformanceReportingBusinessAreaConfigs</h3>
+                <p>Configuration for performance reporting by business area.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>BusinessAreaName</code> - VARCHAR(200), business area name</li>
+                    <li><code>IsActive</code> - BOOLEAN, active flag</li>
+                    <li><code>Configuration</code> - NVARCHAR(MAX), configuration data (JSON)</li>
+                </ul>
+
+                <h3 class="h6 mt-3">PerformanceReportingProductExclusions</h3>
+                <p>Products excluded from performance reporting.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>FipsId</code> - VARCHAR(50), product identifier</li>
+                    <li><code>Reason</code> - TEXT, exclusion reason</li>
+                    <li><code>IsActive</code> - BOOLEAN, active flag</li>
+                </ul>
+
+                <h3 class="h6 mt-3">PerformanceReportingPeriodExclusions</h3>
+                <p>Reporting periods excluded from performance reporting.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>Year</code> - INTEGER, reporting year</li>
+                    <li><code>Month</code> - INTEGER, reporting month (unique per Year/Month)</li>
+                    <li><code>Reason</code> - TEXT, exclusion reason</li>
+                    <li><code>IsActive</code> - BOOLEAN, active flag</li>
+                </ul>
+
+                <h3 class="h6 mt-3">NotificationTemplates, NotificationRules, NotificationLogs</h3>
+                <p>Notification system tables.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>Name</code> - VARCHAR(200), template/rule name</li>
+                    <li><code>Subject</code> / <code>Body</code> - NVARCHAR(MAX), email subject/body (for templates)</li>
+                    <li><code>EventType</code> - VARCHAR(100), event type (for rules)</li>
+                    <li><code>NotificationTemplateId</code> - INTEGER, foreign key (for rules)</li>
+                    <li><code>Conditions</code> - NVARCHAR(MAX), rule conditions (JSON)</li>
+                    <li><code>RecipientEmail</code> - VARCHAR(255), recipient (for logs)</li>
+                    <li><code>SentAt</code> - DATETIME, sent timestamp (for logs)</li>
+                    <li><code>Status</code> - VARCHAR(50), status (for logs)</li>
+                    <li><code>IsActive</code> - BOOLEAN, active flag</li>
+                </ul>
+
+                <hr class="my-4">
+
+                <h2 id="project-detailed">Additional Project Management tables</h2>
+                
+                <h3 class="h6 mt-3">Missions</h3>
+                <p>Strategic missions that projects can align to.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>Name</code> - VARCHAR(200), mission name</li>
+                    <li><code>Description</code> - TEXT, mission description</li>
+                    <li><code>Status</code> - VARCHAR(50), mission status</li>
+                    <li><code>OwnerUserId</code> - INTEGER, foreign key to Users</li>
+                </ul>
+
+                <h3 class="h6 mt-3">ProjectSuccesses</h3>
+                <p>Records project success metrics and achievements.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>ProjectId</code> - INTEGER, foreign key to Projects</li>
+                    <li><code>Description</code> - TEXT, success description</li>
+                    <li><code>RecordedAt</code> - DATETIME, recording timestamp</li>
+                </ul>
+
+                <h3 class="h6 mt-3">ProjectOutcomes</h3>
+                <p>Expected and actual project outcomes.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>ProjectId</code> - INTEGER, foreign key to Projects</li>
+                    <li><code>Description</code> - TEXT, outcome description</li>
+                    <li><code>ConfidenceLevel</code> - VARCHAR(50), confidence level</li>
+                    <li><code>SortOrder</code> - INTEGER, display order</li>
+                </ul>
+
+                <h3 class="h6 mt-3">ProjectContacts</h3>
+                <p>Project team contacts with role assignments.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>ProjectId</code> - INTEGER, foreign key to Projects</li>
+                    <li><code>UserId</code> - INTEGER, foreign key to Users (nullable)</li>
+                    <li><code>Role</code> - VARCHAR(100), contact role</li>
+                    <li><code>TeamStatus</code> - VARCHAR(50), team status</li>
+                    <li><code>SortOrder</code> - INTEGER, display order</li>
+                </ul>
+
+                <h3 class="h6 mt-3">ProjectStatusUpdates</h3>
+                <p>Status update narratives and RAG changes.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>ProjectId</code> - INTEGER, foreign key to Projects</li>
+                    <li><code>Narrative</code> - NVARCHAR(MAX), status narrative</li>
+                    <li><code>CreatedByUserId</code> - INTEGER, foreign key to Users</li>
+                    <li><code>CreatedAt</code> - DATETIME, creation timestamp</li>
+                </ul>
+
+                <h3 class="h6 mt-3">ProjectMonthlyUpdates</h3>
+                <p>Monthly status reports with progress narratives.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>ProjectId</code> - INTEGER, foreign key to Projects</li>
+                    <li><code>ReportingYear</code> - INTEGER, reporting year</li>
+                    <li><code>ReportingMonth</code> - INTEGER, reporting month</li>
+                    <li><code>Narrative</code> - TEXT, monthly narrative</li>
+                </ul>
+
+                <h3 class="h6 mt-3">MonthlyStatusReports</h3>
+                <p>Comprehensive monthly status reports.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>ProjectId</code> - INTEGER, foreign key to Projects</li>
+                    <li><code>ReportingYear</code> - INTEGER, reporting year</li>
+                    <li><code>ReportingMonth</code> - INTEGER, reporting month (unique per Project/Year/Month)</li>
+                    <li><code>Narrative</code> - NVARCHAR(MAX), main narrative</li>
+                    <li><code>MilestoneProgress</code> - NVARCHAR(MAX), milestone progress</li>
+                    <li><code>DeliverableProgress</code> - NVARCHAR(MAX), deliverable progress</li>
+                    <li><code>KeyAchievements</code> - NVARCHAR(MAX), key achievements</li>
+                    <li><code>Challenges</code> - NVARCHAR(MAX), challenges</li>
+                    <li><code>NextMonthOutlook</code> - NVARCHAR(MAX), next month outlook</li>
+                    <li><code>CreatedByUserId</code> - INTEGER, foreign key to Users</li>
+                    <li><code>CreatedAt</code> - DATETIME, creation timestamp</li>
+                </ul>
+
+                <h3 class="h6 mt-3">ProjectFundingAllocations</h3>
+                <p>Funding allocations from various sources.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>ProjectId</code> - INTEGER, foreign key to Projects</li>
+                    <li><code>FundingSourceId</code> - INTEGER, foreign key to FundingSources</li>
+                    <li><code>Amount</code> - DECIMAL(18,2), allocation amount</li>
+                    <li><code>AllocationDate</code> - DATETIME, allocation date</li>
+                </ul>
+
+                <h3 class="h6 mt-3">ProjectResourceFundings</h3>
+                <p>Resource funding tracking with FTE allocations.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>ProjectId</code> - INTEGER, foreign key to Projects</li>
+                    <li><code>BusinessAreaId</code> - INTEGER, business area identifier</li>
+                    <li><code>PermFte</code> - DECIMAL(10,2), permanent FTE</li>
+                    <li><code>MspFte</code> - DECIMAL(10,2), MSP FTE</li>
+                    <li><code>PeriodStart</code> - DATETIME, period start</li>
+                    <li><code>PeriodEnd</code> - DATETIME, period end</li>
+                </ul>
+
+                <h3 class="h6 mt-3">ProjectObjectives, ProjectProducts, ProjectMissions</h3>
+                <p>Junction tables linking projects to objectives, products, and missions.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>ProjectId</code> - INTEGER, foreign key to Projects</li>
+                    <li><code>ObjectiveId</code> / <code>ProductFipsId</code> / <code>MissionId</code> - Related entity reference</li>
+                </ul>
+
+                <h3 class="h6 mt-3">Dependencies</h3>
+                <p>Dependencies between projects, milestones, and other entities.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>SourceEntityType</code> - VARCHAR(50), source entity type</li>
+                    <li><code>SourceEntityId</code> - INTEGER, source entity ID</li>
+                    <li><code>TargetEntityType</code> - VARCHAR(50), target entity type</li>
+                    <li><code>TargetEntityId</code> - INTEGER, target entity ID</li>
+                    <li><code>DependencyType</code> - VARCHAR(50), dependency type</li>
+                    <li><code>Status</code> - VARCHAR(50), dependency status</li>
+                </ul>
+
+                <h3 class="h6 mt-3">ProjectRagHistories</h3>
+                <p>History of RAG status changes for projects.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>ProjectId</code> - INTEGER, foreign key to Projects</li>
+                    <li><code>RagStatus</code> - VARCHAR(20), RAG status</li>
+                    <li><code>ChangedAt</code> - DATETIME, change timestamp</li>
+                    <li><code>ChangedBy</code> - VARCHAR(255), user who made change</li>
+                </ul>
+
+                <h3 class="h6 mt-3">ProjectNeeds, ProjectProblemStatements</h3>
+                <p>Project needs and problem statements.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>ProjectId</code> - INTEGER, foreign key to Projects</li>
+                    <li><code>NeedDescription</code> / <code>ProblemStatement</code> - TEXT/NVARCHAR(MAX), need or problem statement</li>
+                    <li><code>Priority</code> - VARCHAR(50), priority (for needs)</li>
+                    <li><code>IsCurrent</code> - BOOLEAN, current flag (for problem statements)</li>
+                    <li><code>CreatedAt</code> - DATETIME, creation timestamp</li>
+                </ul>
+
+                <h3 class="h6 mt-3">ProjectSeniorResponsibleOfficers, ProjectServiceOwners, ProjectDirectorates, ProjectBudgetOwners, ProjectPmoContacts</h3>
+                <p>Project role assignments.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>ProjectId</code> - INTEGER, foreign key to Projects</li>
+                    <li><code>UserId</code> - INTEGER, foreign key to Users (for SRO, Service Owner, PMO Contact)</li>
+                    <li><code>DirectorateLookupId</code> - INTEGER, foreign key to DirectorateLookups (for Directorates)</li>
+                    <li><code>BusinessAreaLookupId</code> - INTEGER, foreign key to BusinessAreaLookups (for Budget Owners)</li>
+                </ul>
+
+                <h3 class="h6 mt-3">ProjectArtefacts</h3>
+                <p>Project artefacts and documents.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>ProjectId</code> - INTEGER, foreign key to Projects</li>
+                    <li><code>Name</code> - VARCHAR(200), artefact name</li>
+                    <li><code>Description</code> - NVARCHAR(MAX), artefact description</li>
+                    <li><code>Url</code> - VARCHAR(500), artefact URL</li>
+                    <li><code>ArtefactType</code> - VARCHAR(50), artefact type</li>
+                    <li><code>CreatedByUserId</code> - INTEGER, foreign key to Users</li>
+                    <li><code>CreatedAt</code> - DATETIME, creation timestamp</li>
+                    <li><code>IsDeleted</code> - BOOLEAN, soft delete flag</li>
+                </ul>
+
+                <h3 class="h6 mt-3">ProjectDrafts</h3>
+                <p>Draft project data saved during creation workflow.</p>
+                <ul class="small">
+                    <li><code>Id</code> - INTEGER, primary key</li>
+                    <li><code>SessionId</code> - VARCHAR(255), session identifier</li>
+                    <li><code>UserEmail</code> - VARCHAR(255), user email</li>
+                    <li><code>ProjectData</code> - NVARCHAR(MAX), draft project data (JSON)</li>
+                    <li><code>IsConfirmed</code> - BOOLEAN, confirmation flag</li>
+                    <li><code>CreatedAt</code> - DATETIME, creation timestamp</li>
+                </ul>
+
+                <h3 class="h6 mt-3">ProjectWeeklySuccessUpdates, MonthlyUpdateNarratives, MonthlyStatusReportTimescaleConfigs, MonthlyUpdateDeadlineConfigs</h3>
+                <p>Additional project reporting and configuration tables.</p>
+                <ul class="small">
+                    <li>Weekly success updates, monthly narrative sections, and deadline configurations</li>
+                    <li>Various configuration and tracking fields for reporting workflows</li>
+                </ul>
 
                 <hr class="my-4">
 
@@ -1317,7 +2365,7 @@
                     <li>INDEX on <code>Status</code></li>
                 </ul>
 
-                <div class="alert alert-info mt-3">
+                <div class="inset-text mt-3">
                     <p class="mb-0"><strong>Strategic alignment:</strong> Many RAID entities and projects include an optional ObjectiveId foreign key to link to strategic objectives for alignment tracking and reporting.</p>
                 </div>
 
@@ -1369,12 +2417,481 @@ WHERE  a.IsDeleted = 0;</pre>
                     <li>Join both datasets in your reporting tool using risk identifiers to present mitigation progress by theme.</li>
                 </ol>
 
-                <div class="alert alert-primary mt-4">
-                    <h3 class="h6"><i class="fas fa-chart-bar"></i> Reporting tip</h3>
-                    <p class="mb-0">When consuming the API from Power BI or similar tooling, honour the pagination metadata (<code>totalPages</code>, <code>currentPage</code>) and request data in batches to stay within rate limits.</p>
+                <div class="inset-text mt-4">
+                    <p class="mb-0"><strong>Reporting tip:</strong> When consuming the API from Power BI or similar tooling, honour the pagination metadata (<code>totalPages</code>, <code>currentPage</code>) and request data in batches to stay within rate limits.</p>
                 </div>
 
-                <div class="alert alert-success mt-4">
+                <h3 class="h5 mt-5">Getting projects with all related data</h3>
+                <p>Projects are central entities that link to many other tables. Here's how to retrieve a complete project view:</p>
+                
+                <div class="bg-light border rounded p-3 mb-3">
+                    <pre>-- Get a project with all basic information
+SELECT p.Id,
+       p.ProjectCode,
+       p.Title,
+       p.Aim,
+       p.StrategicObjectives,
+       p.StartDate,
+       p.TargetDeliveryDate,
+       p.ActualDeliveryDate,
+       p.RagStatus,
+       p.RagJustification,
+       p.PathToGreen,
+       p.Status,
+       p.IsFlagship,
+       p.IsAiInitiative,
+       pl.Name AS Phase,
+       bal.Name AS BusinessArea,
+       dp.Name AS DeliveryPriority,
+       u.Name AS PrimaryContactName,
+       u.Email AS PrimaryContactEmail
+FROM Projects p
+LEFT JOIN PhaseLookups pl ON pl.Id = p.PhaseId
+LEFT JOIN BusinessAreaLookups bal ON bal.Id = p.BusinessAreaId
+LEFT JOIN DeliveryPriorities dp ON dp.Id = p.DeliveryPriorityId
+LEFT JOIN Users u ON u.Id = p.PrimaryContactUserId
+WHERE p.IsDeleted = 0
+  AND p.Id = @@ProjectId;</pre>
+                </div>
+
+                <h3 class="h5 mt-4">Getting project milestones</h3>
+                <p>Milestones are linked to projects via the <code>ProjectId</code> foreign key. A project can have multiple milestones:</p>
+                
+                <div class="bg-light border rounded p-3 mb-3">
+                    <pre>-- Get all milestones for a project with progress tracking
+SELECT m.Id,
+       m.Name,
+       m.Description,
+       m.BaselineDueDate,
+       m.DueDate,
+       m.ActualDate,
+       m.Status,
+       m.ProgressPercent,
+       m.ExternalRef,
+       m.Notes,
+       CASE 
+           WHEN m.ActualDate IS NOT NULL AND m.ActualDate <= m.DueDate THEN 'On Time'
+           WHEN m.ActualDate IS NOT NULL AND m.ActualDate > m.DueDate THEN 'Late'
+           WHEN m.DueDate < GETUTCDATE() AND m.Status != 'complete' THEN 'Overdue'
+           ELSE 'Upcoming'
+       END AS MilestoneStatus
+FROM Milestones m
+WHERE m.ProjectId = @@ProjectId
+  AND m.IsDeleted = 0
+ORDER BY m.DueDate ASC;</pre>
+                </div>
+
+                <h3 class="h5 mt-4">Getting project monthly updates</h3>
+                <p>Monthly updates are stored in <code>ProjectMonthlyUpdates</code> with a one-to-many relationship to <code>MonthlyUpdateNarratives</code> for multiple narrative entries per month:</p>
+                
+                <div class="bg-light border rounded p-3 mb-3">
+                    <pre>-- Get monthly updates for a project with all narrative entries
+SELECT pmu.Id,
+       pmu.ProjectId,
+       pmu.Year,
+       pmu.Month,
+       pmu.Narrative AS MainNarrative,
+       pmu.CreatedByName,
+       pmu.CreatedByEmail,
+       pmu.CreatedAt,
+       pmu.UpdatedAt,
+       pmu.SubmittedAt,
+       -- Count of individual narrative entries
+       (SELECT COUNT(*) 
+        FROM MonthlyUpdateNarratives mun 
+        WHERE mun.ProjectMonthlyUpdateId = pmu.Id) AS NarrativeCount
+FROM ProjectMonthlyUpdates pmu
+WHERE pmu.ProjectId = @@ProjectId
+ORDER BY pmu.Year DESC, pmu.Month DESC;</pre>
+                </div>
+
+                <div class="bg-light border rounded p-3 mb-3">
+                    <pre>-- Get individual narrative entries for a specific monthly update
+SELECT mun.Id,
+       mun.ProjectMonthlyUpdateId,
+       mun.Narrative,
+       mun.CreatedByName,
+       mun.CreatedByEmail,
+       mun.CreatedAt
+FROM MonthlyUpdateNarratives mun
+WHERE mun.ProjectMonthlyUpdateId = @@ProjectMonthlyUpdateId
+ORDER BY mun.CreatedAt ASC;</pre>
+                </div>
+
+                <h3 class="h5 mt-4">Getting project successes</h3>
+                <p>Project successes are stored in two tables: <code>ProjectSuccesses</code> for general success records, and <code>ProjectWeeklySuccessUpdates</code> for weekly success updates:</p>
+                
+                <div class="bg-light border rounded p-3 mb-3">
+                    <pre>-- Get all success records for a project
+SELECT ps.Id,
+       ps.ProjectId,
+       ps.SuccessDescription,
+       ps.RecordedByEmail,
+       ps.RecordedByName,
+       ps.RecordedAt,
+       ps.IsReportedToSlt,
+       ps.SltResponse,
+       ps.SltRespondedByEmail,
+       ps.SltRespondedByName,
+       ps.SltRespondedAt
+FROM ProjectSuccesses ps
+WHERE ps.ProjectId = @@ProjectId
+ORDER BY ps.RecordedAt DESC;</pre>
+                </div>
+
+                <div class="bg-light border rounded p-3 mb-3">
+                    <pre>-- Get weekly success updates for a project
+SELECT pwsu.Id,
+       pwsu.ProjectId,
+       pwsu.Year,
+       pwsu.WeekNumber,
+       pwsu.WeekStartDate,
+       pwsu.WeekEndDate,
+       pwsu.SuccessDescription,
+       pwsu.CreatedByName,
+       pwsu.CreatedByEmail,
+       pwsu.CreatedAt,
+       pwsu.IsReportedToSlt,
+       pwsu.SltResponse,
+       pwsu.SltRespondedByEmail,
+       pwsu.SltRespondedByName,
+       pwsu.SltRespondedAt
+FROM ProjectWeeklySuccessUpdates pwsu
+WHERE pwsu.ProjectId = @@ProjectId
+ORDER BY pwsu.Year DESC, pwsu.WeekNumber DESC;</pre>
+                </div>
+
+                <h3 class="h5 mt-4">Getting project status updates and RAG history</h3>
+                <p>Projects track status changes through <code>ProjectStatusUpdates</code> and RAG status history through <code>ProjectRagHistories</code>:</p>
+                
+                <div class="bg-light border rounded p-3 mb-3">
+                    <pre>-- Get all status updates for a project
+SELECT psu.Id,
+       psu.ProjectId,
+       psu.Narrative,
+       psu.CreatedByUserId,
+       u.Name AS CreatedByName,
+       u.Email AS CreatedByEmail,
+       psu.CreatedAt
+FROM ProjectStatusUpdates psu
+LEFT JOIN Users u ON u.Id = psu.CreatedByUserId
+WHERE psu.ProjectId = @@ProjectId
+ORDER BY psu.CreatedAt DESC;</pre>
+                </div>
+
+                <div class="bg-light border rounded p-3 mb-3">
+                    <pre>-- Get RAG status history for a project
+SELECT prh.Id,
+       prh.ProjectId,
+       prh.RagStatus,
+       prh.ChangedAt,
+       prh.ChangedBy
+FROM ProjectRagHistories prh
+WHERE prh.ProjectId = @@ProjectId
+ORDER BY prh.ChangedAt DESC;</pre>
+                </div>
+
+                <h3 class="h5 mt-4">Getting project contacts and roles</h3>
+                <p>Projects have multiple contact relationships stored in various tables:</p>
+                
+                <div class="bg-light border rounded p-3 mb-3">
+                    <pre>-- Get all project contacts
+SELECT pc.Id,
+       pc.ProjectId,
+       pc.UserId,
+       u.Name AS ContactName,
+       u.Email AS ContactEmail,
+       pc.Email AS ContactEmailDirect,
+       pc.Role,
+       pc.TeamStatus,
+       pc.SortOrder
+FROM ProjectContacts pc
+LEFT JOIN Users u ON u.Id = pc.UserId
+WHERE pc.ProjectId = @@ProjectId
+ORDER BY pc.SortOrder, pc.Role;</pre>
+                </div>
+
+                <div class="bg-light border rounded p-3 mb-3">
+                    <pre>-- Get project role assignments (SRO, Service Owner, PMO Contact, etc.)
+SELECT 
+    'SRO' AS RoleType,
+    psro.Id,
+    psro.ProjectId,
+    u.Name AS UserName,
+    u.Email AS UserEmail
+FROM ProjectSeniorResponsibleOfficers psro
+LEFT JOIN Users u ON u.Id = psro.UserId
+WHERE psro.ProjectId = @@ProjectId
+
+UNION ALL
+
+SELECT 
+    'Service Owner' AS RoleType,
+    pso.Id,
+    pso.ProjectId,
+    u.Name AS UserName,
+    u.Email AS UserEmail
+FROM ProjectServiceOwners pso
+LEFT JOIN Users u ON u.Id = pso.UserId
+WHERE pso.ProjectId = @@ProjectId
+
+UNION ALL
+
+SELECT 
+    'PMO Contact' AS RoleType,
+    ppc.Id,
+    ppc.ProjectId,
+    u.Name AS UserName,
+    u.Email AS UserEmail
+FROM ProjectPmoContacts ppc
+LEFT JOIN Users u ON u.Id = ppc.UserId
+WHERE ppc.ProjectId = @@ProjectId
+
+ORDER BY RoleType, UserName;</pre>
+                </div>
+
+                <h3 class="h5 mt-4">Getting project RAID items</h3>
+                <p>Projects are linked to Risks, Issues, Actions, and Milestones through foreign keys:</p>
+                
+                <div class="bg-light border rounded p-3 mb-3">
+                    <pre>-- Get all RAID items for a project
+SELECT 
+    'Risk' AS ItemType,
+    r.Id,
+    r.Title,
+    r.RiskScore,
+    r.Status,
+    r.ImpactRating,
+    r.LikelihoodRating
+FROM Risks r
+WHERE r.ProjectId = @@ProjectId AND r.IsDeleted = 0
+
+UNION ALL
+
+SELECT 
+    'Issue' AS ItemType,
+    i.Id,
+    i.Title,
+    NULL AS RiskScore,
+    i.Status,
+    NULL AS ImpactRating,
+    NULL AS LikelihoodRating
+FROM Issues i
+WHERE i.ProjectId = @@ProjectId AND i.IsDeleted = 0
+
+UNION ALL
+
+SELECT 
+    'Action' AS ItemType,
+    a.Id,
+    a.Title,
+    NULL AS RiskScore,
+    a.Status,
+    NULL AS ImpactRating,
+    NULL AS LikelihoodRating
+FROM Actions a
+WHERE a.ProjectId = @@ProjectId AND a.IsDeleted = 0
+
+UNION ALL
+
+SELECT 
+    'Milestone' AS ItemType,
+    m.Id,
+    m.Name AS Title,
+    NULL AS RiskScore,
+    m.Status,
+    NULL AS ImpactRating,
+    NULL AS LikelihoodRating
+FROM Milestones m
+WHERE m.ProjectId = @@ProjectId AND m.IsDeleted = 0
+
+ORDER BY ItemType, Title;</pre>
+                </div>
+
+                <h3 class="h5 mt-4">Understanding junction tables</h3>
+                <p>Junction tables enable many-to-many relationships between entities. Here's how they work:</p>
+
+                <h4 class="h6 mt-3">RiskRiskTypes junction table</h4>
+                <p>The <code>RiskRiskTypes</code> table allows a single risk to be classified with multiple risk types. This is a many-to-many relationship:</p>
+                
+                <div class="bg-light border rounded p-3 mb-3">
+                    <pre>-- Get all risk types for a specific risk
+SELECT r.Id AS RiskId,
+       r.Title AS RiskTitle,
+       rt.Id AS RiskTypeId,
+       rt.Name AS RiskTypeName,
+       rt.Code AS RiskTypeCode,
+       rrt.CreatedAt AS ClassificationDate
+FROM Risks r
+INNER JOIN RiskRiskTypes rrt ON rrt.RiskId = r.Id
+INNER JOIN RiskTypes rt ON rt.Id = rrt.RiskTypeId
+WHERE r.Id = @@RiskId
+  AND r.IsDeleted = 0
+  AND rt.IsActive = 1
+ORDER BY rt.Name;</pre>
+                </div>
+
+                <div class="inset-text mt-3">
+                    <p class="mb-0"><strong>How it works:</strong> The <code>RiskRiskTypes</code> table has a composite primary key on (<code>RiskId</code>, <code>RiskTypeId</code>), ensuring each risk-type combination is unique. When a risk is deleted, all its risk type associations are automatically removed (cascade delete).</p>
+                </div>
+
+                <h4 class="h6 mt-3">RiskActions, IssueActions, MilestoneActions junction tables</h4>
+                <p>These junction tables link RAID items to their associated actions:</p>
+                
+                <div class="bg-light border rounded p-3 mb-3">
+                    <pre>-- Get all actions linked to a risk
+SELECT a.Id AS ActionId,
+       a.Title AS ActionTitle,
+       a.Status AS ActionStatus,
+       a.Priority AS ActionPriority,
+       a.DueDate AS ActionDueDate,
+       ra.CreatedAt AS LinkCreatedAt
+FROM Actions a
+INNER JOIN RiskActions ra ON ra.ActionId = a.Id
+WHERE ra.RiskId = @@RiskId
+  AND a.IsDeleted = 0
+ORDER BY a.DueDate;</pre>
+                </div>
+
+                <div class="bg-light border rounded p-3 mb-3">
+                    <pre>-- Get all risks, issues, and milestones linked to an action
+SELECT 
+    'Risk' AS SourceType,
+    r.Id AS SourceId,
+    r.Title AS SourceTitle,
+    ra.CreatedAt AS LinkCreatedAt
+FROM Risks r
+INNER JOIN RiskActions ra ON ra.RiskId = r.Id
+WHERE ra.ActionId = @@ActionId AND r.IsDeleted = 0
+
+UNION ALL
+
+SELECT 
+    'Issue' AS SourceType,
+    i.Id AS SourceId,
+    i.Title AS SourceTitle,
+    ia.CreatedAt AS LinkCreatedAt
+FROM Issues i
+INNER JOIN IssueActions ia ON ia.IssueId = i.Id
+WHERE ia.ActionId = @@ActionId AND i.IsDeleted = 0
+
+UNION ALL
+
+SELECT 
+    'Milestone' AS SourceType,
+    m.Id AS SourceId,
+    m.Name AS SourceTitle,
+    ma.CreatedAt AS LinkCreatedAt
+FROM Milestones m
+INNER JOIN MilestoneActions ma ON ma.MilestoneId = m.Id
+WHERE ma.ActionId = @@ActionId AND m.IsDeleted = 0
+
+ORDER BY SourceType, SourceTitle;</pre>
+                </div>
+
+                <h4 class="h6 mt-3">MilestoneRisks and MilestoneIssues junction tables</h4>
+                <p>These tables link milestones to risks and issues that affect them:</p>
+                
+                <div class="bg-light border rounded p-3 mb-3">
+                    <pre>-- Get all risks and issues affecting a milestone
+SELECT 
+    'Risk' AS ItemType,
+    r.Id AS ItemId,
+    r.Title AS ItemTitle,
+    r.RiskScore,
+    r.Status,
+    mr.CreatedAt AS LinkCreatedAt
+FROM Risks r
+INNER JOIN MilestoneRisks mr ON mr.RiskId = r.Id
+WHERE mr.MilestoneId = @@MilestoneId AND r.IsDeleted = 0
+
+UNION ALL
+
+SELECT 
+    'Issue' AS ItemType,
+    i.Id AS ItemId,
+    i.Title AS ItemTitle,
+    NULL AS RiskScore,
+    i.Status,
+    mi.CreatedAt AS LinkCreatedAt
+FROM Issues i
+INNER JOIN MilestoneIssues mi ON mi.IssueId = i.Id
+WHERE mi.MilestoneId = @@MilestoneId AND i.IsDeleted = 0
+
+ORDER BY ItemType, ItemTitle;</pre>
+                </div>
+
+                <h4 class="h6 mt-3">ProjectObjectives, ProjectProducts, ProjectMissions junction tables</h4>
+                <p>These tables link projects to objectives, products, and missions:</p>
+                
+                <div class="bg-light border rounded p-3 mb-3">
+                    <pre>-- Get all objectives linked to a project
+SELECT o.Id AS ObjectiveId,
+       o.Title AS ObjectiveTitle,
+       o.Status AS ObjectiveStatus,
+       po.CreatedAt AS LinkCreatedAt
+FROM Objectives o
+INNER JOIN ProjectObjectives po ON po.ObjectiveId = o.Id
+WHERE po.ProjectId = @@ProjectId
+  AND o.IsDeleted = 0
+ORDER BY o.Title;</pre>
+                </div>
+
+                <div class="bg-light border rounded p-3 mb-3">
+                    <pre>-- Get all products linked to a project
+SELECT pp.Id AS ProjectProductId,
+       pp.ProductFipsId,
+       pp.CreatedAt AS LinkCreatedAt
+FROM ProjectProducts pp
+WHERE pp.ProjectId = @@ProjectId
+ORDER BY pp.ProductFipsId;</pre>
+                </div>
+
+                <div class="inset-text mt-3">
+                    <p class="mb-0"><strong>Junction table pattern:</strong> All junction tables follow the same pattern: they contain foreign keys to the two entities being linked, often with a composite primary key, and include audit timestamps (<code>CreatedAt</code>). This allows tracking when relationships were established and supports many-to-many relationships between entities.</p>
+                </div>
+
+                <h3 class="h5 mt-4">Complete project dashboard query</h3>
+                <p>Here's a comprehensive query to get all project information in one result set:</p>
+                
+                <div class="bg-light border rounded p-3 mb-3">
+                    <pre>-- Get complete project dashboard data
+SELECT 
+    p.Id,
+    p.ProjectCode,
+    p.Title,
+    p.RagStatus,
+    p.Status,
+    p.StartDate,
+    p.TargetDeliveryDate,
+    -- Counts
+    (SELECT COUNT(*) FROM Milestones m WHERE m.ProjectId = p.Id AND m.IsDeleted = 0) AS MilestoneCount,
+    (SELECT COUNT(*) FROM Risks r WHERE r.ProjectId = p.Id AND r.IsDeleted = 0) AS RiskCount,
+    (SELECT COUNT(*) FROM Issues i WHERE i.ProjectId = p.Id AND i.IsDeleted = 0) AS IssueCount,
+    (SELECT COUNT(*) FROM Actions a WHERE a.ProjectId = p.Id AND a.IsDeleted = 0) AS ActionCount,
+    (SELECT COUNT(*) FROM ProjectMonthlyUpdates pmu WHERE pmu.ProjectId = p.Id) AS MonthlyUpdateCount,
+    (SELECT COUNT(*) FROM ProjectSuccesses ps WHERE ps.ProjectId = p.Id) AS SuccessCount,
+    (SELECT COUNT(*) FROM ProjectWeeklySuccessUpdates pwsu WHERE pwsu.ProjectId = p.Id) AS WeeklySuccessCount,
+    -- Latest update
+    (SELECT TOP 1 pmu.Year, pmu.Month 
+     FROM ProjectMonthlyUpdates pmu 
+     WHERE pmu.ProjectId = p.Id 
+     ORDER BY pmu.Year DESC, pmu.Month DESC) AS LatestMonthlyUpdate,
+    -- Phase and business area
+    pl.Name AS Phase,
+    bal.Name AS BusinessArea
+FROM Projects p
+LEFT JOIN PhaseLookups pl ON pl.Id = p.PhaseId
+LEFT JOIN BusinessAreaLookups bal ON bal.Id = p.BusinessAreaId
+WHERE p.IsDeleted = 0
+  AND p.Id = @@ProjectId;</pre>
+                </div>
+
+                <div class="inset-text mt-3">
+                    <p class="mb-0"><strong>Performance tip:</strong> For large datasets, consider using separate queries for counts and aggregations rather than subqueries, or use a reporting view that pre-calculates these values. Indexes on foreign keys (<code>ProjectId</code>, <code>RiskId</code>, etc.) are essential for query performance.</p>
+                </div>
+
+                <div class="inset-text mt-4">
                     <h3 class="h6">See also</h3>
                     <ul class="mb-0">
                         <li><a href="@Url.Action("DataModels", "Documentation")">Data models</a> - Entity relationships and navigation properties</li>

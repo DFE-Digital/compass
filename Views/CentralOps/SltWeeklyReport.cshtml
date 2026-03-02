@@ -1,0 +1,929 @@
+@model Compass.ViewModels.SltWeeklyReportViewModel
+
+@{
+    ViewData["Title"] = "SLT Weekly Report";
+    
+    // Helper function to create a safe ID from business area name
+    Func<string, string> GetSafeId = (name) =>
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return "not-assigned";
+        
+        return System.Text.RegularExpressions.Regex.Replace(
+            name, 
+            @"[^a-zA-Z0-9\-]", 
+            "-"
+        ).ToLowerInvariant();
+    };
+    
+    // Helper function to format name for display: "Firstname LASTNAME"
+    Func<string, string> FormatNameForDisplay = (name) =>
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return "Unknown";
+        
+        // Handle "LASTNAME, Firstname" format
+        var parts = name.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length == 2)
+        {
+            return $"{parts[1]} {parts[0].ToUpperInvariant()}";
+        }
+        
+        // If already in "Firstname Lastname" format, uppercase the last word
+        var words = name.Trim().Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+        if (words.Length >= 2)
+        {
+            var firstName = string.Join(" ", words.Take(words.Length - 1));
+            var lastName = words.Last().ToUpperInvariant();
+            return $"{firstName} {lastName}";
+        }
+        
+        return name.Trim();
+    };
+}
+
+@await Html.PartialAsync("_DashboardStyles")
+
+@Html.AntiForgeryToken()
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem;">
+            <li class="breadcrumb-item">
+                <a href="/" style="color: #005ea5; text-decoration: none;">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a asp-controller="CentralOps" asp-action="Dashboard" style="color: #005ea5; text-decoration: none;">Central Operations</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page">SLT Weekly Report</li>
+        </ol>
+    </nav>
+}
+
+<section class="content">
+    <div class="container-fluid">
+        @{
+            var currentAction = ViewContext.RouteData.Values["action"]?.ToString() ?? "";
+            var navLinks = new List<object>
+            {
+                new { Text = "Summary overview", Action = "Summary", Controller = "CentralOps", Url = (string)null, IsButton = false, IsActive = currentAction == "Summary" },
+                new { Text = "Monthly reporting", Action = "MonthlyReporting", Controller = "CentralOps", Url = (string)null, IsButton = false, IsActive = currentAction == "MonthlyReporting" },
+                new { Text = "RAG and Risk", Action = "RagAndRisk", Controller = "CentralOps", Url = (string)null, IsButton = false, IsActive = currentAction == "RagAndRisk" },
+                new { Text = "All work", Action = "AllWork", Controller = "CentralOps", Url = (string)null, IsButton = false, IsActive = currentAction == "AllWork" },
+                new { Text = "Risks and Issues", Action = "SltWeeklyReport", Controller = "CentralOps", Url = "#risks-and-issues", IsButton = false, IsActive = false },
+                new { Text = "Successes", Action = "SltWeeklyReport", Controller = "CentralOps", Url = "#successes", IsButton = false, IsActive = false },
+                new { Text = "Updates", Action = "SltWeeklyReport", Controller = "CentralOps", Url = "#updates", IsButton = false, IsActive = false }
+            };
+            
+            if (Model.HasPreviousWeek && Model.PreviousWeekYear.HasValue && Model.PreviousWeekNumber.HasValue)
+            {
+                navLinks.Add(new { 
+                    Text = "Previous week", 
+                    Action = "SltWeeklyReport", 
+                    Controller = "CentralOps", 
+                    Url = Url.Action("SltWeeklyReport", "CentralOps", new { year = Model.PreviousWeekYear, week = Model.PreviousWeekNumber }), 
+                    IsButton = false, 
+                    IsActive = false 
+                });
+            }
+            
+            if (Model.HasNextWeek && Model.NextWeekYear.HasValue && Model.NextWeekNumber.HasValue)
+            {
+                navLinks.Add(new { 
+                    Text = "Next week", 
+                    Action = "SltWeeklyReport", 
+                    Controller = "CentralOps", 
+                    Url = Url.Action("SltWeeklyReport", "CentralOps", new { year = Model.NextWeekYear, week = Model.NextWeekNumber }), 
+                    IsButton = false, 
+                    IsActive = false 
+                });
+            }
+            
+            ViewBag.BrandText = "Central Operations";
+            ViewBag.NavLinks = navLinks;
+        }
+        @await Html.PartialAsync("_ModuleNavbar")
+        
+        <!-- Dashboard Header with Navigation -->
+        <div class="dashboard-header">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;">
+                <div>
+                    <h1>SLT Weekly Report</h1>
+                    <p>
+                        @Model.WeekStartDate.ToString("dd MMMM") to @Model.WeekEndDate.ToString("dd MMMM yyyy")
+                        <br />
+                        <small style="opacity: 0.9;">Week @Model.WeekNumber, @Model.Year</small>
+                    </p>
+                </div>
+            </div>
+        </div>
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["SuccessMessage"]
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+      
+
+        <!-- Successes Section -->
+        <div class="dashboard-section" id="successes">
+            <div class="dashboard-section-header">
+                <h2><i class="fas fa-trophy"></i> Successes Reported to SLT</h2>
+                        @if (Model.BusinessAreaGroups != null && Model.BusinessAreaGroups.Any())
+                        {
+                    <div>
+                        <button type="button" class="btn btn-sm btn-outline-primary" id="expandAllBusinessAreas">
+                                    <i class="fas fa-chevron-down mr-1"></i>Expand all
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-primary d-none" id="collapseAllBusinessAreas">
+                                    <i class="fas fa-chevron-up mr-1"></i>Collapse all
+                        </button>
+                            </div>
+                        }
+                    </div>
+                        @if (Model.BusinessAreaGroups != null && Model.BusinessAreaGroups.Any())
+                        {
+                            @foreach (var businessArea in Model.BusinessAreaGroups)
+                            {
+                                var safeAreaId = GetSafeId(businessArea.BusinessAreaName);
+                                var hasUpdates = businessArea.UpdateCount > 0;
+                    <div class="card mb-3" style="border: 1px solid #e9ecef; border-radius: 8px; overflow: hidden;">
+                        <div class="card-header bg-light" style="cursor: pointer; padding: 1rem;" 
+                                         data-area-id="@safeAreaId"
+                                         data-toggle="collapse" 
+                                         data-target="#ba-@safeAreaId"
+                                         aria-expanded="false"
+                                         aria-controls="ba-@safeAreaId">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                <h6 class="mb-0" style="font-size: 1rem; font-weight: 600;">
+                                    <i class="fas fa-chevron-down toggle-icon mr-2" style="font-size: 0.85rem; transition: transform 0.3s;"></i>
+                                                @businessArea.BusinessAreaName
+                                            </h6>
+                                            @if (hasUpdates)
+                                            {
+                                    <span class="badge badge-success" style="font-size: 0.875rem; padding: 0.375rem 0.75rem;">@businessArea.UpdateCount update@(businessArea.UpdateCount != 1 ? "s" : "")</span>
+                                            }
+                                            else
+                                            {
+                                    <span class="badge badge-secondary" style="font-size: 0.875rem; padding: 0.375rem 0.75rem;">No Updates</span>
+                                            }
+                                        </div>
+                                    </div>
+                        <div id="ba-@safeAreaId" class="collapse">
+                            <div class="card-body" style="padding: 1.5rem;">
+                                            @if (hasUpdates)
+                                            {
+                                                @foreach (var projectGroup in businessArea.ProjectGroups)
+                                                {
+                                        <div class="mb-4" style="border-left: 3px solid #005ea5; padding-left: 1.25rem;">
+                                            <div class="mb-3">
+                                                <h6 class="mb-1" style="font-size: 1rem; font-weight: 600;">
+                                                            <a asp-controller="Project" 
+                                                               asp-action="Details" 
+                                                               asp-route-id="@projectGroup.ProjectId"
+                                                               style="color: #005ea5; text-decoration: none; font-weight: 600;">
+                                                                @projectGroup.ProjectTitle
+                                                            </a>
+                                                            @if (!string.IsNullOrEmpty(projectGroup.ProjectCode))
+                                                            {
+                                                        <small class="text-muted ml-2" style="font-size: 0.875rem;">(@projectGroup.ProjectCode)</small>
+                                                            }
+                                                        </h6>
+                                                    </div>
+                                                    @foreach (var success in projectGroup.Successes)
+                                                    {
+                                                        var displayName = !string.IsNullOrWhiteSpace(success.CreatedByName) 
+                                                            ? FormatNameForDisplay(success.CreatedByName) 
+                                                            : (!string.IsNullOrWhiteSpace(success.CreatedByEmail) ? success.CreatedByEmail : "Unknown");
+                                                        
+                                                <div class="mb-4 pb-4" style="border-bottom: 1px solid #e9ecef;">
+                                                    <div class="mb-2">
+                                                        <div style="background-color: #f4f8fb; padding: 1.25rem; border-radius: 8px; border-left: 4px solid #005ea5;">
+                                                            <div style="color: #1f2937; line-height: 1.6;">@success.SuccessDescription</div>
+                                                                </div>
+                                                            </div>
+                                                    <div class="mb-3">
+                                                        <small class="text-muted">
+                                                            <i class="fas fa-user mr-1"></i>Added by @displayName on @success.CreatedAt.ToString("d MMMM yyyy")
+                                                        </small>
+                                                            </div>
+                                                            
+                                                            @if (!string.IsNullOrWhiteSpace(success.SltResponse))
+                                                            {
+                                                        <div class="mt-3 p-3" style="background-color: #fff9e6; border-left: 4px solid #ffc107; border-radius: 8px;" data-success-id="@success.Id" data-success-type="@success.Type">
+                                                                    <div class="d-flex justify-content-between align-items-start mb-2">
+                                                                <strong style="color: #1f2937;">
+                                                                            <i class="fas fa-comment-dots mr-1"></i>SLT Response
+                                                                        </strong>
+                                                                        <div>
+                                                                            <button type="button" class="btn btn-sm btn-link text-primary p-0 mr-2 edit-slt-response-btn" 
+                                                                                    data-success-id="@success.Id" 
+                                                                                    data-success-type="@success.Type"
+                                                                                    title="Edit response">
+                                                                                <i class="fas fa-edit"></i>
+                                                                            </button>
+                                                                            <button type="button" class="btn btn-sm btn-link text-danger p-0 delete-slt-response-btn" 
+                                                                                    data-success-id="@success.Id" 
+                                                                                    data-success-type="@success.Type"
+                                                                                    title="Delete response">
+                                                                                <i class="fas fa-trash"></i>
+                                                                            </button>
+                                                                        </div>
+                                                                    </div>
+                                                            <div class="slt-response-content" style="color: #1f2937; word-wrap: break-word; margin-bottom: 0.75rem; line-height: 1.6;">
+                                                                        @success.SltResponse
+                                                                    </div>
+                                                                    <div class="slt-response-edit-form" style="display: none;">
+                                                                        <textarea class="form-control mb-2" rows="3" placeholder="Enter SLT response..."></textarea>
+                                                                        <div class="d-flex justify-content-end">
+                                                                            <button type="button" class="btn btn-sm btn-secondary mr-2 cancel-edit-slt-response-btn">Cancel</button>
+                                                                            <button type="button" class="btn btn-sm btn-success save-edit-slt-response-btn">Save</button>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div>
+                                                                        <small class="text-muted">
+                                                                            @{
+                                                                                var sltRespondedAt = (DateTime?)success.SltRespondedAt;
+                                                                            }
+                                                                            @if (sltRespondedAt != null)
+                                                                            {
+                                                                                @if (!string.IsNullOrWhiteSpace(success.SltRespondedByName))
+                                                                                {
+                                                                                    var sltDisplayName = FormatNameForDisplay(success.SltRespondedByName);
+                                                                            <text><i class="fas fa-user-check mr-1"></i>Added by @sltDisplayName on @sltRespondedAt.Value.ToString("d MMMM yyyy")</text>
+                                                                                }
+                                                                                else
+                                                                                {
+                                                                            <text><i class="fas fa-clock mr-1"></i>@sltRespondedAt.Value.ToString("d MMMM yyyy")</text>
+                                                                                }
+                                                                            }
+                                                                        </small>
+                                                                    </div>
+                                                                </div>
+                                                            }
+                                                            else
+                                                            {
+                                                        <div class="mt-3" data-success-type="@success.Type" data-success-id="@success.Id">
+                                                                    <button type="button" 
+                                                                            class="btn btn-sm btn-primary add-slt-response-btn"
+                                                                            data-success-id="@success.Id"
+                                                                            data-success-type="@success.Type">
+                                                                <i class="fas fa-comment mr-1"></i>Add SLT Response
+                                                                    </button>
+                                                                    <div class="slt-response-form-container mt-2" style="display: none;">
+                                                                        <textarea class="form-control mb-2" 
+                                                                                  rows="3" 
+                                                                                  placeholder="Enter SLT response..."
+                                                                                  id="slt-response-text-@success.Type-@success.Id"></textarea>
+                                                                        <div class="d-flex justify-content-start">
+                                                                            <button type="button" 
+                                                                                    class="btn btn-sm btn-success mr-2 save-slt-response-btn"
+                                                                                    data-success-id="@success.Id"
+                                                                                    data-success-type="@success.Type">
+                                                                                Save Response
+                                                                            </button>
+                                                                            <button type="button" 
+                                                                                    class="btn btn-sm btn-secondary cancel-slt-response-btn"
+                                                                                    data-success-id="@success.Id"
+                                                                                    data-success-type="@success.Type">
+                                                                                Cancel
+                                                                            </button>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            }
+                                                        </div>
+                                                    }
+                                                </div>
+                                                }
+                                            }
+                                            else
+                                            {
+                                    <div class="text-center py-4">
+                                                    <p class="text-muted mb-0">No weekly updates submitted for this business area.</p>
+                                                </div>
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                <div class="text-center py-4">
+                                <p class="text-muted mb-0">No successes reported to SLT for this week.</p>
+                            </div>
+                        }
+        </div>
+
+        <!-- Risks and Issues Section -->
+        <div class="dashboard-section" id="risks-and-issues">
+            <div class="dashboard-section-header">
+                <h2><i class="fas fa-exclamation-triangle"></i> Risks and Issues</h2>
+            </div>
+            @if (Model.Risks.Any() || Model.Issues.Any())
+            {
+                @if (Model.Risks.Any())
+                {
+                    <div class="mb-4">
+                        <h4 class="mb-3"><i class="fas fa-shield-alt"></i> Risks (@Model.Risks.Count)</h4>
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Project</th>
+                                        <th>Title</th>
+                                        <th>Status</th>
+                                        <th>Risk Score</th>
+                                        <th>Created</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var risk in Model.Risks)
+                                    {
+                                        <tr>
+                                            <td>
+                                                @if (risk.Project != null)
+                                                {
+                                                    <a asp-controller="Project" asp-action="Details" asp-route-id="@risk.ProjectId" style="color: #005ea5; text-decoration: none;">
+                                                        @risk.Project.Title
+                                                    </a>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">No project</span>
+                                                }
+                                            </td>
+                                            <td>@risk.Title</td>
+                                            <td>
+                                                <span class="badge badge-@(risk.Status == "closed" ? "secondary" : risk.Status == "monitoring" ? "warning" : "danger")">
+                                                    @risk.Status
+                                                </span>
+                                            </td>
+                                            <td>@risk.RiskScore</td>
+                                            <td>@risk.CreatedAt.ToString("dd MMM yyyy")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                }
+                
+                @if (Model.Issues.Any())
+                {
+                    <div class="mb-4">
+                        <h4 class="mb-3"><i class="fas fa-bug"></i> Issues (@Model.Issues.Count)</h4>
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Project</th>
+                                        <th>Title</th>
+                                        <th>Status</th>
+                                        <th>Severity</th>
+                                        <th>Created</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var issue in Model.Issues)
+                                    {
+                                        <tr>
+                                            <td>
+                                                @if (issue.Project != null)
+                                                {
+                                                    <a asp-controller="Project" asp-action="Details" asp-route-id="@issue.ProjectId" style="color: #005ea5; text-decoration: none;">
+                                                        @issue.Project.Title
+                                                    </a>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">No project</span>
+                                                }
+                                            </td>
+                                            <td>@issue.Title</td>
+                                            <td>
+                                                <span class="badge badge-@(issue.Status == "closed" ? "secondary" : issue.Status == "resolved" ? "success" : "warning")">
+                                                    @issue.Status
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <span class="badge badge-@(issue.Severity == "high" ? "danger" : issue.Severity == "medium" ? "warning" : "info")">
+                                                    @issue.Severity
+                                                </span>
+                                            </td>
+                                            <td>@issue.CreatedAt.ToString("dd MMM yyyy")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                }
+            }
+            else
+            {
+                <div class="text-center py-4">
+                    <p class="text-muted mb-0">No risks or issues for this week.</p>
+                </div>
+            }
+        </div>
+
+        <!-- Updates Section -->
+        <div class="dashboard-section" id="updates">
+            <div class="dashboard-section-header">
+                <h2><i class="fas fa-sync-alt"></i> Project Status Updates</h2>
+            </div>
+            @if (Model.Updates.Any())
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Project</th>
+                                <th>Update</th>
+                                <th>Created By</th>
+                                <th>Date</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var update in Model.Updates)
+                            {
+                                <tr>
+                                    <td>
+                                        @if (update.Project != null)
+                                        {
+                                            <a asp-controller="Project" asp-action="Details" asp-route-id="@update.ProjectId" style="color: #005ea5; text-decoration: none;">
+                                                @update.Project.Title
+                                            </a>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">No project</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        <div style="max-width: 500px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="@update.Narrative">
+                                            @update.Narrative
+                                        </div>
+                                    </td>
+                                    <td>
+                                        @if (!string.IsNullOrWhiteSpace(update.CreatedByName))
+                                        {
+                                            @update.CreatedByName
+                                        }
+                                        else if (!string.IsNullOrWhiteSpace(update.CreatedByEmail))
+                                        {
+                                            @update.CreatedByEmail
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">Unknown</span>
+                                        }
+                                    </td>
+                                    <td>@update.CreatedAt.ToString("dd MMM yyyy")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+            else
+            {
+                <div class="text-center py-4">
+                    <p class="text-muted mb-0">No project status updates for this week.</p>
+                </div>
+            }
+        </div>
+
+        <!-- Milestones Section -->
+        <div class="dashboard-section">
+            <div class="dashboard-section-header">
+                <h2><i class="fas fa-calendar-check"></i> Milestones Due This Week</h2>
+                    </div>
+                        @if (Model.Milestones.Any())
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-hover mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th style="width: 25%;">Work Item</th>
+                                            <th style="width: 30%;">Milestone</th>
+                                            <th style="width: 15%;">Due Date</th>
+                                            <th style="width: 15%;">Status</th>
+                                            <th style="width: 15%;">Progress</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var milestone in Model.Milestones)
+                                        {
+                                            <tr>
+                                                <td>
+                                                    @if (milestone.Project != null)
+                                                    {
+                                                        <a asp-controller="Project" 
+                                                           asp-action="Details" 
+                                               asp-route-id="@milestone.ProjectId"
+                                               style="font-weight: 600; color: #005ea5; text-decoration: none;">
+                                                            @milestone.Project.Title
+                                                        </a>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">N/A</span>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    <a asp-controller="Project" 
+                                                       asp-action="MilestoneDetails" 
+                                           asp-route-id="@milestone.Id"
+                                           style="font-weight: 600; color: #005ea5; text-decoration: none;">
+                                                        @milestone.Name
+                                                    </a>
+                                                    @if (!string.IsNullOrWhiteSpace(milestone.Description))
+                                                    {
+                                                        <br />
+                                                        <small class="text-muted">@(milestone.Description.Length > 100 ? milestone.Description.Substring(0, 100) + "..." : milestone.Description)</small>
+                                                    }
+                                                </td>
+                                                <td>
+                                        <span style="font-weight: 500;">@milestone.DueDate.ToString("dd MMM yyyy")</span>
+                                                </td>
+                                                <td>
+                                                    <span class="badge badge-@(milestone.Status == "complete" ? "success" : milestone.Status == "at_risk" ? "warning" : milestone.Status == "in_progress" ? "info" : "secondary")">
+                                            @milestone.Status.Replace("_", " ").ToUpperInvariant()
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    @if (milestone.ProgressPercent.HasValue)
+                                                    {
+                                                        <div class="d-flex align-items-center">
+                                                <div class="progress flex-grow-1 mr-2" style="height: 24px; border-radius: 4px;">
+                                                                <div class="progress-bar @(milestone.ProgressPercent >= 75 ? "bg-success" : milestone.ProgressPercent >= 50 ? "bg-info" : milestone.ProgressPercent >= 25 ? "bg-warning" : "bg-danger")"
+                                                                     role="progressbar"
+                                                                     style="width: @milestone.ProgressPercent%"
+                                                                     aria-valuenow="@milestone.ProgressPercent"
+                                                                     aria-valuemin="0"
+                                                                     aria-valuemax="100">
+                                                                </div>
+                                                            </div>
+                                                <span class="small font-weight-600">@milestone.ProgressPercent%</span>
+                                                        </div>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">Not set</span>
+                                                    }
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                        else
+                        {
+                <div class="text-center py-4">
+                                <p class="text-muted mb-0">No milestones due this week.</p>
+                            </div>
+                        }
+        </div>
+    </div>
+</section>
+
+<style>
+    .business-area-card .card-header:hover {
+        background-color: #e9ecef !important;
+    }
+    
+    .business-area-card .toggle-icon {
+        transition: transform 0.3s;
+    }
+    
+    .business-area-card .card-header[aria-expanded="false"] .toggle-icon {
+        transform: rotate(-90deg);
+    }
+    
+    .slt-response {
+        animation: slideIn 0.3s ease-out;
+    }
+    
+    @@keyframes slideIn {
+        from {
+            opacity: 0;
+            transform: translateY(-10px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+</style>
+
+<script nonce="@Context.Items["Nonce"]">
+    document.addEventListener('DOMContentLoaded', function() {
+        // Handle business area toggle
+        const businessAreaHeaders = document.querySelectorAll('.business-area-header');
+        businessAreaHeaders.forEach(function(header) {
+            header.addEventListener('click', function() {
+                updateExpandCollapseButtons();
+            });
+        });
+        
+        // Handle expand all business areas
+        const expandAllBtn = document.getElementById('expandAllBusinessAreas');
+        const collapseAllBtn = document.getElementById('collapseAllBusinessAreas');
+        
+        if (expandAllBtn && collapseAllBtn) {
+            if (typeof jQuery !== 'undefined') {
+                $(expandAllBtn).on('click', function(e) {
+                    e.preventDefault();
+                    $('.card .collapse').collapse('show');
+                    $(this).addClass('d-none');
+                    $(collapseAllBtn).removeClass('d-none');
+                });
+                
+                $(collapseAllBtn).on('click', function(e) {
+                    e.preventDefault();
+                    $('.card .collapse').collapse('hide');
+                    $(this).addClass('d-none');
+                    $(expandAllBtn).removeClass('d-none');
+                });
+                
+                function updateExpandCollapseButtons() {
+                    const allCollapses = $('.card .collapse');
+                    const expandedCollapses = $('.card .collapse.show');
+                    
+                    if (allCollapses.length === 0) {
+                        $(expandAllBtn).addClass('d-none');
+                        $(collapseAllBtn).addClass('d-none');
+                        return;
+                    }
+                    
+                    if (expandedCollapses.length === allCollapses.length) {
+                        $(expandAllBtn).addClass('d-none');
+                        $(collapseAllBtn).removeClass('d-none');
+                    } else if (expandedCollapses.length === 0) {
+                        $(expandAllBtn).removeClass('d-none');
+                        $(collapseAllBtn).addClass('d-none');
+                    } else {
+                        $(expandAllBtn).removeClass('d-none');
+                        $(collapseAllBtn).removeClass('d-none');
+                    }
+                }
+                
+                $('.card .collapse').on('shown.bs.collapse hidden.bs.collapse', updateExpandCollapseButtons);
+                updateExpandCollapseButtons();
+            }
+        }
+        
+        // Handle "Add SLT Response" button clicks
+        const addSltResponseButtons = document.querySelectorAll('.add-slt-response-btn');
+        addSltResponseButtons.forEach(function(button) {
+            button.addEventListener('click', function() {
+                const successId = this.getAttribute('data-success-id');
+                const successType = this.getAttribute('data-success-type');
+                const formContainer = document.querySelector(`.slt-response-form-container[data-success-id="${successId}"], .slt-response-form[data-success-id="${successId}"][data-success-type="${successType}"] .slt-response-form-container`);
+                
+                if (formContainer) {
+                    formContainer.style.display = 'block';
+                    this.style.display = 'none';
+                    const textarea = formContainer.querySelector('textarea');
+                    if (textarea) {
+                        textarea.focus();
+                    }
+                }
+            });
+        });
+        
+        // Handle "Cancel" button clicks
+        const cancelButtons = document.querySelectorAll('.cancel-slt-response-btn');
+        cancelButtons.forEach(function(button) {
+            button.addEventListener('click', function() {
+                const successId = this.getAttribute('data-success-id');
+                const successType = this.getAttribute('data-success-type');
+                const formContainer = document.querySelector(`.slt-response-form-container[data-success-id="${successId}"], .slt-response-form[data-success-id="${successId}"][data-success-type="${successType}"] .slt-response-form-container`);
+                const addButton = document.querySelector(`.add-slt-response-btn[data-success-id="${successId}"][data-success-type="${successType}"]`);
+                const textarea = formContainer ? formContainer.querySelector('textarea') : null;
+                
+                if (formContainer) {
+                    formContainer.style.display = 'none';
+                    if (addButton) {
+                        addButton.style.display = 'inline-block';
+                    }
+                    if (textarea) {
+                        textarea.value = '';
+                    }
+                }
+            });
+        });
+        
+        // Handle "Edit SLT Response" button clicks
+        const editSltResponseButtons = document.querySelectorAll('.edit-slt-response-btn');
+        editSltResponseButtons.forEach(function(button) {
+            button.addEventListener('click', function() {
+                const successId = this.getAttribute('data-success-id');
+                const successType = this.getAttribute('data-success-type');
+                const sltResponse = document.querySelector(`.slt-response[data-success-id="${successId}"][data-success-type="${successType}"]`);
+                const contentDiv = sltResponse.querySelector('.slt-response-content');
+                const editForm = sltResponse.querySelector('.slt-response-edit-form');
+                const textarea = editForm.querySelector('textarea');
+                
+                textarea.value = contentDiv.textContent.trim();
+                contentDiv.style.display = 'none';
+                editForm.style.display = 'block';
+                this.style.display = 'none';
+                sltResponse.querySelector('.delete-slt-response-btn').style.display = 'none';
+                textarea.focus();
+            });
+        });
+        
+        // Handle "Cancel Edit" button clicks
+        const cancelEditButtons = document.querySelectorAll('.cancel-edit-slt-response-btn');
+        cancelEditButtons.forEach(function(button) {
+            button.addEventListener('click', function() {
+                const sltResponse = this.closest('[data-success-id]');
+                const contentDiv = sltResponse.querySelector('.slt-response-content');
+                const editForm = sltResponse.querySelector('.slt-response-edit-form');
+                const editBtn = sltResponse.querySelector('.edit-slt-response-btn');
+                const deleteBtn = sltResponse.querySelector('.delete-slt-response-btn');
+                
+                contentDiv.style.display = 'block';
+                editForm.style.display = 'none';
+                editBtn.style.display = 'inline-block';
+                deleteBtn.style.display = 'inline-block';
+            });
+        });
+        
+        // Handle "Save Edit" button clicks
+        const saveEditButtons = document.querySelectorAll('.save-edit-slt-response-btn');
+        saveEditButtons.forEach(function(button) {
+            button.addEventListener('click', async function() {
+                const sltResponse = this.closest('[data-success-id]');
+                const successId = sltResponse.getAttribute('data-success-id');
+                const successType = sltResponse.getAttribute('data-success-type');
+                const textarea = sltResponse.querySelector('.slt-response-edit-form textarea');
+                const responseText = textarea.value.trim();
+                
+                if (!responseText) {
+                    alert('Please enter a response before saving.');
+                    return;
+                }
+                
+                const tokenElement = document.querySelector('input[name="__RequestVerificationToken"]');
+                const token = tokenElement ? tokenElement.value : '';
+                
+                if (!token) {
+                    alert('Security token not found. Please refresh the page and try again.');
+                    return;
+                }
+                
+                try {
+                    const formData = new FormData();
+                    formData.append('successId', successId.toString());
+                    formData.append('successType', successType);
+                    formData.append('responseText', responseText);
+                    formData.append('__RequestVerificationToken', token);
+                    
+                    const response = await fetch('@Url.Action("SaveSltResponse", "CentralOps")', {
+                        method: 'POST',
+                        headers: {
+                            'RequestVerificationToken': token
+                        },
+                        body: formData
+                    });
+                    
+                    if (response.ok) {
+                        window.location.reload();
+                    } else {
+                        const errorText = await response.text();
+                        try {
+                            const errorData = JSON.parse(errorText);
+                            alert('Error saving response: ' + (errorData.message || 'Unknown error'));
+                        } catch {
+                            alert('Error saving response. Please try again.');
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    alert('An error occurred while saving the response. Please try again.');
+                }
+            });
+        });
+        
+        // Handle "Delete SLT Response" button clicks
+        const deleteSltResponseButtons = document.querySelectorAll('.delete-slt-response-btn');
+        deleteSltResponseButtons.forEach(function(button) {
+            button.addEventListener('click', async function() {
+                if (!confirm('Are you sure you want to delete this SLT response? This action cannot be undone.')) {
+                    return;
+                }
+                
+                const successId = this.getAttribute('data-success-id');
+                const successType = this.getAttribute('data-success-type');
+                
+                const tokenElement = document.querySelector('input[name="__RequestVerificationToken"]');
+                const token = tokenElement ? tokenElement.value : '';
+                
+                if (!token) {
+                    alert('Security token not found. Please refresh the page and try again.');
+                    return;
+                }
+                
+                try {
+                    const formData = new FormData();
+                    formData.append('successId', successId.toString());
+                    formData.append('successType', successType);
+                    formData.append('__RequestVerificationToken', token);
+                    
+                    const response = await fetch('@Url.Action("DeleteSltResponse", "CentralOps")', {
+                        method: 'POST',
+                        headers: {
+                            'RequestVerificationToken': token
+                        },
+                        body: formData
+                    });
+                    
+                    if (response.ok) {
+                        window.location.reload();
+                    } else {
+                        const errorText = await response.text();
+                        try {
+                            const errorData = JSON.parse(errorText);
+                            alert('Error deleting response: ' + (errorData.message || 'Unknown error'));
+                        } catch {
+                            alert('Error deleting response. Please try again.');
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    alert('An error occurred while deleting the response. Please try again.');
+                }
+            });
+        });
+        
+        // Handle "Save Response" button clicks
+        const saveButtons = document.querySelectorAll('.save-slt-response-btn');
+        saveButtons.forEach(function(button) {
+            button.addEventListener('click', async function() {
+                const successId = this.getAttribute('data-success-id');
+                const successType = this.getAttribute('data-success-type');
+                const textarea = document.querySelector(`#slt-response-text-${successType}-${successId}`);
+                const responseText = textarea ? textarea.value.trim() : '';
+                
+                if (!responseText) {
+                    alert('Please enter a response before saving.');
+                    return;
+                }
+                
+                const tokenElement = document.querySelector('input[name="__RequestVerificationToken"]');
+                const token = tokenElement ? tokenElement.value : '';
+                
+                if (!token) {
+                    alert('Security token not found. Please refresh the page and try again.');
+                    return;
+                }
+                
+                try {
+                    const formData = new FormData();
+                    formData.append('successId', successId.toString());
+                    formData.append('successType', successType);
+                    formData.append('responseText', responseText);
+                    formData.append('__RequestVerificationToken', token);
+                    
+                    const response = await fetch('@Url.Action("SaveSltResponse", "CentralOps")', {
+                        method: 'POST',
+                        headers: {
+                            'RequestVerificationToken': token
+                        },
+                        body: formData
+                    });
+                    
+                    if (response.ok) {
+                        window.location.reload();
+                    } else {
+                        const errorText = await response.text();
+                        try {
+                            const errorData = JSON.parse(errorText);
+                            alert('Error saving response: ' + (errorData.message || 'Unknown error'));
+                        } catch {
+                            alert('Error saving response. Please try again.');
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    alert('An error occurred while saving the response. Please try again.');
+                }
+            });
+        });
+    });
+</script>

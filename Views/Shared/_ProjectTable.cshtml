@@ -1,0 +1,357 @@
+@model IEnumerable<Compass.Models.Project>
+@inject Compass.Services.IMonthlyUpdateService MonthlyUpdateService
+@{
+    var tableId = ViewData["TableId"] as string ?? "projects-table";
+    var tableClass = ViewData["TableClass"] as string ?? "projects-table";
+    var showPagination = ViewData["ShowPagination"] as bool? ?? false;
+    var totalCount = ViewData["TotalCount"] as int? ?? Model.Count();
+    var pageNumber = ViewData["PageNumber"] as int? ?? 1;
+    var pageSize = ViewData["PageSize"] as int? ?? 10;
+    var totalPages = ViewData["TotalPages"] as int? ?? (int)Math.Ceiling((double)totalCount / pageSize);
+    var hasPreviousPage = ViewData["HasPreviousPage"] as bool? ?? false;
+    var hasNextPage = ViewData["HasNextPage"] as bool? ?? false;
+    var paginationIdPrefix = ViewData["PaginationIdPrefix"] as string ?? tableId.Replace("-", "");
+    var showMonthlyUpdateStatus = ViewData["ShowMonthlyUpdateStatus"] as bool? ?? false;
+    
+    // Calculate the applicable reporting period for the header
+    var currentDate = DateTime.UtcNow;
+    var currentYear = currentDate.Year;
+    var currentMonth = currentDate.Month;
+    
+    // Calculate previous month (the period we should normally show)
+    var previousMonth = currentMonth == 1 ? 12 : currentMonth - 1;
+    var previousYear = currentMonth == 1 ? currentYear - 1 : currentYear;
+    
+    // Calculate current period's due date
+    var currentPeriodDueDate = MonthlyUpdateService.GetMonthlyUpdateDueDate(currentYear, currentMonth);
+    
+    // Check if we're within 10 days of the current period's due date
+    // If so, switch to showing the current period (since we're approaching the deadline)
+    var daysUntilCurrentPeriodDueDate = (currentPeriodDueDate - currentDate).Days;
+    var applicableYear = daysUntilCurrentPeriodDueDate <= 10 ? currentYear : previousYear;
+    var applicableMonth = daysUntilCurrentPeriodDueDate <= 10 ? currentMonth : previousMonth;
+    var applicableMonthName = new DateTime(applicableYear, applicableMonth, 1).ToString("MMMM");
+    var updateStatusHeader = $"{applicableMonthName} update";
+}
+
+@functions {
+    string GetDeliveryCode(Compass.Models.Project project)
+    {
+        return $"DFE-DDT-{project.Id}";
+    }
+
+    string GetRagBadgeClass(string ragStatus)
+    {
+        if (string.IsNullOrWhiteSpace(ragStatus))
+        {
+            return "badge badge-secondary";
+        }
+        
+        // Normalize the status - handle both "Amber-Green" and "Amber/Green" formats
+        var normalized = ragStatus.Trim()
+            .Replace(" / ", "-")
+            .Replace("/", "-")
+            .Replace(" /", "-")
+            .Replace("/ ", "-");
+        
+        return normalized switch
+        {
+            "Green" => "badge badge-green",
+            "Amber-Green" => "badge badge-amber-green",
+            "Amber" => "badge badge-amber",
+            "Amber-Red" => "badge badge-amber-red",
+            "Red" => "badge badge-red",
+            _ => "badge badge-secondary"
+        };
+    }
+
+    string GetPriorityBadgeClass(string priorityName)
+    {
+        if (string.IsNullOrWhiteSpace(priorityName))
+        {
+            return "badge badge-secondary";
+        }
+
+        var normalized = priorityName.Trim().ToLowerInvariant();
+        return normalized switch
+        {
+            "high" => "badge badge-red",
+            "medium" => "badge badge-amber",
+            "low" => "badge badge-green",
+            _ => "badge badge-secondary"
+        };
+    }
+
+    string FormatRagStatusText(string ragStatus)
+    {
+        if (string.IsNullOrWhiteSpace(ragStatus))
+        {
+            return ragStatus;
+        }
+
+        // Normalize to always use "Amber-Green" and "Amber-Red" format
+        var normalized = ragStatus.Trim()
+            .Replace(" / ", "-")
+            .Replace("/", "-")
+            .Replace(" /", "-")
+            .Replace("/ ", "-");
+        
+        // Capitalize first letter of each word for consistency
+        var parts = normalized.Split('-');
+        for (int i = 0; i < parts.Length; i++)
+        {
+            if (parts[i].Length > 0)
+            {
+                parts[i] = char.ToUpperInvariant(parts[i][0]) + (parts[i].Length > 1 ? parts[i].Substring(1).ToLowerInvariant() : "");
+            }
+        }
+        return string.Join("-", parts);
+    }
+
+
+    string GetMonthlyUpdateStatusBadgeClass(string status)
+    {
+        return status switch
+        {
+            "Not started" => "badge badge-secondary",
+            "In progress" => "badge badge-amber",
+            "Late" => "badge badge-red",
+            "Submitted" => "badge badge-green",
+            _ => "badge badge-secondary"
+        };
+    }
+}
+
+<div class="card-body p-0" style="overflow-x: auto; max-width: 100%;">
+    <div class="table-responsive" style="max-width: 100%;">
+        <table class="table table-hover text-nowrap sortable-table mb-0 table-responsive-mobile @tableClass" id="@tableId" style="width: 100%; margin-bottom: 0;">
+        <thead>
+            <tr>
+                <th class="col-project-title sortable" data-column="Title" tabindex="0" role="button" aria-label="Sort by Title" style="width: 25%; min-width: 200px;">Title <i class="fas fa-sort sort-icon"></i></th>
+                <th class="col-project-business-area sortable" data-column="BusinessArea" tabindex="0" role="button" aria-label="Sort by Business Area" style="width: 12%; min-width: 120px;">Business Area <i class="fas fa-sort sort-icon"></i></th>
+                <th class="col-project-priority sortable" data-column="Priority" tabindex="0" role="button" aria-label="Sort by Priority" style="width: 10%; min-width: 100px;">Priority <i class="fas fa-sort sort-icon"></i></th>
+                <th class="col-project-rag sortable" data-column="RAGStatus" tabindex="0" role="button" aria-label="Sort by RAG Status" style="width: 10%; min-width: 100px;">RAG Status <i class="fas fa-sort sort-icon"></i></th>
+                <th class="col-project-flagship sortable" data-column="Flagship" tabindex="0" role="button" aria-label="Sort by Flagship" style="width: 8%; min-width: 80px;">Flagship <i class="fas fa-sort sort-icon"></i></th>
+                @if (showMonthlyUpdateStatus)
+                {
+                    <th class="col-project-monthly-update sortable" data-column="MonthlyUpdateStatus" tabindex="0" role="button" aria-label="Sort by Monthly Update Status" style="width: 13%; min-width: 140px;">@updateStatusHeader <i class="fas fa-sort sort-icon"></i></th>
+                }
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var project in Model)
+            {
+                <tr>
+                        <td data-label="Title">
+                        <a asp-controller="Project" asp-action="Details" asp-route-id="@project.Id" class="project-title-link">@project.Title</a>
+                        <div class="project-meta text-muted small mt-1">
+                            <span class="d-block">
+                                <span class="text-monospace">@GetDeliveryCode(project)</span>
+                                @if (!string.IsNullOrWhiteSpace(project.Phase))
+                                {
+                                    <span class="ml-2">• @project.Phase</span>
+                                }
+                            </span>
+                        </div>
+                    </td>
+                        <td data-label="Business Area">@(string.IsNullOrWhiteSpace(project.BusinessArea) ? "-" : project.BusinessArea)</td>
+                        <td data-label="Priority">
+                        @if (project.DeliveryPriority != null)
+                        {
+                            <span class="@GetPriorityBadgeClass(project.DeliveryPriority.Name)">@project.DeliveryPriority.Name</span>
+                        }
+                        else
+                        {
+                            <span class="text-muted">Not set</span>
+                        }
+                    </td>
+                        <td data-label="RAG Status">
+                        @if (!string.IsNullOrEmpty(project.RagStatus))
+                        {
+                            <span class="@GetRagBadgeClass(project.RagStatus)">@FormatRagStatusText(project.RagStatus)</span>
+                        }
+                        else
+                        {
+                            <span class="badge badge-secondary">Not set</span>
+                        }
+                    </td>
+                        <td data-label="Flagship">
+                        @if (project.IsFlagship)
+                        {
+                            <span class="badge badge-primary">Yes</span>
+                        }
+                        else
+                        {
+                            <span class="badge badge-secondary">No</span>
+                        }
+                    </td>
+                        @if (showMonthlyUpdateStatus)
+                        {
+                            <td data-label="@updateStatusHeader">
+                            @{
+                                // Get the due date for the applicable reporting period (using variables from top-level scope)
+                                var dueDate = MonthlyUpdateService.GetMonthlyUpdateDueDate(applicableYear, applicableMonth);
+                                
+                                // Find the monthly update for the applicable reporting period
+                                var applicableUpdate = project.MonthlyUpdates?.FirstOrDefault(u => u.Year == applicableYear && u.Month == applicableMonth);
+                                
+                                string monthlyStatus;
+                                
+                                // If update exists and has been submitted
+                                if (applicableUpdate != null && applicableUpdate.SubmittedAt.HasValue)
+                                {
+                                    monthlyStatus = "Submitted";
+                                }
+                                // Check if the due date has passed
+                                else if (currentDate > dueDate)
+                                {
+                                    monthlyStatus = "Late";
+                                }
+                                // If update exists but not submitted and due date hasn't passed
+                                else if (applicableUpdate != null && !applicableUpdate.SubmittedAt.HasValue)
+                                {
+                                    monthlyStatus = "In progress";
+                                }
+                                // No update exists and due date hasn't passed
+                                else
+                                {
+                                    monthlyStatus = "Not started";
+                                }
+                                
+                                // Determine the link action (EditUpdate if exists, CreateUpdate if not)
+                                var updateAction = applicableUpdate != null ? "EditUpdate" : "CreateUpdate";
+                            }
+                            <a href="@Url.Action(updateAction, "MilestonesUpdatesSuccesses", new { projectId = project.Id, year = applicableYear, month = applicableMonth })" 
+                               class="@GetMonthlyUpdateStatusBadgeClass(monthlyStatus)" 
+                               style="text-decoration: none; cursor: pointer;"
+                               title="Go to monthly update for @(new DateTime(applicableYear, applicableMonth, 1).ToString("MMMM yyyy"))"
+                               aria-label="Go to monthly update">
+                                @monthlyStatus <i class="fas fa-external-link-alt ml-1" style="font-size: 0.75em;"></i>
+                            </a>
+                        </td>
+                        }
+                </tr>
+            }
+        </tbody>
+    </table>
+    </div>
+    @if (showPagination && totalPages > 1)
+    {
+        <div class="p-3 border-top">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    @{
+                        var startIndex = (pageNumber - 1) * pageSize + 1;
+                        var endIndex = Math.Min(pageNumber * pageSize, totalCount);
+                    }
+                    Showing <strong>@startIndex</strong> to <strong>@endIndex</strong> of <strong>@totalCount</strong> @(totalCount == 1 ? "deliverable" : "deliverables")
+                </div>
+                <nav aria-label="Projects pagination">
+                    <ul class="pagination pagination-sm mb-0">
+                        @{
+                            var currentSearch = ViewData["CurrentSearch"] as string;
+                            var currentRagStatus = ViewData["CurrentRagStatus"] as string;
+                            var currentBusinessArea = ViewData["CurrentBusinessArea"] as string;
+                            var currentPhase = ViewData["CurrentPhase"] as string;
+                            var currentFlagship = ViewData["CurrentFlagship"] as string;
+                            var currentPriority = ViewData["CurrentPriority"] as int?;
+                            var currentView = ViewData["CurrentView"] as string;
+                            
+                            // Check if any filter parameters were present in the original request query
+                            // This ensures we preserve all parameters (even empty) so controller doesn't fall back to session
+                            var requestQuery = Context.Request.Query;
+                            var hadSearchParam = requestQuery.ContainsKey("search");
+                            var hadRagStatusParam = requestQuery.ContainsKey("ragStatus");
+                            var hadBusinessAreaParam = requestQuery.ContainsKey("businessArea");
+                            var hadPhaseParam = requestQuery.ContainsKey("phase");
+                            var hadFlagshipParam = requestQuery.ContainsKey("flagship");
+                            var hadPriorityParam = requestQuery.ContainsKey("priority");
+                            var hadViewParam = requestQuery.ContainsKey("view");
+                            var hadAnyFilterParams = hadSearchParam || hadRagStatusParam || hadBusinessAreaParam || 
+                                                    hadPhaseParam || hadFlagshipParam || hadPriorityParam;
+                            
+                            // Build URL query string manually to ensure empty parameters are included
+                            Func<int, string> BuildPaginationUrl = (pageNum) =>
+                            {
+                                var queryParams = new System.Collections.Generic.List<string>
+                                {
+                                    $"page={pageNum}"
+                                };
+                                
+                                // Always include view if it was in the original request or is set
+                                if (hadViewParam && !string.IsNullOrEmpty(currentView))
+                                    queryParams.Add($"view={Uri.EscapeDataString(currentView)}");
+                                else if (!string.IsNullOrEmpty(currentView))
+                                    queryParams.Add($"view={Uri.EscapeDataString(currentView)}");
+                                
+                                // If any filter parameters were in the original request, preserve all of them
+                                // (even empty ones) to prevent controller from falling back to session
+                                if (hadAnyFilterParams)
+                                {
+                                    queryParams.Add($"search={Uri.EscapeDataString(currentSearch ?? "")}");
+                                    queryParams.Add($"ragStatus={Uri.EscapeDataString(currentRagStatus ?? "")}");
+                                    queryParams.Add($"businessArea={Uri.EscapeDataString(currentBusinessArea ?? "")}");
+                                    queryParams.Add($"phase={Uri.EscapeDataString(currentPhase ?? "")}");
+                                    queryParams.Add($"flagship={Uri.EscapeDataString(currentFlagship ?? "")}");
+                                    if (currentPriority.HasValue)
+                                        queryParams.Add($"priority={currentPriority.Value}");
+                                    else if (hadPriorityParam)
+                                        queryParams.Add("priority=");
+                                }
+                                else
+                                {
+                                    // Only include non-empty values if no filter params were in original request
+                                    if (!string.IsNullOrEmpty(currentSearch))
+                                        queryParams.Add($"search={Uri.EscapeDataString(currentSearch)}");
+                                    if (!string.IsNullOrEmpty(currentRagStatus))
+                                        queryParams.Add($"ragStatus={Uri.EscapeDataString(currentRagStatus)}");
+                                    if (!string.IsNullOrEmpty(currentBusinessArea))
+                                        queryParams.Add($"businessArea={Uri.EscapeDataString(currentBusinessArea)}");
+                                    if (!string.IsNullOrEmpty(currentPhase))
+                                        queryParams.Add($"phase={Uri.EscapeDataString(currentPhase)}");
+                                    if (!string.IsNullOrEmpty(currentFlagship))
+                                        queryParams.Add($"flagship={Uri.EscapeDataString(currentFlagship)}");
+                                    if (currentPriority.HasValue)
+                                        queryParams.Add($"priority={currentPriority.Value}");
+                                }
+                                
+                                var baseUrl = Url.Action("Index", "Project");
+                                return $"{baseUrl}?{string.Join("&", queryParams)}";
+                            };
+                        }
+                        <li class="page-item @(hasPreviousPage ? string.Empty : "disabled")">
+                            <a class="page-link"
+                               href="@BuildPaginationUrl(pageNumber > 1 ? pageNumber - 1 : 1)"
+                               rel="prev">Previous</a>
+                        </li>
+                        @for (var i = 1; i <= totalPages; i++)
+                        {
+                            <li class="page-item @(i == pageNumber ? "active" : string.Empty)">
+                                <a class="page-link"
+                                   href="@BuildPaginationUrl(i)">@i</a>
+                            </li>
+                        }
+                        <li class="page-item @(hasNextPage ? string.Empty : "disabled")">
+                            <a class="page-link"
+                               href="@BuildPaginationUrl(pageNumber < totalPages ? pageNumber + 1 : totalPages)"
+                               rel="next">Next</a>
+                        </li>
+                    </ul>
+                </nav>
+            </div>
+        </div>
+    }
+    else if (!showPagination && Model.Count() > 10)
+    {
+        <div class="p-3 border-top">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    Showing <span id="@(paginationIdPrefix)ShowingStart">1</span> to <span id="@(paginationIdPrefix)ShowingEnd">@Math.Min(10, Model.Count())</span> of <strong id="@(paginationIdPrefix)TotalCount">@Model.Count()</strong> deliverables
+                </div>
+                <ul class="pagination pagination-sm m-0" id="@(paginationIdPrefix)PaginationControls">
+                    <!-- Pagination buttons will be generated by JavaScript -->
+                </ul>
+            </div>
+        </div>
+    }
+</div>

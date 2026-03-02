@@ -38,95 +38,130 @@
     <textarea asp-for="Input.Description" class="form-control @(hasError("Description") ? "form-control--error" : string.Empty)" rows="4"></textarea>
 </div>
 
-<div class="form-row">
-    <div class="form-group col-md-6 @(hasError("StatusId") ? "form-group--error" : string.Empty)">
-        <label asp-for="Input.StatusId">Status</label>
-        <small class="form-text text-muted">Select the current progress of this action.</small>
-        <span asp-validation-for="Input.StatusId" class="form-error-message"></span>
-        <select asp-for="Input.StatusId" class="form-control @(hasError("StatusId") ? "form-control--error" : string.Empty)" asp-items="Model.StatusOptions">
-            <option value="">Select a status</option>
-        </select>
-    </div>
-    <div class="form-group col-md-6 @(hasError("PriorityId") ? "form-group--error" : string.Empty)">
-        <label asp-for="Input.PriorityId">Priority</label>
-        <small class="form-text text-muted">Highlight how urgent or important this action is.</small>
-        <span asp-validation-for="Input.PriorityId" class="form-error-message"></span>
-        <select asp-for="Input.PriorityId" class="form-control @(hasError("PriorityId") ? "form-control--error" : string.Empty)" asp-items="Model.PriorityOptions">
-            <option value="">Select priority</option>
-        </select>
+<div class="form-group @(hasError("StatusId") ? "form-group--error" : string.Empty)">
+    <label asp-for="Input.StatusId">Status</label>
+    <small class="form-text text-muted">Select the current progress of this action.</small>
+    <span asp-validation-for="Input.StatusId" class="form-error-message"></span>
+    <select asp-for="Input.StatusId" class="form-control @(hasError("StatusId") ? "form-control--error" : string.Empty)" asp-items="Model.StatusOptions" id="action-status-select">
+        <option value="">Select a status</option>
+    </select>
+</div>
+
+<div class="form-group @(hasError("PriorityId") ? "form-group--error" : string.Empty)">
+    <label asp-for="Input.PriorityId">Priority</label>
+    <small class="form-text text-muted">Highlight how urgent or important this action is.</small>
+    <span asp-validation-for="Input.PriorityId" class="form-error-message"></span>
+    <select asp-for="Input.PriorityId" class="form-control @(hasError("PriorityId") ? "form-control--error" : string.Empty)" asp-items="Model.PriorityOptions">
+        <option value="">Select priority</option>
+    </select>
+</div>
+
+<div class="form-group @(hasError("AssignedToEmail") ? "form-group--error" : string.Empty)">
+    <label for="actionAssignedToSearch">Assigned to</label>
+    <small class="form-text text-muted">Search the Entra directory. Leave blank if unassigned.</small>
+    <span asp-validation-for="Input.AssignedToEmail" class="form-error-message"></span>
+    <div class="user-picker"
+         data-user-picker
+         data-search-url="/api/users/search"
+         data-select-url="/api/users/select">
+        <div class="position-relative">
+            <input type="text"
+                   class="form-control js-user-picker-input @(hasError("AssignedToEmail") ? "form-control--error" : string.Empty)"
+                   id="actionAssignedToSearch"
+                   autocomplete="off"
+                   placeholder="e.g. Alex Smith or alex.smith@education.gov.uk"
+                   value="@(Model.Input.AssignedToName ?? string.Empty)" />
+            <span class="user-picker__spinner js-user-picker-spinner" aria-hidden="true">Searching…</span>
+            <div class="user-picker__results js-user-picker-results" role="listbox" aria-live="polite"></div>
+        </div>
+        <p class="form-text text-muted js-user-picker-message"></p>
+        <input asp-for="Input.AssignedToUserId" type="hidden" class="js-user-picker-value" />
+        <input asp-for="Input.AssignedToName" type="hidden" class="js-user-picker-name" />
+        <input asp-for="Input.AssignedToEmail" type="hidden" class="js-user-picker-email" />
+        <div class="user-picker__selected js-user-picker-summary" data-default-text="No one assigned.">
+            @if (!string.IsNullOrWhiteSpace(Model.Input.AssignedToName))
+            {
+                <div class="user-picker__selected-card">
+                    <div class="user-picker__selected-name">@Model.Input.AssignedToName</div>
+                    @if (!string.IsNullOrWhiteSpace(Model.Input.AssignedToEmail))
+                    {
+                        <div class="user-picker__selected-meta">@Model.Input.AssignedToEmail</div>
+                    }
+                    <button type="button" class="btn btn-link btn-sm js-user-picker-clear">Remove</button>
+                </div>
+            }
+            else
+            {
+                <span class="text-muted">No one assigned.</span>
+            }
+        </div>
     </div>
 </div>
 
-<div class="form-row">
-    <div class="form-group col-md-4">
-        <label asp-for="Input.ActionTypeId">Action type</label>
-        <select asp-for="Input.ActionTypeId" class="form-control" asp-items="Model.ActionTypeOptions">
-            <option value="">Select type</option>
-        </select>
-    </div>
-    <div class="form-group col-md-4">
-        <label asp-for="Input.CategoryId">Category</label>
-        <select asp-for="Input.CategoryId" class="form-control" asp-items="Model.ActionCategoryOptions">
-            <option value="">Select category</option>
-        </select>
-    </div>
-    <div class="form-group col-md-4">
-        <label asp-for="Input.ImpactLevelId">Impact level</label>
-        <select asp-for="Input.ImpactLevelId" class="form-control" asp-items="Model.ImpactLevelOptions">
-            <option value="">Select impact</option>
-        </select>
-    </div>
+<div class="form-group">
+    <label asp-for="Input.ActionTypeId">Action type</label>
+    <select asp-for="Input.ActionTypeId" class="form-control" asp-items="Model.ActionTypeOptions">
+        <option value="">Select type</option>
+    </select>
 </div>
 
-<div class="form-row">
-    <div class="form-group col-md-4">
-        <label asp-for="Input.StartDate">Start date</label>
-        <input asp-for="Input.StartDate" class="form-control" type="date" />
-    </div>
-    <div class="form-group col-md-4">
-        <label asp-for="Input.DueDate">Due date</label>
-        <input asp-for="Input.DueDate" class="form-control" type="date" />
-    </div>
-    <div class="form-group col-md-4">
-        <label asp-for="Input.CompletedDate">Closed date</label>
-        <input asp-for="Input.CompletedDate" class="form-control" type="date" />
-    </div>
+<div class="form-group">
+    <label asp-for="Input.CategoryId">Category</label>
+    <select asp-for="Input.CategoryId" class="form-control" asp-items="Model.ActionCategoryOptions">
+        <option value="">Select category</option>
+    </select>
 </div>
 
-<div class="form-row">
-    <div class="form-group col-md-4">
-        <label asp-for="Input.ProgressPercent">Progress (%)</label>
-        <small class="form-text text-muted">0 = not started, 100 = complete.</small>
-        <input asp-for="Input.ProgressPercent" class="form-control" type="number" min="0" max="100" />
-    </div>
-    <div class="form-group col-md-4">
-        <label asp-for="Input.RagRating">RAG</label>
-        <select asp-for="Input.RagRating" class="form-control">
-            <option value="">Not set</option>
-            <option value="Red">Red</option>
-            <option value="Amber">Amber</option>
-            <option value="Green">Green</option>
-        </select>
-    </div>
-    <div class="form-group col-md-4">
-        <label asp-for="Input.TeamName">Team</label>
-        <input asp-for="Input.TeamName" class="form-control" />
-    </div>
+<div class="form-group">
+    <label asp-for="Input.ImpactLevelId">Impact level</label>
+    <select asp-for="Input.ImpactLevelId" class="form-control" asp-items="Model.ImpactLevelOptions">
+        <option value="">Select impact</option>
+    </select>
 </div>
 
-<div class="form-row">
-    <div class="form-group col-md-6">
-        <label asp-for="Input.ReminderFrequencyId">Reminder frequency</label>
-        <select asp-for="Input.ReminderFrequencyId" class="form-control" asp-items="Model.ReminderFrequencyOptions">
-            <option value="">No reminders</option>
-        </select>
-    </div>
-    <div class="form-group col-md-6">
-        <label asp-for="Input.EscalationThresholdId">Escalation threshold</label>
-        <select asp-for="Input.EscalationThresholdId" class="form-control" asp-items="Model.EscalationThresholdOptions">
-            <option value="">No escalation</option>
-        </select>
-    </div>
+<div class="form-group">
+    <label asp-for="Input.StartDate">Start date</label>
+    <input asp-for="Input.StartDate" class="form-control" type="date" />
+</div>
+
+<div class="form-group">
+    <label asp-for="Input.DueDate">Due date</label>
+    <input asp-for="Input.DueDate" class="form-control" type="date" />
+</div>
+
+<div class="form-group js-closure-fields" style="display: none;">
+    <label asp-for="Input.CompletedDate">Closed date</label>
+    <input asp-for="Input.CompletedDate" class="form-control" type="date" />
+</div>
+
+<div class="form-group">
+    <label asp-for="Input.ProgressPercent">Progress (%)</label>
+    <small class="form-text text-muted">0 = not started, 100 = complete.</small>
+    <input asp-for="Input.ProgressPercent" class="form-control" type="number" min="0" max="100" />
+</div>
+
+<div class="form-group">
+    <label asp-for="Input.RagRating">RAG</label>
+    <select asp-for="Input.RagRating" class="form-control">
+        <option value="">Not set</option>
+        <option value="Red">Red</option>
+        <option value="Amber">Amber</option>
+        <option value="Green">Green</option>
+    </select>
+</div>
+
+<div class="form-group">
+    <label asp-for="Input.ReminderFrequencyId">Reminder frequency</label>
+    <select asp-for="Input.ReminderFrequencyId" class="form-control" asp-items="Model.ReminderFrequencyOptions">
+        <option value="">No reminders</option>
+    </select>
+</div>
+
+<div class="form-group">
+    <label asp-for="Input.EscalationThresholdId">Escalation threshold</label>
+    <select asp-for="Input.EscalationThresholdId" class="form-control" asp-items="Model.EscalationThresholdOptions">
+        <option value="">No escalation</option>
+    </select>
 </div>
 
 <div class="form-group">
@@ -138,43 +173,75 @@
 
 <div class="form-group">
     <div class="form-check">
-        <input class="form-check-input" asp-for="Input.Blocked" />
+        <input class="form-check-input" asp-for="Input.Blocked" id="action-blocked-checkbox" />
         <label class="form-check-label" asp-for="Input.Blocked">Blocked</label>
     </div>
-    <label asp-for="Input.BlockedReason" class="mt-2">Blocked reason</label>
+</div>
+
+<div class="form-group js-blocked-reason-field" style="display: none;">
+    <label asp-for="Input.BlockedReason">Blocked reason</label>
     <textarea asp-for="Input.BlockedReason" class="form-control" rows="2"></textarea>
 </div>
 
-<div class="form-group">
-    <label asp-for="Input.EvidenceTypeId">Evidence</label>
-    <div class="form-row">
-        <div class="col-md-4">
-            <select asp-for="Input.EvidenceTypeId" class="form-control" asp-items="Model.EvidenceTypeOptions">
-                <option value="">Select type</option>
-            </select>
-        </div>
-        <div class="col-md-4">
-            <input asp-for="Input.EvidenceUrl" class="form-control" placeholder="Link to evidence" />
-        </div>
-        <div class="col-md-4">
-            <input asp-for="Input.EvidenceSummary" class="form-control" placeholder="Short summary" />
-        </div>
-    </div>
-    <div class="form-check mt-2">
-        <input class="form-check-input" asp-for="Input.VerificationRequired" />
-        <label class="form-check-label" asp-for="Input.VerificationRequired">Verification required</label>
-    </div>
-    <label asp-for="Input.VerificationNotes" class="mt-2">Verification notes</label>
-    <textarea asp-for="Input.VerificationNotes" class="form-control" rows="2"></textarea>
+<div class="form-group js-closure-fields" style="display: none;">
+    <label asp-for="Input.ClosureNotes">Closure / cancellation notes</label>
+    <small class="form-text text-muted">Provide details about why this action was completed or cancelled.</small>
+    <textarea asp-for="Input.ClosureNotes" class="form-control" rows="3"></textarea>
 </div>
 
 <div class="form-group">
-    <label asp-for="Input.Tags">Tags</label>
-    <small class="form-text text-muted">Enter comma-separated tags (e.g. accessibility, finance, sprint-5).</small>
-    <input asp-for="Input.Tags" class="form-control" />
+    <label>What risks does this action mitigate?</label>
+    <small class="form-text text-muted">Select one or more risks that this action helps to mitigate.</small>
+    <select asp-for="Input.LinkedRiskIds"
+            class="form-control js-linked-entity-select"
+            data-search-url="@Url.Action("SearchRisksForAction", "Project", new { projectId = Model.Input.ProjectId })"
+            data-project-id="@Model.Input.ProjectId"
+            data-placeholder="Search risks"
+            multiple>
+        @foreach (var option in Model.RiskOptions)
+        {
+            <option value="@option.Value" selected="@option.Selected">@option.Text</option>
+        }
+    </select>
+    <span asp-validation-for="Input.LinkedRiskIds" class="form-error-message"></span>
+</div>
+
+<div class="form-group">
+    <label>What issues does this action resolve?</label>
+    <small class="form-text text-muted">Select one or more issues that this action helps to resolve.</small>
+    <select asp-for="Input.LinkedIssueIds"
+            class="form-control js-linked-entity-select"
+            data-search-url="@Url.Action("SearchIssuesForAction", "Project", new { projectId = Model.Input.ProjectId })"
+            data-project-id="@Model.Input.ProjectId"
+            data-placeholder="Search issues"
+            multiple>
+        @foreach (var option in Model.IssueOptions)
+        {
+            <option value="@option.Value" selected="@option.Selected">@option.Text</option>
+        }
+    </select>
+    <span asp-validation-for="Input.LinkedIssueIds" class="form-error-message"></span>
+</div>
+
+<div class="form-group">
+    <label>Linked decisions</label>
+    <small class="form-text text-muted">Start typing to find decisions from this project and others.</small>
+    <select asp-for="Input.LinkedDecisionIds"
+            class="form-control js-linked-entity-select"
+            data-search-url="@Url.Action("SearchDecisionsForAction", "Project", new { projectId = Model.Input.ProjectId })"
+            data-project-id="@Model.Input.ProjectId"
+            data-placeholder="Search decisions"
+            multiple>
+        @foreach (var option in Model.DecisionOptions ?? new List<SelectListItem>())
+        {
+            <option value="@option.Value" selected="@option.Selected">@option.Text</option>
+        }
+    </select>
+    <span asp-validation-for="Input.LinkedDecisionIds" class="form-error-message"></span>
 </div>
 
 <input asp-for="Input.ProjectId" type="hidden" />
 <input asp-for="Input.ActionId" type="hidden" />
 <input asp-for="Input.InitiatingEntityType" type="hidden" />
 <input asp-for="Input.InitiatingEntityId" type="hidden" />
+<input asp-for="Input.DecisionId" type="hidden" />

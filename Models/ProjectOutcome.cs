@@ -28,6 +28,11 @@ public class ProjectOutcome
 
     public string? ConfidenceExplanation { get; set; }
 
+    [MaxLength(20)]
+    public string? AchievementStatus { get; set; } = "In progress"; // In progress, Yes, No
+
+    public string? AchievementNotes { get; set; }
+
     public int SortOrder { get; set; } = 0;
 
     [MaxLength(320)]

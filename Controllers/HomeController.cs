@@ -9,6 +9,8 @@ using Compass.Helpers;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Configuration;
 
 namespace Compass.Controllers;
 
@@ -19,23 +21,32 @@ public class HomeController : Controller
     private readonly ICmsApiService _cmsApiService;
     private readonly IProductsApiService _productsApiService;
     private readonly IReturnStatusService _returnStatusService;
+    private readonly IMonthlyUpdateService _monthlyUpdateService;
     private readonly CompassDbContext _context;
+    private readonly IWebHostEnvironment _environment;
+    private readonly IConfiguration _configuration;
 
     public HomeController(
         ILogger<HomeController> logger, 
         ICmsApiService cmsApiService,
         IProductsApiService productsApiService,
         IReturnStatusService returnStatusService,
-        CompassDbContext context)
+        IMonthlyUpdateService monthlyUpdateService,
+        CompassDbContext context,
+        IWebHostEnvironment environment,
+        IConfiguration configuration)
     {
         _logger = logger;
         _cmsApiService = cmsApiService;
         _productsApiService = productsApiService;
         _returnStatusService = returnStatusService;
+        _monthlyUpdateService = monthlyUpdateService;
         _context = context;
+        _environment = environment;
+        _configuration = configuration;
     }
 
-    public async Task<IActionResult> Index()
+    public async Task<IActionResult> Index(string? testRole = null, int? testUserId = null)
     {
         try
         {
@@ -58,9 +69,77 @@ public class HomeController : Controller
                 return View(new HomeDashboardViewModel());
             }
 
-            var preference = await GetOrCreateDashboardPreference(currentUser);
+            // Handle test role switching (development only)
+            if (!string.IsNullOrEmpty(testRole) && _environment.IsDevelopment())
+            {
+                if (testRole == "clear")
+                {
+                    Response.Cookies.Delete("TestDashboardRole");
+                }
+                else
+                {
+                    Response.Cookies.Append("TestDashboardRole", testRole, new CookieOptions
+                    {
+                        HttpOnly = true,
+                        Secure = false,
+                        SameSite = SameSiteMode.Lax,
+                        Expires = DateTimeOffset.UtcNow.AddDays(1)
+                    });
+                }
+                return RedirectToAction(nameof(Index));
+            }
 
-            var viewModel = await BuildDashboardViewModel(currentUser, userEmail, preference);
+            // Handle test user switching (development only)
+            if (testUserId.HasValue && _environment.IsDevelopment())
+            {
+                if (testUserId.Value == 0)
+                {
+                    // Clear test user
+                    Response.Cookies.Delete("TestDashboardUserId");
+                }
+                else
+                {
+                    // Verify the test user exists
+                    var testUser = await _context.Users.FindAsync(testUserId.Value);
+                    if (testUser != null)
+                    {
+                        Response.Cookies.Append("TestDashboardUserId", testUserId.Value.ToString(), new CookieOptions
+                        {
+                            HttpOnly = true,
+                            Secure = false,
+                            SameSite = SameSiteMode.Lax,
+                            Expires = DateTimeOffset.UtcNow.AddDays(1)
+                        });
+                    }
+                    else
+                    {
+                        TempData["ErrorMessage"] = "Test user not found.";
+                    }
+                }
+                return RedirectToAction(nameof(Index));
+            }
+
+            // Check for test user override (development only)
+            User? effectiveUser = currentUser;
+            string effectiveUserEmail = userEmail;
+            if (_environment.IsDevelopment() && Request.Cookies.TryGetValue("TestDashboardUserId", out var testUserIdValue))
+            {
+                if (int.TryParse(testUserIdValue, out var testUserIdInt) && testUserIdInt > 0)
+                {
+                    var testUser = await _context.Users.FindAsync(testUserIdInt);
+                    if (testUser != null)
+                    {
+                        effectiveUser = testUser;
+                        effectiveUserEmail = testUser.Email;
+                        _logger.LogInformation("Using test user: {TestUserEmail} (ID: {TestUserId}) instead of {ActualUserEmail}", 
+                            testUser.Email, testUserIdInt, userEmail);
+                    }
+                }
+            }
+
+            var preference = await GetOrCreateDashboardPreference(effectiveUser);
+
+            var viewModel = await BuildDashboardViewModel(effectiveUser, effectiveUserEmail, preference);
             return View(viewModel);
         }
         catch (Exception ex)
@@ -254,10 +333,42 @@ public class HomeController : Controller
     private async Task<HomeDashboardViewModel> BuildDashboardViewModel(User currentUser, string userEmail, UserPreference preference)
     {
         var myProjects = await _context.Projects
-            .Where(p => !p.IsDeleted && (
+            .Where(p => !p.IsDeleted && p.Status == "Active" && (
                 p.ProjectContacts.Any(pc => pc.Email.ToLower() == userEmail.ToLower()) ||
-                (p.PrimaryContactUser != null && p.PrimaryContactUser.Email.ToLower() == userEmail.ToLower())
+                (p.PrimaryContactUser != null && p.PrimaryContactUser.Email.ToLower() == userEmail.ToLower()) ||
+                p.SeniorResponsibleOfficers.Any(sro => sro.User != null && sro.User.Email.ToLower() == userEmail.ToLower()) ||
+                p.ServiceOwners.Any(so => so.User != null && so.User.Email.ToLower() == userEmail.ToLower()) ||
+                p.PmoContacts.Any(pmo => pmo.User != null && pmo.User.Email.ToLower() == userEmail.ToLower())
             ))
+            .Include(p => p.ProjectContacts)
+                .ThenInclude(pc => pc.User)
+            .Include(p => p.PrimaryContactUser)
+            .Include(p => p.SeniorResponsibleOfficers)
+                .ThenInclude(sro => sro.User)
+            .Include(p => p.ServiceOwners)
+                .ThenInclude(so => so.User)
+            .Include(p => p.PmoContacts)
+                .ThenInclude(pmo => pmo.User)
+            .Include(p => p.DeliveryPriority)
+            .Include(p => p.Milestones)
+            .Include(p => p.Issues)
+            .Include(p => p.Risks)
+            .Include(p => p.Actions)
+            .Include(p => p.Decisions)
+            .Include(p => p.ProjectProducts)
+            .Include(p => p.Successes)
+            .Include(p => p.MonthlyUpdates)
+            .OrderBy(p => p.Title)
+            .ToListAsync();
+
+        // Fetch watched projects
+        var watchedProjectIds = await _context.ProjectWatchlists
+            .Where(w => w.UserId == currentUser.Id)
+            .Select(w => w.ProjectId)
+            .ToListAsync();
+
+        var watchedProjects = await _context.Projects
+            .Where(p => !p.IsDeleted && watchedProjectIds.Contains(p.Id))
             .Include(p => p.ProjectContacts)
             .Include(p => p.PrimaryContactUser)
             .Include(p => p.DeliveryPriority)
@@ -271,10 +382,20 @@ public class HomeController : Controller
             .OrderBy(p => p.Title)
             .ToListAsync();
 
-        var allProducts = await _productsApiService.GetProductsAsync();
-        var myProducts = allProducts
-            .Where(p => p.ProductContacts?.Any(pc =>
-                pc.UsersPermissionsUser?.Email?.Equals(userEmail, StringComparison.OrdinalIgnoreCase) == true) == true)
+        // Fetch user's products - from service_owner, product_manager, delivery_manager, and reporting_user (same approach as ProductReportingController)
+        var productsByServiceOwner = await _productsApiService.GetProductsByServiceOwnerAsync(userEmail);
+        var productsByProductManager = await _productsApiService.GetProductsByProductManagerAsync(userEmail);
+        var productsByDeliveryManager = await _productsApiService.GetProductsByDeliveryManagerAsync(userEmail);
+        var productsByReportingUser = await _productsApiService.GetProductsByReportingUserAsync(userEmail);
+        
+        // Combine and deduplicate products (by FipsId)
+        var myProducts = productsByServiceOwner
+            .Concat(productsByProductManager)
+            .Concat(productsByDeliveryManager)
+            .Concat(productsByReportingUser)
+            .GroupBy(p => p.FipsId)
+            .Where(g => !string.IsNullOrEmpty(g.Key))
+            .Select(g => g.First())
             .OrderBy(p => p.Title)
             .ToList();
 
@@ -288,8 +409,8 @@ public class HomeController : Controller
         var highPriorityIssues = allActiveIssues.Where(i => i.Severity == "high" || i.Severity == "critical").ToList();
         var openIssues = allActiveIssues.Where(i => i.Status != "resolved" && i.Status != "closed").ToList();
 
-        var redProjects = myProjects.Where(p => p.RagStatus == "Red").ToList();
-        var amberRedProjects = myProjects.Where(p => p.RagStatus == "Amber-Red").ToList();
+        var redProjects = myProjects.Where(p => p.RagStatusLookup != null && p.RagStatusLookup.Name == "Red").ToList();
+        var amberRedProjects = myProjects.Where(p => p.RagStatusLookup != null && p.RagStatusLookup.Name == "Amber-Red").ToList();
         var atRiskProjects = redProjects.Concat(amberRedProjects).ToList();
 
         var thirtyDaysAgo = DateTime.UtcNow.AddDays(-30);
@@ -306,25 +427,105 @@ public class HomeController : Controller
             .ToList();
 
         var now = DateTime.UtcNow;
-        var currentYear = now.Month == 1 ? now.Year - 1 : now.Year;
-        var currentMonth = now.Month == 1 ? 12 : now.Month - 1;
+        // Use same applicable reporting period logic as your-work /api/project/your-work (and _ProjectTable)
+        var reportYear = now.Year;
+        var reportMonth = now.Month;
+        var currentPeriodDueDate = _monthlyUpdateService.GetMonthlyUpdateDueDate(reportYear, reportMonth);
+        var daysUntilCurrentPeriodDueDate = (currentPeriodDueDate - now).Days;
+        var applicableYear = daysUntilCurrentPeriodDueDate <= 10 ? reportYear : (reportMonth == 1 ? reportYear - 1 : reportYear);
+        var applicableMonth = daysUntilCurrentPeriodDueDate <= 10 ? reportMonth : (reportMonth == 1 ? 12 : reportMonth - 1);
 
         var productsNeedingReturns = new List<(ProductDto Product, ReturnStatus Status, DateTime DueDate)>();
-        foreach (var product in myProducts.Where(p => !string.IsNullOrEmpty(p.FipsId)))
+        var enableMonthlyPerformanceReporting = _configuration.GetValue<bool>("FeatureFlags:EnableMonthlyPerformanceReporting", true);
+        
+        if (enableMonthlyPerformanceReporting)
         {
-            var productReturn = await _context.ProductReturns
-                .Where(pr => pr.FipsId == product.FipsId && pr.Year == currentYear && pr.Month == currentMonth)
-                .FirstOrDefaultAsync();
-
-            var status = _returnStatusService.CalculateReturnStatus(
-                currentYear,
-                currentMonth,
-                productReturn?.SubmittedDate);
-
-            if (status == ReturnStatus.Due || status == ReturnStatus.Late)
+            foreach (var product in myProducts.Where(p => !string.IsNullOrEmpty(p.FipsId)))
             {
-                var dueDate = _returnStatusService.GetReturnDueDate(currentYear, currentMonth);
-                productsNeedingReturns.Add((product, status, dueDate));
+                var productReturn = await _context.ProductReturns
+                    .Where(pr => pr.FipsId == product.FipsId && pr.Year == applicableYear && pr.Month == applicableMonth)
+                    .FirstOrDefaultAsync();
+
+                var status = _returnStatusService.CalculateReturnStatus(
+                    applicableYear,
+                    applicableMonth,
+                    productReturn?.SubmittedDate);
+
+                if (status == ReturnStatus.Due || status == ReturnStatus.Late)
+                {
+                    var dueDate = _returnStatusService.GetReturnDueDate(applicableYear, applicableMonth);
+                    productsNeedingReturns.Add((product, status, dueDate));
+                }
+            }
+        }
+
+        // Calculate projects needing monthly updates (same applicable period as your-work)
+        var projectsNeedingMonthlyUpdates = new List<(Project Project, UpdateSubmissionStatus Status, DateTime DueDate)>();
+        foreach (var project in myProjects)
+        {
+            var update = project.MonthlyUpdates?.FirstOrDefault(u => u.Year == applicableYear && u.Month == applicableMonth);
+            var updateStatus = _monthlyUpdateService.CalculateUpdateStatus(applicableYear, applicableMonth, update?.SubmittedAt);
+            
+            if (updateStatus == UpdateSubmissionStatus.Due || updateStatus == UpdateSubmissionStatus.Late)
+            {
+                var dueDate = _monthlyUpdateService.GetMonthlyUpdateDueDate(applicableYear, applicableMonth);
+                projectsNeedingMonthlyUpdates.Add((project, updateStatus, dueDate));
+            }
+        }
+
+        // Calculate products needing commission reporting
+        var productsNeedingCommissionReporting = new List<(ProductDto Product, Commission Commission, CommissionSubmissionStatus Status, DateTime DueDate)>();
+        var activeCommissions = await _context.Commissions
+            .Where(c => c.IsActive && c.OpenDate <= now)
+            .OrderByDescending(c => c.DueDate)
+            .ToListAsync();
+
+        foreach (var commission in activeCommissions)
+        {
+            // Check if commission is still open (not past due date, or past due but not submitted)
+            var isOpen = now >= commission.OpenDate;
+            var isPastDue = now > commission.DueDate;
+
+            // Get user's products for this commission
+            var userProductDocumentIds = myProducts
+                .Where(p => !string.IsNullOrEmpty(p.DocumentId) && 
+                           p.State != null && 
+                           !p.State.Equals("Decommissioned", StringComparison.OrdinalIgnoreCase) &&
+                           !p.State.Equals("Decommissioning", StringComparison.OrdinalIgnoreCase) &&
+                           p.PublishedAt.HasValue)
+                .Select(p => p.DocumentId!)
+                .ToList();
+
+            if (!userProductDocumentIds.Any())
+                continue;
+
+            // Get existing submissions for user's products
+            var existingSubmissions = await _context.CommissionSubmissions
+                .Where(cs => cs.CommissionId == commission.Id && 
+                            userProductDocumentIds.Contains(cs.ProductDocumentId))
+                .ToDictionaryAsync(cs => cs.ProductDocumentId, cs => cs);
+
+            // Check each user product
+            foreach (var product in myProducts.Where(p => userProductDocumentIds.Contains(p.DocumentId ?? "")))
+            {
+                var documentId = product.DocumentId ?? "";
+                if (string.IsNullOrEmpty(documentId))
+                    continue;
+
+                var submission = existingSubmissions.GetValueOrDefault(documentId);
+                var status = submission?.Status ?? CommissionSubmissionStatus.NotStarted;
+
+                // Only include if not submitted and (open or past due)
+                if (status != CommissionSubmissionStatus.Submitted && (isOpen || isPastDue))
+                {
+                    var finalStatus = isPastDue && status != CommissionSubmissionStatus.Submitted
+                        ? CommissionSubmissionStatus.Late
+                        : status == CommissionSubmissionStatus.NotStarted && isOpen
+                        ? CommissionSubmissionStatus.NotStarted
+                        : status;
+
+                    productsNeedingCommissionReporting.Add((product, commission, finalStatus, commission.DueDate));
+                }
             }
         }
 
@@ -369,6 +570,11 @@ public class HomeController : Controller
             })
             .ToList();
 
+        // Get watched deliverables count
+        var watchedDeliverablesCount = await _context.ProjectWatchlists
+            .Where(w => w.UserId == currentUser.Id)
+            .CountAsync();
+
         var metrics = new DashboardMetrics
         {
             TasksDue = priorityTasks.Count,
@@ -377,8 +583,19 @@ public class HomeController : Controller
             ProductCount = myProducts.Count,
             UpcomingMilestones = milestonesDueThisWeek.Count,
             OpenIssues = openIssues.Count,
-            UnreviewedRisks = unmonitoredRisks.Count
+            UnreviewedRisks = unmonitoredRisks.Count,
+            WatchedDeliverables = watchedDeliverablesCount
         };
+
+        // Check for test role override (development only)
+        LeadershipRoleTier? testRoleOverride = null;
+        if (_environment.IsDevelopment() && Request.Cookies.TryGetValue("TestDashboardRole", out var testRoleValue))
+        {
+            if (Enum.TryParse<LeadershipRoleTier>(testRoleValue, true, out var parsedRole))
+            {
+                testRoleOverride = parsedRole;
+            }
+        }
 
         var leadershipAssignments = await _context.UserBusinessAreaRoleAssignments
             .Where(a => a.UserId == currentUser.Id)
@@ -392,9 +609,28 @@ public class HomeController : Controller
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-        var highestRole = leadershipAssignments.Any()
+        // Use test role override if available, otherwise use actual role
+        var highestRole = testRoleOverride ?? (leadershipAssignments.Any()
             ? leadershipAssignments.Max(a => a.Role)
-            : (LeadershipRoleTier?)null;
+            : (LeadershipRoleTier?)null);
+        
+        // If test role is set, override business areas for business area leader roles
+        if (testRoleOverride.HasValue && 
+            (testRoleOverride == LeadershipRoleTier.DeputyDirectorOrSro || 
+             testRoleOverride == LeadershipRoleTier.HeadOfProfession ||
+             testRoleOverride == LeadershipRoleTier.PortfolioLead))
+        {
+            // For testing, use all business areas if none are assigned
+            if (!leadershipBusinessAreas.Any())
+            {
+                leadershipBusinessAreas = await _context.Projects
+                    .Where(p => !p.IsDeleted && p.BusinessAreaLookup != null && !string.IsNullOrWhiteSpace(p.BusinessAreaLookup.Name))
+                    .Select(p => p.BusinessAreaLookup!.Name)
+                    .Distinct()
+                    .Take(3)
+                    .ToListAsync();
+            }
+        }
 
         var leadershipProjects = new List<Project>();
         var leadershipMetrics = new DashboardMetrics();
@@ -437,8 +673,8 @@ public class HomeController : Controller
                     .ToList();
 
                 enterpriseAtRiskProjects = allProjects
-                    .Where(p => string.Equals(p.RagStatus, "Red", StringComparison.OrdinalIgnoreCase) ||
-                                string.Equals(p.RagStatus, "Amber-Red", StringComparison.OrdinalIgnoreCase))
+                    .Where(p => (p.RagStatusLookup != null && string.Equals(p.RagStatusLookup.Name, "Red", StringComparison.OrdinalIgnoreCase)) ||
+                                (p.RagStatusLookup != null && string.Equals(p.RagStatusLookup.Name, "Amber-Red", StringComparison.OrdinalIgnoreCase)))
                     .ToList();
 
                 enterpriseMetrics = new EnterpriseLeadershipMetrics
@@ -470,6 +706,7 @@ public class HomeController : Controller
                 enterpriseMetrics.ActivePriorityOutcomesCount = priorityOutcomes.Count;
             }
             else if (highestRole == LeadershipRoleTier.DeputyDirectorOrSro || 
+                     highestRole == LeadershipRoleTier.HeadOfProfession ||
                      highestRole == LeadershipRoleTier.PortfolioLead)
             {
                 // Business area specific view for Deputy Director and G6
@@ -481,8 +718,10 @@ public class HomeController : Controller
 
                     leadershipProjects = await _context.Projects
                         .Where(p => !p.IsDeleted
-                                    && !string.IsNullOrWhiteSpace(p.BusinessArea)
-                                    && normalizedAreas.Contains(p.BusinessArea!.ToLower()))
+                                    && p.BusinessAreaLookup != null
+                                    && !string.IsNullOrWhiteSpace(p.BusinessAreaLookup.Name)
+                                    && normalizedAreas.Contains(p.BusinessAreaLookup.Name.ToLower()))
+                        .Include(p => p.BusinessAreaLookup)
                         .Include(p => p.Milestones.Where(m => !m.IsDeleted))
                         .Include(p => p.Issues.Where(i => !i.IsDeleted))
                         .Include(p => p.Risks.Where(r => !r.IsDeleted))
@@ -491,8 +730,15 @@ public class HomeController : Controller
                         .ToListAsync();
 
                     leadershipMetrics = BuildLeadershipMetrics(leadershipProjects);
+                    leadershipMetrics.WatchedDeliverables = watchedDeliverablesCount;
                 }
             }
+        }
+        
+        // Set watched deliverables count for leadership metrics if not already set
+        if (leadershipMetrics != null && leadershipMetrics.WatchedDeliverables == 0)
+        {
+            leadershipMetrics.WatchedDeliverables = watchedDeliverablesCount;
         }
 
         var sectionConfig = new DashboardSectionConfig
@@ -507,7 +753,9 @@ public class HomeController : Controller
             DashboardFocus = preference.DashboardFocus
         };
 
-        var firstName = ExtractFirstName(currentUser.Name);
+        var firstName = !string.IsNullOrWhiteSpace(currentUser.FirstName) 
+            ? currentUser.FirstName 
+            : ExtractFirstName(currentUser.Name);
 
         var blockDefinitions = DashboardLayoutHelper.GetBlockCatalog();
         var blockInstances = DashboardLayoutHelper.ParseLayout(preference.DashboardLayout, blockDefinitions);
@@ -523,9 +771,30 @@ public class HomeController : Controller
             await _context.SaveChangesAsync();
         }
 
+        // Get DDT Standards for the user (only published standards)
+        var myOwnedStandards = await _context.DdtStandards
+            .Where(s => !s.IsDeleted && s.IsPublished && s.Owners.Any(o => o.UserId == currentUser.Id))
+            .Include(s => s.Owners).ThenInclude(o => o.User)
+            .Include(s => s.Categories).ThenInclude(c => c.Category)
+            .OrderByDescending(s => s.UpdatedAt)
+            .ToListAsync();
+
+        var myContactStandards = await _context.DdtStandards
+            .Where(s => !s.IsDeleted && s.IsPublished && s.Contacts.Any(c => c.UserId == currentUser.Id))
+            .Include(s => s.Contacts).ThenInclude(c => c.User)
+            .Include(s => s.Categories).ThenInclude(c => c.Category)
+            .OrderByDescending(s => s.UpdatedAt)
+            .ToListAsync();
+
+        var myDdtStandards = myOwnedStandards
+            .Union(myContactStandards)
+            .GroupBy(s => s.Id)
+            .Select(g => g.First())
+            .ToList();
+
         _logger.LogInformation(
-            "Dashboard VM built for {Email}: {Projects} projects, {Products} products, {Milestones} milestones, {Issues} issues, {Actions} assigned actions",
-            userEmail, myProjects.Count, myProducts.Count, allActiveMilestones.Count, allActiveIssues.Count, assignedActions.Count);
+            "Dashboard VM built for {Email}: {Projects} projects, {Products} products, {Milestones} milestones, {Issues} issues, {Actions} assigned actions, {Standards} DDT standards",
+            userEmail, myProjects.Count, myProducts.Count, allActiveMilestones.Count, allActiveIssues.Count, assignedActions.Count, myDdtStandards.Count);
 
         return new HomeDashboardViewModel
         {
@@ -541,6 +810,7 @@ public class HomeController : Controller
             BlockDefinitions = blockDefinitions,
             BlockInstances = blockInstances,
             MyProjects = myProjects,
+            WatchedProjects = watchedProjects,
             OversightProjects = leadershipProjects,
             MyProducts = myProducts,
             MilestonesDueThisWeek = milestonesDueThisWeek,
@@ -552,13 +822,18 @@ public class HomeController : Controller
             ProjectsNeedingPathToGreen = projectsNeedingPathToGreen,
             RecentSuccesses = recentSuccesses,
             ProductsNeedingReturns = productsNeedingReturns,
+            ProjectsNeedingMonthlyUpdates = projectsNeedingMonthlyUpdates,
+            ProductsNeedingCommissionReporting = productsNeedingCommissionReporting,
             LeadershipAssignments = leadershipAssignments,
             LeadershipBusinessAreas = leadershipBusinessAreas,
             HighestLeadershipRole = highestRole,
             EnterpriseMetrics = enterpriseMetrics,
             ActiveMissions = activeMissions,
             PriorityOutcomes = priorityOutcomes,
-            EnterpriseAtRiskProjects = enterpriseAtRiskProjects
+            EnterpriseAtRiskProjects = enterpriseAtRiskProjects,
+            MyDdtStandards = myDdtStandards,
+            MyOwnedDdtStandards = myOwnedStandards,
+            MyContactDdtStandards = myContactStandards
         };
     }
 
@@ -596,8 +871,8 @@ public class HomeController : Controller
             .Count();
 
         var atRiskProjects = oversightProjects
-            .Count(p => string.Equals(p.RagStatus, "Red", StringComparison.OrdinalIgnoreCase) ||
-                        string.Equals(p.RagStatus, "Amber-Red", StringComparison.OrdinalIgnoreCase));
+            .Count(p => (p.RagStatusLookup != null && string.Equals(p.RagStatusLookup.Name, "Red", StringComparison.OrdinalIgnoreCase)) ||
+                        (p.RagStatusLookup != null && string.Equals(p.RagStatusLookup.Name, "Amber-Red", StringComparison.OrdinalIgnoreCase)));
 
         return new DashboardMetrics
         {
@@ -675,7 +950,7 @@ public class HomeController : Controller
                 PriorityBadgeClass = status == ReturnStatus.Late ? "badge badge-danger" : "badge badge-warning",
                 DueDate = dueDate,
                 LinkLabel = "Open performance metrics",
-                LinkUrl = Url.Action("PerformanceMetrics", "ProductReporting", new { fipsId = product.FipsId }) ?? "#"
+                LinkUrl = Url.Action("PerformanceMetrics", "ProductReporting", new { documentId = product.DocumentId ?? product.FipsId }) ?? "#"
             });
         }
 
@@ -722,21 +997,6 @@ public class HomeController : Controller
     {
         var reminders = new List<DashboardReminder>();
 
-        if (myProjects.Any())
-        {
-            var nextFriday = NextWeekday(DateTime.Today, DayOfWeek.Friday);
-            reminders.Add(new DashboardReminder
-            {
-                Title = "Share your weekly delivery update",
-                Description = $"Capture blockers and changes across {myProjects.Count} project(s) before {nextFriday:dddd d MMM}.",
-                Icon = "far fa-calendar-check",
-                FrequencyBadge = "Weekly",
-                Tone = "primary",
-                LinkLabel = "Open projects",
-                LinkUrl = Url.Action("Index", "Project") ?? "#"
-            });
-        }
-
         if (productsNeedingReturns.Any())
         {
             var earliestDueDate = productsNeedingReturns.Min(r => r.DueDate);
@@ -770,13 +1030,13 @@ public class HomeController : Controller
         {
             reminders.Add(new DashboardReminder
             {
-                Title = "Complete DDaT service health check",
+                Title = "Service Health Check App for standards compliance",
                 Description = "Confirm each product still meets the service standard and report gaps.",
                 Icon = "fas fa-notes-medical",
                 FrequencyBadge = "Quarterly",
                 Tone = "info",
-                LinkLabel = "Service health guidance",
-                LinkUrl = Url.Action("Index", "DdtReports") ?? "#"
+                LinkLabel = "Open Service Health Check App",
+                LinkUrl = "https://educationgovuk.sharepoint.com/sites/ServiceHealthCheckHub/SitePages/Service-Health-Check-App.aspx"
             });
         }
 
@@ -791,7 +1051,7 @@ public class HomeController : Controller
                 FrequencyBadge = "Lifecycle",
                 Tone = "info",
                 LinkLabel = "Book review",
-                LinkUrl = Url.Action("Roadmap", "Home") ?? "#"
+                LinkUrl = "#"
             });
         }
 
@@ -806,37 +1066,7 @@ public class HomeController : Controller
                 FrequencyBadge = "Lifecycle",
                 Tone = "primary",
                 LinkLabel = "Assessment guidance",
-                LinkUrl = Url.Action("Roadmap", "Home") ?? "#"
-            });
-        }
-
-        var privateBetaCount = myProducts.Count(p => p.Phase?.Equals("Private beta", StringComparison.OrdinalIgnoreCase) == true);
-        if (privateBetaCount > 0)
-        {
-            reminders.Add(new DashboardReminder
-            {
-                Title = "Complete operational readiness review",
-                Description = $"{privateBetaCount} private beta service(s) must evidence monitoring, alerting and on-call cover.",
-                Icon = "fas fa-clipboard-list",
-                FrequencyBadge = "Lifecycle",
-                Tone = "warning",
-                LinkLabel = "Operational readiness checklist",
-                LinkUrl = Url.Action("Roadmap", "Home") ?? "#"
-            });
-        }
-
-        var publicBetaCount = myProducts.Count(p => p.Phase?.Equals("Public beta", StringComparison.OrdinalIgnoreCase) == true);
-        if (publicBetaCount > 0)
-        {
-            reminders.Add(new DashboardReminder
-            {
-                Title = "Arrange public beta assessment",
-                Description = $"{publicBetaCount} service(s) are live to real users – line up the public beta assessment.",
-                Icon = "fas fa-users",
-                FrequencyBadge = "Lifecycle",
-                Tone = "success",
-                LinkLabel = "Book assessment",
-                LinkUrl = Url.Action("Roadmap", "Home") ?? "#"
+                LinkUrl = "#"
             });
         }
 
@@ -887,7 +1117,7 @@ public class HomeController : Controller
                 Title = "Book service assessment",
                 Description = "Secure a DDaT assessment slot for your service.",
                 Icon = "fas fa-clipboard",
-                Url = Url.Action("Roadmap", "Home") ?? "#"
+                Url = "#"
             },
             new()
             {
@@ -1046,9 +1276,36 @@ public class HomeController : Controller
         return View();
     }
 
-    public IActionResult Roadmap()
+    public IActionResult Support()
     {
         return View();
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> GetTestUsers()
+    {
+        // Only allow in development
+        if (!_environment.IsDevelopment())
+        {
+            return Forbid();
+        }
+
+        try
+        {
+            var users = await _context.Users
+                .OrderBy(u => u.Name)
+                .Select(u => new { u.Id, u.Name, u.Email })
+                .Take(100) // Limit to first 100 users for performance
+                .ToListAsync();
+
+            return Json(users);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to load test users - database may be unavailable");
+            // Return empty array instead of failing
+            return Json(Array.Empty<object>());
+        }
     }
 }
 

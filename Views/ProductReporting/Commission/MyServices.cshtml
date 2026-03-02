@@ -1,0 +1,678 @@
+@model List<Compass.Models.CommissionSubmissionStatusViewModel>
+@using Compass.Models
+@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
+@{
+    ViewData["Title"] = "Performance reporting";
+    var currentView = ViewBag.CurrentView as string ?? "mine";
+    var isViewMine = string.Equals(currentView, "mine", StringComparison.OrdinalIgnoreCase);
+    var isViewAll = string.Equals(currentView, "all", StringComparison.OrdinalIgnoreCase);
+    var selectedCommission = ViewBag.SelectedCommission as Compass.Models.Commission;
+    var activeCommissions = ViewBag.ActiveCommissions as List<Compass.Models.Commission> ?? new List<Compass.Models.Commission>();
+    var isOpen = ViewBag.IsOpen as bool? ?? false;
+    var isPastDue = ViewBag.IsPastDue as bool? ?? false;
+    var fipsBaseUrl = Configuration["fipsProduct:baseUrl"] ?? "https://fips.education.gov.uk";
+}
+
+@await Html.PartialAsync("_DashboardStyles")
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <li class="breadcrumb-item">
+                <a href="/" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a asp-controller="ProductReporting" asp-action="Commission" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Performance reporting</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page" style="color: #0b0c0c; font-weight: 600;">@(isViewMine ? "My services" : "All services")</li>
+        </ol>
+    </nav>
+}
+
+@{
+    ViewBag.BrandText = "Performance reporting";
+    var currentAction = ViewContext.RouteData.Values["Action"]?.ToString() ?? "";
+    var navLinksList = new List<object>
+    {
+    };
+    if (selectedCommission != null)
+    {
+        navLinksList.AddRange(new[]
+        {
+            new { Text = "My services", Action = "Commission", Controller = "ProductReporting", Url = Url.Action("Commission", "ProductReporting", new { view = "mine", commissionId = selectedCommission.Id }), IsButton = false, IsActive = isViewMine },
+            new { Text = "All services", Action = "Commission", Controller = "ProductReporting", Url = Url.Action("Commission", "ProductReporting", new { view = "all", commissionId = selectedCommission.Id }), IsButton = false, IsActive = isViewAll },
+            new { Text = "Business areas", Action = "BusinessAreasIndex", Controller = "ProductReporting", Url = Url.Action("BusinessAreasIndex", "ProductReporting", new { commissionId = selectedCommission.Id }), IsButton = false, IsActive = currentAction == "BusinessAreasIndex" || currentAction == "BusinessAreasDetails" },
+            new { Text = "Guidance on reporting", Action = "GuidanceOnReporting", Controller = "ProductReporting", Url = Url.Action("GuidanceOnReporting", "ProductReporting", new { commissionId = selectedCommission.Id }), IsButton = false, IsActive = currentAction == "GuidanceOnReporting" }
+        });
+    }
+    ViewBag.NavLinks = navLinksList;
+}
+
+<section class="content">
+    <div class="container-fluid">
+        @await Html.PartialAsync("_ModuleNavbar")
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["SuccessMessage"]
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+        @if (TempData["WarningMessage"] != null)
+        {
+            <div class="alert alert-warning alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["WarningMessage"]
+            </div>
+        }
+
+        @if (selectedCommission != null)
+        {
+            var now = DateTime.UtcNow;
+            var selectedIsPastDue = now > selectedCommission.DueDate;
+            var selectedDueDateBorderClass = selectedIsPastDue ? "border-left-danger" : "border-left-warning";
+            var selectedDueDateTextClass = selectedIsPastDue ? "text-danger" : "text-warning";
+            <div class="row mb-4">
+                <div class="col-md-12">
+                    <div class="card mb-3">
+                        <div class="card-header bg-light">
+                            <div class="row align-items-center">
+                                <div class="col-md-8">
+                                    <h3 class="card-title mb-0">@selectedCommission.Name</h3>
+                                </div>
+                                <div class="col-md-4 text-right">
+                                    <a asp-controller="ProductReporting" asp-action="ExportCommission1PerformanceData" asp-route-commissionId="@selectedCommission.Id" class="btn btn-sm btn-outline-primary">
+                                        <i class="fas fa-file-excel" aria-hidden="true"></i> Export to Excel
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            @if (!string.IsNullOrEmpty(selectedCommission.Description))
+                            {
+                                <p class="text-muted mb-3">@selectedCommission.Description</p>
+                            }
+                            <div class="row">
+                                <!-- Commission Period Card -->
+                                <div class="col-md-6 mb-3 mb-md-0">
+                                    <div class="card border-left-info shadow h-100">
+                                        <div class="card-body">
+                                            <div class="row no-gutters align-items-center">
+                                                <div class="col mr-2">
+                                                    <div class="text-xs font-weight-bold text-info text-uppercase mb-1">Data required for period</div>
+                                                    <div class="h6 mb-0 font-weight-bold text-gray-800">
+                                                        @selectedCommission.StartDate.ToString("d MMMM yyyy")<br />
+                                                        <small class="text-muted">to</small><br />
+                                                        @selectedCommission.EndDate.ToString("d MMMM yyyy")
+                                                        @if (!string.IsNullOrEmpty(selectedCommission.Quarter))
+                                                        {
+                                                            <span class="badge badge-info ml-2">@selectedCommission.Quarter</span>
+                                                        }
+                                                    </div>
+                                                </div>
+                                                <div class="col-auto">
+                                                    <i class="fas fa-calendar-alt fa-2x text-gray-300"></i>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Due Date Card -->
+                                <div class="col-md-6">
+                                    <div class="card @selectedDueDateBorderClass shadow h-100">
+                                        <div class="card-body">
+                                            <div class="row no-gutters align-items-center">
+                                                <div class="col mr-2">
+                                                    <div class="text-xs font-weight-bold @selectedDueDateTextClass text-uppercase mb-1">Due date</div>
+                                                    <div class="h6 mb-0 font-weight-bold text-gray-800">@selectedCommission.DueDate.ToString("d MMMM yyyy")</div>
+                                                    @if (selectedIsPastDue)
+                                                    {
+                                                        <small class="text-danger">Past due</small>
+                                                    }
+                                                </div>
+                                                <div class="col-auto">
+                                                    <i class="fas fa-clock fa-2x text-gray-300"></i>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <div class="row">
+            <!-- Left Column: Filters -->
+            <div class="col-xxl-2 col-xl-2 col-lg-3 col-md-4 col-sm-12 col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Filters</h3>
+                    </div>
+                    <div class="card-body">
+                        @{
+                            var phases = ViewBag.Phases as List<string> ?? new List<string>();
+                            var businessAreas = ViewBag.BusinessAreas as List<string> ?? new List<string>();
+                        }
+                        <form method="get" id="filterForm">
+                            <input type="hidden" name="view" value="@currentView" />
+                            <input type="hidden" name="commissionId" value="@selectedCommission?.Id" />
+                            <div class="form-group">
+                                <label>Search</label>
+                                <input type="text" name="search" class="form-control form-control-sm" placeholder="Search products..." value="@ViewBag.CurrentSearch" />
+                            </div>
+
+                            <div class="form-group">
+                                <label for="phase">Phase</label>
+                                <select name="phase" id="phase" class="form-control form-control-sm">
+                                    <option value="">All</option>
+                                    @foreach (var phaseOption in phases)
+                                    {
+                                        <option value="@phaseOption" selected="@(ViewBag.CurrentPhase == phaseOption)">@phaseOption</option>
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="businessArea">Business Area</label>
+                                <select name="businessArea" id="businessArea" class="form-control form-control-sm">
+                                    <option value="">All</option>
+                                    @foreach (var ba in businessAreas)
+                                    {
+                                        <option value="@ba" selected="@(ViewBag.CurrentBusinessArea == ba)">@ba</option>
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="reportingStatus">Status</label>
+                                <select name="reportingStatus" id="reportingStatus" class="form-control form-control-sm">
+                                    <option value="">All</option>
+                                    <option value="NotStarted" selected="@(ViewBag.CurrentReportingStatus == "NotStarted")">Not started</option>
+                                    <option value="InProgress" selected="@(ViewBag.CurrentReportingStatus == "InProgress")">In progress</option>
+                                    <option value="Submitted" selected="@(ViewBag.CurrentReportingStatus == "Submitted")">Submitted</option>
+                                    <option value="Late" selected="@(ViewBag.CurrentReportingStatus == "Late")">Late</option>
+                                </select>
+                            </div>
+
+                            <button type="submit" class="btn btn-primary btn-sm btn-block">Apply filters</button>
+                            <a href="@Url.Action("Commission", "ProductReporting", new { view = currentView, commissionId = selectedCommission?.Id, clearFilters = true })" class="btn btn-secondary btn-sm btn-block">Clear filters</a>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Products Tables -->
+            <div class="col-xxl-10 col-xl-10 col-lg-9 col-md-8 col-sm-12 col-12">
+                @if (isViewMine)
+                {
+                    <!-- My Services Section -->
+                    @if (Model != null && Model.Any())
+                    {
+        <div class="card mb-4">
+                            <div class="card-header">
+                                <h3 class="card-title">My services</h3>
+                            </div>
+                            <div class="card-body table-responsive p-0">
+                                <table class="table table-hover sortable-table" id="commissionAllServicesTable">
+                                    <thead>
+                                        <tr>
+                                            <th class="sortable" data-column="Product" tabindex="0" role="button" aria-label="Sort by product">
+                                                Product <i class="fas fa-sort sort-icon"></i>
+                                            </th>
+                                            <th class="sortable" data-column="BusinessArea" tabindex="0" role="button" aria-label="Sort by business area">
+                                                Business area <i class="fas fa-sort sort-icon"></i>
+                                            </th>
+                                            <th class="sortable" data-column="ServiceOwner" tabindex="0" role="button" aria-label="Sort by service owner">
+                                                Service owner <i class="fas fa-sort sort-icon"></i>
+                                            </th>
+                                            <th class="sortable" data-column="Phase" tabindex="0" role="button" aria-label="Sort by phase">
+                                                Phase <i class="fas fa-sort sort-icon"></i>
+                                            </th>
+                                            <th class="sortable" data-column="Type" tabindex="0" role="button" aria-label="Sort by type">
+                                                Type <i class="fas fa-sort sort-icon"></i>
+                                            </th>
+                                            <th class="sortable" data-column="Status" tabindex="0" role="button" aria-label="Sort by status">
+                                                Status <i class="fas fa-sort sort-icon"></i>
+                                            </th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var item in Model)
+                                        {
+                                            var businessArea = item.Product.CategoryValues?
+                                                .FirstOrDefault(cv => cv.CategoryType?.Name?.Equals("Business area", StringComparison.OrdinalIgnoreCase) == true)
+                                                ?.Name ?? "-";
+                                            var types = item.Product.CategoryValues?
+                                                .Where(cv => cv.CategoryType?.Name?.Equals("Type", StringComparison.OrdinalIgnoreCase) == true)
+                                                .Select(cv => cv.Name)
+                                                .ToList() ?? new List<string>();
+                                            var serviceOwnerNames = item.Product.ServiceOwners != null && item.Product.ServiceOwners.Any()
+                                                ? string.Join(", ", item.Product.ServiceOwners.Select(so => (so.DisplayName ?? so.EmailAddress ?? "-").ToLowerInvariant()))
+                                                : "-";
+                                            <tr data-product="@item.Product.Title.ToLowerInvariant()"
+                                                data-business-area="@businessArea.ToLowerInvariant()"
+                                                data-service-owner="@serviceOwnerNames"
+                                                data-phase="@(item.Product.Phase ?? string.Empty).ToLowerInvariant()"
+                                                data-types="@string.Join("||", types.Select(t => t.ToLowerInvariant()))"
+                                                data-status="@item.Status.ToString().ToLowerInvariant()">
+                                                <td>
+                                                    <strong>@item.Product.Title</strong><br />
+                                                    <small class="text-muted">
+                                                        @if (!string.IsNullOrEmpty(item.Product.DocumentId))
+                                                        {
+                                                            var fipsProductUrl = $"{fipsBaseUrl.TrimEnd('/')}/product/{item.Product.DocumentId}";
+                                                            <a href="@fipsProductUrl" target="_blank" rel="noopener noreferrer">View on FIPS</a>
+                                                        }
+                                                        else if (!string.IsNullOrEmpty(item.Product.FipsId))
+                                                        {
+                                                            var fipsProductUrl = $"{fipsBaseUrl.TrimEnd('/')}/product/{item.Product.FipsId}";
+                                                            <a href="@fipsProductUrl" target="_blank" rel="noopener noreferrer">View on FIPS</a>
+                                                        }
+                                                    </small>
+                                                </td>
+                                                <td>@businessArea</td>
+                                                <td>
+                                                    @if (item.Product.ServiceOwners != null && item.Product.ServiceOwners.Any())
+                                                    {
+                                                        @string.Join(", ", item.Product.ServiceOwners.Select(so => so.DisplayName ?? so.EmailAddress ?? "-"))
+                                                    }
+                                                    else
+                                                    {
+                                                        <text>-</text>
+                                                    }
+                                                </td>
+                                                <td>@(item.Product.Phase ?? "-")</td>
+                                                <td>
+                                                    @if (types.Any())
+                                                    {
+                                                        @string.Join(", ", types)
+                                                    }
+                                                    else
+                                                    {
+                                                        <text>-</text>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    @switch (item.Status)
+                                                    {
+                                                        case CommissionSubmissionStatus.NotStarted:
+                                                            <span class="badge badge-secondary">Not started</span>
+                                                            break;
+                                                        case CommissionSubmissionStatus.InProgress:
+                                                            <span class="badge badge-warning">In progress</span>
+                                                            break;
+                                                        case CommissionSubmissionStatus.Submitted:
+                                                            <span class="badge badge-success">Submitted</span>
+                                                            break;
+                                                        case CommissionSubmissionStatus.Late:
+                                                            <span class="badge badge-danger">Late</span>
+                                                            break;
+                                                    }
+                                                </td>
+                                                <td>
+                                                    @if (!item.IsOpen)
+                                                    {
+                                                        <span class="text-muted">Not yet open</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        @switch (item.Status)
+                                                        {
+                                                            case CommissionSubmissionStatus.NotStarted:
+                                                                <a href="@Url.Action("SubmitCommission", "ProductReporting", new { documentId = item.Product.DocumentId ?? item.Product.FipsId, commissionId = item.Commission.Id })" class="btn btn-sm btn-primary">
+                                                                    <i class="fas fa-play"></i> Start
+                                                                </a>
+                                                                break;
+                                                            case CommissionSubmissionStatus.InProgress:
+                                                                <a href="@Url.Action("SubmitCommission", "ProductReporting", new { documentId = item.Product.DocumentId ?? item.Product.FipsId, commissionId = item.Commission.Id })" class="btn btn-sm btn-warning">
+                                                                    <i class="fas fa-edit"></i> Continue
+                                                                </a>
+                                                                break;
+                                                            case CommissionSubmissionStatus.Submitted:
+                                                                <a href="@Url.Action("SubmitCommission", "ProductReporting", new { documentId = item.Product.DocumentId ?? item.Product.FipsId, commissionId = item.Commission.Id })" class="btn btn-sm btn-success">
+                                                                    <i class="fas fa-eye"></i> View
+                                                                </a>
+                                                                break;
+                                                            case CommissionSubmissionStatus.Late:
+                                                                <a href="@Url.Action("SubmitCommission", "ProductReporting", new { documentId = item.Product.DocumentId ?? item.Product.FipsId, commissionId = item.Commission.Id })" class="btn btn-sm btn-success">
+                                                                    <i class="fas fa-eye"></i> View
+                                                                </a>
+                                                                break;
+                                                        }
+                                                    }
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="card mb-4">
+                            <div class="card-body text-center py-5">
+                                <p class="text-muted mb-0">No products found.</p>
+                            </div>
+                        </div>
+                    }
+                }
+                else if (isViewAll)
+                {
+                    <!-- All Services Section -->
+                    @if (Model != null && Model.Any())
+                    {
+                        <div class="card mb-4">
+                            <div class="card-header">
+                                <h3 class="card-title">
+                                    @{
+                                        var hasFilters = !string.IsNullOrEmpty(ViewBag.CurrentSearch?.ToString()) || 
+                                                        !string.IsNullOrEmpty(ViewBag.CurrentPhase?.ToString()) || 
+                                                        !string.IsNullOrEmpty(ViewBag.CurrentBusinessArea?.ToString()) || 
+                                                        !string.IsNullOrEmpty(ViewBag.CurrentReportingStatus?.ToString());
+                                    }
+                                    @(hasFilters ? "Filtered view of services" : "All services")
+                                </h3>
+                            </div>
+                            <div class="card-body table-responsive p-0">
+                                <table class="table table-hover sortable-table" id="commissionAllServicesTable">
+                                    <thead>
+                                        <tr>
+                                            <th class="sortable" data-column="Product" tabindex="0" role="button" aria-label="Sort by Product" style="cursor: pointer;">
+                                                Product <i class="fas fa-sort sort-icon"></i>
+                                            </th>
+                                            <th class="sortable" data-column="BusinessArea" tabindex="0" role="button" aria-label="Sort by Business Area" style="cursor: pointer;">
+                                                Business area <i class="fas fa-sort sort-icon"></i>
+                                            </th>
+                                            <th class="sortable" data-column="ServiceOwner" tabindex="0" role="button" aria-label="Sort by Service Owner" style="cursor: pointer;">
+                                                Service owner <i class="fas fa-sort sort-icon"></i>
+                                            </th>
+                                            <th class="sortable" data-column="Phase" tabindex="0" role="button" aria-label="Sort by Phase" style="cursor: pointer;">
+                                                Phase <i class="fas fa-sort sort-icon"></i>
+                                            </th>
+                                            <th class="sortable" data-column="Type" tabindex="0" role="button" aria-label="Sort by Type" style="cursor: pointer;">
+                                                Type <i class="fas fa-sort sort-icon"></i>
+                                            </th>
+                                            <th class="sortable" data-column="Status" tabindex="0" role="button" aria-label="Sort by Status" style="cursor: pointer;">
+                                                Status <i class="fas fa-sort sort-icon"></i>
+                                            </th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var item in Model)
+                                        {
+                                            var businessArea = item.Product.CategoryValues?
+                                                .FirstOrDefault(cv => cv.CategoryType?.Name?.Equals("Business area", StringComparison.OrdinalIgnoreCase) == true)
+                                                ?.Name ?? "-";
+                                            var types = item.Product.CategoryValues?
+                                                .Where(cv => cv.CategoryType?.Name?.Equals("Type", StringComparison.OrdinalIgnoreCase) == true)
+                                                .Select(cv => cv.Name)
+                                                .ToList() ?? new List<string>();
+                                            var statusText = item.Status == CommissionSubmissionStatus.NotStarted ? "NotStarted" :
+                                                             item.Status == CommissionSubmissionStatus.InProgress ? "InProgress" :
+                                                             item.Status == CommissionSubmissionStatus.Submitted ? "Submitted" :
+                                                             item.Status == CommissionSubmissionStatus.Late ? "Late" : "";
+                                            var serviceOwnerNames = item.Product.ServiceOwners != null && item.Product.ServiceOwners.Any()
+                                                ? string.Join(", ", item.Product.ServiceOwners.Select(so => (so.DisplayName ?? so.EmailAddress ?? "-").ToLowerInvariant()))
+                                                : "-";
+                                            <tr data-product-title="@item.Product.Title.ToLowerInvariant()"
+                                                data-business-area="@businessArea.ToLowerInvariant()"
+                                                data-service-owner="@serviceOwnerNames"
+                                                data-phase="@((item.Product.Phase ?? "-").ToLowerInvariant())"
+                                                data-type="@(string.Join(", ", types).ToLowerInvariant())"
+                                                data-status="@statusText.ToLowerInvariant()">
+                                                <td>
+                                                    <strong>@item.Product.Title</strong><br />
+                                                    <small class="text-muted">
+                                                        @if (!string.IsNullOrEmpty(item.Product.DocumentId))
+                                                        {
+                                                            var fipsProductUrl = $"{fipsBaseUrl.TrimEnd('/')}/product/{item.Product.DocumentId}";
+                                                            <a href="@fipsProductUrl" target="_blank" rel="noopener noreferrer">View on FIPS</a>
+                                                        }
+                                                        else if (!string.IsNullOrEmpty(item.Product.FipsId))
+                                                        {
+                                                            var fipsProductUrl = $"{fipsBaseUrl.TrimEnd('/')}/product/{item.Product.FipsId}";
+                                                            <a href="@fipsProductUrl" target="_blank" rel="noopener noreferrer">View on FIPS</a>
+                                                        }
+                                                    </small>
+                                                </td>
+                                                <td>@businessArea</td>
+                                                <td>
+                                                    @if (item.Product.ServiceOwners != null && item.Product.ServiceOwners.Any())
+                                                    {
+                                                        @string.Join(", ", item.Product.ServiceOwners.Select(so => so.DisplayName ?? so.EmailAddress ?? "-"))
+                                                    }
+                                                    else
+                                                    {
+                                                        <text>-</text>
+                                                    }
+                                                </td>
+                                                <td>@(item.Product.Phase ?? "-")</td>
+                                                <td>
+                                                    @if (types.Any())
+                                                    {
+                                                        @string.Join(", ", types)
+                                                    }
+                                                    else
+                                                    {
+                                                        <text>-</text>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    @switch (item.Status)
+                                                    {
+                                                        case CommissionSubmissionStatus.NotStarted:
+                                                            <span class="badge badge-secondary">Not started</span>
+                                                            break;
+                                                        case CommissionSubmissionStatus.InProgress:
+                                                            <span class="badge badge-warning">In progress</span>
+                                                            break;
+                                                        case CommissionSubmissionStatus.Submitted:
+                                                            <span class="badge badge-success">Submitted</span>
+                                                            break;
+                                                        case CommissionSubmissionStatus.Late:
+                                                            <span class="badge badge-danger">Late</span>
+                                                            break;
+                                                    }
+                                                </td>
+                                                <td>
+                                                    @if (!item.IsOpen)
+                                                    {
+                                                        <span class="text-muted">Not yet open</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        @switch (item.Status)
+                                                        {
+                                                            case CommissionSubmissionStatus.NotStarted:
+                                                                <a href="@Url.Action("SubmitCommission", "ProductReporting", new { documentId = item.Product.DocumentId ?? item.Product.FipsId, commissionId = item.Commission.Id })" class="btn btn-sm btn-primary">
+                                                                    <i class="fas fa-play"></i> Start
+                                                                </a>
+                                                                break;
+                                                            case CommissionSubmissionStatus.InProgress:
+                                                                <a href="@Url.Action("SubmitCommission", "ProductReporting", new { documentId = item.Product.DocumentId ?? item.Product.FipsId, commissionId = item.Commission.Id })" class="btn btn-sm btn-warning">
+                                                                    <i class="fas fa-edit"></i> Continue
+                                                                </a>
+                                                                break;
+                                                            case CommissionSubmissionStatus.Submitted:
+                                                                <a href="@Url.Action("SubmitCommission", "ProductReporting", new { documentId = item.Product.DocumentId ?? item.Product.FipsId, commissionId = item.Commission.Id })" class="btn btn-sm btn-success">
+                                                                    <i class="fas fa-eye"></i> View
+                                                                </a>
+                                                                break;
+                                                            case CommissionSubmissionStatus.Late:
+                                                                <a href="@Url.Action("SubmitCommission", "ProductReporting", new { documentId = item.Product.DocumentId ?? item.Product.FipsId, commissionId = item.Commission.Id })" class="btn btn-sm btn-success">
+                                                                    <i class="fas fa-eye"></i> View
+                                                                </a>
+                                                                break;
+                                                        }
+                                                    }
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+        <div class="card mb-4">
+            <div class="card-body text-center py-5">
+                <p class="text-muted mb-0">No products found.</p>
+            </div>
+        </div>
+                    }
+                }
+            </div>
+        </div>
+    </div>
+</section>
+
+<style nonce="@Context.Items["Nonce"]">
+    .border-left-primary {
+        border-left: 0.25rem solid #4e73df !important;
+    }
+    .border-left-danger {
+        border-left: 0.25rem solid #e74a3b !important;
+    }
+    .border-left-warning {
+        border-left: 0.25rem solid #f6c23e !important;
+    }
+    .border-left-info {
+        border-left: 0.25rem solid #36b9cc !important;
+    }
+    .text-gray-800 {
+        color: #5a5c69 !important;
+    }
+    .text-gray-300 {
+        color: #dddfeb !important;
+    }
+</style>
+
+@section Scripts {
+    <script nonce="@Context.Items["Nonce"]">
+        $(document).ready(function () {
+            var table = $('#commissionAllServicesTable');
+            if (table.length) {
+                initializeSortableCommissionTable(table);
+                initializeTableFiltering();
+            }
+
+            function initializeTableFiltering() {
+                // Filter table based on form inputs
+                function filterTable() {
+                    var searchTerm = ($('input[name="search"]').val() || '').toString().toLowerCase();
+                    var phaseFilter = ($('#phase').val() || '').toString().toLowerCase();
+                    var businessAreaFilter = ($('#businessArea').val() || '').toString().toLowerCase();
+                    var reportingStatusFilter = ($('#reportingStatus').val() || '').toString().toLowerCase();
+
+                    var visibleCount = 0;
+
+                    $('#commissionAllServicesTable tbody tr').each(function () {
+                        var $row = $(this);
+                        var productTitle = ($row.data('product-title') || '').toString();
+                        var businessArea = ($row.data('business-area') || '').toString();
+                        var phase = ($row.data('phase') || '').toString();
+                        var type = ($row.data('type') || '').toString();
+                        var status = ($row.data('status') || '').toString();
+
+                        var matchesSearch = !searchTerm || productTitle.includes(searchTerm) || type.includes(searchTerm);
+                        var matchesPhase = !phaseFilter || phase === phaseFilter.toLowerCase();
+                        var matchesBusinessArea = !businessAreaFilter || businessArea === businessAreaFilter.toLowerCase();
+                        var matchesStatus = !reportingStatusFilter || status === reportingStatusFilter.toLowerCase();
+
+                        if (matchesSearch && matchesPhase && matchesBusinessArea && matchesStatus) {
+                            $row.show();
+                            visibleCount++;
+                        } else {
+                            $row.hide();
+                        }
+                    });
+                }
+
+                // Apply filters on input change
+                $('input[name="search"], #phase, #businessArea, #reportingStatus').on('input change', function () {
+                    filterTable();
+                });
+
+                // Initial filter on page load
+                filterTable();
+            }
+
+            function initializeSortableCommissionTable(table) {
+                var currentSort = { column: null, direction: 'asc' };
+
+                table.find('.sortable').on('click keypress', function (e) {
+                    if (e.type === 'keypress' && e.which !== 13 && e.which !== 32) {
+                        return;
+                    }
+
+                    var column = $(this).data('column');
+                    var direction = 'asc';
+
+                    if (currentSort.column === column && currentSort.direction === 'asc') {
+                        direction = 'desc';
+                    }
+
+                    sortTable(table, column, direction);
+                    currentSort = { column: column, direction: direction };
+                });
+
+                function sortTable(table, column, direction) {
+                    var tbody = table.find('tbody');
+                    var rows = tbody.find('tr').toArray();
+
+                    rows.sort(function (a, b) {
+                        var aVal, bVal;
+
+                        if (column === 'Product') {
+                            aVal = $(a).find('td').eq(0).find('strong').text().trim().toLowerCase();
+                            bVal = $(b).find('td').eq(0).find('strong').text().trim().toLowerCase();
+                        } else if (column === 'BusinessArea') {
+                            aVal = $(a).find('td').eq(1).text().trim().toLowerCase();
+                            bVal = $(b).find('td').eq(1).text().trim().toLowerCase();
+                        } else if (column === 'ServiceOwner') {
+                            aVal = $(a).find('td').eq(2).text().trim().toLowerCase();
+                            bVal = $(b).find('td').eq(2).text().trim().toLowerCase();
+                        } else if (column === 'Phase') {
+                            aVal = $(a).find('td').eq(3).text().trim().toLowerCase();
+                            bVal = $(b).find('td').eq(3).text().trim().toLowerCase();
+                        } else if (column === 'Type') {
+                            aVal = $(a).find('td').eq(4).text().trim().toLowerCase();
+                            bVal = $(b).find('td').eq(4).text().trim().toLowerCase();
+                        } else if (column === 'Status') {
+                            aVal = $(a).find('td').eq(5).text().trim().toLowerCase();
+                            bVal = $(b).find('td').eq(5).text().trim().toLowerCase();
+                        } else {
+                            aVal = $(a).find('td').eq(0).text().trim().toLowerCase();
+                            bVal = $(b).find('td').eq(0).text().trim().toLowerCase();
+                        }
+
+                        if (direction === 'asc') {
+                            return aVal.localeCompare(bVal);
+                        } else {
+                            return bVal.localeCompare(aVal);
+                        }
+                    });
+
+                    $.each(rows, function (index, row) {
+                        tbody.append(row);
+                    });
+                }
+            }
+        });
+    </script>
+}

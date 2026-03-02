@@ -1,0 +1,154 @@
+@model Compass.ViewModels.DdtStandardsManageViewModel
+@inject Compass.Services.IPermissionService PermissionService
+
+@{
+    ViewData["Title"] = "Draft Standards";
+    
+    var currentView = ViewBag.CurrentView as string ?? "all";
+    var isViewMine = string.Equals(currentView, "mine", StringComparison.OrdinalIgnoreCase);
+    var isViewAll = string.Equals(currentView, "all", StringComparison.OrdinalIgnoreCase) || string.IsNullOrEmpty(currentView);
+    
+    bool isStandardsManager = ViewBag.IsStandardsManager as bool? ?? false;
+    var allDraftsCount = ViewBag.AllDraftsCount as int? ?? 0;
+    var myDraftsCount = Model.MyDrafts?.Count ?? 0;
+    
+    ViewBag.BrandText = "Standards";
+    var navLinks = new List<object>
+    {
+        new { Text = "Create new draft", Action = "Create", Controller = "DdtStandardsManagement", Url = Url.Action("Create", "DdtStandardsManagement"), IsButton = true, IsActive = false }
+    };
+    ViewBag.NavLinks = navLinks;
+    
+    // Get counts from ViewBag (set by controller)
+    var allInReviewCount = ViewBag.AllInReviewCount as int? ?? 0;
+    var allForApprovalCount = ViewBag.AllForApprovalCount as int? ?? 0;
+    var allPublishedCount = ViewBag.AllPublishedCount as int? ?? 0;
+    var allUnpublishedCount = ViewBag.AllUnpublishedCount as int? ?? 0;
+}
+
+@await Html.PartialAsync("_DashboardStyles")
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem;">
+            <li class="breadcrumb-item">
+                <a href="/" style="color: #005ea5; text-decoration: none;">Home</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page">Draft Standards</li>
+        </ol>
+    </nav>
+}
+
+<section class="content">
+    <div class="container-fluid">
+        @await Html.PartialAsync("_ModuleNavbar")
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["SuccessMessage"]
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        <div class="row">
+            <!-- Left Column: Navigation -->
+            <div class="col-xxl-2 col-xl-2 col-lg-3 col-md-4 col-sm-12 col-12">
+                <!-- Navigation Card -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h3 class="card-title">Navigation</h3>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="list-group list-group-flush">
+                            <a href="@Url.Action("Drafts", new { search = Model.CurrentSearch, category = Model.CurrentCategory, creator = Model.CurrentCreator, owner = Model.CurrentOwner, contact = Model.CurrentContact, legalStandard = Model.CurrentLegalStandard })"
+                               class="list-group-item list-group-item-action active" style="display: flex !important; justify-content: space-between !important; align-items: center !important;">
+                                <span>Drafts</span>
+                                <span class="badge badge-light badge-pill">@allDraftsCount</span>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Standards List -->
+            <div class="col-xxl-10 col-xl-10 col-lg-9 col-md-8 col-sm-12 col-12">
+                @if (isViewMine && Model.MyDrafts != null && Model.MyDrafts.Any())
+                {
+                    <div class="mb-3">
+                        @await Html.PartialAsync("~/Views/DdtStandards/_StandardsCard.cshtml", new { Title = "My drafts", Standards = Model.MyDrafts, ShowCreatedBy = false, ShowActions = false })
+                    </div>
+                }
+                else if (isViewAll)
+                {
+                    @if (Model.MyDrafts != null && Model.MyDrafts.Any())
+                    {
+                        <div class="mb-3">
+                            @await Html.PartialAsync("~/Views/DdtStandards/_StandardsCard.cshtml", new { Title = "My drafts", Standards = Model.MyDrafts, ShowCreatedBy = false, ShowActions = false })
+                        </div>
+                    }
+                    @if (Model.AllDrafts != null && Model.AllDrafts.Any())
+                    {
+                        <div class="mb-3">
+                            @await Html.PartialAsync("~/Views/DdtStandards/_StandardsCard.cshtml", new { Title = "All drafts", Standards = Model.AllDrafts, ShowCreatedBy = true, ShowActions = false })
+                        </div>
+                    }
+                }
+                @if ((isViewMine && (Model.MyDrafts == null || !Model.MyDrafts.Any())) || (isViewAll && (Model.MyDrafts == null || !Model.MyDrafts.Any()) && (Model.AllDrafts == null || !Model.AllDrafts.Any())))
+                {
+                    <div class="alert alert-info">
+                        <p class="mb-0">No drafts found.</p>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Create Standard Confirmation Modal -->
+<div class="modal fade" id="createStandardModal" tabindex="-1" role="dialog" aria-labelledby="createStandardModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="createStandardModalLabel">Create new draft standard</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to start a new draft standard?</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="confirmCreateStandard">Confirm</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script nonce="@Context.Items["Nonce"]">
+    $(document).ready(function() {
+            var createUrl = '';
+            
+        $('#createStandardBtn').on('click', function(e) {
+            e.preventDefault();
+                createUrl = $(this).attr('href');
+                $('#createStandardModal').modal('show');
+            });
+            
+            $('#confirmCreateStandard').on('click', function() {
+                if (createUrl) {
+                window.location.href = createUrl;
+            }
+        });
+    });
+</script>
+}
+

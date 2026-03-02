@@ -1,0 +1,558 @@
+@model dynamic
+@inject Compass.Services.IPermissionService PermissionService
+
+@{
+    var title = Model.Title as string ?? "Standards";
+    var standards = Model.Standards as IEnumerable<Compass.Models.DdtStandard> ?? new List<Compass.Models.DdtStandard>();
+    var showCreatedBy = Model.ShowCreatedBy as bool? ?? false;
+    var showActions = Model.ShowActions as bool? ?? false;
+    var tableId = "standardsTable-" + Guid.NewGuid().ToString("N").Substring(0, 8);
+    
+    // Check if user is in Standards Managers group (only if actions are enabled)
+    bool isStandardsManager = false;
+    if (showActions)
+    {
+        try
+        {
+            var userEmail = User.Identity?.Name 
+                ?? User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value
+                ?? string.Empty;
+            if (!string.IsNullOrEmpty(userEmail))
+            {
+                isStandardsManager = await PermissionService.IsInGroupAsync(userEmail, "Standards Managers");
+            }
+        }
+        catch
+        {
+            // Non-blocking: section will not be shown
+        }
+    }
+}
+
+@{
+    var cardClass = "";
+    if (title.ToLower().Contains("unpublished"))
+    {
+        cardClass = "border-secondary";
+    }
+}
+<div class="card @cardClass" style="@(title.ToLower().Contains("unpublished") ? "border-left: 4px solid #6c757d;" : "")">
+    <div class="card-header @(title.ToLower().Contains("unpublished") ? "bg-light" : "")">
+        <h3 class="card-title">@title (<span id="@(tableId)-count">@standards.Count()</span>)</h3>
+    </div>
+    <div class="card-body p-0">
+        @if (standards.Any())
+        {
+            <div class="table-responsive" style="overflow-x: auto;">
+                <table id="@tableId" class="table table-hover sortable-table mb-0" style="width: 100%;">
+                    <thead>
+                        <tr>
+                            <th class="sortable" data-column="Title" tabindex="0" role="button" aria-label="Sort by Title" style="width: 40%;">Title <i class="fas fa-sort sort-icon"></i></th>
+                            @if (showCreatedBy)
+                            {
+                                <th class="sortable" data-column="CreatedBy" tabindex="0" role="button" aria-label="Sort by Created By" style="width: 15%;">Created by <i class="fas fa-sort sort-icon"></i></th>
+                            }
+                            <th class="sortable" data-column="Version" tabindex="0" role="button" aria-label="Sort by Version" style="width: 10%;">Version <i class="fas fa-sort sort-icon"></i></th>
+                            <th style="width: 20%;">Categories</th>
+                            <th style="width: 15%;">Owners</th>
+                            @if (showActions && isStandardsManager)
+                            {
+                            <th style="width: 8%;" class="text-right">Actions</th>
+                            }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var standard in standards)
+                        {
+                            <tr>
+                                <td>
+                                    <strong>
+                                        @if (standard.Stage == "Draft")
+                                        {
+                                            <a href="@Url.Action("Create", "DdtStandardsManagement", new { id = standard.Id })">@standard.Title</a>
+                                        }
+                                        else
+                                        {
+                                            <a href="@Url.Action("Details", "DdtStandardsView", new { id = standard.Id })">@standard.Title</a>
+                                        }
+                                    </strong>
+                                    @if (!string.IsNullOrWhiteSpace(standard.Summary))
+                                    {
+                                        <br />
+                                        <small class="text-muted">@(standard.Summary.Length > 100 ? standard.Summary.Substring(0, 100) + "..." : standard.Summary)</small>
+                                    }
+                                </td>
+                                @if (showCreatedBy)
+                                {
+                                    <td>
+                                        @(standard.CreatorUser?.Name ?? "Unknown")
+                                    </td>
+                                }
+                                <td>@standard.Version</td>
+                                <td>
+                                    @if (standard.Categories.Any())
+                                    {
+                                        <span>@string.Join(", ", standard.Categories.Select(c => c.Category.Name).Distinct())</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">-</span>
+                                    }
+                                </td>
+                                <td>
+                                    @if (standard.Owners.Any())
+                                    {
+                                        @foreach (var owner in standard.Owners.Take(2))
+                                        {
+                                            <div>@owner.User.Name</div>
+                                        }
+                                        @if (standard.Owners.Count > 2)
+                                        {
+                                            <small class="text-muted">+@(standard.Owners.Count - 2) more</small>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">-</span>
+                                    }
+                                </td>
+                                @if (showActions && isStandardsManager)
+                                {
+                                    <td class="text-center">
+                                        <div class="btn-group">
+                                            <button type="button" class="btn btn-sm btn-secondary dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                                                <i class="fas fa-cog"></i>
+                                        </button>
+                                            <div class="dropdown-menu dropdown-menu-right">
+                                                <a class="dropdown-item" href="#" data-action="change-title" data-standard-id="@standard.Id" data-standard-title="@standard.Title">
+                                                    <i class="fas fa-edit mr-2"></i> Change Title
+                                                </a>
+                                                <div class="dropdown-divider"></div>
+                                                <a class="dropdown-item" href="#" data-action="set-owners" data-standard-id="@standard.Id" data-owner-ids="@string.Join(",", standard.Owners.Select(o => o.UserId))">
+                                                    <i class="fas fa-user-tie mr-2"></i> Set Owners
+                                                </a>
+                                                <a class="dropdown-item" href="#" data-action="set-contacts" data-standard-id="@standard.Id" data-contact-ids="@string.Join(",", standard.Contacts.Select(c => c.UserId))">
+                                                    <i class="fas fa-user mr-2"></i> Set Contacts
+                                                </a>
+                                                <div class="dropdown-divider"></div>
+                                                <a class="dropdown-item" href="#" data-action="set-categories" data-standard-id="@standard.Id" data-category-ids="@string.Join(",", standard.Categories.Select(c => c.CategoryId))">
+                                                    <i class="fas fa-tags mr-2"></i> Set Categories
+                                                </a>
+                                                <a class="dropdown-item" href="#" data-action="set-sub-categories" data-standard-id="@standard.Id" data-sub-category-ids="@string.Join(",", standard.SubCategories.Select(sc => sc.SubCategoryId))">
+                                                    <i class="fas fa-tag mr-2"></i> Set Sub-Categories
+                                                </a>
+                                                <div class="dropdown-divider"></div>
+                                                <a class="dropdown-item" href="#" data-action="set-legacy-reference" data-standard-id="@standard.Id" data-legacy-reference="@(standard.LegacyReference ?? "")">
+                                                    <i class="fas fa-link mr-2"></i> Set Legacy Reference
+                                                </a>
+                                            </div>
+                                        </div>
+                                    </td>
+                            }
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        else
+        {
+            <div class="p-4 text-center">
+                <p class="text-muted">No standards found.</p>
+            </div>
+        }
+    </div>
+</div>
+
+@if (standards.Any() && showActions && isStandardsManager)
+{
+    var allUsers = ViewBag.AllUsers as List<Compass.Models.User> ?? new List<Compass.Models.User>();
+    var allCategories = ViewBag.AllCategories as List<Compass.Models.StandardCategory> ?? new List<Compass.Models.StandardCategory>();
+    var allSubCategories = ViewBag.AllSubCategories as List<Compass.Models.StandardSubCategory> ?? new List<Compass.Models.StandardSubCategory>();
+    
+    <!-- Change Title Modal -->
+    <div class="modal fade" id="changeTitleModal" tabindex="-1" role="dialog">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Change Title</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <form asp-action="UpdateStandardTitle" asp-controller="DdtStandards" method="post">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="id" id="titleStandardId" />
+                    <div class="modal-body">
+                        <p class="mb-3">Enter the new title for this standard.</p>
+                        <div class="form-group">
+                            <label for="standardTitle" class="form-label">Title <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="standardTitle" name="title" required maxlength="500" />
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-success">Save Title</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Set Owners Modal -->
+    <div class="modal fade" id="setOwnersModal" tabindex="-1" role="dialog">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Set Owners</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <form asp-action="UpdateStandardOwners" asp-controller="DdtStandards" method="post">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="id" id="ownersStandardId" />
+                    <div class="modal-body">
+                        <p class="mb-3">Select the owners for this standard.</p>
+                        <div class="form-group">
+                            <label for="standardOwners" class="form-label">Owners</label>
+                            <select class="form-control" name="ownerIds" id="standardOwners" multiple size="8">
+                                @foreach (var user in allUsers)
+                                {
+                                    <option value="@user.Id">@user.Name</option>
+                                }
+                            </select>
+                            <small class="form-text text-muted">Hold Ctrl (Cmd on Mac) to select multiple owners</small>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-success">Save Owners</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Set Contacts Modal -->
+    <div class="modal fade" id="setContactsModal" tabindex="-1" role="dialog">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Set Contacts</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <form asp-action="UpdateStandardContacts" asp-controller="DdtStandards" method="post">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="id" id="contactsStandardId" />
+                    <div class="modal-body">
+                        <p class="mb-3">Select the contacts for this standard.</p>
+                        <div class="form-group">
+                            <label for="standardContacts" class="form-label">Contacts</label>
+                            <select class="form-control" name="contactIds" id="standardContacts" multiple size="8">
+                                @foreach (var user in allUsers)
+                                {
+                                    <option value="@user.Id">@user.Name</option>
+                                }
+                            </select>
+                            <small class="form-text text-muted">Hold Ctrl (Cmd on Mac) to select multiple contacts</small>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-success">Save Contacts</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Set Categories Modal -->
+    <div class="modal fade" id="setCategoriesModal" tabindex="-1" role="dialog">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Set Categories</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <form asp-action="UpdateStandardCategories" asp-controller="DdtStandards" method="post">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="id" id="categoriesStandardId" />
+                    <div class="modal-body">
+                        <p class="mb-3">Select the categories for this standard.</p>
+                        <div class="form-group">
+                            <label for="standardCategories" class="form-label">Categories</label>
+                            <select class="form-control" name="categoryIds" id="standardCategories" multiple size="8">
+                                @foreach (var category in allCategories)
+                                {
+                                    <option value="@category.Id">@category.Name</option>
+                                }
+                            </select>
+                            <small class="form-text text-muted">Hold Ctrl (Cmd on Mac) to select multiple categories</small>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-success">Save Categories</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Set Sub-Categories Modal -->
+    <div class="modal fade" id="setSubCategoriesModal" tabindex="-1" role="dialog">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Set Sub-Categories</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <form asp-action="UpdateStandardSubCategories" asp-controller="DdtStandards" method="post">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="id" id="subCategoriesStandardId" />
+                    <div class="modal-body">
+                        <p class="mb-3">Select the sub-categories for this standard.</p>
+                        <div class="form-group">
+                            <label for="standardSubCategories" class="form-label">Sub-Categories</label>
+                            <select class="form-control" name="subCategoryIds" id="standardSubCategories" multiple size="8">
+                                @foreach (var subCategory in allSubCategories)
+                                {
+                                    <option value="@subCategory.Id">@subCategory.Category.Name - @subCategory.Name</option>
+                                }
+                            </select>
+                            <small class="form-text text-muted">Hold Ctrl (Cmd on Mac) to select multiple sub-categories</small>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-success">Save Sub-Categories</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Set Legacy Reference Modal -->
+    <div class="modal fade" id="setLegacyReferenceModal" tabindex="-1" role="dialog">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Set Legacy Reference</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <form asp-action="UpdateStandardLegacyReference" asp-controller="DdtStandards" method="post">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="id" id="legacyReferenceStandardId" />
+                    <div class="modal-body">
+                        <p class="mb-3">Enter the legacy reference for this standard.</p>
+                        <div class="form-group">
+                            <label for="legacyReference" class="form-label">Legacy Reference</label>
+                            <input type="text" class="form-control" id="legacyReference" name="legacyReference" maxlength="200" />
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-success">Save Legacy Reference</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+}
+
+@if (standards.Any())
+{
+    <script nonce="@Context.Items["Nonce"]">
+        $(document).ready(function() {
+            var table = $('#@tableId');
+            var currentSort = { column: null, direction: 'asc' };
+            var tableId = '@tableId';
+            
+            function parseDate(dateText) {
+                // Parse "dd MMM yyyy" format
+                var months = { 'jan': 0, 'feb': 1, 'mar': 2, 'apr': 3, 'may': 4, 'jun': 5, 'jul': 6, 'aug': 7, 'sep': 8, 'oct': 9, 'nov': 10, 'dec': 11 };
+                var parts = dateText.toLowerCase().split(' ');
+                if (parts.length === 3) {
+                    var day = parseInt(parts[0]);
+                    var month = months[parts[1]] || 0;
+                    var year = parseInt(parts[2]);
+                    return new Date(year, month, day);
+                }
+                return new Date(0);
+            }
+            
+            function sortTable(table, column, direction, tableId) {
+                var tbody = table.find('tbody');
+                var rows = tbody.find('tr').toArray();
+                
+                rows.sort(function(a, b) {
+                    var aVal, bVal;
+                    var colIndex = table.find('thead th[data-column="' + column + '"]').index();
+                    
+                    if (column === 'Version') {
+                        // Sort by semantic version
+                        aVal = $(a).find('td').eq(colIndex).text().trim();
+                        bVal = $(b).find('td').eq(colIndex).text().trim();
+                        // Simple string comparison for versions
+                        aVal = aVal.toLowerCase();
+                        bVal = bVal.toLowerCase();
+                    } else {
+                        aVal = $(a).find('td').eq(colIndex).text().trim().toLowerCase();
+                        bVal = $(b).find('td').eq(colIndex).text().trim().toLowerCase();
+                    }
+                    
+                    if (direction === 'asc') {
+                        return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+                    } else {
+                        return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
+                    }
+                });
+                
+                tbody.empty();
+                rows.forEach(function(row) {
+                    tbody.append(row);
+                });
+                
+                updateSortIcons(table, column, direction);
+            }
+
+            function updateSortIcons(table, column, direction) {
+                table.find('.sortable .fa-sort-up, .sortable .fa-sort-down').removeClass('fa-sort-up fa-sort-down').addClass('fa-sort');
+                var header = table.find('.sortable[data-column="' + column + '"]');
+                var iconClass = direction === 'asc' ? 'fa-sort-up' : 'fa-sort-down';
+                header.find('i').removeClass('fa-sort').addClass(iconClass);
+            }
+            
+            // Initialize sortable table
+            table.find('.sortable').on('click keypress', function(e) {
+                if (e.type === 'keypress' && e.which !== 13 && e.which !== 32) {
+                    return;
+                }
+                
+                var column = $(this).data('column');
+                var direction = 'asc';
+                
+                if (currentSort.column === column && currentSort.direction === 'asc') {
+                    direction = 'desc';
+                }
+                
+                sortTable(table, column, direction, tableId);
+                currentSort = { column: column, direction: direction };
+            });
+            
+            // Default sort by Title (ascending)
+            sortTable(table, 'Title', 'asc', tableId);
+            currentSort = { column: 'Title', direction: 'asc' };
+
+            @if (showActions && isStandardsManager)
+            {
+                <text>
+                // Modal handlers for Standards Managers
+                $(document).on('click', '[data-action="change-title"]', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    var standardId = $(this).data('standard-id');
+                    var standardTitle = $(this).data('standard-title') || '';
+                    $('#titleStandardId').val(standardId);
+                    $('#standardTitle').val(standardTitle);
+                    $('#changeTitleModal').modal('show');
+                    return false;
+                });
+
+                $(document).on('click', '[data-action="set-owners"]', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    var standardId = $(this).data('standard-id');
+                    var ownerIdsStr = $(this).data('owner-ids') || '';
+                    $('#ownersStandardId').val(standardId);
+                    // Clear and set current selections
+                    $('#standardOwners option').prop('selected', false);
+                    if (ownerIdsStr) {
+                        var ownerIds = ownerIdsStr.split(',').map(function(id) { return parseInt(id.trim()); });
+                        ownerIds.forEach(function(id) {
+                            $('#standardOwners option[value="' + id + '"]').prop('selected', true);
+                        });
+                    }
+                    $('#setOwnersModal').modal('show');
+                    return false;
+                });
+
+                $(document).on('click', '[data-action="set-contacts"]', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    var standardId = $(this).data('standard-id');
+                    var contactIdsStr = $(this).data('contact-ids') || '';
+                    $('#contactsStandardId').val(standardId);
+                    // Clear and set current selections
+                    $('#standardContacts option').prop('selected', false);
+                    if (contactIdsStr) {
+                        var contactIds = contactIdsStr.split(',').map(function(id) { return parseInt(id.trim()); });
+                        contactIds.forEach(function(id) {
+                            $('#standardContacts option[value="' + id + '"]').prop('selected', true);
+                        });
+                    }
+                    $('#setContactsModal').modal('show');
+                    return false;
+                });
+
+                $(document).on('click', '[data-action="set-categories"]', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    var standardId = $(this).data('standard-id');
+                    var categoryIdsStr = $(this).data('category-ids') || '';
+                    $('#categoriesStandardId').val(standardId);
+                    // Clear and set current selections
+                    $('#standardCategories option').prop('selected', false);
+                    if (categoryIdsStr) {
+                        var categoryIds = categoryIdsStr.split(',').map(function(id) { return parseInt(id.trim()); });
+                        categoryIds.forEach(function(id) {
+                            $('#standardCategories option[value="' + id + '"]').prop('selected', true);
+                        });
+                    }
+                    $('#setCategoriesModal').modal('show');
+                    return false;
+                });
+
+                $(document).on('click', '[data-action="set-sub-categories"]', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    var standardId = $(this).data('standard-id');
+                    var subCategoryIdsStr = $(this).data('sub-category-ids') || '';
+                    $('#subCategoriesStandardId').val(standardId);
+                    // Clear and set current selections
+                    $('#standardSubCategories option').prop('selected', false);
+                    if (subCategoryIdsStr) {
+                        var subCategoryIds = subCategoryIdsStr.split(',').map(function(id) { return parseInt(id.trim()); });
+                        subCategoryIds.forEach(function(id) {
+                            $('#standardSubCategories option[value="' + id + '"]').prop('selected', true);
+                        });
+                    }
+                    $('#setSubCategoriesModal').modal('show');
+                    return false;
+                });
+
+                $(document).on('click', '[data-action="set-legacy-reference"]', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    var standardId = $(this).data('standard-id');
+                    var legacyReference = $(this).data('legacy-reference') || '';
+                    $('#legacyReferenceStandardId').val(standardId);
+                    $('#legacyReference').val(legacyReference);
+                    $('#setLegacyReferenceModal').modal('show');
+                    return false;
+                });
+                </text>
+            }
+        });
+    </script>
+}
+

@@ -1,0 +1,1014 @@
+@using Compass.Controllers
+@using System.Text.Json
+@{
+    ViewData["Title"] = "Monthly Summary";
+    var newProjects = ViewBag.NewProjects as List<Compass.Models.Project> ?? new List<Compass.Models.Project>();
+    var keyMilestones = ViewBag.KeyMilestones as List<MilestoneWithProject> ?? new List<MilestoneWithProject>();
+    var achievedMilestones = ViewBag.AchievedMilestones as List<MilestoneWithProject> ?? new List<MilestoneWithProject>();
+    var highRiskItems = ViewBag.HighRiskItems as List<RiskWithProject> ?? new List<RiskWithProject>();
+    var highPriorityIssues = ViewBag.HighPriorityIssues as List<IssueWithProject> ?? new List<IssueWithProject>();
+    var portfolioSummary = ViewBag.PortfolioSummary as PortfolioSummaryViewModel;
+    var monthlyUpdateStats = ViewBag.MonthlyUpdateStats as MonthlyUpdateStats;
+    var year = ViewBag.Year as int? ?? DateTime.UtcNow.Year;
+    var month = ViewBag.Month as int? ?? DateTime.UtcNow.Month;
+    var monthName = ViewBag.MonthName as string ?? "";
+    var prevMonth = ViewBag.PreviousMonth as int?;
+    var prevYear = ViewBag.PreviousYear as int?;
+    var nextMonth = ViewBag.NextMonth as int?;
+    var nextYear = ViewBag.NextYear as int?;
+    var monthStart = ViewBag.MonthStart as DateTime? ?? DateTime.UtcNow;
+    var monthEnd = ViewBag.MonthEnd as DateTime? ?? DateTime.UtcNow;
+    
+    // Prepare data for charts
+    var ragData = new {
+        Red = portfolioSummary?.RedProjects ?? 0,
+        AmberRed = portfolioSummary?.AmberRedProjects ?? 0,
+        Amber = portfolioSummary?.AmberProjects ?? 0,
+        AmberGreen = portfolioSummary?.AmberGreenProjects ?? 0,
+        Green = portfolioSummary?.GreenProjects ?? 0
+    };
+    
+    var priorityData = new {
+        Critical = portfolioSummary?.CriticalPriorityProjects ?? 0,
+        High = portfolioSummary?.HighPriorityProjects ?? 0,
+        Medium = portfolioSummary?.MediumPriorityProjects ?? 0,
+        Low = portfolioSummary?.LowPriorityProjects ?? 0,
+        NotSet = portfolioSummary?.PriorityNotSetProjects ?? 0
+    };
+    
+    // Get all projects for RAG/Priority table and Business Area Summary
+    var allProjects = ViewBag.AllProjects as List<Compass.Models.Project> ?? new List<Compass.Models.Project>();
+    
+    // Helper function to normalize RAG status (matching controller logic)
+    Func<string?, string> normalizeRagStatus = (ragStatus) => {
+        if (string.IsNullOrWhiteSpace(ragStatus)) return "Not Set";
+        var normalized = ragStatus.Trim();
+        if (normalized.Equals("Red", StringComparison.OrdinalIgnoreCase)) return "Red";
+        if (normalized.Equals("Amber-Red", StringComparison.OrdinalIgnoreCase) || normalized.Equals("AmberRed", StringComparison.OrdinalIgnoreCase)) return "Amber-Red";
+        if (normalized.Equals("Amber", StringComparison.OrdinalIgnoreCase)) return "Amber";
+        if (normalized.Equals("Amber-Green", StringComparison.OrdinalIgnoreCase) || normalized.Equals("AmberGreen", StringComparison.OrdinalIgnoreCase)) return "Amber-Green";
+        if (normalized.Equals("Green", StringComparison.OrdinalIgnoreCase)) return "Green";
+        return normalized;
+    };
+    
+    // Helper function to get priority name
+    Func<Compass.Models.Project, string> getPriorityName = (project) => {
+        if (project.DeliveryPriority == null) return "Not Set";
+        var priority = project.DeliveryPriority.Name.ToLower();
+        if (priority.Contains("critical")) return "Critical";
+        if (priority.Contains("high")) return "High";
+        if (priority.Contains("medium")) return "Medium";
+        if (priority.Contains("low")) return "Low";
+        return "Not Set";
+    };
+    
+    // Prepare projects grouped by RAG and Priority (RAG primary, Priority secondary)
+    var ragPriorityOrder = new[] { "Red", "Amber-Red", "Amber", "Amber-Green", "Green", "Not Set" };
+    var priorityOrder = new[] { "Critical", "High", "Medium", "Low", "Not Set" };
+    
+    var projectsByRagPriority = allProjects
+        .Select(p => new {
+            Project = p,
+            RagStatus = normalizeRagStatus(p.RagStatus),
+            Priority = getPriorityName(p)
+        })
+        .GroupBy(p => new { p.RagStatus, p.Priority })
+        .Select(g => new {
+            RagStatus = g.Key.RagStatus,
+            Priority = g.Key.Priority,
+            Projects = g.Select(x => x.Project).OrderBy(p => p.Title).ToList(),
+            Count = g.Count()
+        })
+        .OrderBy(x => Array.IndexOf(ragPriorityOrder, x.RagStatus))
+        .ThenBy(x => Array.IndexOf(priorityOrder, x.Priority))
+        .ToList();
+    
+    // Prepare Business Area Summary
+    var businessAreaSummary = allProjects
+        .GroupBy(p => p.BusinessAreaLookup)
+        .Select(g => new {
+            BusinessAreaName = g.Key?.Name ?? "Not Set",
+            BusinessAreaId = g.Key?.Id,
+            TotalProjects = g.Count(),
+            RedCount = g.Count(p => normalizeRagStatus(p.RagStatus) == "Red"),
+            AmberRedCount = g.Count(p => normalizeRagStatus(p.RagStatus) == "Amber-Red"),
+            AmberCount = g.Count(p => normalizeRagStatus(p.RagStatus) == "Amber"),
+            AmberGreenCount = g.Count(p => normalizeRagStatus(p.RagStatus) == "Amber-Green"),
+            GreenCount = g.Count(p => normalizeRagStatus(p.RagStatus) == "Green"),
+            CriticalCount = g.Count(p => getPriorityName(p) == "Critical"),
+            HighCount = g.Count(p => getPriorityName(p) == "High"),
+            MediumCount = g.Count(p => getPriorityName(p) == "Medium"),
+            LowCount = g.Count(p => getPriorityName(p) == "Low"),
+            Projects = g.ToList()
+        })
+        .OrderBy(ba => ba.BusinessAreaName)
+        .ToList();
+}
+
+@await Html.PartialAsync("_DashboardStyles")
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem;">
+            <li class="breadcrumb-item">
+                <a href="/" style="color: #005ea5; text-decoration: none;">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a asp-controller="CentralOps" asp-action="Dashboard" style="color: #005ea5; text-decoration: none;">Central Operations</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page">Monthly Summary</li>
+        </ol>
+    </nav>
+}
+
+<section class="content">
+    <div class="container-fluid">
+        @await Html.PartialAsync("_CentralOpsNavigation")
+        
+        <!-- Header -->
+        <div class="dashboard-header">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;">
+                <div>
+                    <h1>Monthly Summary</h1>
+                    <p class="mb-0">@monthName - Executive overview of portfolio performance</p>
+                </div>
+                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                    @if (prevYear.HasValue && prevMonth.HasValue)
+                    {
+                        <a asp-controller="CentralOps" asp-action="MonthlySummary" asp-route-year="@prevYear" asp-route-month="@prevMonth" class="btn btn-light btn-sm" style="background: rgba(255, 255, 255, 0.2); border: 1px solid rgba(255, 255, 255, 0.3); color: white;">
+                            <i class="fas fa-chevron-left"></i> Previous
+                        </a>
+                    }
+                    @if (nextYear.HasValue && nextMonth.HasValue)
+                    {
+                        <a asp-controller="CentralOps" asp-action="MonthlySummary" asp-route-year="@nextYear" asp-route-month="@nextMonth" class="btn btn-light btn-sm" style="background: rgba(255, 255, 255, 0.2); border: 1px solid rgba(255, 255, 255, 0.3); color: white;">
+                            Next <i class="fas fa-chevron-right"></i>
+                        </a>
+                    }
+                </div>
+            </div>
+        </div>
+
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                @TempData["ErrorMessage"]
+                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+        }
+
+        <!-- Key Metrics Overview -->
+        <div class="dashboard-summary-cards mb-4">
+            <div class="dashboard-card bg-primary">
+                <div class="dashboard-card-value">@(portfolioSummary?.TotalProjects ?? 0)</div>
+                <div class="dashboard-card-label">Total Projects</div>
+                <div class="dashboard-card-icon"><i class="fas fa-project-diagram"></i></div>
+            </div>
+            <div class="dashboard-card bg-success">
+                <div class="dashboard-card-value">@(newProjects.Count)</div>
+                <div class="dashboard-card-label">New This Month</div>
+                <div class="dashboard-card-icon"><i class="fas fa-plus-circle"></i></div>
+            </div>
+            <div class="dashboard-card bg-warning">
+                <div class="dashboard-card-value">@(achievedMilestones.Count)</div>
+                <div class="dashboard-card-label">Milestones Achieved</div>
+                <div class="dashboard-card-icon"><i class="fas fa-check-double"></i></div>
+            </div>
+            <div class="dashboard-card bg-danger">
+                <div class="dashboard-card-value">@(highRiskItems.Count + highPriorityIssues.Count)</div>
+                <div class="dashboard-card-label">High Risk Items & Issues</div>
+                <div class="dashboard-card-icon"><i class="fas fa-exclamation-triangle"></i></div>
+            </div>
+        </div>
+
+        <!-- Monthly Update Status -->
+        @if (monthlyUpdateStats != null)
+        {
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h3 class="card-title mb-0">Monthly Update Status for @monthName</h3>
+                </div>
+                <div class="card-body">
+                    <div class="dashboard-summary-cards">
+                        <div class="dashboard-card bg-success">
+                            <div class="dashboard-card-value">@monthlyUpdateStats.Submitted</div>
+                            <div class="dashboard-card-label">
+                                Submitted
+                                <small style="display: block; font-size: 0.75rem; opacity: 0.8; margin-top: 0.25rem;">
+                                    @(monthlyUpdateStats.TotalProjects > 0 ? ((monthlyUpdateStats.Submitted * 100.0) / monthlyUpdateStats.TotalProjects).ToString("F1") : "0.0")% of @monthlyUpdateStats.TotalProjects
+                                </small>
+                            </div>
+                            <div class="dashboard-card-icon"><i class="fas fa-check"></i></div>
+                        </div>
+                        <div class="dashboard-card bg-danger">
+                            <div class="dashboard-card-value">@monthlyUpdateStats.Late</div>
+                            <div class="dashboard-card-label">
+                                Late
+                                <small style="display: block; font-size: 0.75rem; opacity: 0.8; margin-top: 0.25rem;">
+                                    @(monthlyUpdateStats.TotalProjects > 0 ? ((monthlyUpdateStats.Late * 100.0) / monthlyUpdateStats.TotalProjects).ToString("F1") : "0.0")% of @monthlyUpdateStats.TotalProjects
+                                </small>
+                            </div>
+                            <div class="dashboard-card-icon"><i class="fas fa-times"></i></div>
+                        </div>
+                        <div class="dashboard-card bg-warning">
+                            <div class="dashboard-card-value">@monthlyUpdateStats.InProgress</div>
+                            <div class="dashboard-card-label">
+                                In Progress
+                                <small style="display: block; font-size: 0.75rem; opacity: 0.8; margin-top: 0.25rem;">
+                                    @(monthlyUpdateStats.TotalProjects > 0 ? ((monthlyUpdateStats.InProgress * 100.0) / monthlyUpdateStats.TotalProjects).ToString("F1") : "0.0")% of @monthlyUpdateStats.TotalProjects
+                                </small>
+                            </div>
+                            <div class="dashboard-card-icon"><i class="fas fa-clock"></i></div>
+                        </div>
+                        <div class="dashboard-card bg-secondary" style="background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%);">
+                            <div class="dashboard-card-value">@monthlyUpdateStats.NotStarted</div>
+                            <div class="dashboard-card-label">
+                                Not Started
+                                <small style="display: block; font-size: 0.75rem; opacity: 0.8; margin-top: 0.25rem;">
+                                    @(monthlyUpdateStats.TotalProjects > 0 ? ((monthlyUpdateStats.NotStarted * 100.0) / monthlyUpdateStats.TotalProjects).ToString("F1") : "0.0")% of @monthlyUpdateStats.TotalProjects
+                                </small>
+                            </div>
+                            <div class="dashboard-card-icon"><i class="fas fa-circle"></i></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <!-- Portfolio Distribution Charts -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title mb-0">RAG Status Distribution</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div style="position: relative; height: 300px;">
+                                    <canvas id="ragStatusChart"></canvas>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-hover mb-0">
+                                        <thead>
+                                            <tr>
+                                                <th>Status</th>
+                                                <th>Count</th>
+                                                <th>Percentage</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @{
+                                                var ragTotal = ragData.Red + ragData.AmberRed + ragData.Amber + ragData.AmberGreen + ragData.Green;
+                                                var ragItems = new[] {
+                                                    new { Label = "Red", Count = ragData.Red, Color = "#dc3545" },
+                                                    new { Label = "Amber-Red", Count = ragData.AmberRed, Color = "#fd7e14" },
+                                                    new { Label = "Amber", Count = ragData.Amber, Color = "#ffc107" },
+                                                    new { Label = "Amber-Green", Count = ragData.AmberGreen, Color = "#ffeb3b" },
+                                                    new { Label = "Green", Count = ragData.Green, Color = "#28a745" }
+                                                };
+                                            }
+                                            @foreach (var item in ragItems)
+                                            {
+                                                var percentage = ragTotal > 0 ? ((item.Count * 100.0) / ragTotal).ToString("F1") : "0.0";
+                                                <tr>
+                                                    <td>
+                                                        <span class="badge" style="background-color: @item.Color; color: @(item.Label == "Amber-Green" ? "#000" : "#fff");">@item.Label</span>
+                                                    </td>
+                                                    <td>@item.Count</td>
+                                                    <td>@percentage%</td>
+                                                </tr>
+                                            }
+                                            <tr style="font-weight: bold; background-color: #f4f8fb;">
+                                                <td>Total</td>
+                                                <td>@ragTotal</td>
+                                                <td>100.0%</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title mb-0">Priority Distribution</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div style="position: relative; height: 300px;">
+                                    <canvas id="priorityChart"></canvas>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-hover mb-0">
+                                        <thead>
+                                            <tr>
+                                                <th>Priority</th>
+                                                <th>Count</th>
+                                                <th>Percentage</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @{
+                                                var priorityTotal = priorityData.Critical + priorityData.High + priorityData.Medium + priorityData.Low + priorityData.NotSet;
+                                                var priorityItems = new[] {
+                                                    new { Label = "Critical", Count = priorityData.Critical, Color = "#dc3545" },
+                                                    new { Label = "High", Count = priorityData.High, Color = "#fd7e14" },
+                                                    new { Label = "Medium", Count = priorityData.Medium, Color = "#ffc107" },
+                                                    new { Label = "Low", Count = priorityData.Low, Color = "#6c757d" },
+                                                    new { Label = "Not Set", Count = priorityData.NotSet, Color = "#e9ecef" }
+                                                };
+                                            }
+                                            @foreach (var item in priorityItems)
+                                            {
+                                                var percentage = priorityTotal > 0 ? ((item.Count * 100.0) / priorityTotal).ToString("F1") : "0.0";
+                                                <tr>
+                                                    <td>
+                                                        <span class="badge" style="background-color: @item.Color; color: @(item.Label == "Not Set" ? "#000" : "#fff");">@item.Label</span>
+                                                    </td>
+                                                    <td>@item.Count</td>
+                                                    <td>@percentage%</td>
+                                                </tr>
+                                            }
+                                            <tr style="font-weight: bold; background-color: #f4f8fb;">
+                                                <td>Total</td>
+                                                <td>@priorityTotal</td>
+                                                <td>100.0%</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Work by RAG Status and Priority -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h3 class="card-title mb-0">Work by RAG Status and Priority</h3>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>RAG Status</th>
+                                <th>Priority</th>
+                                <th class="text-center">Count</th>
+                                <th>Projects</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var group in projectsByRagPriority)
+                            {
+                                <tr>
+                                    <td>
+                                        @{
+                                            var ragColor = group.RagStatus == "Red" ? "#dc3545" :
+                                                          group.RagStatus == "Amber-Red" ? "#fd7e14" :
+                                                          group.RagStatus == "Amber" ? "#ffc107" :
+                                                          group.RagStatus == "Amber-Green" ? "#ffeb3b" :
+                                                          group.RagStatus == "Green" ? "#28a745" : "#6c757d";
+                                            var ragTextColor = group.RagStatus == "Amber-Green" ? "#000" : "#fff";
+                                        }
+                                        <span class="badge" style="background-color: @ragColor; color: @ragTextColor;">@group.RagStatus</span>
+                                    </td>
+                                    <td>
+                                        @{
+                                            var priorityColor = group.Priority == "Critical" ? "#dc3545" :
+                                                               group.Priority == "High" ? "#fd7e14" :
+                                                               group.Priority == "Medium" ? "#ffc107" :
+                                                               group.Priority == "Low" ? "#6c757d" : "#e9ecef";
+                                            var priorityTextColor = group.Priority == "Not Set" ? "#000" : "#fff";
+                                        }
+                                        <span class="badge" style="background-color: @priorityColor; color: @priorityTextColor;">@group.Priority</span>
+                                    </td>
+                                    <td class="text-center"><strong>@group.Count</strong></td>
+                                    <td>
+                                        @{
+                                            var displayedProjects = group.Projects.Take(5).ToList();
+                                        }
+                                        @for (int i = 0; i < displayedProjects.Count; i++)
+                                        {
+                                            var project = displayedProjects[i];
+                                            <a asp-controller="Project" asp-action="Details" asp-route-id="@project.Id" style="color: #005ea5; text-decoration: none; font-weight: 600;">
+                                                @project.Title
+                                            </a>
+                                            <small class="text-muted">(DFE-DDT-@project.Id)</small>
+                                            @if (i < displayedProjects.Count - 1)
+                                            {
+                                                <span class="text-muted">, </span>
+                                            }
+                                        }
+                                        @if (group.Projects.Count > 5)
+                                        {
+                                            <span class="text-muted">, and @(group.Projects.Count - 5) more</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                            @if (!projectsByRagPriority.Any())
+                            {
+                                <tr>
+                                    <td colspan="4" class="text-center text-muted p-4">No projects found</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Business Area Summary -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h3 class="card-title mb-0">Business Area Summary</h3>
+                <div class="card-tools">
+                    <button type="button" class="btn btn-tool" data-lte-toggle="card-collapse">
+                        <i data-lte-icon="expand" class="bi bi-plus-lg"></i>
+                        <i data-lte-icon="collapse" class="bi bi-dash-lg"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                @if (businessAreaSummary.Any())
+                {
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Business Area</th>
+                                    <th class="text-center">Total Projects</th>
+                                    <th colspan="5" class="text-center" style="border-bottom: 2px solid #dee2e6;">RAG Status</th>
+                                    <th colspan="5" class="text-center" style="border-bottom: 2px solid #dee2e6;">Priority</th>
+                                </tr>
+                                <tr>
+                                    <th></th>
+                                    <th></th>
+                                    <th class="text-center" style="border-left: 2px solid #dee2e6;">Red</th>
+                                    <th class="text-center">Amber-Red</th>
+                                    <th class="text-center">Amber</th>
+                                    <th class="text-center">Amber-Green</th>
+                                    <th class="text-center">Green</th>
+                                    <th class="text-center" style="border-left: 2px solid #dee2e6;">Critical</th>
+                                    <th class="text-center">High</th>
+                                    <th class="text-center">Medium</th>
+                                    <th class="text-center">Low</th>
+                                    <th class="text-center">Not Set</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var area in businessAreaSummary)
+                                {
+                                    <tr>
+                                        <td><strong>@area.BusinessAreaName</strong></td>
+                                        <td class="text-center"><strong>@area.TotalProjects</strong></td>
+                                        <td class="text-center" style="border-left: 2px solid #dee2e6;">
+                                            @if (area.RedCount > 0)
+                                            {
+                                                <span class="badge badge-danger">@area.RedCount</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">0</span>
+                                            }
+                                        </td>
+                                        <td class="text-center">
+                                            @if (area.AmberRedCount > 0)
+                                            {
+                                                <span class="badge" style="background-color: #fd7e14; color: #fff;">@area.AmberRedCount</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">0</span>
+                                            }
+                                        </td>
+                                        <td class="text-center">
+                                            @if (area.AmberCount > 0)
+                                            {
+                                                <span class="badge badge-warning">@area.AmberCount</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">0</span>
+                                            }
+                                        </td>
+                                        <td class="text-center">
+                                            @if (area.AmberGreenCount > 0)
+                                            {
+                                                <span class="badge" style="background-color: #ffeb3b; color: #000;">@area.AmberGreenCount</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">0</span>
+                                            }
+                                        </td>
+                                        <td class="text-center">
+                                            @if (area.GreenCount > 0)
+                                            {
+                                                <span class="badge badge-success">@area.GreenCount</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">0</span>
+                                            }
+                                        </td>
+                                        <td class="text-center" style="border-left: 2px solid #dee2e6;">
+                                            @if (area.CriticalCount > 0)
+                                            {
+                                                <span class="badge badge-danger">@area.CriticalCount</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">0</span>
+                                            }
+                                        </td>
+                                        <td class="text-center">
+                                            @if (area.HighCount > 0)
+                                            {
+                                                <span class="badge" style="background-color: #fd7e14; color: #fff;">@area.HighCount</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">0</span>
+                                            }
+                                        </td>
+                                        <td class="text-center">
+                                            @if (area.MediumCount > 0)
+                                            {
+                                                <span class="badge badge-warning">@area.MediumCount</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">0</span>
+                                            }
+                                        </td>
+                                        <td class="text-center">
+                                            @if (area.LowCount > 0)
+                                            {
+                                                <span class="badge badge-secondary">@area.LowCount</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">0</span>
+                                            }
+                                        </td>
+                                        <td class="text-center">
+                                            @{
+                                                var notSetCount = area.TotalProjects - area.CriticalCount - area.HighCount - area.MediumCount - area.LowCount;
+                                            }
+                                            @if (notSetCount > 0)
+                                            {
+                                                <span class="badge" style="background-color: #e9ecef; color: #000;">@notSetCount</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">0</span>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                else
+                {
+                    <div class="p-4 text-center text-muted">No business area data available</div>
+                }
+            </div>
+        </div>
+
+        <!-- Activity This Month -->
+        <div class="row mb-4">
+            <div class="col-lg-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title mb-0">New Projects This Month</h3>
+                    </div>
+                    <div class="card-body p-0">
+                        @if (newProjects.Any())
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-hover mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Project</th>
+                                            <th>Business Area</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var project in newProjects.Take(10))
+                                        {
+                                            <tr>
+                                                <td>
+                                                    <a asp-controller="Project" asp-action="Details" asp-route-id="@project.Id" style="color: #005ea5; text-decoration: none; font-weight: 600;">
+                                                        @project.Title
+                                                    </a>
+                                                    <br />
+                                                    <small class="text-muted">DFE-DDT-@project.Id</small>
+                                                </td>
+                                                <td>@(project.BusinessAreaLookup?.Name ?? "-")</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                            @if (newProjects.Count > 10)
+                            {
+                                <div class="card-footer text-center">
+                                    <a asp-controller="CentralOps" asp-action="ManageWork" class="text-primary">View All @newProjects.Count Projects</a>
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <div class="p-4 text-center text-muted">No new projects added this month</div>
+                        }
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title mb-0">Milestones Achieved</h3>
+                    </div>
+                    <div class="card-body p-0">
+                        @if (achievedMilestones.Any())
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-hover mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Milestone</th>
+                                            <th>Project</th>
+                                            <th>Date</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var item in achievedMilestones.Take(10))
+                                        {
+                                            <tr>
+                                                <td>
+                                                    <a asp-controller="Project" asp-action="Details" asp-route-id="@item.Project.Id" style="color: #005ea5; text-decoration: none; font-weight: 600;">
+                                                        @item.Milestone.Name
+                                                    </a>
+                                                </td>
+                                                <td>@item.Project.Title</td>
+                                                <td>@item.Milestone.ActualDate?.ToString("dd MMM yyyy")</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                            @if (achievedMilestones.Count > 10)
+                            {
+                                <div class="card-footer text-center">
+                                    <span class="text-muted">@achievedMilestones.Count total milestones achieved</span>
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <div class="p-4 text-center text-muted">No milestones achieved this month</div>
+                        }
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title mb-0">Key Milestones Upcoming</h3>
+                    </div>
+                    <div class="card-body p-0">
+                        @if (keyMilestones.Any())
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-hover mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Milestone</th>
+                                            <th>Project</th>
+                                            <th>Due Date</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var item in keyMilestones.Take(10))
+                                        {
+                                            <tr>
+                                                <td>
+                                                    <a asp-controller="Project" asp-action="Details" asp-route-id="@item.Project.Id" style="color: #005ea5; text-decoration: none; font-weight: 600;">
+                                                        @item.Milestone.Name
+                                                    </a>
+                                                </td>
+                                                <td>@item.Project.Title</td>
+                                                <td>@item.Milestone.DueDate.ToString("dd MMM yyyy")</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                            @if (keyMilestones.Count > 10)
+                            {
+                                <div class="card-footer text-center">
+                                    <span class="text-muted">@keyMilestones.Count total key milestones</span>
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <div class="p-4 text-center text-muted">No key milestones upcoming</div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Risks and Issues -->
+        <div class="row mb-4">
+            <div class="col-lg-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title mb-0">High Risk Items</h3>
+                        <div class="card-tools">
+                            <span class="badge badge-danger">@highRiskItems.Count</span>
+                        </div>
+                    </div>
+                    <div class="card-body p-0">
+                        @if (highRiskItems.Any())
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-hover mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Risk</th>
+                                            <th>Project</th>
+                                            <th>Score</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var item in highRiskItems.Take(15))
+                                        {
+                                            var isNew = item.Risk.CreatedAt >= monthStart && item.Risk.CreatedAt <= monthEnd;
+                                            <tr>
+                                                <td>
+                                                    <a asp-controller="Project" asp-action="Details" asp-route-id="@item.Project.Id" style="color: #005ea5; text-decoration: none; font-weight: 600;">
+                                                        @item.Risk.Title
+                                                    </a>
+                                                    @if (isNew)
+                                                    {
+                                                        <span class="badge badge-info ml-1">New</span>
+                                                    }
+                                                </td>
+                                                <td>@item.Project.Title</td>
+                                                <td>
+                                                    <span class="badge @(item.Risk.RiskScore >= 20 ? "badge-danger" : "badge-warning")">@item.Risk.RiskScore</span>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                            @if (highRiskItems.Count > 15)
+                            {
+                                <div class="card-footer text-center">
+                                    <span class="text-muted">@highRiskItems.Count total high risk items</span>
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <div class="p-4 text-center text-muted">No high risk items found</div>
+                        }
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title mb-0">High Priority Issues</h3>
+                        <div class="card-tools">
+                            <span class="badge badge-danger">@highPriorityIssues.Count</span>
+                        </div>
+                    </div>
+                    <div class="card-body p-0">
+                        @if (highPriorityIssues.Any())
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-hover mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Issue</th>
+                                            <th>Project</th>
+                                            <th>Severity</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var item in highPriorityIssues.Take(15))
+                                        {
+                                            var isNew = item.Issue.CreatedAt >= monthStart && item.Issue.CreatedAt <= monthEnd;
+                                            <tr>
+                                                <td>
+                                                    <a asp-controller="Project" asp-action="Details" asp-route-id="@item.Project.Id" style="color: #005ea5; text-decoration: none; font-weight: 600;">
+                                                        @item.Issue.Title
+                                                    </a>
+                                                    @if (isNew)
+                                                    {
+                                                        <span class="badge badge-info ml-1">New</span>
+                                                    }
+                                                </td>
+                                                <td>@item.Project.Title</td>
+                                                <td>
+                                                    <span class="badge badge-@(item.Issue.Severity.ToLower() == "critical" ? "danger" : item.Issue.Severity.ToLower() == "high" ? "warning" : "info")">
+                                                        @item.Issue.Severity
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                            @if (highPriorityIssues.Count > 15)
+                            {
+                                <div class="card-footer text-center">
+                                    <span class="text-muted">@highPriorityIssues.Count total high priority issues</span>
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <div class="p-4 text-center text-muted">No high priority issues found</div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Portfolio Summary -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title mb-0">Portfolio Summary</h3>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="info-box">
+                            <span class="info-box-icon bg-info"><i class="fas fa-tasks"></i></span>
+                            <div class="info-box-content">
+                                <span class="info-box-text">Total Milestones</span>
+                                <span class="info-box-number">@(portfolioSummary?.TotalMilestones ?? 0)</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="info-box">
+                            <span class="info-box-icon bg-success"><i class="fas fa-check-circle"></i></span>
+                            <div class="info-box-content">
+                                <span class="info-box-text">Completed Milestones</span>
+                                <span class="info-box-number">@(portfolioSummary?.CompletedMilestones ?? 0)</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="info-box">
+                            <span class="info-box-icon bg-warning"><i class="fas fa-exclamation-triangle"></i></span>
+                            <div class="info-box-content">
+                                <span class="info-box-text">Open Risks</span>
+                                <span class="info-box-number">@(portfolioSummary?.OpenRisks ?? 0)</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="info-box">
+                            <span class="info-box-icon bg-danger"><i class="fas fa-bug"></i></span>
+                            <div class="info-box-content">
+                                <span class="info-box-text">Open Issues</span>
+                                <span class="info-box-number">@(portfolioSummary?.OpenIssues ?? 0)</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" nonce="@Context.Items["Nonce"]"></script>
+    <script nonce="@Context.Items["Nonce"]">
+        $(document).ready(function() {
+            // RAG Status Donut Chart
+            var ragCtx = document.getElementById('ragStatusChart');
+            if (ragCtx) {
+                new Chart(ragCtx.getContext('2d'), {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Red', 'Amber-Red', 'Amber', 'Amber-Green', 'Green'],
+                        datasets: [{
+                            data: [@ragData.Red, @ragData.AmberRed, @ragData.Amber, @ragData.AmberGreen, @ragData.Green],
+                            backgroundColor: [
+                                '#dc3545',
+                                '#fd7e14',
+                                '#ffc107',
+                                '#ffeb3b',
+                                '#28a745'
+                            ],
+                            borderWidth: 3,
+                            borderColor: '#fff'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'bottom',
+                                labels: {
+                                    padding: 15,
+                                    font: {
+                                        size: 12
+                                    }
+                                }
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        var label = context.label || '';
+                                        var value = context.parsed || 0;
+                                        var total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                        var percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+                                        return label + ': ' + value + ' (' + percentage + '%)';
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            // Priority Distribution Donut Chart
+            var priorityCtx = document.getElementById('priorityChart');
+            if (priorityCtx) {
+                new Chart(priorityCtx.getContext('2d'), {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Critical', 'High', 'Medium', 'Low', 'Not Set'],
+                        datasets: [{
+                            data: [@priorityData.Critical, @priorityData.High, @priorityData.Medium, @priorityData.Low, @priorityData.NotSet],
+                            backgroundColor: [
+                                '#dc3545',
+                                '#fd7e14',
+                                '#ffc107',
+                                '#6c757d',
+                                '#e9ecef'
+                            ],
+                            borderWidth: 3,
+                            borderColor: '#fff'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'bottom',
+                                labels: {
+                                    padding: 15,
+                                    font: {
+                                        size: 12
+                                    }
+                                }
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        var label = context.label || '';
+                                        var value = context.parsed || 0;
+                                        var total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                        var percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+                                        return label + ': ' + value + ' (' + percentage + '%)';
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+        });
+    </script>
+}

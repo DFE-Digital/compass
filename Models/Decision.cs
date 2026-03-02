@@ -25,6 +25,9 @@ public class Decision
     [MaxLength(50)]
     public string? FipsId { get; set; }
 
+    [MaxLength(100)]
+    public string? ProductDocumentId { get; set; } // Product DocumentID from CMS (primary identifier)
+
     [Required]
     [MaxLength(200)]
     public string Title { get; set; } = string.Empty;
@@ -187,5 +190,6 @@ public class Decision
     public ICollection<Action> Actions { get; set; } = new List<Action>();
     public ICollection<RiskDecision> RiskDecisions { get; set; } = new List<RiskDecision>();
     public ICollection<IssueDecision> IssueDecisions { get; set; } = new List<IssueDecision>();
+    public ICollection<ActionDecision> ActionDecisions { get; set; } = new List<ActionDecision>();
 }
 

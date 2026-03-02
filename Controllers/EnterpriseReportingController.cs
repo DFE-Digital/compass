@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Compass.Data;
@@ -7,6 +8,7 @@ using System.Text;
 
 namespace Compass.Controllers;
 
+[Authorize]
 public class EnterpriseReportingController : Controller
 {
     private readonly CompassDbContext _context;
@@ -412,6 +414,12 @@ public class EnterpriseReportingController : Controller
         ViewBag.HasInProgressAssessment = inProgressAssessments.Any();
 
         return View("~/Views/EnterpriseReporting/FunctionalStandards/SelectStandard.cshtml");
+    }
+
+    // GET: EnterpriseReporting/FunctionalStandardsGuidance
+    public IActionResult FunctionalStandardsGuidance()
+    {
+        return View("~/Views/EnterpriseReporting/FunctionalStandards/Guidance.cshtml");
     }
 
     // POST: EnterpriseReporting/StartAssessment

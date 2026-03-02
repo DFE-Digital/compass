@@ -1,0 +1,2137 @@
+@model Compass.Models.FipsCompletionViewModel
+@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
+@{
+    ViewData["Title"] = "FIPS New Entries";
+    var fipsBaseUrl = Configuration["fipsProduct:baseUrl"] ?? "https://find-products-services-test.azurewebsites.net/";
+}
+
+@section Breadcrumbs {
+    <style>
+        .breadcrumb a:hover {
+            color: #003078 !important;
+            text-decoration: underline !important;
+        }
+    </style>
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4 breadcrumb-standard">
+            <li class="breadcrumb-item">
+                <a href="/" class="breadcrumb-link-standard">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a asp-action="Index" class="breadcrumb-link-standard">DDT Reports</a>
+            </li>
+            <li class="breadcrumb-item active breadcrumb-active-standard" aria-current="page">FIPS New Entries</li>
+        </ol>
+    </nav>
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-12">
+                <h1 class="m-0">FIPS New Entries</h1>
+                <p class="text-muted mb-0">
+                    <small>
+                        Showing products with state "New" only. Use this view to manage and complete data for new product entries.
+                    </small>
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+@await Html.PartialAsync("_DataQualityNavigation")
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @Html.Raw(TempData["SuccessMessage"])
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        <div id="inlineAlertContainer"></div>
+
+        <!-- Summary Cards -->
+        <div class="row mb-3">
+            <!-- Business Area Completion -->
+            <div class="col-lg-8 col-md-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            Completion by business area
+                        </h3>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Business area</th>
+                                        <th class="text-center">Products</th>
+                                        <th class="text-center">Average completion</th>
+                                        <th class="text-center width-200px">Progress</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="businessAreaTableBody">
+                                    @foreach (var area in Model.BusinessAreaCompletions)
+                                    {
+                                        var completionClass = area.AverageCompletionPercentage >= 80 ? "success" : 
+                                                            area.AverageCompletionPercentage >= 60 ? "warning" : "danger";
+                                        <tr>
+                                            <td>
+                                                <strong>@area.BusinessArea</strong>
+                                            </td>
+                                            <td class="text-center">
+                                                <span class="badge badge-info">@area.ProductCount</span>
+                                            </td>
+                                            <td class="text-center">
+                                                <span class="badge badge-@completionClass badge-lg">
+                                                    @area.AverageCompletionPercentage.ToString("F1")%
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <div class="progress progress-sm">
+                                                    <div class="progress-bar bg-@completionClass" 
+                                                         style="width: @area.AverageCompletionPercentage%"></div>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Side Cards -->
+            <div class="col-lg-4 col-md-12">
+                <!-- Average Completion Summary -->
+                <div class="card @(Model.AverageCompletionPercentage >= 80 ? "card-success" : Model.AverageCompletionPercentage >= 60 ? "card-warning" : "card-danger") mb-3" id="averageCompletionCard">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            Average completion across all products
+                        </h3>
+                    </div>
+                    <div class="card-body text-center">
+                        <h2 class="mb-0 stat-value-large" id="averageCompletionValue">@Model.AverageCompletionPercentage.ToString("F1")%</h2>
+                        <p class="text-muted mb-0 mt-2" id="averageCompletionSubtitle">Based on @Model.Products.Count products</p>
+                        <div class="progress progress-lg mt-3">
+                            <div class="progress-bar @(Model.AverageCompletionPercentage >= 80 ? "bg-success" : Model.AverageCompletionPercentage >= 60 ? "bg-warning" : "bg-danger")" 
+                                 style="width: @Model.AverageCompletionPercentage%" id="averageCompletionProgress"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Zero Completion Count -->
+                <div class="card @(Model.ZeroCompletionCount > 0 ? "card-danger" : "card-success") mb-3" id="zeroCompletionCard">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            Products at 0% completion
+                        </h3>
+                    </div>
+                    <div class="card-body text-center">
+                        <h2 class="mb-0 stat-value-large" id="zeroCompletionValue">@Model.ZeroCompletionCount</h2>
+                        <p class="text-muted mb-0 mt-2">
+                            @{
+                                var zeroPercentage = Model.Products.Any() ? (Model.ZeroCompletionCount / (double)Model.Products.Count) * 100 : 0;
+                            }
+                            @if (Model.ZeroCompletionCount == 0)
+                            {
+                                <span id="zeroCompletionText">All products have at least some completion data (@zeroPercentage.ToString("F1")%)</span>
+                            }
+                            else if (Model.ZeroCompletionCount == 1)
+                            {
+                                <span id="zeroCompletionText">product has no completion data (@zeroPercentage.ToString("F1")%)</span>
+                            }
+                            else
+                            {
+                                <span id="zeroCompletionText">products have no completion data (@zeroPercentage.ToString("F1")%)</span>
+                            }
+                        </p>
+                        <div class="progress progress-lg mt-3">
+                            <div class="progress-bar @(Model.ZeroCompletionCount > 0 ? "bg-danger" : "bg-success")" 
+                                 style="width: @zeroPercentage%" id="zeroCompletionProgress"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Products With Contact Count -->
+                <div class="card @(Model.ProductsWithContactCount == Model.Products.Count ? "card-success" : Model.ProductsWithContactCount > 0 ? "card-warning" : "card-danger")" id="productsWithContactCard">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            At least 1 contact
+                        </h3>
+                    </div>
+                    <div class="card-body text-center">
+                        <h2 class="mb-0 stat-value-large" id="productsWithContactValue">@Model.ProductsWithContactCount</h2>
+                        <p class="text-muted mb-0 mt-2">
+                            @{
+                                var contactPercentage = Model.Products.Any() ? (Model.ProductsWithContactCount / (double)Model.Products.Count) * 100 : 0;
+                                var contactColorClass = contactPercentage >= 80 ? "success" : contactPercentage >= 50 ? "warning" : "danger";
+                            }
+                            @if (Model.ProductsWithContactCount == 0)
+                            {
+                                <span id="productsWithContactText">No products have contacts (@contactPercentage.ToString("F1")%)</span>
+                            }
+                            else if (Model.ProductsWithContactCount == 1)
+                            {
+                                <span id="productsWithContactText">product has at least 1 contact (@contactPercentage.ToString("F1")%)</span>
+                            }
+                            else
+                            {
+                                <span id="productsWithContactText">products have at least 1 contact (@contactPercentage.ToString("F1")%)</span>
+                            }
+                        </p>
+                        <div class="progress progress-lg mt-3">
+                            <div class="progress-bar bg-@contactColorClass" 
+                                 style="width: @contactPercentage%" id="productsWithContactProgress"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Completion Stats -->
+        <div class="row mb-3">
+            <div class="col-lg-4 col-md-4 col-12">
+                @{
+                    var phasePercentage = Model.Products.Any() ? (Model.CompletedPhaseCount / (double)Model.Products.Count) * 100 : 0;
+                    var phaseColorClass = phasePercentage >= 80 ? "success" : phasePercentage >= 50 ? "warning" : "danger";
+                }
+                <div class="card card-@phaseColorClass" id="completedPhaseCard">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            Completed Phase
+                        </h3>
+                    </div>
+                    <div class="card-body text-center">
+                        <h2 class="mb-0 stat-value-large" id="completedPhaseValue">@Model.CompletedPhaseCount</h2>
+                        <p class="text-muted mb-0 mt-2" id="completedPhaseText">of @Model.Products.Count products (@phasePercentage.ToString("F1")%)</p>
+                        <div class="progress progress-lg mt-3">
+                            <div class="progress-bar bg-@phaseColorClass" style="width: @phasePercentage%" id="completedPhaseProgress"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-4 col-md-4 col-12">
+                @{
+                    var businessAreaPercentage = Model.Products.Any() ? (Model.CompletedBusinessAreaCount / (double)Model.Products.Count) * 100 : 0;
+                    var businessAreaColorClass = businessAreaPercentage >= 80 ? "success" : businessAreaPercentage >= 50 ? "warning" : "danger";
+                }
+                <div class="card card-@businessAreaColorClass" id="completedBusinessAreaCard">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            Completed Business Area
+                        </h3>
+                    </div>
+                    <div class="card-body text-center">
+                        <h2 class="mb-0 stat-value-large" id="completedBusinessAreaValue">@Model.CompletedBusinessAreaCount</h2>
+                        <p class="text-muted mb-0 mt-2" id="completedBusinessAreaText">of @Model.Products.Count products (@businessAreaPercentage.ToString("F1")%)</p>
+                        <div class="progress progress-lg mt-3">
+                            <div class="progress-bar bg-@businessAreaColorClass" style="width: @businessAreaPercentage%" id="completedBusinessAreaProgress"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-4 col-md-4 col-12">
+                @{
+                    var urlPercentage = Model.Products.Any() ? (Model.CompletedUrlCount / (double)Model.Products.Count) * 100 : 0;
+                    var urlColorClass = urlPercentage >= 80 ? "success" : urlPercentage >= 50 ? "warning" : "danger";
+                }
+                <div class="card card-@urlColorClass" id="completedUrlCard">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            Completed URL
+                        </h3>
+                    </div>
+                    <div class="card-body text-center">
+                        <h2 class="mb-0 stat-value-large" id="completedUrlValue">@Model.CompletedUrlCount</h2>
+                        <p class="text-muted mb-0 mt-2" id="completedUrlText">of @Model.Products.Count products (@urlPercentage.ToString("F1")%)</p>
+                        <div class="progress progress-lg mt-3">
+                            <div class="progress-bar bg-@urlColorClass" style="width: @urlPercentage%" id="completedUrlProgress"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @{
+            var sroOptions = Model.Products
+                .SelectMany(p => p.SeniorResponsibleOfficerContacts ?? new List<string>())
+                .Where(option => !string.IsNullOrWhiteSpace(option))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(option => option, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            var iaoOptions = Model.Products
+                .SelectMany(p => p.InformationAssetOwnerContacts ?? new List<string>())
+                .Where(option => !string.IsNullOrWhiteSpace(option))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(option => option, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            var deliveryManagerOptions = Model.Products
+                .SelectMany(p => p.DeliveryManagerContacts ?? new List<string>())
+                .Where(option => !string.IsNullOrWhiteSpace(option))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(option => option, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
+        <!-- Filters -->
+        <div class="row mb-3">
+            <div class="col-lg-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            Filter products
+                        </h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-lg-4 col-md-6 col-12">
+                                <div class="form-group">
+                                    <label for="searchInput">Search by product name or FIPS ID</label>
+                                    <input type="text" class="form-control" id="searchInput" placeholder="Search products...">
+                                </div>
+                            </div>
+                            <div class="col-lg-2 col-md-6 col-12">
+                                <div class="form-group">
+                                    <label for="businessAreaFilter">Business area</label>
+                                    <select class="form-control" id="businessAreaFilter">
+                                        <option value="">All business areas</option>
+                                        @foreach (var area in Model.BusinessAreaCompletions.OrderBy(a => a.BusinessArea))
+                                        {
+                                            <option value="@area.BusinessArea">@area.BusinessArea</option>
+                                        }
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-lg-3 col-md-6 col-12">
+                                <div class="form-group">
+                                    <label for="completionFilter">Filter by completion %</label>
+                                    <select class="form-control" id="completionFilter">
+                                        <option value="">All products</option>
+                                        <option value="100">100% Complete</option>
+                                        <option value="80-99">80-99%</option>
+                                        <option value="60-79">60-79%</option>
+                                        <option value="40-59">40-59%</option>
+                                        <option value="0-39">0-39%</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-lg-3 col-md-6 col-12">
+                                <div class="form-group">
+                                    <label for="statusFilter">Filter by status</label>
+                                    <select class="form-control" id="statusFilter">
+                                        <option value="">All products</option>
+                                        <option value="complete">Complete (100%)</option>
+                                        <option value="incomplete">Incomplete (&lt;100%)</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-lg-4 col-md-6 col-12">
+                                <div class="form-group">
+                                    <label for="sroFilter">Senior responsible officer</label>
+                                    <input type="text" class="form-control form-control-sm filter-search mb-2" data-target="#sroFilter" placeholder="Search users" aria-label="Search senior responsible officer">
+                                    <select class="form-control" id="sroFilter">
+                                        <option value="">All contacts</option>
+                                        @foreach (var option in sroOptions)
+                                        {
+                                            var optionValue = option.ToLowerInvariant();
+                                            <option value="@optionValue">@option</option>
+                                        }
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-lg-4 col-md-6 col-12">
+                                <div class="form-group">
+                                    <label for="iaoFilter">Information asset owner</label>
+                                    <input type="text" class="form-control form-control-sm filter-search mb-2" data-target="#iaoFilter" placeholder="Search users" aria-label="Search information asset owner">
+                                    <select class="form-control" id="iaoFilter">
+                                        <option value="">All contacts</option>
+                                        @foreach (var option in iaoOptions)
+                                        {
+                                            var optionValue = option.ToLowerInvariant();
+                                            <option value="@optionValue">@option</option>
+                                        }
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-lg-4 col-md-6 col-12">
+                                <div class="form-group">
+                                    <label for="deliveryManagerFilter">Delivery manager</label>
+                                    <input type="text" class="form-control form-control-sm filter-search mb-2" data-target="#deliveryManagerFilter" placeholder="Search users" aria-label="Search delivery manager">
+                                    <select class="form-control" id="deliveryManagerFilter">
+                                        <option value="">All contacts</option>
+                                        @foreach (var option in deliveryManagerOptions)
+                                        {
+                                            var optionValue = option.ToLowerInvariant();
+                                            <option value="@optionValue">@option</option>
+                                        }
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Completion Table -->
+        <div class="row">
+            <div class="col-lg-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            Product completion status
+                        </h3>
+                        <div class="card-tools">
+                            <button type="button" id="exportFilteredBtn" class="btn btn-outline-primary btn-sm mr-2">
+                                <i class="fas fa-file-excel mr-1"></i> Export filtered view
+                            </button>
+                            <a asp-action="ExportFipsNewEntries" class="btn btn-outline-success btn-sm mr-2">
+                                <i class="fas fa-file-excel mr-1"></i> Export to Excel
+                            </a>
+                            <span class="badge badge-info" id="productCount">@Model.Products.Count products</span>
+                        </div>
+                    </div>
+                    <div class="card-body table-responsive p-0">
+                        <table class="table table-hover text-nowrap sortable-table mb-0" id="completionTable">
+                            <thead>
+                                <tr>
+                                    <th class="sortable cursor-pointer" data-column="ProductTitle">
+                                        Product <i class="fas fa-sort"></i>
+                                    </th>
+                                    <th class="sortable cursor-pointer" data-column="FipsId">
+                                        FIPS ID <i class="fas fa-sort"></i>
+                                    </th>
+                                    <th class="text-center sortable cursor-pointer" data-column="Phase">
+                                        Phase <i class="fas fa-sort"></i>
+                                    </th>
+                                    <th class="text-center sortable cursor-pointer" data-column="BusinessArea">
+                                        Business area <i class="fas fa-sort"></i>
+                                    </th>
+                                    <th class="text-center sortable cursor-pointer" data-column="Contacts">
+                                        Contacts <i class="fas fa-sort"></i>
+                                    </th>
+                                    <th class="text-center sortable cursor-pointer" data-column="ProductUrl">
+                                        Product URL <i class="fas fa-sort"></i>
+                                    </th>
+                                    <th class="text-center sortable cursor-pointer" data-column="UserGroups">
+                                        User groups <i class="fas fa-sort"></i>
+                                    </th>
+                                    <th class="sortable cursor-pointer" data-column="SeniorResponsibleOfficer">
+                                        Senior Responsible Officer <i class="fas fa-sort"></i>
+                                    </th>
+                                    <th class="sortable cursor-pointer" data-column="DeliveryManager">
+                                        Delivery Manager <i class="fas fa-sort"></i>
+                                    </th>
+                                    <th class="sortable cursor-pointer" data-column="InformationAssetOwner">
+                                        Information Asset Owner <i class="fas fa-sort"></i>
+                                    </th>
+                                    <th class="text-center sortable cursor-pointer" data-column="CompletionPercentage">
+                                        Completion % <i class="fas fa-sort"></i>
+                                    </th>
+                                    <th class="text-center width-100px">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var product in Model.Products)
+                                {
+                                    var sroDisplayList = product.SeniorResponsibleOfficerContacts ?? new List<string>();
+                                    var iaoDisplayList = product.InformationAssetOwnerContacts ?? new List<string>();
+                                    var deliveryDisplayList = product.DeliveryManagerContacts ?? new List<string>();
+                                    var sroDataValue = string.Join("||", sroDisplayList.Select(c => c.ToLowerInvariant()));
+                                    var iaoDataValue = string.Join("||", iaoDisplayList.Select(c => c.ToLowerInvariant()));
+                                    var deliveryManagerDataValue = string.Join("||", deliveryDisplayList.Select(c => c.ToLowerInvariant()));
+                                    var userGroupDataValue = string.Join("||", (product.UserGroupNames ?? new List<string>()).Select(c => c.ToLowerInvariant()));
+                                    var userGroupIdsDataValue = string.Join(",", product.UserGroupCategoryValueIds ?? new List<int>());
+                                    var userGroupTitle = product.UserGroupNames.Any()
+                                        ? string.Join(", ", product.UserGroupNames)
+                                        : "No user groups";
+                                    <tr data-product-title="@product.ProductTitle.ToLowerInvariant()" 
+                                        data-fips-id="@product.FipsId.ToLowerInvariant()"
+                                        data-completion="@product.CompletionPercentage"
+                                        data-business-area="@product.BusinessArea"
+                                        data-has-phase="@(product.HasPhase ? "true" : "false")"
+                                        data-has-business-area="@(product.HasBusinessArea ? "true" : "false")"
+                                        data-has-product-url="@(product.HasProductUrl ? "true" : "false")"
+                                        data-user-groups-count="@product.UserGroupsCount"
+                                        data-user-groups="@userGroupDataValue"
+                                        data-user-group-ids="@userGroupIdsDataValue"
+                                        data-contacts-count="@product.ContactsCount"
+                                        data-sro="@sroDataValue"
+                                        data-sro-names="@string.Join("||", sroDisplayList)"
+                                        data-sro-display="@product.SeniorResponsibleOfficer"
+                                        data-iao="@iaoDataValue"
+                                        data-iao-names="@string.Join("||", iaoDisplayList)"
+                                        data-iao-display="@product.InformationAssetOwner"
+                                        data-delivery-manager="@deliveryManagerDataValue"
+                                        data-delivery-manager-names="@string.Join("||", deliveryDisplayList)"
+                                        data-delivery-manager-display="@product.DeliveryManager">
+                                        <td>
+                                            <a href="@($"{fipsBaseUrl.TrimEnd('/')}/product/{product.FipsId}")" target="_blank" rel="noopener noreferrer" class="font-weight-bold">
+                                                @product.ProductTitle
+                                            </a>
+                                        </td>
+                                        <td>
+                                            @product.FipsId
+                                        </td>
+                                        <td class="text-center">
+                                            @if (product.HasPhase)
+                                            {
+                                                <i class="fas fa-check-square text-success completion-icon" title="Phase assigned"></i>
+                                            }
+                                            else
+                                            {
+                                                <i class="fas fa-times-square text-danger completion-icon" title="Phase missing"></i>
+                                            }
+                                        </td>
+                                        <td class="text-center">
+                                            @if (product.HasBusinessArea)
+                                            {
+                                                <i class="fas fa-check-square text-success completion-icon" title="@($"Business area: {product.BusinessArea}")"></i>
+                                            }
+                                            else
+                                            {
+                                                <i class="fas fa-times-square text-danger completion-icon" title="Business area missing"></i>
+                                            }
+                                        </td>
+                                        <td class="text-center">
+                                            @if (product.ContactsCount > 0)
+                                            {
+                                                <i class="fas fa-check-square text-success completion-icon" title="@product.ContactsCount contact(s)"></i><span class="completion-count">@product.ContactsCount</span>
+                                            }
+                                            else
+                                            {
+                                                <i class="fas fa-times-square text-danger completion-icon" title="No contacts"></i><span class="completion-count">0</span>
+                                            }
+                                        </td>
+                                        <td class="text-center">
+                                            @if (product.HasProductUrl)
+                                            {
+                                                <i class="fas fa-check-square text-success completion-icon" title="Product URL provided"></i>
+                                            }
+                                            else
+                                            {
+                                                <i class="fas fa-times-square text-danger completion-icon" title="Product URL missing"></i>
+                                            }
+                                        </td>
+                                        <td class="text-center">
+                                            @if (product.UserGroupsCount > 0)
+                                            {
+                                                <i class="fas fa-check-square text-success completion-icon" title="@userGroupTitle"></i><span class="completion-count">@product.UserGroupsCount</span>
+                                            }
+                                            else
+                                            {
+                                                <i class="fas fa-times-square text-danger completion-icon" title="No user groups"></i><span class="completion-count">0</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            @if (!string.IsNullOrWhiteSpace(product.SeniorResponsibleOfficer))
+                                            {
+                                                @product.SeniorResponsibleOfficer
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">-</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            @if (!string.IsNullOrWhiteSpace(product.DeliveryManager))
+                                            {
+                                                @product.DeliveryManager
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">-</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            @if (!string.IsNullOrWhiteSpace(product.InformationAssetOwner))
+                                            {
+                                                @product.InformationAssetOwner
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">-</span>
+                                            }
+                                        </td>
+                                        <td class="text-center">
+                                            @product.CompletionPercentage.ToString("F1")%
+                                        </td>
+                                        <td class="text-center">
+                                            <div class="btn-group">
+                                                <button type="button" class="btn btn-sm btn-secondary dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                                                    <i class="fas fa-cog"></i>
+                                                </button>
+                                                <div class="dropdown-menu dropdown-menu-right">
+                                                    <a class="dropdown-item" href="#" data-action="set-phase" data-fips-id="@product.FipsId">
+                                                        <i class="fas fa-layer-group mr-2"></i> Set Phase
+                                                    </a>
+                                                    <a class="dropdown-item" href="#" data-action="set-business-area" data-fips-id="@product.FipsId">
+                                                        <i class="fas fa-building mr-2"></i> Set Business Area
+                                                    </a>
+                                                    <a class="dropdown-item" href="#" data-action="set-product-url" data-fips-id="@product.FipsId">
+                                                        <i class="fas fa-link mr-2"></i> Set Product URL
+                                                    </a>
+                                                    <a class="dropdown-item" href="#" data-action="set-user-groups" data-fips-id="@product.FipsId">
+                                                        <i class="fas fa-users mr-2"></i> Set User Groups
+                                                    </a>
+                                                    <a class="dropdown-item" href="#" data-action="set-service-owner" data-fips-id="@product.FipsId">
+                                                        <i class="fas fa-user-tie mr-2"></i> Set Service Owner
+                                                    </a>
+                                                    <a class="dropdown-item" href="#" data-action="set-product-manager" data-fips-id="@product.FipsId">
+                                                        <i class="fas fa-user-cog mr-2"></i> Set Product Manager
+                                                    </a>
+                                                    <a class="dropdown-item" href="#" data-action="set-delivery-manager" data-fips-id="@product.FipsId">
+                                                        <i class="fas fa-truck mr-2"></i> Set Delivery Manager
+                                                    </a>
+                                                    <a class="dropdown-item" href="#" data-action="set-information-asset-owner" data-fips-id="@product.FipsId">
+                                                        <i class="fas fa-shield-alt mr-2"></i> Set Information Asset Owner
+                                                    </a>
+                                                    <a class="dropdown-item" href="#" data-action="set-senior-responsible-officer" data-fips-id="@product.FipsId">
+                                                        <i class="fas fa-user-shield mr-2"></i> Set Senior Responsible Officer
+                                                    </a>
+                                                    <a class="dropdown-item" href="#" data-action="set-reporting-user" data-fips-id="@product.FipsId">
+                                                        <i class="fas fa-chart-line mr-2"></i> Set Reporting User
+                                                    </a>
+                                                    <a class="dropdown-item" href="#" data-action="set-service-designs" data-fips-id="@product.FipsId">
+                                                        <i class="fas fa-palette mr-2"></i> Set Service Designs
+                                                    </a>
+                                                    <a class="dropdown-item" href="#" data-action="set-user-researchers" data-fips-id="@product.FipsId">
+                                                        <i class="fas fa-search mr-2"></i> Set User Researchers
+                                                    </a>
+                                                    <div class="dropdown-divider"></div>
+                                                    <a class="dropdown-item text-success" href="#" data-action="update-state-active" data-fips-id="@product.FipsId" data-product-title="@product.ProductTitle">
+                                                        <i class="fas fa-check-circle mr-2"></i> Set to Active
+                                                    </a>
+                                                    <a class="dropdown-item text-danger" href="#" data-action="update-state-rejected" data-fips-id="@product.FipsId" data-product-title="@product.ProductTitle">
+                                                        <i class="fas fa-ban mr-2"></i> Update State to Rejected
+                                                    </a>
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                        @if (!Model.Products.Any())
+                        {
+                            <div class="text-center text-muted p-5">
+                                <i class="fas fa-info-circle fa-3x mb-3"></i>
+                                <p class="mb-0">No products found</p>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+@{
+    var phaseCategoryValues = ViewBag.PhaseCategoryValues as List<Compass.Models.CategoryValueDto> ?? new List<Compass.Models.CategoryValueDto>();
+    var businessAreaCategoryValues = ViewBag.BusinessAreaCategoryValues as List<Compass.Models.CategoryValueDto> ?? new List<Compass.Models.CategoryValueDto>();
+    var userGroupCategoryValues = ViewBag.UserGroupCategoryValues as List<Compass.Models.CategoryValueDto> ?? new List<Compass.Models.CategoryValueDto>();
+}
+
+<!-- Update Phase Modal -->
+<div class="modal fade" id="updatePhaseModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Update Phase</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateProductPhase" method="post">
+                <input type="hidden" name="fipsId" id="phaseFipsId" />
+                <div class="modal-body">
+                    <p class="mb-3">Select the Phase for this product.</p>
+                    <div class="form-group">
+                        <label for="phaseCategoryValueId" class="form-label">Phase *</label>
+                        <select class="form-control" id="phaseCategoryValueId" name="phaseCategoryValueId" required>
+                            <option value="">-- Select Phase --</option>
+                            @foreach (var phase in phaseCategoryValues.OrderBy(p => p.SortOrder ?? int.MaxValue).ThenBy(p => p.Name))
+                            {
+                                <option value="@phase.Id">@phase.Name</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-success">Save Phase</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Update Business Area Modal -->
+<div class="modal fade" id="updateBusinessAreaModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Update Business Area</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateProductBusinessArea" method="post">
+                <input type="hidden" name="fipsId" id="businessAreaFipsId" />
+                <div class="modal-body">
+                    <p class="mb-3">Select the Business Area for this product.</p>
+                    <div class="form-group">
+                        <label for="businessAreaCategoryValueId" class="form-label">Business Area *</label>
+                        <select class="form-control" id="businessAreaCategoryValueId" name="businessAreaCategoryValueId" required>
+                            <option value="">-- Select Business Area --</option>
+                            @foreach (var area in businessAreaCategoryValues.OrderBy(a => a.SortOrder ?? int.MaxValue).ThenBy(a => a.Name))
+                            {
+                                <option value="@area.Id">@area.Name</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-success">Save Business Area</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Update Product URL Modal -->
+<div class="modal fade" id="updateProductUrlModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Update Product URL</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateProductUrl" method="post">
+                <input type="hidden" name="fipsId" id="productUrlFipsId" />
+                <div class="modal-body">
+                    <p class="mb-3">The Product URL should be the main URL of the product website.</p>
+                    <div class="form-group">
+                        <label for="productUrl" class="form-label">Product URL *</label>
+                        <input type="url" 
+                               class="form-control" 
+                               id="productUrl" 
+                               name="productUrl"
+                               placeholder="https://example.gov.uk" 
+                               required />
+                        <small class="form-text text-muted">
+                            Enter the main URL of the product website (must start with http:// or https://)
+                        </small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-success">Save Product URL</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Update User Groups Modal -->
+<div class="modal fade" id="updateUserGroupsModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Update User Groups</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateProductUserGroups" method="post">
+                <input type="hidden" name="fipsId" id="userGroupsFipsId" />
+                <div class="modal-body">
+                    <p class="mb-3">Select all user groups that apply to this product. Leave blank to clear user groups.</p>
+                    <div class="form-group">
+                        <label for="userGroupCategoryValueIds" class="form-label">User groups</label>
+                        <select class="form-control" id="userGroupCategoryValueIds" name="userGroupCategoryValueIds" multiple size="10">
+                            @foreach (var userGroup in userGroupCategoryValues.OrderBy(u => u.Name))
+                            {
+                                <option value="@userGroup.Id">@userGroup.Name</option>
+                            }
+                        </select>
+                        <small class="form-text text-muted">
+                            Hold Ctrl (Windows) or Command (Mac) to select multiple user groups. Leave all options unselected to remove user groups.
+                        </small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-success">Save User Groups</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Update Service Owner Modal -->
+<div class="modal fade" id="updateServiceOwnerModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Update Service Owner</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateProductServiceOwner" method="post">
+                <input type="hidden" name="fipsId" id="serviceOwnerFipsId" />
+                <div class="modal-body">
+                    <p class="mb-3">Search for a colleague in Entra ID. The user will be automatically added to the CMS if they don't already exist.</p>
+                    <div class="form-group">
+                        <label class="control-label" for="serviceOwnerSearch">Search for a colleague</label>
+                        <small class="form-text text-muted">Start typing a name or email address to look up someone in Entra ID.</small>
+                        <div class="user-picker" data-user-picker data-search-url="/api/users/search" data-select-url="/api/users/select">
+                            <div class="position-relative">
+                                <input type="text"
+                                       class="form-control js-user-picker-input"
+                                       id="serviceOwnerSearch"
+                                       autocomplete="off"
+                                       placeholder="e.g. Alex Smith or alex.smith@education.gov.uk" />
+                                <span class="user-picker__spinner js-user-picker-spinner" aria-hidden="true">Searching…</span>
+                                <div class="user-picker__results js-user-picker-results" role="listbox" aria-live="polite"></div>
+                            </div>
+                            <p class="form-text text-muted js-user-picker-message"></p>
+                            <input type="hidden" name="entraUserObjectId" class="js-user-picker-objectid" id="serviceOwnerObjectId" />
+                            <input type="hidden" name="entraUserEmail" class="js-user-picker-email" id="serviceOwnerEmail" />
+                            <input type="hidden" name="entraUserName" class="js-user-picker-name" id="serviceOwnerName" />
+                            <div class="user-picker__selected js-user-picker-summary" data-default-text="No service owner selected.">
+                                <span class="text-muted">No service owner selected.</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-success">Save Service Owner</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Update Product Manager Modal -->
+<div class="modal fade" id="updateProductManagerModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Update Product Manager</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateProductRole" method="post">
+                <input type="hidden" name="fipsId" id="productManagerFipsId" />
+                <input type="hidden" name="roleFieldName" value="product_manager" />
+                <input type="hidden" name="roleDisplayName" value="Product Manager" />
+                <div class="modal-body">
+                    <p class="mb-3">Search for a colleague in Entra ID. The user will be automatically added to the CMS if they don't already exist.</p>
+                    <div class="form-group">
+                        <label class="control-label" for="productManagerSearch">Search for a colleague</label>
+                        <small class="form-text text-muted">Start typing a name or email address to look up someone in Entra ID.</small>
+                        <div class="user-picker" data-user-picker data-search-url="/api/users/search" data-select-url="/api/users/select">
+                            <div class="position-relative">
+                                <input type="text"
+                                       class="form-control js-user-picker-input"
+                                       id="productManagerSearch"
+                                       autocomplete="off"
+                                       placeholder="e.g. Alex Smith or alex.smith@education.gov.uk" />
+                                <span class="user-picker__spinner js-user-picker-spinner" aria-hidden="true">Searching…</span>
+                                <div class="user-picker__results js-user-picker-results" role="listbox" aria-live="polite"></div>
+                            </div>
+                            <p class="form-text text-muted js-user-picker-message"></p>
+                            <input type="hidden" name="entraUserObjectId" class="js-user-picker-objectid" id="productManagerObjectId" />
+                            <input type="hidden" name="entraUserEmail" class="js-user-picker-email" id="productManagerEmail" />
+                            <input type="hidden" name="entraUserName" class="js-user-picker-name" id="productManagerName" />
+                            <div class="user-picker__selected js-user-picker-summary" data-default-text="No product manager selected.">
+                                <span class="text-muted">No product manager selected.</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-success">Save Product Manager</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Update Delivery Manager Modal -->
+<div class="modal fade" id="updateDeliveryManagerModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Update Delivery Manager</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateProductRole" method="post">
+                <input type="hidden" name="fipsId" id="deliveryManagerFipsId" />
+                <input type="hidden" name="roleFieldName" value="delivery_manager" />
+                <input type="hidden" name="roleDisplayName" value="Delivery Manager" />
+                <div class="modal-body">
+                    <p class="mb-3">Search for a colleague in Entra ID. The user will be automatically added to the CMS if they don't already exist.</p>
+                    <div class="form-group">
+                        <label class="control-label" for="deliveryManagerSearch">Search for a colleague</label>
+                        <small class="form-text text-muted">Start typing a name or email address to look up someone in Entra ID.</small>
+                        <div class="user-picker" data-user-picker data-search-url="/api/users/search" data-select-url="/api/users/select">
+                            <div class="position-relative">
+                                <input type="text"
+                                       class="form-control js-user-picker-input"
+                                       id="deliveryManagerSearch"
+                                       autocomplete="off"
+                                       placeholder="e.g. Alex Smith or alex.smith@education.gov.uk" />
+                                <span class="user-picker__spinner js-user-picker-spinner" aria-hidden="true">Searching…</span>
+                                <div class="user-picker__results js-user-picker-results" role="listbox" aria-live="polite"></div>
+                            </div>
+                            <p class="form-text text-muted js-user-picker-message"></p>
+                            <input type="hidden" name="entraUserObjectId" class="js-user-picker-objectid" id="deliveryManagerObjectId" />
+                            <input type="hidden" name="entraUserEmail" class="js-user-picker-email" id="deliveryManagerEmail" />
+                            <input type="hidden" name="entraUserName" class="js-user-picker-name" id="deliveryManagerName" />
+                            <div class="user-picker__selected js-user-picker-summary" data-default-text="No delivery manager selected.">
+                                <span class="text-muted">No delivery manager selected.</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-success">Save Delivery Manager</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Update Information Asset Owner Modal -->
+<div class="modal fade" id="updateInformationAssetOwnerModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Update Information Asset Owner</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateProductRole" method="post">
+                <input type="hidden" name="fipsId" id="informationAssetOwnerFipsId" />
+                <input type="hidden" name="roleFieldName" value="Information_asset_owner" />
+                <input type="hidden" name="roleDisplayName" value="Information Asset Owner" />
+                <div class="modal-body">
+                    <p class="mb-3">Search for a colleague in Entra ID. The user will be automatically added to the CMS if they don't already exist.</p>
+                    <div class="form-group">
+                        <label class="control-label" for="informationAssetOwnerSearch">Search for a colleague</label>
+                        <small class="form-text text-muted">Start typing a name or email address to look up someone in Entra ID.</small>
+                        <div class="user-picker" data-user-picker data-search-url="/api/users/search" data-select-url="/api/users/select">
+                            <div class="position-relative">
+                                <input type="text"
+                                       class="form-control js-user-picker-input"
+                                       id="informationAssetOwnerSearch"
+                                       autocomplete="off"
+                                       placeholder="e.g. Alex Smith or alex.smith@education.gov.uk" />
+                                <span class="user-picker__spinner js-user-picker-spinner" aria-hidden="true">Searching…</span>
+                                <div class="user-picker__results js-user-picker-results" role="listbox" aria-live="polite"></div>
+                            </div>
+                            <p class="form-text text-muted js-user-picker-message"></p>
+                            <input type="hidden" name="entraUserObjectId" class="js-user-picker-objectid" id="informationAssetOwnerObjectId" />
+                            <input type="hidden" name="entraUserEmail" class="js-user-picker-email" id="informationAssetOwnerEmail" />
+                            <input type="hidden" name="entraUserName" class="js-user-picker-name" id="informationAssetOwnerName" />
+                            <div class="user-picker__selected js-user-picker-summary" data-default-text="No information asset owner selected.">
+                                <span class="text-muted">No information asset owner selected.</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-success">Save Information Asset Owner</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Update Senior Responsible Officer Modal -->
+<div class="modal fade" id="updateSeniorResponsibleOfficerModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Update Senior Responsible Officer</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateProductRole" method="post">
+                <input type="hidden" name="fipsId" id="seniorResponsibleOfficerFipsId" />
+                <input type="hidden" name="roleFieldName" value="senior_responsible_officer" />
+                <input type="hidden" name="roleDisplayName" value="Senior Responsible Officer" />
+                <div class="modal-body">
+                    <p class="mb-3">Search for a colleague in Entra ID. The user will be automatically added to the CMS if they don't already exist.</p>
+                    <div class="form-group">
+                        <label class="control-label" for="seniorResponsibleOfficerSearch">Search for a colleague</label>
+                        <small class="form-text text-muted">Start typing a name or email address to look up someone in Entra ID.</small>
+                        <div class="user-picker" data-user-picker data-search-url="/api/users/search" data-select-url="/api/users/select">
+                            <div class="position-relative">
+                                <input type="text"
+                                       class="form-control js-user-picker-input"
+                                       id="seniorResponsibleOfficerSearch"
+                                       autocomplete="off"
+                                       placeholder="e.g. Alex Smith or alex.smith@education.gov.uk" />
+                                <span class="user-picker__spinner js-user-picker-spinner" aria-hidden="true">Searching…</span>
+                                <div class="user-picker__results js-user-picker-results" role="listbox" aria-live="polite"></div>
+                            </div>
+                            <p class="form-text text-muted js-user-picker-message"></p>
+                            <input type="hidden" name="entraUserObjectId" class="js-user-picker-objectid" id="seniorResponsibleOfficerObjectId" />
+                            <input type="hidden" name="entraUserEmail" class="js-user-picker-email" id="seniorResponsibleOfficerEmail" />
+                            <input type="hidden" name="entraUserName" class="js-user-picker-name" id="seniorResponsibleOfficerName" />
+                            <div class="user-picker__selected js-user-picker-summary" data-default-text="No senior responsible officer selected.">
+                                <span class="text-muted">No senior responsible officer selected.</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-success">Save Senior Responsible Officer</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Update Reporting User Modal -->
+<div class="modal fade" id="updateReportingUserModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Update Reporting User</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateProductRole" method="post">
+                <input type="hidden" name="fipsId" id="reportingUserFipsId" />
+                <input type="hidden" name="roleFieldName" value="reporting_user" />
+                <input type="hidden" name="roleDisplayName" value="Reporting User" />
+                <div class="modal-body">
+                    <p class="mb-3">Search for a colleague in Entra ID. The user will be automatically added to the CMS if they don't already exist.</p>
+                    <div class="form-group">
+                        <label class="control-label" for="reportingUserSearch">Search for a colleague</label>
+                        <small class="form-text text-muted">Start typing a name or email address to look up someone in Entra ID.</small>
+                        <div class="user-picker" data-user-picker data-search-url="/api/users/search" data-select-url="/api/users/select">
+                            <div class="position-relative">
+                                <input type="text"
+                                       class="form-control js-user-picker-input"
+                                       id="reportingUserSearch"
+                                       autocomplete="off"
+                                       placeholder="e.g. Alex Smith or alex.smith@education.gov.uk" />
+                                <span class="user-picker__spinner js-user-picker-spinner" aria-hidden="true">Searching…</span>
+                                <div class="user-picker__results js-user-picker-results" role="listbox" aria-live="polite"></div>
+                            </div>
+                            <p class="form-text text-muted js-user-picker-message"></p>
+                            <input type="hidden" name="entraUserObjectId" class="js-user-picker-objectid" id="reportingUserObjectId" />
+                            <input type="hidden" name="entraUserEmail" class="js-user-picker-email" id="reportingUserEmail" />
+                            <input type="hidden" name="entraUserName" class="js-user-picker-name" id="reportingUserName" />
+                            <div class="user-picker__selected js-user-picker-summary" data-default-text="No reporting user selected.">
+                                <span class="text-muted">No reporting user selected.</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-success">Save Reporting User</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Update Service Designs Modal -->
+<div class="modal fade" id="updateServiceDesignsModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Update Service Designs</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateProductRole" method="post">
+                <input type="hidden" name="fipsId" id="serviceDesignsFipsId" />
+                <input type="hidden" name="roleFieldName" value="service_designs" />
+                <input type="hidden" name="roleDisplayName" value="Service Designs" />
+                <div class="modal-body">
+                    <p class="mb-3">Search for a colleague in Entra ID. The user will be automatically added to the CMS if they don't already exist.</p>
+                    <div class="form-group">
+                        <label class="control-label" for="serviceDesignsSearch">Search for a colleague</label>
+                        <small class="form-text text-muted">Start typing a name or email address to look up someone in Entra ID.</small>
+                        <div class="user-picker" data-user-picker data-search-url="/api/users/search" data-select-url="/api/users/select">
+                            <div class="position-relative">
+                                <input type="text"
+                                       class="form-control js-user-picker-input"
+                                       id="serviceDesignsSearch"
+                                       autocomplete="off"
+                                       placeholder="e.g. Alex Smith or alex.smith@education.gov.uk" />
+                                <span class="user-picker__spinner js-user-picker-spinner" aria-hidden="true">Searching…</span>
+                                <div class="user-picker__results js-user-picker-results" role="listbox" aria-live="polite"></div>
+                            </div>
+                            <p class="form-text text-muted js-user-picker-message"></p>
+                            <input type="hidden" name="entraUserObjectId" class="js-user-picker-objectid" id="serviceDesignsObjectId" />
+                            <input type="hidden" name="entraUserEmail" class="js-user-picker-email" id="serviceDesignsEmail" />
+                            <input type="hidden" name="entraUserName" class="js-user-picker-name" id="serviceDesignsName" />
+                            <div class="user-picker__selected js-user-picker-summary" data-default-text="No service designs selected.">
+                                <span class="text-muted">No service designs selected.</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-success">Save Service Designs</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Update User Researchers Modal -->
+<div class="modal fade" id="updateUserResearchersModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Update User Researchers</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateProductRole" method="post">
+                <input type="hidden" name="fipsId" id="userResearchersFipsId" />
+                <input type="hidden" name="roleFieldName" value="user_researchers" />
+                <input type="hidden" name="roleDisplayName" value="User Researchers" />
+                <div class="modal-body">
+                    <p class="mb-3">Search for a colleague in Entra ID. The user will be automatically added to the CMS if they don't already exist.</p>
+                    <div class="form-group">
+                        <label class="control-label" for="userResearchersSearch">Search for a colleague</label>
+                        <small class="form-text text-muted">Start typing a name or email address to look up someone in Entra ID.</small>
+                        <div class="user-picker" data-user-picker data-search-url="/api/users/search" data-select-url="/api/users/select">
+                            <div class="position-relative">
+                                <input type="text"
+                                       class="form-control js-user-picker-input"
+                                       id="userResearchersSearch"
+                                       autocomplete="off"
+                                       placeholder="e.g. Alex Smith or alex.smith@education.gov.uk" />
+                                <span class="user-picker__spinner js-user-picker-spinner" aria-hidden="true">Searching…</span>
+                                <div class="user-picker__results js-user-picker-results" role="listbox" aria-live="polite"></div>
+                            </div>
+                            <p class="form-text text-muted js-user-picker-message"></p>
+                            <input type="hidden" name="entraUserObjectId" class="js-user-picker-objectid" id="userResearchersObjectId" />
+                            <input type="hidden" name="entraUserEmail" class="js-user-picker-email" id="userResearchersEmail" />
+                            <input type="hidden" name="entraUserName" class="js-user-picker-name" id="userResearchersName" />
+                            <div class="user-picker__selected js-user-picker-summary" data-default-text="No user researchers selected.">
+                                <span class="text-muted">No user researchers selected.</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-success">Save User Researchers</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Update State to Active Modal -->
+<div class="modal fade" id="updateStateActiveModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title">Set Product to Active</h5>
+                <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateProductState" method="post">
+                <input type="hidden" name="fipsId" id="stateActiveFipsId" />
+                <input type="hidden" name="state" value="Active" />
+                <input type="hidden" name="returnUrl" value="@Url.Action("FipsNewEntries")" />
+                <div class="modal-body">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle mr-2"></i>
+                        <strong>Info:</strong> This action will change the state of this product from <strong>New</strong> to <strong>Active</strong>.
+                    </div>
+                    <p class="mb-3">Once set to Active, this product will appear in the main FIPS listing and will be visible to all users.</p>
+                    <p class="mb-0"><strong>Product:</strong> <span id="stateActiveProductTitle"></span></p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-success">Set to Active</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Update State to Rejected Modal -->
+<div class="modal fade" id="updateStateModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title">Confirm State Change</h5>
+                <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateProductState" method="post">
+                <input type="hidden" name="fipsId" id="stateFipsId" />
+                <input type="hidden" name="state" value="Rejected" />
+                <input type="hidden" name="returnUrl" value="@Url.Action("FipsNewEntries")" />
+                <div class="modal-body">
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle mr-2"></i>
+                        <strong>Warning:</strong> This action will change the state of this product.
+                    </div>
+                    <p class="mb-3">Confirm state change from <strong>New</strong> to <strong>Rejected</strong>. This will mark the entry as rejected.</p>
+                    <p class="mb-0"><strong>Product:</strong> <span id="stateProductTitle"></span></p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-danger">Confirm Change Status</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<style>
+.sortable {
+    cursor: pointer;
+    user-select: none;
+}
+
+.sortable:hover {
+    background-color: #f4f8fb;
+}
+
+.badge-lg {
+    font-size: 1rem;
+    padding: 0.5rem 0.75rem;
+}
+
+.completion-icon {
+    font-size: 2rem;
+    vertical-align: middle;
+}
+
+.completion-count {
+    font-size: 1rem;
+    margin-left: 0.25rem;
+    vertical-align: middle;
+    display: inline-block;
+}
+
+</style>
+
+
+@section Scripts {
+    <script nonce="@Context.Items["Nonce"]">
+        $(document).ready(function() {
+            initializeSortableTable($('#completionTable'));
+
+            $('#searchInput, #completionFilter, #statusFilter, #businessAreaFilter, #sroFilter, #iaoFilter, #deliveryManagerFilter')
+                .on('input change', filterTable);
+
+            // Handle filtered export
+            $('#exportFilteredBtn').on('click', function() {
+                var searchTerm = $('#searchInput').val() || '';
+                var completionFilter = $('#completionFilter').val() || '';
+                var statusFilter = $('#statusFilter').val() || '';
+                var businessAreaFilter = $('#businessAreaFilter').val() || '';
+                var sroFilter = $('#sroFilter').val() || '';
+                var iaoFilter = $('#iaoFilter').val() || '';
+                var deliveryManagerFilter = $('#deliveryManagerFilter').val() || '';
+
+                var params = new URLSearchParams();
+                if (searchTerm) params.append('searchTerm', searchTerm);
+                if (completionFilter) params.append('completionFilter', completionFilter);
+                if (statusFilter) params.append('statusFilter', statusFilter);
+                if (businessAreaFilter) params.append('businessAreaFilter', businessAreaFilter);
+                if (sroFilter) params.append('sroFilter', sroFilter);
+                if (iaoFilter) params.append('iaoFilter', iaoFilter);
+                if (deliveryManagerFilter) params.append('deliveryManagerFilter', deliveryManagerFilter);
+
+                var url = '@Url.Action("ExportFipsCompletionFiltered", "DdtReports")' + '?' + params.toString();
+                window.location.href = url;
+            });
+
+            // Handle service owner form validation
+            $('#updateServiceOwnerModal form').on('submit', function(e) {
+                var objectId = $('#serviceOwnerObjectId').val();
+                
+                if (!objectId || objectId === '1' || !objectId.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+                    e.preventDefault();
+                    showInlineAlert('danger', 'Please select a user from the search results.');
+                    return false;
+                }
+            });
+
+            $(document).on('click', '[data-action="set-phase"]', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                var fipsId = $(this).data('fips-id');
+                $('#phaseFipsId').val(fipsId);
+                $('#phaseCategoryValueId').val('');
+                $('#updatePhaseModal').modal('show');
+                return false;
+            });
+
+            $(document).on('click', '[data-action="set-business-area"]', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                var fipsId = $(this).data('fips-id');
+                $('#businessAreaFipsId').val(fipsId);
+                $('#businessAreaCategoryValueId').val('');
+                $('#updateBusinessAreaModal').modal('show');
+                return false;
+            });
+
+            $(document).on('click', '[data-action="set-product-url"]', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                var fipsId = $(this).data('fips-id');
+                $('#productUrlFipsId').val(fipsId);
+                $('#productUrl').val('');
+                $('#updateProductUrlModal').modal('show');
+                return false;
+            });
+
+            $(document).on('click', '[data-action="set-user-groups"]', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                var $row = $(this).closest('tr');
+                var fipsId = $(this).data('fips-id');
+                var selectedIds = ($row.attr('data-user-group-ids') || '')
+                    .toString()
+                    .split(',')
+                    .filter(Boolean);
+                $('#userGroupsFipsId').val(fipsId);
+                var $select = $('#userGroupCategoryValueIds');
+                $select.val(null);
+                if (selectedIds.length) {
+                    $select.val(selectedIds);
+                }
+                $('#updateUserGroupsModal').modal('show');
+                return false;
+            });
+
+            $(document).on('click', '[data-action="set-service-owner"]', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                var fipsId = $(this).data('fips-id');
+                $('#serviceOwnerFipsId').val(fipsId);
+                // Clear the user picker
+                var $picker = $('#updateServiceOwnerModal [data-user-picker]');
+                var $clearBtn = $picker.find('.js-user-picker-clear');
+                if ($clearBtn.length) {
+                    $clearBtn.click();
+                } else {
+                    $picker.find('.js-user-picker-input').val('');
+                    $picker.find('.js-user-picker-value').val('');
+                    $picker.find('.js-user-picker-objectid').val('');
+                    $picker.find('.js-user-picker-email').val('');
+                    $picker.find('.js-user-picker-name').val('');
+                    $picker.find('.js-user-picker-summary').html('<span class="text-muted">No service owner selected.</span>');
+                }
+                $('#updateServiceOwnerModal').modal('show');
+                setTimeout(function() {
+                    $('#serviceOwnerSearch').focus();
+                }, 300);
+                return false;
+            });
+
+            // Generic function to open role modals
+            function openRoleModal(modalId, fipsIdInputId, searchInputId, defaultText) {
+                var fipsId = $(this).data('fips-id');
+                $(fipsIdInputId).val(fipsId);
+                var $picker = $(modalId + ' [data-user-picker]');
+                var $clearBtn = $picker.find('.js-user-picker-clear');
+                if ($clearBtn.length) {
+                    $clearBtn.click();
+                } else {
+                    $picker.find('.js-user-picker-input').val('');
+                    $picker.find('.js-user-picker-value').val('');
+                    $picker.find('.js-user-picker-objectid').val('');
+                    $picker.find('.js-user-picker-email').val('');
+                    $picker.find('.js-user-picker-name').val('');
+                    $picker.find('.js-user-picker-summary').html('<span class="text-muted">' + defaultText + '</span>');
+                }
+                $(modalId).modal('show');
+                setTimeout(function() {
+                    $(searchInputId).focus();
+                }, 300);
+            }
+
+            $(document).on('click', '[data-action="set-product-manager"]', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                openRoleModal.call(this, '#updateProductManagerModal', '#productManagerFipsId', '#productManagerSearch', 'No product manager selected.');
+                return false;
+            });
+
+            $(document).on('click', '[data-action="set-delivery-manager"]', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                openRoleModal.call(this, '#updateDeliveryManagerModal', '#deliveryManagerFipsId', '#deliveryManagerSearch', 'No delivery manager selected.');
+                return false;
+            });
+
+            $(document).on('click', '[data-action="set-information-asset-owner"]', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                openRoleModal.call(this, '#updateInformationAssetOwnerModal', '#informationAssetOwnerFipsId', '#informationAssetOwnerSearch', 'No information asset owner selected.');
+                return false;
+            });
+
+            $(document).on('click', '[data-action="set-senior-responsible-officer"]', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                openRoleModal.call(this, '#updateSeniorResponsibleOfficerModal', '#seniorResponsibleOfficerFipsId', '#seniorResponsibleOfficerSearch', 'No senior responsible officer selected.');
+                return false;
+            });
+
+            $(document).on('click', '[data-action="set-reporting-user"]', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                openRoleModal.call(this, '#updateReportingUserModal', '#reportingUserFipsId', '#reportingUserSearch', 'No reporting user selected.');
+                return false;
+            });
+
+            $(document).on('click', '[data-action="set-service-designs"]', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                openRoleModal.call(this, '#updateServiceDesignsModal', '#serviceDesignsFipsId', '#serviceDesignsSearch', 'No service designs selected.');
+                return false;
+            });
+
+            $(document).on('click', '[data-action="set-user-researchers"]', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                openRoleModal.call(this, '#updateUserResearchersModal', '#userResearchersFipsId', '#userResearchersSearch', 'No user researchers selected.');
+                return false;
+            });
+
+            $(document).on('click', '[data-action="update-state-active"]', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                var fipsId = $(this).data('fips-id');
+                var productTitle = $(this).data('product-title');
+                $('#stateActiveFipsId').val(fipsId);
+                $('#stateActiveProductTitle').text(productTitle);
+                $('#updateStateActiveModal').modal('show');
+                return false;
+            });
+
+            $(document).on('click', '[data-action="update-state-rejected"]', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                var fipsId = $(this).data('fips-id');
+                var productTitle = $(this).data('product-title');
+                $('#stateFipsId').val(fipsId);
+                $('#stateProductTitle').text(productTitle);
+                $('#updateStateModal').modal('show');
+                return false;
+            });
+
+            setupAjaxForm('#updatePhaseModal form', handleProductUpdate);
+            setupAjaxForm('#updateBusinessAreaModal form', handleProductUpdate);
+            setupAjaxForm('#updateProductUrlModal form', handleProductUpdate);
+            setupAjaxForm('#updateUserGroupsModal form', handleProductUpdate);
+            setupAjaxForm('#updateServiceOwnerModal form', handleProductUpdate);
+            setupAjaxForm('#updateProductManagerModal form', handleProductUpdate);
+            setupAjaxForm('#updateDeliveryManagerModal form', handleProductUpdate);
+            setupAjaxForm('#updateInformationAssetOwnerModal form', handleProductUpdate);
+            setupAjaxForm('#updateSeniorResponsibleOfficerModal form', handleProductUpdate);
+            setupAjaxForm('#updateReportingUserModal form', handleProductUpdate);
+            setupAjaxForm('#updateServiceDesignsModal form', handleProductUpdate);
+            setupAjaxForm('#updateUserResearchersModal form', handleProductUpdate);
+
+            // Add validation for all role modals
+            $('#updateProductManagerModal form, #updateDeliveryManagerModal form, #updateInformationAssetOwnerModal form, #updateSeniorResponsibleOfficerModal form, #updateReportingUserModal form, #updateServiceDesignsModal form, #updateUserResearchersModal form').on('submit', function(e) {
+                var $form = $(this);
+                var objectIdInput = $form.find('.js-user-picker-objectid');
+                var objectId = objectIdInput.val();
+                
+                if (!objectId || objectId === '1' || !objectId.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+                    e.preventDefault();
+                    showInlineAlert('danger', 'Please select a user from the search results.');
+                    return false;
+                }
+            });
+
+            window.filterZeroCompletion = function() {
+                $('#completionFilter').val('');
+                $('#statusFilter').val('');
+                $('#businessAreaFilter').val('');
+                $('#sroFilter').val('');
+                $('#iaoFilter').val('');
+                $('#deliveryManagerFilter').val('');
+                $('#searchInput').val('');
+                filterTable();
+                $('html, body').animate({
+                    scrollTop: $('#completionTable').offset().top - 100
+                }, 500);
+            };
+
+            filterTable();
+            recalculateSummary();
+
+            function setupAjaxForm(selector, onSuccess) {
+                var $form = $(selector);
+                $form.on('submit', function(e) {
+                    e.preventDefault();
+                    var formData = new FormData(this);
+                    var $submitButton = $form.find('button[type="submit"]');
+                    $submitButton.prop('disabled', true);
+                    fetch($form.attr('action'), {
+                        method: 'POST',
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                        body: formData,
+                        credentials: 'same-origin'
+                    })
+                    .then(function(response) {
+                        return response.json();
+                    })
+                    .then(function(data) {
+                        if (data && data.success) {
+                            if (typeof onSuccess === 'function') {
+                                onSuccess(data);
+                            }
+                            $form.closest('.modal').modal('hide');
+                        } else {
+                            showInlineAlert('danger', (data && data.message) || 'Unable to complete the update. Please try again.');
+                        }
+                    })
+                    .catch(function() {
+                        showInlineAlert('danger', 'An unexpected error occurred. Please try again.');
+                    })
+                    .finally(function() {
+                        $submitButton.prop('disabled', false);
+                    });
+                });
+            }
+
+            function handleProductUpdate(response) {
+                if (!response) {
+                    return;
+                }
+
+                if (response.message) {
+                    showInlineAlert(response.success ? 'success' : 'danger', response.message);
+                }
+
+                if (response.product) {
+                    updateRowWithProduct(response.product);
+                    recalculateSummary();
+                    filterTable();
+                }
+            }
+
+            function showInlineAlert(type, message) {
+                var $container = $('#inlineAlertContainer');
+                if (!message) {
+                    $container.empty();
+                    return;
+                }
+
+                var alertHtml = '<div class="alert alert-' + type + ' alert-dismissible fade show" role="alert">' +
+                    message +
+                    '<button type="button" class="close" data-dismiss="alert" aria-label="Close">' +
+                    '<span aria-hidden="true">&times;</span>' +
+                    '</button>' +
+                    '</div>';
+
+                $container.html(alertHtml);
+            }
+
+            function escapeHtml(text) {
+                return $('<div>').text(text || '').html();
+            }
+
+            function toLowerJoined(values) {
+                if (!Array.isArray(values) || !values.length) {
+                    return '';
+                }
+                return values.map(function(value) { return (value || '').toLowerCase(); }).join('||');
+            }
+
+
+            function joinOriginalList(values) {
+                if (!Array.isArray(values) || !values.length) {
+                    return '';
+                }
+                return values.join('||');
+            }
+
+            function updateRowWithProduct(product) {
+                if (!product || !product.fipsId) {
+                    return;
+                }
+
+                var fipsId = (product.fipsId || '').toLowerCase();
+                var $row = $('#completionTable tbody tr').filter(function() {
+                    return $(this).attr('data-fips-id') === fipsId;
+                });
+
+                if (!$row.length) {
+                    return;
+                }
+
+                var businessArea = product.businessArea || 'Unassigned';
+                var completion = parseFloat(product.completionPercentage) || 0;
+                var hasPhase = !!product.hasPhase;
+                var hasBusinessArea = !!product.hasBusinessArea;
+                var hasProductUrl = !!product.hasProductUrl;
+                var contactsCount = product.contactsCount || 0;
+                var userGroupNames = product.userGroupNames || [];
+                var userGroupIds = (product.userGroupCategoryValueIds || []).map(function(id) { return id.toString(); });
+                var userGroupsCount = product.userGroupsCount != null ? product.userGroupsCount : userGroupNames.length;
+                var userGroupTitle = userGroupNames.length ? userGroupNames.join(', ') : 'No user groups';
+
+                var sroContacts = product.seniorResponsibleOfficerContacts || [];
+                var iaoContacts = product.informationAssetOwnerContacts || [];
+                var deliveryContacts = product.deliveryManagerContacts || [];
+
+                $row.attr('data-completion', completion).data('completion', completion);
+                $row.attr('data-business-area', businessArea).data('business-area', businessArea);
+                $row.attr('data-has-phase', hasPhase).data('has-phase', hasPhase);
+                $row.attr('data-has-business-area', hasBusinessArea).data('has-business-area', hasBusinessArea);
+                $row.attr('data-has-product-url', hasProductUrl).data('has-product-url', hasProductUrl);
+                $row.attr('data-user-groups-count', userGroupsCount).data('user-groups-count', userGroupsCount);
+                $row.attr('data-user-groups', toLowerJoined(userGroupNames)).data('user-groups', toLowerJoined(userGroupNames));
+                $row.attr('data-user-group-ids', userGroupIds.join(',')).data('user-group-ids', userGroupIds.join(','));
+                $row.attr('data-contacts-count', contactsCount).data('contacts-count', contactsCount);
+                $row.attr('data-sro', toLowerJoined(sroContacts)).data('sro', toLowerJoined(sroContacts));
+                $row.attr('data-sro-display', product.seniorResponsibleOfficer || '').data('sro-display', product.seniorResponsibleOfficer || '');
+                $row.attr('data-sro-names', joinOriginalList(product.seniorResponsibleOfficerContacts || [])).data('sro-names', joinOriginalList(product.seniorResponsibleOfficerContacts || []));
+                $row.attr('data-iao', toLowerJoined(iaoContacts)).data('iao', toLowerJoined(iaoContacts));
+                $row.attr('data-iao-display', product.informationAssetOwner || '').data('iao-display', product.informationAssetOwner || '');
+                $row.attr('data-iao-names', joinOriginalList(product.informationAssetOwnerContacts || [])).data('iao-names', joinOriginalList(product.informationAssetOwnerContacts || []));
+                $row.attr('data-delivery-manager', toLowerJoined(deliveryContacts)).data('delivery-manager', toLowerJoined(deliveryContacts));
+                $row.attr('data-delivery-manager-display', product.deliveryManager || '').data('delivery-manager-display', product.deliveryManager || '');
+                $row.attr('data-delivery-manager-names', joinOriginalList(product.deliveryManagerContacts || [])).data('delivery-manager-names', joinOriginalList(product.deliveryManagerContacts || []));
+
+                var phaseHtml = hasPhase
+                    ? '<i class="fas fa-check-square text-success completion-icon" title="Phase assigned"></i>'
+                    : '<i class="fas fa-times-square text-danger completion-icon" title="Phase missing"></i>';
+                var businessAreaHtml = hasBusinessArea
+                    ? '<i class="fas fa-check-square text-success completion-icon" title="Business area: ' + escapeHtml(businessArea) + '"></i>'
+                    : '<i class="fas fa-times-square text-danger completion-icon" title="Business area missing"></i>';
+                var contactsHtml = contactsCount > 0
+                    ? '<i class="fas fa-check-square text-success completion-icon" title="' + contactsCount + ' contact(s)"></i><span class="completion-count">' + contactsCount + '</span>'
+                    : '<i class="fas fa-times-square text-danger completion-icon" title="No contacts"></i><span class="completion-count">0</span>';
+                var productUrlHtml = hasProductUrl
+                    ? '<i class="fas fa-check-square text-success completion-icon" title="Product URL provided"></i>'
+                    : '<i class="fas fa-times-square text-danger completion-icon" title="Product URL missing"></i>';
+                var userGroupsHtml = userGroupsCount > 0
+                    ? '<i class="fas fa-check-square text-success completion-icon" title="' + escapeHtml(userGroupTitle) + '"></i><span class="completion-count">' + userGroupsCount + '</span>'
+                    : '<i class="fas fa-times-square text-danger completion-icon" title="No user groups"></i><span class="completion-count">0</span>';
+
+                var sroHtml = (product.seniorResponsibleOfficer || '').trim()
+                    ? escapeHtml(product.seniorResponsibleOfficer)
+                    : '<span class="text-muted">-</span>';
+
+                var deliveryManagerHtml = (product.deliveryManager || '').trim()
+                    ? escapeHtml(product.deliveryManager)
+                    : '<span class="text-muted">-</span>';
+
+                var iaoHtml = (product.informationAssetOwner || '').trim()
+                    ? escapeHtml(product.informationAssetOwner)
+                    : '<span class="text-muted">-</span>';
+
+                $row.find('td').eq(2).html(phaseHtml);
+                $row.find('td').eq(3).html(businessAreaHtml);
+                $row.find('td').eq(4).html(contactsHtml);
+                $row.find('td').eq(5).html(productUrlHtml);
+                $row.find('td').eq(6).html(userGroupsHtml);
+                $row.find('td').eq(7).html(sroHtml);
+                $row.find('td').eq(8).html(deliveryManagerHtml);
+                $row.find('td').eq(9).html(iaoHtml);
+                $row.find('td').eq(10).text(completion.toFixed(1) + '%');
+            }
+
+            function refreshBusinessAreaFilterOptions() {
+                var $filter = $('#businessAreaFilter');
+                var selectedValue = $filter.val();
+                var areas = {};
+
+                $('#completionTable tbody tr').each(function() {
+                    var value = ($(this).attr('data-business-area') || 'Unassigned').toString();
+                    if (!areas[value]) {
+                        areas[value] = true;
+                    }
+                });
+
+                var areaList = Object.keys(areas).sort(function(a, b) { return a.localeCompare(b); });
+                $filter.empty();
+                $filter.append('<option value="">All business areas</option>');
+                areaList.forEach(function(area) {
+                    var selected = selectedValue === area ? ' selected' : '';
+                    $filter.append('<option value="' + escapeHtml(area) + '"' + selected + '>' + escapeHtml(area) + '</option>');
+                });
+            }
+
+            function recalculateSummary() {
+                var $rows = $('#completionTable tbody tr');
+                var total = $rows.length;
+                var completionSum = 0;
+                var zeroCount = 0;
+                var fullCount = 0;
+                var phaseCount = 0;
+                var businessAreaCount = 0;
+                var urlCount = 0;
+                var businessAreaMap = {};
+
+                $rows.each(function() {
+                    var $row = $(this);
+                    var completion = parseFloat($row.attr('data-completion')) || 0;
+                    completionSum += completion;
+                    if (Math.abs(completion) < 0.0001) zeroCount++;
+                    if (Math.abs(completion - 100) < 0.0001) fullCount++;
+                    if (isTruthy($row.attr('data-has-phase'))) phaseCount++;
+                    if (isTruthy($row.attr('data-has-business-area'))) businessAreaCount++;
+                    if (isTruthy($row.attr('data-has-product-url'))) urlCount++;
+
+                    var areaName = ($row.attr('data-business-area') || 'Unassigned').toString();
+                    if (!businessAreaMap[areaName]) {
+                        businessAreaMap[areaName] = { count: 0, sum: 0 };
+                    }
+                    businessAreaMap[areaName].count++;
+                    businessAreaMap[areaName].sum += completion;
+                });
+
+                var average = total ? completionSum / total : 0;
+                updateAverageCard(total, average);
+                updateZeroCard(total, zeroCount);
+                updateFullCard(total, fullCount);
+                updateCompletionCard('#completedPhaseCard', '#completedPhaseValue', '#completedPhaseText', '#completedPhaseProgress', phaseCount, total);
+                updateCompletionCard('#completedBusinessAreaCard', '#completedBusinessAreaValue', '#completedBusinessAreaText', '#completedBusinessAreaProgress', businessAreaCount, total);
+                updateCompletionCard('#completedUrlCard', '#completedUrlValue', '#completedUrlText', '#completedUrlProgress', urlCount, total);
+                rebuildBusinessAreaTable(businessAreaMap);
+                refreshBusinessAreaFilterOptions();
+                refreshContactFilterOptions();
+            }
+
+            function updateAverageCard(total, average) {
+                var cardClass = getCompletionBracket(average);
+                $('#averageCompletionCard').removeClass('card-success card-warning card-danger').addClass('card-' + cardClass);
+                $('#averageCompletionValue').text(average.toFixed(1) + '%');
+                $('#averageCompletionSubtitle').text('Based on ' + total + ' ' + formatProductLabel(total));
+                $('#averageCompletionProgress').removeClass('bg-success bg-warning bg-danger').addClass('bg-' + cardClass).css('width', average + '%');
+            }
+
+            function updateZeroCard(total, zeroCount) {
+                var zeroPercentage = total ? (zeroCount / total) * 100 : 0;
+                var cardClass = zeroCount > 0 ? 'card-danger' : 'card-success';
+                var barClass = zeroCount > 0 ? 'bg-danger' : 'bg-success';
+                var text;
+
+                if (zeroCount === 0) {
+                    text = 'All products have at least some completion data';
+                } else if (zeroCount === 1) {
+                    text = 'product has no completion data';
+                } else {
+                    text = 'products have no completion data';
+                }
+
+                $('#zeroCompletionCard').removeClass('card-success card-danger').addClass(cardClass);
+                $('#zeroCompletionValue').text(zeroCount);
+                $('#zeroCompletionText').text(text + ' (' + zeroPercentage.toFixed(1) + '%)');
+                $('#zeroCompletionProgress').removeClass('bg-success bg-danger').addClass(barClass).css('width', zeroPercentage + '%');
+            }
+
+            function updateFullCard(total, fullCount) {
+                var fullPercentage = total ? (fullCount / total) * 100 : 0;
+                var cardClass = (fullCount === total && total > 0) ? 'card-success' : 'card-info';
+                var fullColorClass = fullPercentage >= 80 ? 'success' : fullPercentage >= 50 ? 'warning' : 'info';
+                var text;
+
+                if (fullCount === 0) {
+                    text = 'No products fully complete yet';
+                } else if (fullCount === 1) {
+                    text = 'product is fully complete';
+                } else {
+                    text = 'products are fully complete';
+                }
+
+                $('#fullCompletionCard').removeClass('card-success card-info').addClass(cardClass);
+                $('#fullCompletionValue').text(fullCount);
+                $('#fullCompletionText').text(text + ' (' + fullPercentage.toFixed(1) + '%)');
+                $('#fullCompletionProgress').removeClass('bg-success bg-warning bg-info').addClass('bg-' + fullColorClass).css('width', fullPercentage + '%');
+            }
+
+            function updateCompletionCard(cardSelector, valueSelector, textSelector, progressSelector, completedCount, total) {
+                var percentage = total ? (completedCount / total) * 100 : 0;
+                var cardClass = getCompletionBracket(percentage);
+                $(cardSelector).removeClass('card-success card-warning card-danger').addClass('card-' + cardClass);
+                $(valueSelector).text(completedCount);
+                $(textSelector).text('of ' + total + ' ' + formatProductLabel(total) + ' (' + percentage.toFixed(1) + '%)');
+                $(progressSelector).removeClass('bg-success bg-warning bg-danger').addClass('bg-' + cardClass).css('width', percentage + '%');
+            }
+
+            function rebuildBusinessAreaTable(businessAreaMap) {
+                var $tbody = $('#businessAreaTableBody');
+                $tbody.empty();
+
+                var areas = Object.keys(businessAreaMap).map(function(name) {
+                    var entry = businessAreaMap[name];
+                    var average = entry.count ? entry.sum / entry.count : 0;
+                    return {
+                        name: name,
+                        count: entry.count,
+                        average: average
+                    };
+                }).sort(function(a, b) {
+                    return b.average - a.average;
+                });
+
+                areas.forEach(function(area) {
+                    var completionClass = getCompletionBracket(area.average);
+                    var $tr = $('<tr>');
+                    $tr.append($('<td>').html('<strong>' + escapeHtml(area.name) + '</strong>'));
+                    $tr.append($('<td class="text-center">').html('<span class="badge badge-info">' + area.count + '</span>'));
+                    $tr.append($('<td class="text-center">').html('<span class="badge badge-' + completionClass + ' badge-lg">' + area.average.toFixed(1) + '%</span>'));
+                    var $progressCell = $('<td>');
+                    var $progress = $('<div class="progress progress-sm">');
+                    var $bar = $('<div class="progress-bar">').addClass('bg-' + completionClass).css('width', area.average + '%');
+                    $progress.append($bar);
+                    $progressCell.append($progress);
+                    $tr.append($progressCell);
+                    $tbody.append($tr);
+                });
+            }
+
+            function getCompletionBracket(value) {
+                if (value >= 80) return 'success';
+                if (value >= 60) return 'warning';
+                return 'danger';
+            }
+
+            function formatProductLabel(count) {
+                return 'product' + (count === 1 ? '' : 's');
+            }
+
+            function isTruthy(value) {
+                if (typeof value === 'boolean') {
+                    return value;
+                }
+                if (typeof value === 'string') {
+                    return value.toLowerCase() === 'true';
+                }
+                return false;
+            }
+
+            function filterTable() {
+                var searchTerm = ($('#searchInput').val() || '').toString().toLowerCase();
+                var completionFilter = ($('#completionFilter').val() || '').toString();
+                var statusFilter = ($('#statusFilter').val() || '').toString();
+                var businessAreaFilter = ($('#businessAreaFilter').val() || '').toString();
+                var sroFilter = ($('#sroFilter').val() || '').toString();
+                var iaoFilter = ($('#iaoFilter').val() || '').toString();
+                var deliveryFilter = ($('#deliveryManagerFilter').val() || '').toString();
+
+                var visibleCount = 0;
+
+                $('#completionTable tbody tr').each(function() {
+                    var $row = $(this);
+                    var productTitle = ($row.attr('data-product-title') || '').toString();
+                    var fipsId = ($row.attr('data-fips-id') || '').toString();
+                    var completion = parseFloat($row.attr('data-completion')) || 0;
+                    var businessArea = ($row.attr('data-business-area') || '').toString();
+                    var rowSro = splitDataList($row.attr('data-sro'));
+                    var rowIao = splitDataList($row.attr('data-iao'));
+                    var rowDelivery = splitDataList($row.attr('data-delivery-manager'));
+
+                    var matchesSearch = !searchTerm || productTitle.includes(searchTerm) || fipsId.includes(searchTerm);
+                    var matchesBusinessArea = !businessAreaFilter || businessArea === businessAreaFilter;
+
+                    var matchesCompletion = true;
+                    if (completionFilter) {
+                        if (completionFilter === '100') {
+                            matchesCompletion = completion === 100;
+                        } else if (completionFilter === '80-99') {
+                            matchesCompletion = completion >= 80 && completion < 100;
+                        } else if (completionFilter === '60-79') {
+                            matchesCompletion = completion >= 60 && completion < 80;
+                        } else if (completionFilter === '40-59') {
+                            matchesCompletion = completion >= 40 && completion < 60;
+                        } else if (completionFilter === '0-39') {
+                            matchesCompletion = completion >= 0 && completion < 40;
+                        }
+                    }
+
+                    var matchesStatus = true;
+                    if (statusFilter === 'complete') {
+                        matchesStatus = completion === 100;
+                    } else if (statusFilter === 'incomplete') {
+                        matchesStatus = completion < 100;
+                    }
+
+                    var matchesSro = !sroFilter || rowSro.indexOf(sroFilter) !== -1;
+                    var matchesIao = !iaoFilter || rowIao.indexOf(iaoFilter) !== -1;
+                    var matchesDelivery = !deliveryFilter || rowDelivery.indexOf(deliveryFilter) !== -1;
+
+                    if (matchesSearch && matchesCompletion && matchesStatus && matchesBusinessArea && matchesSro && matchesIao && matchesDelivery) {
+                        $row.show();
+                        visibleCount++;
+                    } else {
+                        $row.hide();
+                    }
+                });
+
+                $('#productCount').text(visibleCount + ' ' + formatProductLabel(visibleCount));
+            }
+
+            function refreshContactFilterOptions() {
+                rebuildContactFilter('#sroFilter', 'data-sro-names');
+                rebuildContactFilter('#iaoFilter', 'data-iao-names');
+                rebuildContactFilter('#deliveryManagerFilter', 'data-delivery-manager-names');
+                $('.filter-search').each(function() {
+                    applyFilterSearch($(this));
+                });
+            }
+
+            function rebuildContactFilter(selector, attrName) {
+                var $select = $(selector);
+                var selectedValue = ($select.val() || '').toString();
+                var names = {};
+
+                $('#completionTable tbody tr').each(function() {
+                    var attr = ($(this).attr(attrName) || '').toString();
+                    if (!attr) {
+                        return;
+                    }
+                    attr.split('||').forEach(function(name) {
+                        var trimmed = (name || '').trim();
+                        if (trimmed) {
+                            names[trimmed] = true;
+                        }
+                    });
+                });
+
+                var sorted = Object.keys(names).sort(function(a, b) {
+                    return a.localeCompare(b, undefined, { sensitivity: 'base' });
+                });
+
+                $select.empty();
+                $select.append('<option value="">All contacts</option>');
+
+                var hasSelected = false;
+                sorted.forEach(function(name) {
+                    var value = name.toLowerCase();
+                    var isSelected = value === selectedValue;
+                    if (isSelected) {
+                        hasSelected = true;
+                    }
+                    $select.append('<option value="' + escapeHtml(value) + '"' + (isSelected ? ' selected' : '') + '>' + escapeHtml(name) + '</option>');
+                });
+
+                if (selectedValue && !hasSelected) {
+                    $select.val('');
+                }
+            }
+
+            $('.filter-search').on('input', function() {
+                applyFilterSearch($(this));
+            });
+
+            function applyFilterSearch($input) {
+                var term = ($input.val() || '').toString().toLowerCase();
+                var targetSelector = $input.data('target');
+                if (!targetSelector) {
+                    return;
+                }
+                var $select = $(targetSelector);
+                if (!$select.length) {
+                    return;
+                }
+                $select.find('option').each(function(index) {
+                    if (index === 0) {
+                        $(this).prop('hidden', false);
+                        return;
+                    }
+                    var text = $(this).text().toLowerCase();
+                    var match = !term || text.indexOf(term) !== -1;
+                    $(this).prop('hidden', !match);
+                });
+            }
+
+            function splitDataList(value) {
+                if (!value) {
+                    return [];
+                }
+                return value.toString().split('||').map(function(item) {
+                    return item.trim();
+                }).filter(Boolean);
+            }
+
+            function initializeSortableTable(table) {
+                var currentSort = { column: null, direction: 'asc' };
+                
+                table.find('.sortable').on('click keypress', function(e) {
+                    if (e.type === 'keypress' && e.which !== 13 && e.which !== 32) {
+                        return;
+                    }
+                    
+                    var column = $(this).data('column');
+                    var direction = 'asc';
+                    
+                    if (currentSort.column === column && currentSort.direction === 'asc') {
+                        direction = 'desc';
+                    }
+                    
+                    sortTable(table, column, direction);
+                    currentSort = { column: column, direction: direction };
+                });
+                
+                function sortTable(table, column, direction) {
+                    var tbody = table.find('tbody');
+                    var rows = tbody.find('tr:visible').toArray();
+                    
+                    rows.sort(function(a, b) {
+                        var aVal, bVal;
+                        
+                        if (column === 'ProductTitle') {
+                            aVal = $(a).find('td').eq(0).find('a').text().trim().toLowerCase();
+                            bVal = $(b).find('td').eq(0).find('a').text().trim().toLowerCase();
+                        } else if (column === 'FipsId') {
+                            aVal = $(a).find('td').eq(1).text().trim().toLowerCase();
+                            bVal = $(b).find('td').eq(1).text().trim().toLowerCase();
+                        } else if (column === 'Phase') {
+                            aVal = $(a).find('td').eq(2).find('.fa-check-square').length > 0 ? 1 : 0;
+                            bVal = $(b).find('td').eq(2).find('.fa-check-square').length > 0 ? 1 : 0;
+                        } else if (column === 'BusinessArea') {
+                            aVal = $(a).find('td').eq(3).find('.fa-check-square').length > 0 ? 1 : 0;
+                            bVal = $(b).find('td').eq(3).find('.fa-check-square').length > 0 ? 1 : 0;
+                        } else if (column === 'Contacts') {
+                            var aText = $(a).find('td').eq(4).text().trim();
+                            var bText = $(b).find('td').eq(4).text().trim();
+                            aVal = parseInt(aText.match(/\d+/)?.[0]) || 0;
+                            bVal = parseInt(bText.match(/\d+/)?.[0]) || 0;
+                        } else if (column === 'ProductUrl') {
+                            aVal = $(a).find('td').eq(5).find('.fa-check-square').length > 0 ? 1 : 0;
+                            bVal = $(b).find('td').eq(5).find('.fa-check-square').length > 0 ? 1 : 0;
+                        } else if (column === 'UserGroups') {
+                            var aText = $(a).find('td').eq(6).text().trim();
+                            var bText = $(b).find('td').eq(6).text().trim();
+                            aVal = parseInt(aText.match(/\d+/)?.[0]) || 0;
+                            bVal = parseInt(bText.match(/\d+/)?.[0]) || 0;
+                        } else if (column === 'SeniorResponsibleOfficer') {
+                            aVal = $(a).find('td').eq(7).text().trim().toLowerCase();
+                            bVal = $(b).find('td').eq(7).text().trim().toLowerCase();
+                        } else if (column === 'DeliveryManager') {
+                            aVal = $(a).find('td').eq(8).text().trim().toLowerCase();
+                            bVal = $(b).find('td').eq(8).text().trim().toLowerCase();
+                        } else if (column === 'InformationAssetOwner') {
+                            aVal = $(a).find('td').eq(9).text().trim().toLowerCase();
+                            bVal = $(b).find('td').eq(9).text().trim().toLowerCase();
+                        } else if (column === 'CompletionPercentage') {
+                            aVal = parseFloat($(a).data('completion')) || 0;
+                            bVal = parseFloat($(b).data('completion')) || 0;
+                        } else {
+                            aVal = $(a).find('td').eq(0).text().trim();
+                            bVal = $(b).find('td').eq(0).text().trim();
+                        }
+                        
+                        if (typeof aVal === 'string') {
+                            if (direction === 'asc') {
+                                return aVal.localeCompare(bVal);
+                            } else {
+                                return bVal.localeCompare(aVal);
+                            }
+                        } else {
+                            if (direction === 'asc') {
+                                return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+                            } else {
+                                return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
+                            }
+                        }
+                    });
+                    
+                    // Store hidden rows
+                    var hiddenRows = tbody.find('tr:hidden').detach();
+                    
+                    // Clear tbody and append sorted visible rows
+                    tbody.empty();
+                    rows.forEach(function(row) {
+                        tbody.append(row);
+                    });
+                    
+                    // Re-append hidden rows
+                    tbody.append(hiddenRows);
+                    
+                    // Update sort icons
+                    updateSortIcons(table, column, direction);
+                }
+                
+                function updateSortIcons(table, column, direction) {
+                    // Remove all sort icons
+                    table.find('.sortable i').remove();
+                    
+                    // Add sort icon to current column
+                    var header = table.find('.sortable[data-column="' + column + '"]');
+                    var iconClass = direction === 'asc' ? 'fa-sort-up' : 'fa-sort-down';
+                    header.append(' <i class="fas ' + iconClass + '"></i>');
+                }
+            }
+        });
+    </script>
+    <script src="~/js/user-picker.js" asp-append-version="true"></script>
+}
+

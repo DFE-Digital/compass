@@ -1,0 +1,176 @@
+@model Compass.Models.DdatProfession
+@using Compass.Data
+@inject CompassDbContext DbContext
+
+@{
+    ViewData["Title"] = "Profession Details";
+    var assignedSkillIds = Model.ProfessionSkills.Select(ps => ps.SkillId).ToList();
+    var allSkills = ViewBag.AllSkills as List<Compass.Models.Skill> ?? new List<Compass.Models.Skill>();
+    var hop = ViewBag.HeadOfProfession as Compass.Models.HOPS;
+}
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem;">
+            <li class="breadcrumb-item"><a href="/" style="color: #005ea5;">Home</a></li>
+            <li class="breadcrumb-item"><a asp-controller="Admin" asp-action="Index" style="color: #005ea5;">Admin</a></li>
+            <li class="breadcrumb-item"><a asp-action="Professions" style="color: #005ea5;">Professions</a></li>
+            <li class="breadcrumb-item active">@Model.Name</li>
+        </ol>
+    </nav>
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1 class="m-0">@Model.Name</h1>
+            </div>
+            <div class="col-sm-6">
+                <div class="float-right">
+                    <a asp-action="EditProfession" asp-route-id="@Model.Id" class="btn btn-secondary">
+                        <i class="fas fa-edit"></i> Edit Profession
+                    </a>
+                    <a asp-action="Professions" class="btn btn-default">
+                        <i class="fas fa-arrow-left"></i> Back to List
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["SuccessMessage"]
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Profession Information</h3>
+                    </div>
+                    <div class="card-body">
+                        <dl class="row">
+                            <dt class="col-sm-4">Name:</dt>
+                            <dd class="col-sm-8">@Model.Name</dd>
+
+                            <dt class="col-sm-4">Slug:</dt>
+                            <dd class="col-sm-8">@Model.Slug</dd>
+
+                            <dt class="col-sm-4">Role Group:</dt>
+                            <dd class="col-sm-8">@(Model.RoleGroup ?? "—")</dd>
+
+                            <dt class="col-sm-4">Description:</dt>
+                            <dd class="col-sm-8">@(Model.Description ?? "—")</dd>
+
+                            <dt class="col-sm-4">Status:</dt>
+                            <dd class="col-sm-8">
+                                @if (Model.IsActive)
+                                {
+                                    <span class="badge badge-success">Active</span>
+                                }
+                                else
+                                {
+                                    <span class="badge badge-secondary">Inactive</span>
+                                }
+                            </dd>
+
+                            <dt class="col-sm-4">Head of Profession:</dt>
+                            <dd class="col-sm-8">
+                                @if (hop != null && hop.User != null)
+                                {
+                                    <span>@hop.User.Name (@hop.User.Email)</span>
+                                    <br>
+                                    <small>
+                                        <a href="@Url.Action("HeadsOfProfession", "Admin")" class="text-muted">
+                                            <i class="fas fa-cog"></i> Manage Heads of Profession
+                                        </a>
+                                    </small>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">Not assigned</span>
+                                    <br>
+                                    <small>
+                                        <a href="@Url.Action("HeadsOfProfession", "Admin")" class="text-primary">
+                                            <i class="fas fa-plus"></i> Assign Head of Profession
+                                        </a>
+                                    </small>
+                                }
+                            </dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Assigned Skills</h3>
+                    </div>
+                    <div class="card-body">
+                        <form asp-action="AssignSkillsToProfession" method="post" id="assignSkillsForm">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="professionId" value="@Model.Id" />
+                            
+                            <div class="form-group">
+                                <label>Select Skills:</label>
+                                <div style="max-height: 400px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; border-radius: 4px;">
+                                    @foreach (var skill in allSkills)
+                                    {
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" name="skillIds" value="@skill.Id" 
+                                                   id="skill_@skill.Id" @(assignedSkillIds.Contains(skill.Id) ? "checked" : "")>
+                                            <label class="form-check-label" for="skill_@skill.Id">
+                                                @skill.SkillName
+                                                @if (!string.IsNullOrEmpty(skill.Category))
+                                                {
+                                                    <small class="text-muted">(@skill.Category)</small>
+                                                }
+                                            </label>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                            
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save"></i> Save Skills Assignment
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+@section Scripts {
+    <script nonce="@Context.Items["Nonce"]">
+        $(document).ready(function() {
+            $('#assignSkillsForm').on('submit', function(e) {
+                var checkedCount = $('input[name="skillIds"]:checked').length;
+                if (checkedCount === 0) {
+                    if (!confirm('No skills selected. This will remove all skill assignments. Continue?')) {
+                        e.preventDefault();
+                        return false;
+                    }
+                }
+            });
+        });
+    </script>
+}
+

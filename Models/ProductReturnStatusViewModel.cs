@@ -9,5 +9,13 @@ public class ProductReturnStatusViewModel
     public int? CompletedMetrics { get; set; }
     public int? TotalMetrics { get; set; }
     public string? UserRole { get; set; }
+    public bool IsReportingRequired { get; set; }
+    public string? ReportingSuspensionReason { get; set; }
+    public DateTime? NextReportingPeriod { get; set; }
+    public DateTime? NextReportingPeriodDueDate { get; set; }
+    public bool IsBusinessAreaInScope { get; set; }
+    public DateTime? CurrentPeriodDueDate { get; set; }
+    public bool IsPeriodExcluded { get; set; }
+    public bool HasBusinessAreaOverride { get; set; }
 }
 

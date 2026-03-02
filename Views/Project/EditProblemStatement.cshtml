@@ -3,6 +3,32 @@
 @{
     ViewData["Title"] = $"Edit problem statement – {Model.ProjectTitle}";
     var returnUrl = Url.Action("Details", "Project", new { id = Model.Input.ProjectId, tab = "outcomes" });
+}
+
+@section Breadcrumbs {
+    <style>
+        .breadcrumb a:hover {
+            color: #003078 !important;
+            text-decoration: underline !important;
+        }
+    </style>
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <li class="breadcrumb-item">
+                <a asp-controller="Home" asp-action="Index" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a asp-controller="Project" asp-action="Index" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Work reporting</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a asp-controller="Project" asp-action="Details" asp-route-id="@Model.Input.ProjectId" asp-route-tab="outcomes" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">@Model.ProjectTitle</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page" style="color: #0b0c0c; font-weight: 600;">Edit problem statement</li>
+        </ol>
+    </nav>
+}
+
+@{
 
     Func<string, string> normaliseKey = key =>
     {
@@ -48,11 +74,11 @@
     <div class="container-fluid">
         <div class="row mb-3">
             <div class="col-12">
-                <a class="btn btn-link px-0 mb-2" href="@returnUrl" aria-label="Back to project">
-                    <i class="fas fa-arrow-left mr-2" aria-hidden="true"></i>Back to project
+                <a class="btn btn-link px-0 mb-2" href="@returnUrl" aria-label="Back to work item">
+                    <i class="fas fa-arrow-left mr-2" aria-hidden="true"></i>Back to work item
                 </a>
                 <h1 class="m-0">Edit problem statement</h1>
-                <p class="text-muted mb-0">Project: @Model.ProjectTitle</p>
+                <p class="text-muted mb-0">Work: @Model.ProjectTitle</p>
             </div>
         </div>
     </div>
@@ -66,7 +92,10 @@
             <input asp-for="Input.ProblemStatementId" type="hidden" />
 
             <div class="row">
-                <div class="col-lg-8 col-md-10">
+                <aside class="col-xxl-2 col-xl-2 col-lg-3 col-md-4 col-sm-12 col-12 mb-4">
+                    <partial name="_ProjectSummarySidebar" model="Model.ProjectSummary" />
+                </aside>
+                <div class="col-xxl-10 col-xl-10 col-lg-9 col-md-8 col-sm-12 col-12">
                     <div id="problem-statement-edit-error-summary"
                          class="@errorSummaryClasses"
                          role="alert"
@@ -106,33 +135,22 @@
                         <div class="card-body">
                             <partial name="_ProblemStatementFormFields" model="Model" />
                         </div>
-                        <div class="card-footer d-flex align-items-center">
-                            <button type="submit" class="btn btn-primary mr-3">Save changes</button>
-                            <a class="btn btn-outline-secondary" href="@returnUrl">Cancel</a>
+                        <div class="card-footer d-flex align-items-center justify-content-between">
+                            <div>
+                                <button type="submit" class="btn btn-success mr-3">Save changes</button>
+                                <a class="btn btn-outline-secondary" href="@returnUrl">Cancel</a>
+                            </div>
+                            <form asp-action="DeleteProblemStatement" method="post" style="display: inline;" onsubmit="return confirm('Are you sure you want to delete this problem statement?');">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="projectId" value="@Model.Input.ProjectId" />
+                                <input type="hidden" name="problemStatementId" value="@Model.Input.ProblemStatementId" />
+                                <button type="submit" class="btn btn-outline-danger">Delete problem statement</button>
+                            </form>
                         </div>
                     </div>
                 </div>
             </div>
         </form>
-
-        <div class="row">
-            <div class="col-lg-8 col-md-10">
-                <div class="card card-outline card-danger">
-                    <div class="card-header">
-                        <h3 class="card-title mb-0">Delete problem statement</h3>
-                    </div>
-                    <div class="card-body">
-                        <p class="mb-3">Deleting this problem statement will remove it from planning and reporting views.</p>
-                        <form asp-action="DeleteProblemStatement" method="post" onsubmit="return confirm('Are you sure you want to delete this problem statement?');">
-                            @Html.AntiForgeryToken()
-                            <input type="hidden" name="projectId" value="@Model.Input.ProjectId" />
-                            <input type="hidden" name="problemStatementId" value="@Model.Input.ProblemStatementId" />
-                            <button type="submit" class="btn btn-outline-danger">Delete problem statement</button>
-                        </form>
-                    </div>
-                </div>
-            </div>
-        </div>
     </div>
 </section>
 

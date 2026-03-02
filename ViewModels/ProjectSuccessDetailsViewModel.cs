@@ -17,4 +17,8 @@ public class ProjectSuccessDetailsViewModel
     public DateTime RecordedAt { get; set; }
 
     public bool IsReportedToSlt { get; set; }
+
+    public ProjectSummaryViewModel ProjectSummary { get; set; } = new();
+
+    public bool CanDelete { get; set; } = true;
 }

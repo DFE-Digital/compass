@@ -1,0 +1,2098 @@
+@model Compass.Models.ProjectCompletionViewModel
+@{
+    ViewData["Title"] = "Deliverables Completion %";
+}
+
+@section Breadcrumbs {
+    <style>
+        .breadcrumb a:hover {
+            color: #003078 !important;
+            text-decoration: underline !important;
+        }
+    </style>
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f8f9fa; padding: 0.75rem 1rem; border-radius: 0.375rem;">
+            <li class="breadcrumb-item">
+                <a href="@Url.Action("Index", "Home")" style="color: #005ea5; text-decoration: none;">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a asp-action="Index" style="color: #005ea5; text-decoration: none;">DDT Reports</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page">Deliverables Completion %</li>
+        </ol>
+    </nav>
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-12">
+                <h1 class="m-0">Deliverables Completion %</h1>
+                <p class="text-muted mb-0">
+                    <small>
+                        Showing Active deliverables only. Track completion of key fields: SRO, Primary contact, Service Owner, Directorate, Budget owner, RAG, Priority, Business area, Activity type, Spend control.
+                    </small>
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @Html.Raw(TempData["SuccessMessage"])
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        <div id="inlineAlertContainer"></div>
+
+        <!-- Summary Cards -->
+        <div class="row mb-3">
+            <!-- Full Completion Count -->
+            <div class="col-lg-2 col-md-4 col-6">
+                <div class="card @(Model.FullCompletionCount == Model.Projects.Count ? "card-success" : "card-info") mb-4 h-100" id="fullCompletionCard">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            100% completion target
+                        </h3>
+                    </div>
+                    <div class="card-body text-center">
+                        @{
+                            var fullPercentage = Model.Projects.Any() ? (Model.FullCompletionCount / (double)Model.Projects.Count) * 100 : 0;
+                            var fullColorClass = fullPercentage >= 80 ? "success" : fullPercentage >= 50 ? "warning" : "info";
+                        }
+                        <h2 class="mb-0 stat-value-large" id="fullCompletionValue">@fullPercentage.ToString("F1")%</h2>
+                        <p class="text-muted mb-0 mt-2" id="fullCompletionText">@Model.FullCompletionCount of @Model.Projects.Count</p>
+                        <div class="progress progress-lg mt-3">
+                            <div class="progress-bar bg-@fullColorClass" 
+                                 style="width: @fullPercentage%" id="fullCompletionProgress"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Field Completion Stats -->
+            <div class="col-lg-2 col-md-4 col-6">
+                @{
+                    var sroPercentage = Model.Projects.Any() ? (Model.CompletedSroCount / (double)Model.Projects.Count) * 100 : 0;
+                    var sroColorClass = sroPercentage >= 80 ? "success" : sroPercentage >= 50 ? "warning" : "danger";
+                }
+                <div class="card card-@sroColorClass mb-4 h-100" id="completedSroCard">
+                    <div class="card-header">
+                        <h3 class="card-title">SRO</h3>
+                    </div>
+                    <div class="card-body text-center">
+                        <h2 class="mb-0 stat-value-medium" id="completedSroValue">@sroPercentage.ToString("F1")%</h2>
+                        <p class="text-muted mb-0 mt-2" id="completedSroText">@Model.CompletedSroCount of @Model.Projects.Count</p>
+                        <div class="progress progress-lg mt-3">
+                            <div class="progress-bar bg-@sroColorClass" style="width: @sroPercentage%" id="completedSroProgress"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-2 col-md-4 col-6">
+                @{
+                    var pmoPercentage = Model.Projects.Any() ? (Model.CompletedPmoContactCount / (double)Model.Projects.Count) * 100 : 0;
+                    var pmoColorClass = pmoPercentage >= 80 ? "success" : pmoPercentage >= 50 ? "warning" : "danger";
+                }
+                <div class="card card-@pmoColorClass mb-4 h-100" id="completedPmoCard">
+                    <div class="card-header">
+                        <h3 class="card-title">PMO Contact</h3>
+                    </div>
+                    <div class="card-body text-center">
+                        <h2 class="mb-0 stat-value-medium" id="completedPmoValue">@pmoPercentage.ToString("F1")%</h2>
+                        <p class="text-muted mb-0 mt-2" id="completedPmoText">@Model.CompletedPmoContactCount of @Model.Projects.Count</p>
+                        <div class="progress progress-lg mt-3">
+                            <div class="progress-bar bg-@pmoColorClass" style="width: @pmoPercentage%" id="completedPmoProgress"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-2 col-md-4 col-6">
+                @{
+                    var directoratePercentage = Model.Projects.Any() ? (Model.CompletedDirectorateCount / (double)Model.Projects.Count) * 100 : 0;
+                    var directorateColorClass = directoratePercentage >= 80 ? "success" : directoratePercentage >= 50 ? "warning" : "danger";
+                }
+                <div class="card card-@directorateColorClass mb-4 h-100" id="completedDirectorateCard">
+                    <div class="card-header">
+                        <h3 class="card-title">Directorate</h3>
+                    </div>
+                    <div class="card-body text-center">
+                        <h2 class="mb-0 stat-value-medium" id="completedDirectorateValue">@directoratePercentage.ToString("F1")%</h2>
+                        <p class="text-muted mb-0 mt-2" id="completedDirectorateText">@Model.CompletedDirectorateCount of @Model.Projects.Count</p>
+                        <div class="progress progress-lg mt-3">
+                            <div class="progress-bar bg-@directorateColorClass" style="width: @directoratePercentage%" id="completedDirectorateProgress"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-2 col-md-4 col-6">
+                @{
+                    var budgetOwnerPercentage = Model.Projects.Any() ? (Model.CompletedBudgetOwnerCount / (double)Model.Projects.Count) * 100 : 0;
+                    var budgetOwnerColorClass = budgetOwnerPercentage >= 80 ? "success" : budgetOwnerPercentage >= 50 ? "warning" : "danger";
+                }
+                <div class="card card-@budgetOwnerColorClass mb-4 h-100" id="completedBudgetOwnerCard">
+                    <div class="card-header">
+                        <h3 class="card-title">Budget Owner</h3>
+                    </div>
+                    <div class="card-body text-center">
+                        <h2 class="mb-0 stat-value-medium" id="completedBudgetOwnerValue">@budgetOwnerPercentage.ToString("F1")%</h2>
+                        <p class="text-muted mb-0 mt-2" id="completedBudgetOwnerText">@Model.CompletedBudgetOwnerCount of @Model.Projects.Count</p>
+                        <div class="progress progress-lg mt-3">
+                            <div class="progress-bar bg-@budgetOwnerColorClass" style="width: @budgetOwnerPercentage%" id="completedBudgetOwnerProgress"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-2 col-md-4 col-6">
+                @{
+                    var ragPercentage = Model.Projects.Any() ? (Model.CompletedRagStatusCount / (double)Model.Projects.Count) * 100 : 0;
+                    var ragColorClass = ragPercentage >= 80 ? "success" : ragPercentage >= 50 ? "warning" : "danger";
+                }
+                <div class="card card-@ragColorClass mb-4 h-100" id="completedRagCard">
+                    <div class="card-header">
+                        <h3 class="card-title">RAG Status</h3>
+                    </div>
+                    <div class="card-body text-center">
+                        <h2 class="mb-0 stat-value-medium" id="completedRagValue">@ragPercentage.ToString("F1")%</h2>
+                        <p class="text-muted mb-0 mt-2" id="completedRagText">@Model.CompletedRagStatusCount of @Model.Projects.Count</p>
+                        <div class="progress progress-lg mt-3">
+                            <div class="progress-bar bg-@ragColorClass" style="width: @ragPercentage%" id="completedRagProgress"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-2 col-md-4 col-6">
+                @{
+                    var priorityPercentage = Model.Projects.Any() ? (Model.CompletedPriorityCount / (double)Model.Projects.Count) * 100 : 0;
+                    var priorityColorClass = priorityPercentage >= 80 ? "success" : priorityPercentage >= 50 ? "warning" : "danger";
+                }
+                <div class="card card-@priorityColorClass mb-4 h-100" id="completedPriorityCard">
+                    <div class="card-header">
+                        <h3 class="card-title">Priority</h3>
+                    </div>
+                    <div class="card-body text-center">
+                        <h2 class="mb-0 stat-value-medium" id="completedPriorityValue">@priorityPercentage.ToString("F1")%</h2>
+                        <p class="text-muted mb-0 mt-2" id="completedPriorityText">@Model.CompletedPriorityCount of @Model.Projects.Count</p>
+                        <div class="progress progress-lg mt-3">
+                            <div class="progress-bar bg-@priorityColorClass" style="width: @priorityPercentage%" id="completedPriorityProgress"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-2 col-md-4 col-6">
+                @{
+                    var businessAreaPercentage = Model.Projects.Any() ? (Model.CompletedBusinessAreaCount / (double)Model.Projects.Count) * 100 : 0;
+                    var businessAreaColorClass = businessAreaPercentage >= 80 ? "success" : businessAreaPercentage >= 50 ? "warning" : "danger";
+                }
+                <div class="card card-@businessAreaColorClass mb-4 h-100" id="completedBusinessAreaCard">
+                    <div class="card-header">
+                        <h3 class="card-title">Business Area</h3>
+                    </div>
+                    <div class="card-body text-center">
+                        <h2 class="mb-0 stat-value-medium" id="completedBusinessAreaValue">@businessAreaPercentage.ToString("F1")%</h2>
+                        <p class="text-muted mb-0 mt-2" id="completedBusinessAreaText">@Model.CompletedBusinessAreaCount of @Model.Projects.Count</p>
+                        <div class="progress progress-lg mt-3">
+                            <div class="progress-bar bg-@businessAreaColorClass" style="width: @businessAreaPercentage%" id="completedBusinessAreaProgress"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-2 col-md-4 col-6">
+                @{
+                    var primaryContactPercentage = Model.Projects.Any() ? (Model.CompletedPrimaryContactCount / (double)Model.Projects.Count) * 100 : 0;
+                    var primaryContactColorClass = primaryContactPercentage >= 80 ? "success" : primaryContactPercentage >= 50 ? "warning" : "danger";
+                }
+                <div class="card card-@primaryContactColorClass mb-4 h-100" id="completedPrimaryContactCard">
+                    <div class="card-header">
+                        <h3 class="card-title">Primary Contact</h3>
+                    </div>
+                    <div class="card-body text-center">
+                        <h2 class="mb-0 stat-value-medium" id="completedPrimaryContactValue">@primaryContactPercentage.ToString("F1")%</h2>
+                        <p class="text-muted mb-0 mt-2" id="completedPrimaryContactText">@Model.CompletedPrimaryContactCount of @Model.Projects.Count</p>
+                        <div class="progress progress-lg mt-3">
+                            <div class="progress-bar bg-@primaryContactColorClass" style="width: @primaryContactPercentage%" id="completedPrimaryContactProgress"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-2 col-md-4 col-6">
+                @{
+                    var serviceOwnerPercentage = Model.Projects.Any() ? (Model.CompletedServiceOwnerCount / (double)Model.Projects.Count) * 100 : 0;
+                    var serviceOwnerColorClass = serviceOwnerPercentage >= 80 ? "success" : serviceOwnerPercentage >= 50 ? "warning" : "danger";
+                }
+                <div class="card card-@serviceOwnerColorClass mb-4 h-100" id="completedServiceOwnerCard">
+                    <div class="card-header">
+                        <h3 class="card-title">Service Owner</h3>
+                    </div>
+                    <div class="card-body text-center">
+                        <h2 class="mb-0 stat-value-medium" id="completedServiceOwnerValue">@serviceOwnerPercentage.ToString("F1")%</h2>
+                        <p class="text-muted mb-0 mt-2" id="completedServiceOwnerText">@Model.CompletedServiceOwnerCount of @Model.Projects.Count</p>
+                        <div class="progress progress-lg mt-3">
+                            <div class="progress-bar bg-@serviceOwnerColorClass" style="width: @serviceOwnerPercentage%" id="completedServiceOwnerProgress"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-2 col-md-4 col-6">
+                @{
+                    var activityTypePercentage = Model.Projects.Any() ? (Model.CompletedActivityTypeCount / (double)Model.Projects.Count) * 100 : 0;
+                    var activityTypeColorClass = activityTypePercentage >= 80 ? "success" : activityTypePercentage >= 50 ? "warning" : "danger";
+                }
+                <div class="card card-@activityTypeColorClass mb-4 h-100" id="completedActivityTypeCard">
+                    <div class="card-header">
+                        <h3 class="card-title">Activity Type</h3>
+                    </div>
+                    <div class="card-body text-center">
+                        <h2 class="mb-0 stat-value-medium" id="completedActivityTypeValue">@activityTypePercentage.ToString("F1")%</h2>
+                        <p class="text-muted mb-0 mt-2" id="completedActivityTypeText">@Model.CompletedActivityTypeCount of @Model.Projects.Count</p>
+                        <div class="progress progress-lg mt-3">
+                            <div class="progress-bar bg-@activityTypeColorClass" style="width: @activityTypePercentage%" id="completedActivityTypeProgress"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-2 col-md-4 col-6">
+                @{
+                    var spendControlPercentage = Model.Projects.Any() ? (Model.CompletedSpendControlCount / (double)Model.Projects.Count) * 100 : 0;
+                    var spendControlColorClass = spendControlPercentage >= 80 ? "success" : spendControlPercentage >= 50 ? "warning" : "danger";
+                }
+                <div class="card card-@spendControlColorClass mb-4 h-100" id="completedSpendControlCard">
+                    <div class="card-header">
+                        <h3 class="card-title">Spend Control</h3>
+                    </div>
+                    <div class="card-body text-center">
+                        <h2 class="mb-0 stat-value-medium" id="completedSpendControlValue">@spendControlPercentage.ToString("F1")%</h2>
+                        <p class="text-muted mb-0 mt-2" id="completedSpendControlText">@Model.CompletedSpendControlCount of @Model.Projects.Count</p>
+                        <div class="progress progress-lg mt-3">
+                            <div class="progress-bar bg-@spendControlColorClass" style="width: @spendControlPercentage%" id="completedSpendControlProgress"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Business Area Completion -->
+        <div class="row mb-3">
+            <div class="col-lg-12">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            Completion by business area
+                        </h3>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Business area</th>
+                                        <th class="text-center">Deliverables</th>
+                                        <th class="text-center">Average completion</th>
+                                        <th class="text-center width-200px">Progress</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="businessAreaTableBody">
+                                    @foreach (var area in Model.BusinessAreaCompletions)
+                                    {
+                                        var completionClass = area.AverageCompletionPercentage >= 80 ? "success" : 
+                                                            area.AverageCompletionPercentage >= 60 ? "warning" : "danger";
+                                        <tr>
+                                            <td>
+                                                <strong>@area.BusinessArea</strong>
+                                            </td>
+                                            <td class="text-center">
+                                                <span class="badge badge-info">@area.ProductCount</span>
+                                            </td>
+                                            <td class="text-center">
+                                                <span class="badge badge-@completionClass badge-lg">
+                                                    @area.AverageCompletionPercentage.ToString("F1")%
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <div class="progress progress-sm">
+                                                    <div class="progress-bar bg-@completionClass" 
+                                                         style="width: @area.AverageCompletionPercentage%"></div>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="row mb-3">
+            <div class="col-lg-12">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h3 class="card-title">Filter deliverables</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-lg-4 col-md-6 col-12">
+                                <div class="form-group">
+                                    <label for="searchInput">Search by deliverable name or code</label>
+                                    <input type="text" class="form-control" id="searchInput" placeholder="Search deliverables...">
+                                </div>
+                            </div>
+                            <div class="col-lg-2 col-md-6 col-12">
+                                <div class="form-group">
+                                    <label for="businessAreaFilter">Business area</label>
+                                    <select class="form-control" id="businessAreaFilter">
+                                        <option value="">All business areas</option>
+                                        @foreach (var area in Model.BusinessAreaCompletions.OrderBy(a => a.BusinessArea))
+                                        {
+                                            <option value="@area.BusinessArea">@area.BusinessArea</option>
+                                        }
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-lg-3 col-md-6 col-12">
+                                <div class="form-group">
+                                    <label for="completionFilter">Filter by completion %</label>
+                                    <select class="form-control" id="completionFilter">
+                                        <option value="">All deliverables</option>
+                                        <option value="100">100% Complete</option>
+                                        <option value="80-99">80-99%</option>
+                                        <option value="60-79">60-79%</option>
+                                        <option value="40-59">40-59%</option>
+                                        <option value="0-39">0-39%</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-lg-3 col-md-6 col-12">
+                                <div class="form-group">
+                                    <label for="statusFilter">Filter by status</label>
+                                    <select class="form-control" id="statusFilter">
+                                        <option value="">All deliverables</option>
+                                        <option value="complete">Complete (100%)</option>
+                                        <option value="incomplete">Incomplete (&lt;100%)</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Completion Table - All Projects -->
+        <div class="row">
+            <div class="col-lg-12">
+                @if (!Model.Projects.Any())
+                {
+                    <div class="card">
+                        <div class="card-body text-center text-muted p-5">
+                            <i class="fas fa-info-circle fa-3x mb-3"></i>
+                            <p class="mb-0">No deliverables found</p>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h3 class="card-title">Deliverables Completion Status</h3>
+                        </div>
+                        <div class="card-body p-0">
+                            <div class="table-responsive">
+                                <table class="table table-hover sortable-table mb-0" id="completionTable">
+                                    <thead>
+                                        <tr>
+                                            <th class="sortable" data-column="ProjectTitle" style="cursor: pointer;">
+                                                Project <i class="fas fa-sort"></i>
+                                            </th>
+                                            <th class="text-center sortable" data-column="Phase" style="cursor: pointer;">
+                                                Phase <i class="fas fa-sort"></i>
+                                            </th>
+                                            <th class="text-center sortable" data-column="Sro" style="cursor: pointer;">
+                                                SRO <i class="fas fa-sort"></i>
+                                            </th>
+                                            <th class="text-center sortable" data-column="PrimaryContact" style="cursor: pointer;">
+                                                Primary Contact <i class="fas fa-sort"></i>
+                                            </th>
+                                            <th class="text-center sortable" data-column="ServiceOwner" style="cursor: pointer;">
+                                                Service Owner <i class="fas fa-sort"></i>
+                                            </th>
+                                            <th class="text-center sortable" data-column="PmoContact" style="cursor: pointer;">
+                                                PMO Contact <i class="fas fa-sort"></i>
+                                            </th>
+                                            <th class="text-center sortable" data-column="Directorate" style="cursor: pointer;">
+                                                Directorate <i class="fas fa-sort"></i>
+                                            </th>
+                                            <th class="text-center sortable" data-column="BudgetOwner" style="cursor: pointer;">
+                                                Budget Owner <i class="fas fa-sort"></i>
+                                            </th>
+                                            <th class="text-center sortable" data-column="RagStatus" style="cursor: pointer;">
+                                                RAG Status <i class="fas fa-sort"></i>
+                                            </th>
+                                            <th class="text-center sortable" data-column="Priority" style="cursor: pointer;">
+                                                Priority <i class="fas fa-sort"></i>
+                                            </th>
+                                            <th class="text-center sortable" data-column="BusinessArea" style="cursor: pointer;">
+                                                Business Area <i class="fas fa-sort"></i>
+                                            </th>
+                                            <th class="text-center sortable" data-column="ActivityType" style="cursor: pointer;">
+                                                Activity Type <i class="fas fa-sort"></i>
+                                            </th>
+                                            <th class="text-center sortable" data-column="SpendControl" style="cursor: pointer;">
+                                                Spend Control <i class="fas fa-sort"></i>
+                                            </th>
+                                            <th class="text-center sortable" data-column="CompletionPercentage" style="cursor: pointer; width: 180px;">
+                                                Completion % <i class="fas fa-sort"></i>
+                                            </th>
+                                            <th class="text-center" style="width: 100px;">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var project in Model.Projects)
+                                        {
+                                            var completionBadgeClass = project.CompletionPercentage >= 100 ? "success" :
+                                                                       project.CompletionPercentage >= 75 ? "warning" :
+                                                                       project.CompletionPercentage >= 50 ? "orange" : "danger";
+                                            <tr data-completion="@project.CompletionPercentage"
+                                                data-project-title="@project.ProjectTitle.ToLowerInvariant()"
+                                                data-project-code="@($"DFE-DDT-{project.ProjectId}")"
+                                                data-phase="@(project.Phase ?? "")"
+                                                data-has-phase="@(project.HasPhase ? "true" : "false")"
+                                                data-has-sro="@(project.HasSro ? "true" : "false")"
+                                                data-sro-names="@string.Join(", ", project.SeniorResponsibleOfficerNames ?? new List<string>())"
+                                                data-has-primary-contact="@(project.HasPrimaryContact ? "true" : "false")"
+                                                data-primary-contact-name="@(project.PrimaryContactName ?? "")"
+                                                data-has-service-owner="@(project.HasServiceOwner ? "true" : "false")"
+                                                data-service-owner-names="@string.Join(", ", project.ServiceOwnerNames ?? new List<string>())"
+                                                data-has-pmo="@(project.HasPmoContact ? "true" : "false")"
+                                                data-pmo-names="@string.Join(", ", project.PmoContactNames ?? new List<string>())"
+                                                data-has-directorate="@(project.HasDirectorate ? "true" : "false")"
+                                                data-directorate-names="@string.Join(", ", project.DirectorateNames ?? new List<string>())"
+                                                data-has-budget-owner="@(project.HasBudgetOwner ? "true" : "false")"
+                                                data-budget-owner-names="@string.Join(", ", project.BudgetOwnerNames ?? new List<string>())"
+                                                data-rag-status="@(project.RagStatus ?? "")"
+                                                data-has-rag="@(project.HasRagStatus ? "true" : "false")"
+                                                data-priority-name="@(project.PriorityName ?? "")"
+                                                data-has-priority="@(project.HasPriority ? "true" : "false")"
+                                                data-business-area="@(project.BusinessArea ?? "")"
+                                                data-has-business-area="@(project.HasBusinessArea ? "true" : "false")"
+                                                data-activity-type-name="@(project.ActivityTypeName ?? "")"
+                                                data-has-activity-type="@(project.HasActivityType ? "true" : "false")"
+                                                data-spend-control="@(project.HasSpendControl ? (project.IsSubjectToSpendControl == true ? "true" : "false") : "")"
+                                                data-has-spend-control="@(project.HasSpendControl ? "true" : "false")">
+                                                <td>
+                                                    <a asp-controller="Project" asp-action="Details" asp-route-id="@project.ProjectId" class="text-decoration-none">
+                                                        <strong>@project.ProjectTitle</strong>
+                                                    </a>
+                                                    <br>
+                                                    <small class="text-muted">DFE-DDT-@project.ProjectId</small>
+                                                </td>
+                                                                <a class="dropdown-item" href="#" data-action="change-title" data-project-id="@project.ProjectId" data-project-title="@project.ProjectTitle">
+                                                                    <i class="fas fa-edit mr-2"></i> Change Title
+                                                                </a>
+                                                <td class="text-center">
+                                                    @if (!string.IsNullOrWhiteSpace(project.Phase))
+                                                    {
+                                                        <i class="fas fa-check-square text-success completion-icon" title="@project.Phase"></i>
+                                                    }
+                                                    else
+                                                    {
+                                                        <i class="fas fa-times-square text-danger completion-icon" title="Phase missing"></i>
+                                                    }
+                                                </td>
+                                                <td class="text-center">
+                                                    @if (project.HasSro)
+                                                    {
+                                                        <i class="fas fa-check-square text-success completion-icon" title="@string.Join(", ", project.SeniorResponsibleOfficerNames)"></i>
+                                                    }
+                                                    else
+                                                    {
+                                                        <i class="fas fa-times-square text-danger completion-icon" title="SRO missing"></i>
+                                                    }
+                                                </td>
+                                                <td class="text-center">
+                                                    @if (project.HasPrimaryContact)
+                                                    {
+                                                        <i class="fas fa-check-square text-success completion-icon" title="@project.PrimaryContactName"></i>
+                                                    }
+                                                    else
+                                                    {
+                                                        <i class="fas fa-times-square text-danger completion-icon" title="Primary Contact missing"></i>
+                                                    }
+                                                </td>
+                                                <td class="text-center">
+                                                    @if (project.HasServiceOwner)
+                                                    {
+                                                        <i class="fas fa-check-square text-success completion-icon" title="@string.Join(", ", project.ServiceOwnerNames)"></i>
+                                                    }
+                                                    else
+                                                    {
+                                                        <i class="fas fa-times-square text-danger completion-icon" title="Service Owner missing"></i>
+                                                    }
+                                                </td>
+                                                <td class="text-center">
+                                                    @if (project.HasPmoContact)
+                                                    {
+                                                        <i class="fas fa-check-square text-success completion-icon" title="@string.Join(", ", project.PmoContactNames)"></i>
+                                                    }
+                                                    else
+                                                    {
+                                                        <i class="fas fa-times-square text-danger completion-icon" title="PMO Contact missing"></i>
+                                                    }
+                                                </td>
+                                                <td class="text-center">
+                                                    @if (project.HasDirectorate)
+                                                    {
+                                                        <i class="fas fa-check-square text-success completion-icon" title="@string.Join(", ", project.DirectorateNames)"></i>
+                                                    }
+                                                    else
+                                                    {
+                                                        <i class="fas fa-times-square text-danger completion-icon" title="Directorate missing"></i>
+                                                    }
+                                                </td>
+                                                <td class="text-center">
+                                                    @if (project.HasBudgetOwner)
+                                                    {
+                                                        <i class="fas fa-check-square text-success completion-icon" title="@string.Join(", ", project.BudgetOwnerNames)"></i>
+                                                    }
+                                                    else
+                                                    {
+                                                        <i class="fas fa-times-square text-danger completion-icon" title="Budget Owner missing"></i>
+                                                    }
+                                                </td>
+                                                <td class="text-center">
+                                                    @if (project.HasRagStatus)
+                                                    {
+                                                        <i class="fas fa-check-square text-success completion-icon" title="@project.RagStatus"></i>
+                                                    }
+                                                    else
+                                                    {
+                                                        <i class="fas fa-times-square text-danger completion-icon" title="RAG Status missing"></i>
+                                                    }
+                                                </td>
+                                                <td class="text-center">
+                                                    @if (project.HasPriority)
+                                                    {
+                                                        <i class="fas fa-check-square text-success completion-icon" title="@project.PriorityName"></i>
+                                                    }
+                                                    else
+                                                    {
+                                                        <i class="fas fa-times-square text-danger completion-icon" title="Priority missing"></i>
+                                                    }
+                                                </td>
+                                                <td class="text-center">
+                                                    @if (project.HasBusinessArea)
+                                                    {
+                                                        <i class="fas fa-check-square text-success completion-icon" title="@project.BusinessArea"></i>
+                                                    }
+                                                    else
+                                                    {
+                                                        <i class="fas fa-times-square text-danger completion-icon" title="Business Area missing"></i>
+                                                    }
+                                                </td>
+                                                <td class="text-center">
+                                                    @if (project.HasActivityType)
+                                                    {
+                                                        <i class="fas fa-check-square text-success completion-icon" title="@project.ActivityTypeName"></i>
+                                                    }
+                                                    else
+                                                    {
+                                                        <i class="fas fa-times-square text-danger completion-icon" title="Activity Type missing"></i>
+                                                    }
+                                                </td>
+                                                <td class="text-center">
+                                                    @if (project.HasSpendControl)
+                                                    {
+                                                        <i class="fas fa-check-square text-success completion-icon" title="@(project.IsSubjectToSpendControl == true ? "Yes" : "No")"></i>
+                                                    }
+                                                    else
+                                                    {
+                                                        <i class="fas fa-times-square text-danger completion-icon" title="Spend Control missing"></i>
+                                                    }
+                                                </td>
+                                                <td class="text-center">
+                                                    <span class="badge badge-@(completionBadgeClass == "orange" ? "orange" : completionBadgeClass)" style="font-size: 0.875rem;">
+                                                        @project.CompletionPercentage.ToString("F1")%
+                                                    </span>
+                                                </td>
+                                                <td class="text-center">
+                                                    <div class="btn-group">
+                                                        <button type="button" class="btn btn-sm btn-secondary dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                                                            <i class="fas fa-cog"></i>
+                                                        </button>
+                                                        <div class="dropdown-menu dropdown-menu-right">
+                                                            <a class="dropdown-item" href="#" data-action="change-title" data-project-id="@project.ProjectId" data-project-title="@project.ProjectTitle">
+                                                                <i class="fas fa-edit mr-2"></i> Change Title
+                                                            </a>
+                                                            <div class="dropdown-divider"></div>
+                                                            <a class="dropdown-item" href="#" data-action="set-phase" data-project-id="@project.ProjectId">
+                                                                <i class="fas fa-layer-group mr-2"></i> Set Phase
+                                                            </a>
+                                                            <a class="dropdown-item" href="#" data-action="set-sro" data-project-id="@project.ProjectId">
+                                                                <i class="fas fa-user-tie mr-2"></i> Set SRO
+                                                            </a>
+                                                            <a class="dropdown-item" href="#" data-action="set-primary-contact" data-project-id="@project.ProjectId">
+                                                                <i class="fas fa-user mr-2"></i> Set Primary Contact
+                                                            </a>
+                                                            <a class="dropdown-item" href="#" data-action="set-service-owner" data-project-id="@project.ProjectId">
+                                                                <i class="fas fa-user-tie mr-2"></i> Set Service Owner
+                                                            </a>
+                                                            <a class="dropdown-item" href="#" data-action="set-directorate" data-project-id="@project.ProjectId">
+                                                                <i class="fas fa-sitemap mr-2"></i> Set Directorate
+                                                            </a>
+                                                            <a class="dropdown-item" href="#" data-action="set-rag-status" data-project-id="@project.ProjectId">
+                                                                <i class="fas fa-flag mr-2"></i> Set RAG Status
+                                                            </a>
+                                                            <a class="dropdown-item" href="#" data-action="set-priority" data-project-id="@project.ProjectId">
+                                                                <i class="fas fa-star mr-2"></i> Set Priority
+                                                            </a>
+                                                            <a class="dropdown-item" href="#" data-action="set-business-area" data-project-id="@project.ProjectId">
+                                                                <i class="fas fa-building mr-2"></i> Set Business Area
+                                                            </a>
+                                                            <a class="dropdown-item" href="#" data-action="set-activity-type" data-project-id="@project.ProjectId">
+                                                                <i class="fas fa-tasks mr-2"></i> Set Activity Type
+                                                            </a>
+                                                            <a class="dropdown-item" href="#" data-action="set-spend-control" data-project-id="@project.ProjectId">
+                                                                <i class="fas fa-pound-sign mr-2"></i> Set Spend Control
+                                                            </a>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</section>
+
+@{
+    var deliveryPriorities = ViewBag.DeliveryPriorities as List<Compass.Models.DeliveryPriority> ?? new List<Compass.Models.DeliveryPriority>();
+    var businessAreaLookups = ViewBag.BusinessAreaLookups as List<Compass.Models.BusinessAreaLookup> ?? new List<Compass.Models.BusinessAreaLookup>();
+    var activityTypeLookups = ViewBag.ActivityTypeLookups as List<Compass.Models.ActivityTypeLookup> ?? new List<Compass.Models.ActivityTypeLookup>();
+    var phaseLookups = ViewBag.PhaseLookups as List<Compass.Models.PhaseLookup> ?? new List<Compass.Models.PhaseLookup>();
+}
+
+<!-- Update RAG Status Modal -->
+<div class="modal fade" id="updateRagStatusModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Update RAG Status</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateProjectRagStatus" method="post">
+                <input type="hidden" name="projectId" id="ragStatusProjectId" />
+                <div class="modal-body">
+                    <p class="mb-3">Select the RAG status for this deliverable.</p>
+                    <div class="form-group">
+                        <label for="ragStatus" class="form-label">RAG Status</label>
+                        <select class="form-control" id="ragStatus" name="ragStatus">
+                            <option value="">-- Clear RAG Status --</option>
+                            <option value="Green">Green</option>
+                            <option value="Amber-Green">Amber-Green</option>
+                            <option value="Amber">Amber</option>
+                            <option value="Amber-Red">Amber-Red</option>
+                            <option value="Red">Red</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-success">Save RAG Status</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Update Priority Modal -->
+<div class="modal fade" id="updatePriorityModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Update Priority</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateProjectPriority" method="post">
+                <input type="hidden" name="projectId" id="priorityProjectId" />
+                <div class="modal-body">
+                    <p class="mb-3">Select the Priority for this deliverable.</p>
+                    <div class="form-group">
+                        <label for="deliveryPriorityId" class="form-label">Priority</label>
+                        <select class="form-control" id="deliveryPriorityId" name="deliveryPriorityId">
+                            <option value="">-- Clear Priority --</option>
+                            @foreach (var priority in deliveryPriorities)
+                            {
+                                <option value="@priority.Id">@priority.Name</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-success">Save Priority</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Update Phase Modal -->
+<div class="modal fade" id="updatePhaseModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Update Phase</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateProjectPhase" method="post">
+                <input type="hidden" name="projectId" id="phaseProjectId" />
+                <div class="modal-body">
+                    <p class="mb-3">Select the Phase for this deliverable.</p>
+                    <div class="form-group">
+                        <label for="phaseLookupId" class="form-label">Phase</label>
+                        <select class="form-control" id="phaseLookupId" name="phaseLookupId">
+                            <option value="">-- Clear Phase --</option>
+                            @foreach (var phase in phaseLookups)
+                            {
+                                <option value="@phase.Id">@phase.Name</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-success">Save Phase</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Update Business Area Modal -->
+<div class="modal fade" id="updateBusinessAreaModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Update Business Area</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateProjectBusinessArea" method="post">
+                <input type="hidden" name="projectId" id="businessAreaProjectId" />
+                <div class="modal-body">
+                    <p class="mb-3">Select the Business Area for this deliverable.</p>
+                    <div class="form-group">
+                        <label for="businessAreaLookupId" class="form-label">Business Area</label>
+                        <select class="form-control" id="businessAreaLookupId" name="businessAreaLookupId">
+                            <option value="">-- Clear Business Area --</option>
+                            @foreach (var area in businessAreaLookups)
+                            {
+                                <option value="@area.Id">@area.Name</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-success">Save Business Area</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Update SRO Modal -->
+<div class="modal fade" id="updateSroModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Update SRO</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateProjectSro" method="post">
+                <input type="hidden" name="projectId" id="sroProjectId" />
+                <input type="hidden" name="clearSro" id="clearSro" value="false" />
+                <div class="modal-body">
+                    <p class="mb-3">Search for a colleague in Entra ID to set as the SRO. The user will be automatically added to the CMS if they don't already exist.</p>
+                    <div class="form-group">
+                        <label class="control-label" for="sroSearch">Search for a colleague</label>
+                        <small class="form-text text-muted">Start typing a name or email address to look up someone in Entra ID.</small>
+                        <div class="user-picker" data-user-picker data-search-url="/api/users/search" data-select-url="/api/users/select">
+                            <div class="position-relative">
+                                <input type="text"
+                                       class="form-control js-user-picker-input"
+                                       id="sroSearch"
+                                       autocomplete="off"
+                                       placeholder="e.g. Alex Smith or alex.smith@education.gov.uk" />
+                                <span class="user-picker__spinner js-user-picker-spinner" aria-hidden="true">Searching…</span>
+                                <div class="user-picker__results js-user-picker-results" role="listbox" aria-live="polite"></div>
+                            </div>
+                            <p class="form-text text-muted js-user-picker-message"></p>
+                            <input type="hidden" name="entraUserObjectId" class="js-user-picker-objectid" id="sroObjectId" />
+                            <input type="hidden" name="entraUserEmail" class="js-user-picker-email" id="sroEmail" />
+                            <input type="hidden" name="entraUserName" class="js-user-picker-name" id="sroName" />
+                            <div class="user-picker__selected js-user-picker-summary" data-default-text="No SRO selected.">
+                                <span class="text-muted">No SRO selected.</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-warning" id="clearSroBtn">Clear SRO</button>
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-success">Save SRO</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Update PMO Contact Modal -->
+<div class="modal fade" id="updatePmoContactModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Update PMO Contact</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateProjectPmoContact" method="post">
+                <input type="hidden" name="projectId" id="pmoContactProjectId" />
+                <input type="hidden" name="clearPmoContact" id="clearPmoContact" value="false" />
+                <div class="modal-body">
+                    <p class="mb-3">Search for a colleague in Entra ID to set as the PMO Contact. The user will be automatically added to the CMS if they don't already exist.</p>
+                    <div class="form-group">
+                        <label class="control-label" for="pmoContactSearch">Search for a colleague</label>
+                        <small class="form-text text-muted">Start typing a name or email address to look up someone in Entra ID.</small>
+                        <div class="user-picker" data-user-picker data-search-url="/api/users/search" data-select-url="/api/users/select">
+                            <div class="position-relative">
+                                <input type="text"
+                                       class="form-control js-user-picker-input"
+                                       id="pmoContactSearch"
+                                       autocomplete="off"
+                                       placeholder="e.g. Alex Smith or alex.smith@education.gov.uk" />
+                                <span class="user-picker__spinner js-user-picker-spinner" aria-hidden="true">Searching…</span>
+                                <div class="user-picker__results js-user-picker-results" role="listbox" aria-live="polite"></div>
+                            </div>
+                            <p class="form-text text-muted js-user-picker-message"></p>
+                            <input type="hidden" name="entraUserObjectId" class="js-user-picker-objectid" id="pmoContactObjectId" />
+                            <input type="hidden" name="entraUserEmail" class="js-user-picker-email" id="pmoContactEmail" />
+                            <input type="hidden" name="entraUserName" class="js-user-picker-name" id="pmoContactName" />
+                            <div class="user-picker__selected js-user-picker-summary" data-default-text="No PMO contact selected.">
+                                <span class="text-muted">No PMO contact selected.</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-warning" id="clearPmoContactBtn">Clear PMO Contact</button>
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-success">Save PMO Contact</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Update Service Owner Modal -->
+<div class="modal fade" id="updateServiceOwnerModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Update Service Owner</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateProjectServiceOwner" method="post">
+                <input type="hidden" name="projectId" id="serviceOwnerProjectId" />
+                <input type="hidden" name="clearServiceOwner" id="clearServiceOwner" value="false" />
+                <div class="modal-body">
+                    <p class="mb-3">Search for a colleague in Entra ID to set as the Service Owner. The user will be automatically added to the CMS if they don't already exist.</p>
+                    <div class="form-group">
+                        <label class="control-label" for="serviceOwnerSearch">Search for a colleague</label>
+                        <small class="form-text text-muted">Start typing a name or email address to look up someone in Entra ID.</small>
+                        <div class="user-picker" data-user-picker data-search-url="/api/users/search" data-select-url="/api/users/select">
+                            <div class="position-relative">
+                                <input type="text"
+                                       class="form-control js-user-picker-input"
+                                       id="serviceOwnerSearch"
+                                       autocomplete="off"
+                                       placeholder="e.g. Alex Smith or alex.smith@education.gov.uk" />
+                                <span class="user-picker__spinner js-user-picker-spinner" aria-hidden="true">Searching…</span>
+                                <div class="user-picker__results js-user-picker-results" role="listbox" aria-live="polite"></div>
+                            </div>
+                            <p class="form-text text-muted js-user-picker-message"></p>
+                            <input type="hidden" name="entraUserObjectId" class="js-user-picker-objectid" id="serviceOwnerObjectId" />
+                            <input type="hidden" name="entraUserEmail" class="js-user-picker-email" id="serviceOwnerEmail" />
+                            <input type="hidden" name="entraUserName" class="js-user-picker-name" id="serviceOwnerName" />
+                            <div class="user-picker__selected js-user-picker-summary" data-default-text="No Service Owner selected.">
+                                <span class="text-muted">No Service Owner selected.</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-warning" id="clearServiceOwnerBtn">Clear Service Owner</button>
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-success">Save Service Owner</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Update Directorate Modal -->
+<div class="modal fade" id="updateDirectorateModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Update Directorate</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateProjectDirectorate" method="post">
+                <input type="hidden" name="projectId" id="directorateProjectId" />
+                <div class="modal-body">
+                    <p class="mb-3">Select the Directorate for this deliverable.</p>
+                    <div class="form-group">
+                        <label for="directorateLookupId" class="form-label">Directorate</label>
+                        <select class="form-control" id="directorateLookupId" name="directorateLookupId">
+                            <option value="">-- Clear Directorate --</option>
+                            @if (ViewBag.DirectorateLookups != null)
+                            {
+                                @foreach (var directorate in (List<Compass.Models.Division>)ViewBag.DirectorateLookups)
+                                {
+                                    <option value="@directorate.Id">@directorate.Name</option>
+                                }
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-success">Save Directorate</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Update Primary Contact Modal -->
+<div class="modal fade" id="updatePrimaryContactModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Update Primary Contact</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateProjectPrimaryContact" method="post">
+                <input type="hidden" name="projectId" id="primaryContactProjectId" />
+                <input type="hidden" name="clearContact" id="clearPrimaryContact" value="false" />
+                <div class="modal-body">
+                    <p class="mb-3">Search for a colleague in Entra ID. The user will be automatically added to the CMS if they don't already exist.</p>
+                    <div class="form-group">
+                        <label class="control-label" for="primaryContactSearch">Search for a colleague</label>
+                        <small class="form-text text-muted">Start typing a name or email address to look up someone in Entra ID.</small>
+                        <div class="user-picker" data-user-picker data-search-url="/api/users/search" data-select-url="/api/users/select">
+                            <div class="position-relative">
+                                <input type="text"
+                                       class="form-control js-user-picker-input"
+                                       id="primaryContactSearch"
+                                       autocomplete="off"
+                                       placeholder="e.g. Alex Smith or alex.smith@education.gov.uk" />
+                                <span class="user-picker__spinner js-user-picker-spinner" aria-hidden="true">Searching…</span>
+                                <div class="user-picker__results js-user-picker-results" role="listbox" aria-live="polite"></div>
+                            </div>
+                            <p class="form-text text-muted js-user-picker-message"></p>
+                            <input type="hidden" name="entraUserObjectId" class="js-user-picker-objectid" id="primaryContactObjectId" />
+                            <input type="hidden" name="entraUserEmail" class="js-user-picker-email" id="primaryContactEmail" />
+                            <input type="hidden" name="entraUserName" class="js-user-picker-name" id="primaryContactName" />
+                            <div class="user-picker__selected js-user-picker-summary" data-default-text="No primary contact selected.">
+                                <span class="text-muted">No primary contact selected.</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-warning" id="clearPrimaryContactBtn">Clear Contact</button>
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-success">Save Primary Contact</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Update Activity Type Modal -->
+<div class="modal fade" id="updateActivityTypeModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Update Activity Type</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateProjectActivityType" method="post">
+                <input type="hidden" name="projectId" id="activityTypeProjectId" />
+                <div class="modal-body">
+                    <p class="mb-3">Select the Activity Type for this deliverable.</p>
+                    <div class="form-group">
+                        <label for="activityTypeLookupId" class="form-label">Activity Type</label>
+                        <select class="form-control" id="activityTypeLookupId" name="activityTypeLookupId">
+                            <option value="">-- Clear Activity Type --</option>
+                            @foreach (var activityType in activityTypeLookups)
+                            {
+                                <option value="@activityType.Id">@activityType.Name</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-success">Save Activity Type</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Update Spend Control Modal -->
+<div class="modal fade" id="updateSpendControlModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Update Spend Control</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateProjectSpendControl" method="post">
+                <input type="hidden" name="projectId" id="spendControlProjectId" />
+                <div class="modal-body">
+                    <p class="mb-3">Select whether this deliverable is subject to spend control.</p>
+                    <div class="form-group">
+                        <label for="isSubjectToSpendControl" class="form-label">Subject to Spend Control</label>
+                        <select class="form-control" id="isSubjectToSpendControl" name="isSubjectToSpendControl">
+                            <option value="">-- Not Set --</option>
+                            <option value="true">Yes</option>
+                            <option value="false">No</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-success">Save Spend Control</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Update Title Modal -->
+<div class="modal fade" id="updateTitleModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Change Deliverable Title</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateProjectTitle" method="post">
+                <input type="hidden" name="projectId" id="titleProjectId" />
+                <div class="modal-body">
+                    <p class="mb-3">Enter the new title for this deliverable.</p>
+                    <div class="form-group">
+                        <label for="projectTitle" class="form-label">Title</label>
+                        <input type="text" class="form-control" id="projectTitle" name="title" required maxlength="500" />
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-success">Save Title</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<style>
+.sortable {
+    cursor: pointer;
+    user-select: none;
+}
+
+.sortable:hover {
+    background-color: #f4f8fb;
+}
+
+.badge-lg {
+    font-size: 1rem;
+    padding: 0.5rem 0.75rem;
+}
+
+.completion-icon {
+    font-size: 2rem;
+    vertical-align: middle;
+}
+
+.badge-orange {
+    background-color: #fd7e14;
+    color: white;
+}
+</style>
+
+@section Scripts {
+    <script nonce="@Context.Items["Nonce"]">
+        // Total number of deliverables from server-side model
+        var totalDeliverables = @Model.Projects.Count;
+        
+        $(document).ready(function() {
+            initializeSortableTable($('#completionTable'));
+
+            $('#searchInput, #completionFilter, #statusFilter, #businessAreaFilter')
+                .on('input change', filterTable);
+
+            // Modal handlers
+            $(document).on('click', '[data-action="change-title"]', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                var projectId = $(this).data('project-id');
+                var projectTitle = $(this).data('project-title') || '';
+                $('#titleProjectId').val(projectId);
+                $('#projectTitle').val(projectTitle);
+                $('#updateTitleModal').modal('show');
+                return false;
+            });
+
+            $(document).on('click', '[data-action="set-rag-status"]', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                var projectId = $(this).data('project-id');
+                $('#ragStatusProjectId').val(projectId);
+                var $row = $(this).closest('tr');
+                var currentRag = $row.attr('data-rag-status') || '';
+                $('#ragStatus').val(currentRag);
+                $('#updateRagStatusModal').modal('show');
+                return false;
+            });
+
+            $(document).on('click', '[data-action="set-phase"]', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                var projectId = $(this).data('project-id');
+                $('#phaseProjectId').val(projectId);
+                $('#phaseLookupId').val('');
+                $('#updatePhaseModal').modal('show');
+                return false;
+            });
+
+            $(document).on('click', '[data-action="set-priority"]', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                var projectId = $(this).data('project-id');
+                $('#priorityProjectId').val(projectId);
+                $('#deliveryPriorityId').val('');
+                $('#updatePriorityModal').modal('show');
+                return false;
+            });
+
+            $(document).on('click', '[data-action="set-business-area"]', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                var projectId = $(this).data('project-id');
+                $('#businessAreaProjectId').val(projectId);
+                $('#businessAreaLookupId').val('');
+                $('#updateBusinessAreaModal').modal('show');
+                return false;
+            });
+
+            $(document).on('click', '[data-action="set-primary-contact"]', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                var projectId = $(this).data('project-id');
+                $('#primaryContactProjectId').val(projectId);
+                $('#clearPrimaryContact').val('false');
+                var $picker = $('#updatePrimaryContactModal [data-user-picker]');
+                $picker.find('.js-user-picker-input').val('');
+                $picker.find('.js-user-picker-objectid').val('');
+                $picker.find('.js-user-picker-email').val('');
+                $picker.find('.js-user-picker-name').val('');
+                $picker.find('.js-user-picker-summary').html('<span class="text-muted">No primary contact selected.</span>');
+                $('#updatePrimaryContactModal').modal('show');
+                setTimeout(function() {
+                    $('#primaryContactSearch').focus();
+                }, 300);
+                return false;
+            });
+
+            $('#clearPrimaryContactBtn').on('click', function() {
+                $('#clearPrimaryContact').val('true');
+                $('#updatePrimaryContactModal form').submit();
+            });
+
+            $(document).on('click', '[data-action="set-service-owner"]', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                var projectId = $(this).data('project-id');
+                $('#serviceOwnerProjectId').val(projectId);
+                $('#clearServiceOwner').val('false');
+                var $picker = $('#updateServiceOwnerModal [data-user-picker]');
+                $picker.find('.js-user-picker-input').val('');
+                $picker.find('.js-user-picker-objectid').val('');
+                $picker.find('.js-user-picker-email').val('');
+                $picker.find('.js-user-picker-name').val('');
+                $picker.find('.js-user-picker-summary').html('<span class="text-muted">No Service Owner selected.</span>');
+                $('#updateServiceOwnerModal').modal('show');
+                setTimeout(function() {
+                    $('#serviceOwnerSearch').focus();
+                }, 300);
+                return false;
+            });
+
+            $('#clearServiceOwnerBtn').on('click', function() {
+                $('#clearServiceOwner').val('true');
+                $('#updateServiceOwnerModal form').submit();
+            });
+
+            $(document).on('click', '[data-action="set-activity-type"]', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                var projectId = $(this).data('project-id');
+                $('#activityTypeProjectId').val(projectId);
+                $('#activityTypeLookupId').val('');
+                $('#updateActivityTypeModal').modal('show');
+                return false;
+            });
+
+            $(document).on('click', '[data-action="set-spend-control"]', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                var projectId = $(this).data('project-id');
+                $('#spendControlProjectId').val(projectId);
+                var $row = $(this).closest('tr');
+                var currentSpendControl = $row.attr('data-spend-control') || '';
+                $('#isSubjectToSpendControl').val(currentSpendControl);
+                $('#updateSpendControlModal').modal('show');
+                return false;
+            });
+
+            $(document).on('click', '[data-action="set-sro"]', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                var projectId = $(this).data('project-id');
+                $('#sroProjectId').val(projectId);
+                $('#clearSro').val('false');
+                var $picker = $('#updateSroModal [data-user-picker]');
+                $picker.find('.js-user-picker-input').val('');
+                $picker.find('.js-user-picker-objectid').val('');
+                $picker.find('.js-user-picker-email').val('');
+                $picker.find('.js-user-picker-name').val('');
+                $picker.find('.js-user-picker-summary').html('<span class="text-muted">No SRO selected.</span>');
+                $('#updateSroModal').modal('show');
+                setTimeout(function() {
+                    $('#sroSearch').focus();
+                }, 300);
+                return false;
+            });
+
+            $('#clearSroBtn').on('click', function() {
+                $('#clearSro').val('true');
+                $('#updateSroModal form').submit();
+            });
+
+
+            $(document).on('click', '[data-action="set-directorate"]', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                var projectId = $(this).data('project-id');
+                $('#directorateProjectId').val(projectId);
+                $('#directorateLookupId').val('');
+                $('#updateDirectorateModal').modal('show');
+                return false;
+            });
+
+            // Setup AJAX forms
+            setupAjaxForm('#updateTitleModal form', handleProjectUpdate);
+            setupAjaxForm('#updateSroModal form', handleProjectUpdate);
+            setupAjaxForm('#updateDirectorateModal form', handleProjectUpdate);
+            setupAjaxForm('#updateRagStatusModal form', handleProjectUpdate);
+            setupAjaxForm('#updatePhaseModal form', handleProjectUpdate);
+            setupAjaxForm('#updatePriorityModal form', handleProjectUpdate);
+            setupAjaxForm('#updateBusinessAreaModal form', handleProjectUpdate);
+            setupAjaxForm('#updatePrimaryContactModal form', handleProjectUpdate);
+            setupAjaxForm('#updateServiceOwnerModal form', handleProjectUpdate);
+            setupAjaxForm('#updateActivityTypeModal form', handleProjectUpdate);
+            setupAjaxForm('#updateSpendControlModal form', handleProjectUpdate);
+
+            // View details button handler
+            $(document).on('click', '.view-details-btn', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                var projectId = $(this).data('project-id');
+                var $detailContent = $('#detail-content-' + projectId);
+                var $icon = $(this).find('i');
+                
+                $detailContent.collapse('toggle');
+                return false;
+            });
+            
+            // Handle Bootstrap collapse events to update chevron
+            $(document).on('shown.bs.collapse', '.detail-row .collapse', function() {
+                var projectId = $(this).attr('id').replace('detail-content-', '');
+                $('.view-details-btn[data-project-id="' + projectId + '"] i')
+                    .removeClass('fa-chevron-down').addClass('fa-chevron-up');
+            });
+            
+            $(document).on('hidden.bs.collapse', '.detail-row .collapse', function() {
+                var projectId = $(this).attr('id').replace('detail-content-', '');
+                $('.view-details-btn[data-project-id="' + projectId + '"] i')
+                    .removeClass('fa-chevron-up').addClass('fa-chevron-down');
+            });
+
+            filterTable();
+            recalculateSummary();
+
+            function setupAjaxForm(selector, onSuccess) {
+                var $form = $(selector);
+                $form.on('submit', function(e) {
+                    e.preventDefault();
+                    var formData = new FormData(this);
+                    var $submitButton = $form.find('button[type="submit"]');
+                    $submitButton.prop('disabled', true);
+                    fetch($form.attr('action'), {
+                        method: 'POST',
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                        body: formData,
+                        credentials: 'same-origin'
+                    })
+                    .then(function(response) {
+                        return response.json();
+                    })
+                    .then(function(data) {
+                        if (data && data.success) {
+                            if (typeof onSuccess === 'function') {
+                                onSuccess(data);
+                            }
+                            $form.closest('.modal').modal('hide');
+                        } else {
+                            showInlineAlert('danger', (data && data.message) || 'Unable to complete the update. Please try again.');
+                        }
+                    })
+                    .catch(function() {
+                        showInlineAlert('danger', 'An unexpected error occurred. Please try again.');
+                    })
+                    .finally(function() {
+                        $submitButton.prop('disabled', false);
+                    });
+                });
+            }
+
+            function handleProjectUpdate(response) {
+                if (!response) {
+                    return;
+                }
+
+                if (response.message) {
+                    showInlineAlert(response.success ? 'success' : 'danger', response.message);
+                }
+
+                if (response.project) {
+                    updateRowWithProject(response.project);
+                    recalculateSummary();
+                    filterTable();
+                }
+            }
+
+            function showInlineAlert(type, message) {
+                var $container = $('#inlineAlertContainer');
+                if (!message) {
+                    $container.empty();
+                    return;
+                }
+
+                var alertHtml = '<div class="alert alert-' + type + ' alert-dismissible fade show" role="alert">' +
+                    message +
+                    '<button type="button" class="close" data-dismiss="alert" aria-label="Close">' +
+                    '<span aria-hidden="true">&times;</span>' +
+                    '</button>' +
+                    '</div>';
+
+                $container.html(alertHtml);
+            }
+
+            function updateRowWithProject(project) {
+                if (!project || !project.projectId) {
+                    return;
+                }
+
+                var projectId = project.projectId;
+                // Only find main rows, exclude detail rows
+                var $row = $('#completionTable tbody tr').not('.detail-row').filter(function() {
+                    var href = $(this).find('a').attr('href');
+                    return href && href.includes('/' + projectId);
+                });
+
+                if (!$row.length) {
+                    return;
+                }
+
+                // Update data attributes and display based on project data
+                // This is a simplified version - you may need to expand based on what fields are returned
+                if (project.projectTitle !== undefined) {
+                    $row.attr('data-project-title', project.projectTitle.toLowerCase());
+                    var titleCell = $row.find('td').first();
+                    var titleLink = titleCell.find('a');
+                    if (titleLink.length) {
+                        titleLink.text(project.projectTitle);
+                        // Update the summary if it exists
+                        var summaryText = titleCell.find('small.text-muted');
+                        if (summaryText.length && project.summary) {
+                            var truncatedSummary = project.summary.length > 100 ? project.summary.substring(0, 100) + '...' : project.summary;
+                            summaryText.text(truncatedSummary);
+                        }
+                    }
+                    // Update the data attribute in the dropdown button
+                    $row.find('[data-action="change-title"]').attr('data-project-title', project.projectTitle);
+                }
+
+                // Update completion percentage badge (13th column - Completion % column)
+                if (project.completionPercentage !== undefined) {
+                    $row.attr('data-completion', project.completionPercentage);
+                    var completionBadgeClass = project.completionPercentage >= 100 ? 'success' :
+                                               project.completionPercentage >= 75 ? 'warning' :
+                                               project.completionPercentage >= 50 ? 'orange' : 'danger';
+                    var badgeClass = completionBadgeClass === 'orange' ? 'badge-orange' : 'badge-' + completionBadgeClass;
+                    var completionCell = $row.find('td').eq(13); // 14th column (Completion % column)
+                    completionCell.html('<span class="badge ' + badgeClass + '" style="font-size: 0.875rem;">' + project.completionPercentage.toFixed(1) + '%</span>');
+                }
+
+                // Update phase badge (3rd column)
+                if (project.phase !== undefined) {
+                    $row.attr('data-phase', project.phase || '');
+                    var phaseCell = $row.find('td').eq(2); // 3rd column (0-indexed)
+                    if (project.phase) {
+                        phaseCell.html('<span class="badge badge-info">' + escapeHtml(project.phase) + '</span>');
+                    } else {
+                        phaseCell.html('<span class="text-muted">-</span>');
+                    }
+                }
+
+                // Update SRO (column 3)
+                if (project.seniorResponsibleOfficerNames !== undefined) {
+                    var hasSro = project.seniorResponsibleOfficerNames && project.seniorResponsibleOfficerNames.length > 0;
+                    $row.attr('data-has-sro', hasSro ? 'true' : 'false');
+                    var sroNames = hasSro ? project.seniorResponsibleOfficerNames.join(', ') : '';
+                    $row.attr('data-sro-names', sroNames);
+                    var sroHtml = hasSro
+                        ? '<i class="fas fa-check-square text-success completion-icon" title="' + escapeHtml(sroNames) + '"></i>'
+                        : '<i class="fas fa-times-square text-danger completion-icon" title="SRO missing"></i>';
+                    $row.find('td').eq(3).html(sroHtml); // Column 3: SRO
+                }
+
+                // Update Primary Contact (column 4)
+                if (project.primaryContactName !== undefined) {
+                    $row.attr('data-primary-contact-name', project.primaryContactName || '');
+                    $row.attr('data-has-primary-contact', project.primaryContactName ? 'true' : 'false');
+                    var primaryContactHtml = project.primaryContactName
+                        ? '<i class="fas fa-check-square text-success completion-icon" title="' + escapeHtml(project.primaryContactName) + '"></i>'
+                        : '<i class="fas fa-times-square text-danger completion-icon" title="Primary Contact missing"></i>';
+                    $row.find('td').eq(4).html(primaryContactHtml); // Column 4: Primary Contact
+                }
+
+                // Update Service Owner (column 5)
+                if (project.serviceOwnerNames !== undefined) {
+                    var hasServiceOwner = project.serviceOwnerNames && project.serviceOwnerNames.length > 0;
+                    $row.attr('data-has-service-owner', hasServiceOwner ? 'true' : 'false');
+                    var serviceOwnerNames = hasServiceOwner ? project.serviceOwnerNames.join(', ') : '';
+                    $row.attr('data-service-owner-names', serviceOwnerNames);
+                    var serviceOwnerHtml = hasServiceOwner
+                        ? '<i class="fas fa-check-square text-success completion-icon" title="' + escapeHtml(serviceOwnerNames) + '"></i>'
+                        : '<i class="fas fa-times-square text-danger completion-icon" title="Service Owner missing"></i>';
+                    $row.find('td').eq(5).html(serviceOwnerHtml); // Column 5: Service Owner
+                }
+
+                // Update Directorate (column 6)
+                if (project.directorateNames !== undefined) {
+                    var hasDirectorate = project.directorateNames && project.directorateNames.length > 0;
+                    $row.attr('data-has-directorate', hasDirectorate ? 'true' : 'false');
+                    var directorateNames = hasDirectorate ? project.directorateNames.join(', ') : '';
+                    $row.attr('data-directorate-names', directorateNames);
+                    var directorateHtml = hasDirectorate
+                        ? '<i class="fas fa-check-square text-success completion-icon" title="' + escapeHtml(directorateNames) + '"></i>'
+                        : '<i class="fas fa-times-square text-danger completion-icon" title="Directorate missing"></i>';
+                    $row.find('td').eq(6).html(directorateHtml); // Column 6: Directorate
+                }
+
+                // Update Budget Owner (column 7)
+                if (project.budgetOwnerNames !== undefined) {
+                    var hasBudgetOwner = project.budgetOwnerNames && project.budgetOwnerNames.length > 0;
+                    $row.attr('data-has-budget-owner', hasBudgetOwner ? 'true' : 'false');
+                    var budgetOwnerNames = hasBudgetOwner ? project.budgetOwnerNames.join(', ') : '';
+                    $row.attr('data-budget-owner-names', budgetOwnerNames);
+                    var budgetOwnerHtml = hasBudgetOwner
+                        ? '<i class="fas fa-check-square text-success completion-icon" title="' + escapeHtml(budgetOwnerNames) + '"></i>'
+                        : '<i class="fas fa-times-square text-danger completion-icon" title="Budget Owner missing"></i>';
+                    $row.find('td').eq(7).html(budgetOwnerHtml); // Column 7: Budget Owner
+                }
+
+                // Update RAG Status (column 8)
+                if (project.ragStatus !== undefined) {
+                    $row.attr('data-rag-status', project.ragStatus || '');
+                    $row.attr('data-has-rag', project.ragStatus ? 'true' : 'false');
+                    var ragHtml = project.ragStatus 
+                        ? '<span class="badge badge-' + getRagBadgeClass(project.ragStatus) + '">' + project.ragStatus + '</span>'
+                        : '<i class="fas fa-times-square text-danger completion-icon" title="RAG Status missing"></i>';
+                    $row.find('td').eq(8).html(ragHtml); // Column 8: RAG Status
+                }
+
+                // Update Phase (column 2)
+                if (project.phase !== undefined) {
+                    $row.attr('data-phase', project.phase || '');
+                    var phaseHtml = project.phase
+                        ? '<span class="badge badge-info">' + escapeHtml(project.phase) + '</span>'
+                        : '<span class="text-muted">-</span>';
+                    $row.find('td').eq(2).html(phaseHtml); // Column 2: Phase
+                }
+
+                // Update Priority (column 9)
+                if (project.priorityName !== undefined) {
+                    $row.attr('data-priority-name', project.priorityName || '');
+                    $row.attr('data-has-priority', project.priorityName ? 'true' : 'false');
+                    var priorityHtml = project.priorityName
+                        ? '<span class="badge badge-info">' + project.priorityName + '</span>'
+                        : '<i class="fas fa-times-square text-danger completion-icon" title="Priority missing"></i>';
+                    $row.find('td').eq(9).html(priorityHtml); // Column 9: Priority
+                }
+
+                // Update Business Area (column 10)
+                if (project.businessArea !== undefined) {
+                    $row.attr('data-business-area', project.businessArea || '');
+                    $row.attr('data-has-business-area', project.businessArea ? 'true' : 'false');
+                    var businessAreaHtml = project.businessArea
+                        ? '<i class="fas fa-check-square text-success completion-icon" title="' + escapeHtml(project.businessArea) + '"></i>'
+                        : '<i class="fas fa-times-square text-danger completion-icon" title="Business Area missing"></i>';
+                    $row.find('td').eq(10).html(businessAreaHtml); // Column 10: Business Area
+                }
+
+                // Update Activity Type (column 11)
+                if (project.activityTypeName !== undefined) {
+                    $row.attr('data-activity-type-name', project.activityTypeName || '');
+                    $row.attr('data-has-activity-type', project.activityTypeName ? 'true' : 'false');
+                    var activityTypeHtml = project.activityTypeName
+                        ? '<i class="fas fa-check-square text-success completion-icon" title="' + escapeHtml(project.activityTypeName) + '"></i>'
+                        : '<i class="fas fa-times-square text-danger completion-icon" title="Activity Type missing"></i>';
+                    $row.find('td').eq(11).html(activityTypeHtml); // Column 11: Activity Type
+                }
+
+                // Update Spend Control (column 12)
+                if (project.isSubjectToSpendControl !== undefined) {
+                    var spendControlValue = project.isSubjectToSpendControl === true ? 'true' : project.isSubjectToSpendControl === false ? 'false' : '';
+                    $row.attr('data-spend-control', spendControlValue);
+                    $row.attr('data-has-spend-control', spendControlValue !== '' ? 'true' : 'false');
+                    var spendControlHtml = spendControlValue !== ''
+                        ? '<span class="badge badge-' + (spendControlValue === 'true' ? 'warning' : 'secondary') + '">' + (spendControlValue === 'true' ? 'Yes' : 'No') + '</span>'
+                        : '<i class="fas fa-times-square text-danger completion-icon" title="Spend Control missing"></i>';
+                    $row.find('td').eq(12).html(spendControlHtml); // Column 12: Spend Control
+                }
+
+                // Note: PMO Contact is not displayed in the table, so we skip updating it
+                if (project.pmoContactNames !== undefined) {
+                    var hasPmo = project.pmoContactNames && project.pmoContactNames.length > 0;
+                    $row.attr('data-has-pmo', hasPmo ? 'true' : 'false');
+                    var pmoNames = hasPmo ? project.pmoContactNames.join(', ') : '';
+                    $row.attr('data-pmo-names', pmoNames);
+                    // PMO Contact column doesn't exist in the table, so we don't update it
+                }
+
+                // Recalculate completion percentage
+                var completedFields = 0;
+                if ($row.attr('data-has-sro') === 'true') completedFields++;
+                if ($row.attr('data-has-pmo') === 'true') completedFields++;
+                if ($row.attr('data-has-service-owner') === 'true') completedFields++;
+                if ($row.attr('data-has-directorate') === 'true') completedFields++;
+                if ($row.attr('data-has-budget-owner') === 'true') completedFields++;
+                if ($row.attr('data-has-rag') === 'true') completedFields++;
+                if ($row.attr('data-has-priority') === 'true') completedFields++;
+                if ($row.attr('data-has-business-area') === 'true') completedFields++;
+                if ($row.attr('data-has-primary-contact') === 'true') completedFields++;
+                if ($row.attr('data-has-activity-type') === 'true') completedFields++;
+                if ($row.attr('data-has-spend-control') === 'true') completedFields++;
+
+                var completionPercentage = (completedFields / 11.0) * 100;
+                $row.attr('data-completion', completionPercentage);
+                // Update completion badge in 13th column (Completion % column)
+                var completionBadgeClass = completionPercentage >= 100 ? 'success' :
+                                          completionPercentage >= 75 ? 'warning' :
+                                          completionPercentage >= 50 ? 'orange' : 'danger';
+                var badgeClass = completionBadgeClass === 'orange' ? 'badge-orange' : 'badge-' + completionBadgeClass;
+                $row.find('td').eq(13).html('<span class="badge ' + badgeClass + '" style="font-size: 0.875rem;">' + completionPercentage.toFixed(1) + '%</span>');
+            }
+
+            function getRagBadgeClass(ragStatus) {
+                if (ragStatus === 'Green') return 'success';
+                if (ragStatus === 'Amber-Green' || ragStatus === 'Amber' || ragStatus === 'Amber-Red') return 'warning';
+                if (ragStatus === 'Red') return 'danger';
+                return 'secondary';
+            }
+
+            function escapeHtml(text) {
+                return $('<div>').text(text || '').html();
+            }
+
+            function filterTable() {
+                var searchTerm = ($('#searchInput').val() || '').toString().toLowerCase();
+                var completionFilter = ($('#completionFilter').val() || '').toString();
+                var statusFilter = ($('#statusFilter').val() || '').toString();
+                var businessAreaFilter = ($('#businessAreaFilter').val() || '').toString();
+
+                var visibleCount = 0;
+
+                // Only process main rows (with data-completion attribute), exclude detail rows (expandable rows)
+                $('#completionTable tbody tr').filter(function() {
+                    return $(this).attr('data-completion') !== undefined && !$(this).hasClass('detail-row');
+                }).each(function() {
+                    var $row = $(this);
+                    var projectTitle = ($row.attr('data-project-title') || '').toString();
+                    var projectCode = ($row.attr('data-project-code') || '').toString();
+                    var completion = parseFloat($row.attr('data-completion')) || 0;
+                    var businessArea = ($row.attr('data-business-area') || '').toString();
+
+                    var matchesSearch = !searchTerm || projectTitle.includes(searchTerm) || projectCode.includes(searchTerm);
+                    var matchesBusinessArea = !businessAreaFilter || businessArea === businessAreaFilter;
+
+                    var matchesCompletion = true;
+                    if (completionFilter) {
+                        if (completionFilter === '100') {
+                            matchesCompletion = completion === 100;
+                        } else if (completionFilter === '80-99') {
+                            matchesCompletion = completion >= 80 && completion < 100;
+                        } else if (completionFilter === '60-79') {
+                            matchesCompletion = completion >= 60 && completion < 80;
+                        } else if (completionFilter === '40-59') {
+                            matchesCompletion = completion >= 40 && completion < 60;
+                        } else if (completionFilter === '0-39') {
+                            matchesCompletion = completion >= 0 && completion < 40;
+                        }
+                    }
+
+                    var matchesStatus = true;
+                    if (statusFilter === 'complete') {
+                        matchesStatus = completion === 100;
+                    } else if (statusFilter === 'incomplete') {
+                        matchesStatus = completion < 100;
+                    }
+
+                    if (matchesSearch && matchesCompletion && matchesStatus && matchesBusinessArea) {
+                        $row.show();
+                        // Also show/hide the associated detail row
+                        var projectId = $row.find('a').attr('href');
+                        if (projectId) {
+                            var match = projectId.match(/\/(\d+)$/);
+                            if (match) {
+                                var detailRow = $('#detail-row-' + match[1]);
+                                if (detailRow.length) {
+                                    detailRow.show();
+                                }
+                            }
+                        }
+                        visibleCount++;
+                    } else {
+                        $row.hide();
+                        // Also hide the associated detail row
+                        var projectId = $row.find('a').attr('href');
+                        if (projectId) {
+                            var match = projectId.match(/\/(\d+)$/);
+                            if (match) {
+                                var detailRow = $('#detail-row-' + match[1]);
+                                if (detailRow.length) {
+                                    detailRow.hide();
+                                }
+                            }
+                        }
+                    }
+                });
+
+                $('#projectCount').text(visibleCount + ' ' + formatDeliverableLabel(visibleCount));
+            }
+
+            function formatDeliverableLabel(count) {
+                return 'deliverable' + (count === 1 ? '' : 's');
+            }
+
+            function recalculateSummary() {
+                // Use the total from the server-side model, not DOM counting
+                var total = totalDeliverables;
+                
+                // Get all main rows (with data-completion attribute, excluding detail rows) for calculations
+                var $table = $('#completionTable');
+                if (!$table.length) {
+                    console.error('completionTable not found');
+                    return;
+                }
+                
+                // Get all rows in the tbody, then filter to only main rows
+                var $allRows = $table.find('tbody > tr');
+                var $rows = $allRows.filter(function() {
+                    var $row = $(this);
+                    // Must have data-completion attribute and not be a detail row
+                    var hasDataCompletion = $row.attr('data-completion') !== undefined && 
+                                           $row.attr('data-completion') !== null;
+                    var isDetailRow = $row.hasClass('detail-row');
+                    return hasDataCompletion && !isDetailRow;
+                });
+                var completionSum = 0;
+                var zeroCount = 0;
+                var fullCount = 0;
+                var businessAreaMap = {};
+
+                var fieldCounts = {
+                    sro: 0,
+                    pmo: 0,
+                    serviceOwner: 0,
+                    directorate: 0,
+                    budgetOwner: 0,
+                    rag: 0,
+                    priority: 0,
+                    businessArea: 0,
+                    primaryContact: 0,
+                    activityType: 0,
+                    spendControl: 0
+                };
+
+                $rows.each(function() {
+                    var $row = $(this);
+                    var completion = parseFloat($row.attr('data-completion')) || 0;
+                    completionSum += completion;
+                    if (Math.abs(completion) < 0.0001) zeroCount++;
+                    if (Math.abs(completion - 100) < 0.0001) fullCount++;
+
+                    // Only count if row has data attributes (main rows have them, detail rows don't)
+                    if ($row.attr('data-has-sro') === 'true') fieldCounts.sro++;
+                    if ($row.attr('data-has-pmo') === 'true') fieldCounts.pmo++;
+                    if ($row.attr('data-has-service-owner') === 'true') fieldCounts.serviceOwner++;
+                    if ($row.attr('data-has-directorate') === 'true') fieldCounts.directorate++;
+                    if ($row.attr('data-has-budget-owner') === 'true') fieldCounts.budgetOwner++;
+                    if ($row.attr('data-has-rag') === 'true') fieldCounts.rag++;
+                    if ($row.attr('data-has-priority') === 'true') fieldCounts.priority++;
+                    if ($row.attr('data-has-business-area') === 'true') fieldCounts.businessArea++;
+                    if ($row.attr('data-has-primary-contact') === 'true') fieldCounts.primaryContact++;
+                    if ($row.attr('data-has-activity-type') === 'true') fieldCounts.activityType++;
+                    if ($row.attr('data-has-spend-control') === 'true') fieldCounts.spendControl++;
+
+                    var areaName = ($row.attr('data-business-area') || 'Unassigned').toString();
+                    if (!businessAreaMap[areaName]) {
+                        businessAreaMap[areaName] = { count: 0, sum: 0 };
+                    }
+                    businessAreaMap[areaName].count++;
+                    businessAreaMap[areaName].sum += completion;
+                });
+
+                var average = total ? completionSum / total : 0;
+                updateAverageCard(total, average);
+                updateFullCard(total, fullCount);
+                updateFieldCards(total, fieldCounts);
+                rebuildBusinessAreaTable(businessAreaMap);
+            }
+
+            function updateAverageCard(total, average) {
+                var cardClass = getCompletionBracket(average);
+                $('#averageCompletionCard').removeClass('card-success card-warning card-danger').addClass('card-' + cardClass);
+                $('#averageCompletionValue').text(average.toFixed(1) + '%');
+                $('#averageCompletionSubtitle').text('Based on ' + total + ' ' + formatDeliverableLabel(total));
+                $('#averageCompletionProgress').removeClass('bg-success bg-warning bg-danger').addClass('bg-' + cardClass).css('width', average + '%');
+            }
+
+
+            function updateFullCard(total, fullCount) {
+                var fullPercentage = total ? (fullCount / total) * 100 : 0;
+                var cardClass = (fullCount === total && total > 0) ? 'card-success' : 'card-info';
+                var fullColorClass = fullPercentage >= 80 ? 'success' : fullPercentage >= 50 ? 'warning' : 'info';
+                var text = fullCount === 0
+                    ? 'No deliverables fully complete yet'
+                    : fullCount === 1
+                        ? 'deliverable is fully complete'
+                        : 'deliverables are fully complete';
+
+                $('#fullCompletionCard').removeClass('card-success card-info').addClass(cardClass);
+                $('#fullCompletionValue').text(fullCount);
+                $('#fullCompletionText').text(text + ' (' + fullPercentage.toFixed(1) + '%)');
+                $('#fullCompletionProgress').removeClass('bg-success bg-warning bg-info').addClass('bg-' + fullColorClass).css('width', fullPercentage + '%');
+            }
+
+            function updateFieldCards(total, fieldCounts) {
+                updateFieldCard('#completedSroCard', '#completedSroValue', '#completedSroText', '#completedSroProgress', fieldCounts.sro, total);
+                updateFieldCard('#completedPmoCard', '#completedPmoValue', '#completedPmoText', '#completedPmoProgress', fieldCounts.pmo, total);
+                updateFieldCard('#completedDirectorateCard', '#completedDirectorateValue', '#completedDirectorateText', '#completedDirectorateProgress', fieldCounts.directorate, total);
+                updateFieldCard('#completedBudgetOwnerCard', '#completedBudgetOwnerValue', '#completedBudgetOwnerText', '#completedBudgetOwnerProgress', fieldCounts.budgetOwner, total);
+                updateFieldCard('#completedRagCard', '#completedRagValue', '#completedRagText', '#completedRagProgress', fieldCounts.rag, total);
+                updateFieldCard('#completedPriorityCard', '#completedPriorityValue', '#completedPriorityText', '#completedPriorityProgress', fieldCounts.priority, total);
+                updateFieldCard('#completedBusinessAreaCard', '#completedBusinessAreaValue', '#completedBusinessAreaText', '#completedBusinessAreaProgress', fieldCounts.businessArea, total);
+                updateFieldCard('#completedPrimaryContactCard', '#completedPrimaryContactValue', '#completedPrimaryContactText', '#completedPrimaryContactProgress', fieldCounts.primaryContact, total);
+                updateFieldCard('#completedServiceOwnerCard', '#completedServiceOwnerValue', '#completedServiceOwnerText', '#completedServiceOwnerProgress', fieldCounts.serviceOwner, total);
+                updateFieldCard('#completedActivityTypeCard', '#completedActivityTypeValue', '#completedActivityTypeText', '#completedActivityTypeProgress', fieldCounts.activityType, total);
+                updateFieldCard('#completedSpendControlCard', '#completedSpendControlValue', '#completedSpendControlText', '#completedSpendControlProgress', fieldCounts.spendControl, total);
+            }
+
+            function updateFieldCard(cardSelector, valueSelector, textSelector, progressSelector, completedCount, total) {
+                var percentage = total ? (completedCount / total) * 100 : 0;
+                var cardClass = getCompletionBracket(percentage);
+                $(cardSelector).removeClass('card-success card-warning card-danger').addClass('card-' + cardClass);
+                $(valueSelector).text(percentage.toFixed(1) + '%');
+                $(textSelector).text(completedCount + ' of ' + total);
+                $(progressSelector).removeClass('bg-success bg-warning bg-danger').addClass('bg-' + cardClass).css('width', percentage + '%');
+            }
+
+            function rebuildBusinessAreaTable(businessAreaMap) {
+                var $tbody = $('#businessAreaTableBody');
+                $tbody.empty();
+
+                var areas = Object.keys(businessAreaMap).map(function(name) {
+                    var entry = businessAreaMap[name];
+                    var average = entry.count ? entry.sum / entry.count : 0;
+                    return {
+                        name: name,
+                        count: entry.count,
+                        average: average
+                    };
+                }).sort(function(a, b) {
+                    return b.average - a.average;
+                });
+
+                areas.forEach(function(area) {
+                    var completionClass = getCompletionBracket(area.average);
+                    var $tr = $('<tr>');
+                    $tr.append($('<td>').html('<strong>' + escapeHtml(area.name) + '</strong>'));
+                    $tr.append($('<td class="text-center">').html('<span class="badge badge-info">' + area.count + '</span>'));
+                    $tr.append($('<td class="text-center">').html('<span class="badge badge-' + completionClass + ' badge-lg">' + area.average.toFixed(1) + '%</span>'));
+                    var $progressCell = $('<td>');
+                    var $progress = $('<div class="progress progress-sm">');
+                    var $bar = $('<div class="progress-bar">').addClass('bg-' + completionClass).css('width', area.average + '%');
+                    $progress.append($bar);
+                    $progressCell.append($progress);
+                    $tr.append($progressCell);
+                    $tbody.append($tr);
+                });
+            }
+
+            function getCompletionBracket(value) {
+                if (value >= 80) return 'success';
+                if (value >= 60) return 'warning';
+                return 'danger';
+            }
+
+            function initializeSortableTable(table) {
+                var currentSort = { column: null, direction: 'asc' };
+                
+                table.find('.sortable').on('click keypress', function(e) {
+                    if (e.type === 'keypress' && e.which !== 13 && e.which !== 32) {
+                        return;
+                    }
+                    
+                    var column = $(this).data('column');
+                    var direction = 'asc';
+                    
+                    if (currentSort.column === column && currentSort.direction === 'asc') {
+                        direction = 'desc';
+                    }
+                    
+                    sortTable(table, column, direction);
+                    currentSort = { column: column, direction: direction };
+                });
+                
+                function sortTable(table, column, direction) {
+                    var tbody = table.find('tbody');
+                    var rows = tbody.find('tr:visible').toArray();
+                    
+                    rows.sort(function(a, b) {
+                        var aVal, bVal;
+                        
+                        if (column === 'ProjectTitle') {
+                            aVal = $(a).find('td').eq(0).find('a').text().trim().toLowerCase();
+                            bVal = $(b).find('td').eq(0).find('a').text().trim().toLowerCase();
+                        } else if (column === 'Phase') {
+                            aVal = $(a).find('td').eq(1).find('.fa-check-square').length > 0 ? 1 : 0;
+                            bVal = $(b).find('td').eq(1).find('.fa-check-square').length > 0 ? 1 : 0;
+                        } else if (column === 'Sro') {
+                            aVal = $(a).find('td').eq(2).find('.fa-check-square').length > 0 ? 1 : 0;
+                            bVal = $(b).find('td').eq(2).find('.fa-check-square').length > 0 ? 1 : 0;
+                        } else if (column === 'PrimaryContact') {
+                            aVal = $(a).find('td').eq(3).find('.fa-check-square').length > 0 ? 1 : 0;
+                            bVal = $(b).find('td').eq(3).find('.fa-check-square').length > 0 ? 1 : 0;
+                        } else if (column === 'ServiceOwner') {
+                            aVal = $(a).find('td').eq(4).find('.fa-check-square').length > 0 ? 1 : 0;
+                            bVal = $(b).find('td').eq(4).find('.fa-check-square').length > 0 ? 1 : 0;
+                        } else if (column === 'PmoContact') {
+                            aVal = $(a).find('td').eq(5).find('.fa-check-square').length > 0 ? 1 : 0;
+                            bVal = $(b).find('td').eq(5).find('.fa-check-square').length > 0 ? 1 : 0;
+                        } else if (column === 'Directorate') {
+                            aVal = $(a).find('td').eq(6).find('.fa-check-square').length > 0 ? 1 : 0;
+                            bVal = $(b).find('td').eq(6).find('.fa-check-square').length > 0 ? 1 : 0;
+                        } else if (column === 'BudgetOwner') {
+                            aVal = $(a).find('td').eq(7).find('.fa-check-square').length > 0 ? 1 : 0;
+                            bVal = $(b).find('td').eq(7).find('.fa-check-square').length > 0 ? 1 : 0;
+                        } else if (column === 'RagStatus') {
+                            aVal = $(a).find('td').eq(8).find('.fa-check-square').length > 0 ? 1 : 0;
+                            bVal = $(b).find('td').eq(8).find('.fa-check-square').length > 0 ? 1 : 0;
+                        } else if (column === 'Priority') {
+                            aVal = $(a).find('td').eq(9).find('.fa-check-square').length > 0 ? 1 : 0;
+                            bVal = $(b).find('td').eq(9).find('.fa-check-square').length > 0 ? 1 : 0;
+                        } else if (column === 'BusinessArea') {
+                            aVal = $(a).find('td').eq(10).find('.fa-check-square').length > 0 ? 1 : 0;
+                            bVal = $(b).find('td').eq(10).find('.fa-check-square').length > 0 ? 1 : 0;
+                        } else if (column === 'ActivityType') {
+                            aVal = $(a).find('td').eq(11).find('.fa-check-square').length > 0 ? 1 : 0;
+                            bVal = $(b).find('td').eq(11).find('.fa-check-square').length > 0 ? 1 : 0;
+                        } else if (column === 'SpendControl') {
+                            aVal = $(a).find('td').eq(12).find('.fa-check-square').length > 0 ? 1 : 0;
+                            bVal = $(b).find('td').eq(12).find('.fa-check-square').length > 0 ? 1 : 0;
+                        } else if (column === 'CompletionPercentage') {
+                            aVal = parseFloat($(a).attr('data-completion')) || 0;
+                            bVal = parseFloat($(b).attr('data-completion')) || 0;
+                        } else {
+                            aVal = $(a).find('td').eq(0).text().trim();
+                            bVal = $(b).find('td').eq(0).text().trim();
+                        }
+                        
+                        if (typeof aVal === 'string') {
+                            if (direction === 'asc') {
+                                return aVal.localeCompare(bVal);
+                            } else {
+                                return bVal.localeCompare(aVal);
+                            }
+                        } else {
+                            if (direction === 'asc') {
+                                return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+                            } else {
+                                return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
+                            }
+                        }
+                    });
+                    
+                    // Store hidden rows
+                    var hiddenRows = tbody.find('tr:hidden').detach();
+                    
+                    // Clear tbody and append sorted visible rows
+                    tbody.empty();
+                    rows.forEach(function(row) {
+                        tbody.append(row);
+                    });
+                    
+                    // Re-append hidden rows
+                    tbody.append(hiddenRows);
+                    
+                    // Update sort icons
+                    updateSortIcons(table, column, direction);
+                }
+                
+                function updateSortIcons(table, column, direction) {
+                    table.find('.sortable i').remove();
+                    var header = table.find('.sortable[data-column="' + column + '"]');
+                    var iconClass = direction === 'asc' ? 'fa-sort-up' : 'fa-sort-down';
+                    header.append(' <i class="fas ' + iconClass + '"></i>');
+                }
+            }
+        });
+    </script>
+    <script src="~/js/user-picker.js" asp-append-version="true"></script>
+}
+
+@functions {
+    string GetRagBadgeClass(string ragStatus)
+    {
+        if (string.IsNullOrWhiteSpace(ragStatus))
+        {
+            return "badge badge-secondary";
+        }
+        
+        // Normalize the status - handle both "Amber-Green" and "Amber/Green" formats
+        var normalized = ragStatus.Trim()
+            .Replace(" / ", "-")
+            .Replace("/", "-")
+            .Replace(" /", "-")
+            .Replace("/ ", "-");
+        
+        return normalized switch
+        {
+            "Green" => "badge badge-green",
+            "Amber-Green" => "badge badge-amber-green",
+            "Amber" => "badge badge-amber",
+            "Amber-Red" => "badge badge-amber-red",
+            "Red" => "badge badge-red",
+            _ => "badge badge-secondary"
+        };
+    }
+
+    string FormatRagStatusText(string ragStatus)
+    {
+        if (string.IsNullOrWhiteSpace(ragStatus))
+        {
+            return ragStatus;
+        }
+
+        return ragStatus switch
+        {
+            "Amber-Green" => "Amber / Green",
+            "Amber-Red" => "Amber / Red",
+            _ => ragStatus
+        };
+    }
+}
+

@@ -8,8 +8,11 @@ public class ProductReturn
     public int Id { get; set; }
 
     [Required]
+    [StringLength(100)]
+    public string ProductDocumentId { get; set; } = string.Empty; // Product DocumentID from CMS (primary identifier)
+
     [StringLength(50)]
-    public string FipsId { get; set; } = string.Empty;
+    public string? FipsId { get; set; } // Product FIPS ID (legacy, kept for backwards compatibility)
 
     [Required]
     public int Year { get; set; }

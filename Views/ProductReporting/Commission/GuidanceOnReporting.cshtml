@@ -1,0 +1,278 @@
+@model List<Compass.Models.PerformanceMetric>
+@using System.Text.Json
+@{
+    ViewData["Title"] = "Guidance on reporting - Performance reporting";
+    var selectedCommission = ViewBag.SelectedCommission as Compass.Models.Commission;
+    var activeCommissions = ViewBag.ActiveCommissions as List<Compass.Models.Commission> ?? new List<Compass.Models.Commission>();
+    var metrics = ViewBag.Metrics as List<Compass.Models.PerformanceMetric> ?? new List<Compass.Models.PerformanceMetric>();
+}
+
+@await Html.PartialAsync("_DashboardStyles")
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <li class="breadcrumb-item">
+                <a href="/" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a asp-controller="ProductReporting" asp-action="Commission" asp-route-commissionId="@selectedCommission?.Id" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Performance reporting</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page" style="color: #0b0c0c; font-weight: 600;">Guidance on reporting</li>
+        </ol>
+    </nav>
+}
+
+@{
+    ViewBag.BrandText = "Performance reporting";
+    var currentAction = ViewContext.RouteData.Values["Action"]?.ToString() ?? "";
+    ViewBag.NavLinks = new[]
+    {
+        new { Text = "My services", Action = "Commission", Controller = "ProductReporting", Url = Url.Action("Commission", "ProductReporting", new { view = "mine", commissionId = selectedCommission?.Id }), IsButton = false, IsActive = currentAction == "Commission" && (ViewContext.RouteData.Values["view"]?.ToString() == "mine") },
+        new { Text = "All services", Action = "Commission", Controller = "ProductReporting", Url = Url.Action("Commission", "ProductReporting", new { view = "all", commissionId = selectedCommission?.Id }), IsButton = false, IsActive = currentAction == "Commission" && (ViewContext.RouteData.Values["view"]?.ToString() == "all" || string.IsNullOrEmpty(ViewContext.RouteData.Values["view"]?.ToString())) },
+        new { Text = "Business areas", Action = "BusinessAreasIndex", Controller = "ProductReporting", Url = Url.Action("BusinessAreasIndex", "ProductReporting", new { commissionId = selectedCommission?.Id }), IsButton = false, IsActive = currentAction == "BusinessAreasIndex" || currentAction == "BusinessAreasDetails" },
+        new { Text = "Guidance on reporting", Action = "GuidanceOnReporting", Controller = "ProductReporting", Url = Url.Action("GuidanceOnReporting", "ProductReporting", new { commissionId = selectedCommission?.Id }), IsButton = false, IsActive = currentAction == "GuidanceOnReporting" }
+    };
+}
+
+<section class="content">
+    <div class="container-fluid">
+        @await Html.PartialAsync("_ModuleNavbar")
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["SuccessMessage"]
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        <div class="row mb-4">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Guidance on reporting</h3>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted mb-4">The following performance metrics may be required for your products, depending on their phase and type. This guidance details all the performance stats being asked for, including descriptions, hint text, validation rules, and applicable phases and service types.</p>
+                        
+                        @if (metrics != null && metrics.Any())
+                        {
+                            @foreach (var metric in metrics)
+                            {
+                                // Parse validation rules
+                                Compass.Models.ValidationRules? validationRules = null;
+                                try
+                                {
+                                    var options = new JsonSerializerOptions
+                                    {
+                                        PropertyNameCaseInsensitive = true
+                                    };
+                                    validationRules = JsonSerializer.Deserialize<Compass.Models.ValidationRules>(metric.ValidationRules, options);
+                                }
+                                catch
+                                {
+                                    // If parsing fails, continue without validation rules display
+                                }
+                                
+                                <div class="card mb-4">
+                                    <div class="card-body">
+                                        <div class="d-flex align-items-start mb-3">
+                                            <span class="badge badge-primary mr-2" style="font-size: 0.875rem; padding: 0.5rem 0.75rem;">@metric.Identifier</span>
+                                            <h4 class="mb-0" style="font-size: 1.25rem; font-weight: 600;">@metric.Title</h4>
+                                        </div>
+                                        
+                                        <div class="row mb-3">
+                                            <div class="col-md-6">
+                                                <strong class="d-block mb-1" style="color: #0b0c0c; font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.5px;">Description</strong>
+                                                <p class="mb-0" style="color: #505a5f; line-height: 1.6;">@metric.Description</p>
+                                            </div>
+                                            @if (!string.IsNullOrEmpty(metric.Purpose))
+                                            {
+                                                <div class="col-md-6">
+                                                    <strong class="d-block mb-1" style="color: #0b0c0c; font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.5px;">Purpose</strong>
+                                                    <p class="mb-0" style="color: #505a5f; line-height: 1.6;">@metric.Purpose</p>
+                                                </div>
+                                            }
+                                        </div>
+                                        
+                                        @if (!string.IsNullOrEmpty(metric.HintText))
+                                        {
+                                            <div class="mb-3">
+                                                <strong class="d-block mb-1" style="color: #0b0c0c; font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.5px;">Hint text</strong>
+                                                <p class="mb-0" style="color: #505a5f; line-height: 1.6; font-style: italic;">@metric.HintText</p>
+                                            </div>
+                                        }
+                                        
+                                        <div class="row mt-3">
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <strong class="d-block mb-1" style="color: #0b0c0c; font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.5px;">Value expected</strong>
+                                                    <div style="color: #505a5f;">
+                                                        @switch (metric.ValueType)
+                                                        {
+                                                            case Compass.Models.ValueType.Text:
+                                                                <span>Text</span>
+                                                                break;
+                                                            case Compass.Models.ValueType.Number:
+                                                                <span>Whole number</span>
+                                                                break;
+                                                            case Compass.Models.ValueType.Decimal:
+                                                                <span>Decimal number</span>
+                                                                break;
+                                                            case Compass.Models.ValueType.Percentage:
+                                                                <span>Percentage (0-100)</span>
+                                                                break;
+                                                        }
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <strong class="d-block mb-1" style="color: #0b0c0c; font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.5px;">Applies to phases</strong>
+                                                    <div>
+                                                        @if (!string.IsNullOrEmpty(metric.ApplicablePhases))
+                                                        {
+                                                            var phases = metric.ApplicablePhases.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                                                            @foreach (var phase in phases)
+                                                            {
+                                                                <span class="badge badge-info mr-1 mb-1">@phase</span>
+                                                            }
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="badge badge-light">All phases</span>
+                                                        }
+                                                    </div>
+                                                </div>
+                                                
+                                                <div class="mb-3">
+                                                    <strong class="d-block mb-1" style="color: #0b0c0c; font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.5px;">Applies to service types</strong>
+                                                    <div>
+                                                        @if (!string.IsNullOrEmpty(metric.ApplicableTypes))
+                                                        {
+                                                            var types = metric.ApplicableTypes.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                                                            @foreach (var type in types)
+                                                            {
+                                                                <span class="badge badge-success mr-1 mb-1">@type</span>
+                                                            }
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="badge badge-light">All types</span>
+                                                        }
+                                                    </div>
+                                                </div>
+                                                
+                                                @if (metric.ConditionalOnMetricId.HasValue)
+                                                {
+                                                    var conditionalMetric = metrics.FirstOrDefault(m => m.Id == metric.ConditionalOnMetricId.Value);
+                                                    <div class="mb-3">
+                                                        <strong class="d-block mb-1" style="color: #0b0c0c; font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.5px;">Conditional requirement</strong>
+                                                        <div style="color: #505a5f;">
+                                                            @if (conditionalMetric != null)
+                                                            {
+                                                                <span>Only required if <strong>@conditionalMetric.Identifier</strong> has a value</span>
+                                                            }
+                                                            else
+                                                            {
+                                                                <span>Only required if another metric has a value</span>
+                                                            }
+                                                        </div>
+                                                    </div>
+                                                }
+                                            </div>
+                                        </div>
+                                        
+                                        @if (validationRules != null)
+                                        {
+                                            <div class="mt-3 pt-3 border-top">
+                                                <strong class="d-block mb-2" style="color: #0b0c0c; font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.5px;">Validation rules</strong>
+                                                <div class="row">
+                                                    <div class="col-md-6">
+                                                        <ul class="list-unstyled mb-0" style="color: #505a5f;">
+                                                            <li class="mb-1">
+                                                                @if (validationRules.Required)
+                                                                {
+                                                                    <i class="fas fa-check-circle text-success mr-2"></i>
+                                                                    <text><strong>Required:</strong> Yes</text>
+                                                                }
+                                                                else
+                                                                {
+                                                                    <i class="fas fa-times-circle text-muted mr-2"></i>
+                                                                    <text><strong>Required:</strong> No</text>
+                                                                }
+                                                            </li>
+                                                            <li class="mb-1">
+                                                                @if (validationRules.AllowNull)
+                                                                {
+                                                                    <i class="fas fa-info-circle text-info mr-2"></i>
+                                                                    <text><strong>Nullable:</strong> Yes (can be marked as not captured)</text>
+                                                                }
+                                                                else
+                                                                {
+                                                                    <i class="fas fa-ban text-warning mr-2"></i>
+                                                                    <text><strong>Nullable:</strong> No (must have a value)</text>
+                                                                }
+                                                            </li>
+                                                        </ul>
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <ul class="list-unstyled mb-0" style="color: #505a5f;">
+                                                            @if (validationRules.MinimumValue.HasValue)
+                                                            {
+                                                                var minValue = validationRules.MinimumValue.Value;
+                                                                var minFormatted = minValue % 1 == 0 ? minValue.ToString("N0") : minValue.ToString("N");
+                                                                <li class="mb-1">
+                                                                    <i class="fas fa-arrow-down text-warning mr-2"></i>
+                                                                    <strong>Minimum value:</strong> @minFormatted
+                                                                </li>
+                                                            }
+                                                            @if (validationRules.MaximumValue.HasValue)
+                                                            {
+                                                                var maxValue = validationRules.MaximumValue.Value;
+                                                                var maxFormatted = maxValue % 1 == 0 ? maxValue.ToString("N0") : maxValue.ToString("N");
+                                                                <li class="mb-1">
+                                                                    <i class="fas fa-arrow-up text-warning mr-2"></i>
+                                                                    <strong>Maximum value:</strong> @maxFormatted
+                                                                </li>
+                                                            }
+                                                            @if (validationRules.DecimalPlaces.HasValue)
+                                                            {
+                                                                <li class="mb-1">
+                                                                    <i class="fas fa-hashtag text-info mr-2"></i>
+                                                                    <strong>Decimal places:</strong> @validationRules.DecimalPlaces.Value
+                                                                </li>
+                                                            }
+                                                        </ul>
+                                                    </div>
+                                                </div>
+                                                @if (!validationRules.Required && !validationRules.AllowNull && !validationRules.MinimumValue.HasValue && !validationRules.MaximumValue.HasValue && !validationRules.DecimalPlaces.HasValue)
+                                                {
+                                                    <p class="text-muted mb-0 mt-2"><em>No specific validation rules</em></p>
+                                                }
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <div class="alert alert-info mb-0">
+                                <p class="mb-0">No performance metrics are currently configured.</p>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>

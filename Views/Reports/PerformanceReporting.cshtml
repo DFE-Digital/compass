@@ -1,0 +1,522 @@
+@using Compass.Models
+@model PerformanceReportingViewModel
+@{
+    ViewData["Title"] = "Performance reporting";
+    ViewData["BodyClass"] = "reports-page";
+    var selectedCommission = Model.SelectedCommission;
+    var activeCommissions = Model.ActiveCommissions ?? new List<Commission>();
+    var totalInScope = Model.TotalProductsInScope;
+    var submittedCount = Model.SubmittedCount;
+    var inProgressCount = Model.InProgressCount;
+    var notStartedCount = Model.NotStartedCount;
+    var lateCount = Model.LateCount;
+    var completionPct = Model.SubmissionCompletionPercentage;
+    var businessAreaCompletions = Model.BusinessAreaCompletions ?? new List<BusinessAreaCompletionItem>();
+    var metricCompletions = Model.MetricCompletions ?? new List<MetricCompletionSummary>();
+    var submissionComments = Model.SubmissionComments ?? new List<SubmissionCommentItem>();
+    var isAdmin = ViewBag.IsAdmin as bool? ?? false;
+    var allDivisions = ViewBag.AllDivisions as List<Division> ?? new List<Division>();
+    var allBusinessAreas = ViewBag.AllBusinessAreas as List<BusinessAreaLookup> ?? new List<BusinessAreaLookup>();
+}
+
+@await Html.PartialAsync("_DashboardStyles")
+@await Html.PartialAsync("_ReportsDashboardStyles")
+<style>
+    .data-summary-cell { vertical-align: middle; }
+    .data-summary-stats { font-size: 0.875rem; }
+    .data-summary-item { display: inline-flex; align-items: baseline; gap: 0.25rem; padding: 0.2rem 0.5rem; border-radius: 4px; background: var(--light, #f8f9fa); white-space: nowrap; }
+    .data-summary-item .data-summary-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.02em; color: #6c757d; font-weight: 600; }
+    .data-summary-item.data-summary-min .data-summary-label { color: #0d6efd; }
+    .data-summary-item.data-summary-max .data-summary-label { color: #198754; }
+    .data-summary-item.data-summary-avg .data-summary-label { color: #6f42c1; }
+    .data-summary-count { font-size: 0.75rem; }
+    .column-list { column-width: 220px; column-gap: 1.5rem; }
+    .expand-detail-row td { border-top: 0; vertical-align: top; }
+</style>
+
+<!-- Dashboard header -->
+<div class="reports-dashboard-header">
+    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+        <div>
+            <nav aria-label="Breadcrumb" class="reports-breadcrumb">
+                <a href="/">Home</a> <span aria-hidden="true">/</span>
+                <a href="@Url.Action("Index", "Reports")">Reports overview</a> <span aria-hidden="true">/</span>
+                Performance reporting
+            </nav>
+            <h1 class="mb-1"><i class="fas fa-chart-line mr-2" aria-hidden="true"></i>Performance reporting</h1>
+            <p class="mb-0 opacity-90">Commission reporting dashboard: portfolio completion rates and metrics summary</p>
+        </div>
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            <a href="@Url.Action("Commission", "ProductReporting")" class="btn btn-primary">
+                <i class="fas fa-edit mr-1" aria-hidden="true"></i>Commission submission
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Report navigation tabs -->
+<div class="reports-nav-bar">
+    <ul class="reports-nav-tabs" role="navigation" aria-label="Report sections">
+        <li><a href="@Url.Action("Index", "Reports")"><i class="fas fa-globe mr-1" aria-hidden="true"></i>Overview</a></li>
+        <li class="reports-nav-dropdown">
+            <button class="reports-nav-dropdown-toggle" aria-haspopup="true" aria-expanded="false">
+                <i class="fas fa-sitemap mr-1" aria-hidden="true"></i>Division
+                <i class="fas fa-chevron-down caret-icon ml-1" aria-hidden="true"></i>
+            </button>
+            <div class="reports-nav-dropdown-menu" role="menu">
+                <a href="@Url.Action("DivisionReport", "Reports")" role="menuitem"><i class="fas fa-th-list mr-1 text-muted" aria-hidden="true"></i>All divisions</a>
+                @if (allDivisions.Any())
+                {
+                    <div class="dropdown-divider"></div>
+                    @foreach (var div in allDivisions)
+                    {
+                        <a href="@Url.Action("DivisionReport", "Reports", new { divisionId = div.Id })" role="menuitem">@div.Name</a>
+                    }
+                }
+            </div>
+            <div class="dropdown-scroll-hint" aria-hidden="true"><i class="fas fa-chevron-down"></i></div>
+        </li>
+        <li class="reports-nav-dropdown">
+            <button class="reports-nav-dropdown-toggle" aria-haspopup="true" aria-expanded="false">
+                <i class="fas fa-building mr-1" aria-hidden="true"></i>Business area
+                <i class="fas fa-chevron-down caret-icon ml-1" aria-hidden="true"></i>
+            </button>
+            <div class="reports-nav-dropdown-menu" role="menu">
+                <a href="@Url.Action("BusinessAreaReport", "Reports")" role="menuitem"><i class="fas fa-th-list mr-1 text-muted" aria-hidden="true"></i>All business areas</a>
+                @if (allBusinessAreas.Any())
+                {
+                    <div class="dropdown-divider"></div>
+                    @foreach (var ba in allBusinessAreas.Take(20))
+                    {
+                        <a href="@Url.Action("BusinessAreaReport", "Reports", new { businessAreaId = ba.Id })" role="menuitem">@ba.Name</a>
+                    }
+                }
+            </div>
+            <div class="dropdown-scroll-hint" aria-hidden="true"><i class="fas fa-chevron-down"></i></div>
+        </li>
+        <li><a href="@Url.Action("PriorityOutcomes", "Reports")"><i class="fas fa-star mr-1" aria-hidden="true"></i>Priority outcomes</a></li>
+        <li><a href="@Url.Action("PerformanceReporting", "Reports")" class="active" aria-current="page"><i class="fas fa-chart-line mr-1" aria-hidden="true"></i>Performance reporting</a></li>
+    </ul>
+</div>
+
+<div class="reports-body">
+
+    @if (!activeCommissions.Any())
+    {
+        <div class="alert alert-info">
+            <i class="fas fa-info-circle mr-2" aria-hidden="true"></i>
+            No active commissions are currently available. When a commission period is open, this dashboard will show portfolio completion and metrics summary.
+        </div>
+        <p class="mb-0">
+            <a href="@Url.Action("Commission", "ProductReporting")" class="section-link">Go to Commission submission <i class="fas fa-arrow-right" aria-hidden="true"></i></a>
+        </p>
+    }
+    else
+    {
+        <!-- Commission selector -->
+        <div class="dashboard-section mb-4">
+            <div class="dashboard-section-header">
+                <h2><i class="fas fa-calendar-alt mr-1" aria-hidden="true"></i>Commission period</h2>
+            </div>
+            <form method="get" action="@Url.Action("PerformanceReporting", "Reports")" class="form-inline">
+                <label for="commissionId" class="mr-2">Show data for:</label>
+                <select name="commissionId" id="commissionId" class="form-control form-control-sm mr-2" onchange="this.form.submit()">
+                    @foreach (var c in activeCommissions)
+                    {
+                        if (selectedCommission != null && selectedCommission.Id == c.Id)
+                        {
+                            <option value="@c.Id" selected="selected">@c.Name (due @c.DueDate.ToString("d MMM yyyy"))</option>
+                        }
+                        else
+                        {
+                            <option value="@c.Id">@c.Name (due @c.DueDate.ToString("d MMM yyyy"))</option>
+                        }
+                    }
+                </select>
+            </form>
+        </div>
+
+        if (selectedCommission != null)
+        {
+            <!-- Portfolio completion – stat cards -->
+            <div class="reports-stat-grid mb-4">
+                <div class="reports-stat-card reports-stat-blue">
+                    <div class="reports-stat-icon"><i class="fas fa-project-diagram" aria-hidden="true"></i></div>
+                    <div class="reports-stat-value">@totalInScope</div>
+                    <div class="reports-stat-label">Products in scope</div>
+                    <div class="reports-stat-sub">portfolio total</div>
+                </div>
+                <div class="reports-stat-card @(completionPct >= 80 ? "reports-stat-green" : completionPct >= 50 ? "reports-stat-amber" : "reports-stat-red")">
+                    <div class="reports-stat-icon"><i class="fas fa-percentage" aria-hidden="true"></i></div>
+                    <div class="reports-stat-value">@completionPct<span style="font-size:1.2rem">%</span></div>
+                    <div class="reports-stat-label">Submission completion</div>
+                    <div class="reports-stat-sub">@submittedCount of @totalInScope submitted</div>
+                </div>
+                <div class="reports-stat-card reports-stat-green">
+                    <div class="reports-stat-icon"><i class="fas fa-check-circle" aria-hidden="true"></i></div>
+                    <div class="reports-stat-value">@submittedCount</div>
+                    <div class="reports-stat-label">Submitted</div>
+                    <div class="reports-stat-sub">completed</div>
+                </div>
+                <div class="reports-stat-card reports-stat-amber">
+                    <div class="reports-stat-icon"><i class="fas fa-spinner" aria-hidden="true"></i></div>
+                    <div class="reports-stat-value">@inProgressCount</div>
+                    <div class="reports-stat-label">In progress</div>
+                    <div class="reports-stat-sub">started</div>
+                </div>
+                <div class="reports-stat-card reports-stat-blue">
+                    <div class="reports-stat-icon"><i class="fas fa-circle" aria-hidden="true"></i></div>
+                    <div class="reports-stat-value">@notStartedCount</div>
+                    <div class="reports-stat-label">Not started</div>
+                    <div class="reports-stat-sub">no submission yet</div>
+                </div>
+                <div class="reports-stat-card @(lateCount > 0 ? "reports-stat-red" : "reports-stat-green")">
+                    <div class="reports-stat-icon"><i class="fas fa-clock" aria-hidden="true"></i></div>
+                    <div class="reports-stat-value">@lateCount</div>
+                    <div class="reports-stat-label">Late</div>
+                    <div class="reports-stat-sub">not submitted</div>
+                </div>
+            </div>
+
+            <!-- Submission summary -->
+            <div class="dashboard-section mb-4">
+                <div class="dashboard-section-header">
+                    <h2><i class="fas fa-file-alt mr-1" aria-hidden="true"></i>Submission summary</h2>
+                    <a href="@Url.Action("Commission", "ProductReporting", new { commissionId = selectedCommission.Id })" class="section-link">View commission submission <i class="fas fa-arrow-right" aria-hidden="true"></i></a>
+                </div>
+                <div class="reporting-progress-wrap mb-3">
+                    <div class="d-flex justify-content-between mb-1">
+                        <span class="small font-weight-bold">@submittedCount of @totalInScope submitted</span>
+                        <span class="small font-weight-bold @(completionPct >= 80 ? "text-success" : completionPct >= 50 ? "text-warning" : "text-danger")">@completionPct%</span>
+                    </div>
+                    <div class="progress" style="height:12px;border-radius:6px;">
+                        <div class="progress-bar @(completionPct >= 80 ? "bg-success" : completionPct >= 50 ? "bg-warning" : "bg-danger")"
+                             role="progressbar" style="width:@(completionPct.ToString("F0"))%"
+                             aria-valuenow="@completionPct" aria-valuemin="0" aria-valuemax="100"
+                             aria-label="@completionPct% of products have submitted commission reports"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Business area completion -->
+            @if (businessAreaCompletions.Any())
+            {
+                <div class="dashboard-section mb-4">
+                    <div class="dashboard-section-header">
+                        <h2><i class="fas fa-building mr-1" aria-hidden="true"></i>Business area completion</h2>
+                        <span class="text-muted small">Products in scope and submission status by business area</span>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover reports-table mb-0" id="businessAreaCompletionTable">
+                            <thead>
+                                <tr>
+                                    <th style="width:40px" aria-label="Expand"></th>
+                                    <th>Business area</th>
+                                    <th class="text-center">Total products</th>
+                                    <th class="text-center">Submitted</th>
+                                    <th class="text-center">In progress</th>
+                                    <th class="text-center">Not started</th>
+                                    <th class="text-center">Late</th>
+                                    <th class="text-center">Completion %</th>
+                                    <th style="width:140px"></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @{
+                                    var baIndex = 0;
+                                }
+                                @foreach (var ba in businessAreaCompletions)
+                                {
+                                    var baPctClass = ba.CompletionPercentage >= 80 ? "text-success" : ba.CompletionPercentage >= 50 ? "text-warning" : "text-danger";
+                                    var expandId = "ba-expand-" + baIndex;
+                                    var hasProducts = ba.ProductTitles != null && ba.ProductTitles.Any();
+                                    baIndex++;
+                                    <tr class="ba-summary-row">
+                                        <td class="align-middle">
+                                            @if (hasProducts)
+                                            {
+                                                <button type="button" class="btn btn-sm btn-outline-secondary expand-row-btn py-0 px-1" data-expand-id="@expandId" aria-expanded="false" aria-controls="@expandId" aria-label="Show products in @ba.BusinessAreaName">+</button>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted" aria-hidden="true">–</span>
+                                            }
+                                        </td>
+                                        <td><strong>@ba.BusinessAreaName</strong></td>
+                                        <td class="text-center">@ba.TotalProducts</td>
+                                        <td class="text-center">@ba.SubmittedCount</td>
+                                        <td class="text-center">@ba.InProgressCount</td>
+                                        <td class="text-center">@ba.NotStartedCount</td>
+                                        <td class="text-center">@ba.LateCount</td>
+                                        <td class="text-center"><span class="font-weight-bold @baPctClass">@ba.CompletionPercentage%</span></td>
+                                        <td>
+                                            <div class="progress" style="height:8px;border-radius:4px;" aria-hidden="true">
+                                                <div class="progress-bar @(ba.CompletionPercentage >= 80 ? "bg-success" : ba.CompletionPercentage >= 50 ? "bg-warning" : "bg-danger")"
+                                                     style="width:@(ba.CompletionPercentage.ToString("F0"))%"></div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    @if (hasProducts)
+                                    {
+                                        <tr class="expand-detail-row bg-light" id="@expandId" style="display:none;" aria-hidden="true">
+                                            <td colspan="9" class="py-3">
+                                                <div class="pl-3">
+                                                    <span class="small font-weight-bold text-muted d-block mb-2">Products and metrics completion in @ba.BusinessAreaName</span>
+                                                    @if (ba.Products != null && ba.Products.Any())
+                                                    {
+                                                        var firstProduct = ba.Products.First();
+                                                        <div class="table-responsive">
+                                                            <table class="table table-sm table-bordered mb-0">
+                                                                <thead>
+                                                                    <tr>
+                                                                        <th>Product</th>
+                                                                        <th class="text-nowrap">Status</th>
+                                                                        @foreach (var m in firstProduct.MetricRows)
+                                                                        {
+                                                                            <th class="small text-nowrap" title="@(string.IsNullOrWhiteSpace(m.ApplicablePhases) ? "All phases" : m.ApplicablePhases) / @(string.IsNullOrWhiteSpace(m.ApplicableTypes) ? "All types" : m.ApplicableTypes)">@m.MetricTitle</th>
+                                                                        }
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody>
+                                                                    @foreach (var prod in ba.Products)
+                                                                    {
+                                                                        <tr>
+                                                                            <td class="small"><strong>@prod.ProductTitle</strong></td>
+                                                                            <td>
+                                                                                <span class="badge @(prod.SubmissionStatus == "Submitted" ? "badge-success" : prod.SubmissionStatus == "Late" ? "badge-danger" : prod.SubmissionStatus == "In progress" ? "badge-warning" : "badge-secondary")">@prod.SubmissionStatus</span>
+                                                                            </td>
+                                                                            @foreach (var row in prod.MetricRows)
+                                                                            {
+                                                                                <td class="small">@row.DisplayValue</td>
+                                                                            }
+                                                                        </tr>
+                                                                    }
+                                                                </tbody>
+                                                            </table>
+                                                        </div>
+                                                    }
+                                                    else
+                                                    {
+                                                        <ul class="list-unstyled mb-0 small column-list">
+                                                            @foreach (var title in ba.ProductTitles!)
+                                                            {
+                                                                <li class="mb-1">@title</li>
+                                                            }
+                                                        </ul>
+                                                    }
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            }
+
+            <!-- 9 metrics completion -->
+            <div class="dashboard-section mb-4">
+                <div class="dashboard-section-header">
+                    <h2><i class="fas fa-tasks mr-1" aria-hidden="true"></i>Metrics completion</h2>
+                    <span class="text-muted small">Per-metric completion, data summaries and comments from submissions</span>
+                </div>
+                @if (metricCompletions.Any())
+                {
+                    <div class="table-responsive">
+                        <table class="table table-hover reports-table mb-0" id="metricsCompletionTable">
+                            <thead>
+                                <tr>
+                                    <th style="width:40px" aria-label="Expand"></th>
+                                    <th>Metric</th>
+                                    <th class="text-nowrap">Phase</th>
+                                    <th class="text-nowrap">Type</th>
+                                    <th class="text-center">Completed</th>
+                                    <th class="text-center">Completion %</th>
+                                    <th title="For numeric metrics, the number in brackets is the count of products that provided a value">Data summary</th>
+                                    <th style="width:120px"></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var m in metricCompletions)
+                                {
+                                    var pctClass = m.CompletionPercentage >= 80 ? "text-success" : m.CompletionPercentage >= 50 ? "text-warning" : "text-danger";
+                                    var hasComments = m.Comments != null && m.Comments.Any();
+                                    var metricExpandId = "metric-expand-" + m.PerformanceMetricId;
+                                    <tr class="metric-row" data-metric-id="@m.PerformanceMetricId">
+                                        <td class="align-middle" style="width:40px">
+                                            <button type="button" class="btn btn-sm btn-outline-secondary expand-row-btn py-0 px-1" data-expand-id="@metricExpandId" aria-expanded="false" aria-controls="@metricExpandId" aria-label="Show comments for @m.Title">+</button>
+                                        </td>
+                                        <td><strong>@m.Title</strong></td>
+                                        <td class="small text-muted">@(string.IsNullOrWhiteSpace(m.ApplicablePhases) ? "All" : m.ApplicablePhases)</td>
+                                        <td class="small text-muted">@(string.IsNullOrWhiteSpace(m.ApplicableTypes) ? "All" : m.ApplicableTypes)</td>
+                                        <td class="text-center">@m.CompletedCount.ToString("N0")</td>
+                                        <td class="text-center"><span class="font-weight-bold @pctClass">@m.CompletionPercentage.ToString("N1")%</span></td>
+                                        <td class="data-summary-cell">
+                                            @if (m.NumericMin.HasValue && m.NumericMax.HasValue && m.NumericAvg.HasValue)
+                                            {
+                                                <div class="data-summary-stats d-flex flex-wrap gap-2 align-items-center">
+                                                    <span class="data-summary-item data-summary-min" title="Minimum"><span class="data-summary-label">Min</span> <strong>@m.NumericMin.Value.ToString("N1")</strong></span>
+                                                    <span class="data-summary-item data-summary-max" title="Maximum"><span class="data-summary-label">Max</span> <strong>@m.NumericMax.Value.ToString("N1")</strong></span>
+                                                    <span class="data-summary-item data-summary-avg" title="Average"><span class="data-summary-label">Avg</span> <strong>@m.NumericAvg.Value.ToString("N1")</strong></span>
+                                                    @if (m.ValueCount > 0)
+                                                    {
+                                                        <span class="data-summary-count text-muted small" title="Number of products that provided a value for this metric">(@m.ValueCount.ToString("N0"))</span>
+                                                    }
+                                                </div>
+                                            }
+                                            else
+                                            {
+                                                <span class="small text-muted">@(m.DataSummary ?? "–")</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            <div class="progress" style="height:8px;border-radius:4px;" aria-hidden="true">
+                                                <div class="progress-bar @(m.CompletionPercentage >= 80 ? "bg-success" : m.CompletionPercentage >= 50 ? "bg-warning" : "bg-danger")"
+                                                     style="width:@(m.CompletionPercentage.ToString("F0"))%"></div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    <tr class="expand-detail-row bg-light" id="@metricExpandId" style="display:none;" aria-hidden="true">
+                                        <td colspan="8" class="py-2">
+                                            <div class="pl-3">
+                                                <span class="small font-weight-bold text-muted d-block mb-1">Comments from submissions:</span>
+                                                @if (hasComments)
+                                                {
+                                                    <ul class="mb-0 mt-1 list-unstyled small">
+                                                        @foreach (var c in m.Comments!)
+                                                        {
+                                                            <li class="mb-2">
+                                                                <strong>@c.ProductTitle</strong>
+                                                                @if (!string.IsNullOrWhiteSpace(c.Value))
+                                                                {
+                                                                    <span> — Value: @c.Value</span>
+                                                                }
+                                                                @if (!string.IsNullOrWhiteSpace(c.NotCapturedReason))
+                                                                {
+                                                                    <div class="text-muted">Not captured: @c.NotCapturedReason</div>
+                                                                }
+                                                                @if (!string.IsNullOrWhiteSpace(c.ReasonForDifference))
+                                                                {
+                                                                    <div class="text-muted">Reason for difference: @c.ReasonForDifference</div>
+                                                                }
+                                                            </li>
+                                                        }
+                                                    </ul>
+                                                }
+                                                else
+                                                {
+                                                    <p class="text-muted small mb-0 mt-1">No comments.</p>
+                                                }
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                else
+                {
+                    <p class="text-muted mb-0">No performance metrics are configured, or there are no submissions yet for this commission.</p>
+                }
+            </div>
+
+            <!-- Submission comments (overall comments from submitters) -->
+            @if (submissionComments.Any())
+            {
+                <div class="dashboard-section mb-4">
+                    <div class="dashboard-section-header">
+                        <h2><i class="fas fa-comment-alt mr-1" aria-hidden="true"></i>Submission comments</h2>
+                        <span class="text-muted small">Comments from commission submissions (recent)</span>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover reports-table mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Product</th>
+                                    <th>Comments</th>
+                                    <th class="text-nowrap">Submitted</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var c in submissionComments)
+                                {
+                                    <tr>
+                                        <td><strong>@c.ProductTitle</strong></td>
+                                        <td class="text-muted small">@c.Comments</td>
+                                        <td class="small text-nowrap text-muted">
+                                            @if (c.SubmittedDate.HasValue)
+                                            {
+                                                @c.SubmittedDate.Value.ToString("d MMM yyyy")
+                                            }
+                                            else
+                                            {
+                                                @:–
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            }
+        }
+    }
+
+</div>
+
+@section Scripts {
+<script nonce="@Context.Items["Nonce"]">
+(function () {
+    var navBar = document.querySelector('.reports-nav-bar');
+    if (navBar) {
+        var toggles = navBar.querySelectorAll('.reports-nav-dropdown-toggle');
+        toggles.forEach(function (toggle) {
+            var menu = toggle.nextElementSibling;
+            if (!menu || !menu.classList.contains('reports-nav-dropdown-menu')) return;
+            toggle.addEventListener('click', function (e) {
+                e.stopPropagation();
+                var isOpen = menu.classList.contains('open');
+                navBar.querySelectorAll('.reports-nav-dropdown-menu.open').forEach(function (m) {
+                    m.classList.remove('open');
+                    m.previousElementSibling.setAttribute('aria-expanded', 'false');
+                });
+                if (!isOpen) {
+                    menu.classList.add('open');
+                    toggle.setAttribute('aria-expanded', 'true');
+                }
+            });
+        });
+        document.addEventListener('click', function () {
+            navBar.querySelectorAll('.reports-nav-dropdown-menu.open').forEach(function (m) {
+                m.classList.remove('open');
+                m.previousElementSibling.setAttribute('aria-expanded', 'false');
+            });
+        });
+    }
+
+    function toggleExpandRow(btn, expandId, summaryRow) {
+        var row = document.getElementById(expandId);
+        if (!row) return;
+        var isHidden = row.style.display === 'none';
+        row.style.display = isHidden ? '' : 'none';
+        row.setAttribute('aria-hidden', isHidden ? 'false' : 'true');
+        btn.setAttribute('aria-expanded', isHidden ? 'true' : 'false');
+        btn.textContent = isHidden ? '\u2212' : '+';
+        if (summaryRow) summaryRow.classList.toggle('is-open', isHidden);
+    }
+
+    document.addEventListener('click', function (e) {
+        var btn = e.target.closest('.expand-row-btn');
+        if (!btn) return;
+        var expandId = btn.getAttribute('data-expand-id');
+        if (!expandId) return;
+        e.preventDefault();
+        e.stopPropagation();
+        toggleExpandRow(btn, expandId, btn.closest('tr'));
+    });
+}());
+</script>
+}

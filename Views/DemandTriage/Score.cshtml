@@ -1,0 +1,897 @@
+@model Compass.ViewModels.DemandTriage.ScoringWizardViewModel
+
+@{
+    var sectionTitles = new Dictionary<int, (string Short, string Full, string Icon)>
+    {
+        { 1, ("Strategic alignment", "Section 1 — DDT strategic alignment", "fa-bullseye") },
+        { 2, ("Urgency",             "Section 2 — Urgency",                  "fa-clock") },
+        { 3, ("Funding",             "Section 3 — Funding",                  "fa-pound-sign") },
+        { 4, ("RICE",                "Section 4 — RICE scoring",             "fa-chart-bar") },
+    };
+    var maxScores = new Dictionary<int, int> { { 1, 15 }, { 2, 10 }, { 3, 22 }, { 4, 42 } };
+    ViewData["Title"] = $"Scoring: {sectionTitles[Model.Section].Short} — {Model.RequestReference}";
+
+    string A(string code) => Model.Answers.TryGetValue(code, out var v) ? v : string.Empty;
+    string T(string code) => Model.FreeTexts.TryGetValue(code, out var v) ? v : string.Empty;
+    bool Checked(string code, string value) => A(code) == value;
+    bool MultiChecked(string code, string value)
+    {
+        var raw = A(code);
+        if (string.IsNullOrEmpty(raw)) return false;
+        return raw.Split(',').Select(x => x.Trim()).Contains(value);
+    }
+}
+
+@await Html.PartialAsync("_DemandTriageStyles")
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb" class="govuk-breadcrumbs">
+        <ol class="govuk-breadcrumbs__list">
+            <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="/">Home</a></li>
+            <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" asp-action="Index" asp-controller="DemandTriage">Demand triage</a></li>
+            <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" asp-action="Detail" asp-controller="DemandTriage" asp-route-id="@Model.DemandTriageRequestId">@Model.RequestReference</a></li>
+            <li class="govuk-breadcrumbs__list-item" aria-current="page">Scoring</li>
+        </ol>
+    </nav>
+}
+
+<!-- ── Header ────────────────────────────────────────────────────────────── -->
+<div class="dt-header">
+    <div class="dt-header-inner">
+        <div>
+            <div class="dt-breadcrumb">
+                <a href="@Url.Action("Index","DemandTriage")">Demand triage</a>
+                <span>/</span>
+                <a href="@Url.Action("Detail","DemandTriage", new{id=Model.DemandTriageRequestId})">@Model.RequestReference</a>
+                <span>/</span> Prioritisation scoring
+            </div>
+            <h1><i class="fas fa-star-half-alt mr-2" aria-hidden="true"></i>Prioritisation scoring</h1>
+            <p>@Model.RequestReference — @Model.RequestName</p>
+        </div>
+    </div>
+
+    <!-- Section progress bar -->
+    <div class="dt-pipeline" role="navigation" aria-label="Scoring sections">
+        @foreach (var s in sectionTitles)
+        {
+            <a asp-action="Score" asp-controller="DemandTriage"
+               asp-route-id="@Model.DemandTriageRequestId"
+               asp-route-section="@s.Key"
+               class="dt-stage @(Model.Section == s.Key ? "dt-stage--active" : (s.Key < Model.Section ? "dt-stage--done" : ""))"
+               aria-label="@s.Value.Short">
+                <i class="fas @s.Value.Icon" aria-hidden="true"></i>
+                @s.Value.Short
+            </a>
+        }
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid pt-3">
+
+        @if (Model.ValidationErrors.Any())
+        {
+            <div class="dt-notice dt-notice--danger mb-3">
+                <i class="fas fa-exclamation-circle"></i>
+                <div>
+                    <strong>Please fix the following:</strong>
+                    <ul class="mb-0 mt-1">
+                        @foreach (var e in Model.ValidationErrors) { <li>@e</li> }
+                    </ul>
+                </div>
+            </div>
+        }
+
+        @if (Model.ScorecardIsLocked)
+        {
+            <div class="dt-notice dt-notice--warning mb-3">
+                <i class="fas fa-lock"></i>
+                <span>This scorecard is locked. Contact a Central Operations Admin to unlock it for editing.</span>
+            </div>
+        }
+
+        <div class="row">
+
+            <!-- ── Left nav + live score ──────────────────────────────────── -->
+            <div class="col-lg-3">
+
+                <!-- Section navigation -->
+                <div class="dt-scoring-nav" role="navigation" aria-label="Scoring sections">
+                    @foreach (var s in sectionTitles)
+                    {
+                        <a asp-action="Score" asp-controller="DemandTriage"
+                           asp-route-id="@Model.DemandTriageRequestId"
+                           asp-route-section="@s.Key"
+                           class="dt-scoring-nav-item @(Model.Section == s.Key ? "active" : "")">
+                            <div class="dt-nav-num">@s.Key</div>
+                            <span>@s.Value.Short</span>
+                            <span class="dt-nav-score">
+                                @{
+                                    var sectionScore = s.Key switch
+                                    {
+                                        1 => Model.StrategicAlignmentScore,
+                                        2 => Model.UrgencyScore,
+                                        3 => Model.FundingScore,
+                                        4 => Model.RiceScore,
+                                        _ => 0
+                                    };
+                                }
+                                @sectionScore / @maxScores[s.Key]
+                            </span>
+                        </a>
+                    }
+                </div>
+
+                <!-- Live score panel -->
+                <div class="dt-live-score mt-3">
+                    <div class="dt-live-score-header">
+                        <i class="fas fa-tachometer-alt mr-1" aria-hidden="true"></i> Live scores
+                    </div>
+                    <div class="dt-live-score-body">
+                        <div class="dt-score-row">
+                            <span class="dt-score-row-label">Strategic alignment</span>
+                            <span class="dt-score-row-val">@Model.StrategicAlignmentScore <span class="dt-score-row-max">/ 15</span></span>
+                        </div>
+                        <div class="dt-score-row">
+                            <span class="dt-score-row-label">Urgency</span>
+                            <span class="dt-score-row-val">@Model.UrgencyScore <span class="dt-score-row-max">/ 10</span></span>
+                        </div>
+                        <div class="dt-score-row">
+                            <span class="dt-score-row-label">Funding</span>
+                            <span class="dt-score-row-val">@Model.FundingScore <span class="dt-score-row-max">/ 22</span></span>
+                        </div>
+                        <div class="dt-score-row">
+                            <span class="dt-score-row-label">RICE</span>
+                            <span class="dt-score-row-val">@Model.RiceScore <span class="dt-score-row-max">/ 42</span></span>
+                        </div>
+                        <div class="dt-score-row dt-score-row--total">
+                            <span class="dt-score-row-label">Total</span>
+                            <span class="dt-score-row-val">@Model.TotalScore <span class="dt-score-row-max">/ 100</span></span>
+                        </div>
+                    </div>
+                    @if (!string.IsNullOrEmpty(Model.SuggestionBand))
+                    {
+                        var sugClass = Model.SuggestionBand == "Must do" ? "dt-suggestion dt-suggestion--must-do"
+                                     : Model.SuggestionBand == "Could do" ? "dt-suggestion dt-suggestion--could-do"
+                                     : "dt-suggestion dt-suggestion--do-not-do";
+                        <div style="padding:0.75rem;text-align:center;border-top:1px solid #e9ecef;">
+                            <span class="@sugClass">
+                                <i class="fas fa-lightbulb" aria-hidden="true"></i>
+                                @Model.SuggestionBand
+                            </span>
+                        </div>
+                    }
+                </div>
+
+                <!-- Finalise button -->
+                @if (!Model.ScorecardIsLocked)
+                {
+                    <div class="dt-section-card mt-3" style="border-color:#28a745;">
+                        <div class="dt-section-header" style="background:#e8f5e9;">
+                            <h3 style="color:#155724;font-size:0.8rem;"><i class="fas fa-lock" aria-hidden="true"></i> Finalise scorecard</h3>
+                        </div>
+                        <div class="dt-section-body" style="font-size:0.82rem;color:#495057;">
+                            <p class="mb-2">Once all sections are complete, finalise and lock the scorecard to advance to triage.</p>
+                            <form id="finaliseForm" asp-action="FinaliseScorecard" asp-controller="DemandTriage"
+                                  asp-route-id="@Model.DemandTriageRequestId" method="post"
+                                  onsubmit="return confirm('Finalise the scorecard? This will lock it and advance the status.')">
+                                @Html.AntiForgeryToken()
+                                <button type="submit" class="dt-action-btn dt-action-btn--success" style="font-size:0.82rem;">
+                                    <i class="fas fa-check-circle" aria-hidden="true"></i>
+                                    <span>Finalise scorecard</span>
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                }
+
+            </div>
+
+            <!-- ── Questions ──────────────────────────────────────────────── -->
+            <div class="col-lg-9">
+
+                <form asp-action="SaveSection" asp-controller="DemandTriage"
+                      asp-route-id="@Model.DemandTriageRequestId"
+                      asp-route-section="@Model.Section" method="post" novalidate>
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="Section" value="@Model.Section" />
+
+                    <div class="dt-form-section">
+                        <div class="dt-form-section-header">
+                            <div class="dt-section-num">@Model.Section</div>
+                            <h3>@sectionTitles[Model.Section].Full</h3>
+                        </div>
+                        <div class="dt-form-section-body">
+
+                            @if (Model.Section == 1)
+                            {
+                                <!-- 1.1 Free text -->
+                                <div class="dt-form-group">
+                                    <label class="dt-label">1.1 What is the problem this request is trying to solve?</label>
+                                    <span class="dt-label-hint">Provide context on the problem or opportunity being addressed</span>
+                                    <textarea name="FreeTexts[1.1]" class="dt-input" rows="4">@T("1.1")</textarea>
+                                </div>
+
+                                <!-- 1.2 Single select (scored) -->
+                                <div class="dt-form-group">
+                                    <label class="dt-label">
+                                        1.2 Which DDT Priority Strategic Outcome does this request best support?
+                                        <span class="text-danger">*</span>
+                                    </label>
+                                    <span class="dt-label-hint">Select the single best-fit outcome</span>
+                                    @{
+                                        var q12Options = new[]
+                                        {
+                                            ("Delivering Digitally - Joined‑up services that empower parents and carers", "5"),
+                                            ("Delivering Digitally - Services that help learners progress between education stages", "5"),
+                                            ("Delivering Digitally - Joined‑up school services that support improvement & productivity", "5"),
+                                            ("Delivering Digitally - Workforce services that address quality and sufficiency gaps", "5"),
+                                            ("Delivering Digitally - Services that deliver accurate and timely funding to DfE sectors", "5"),
+                                            ("Powered by Data - Trusted data from end to end", "5"),
+                                            ("Powered by Data - Ready for any question", "5"),
+                                            ("Powered by Data - Data‑driven school system", "5"),
+                                            ("Powered by Data - Efficient multi‑agency information sharing", "5"),
+                                            ("The Right Technology - AI‑enabled business operations", "5"),
+                                            ("The Right Technology - Unified platforms for scale, efficiency and resilience", "5"),
+                                            ("The Right Technology - Exceptional workplace technology", "5"),
+                                            ("The Right Technology - DfE systems are safe and secure", "5"),
+                                            ("DDaT Skills and Expertise - The right people are in the right roles, with skills matched to organisation needs", "5"),
+                                            ("DDaT Skills and Expertise - DfE workforce upskilling", "5"),
+                                            ("Sector Capability - Safe and effective digital and AI tools for teaching and learning", "5"),
+                                            ("Sector Capability - Safe and effective case management systems in CSC", "5"),
+                                            ("Sector Capability - All schools to safe and reliable tech baseline", "5"),
+                                            ("Sector Capability - School workforce digital and data capability building", "5"),
+                                            ("Sector Capability - Local authority digital and data capability building", "5"),
+                                            ("None of the above", "0"),
+                                        };
+                                    }
+                                    <div class="dt-radio-group">
+                                        @foreach (var (opt, score) in q12Options)
+                                        {
+                                            <label class="dt-radio-option @(Checked("1.2", opt) ? "selected" : "")">
+                                                <input type="radio" name="Answers[1.2]" id="q12_@opt.GetHashCode()" value="@opt"
+                                                       @(Checked("1.2", opt) ? "checked" : "") />
+                                                <span>@opt</span>
+                                                @if (score != "0") { <span class="dt-radio-score">+@score</span> }
+                                            </label>
+                                        }
+                                    </div>
+                                </div>
+
+                                <!-- 1.3 Single select (scored) -->
+                                <div class="dt-form-group">
+                                    <label class="dt-label">
+                                        1.3 Which Secretary of State Opportunity Mission Pillar does this request best support?
+                                        <span class="text-danger">*</span>
+                                    </label>
+                                    @{
+                                        var q13Options = new[]
+                                        {
+                                            ("Best start in life", "5"),
+                                            ("Every child achieving and thriving", "5"),
+                                            ("Skills for opportunity and growth", "5"),
+                                            ("Cross cutting: Family Security (tackling child poverty, keeping children safe)", "5"),
+                                            ("Does not support SoS Opportunity Mission Pillar", "0"),
+                                        };
+                                    }
+                                    <div class="dt-radio-group">
+                                        @foreach (var (opt, score) in q13Options)
+                                        {
+                                            <label class="dt-radio-option @(Checked("1.3", opt) ? "selected" : "")">
+                                                <input type="radio" name="Answers[1.3]" id="q13_@opt.GetHashCode()" value="@opt"
+                                                       @(Checked("1.3", opt) ? "checked" : "") />
+                                                <span>@opt</span>
+                                                @if (score != "0") { <span class="dt-radio-score">+@score</span> }
+                                            </label>
+                                        }
+                                    </div>
+                                </div>
+
+                                <!-- 1.4 Single select (scored) -->
+                                <div class="dt-form-group">
+                                    <label class="dt-label">
+                                        1.4 Is the request featured on a portfolio roadmap?
+                                        <span class="text-danger">*</span>
+                                    </label>
+                                    <div class="dt-radio-group">
+                                        @foreach (var (opt, score) in new[] { ("Yes", "5"), ("Other", "3"), ("No", "0") })
+                                        {
+                                            <label class="dt-radio-option @(Checked("1.4", opt) ? "selected" : "")">
+                                                <input type="radio" name="Answers[1.4]" id="q14_@opt" value="@opt"
+                                                       @(Checked("1.4", opt) ? "checked" : "")
+                                                       data-conditional="q14" />
+                                                <span>@opt</span>
+                                                @if (score != "0") { <span class="dt-radio-score">+@score</span> }
+                                            </label>
+                                        }
+                                    </div>
+                                </div>
+
+                                <div class="dt-form-group" id="q15-group" style="@(A("1.4") == "Yes" ? "" : "display:none")">
+                                    <label class="dt-label">1.5 Which roadmap and how does it align? <span class="text-danger">*</span></label>
+                                    <textarea name="FreeTexts[1.5]" class="dt-input" rows="3">@T("1.5")</textarea>
+                                </div>
+
+                                <div class="dt-form-group" id="q16-group" style="@(A("1.4") == "Other" ? "" : "display:none")">
+                                    <label class="dt-label">1.6 What does it align with? <span class="text-danger">*</span></label>
+                                    <textarea name="FreeTexts[1.6]" class="dt-input" rows="3">@T("1.6")</textarea>
+                                </div>
+                            }
+
+                            @if (Model.Section == 2)
+                            {
+                                <!-- 2.1 Single select (scored) -->
+                                <div class="dt-form-group">
+                                    <label class="dt-label">
+                                        2.1 Is there a compelling reason for the DDT to act now?
+                                        <span class="text-danger">*</span>
+                                    </label>
+                                    <div class="dt-radio-group">
+                                        @foreach (var (opt, score) in new[] { ("Yes", "5"), ("Don't know", "3"), ("No", "0") })
+                                        {
+                                            <label class="dt-radio-option @(Checked("2.1", opt) ? "selected" : "")">
+                                                <input type="radio" name="Answers[2.1]" id="q21_@opt.GetHashCode()" value="@opt"
+                                                       @(Checked("2.1", opt) ? "checked" : "") />
+                                                <span>@opt</span>
+                                                @if (score != "0") { <span class="dt-radio-score">+@score</span> }
+                                            </label>
+                                        }
+                                    </div>
+                                </div>
+
+                                <div class="dt-form-group" id="q22-group" style="@(A("2.1") == "Yes" ? "" : "display:none")">
+                                    <label class="dt-label">2.2 What is the compelling reason? <span class="text-danger">*</span></label>
+                                    <textarea name="FreeTexts[2.2]" class="dt-input" rows="3">@T("2.2")</textarea>
+                                </div>
+
+                                <!-- 2.3 Single select (scored) -->
+                                <div class="dt-form-group">
+                                    <label class="dt-label">
+                                        2.3 Is there a critical delivery date?
+                                        <span class="text-danger">*</span>
+                                    </label>
+                                    @{
+                                        var q23Options = new[]
+                                        {
+                                            ("Contract expiry date", "5"),
+                                            ("Contract start date", "5"),
+                                            ("Managed service transition or handover date", "5"),
+                                            ("Supplier notice period deadline", "5"),
+                                            ("Ministerial commitment start date", "5"),
+                                            ("Legislative or statutory deadline", "5"),
+                                            ("Programme or portfolio milestone date", "5"),
+                                            ("Operational business critical date", "5"),
+                                            ("Financial year or budget cycle deadline", "5"),
+                                            ("No critical delivery date", "0"),
+                                        };
+                                    }
+                                    <div class="dt-radio-group">
+                                        @foreach (var (opt, score) in q23Options)
+                                        {
+                                            <label class="dt-radio-option @(Checked("2.3", opt) ? "selected" : "")">
+                                                <input type="radio" name="Answers[2.3]" id="q23_@opt.GetHashCode()" value="@opt"
+                                                       @(Checked("2.3", opt) ? "checked" : "") />
+                                                <span>@opt</span>
+                                                @if (score != "0") { <span class="dt-radio-score">+@score</span> }
+                                            </label>
+                                        }
+                                    </div>
+                                </div>
+
+                                <div class="dt-form-group" id="q24-group"
+                                     style="@(A("2.3") != "No critical delivery date" && !string.IsNullOrEmpty(A("2.3")) ? "" : "display:none")">
+                                    <label class="dt-label">2.4 What is the critical delivery date? <span class="text-danger">*</span></label>
+                                    <input type="date" name="FreeTexts[2.4]" class="dt-input" style="max-width:220px;" value="@T("2.4")" />
+                                </div>
+
+                                <div class="dt-form-group" id="q25-group"
+                                     style="@(A("2.3") == "No critical delivery date" ? "" : "display:none")">
+                                    <label class="dt-label">2.5 Provide target delivery date or further information <span class="text-danger">*</span></label>
+                                    <textarea name="FreeTexts[2.5]" class="dt-input" rows="3">@T("2.5")</textarea>
+                                </div>
+                            }
+
+                            @if (Model.Section == 3)
+                            {
+                                <!-- 3.1 Informational -->
+                                <div class="dt-form-group">
+                                    <label class="dt-label">3.1 What is the request about?</label>
+                                    <div class="dt-radio-group">
+                                        @foreach (var opt in new[] { "Help with advice / guidance", "Delivery" })
+                                        {
+                                            <label class="dt-radio-option @(Checked("3.1", opt) ? "selected" : "")">
+                                                <input type="radio" name="Answers[3.1]" id="q31_@opt.GetHashCode()" value="@opt"
+                                                       @(Checked("3.1", opt) ? "checked" : "") />
+                                                <span>@opt</span>
+                                            </label>
+                                        }
+                                    </div>
+                                </div>
+
+                                <!-- 3.2 Scored -->
+                                <div class="dt-form-group">
+                                    <label class="dt-label">
+                                        3.2 Does the request have confirmation of funding?
+                                        <span class="text-danger">*</span>
+                                    </label>
+                                    <div class="dt-radio-group">
+                                        @foreach (var (opt, score) in new[] { ("Yes", "10"), ("No", "0") })
+                                        {
+                                            <label class="dt-radio-option @(Checked("3.2", opt) ? "selected" : "")">
+                                                <input type="radio" name="Answers[3.2]" id="q32_@opt" value="@opt"
+                                                       @(Checked("3.2", opt) ? "checked" : "") />
+                                                <span>@opt</span>
+                                                @if (score != "0") { <span class="dt-radio-score">+@score</span> }
+                                            </label>
+                                        }
+                                    </div>
+                                </div>
+
+                                <!-- 3.3–3.6 Conditional on funding confirmed -->
+                                <div id="q33-group" style="@(A("3.2") == "Yes" ? "" : "display:none")">
+
+                                    <div class="dt-form-group">
+                                        <label class="dt-label">
+                                            3.3 Is budget approved for a single phase or entire programme?
+                                            <span class="text-danger">*</span>
+                                        </label>
+                                        @{
+                                            var q33Options = new[]
+                                            {
+                                                ("Entire Programme + Run & Maintain", "6"),
+                                                ("Entire Programme", "4"),
+                                                ("Single Phase Only", "2"),
+                                            };
+                                        }
+                                        <div class="dt-radio-group">
+                                            @foreach (var (opt, score) in q33Options)
+                                            {
+                                                <label class="dt-radio-option @(Checked("3.3", opt) ? "selected" : "")">
+                                                    <input type="radio" name="Answers[3.3]" id="q33_@opt.GetHashCode()" value="@opt"
+                                                           @(Checked("3.3", opt) ? "checked" : "") />
+                                                    <span>@opt</span>
+                                                    <span class="dt-radio-score">+@score</span>
+                                                </label>
+                                            }
+                                        </div>
+                                    </div>
+
+                                    <div class="dt-form-group">
+                                        <label class="dt-label">3.4 Which area is funding the request? <span class="text-danger">*</span></label>
+                                        <textarea name="FreeTexts[3.4]" class="dt-input" rows="2">@T("3.4")</textarea>
+                                    </div>
+
+                                    <div class="dt-form-group">
+                                        <label class="dt-label">
+                                            3.5 Has a cost centre been identified?
+                                            <span class="text-danger">*</span>
+                                        </label>
+                                        <div class="dt-radio-group">
+                                            @foreach (var (opt, score) in new[] { ("Yes", "4"), ("No", "0") })
+                                            {
+                                                <label class="dt-radio-option @(Checked("3.5", opt) ? "selected" : "")">
+                                                    <input type="radio" name="Answers[3.5]" id="q35_@opt" value="@opt"
+                                                           @(Checked("3.5", opt) ? "checked" : "") />
+                                                    <span>@opt</span>
+                                                    @if (score != "0") { <span class="dt-radio-score">+@score</span> }
+                                                </label>
+                                            }
+                                        </div>
+                                    </div>
+
+                                    <div class="dt-form-group">
+                                        <label class="dt-label">3.6 What is the type of funding?</label>
+                                        <div class="dt-radio-group">
+                                            @foreach (var opt in new[] { "Programme", "Capital", "Admin" })
+                                            {
+                                                <label class="dt-radio-option @(Checked("3.6", opt) ? "selected" : "")">
+                                                    <input type="radio" name="Answers[3.6]" id="q36_@opt" value="@opt"
+                                                           @(Checked("3.6", opt) ? "checked" : "") />
+                                                    <span>@opt</span>
+                                                </label>
+                                            }
+                                        </div>
+                                    </div>
+
+                                </div>
+                            }
+
+                            @if (Model.Section == 4)
+                            {
+                                <!-- 4.1 Informational -->
+                                <div class="dt-form-group">
+                                    <label class="dt-label">4.1 Which users does this request intend to impact or reach?</label>
+                                    <div class="dt-radio-group">
+                                        @foreach (var opt in new[] { "External users", "Internal users", "Both" })
+                                        {
+                                            <label class="dt-radio-option @(Checked("4.1", opt) ? "selected" : "")">
+                                                <input type="radio" name="Answers[4.1]" id="q41_@opt.GetHashCode()" value="@opt"
+                                                       @(Checked("4.1", opt) ? "checked" : "") />
+                                                <span>@opt</span>
+                                            </label>
+                                        }
+                                    </div>
+                                </div>
+
+                                <!-- 4.2 Multi-select external -->
+                                <div class="dt-form-group" id="q42-group"
+                                     style="@(A("4.1") == "External users" || A("4.1") == "Both" ? "" : "display:none")">
+                                    <label class="dt-label">
+                                        4.2 Which external users does this request intend to impact?
+                                        <span class="text-danger">*</span>
+                                    </label>
+                                    <span class="dt-label-hint">Select all that apply. Score: +2 per selection. "I don't know" is exclusive.</span>
+                                    @{
+                                        var q42Options = new[]
+                                        {
+                                            "Adult learners 18+",
+                                            "Careers advisers or work coaches",
+                                            "Children or young people",
+                                            "Children or young people with SEND",
+                                            "Education providers and early years workforce",
+                                            "Employers",
+                                            "Local authority workforce",
+                                            "NEET or career seekers",
+                                            "Parents or carers",
+                                            "Professional external users of DfE Data",
+                                            "Social care workforce",
+                                            "I don't know",
+                                        };
+                                    }
+                                    <div class="dt-check-group">
+                                        @foreach (var opt in q42Options)
+                                        {
+                                            <label class="dt-check-option @(MultiChecked("4.2", opt) ? "selected" : "")">
+                                                <input type="checkbox" name="Answers[4.2]" id="q42_@opt.GetHashCode()" value="@opt"
+                                                       @(MultiChecked("4.2", opt) ? "checked" : "")
+                                                       data-exclusive="@(opt == "I don't know" ? "true" : "false")"
+                                                       data-group="q42" />
+                                                <span>@opt</span>
+                                                @if (opt != "I don't know") { <span class="dt-radio-score">+2</span> }
+                                            </label>
+                                        }
+                                    </div>
+                                </div>
+
+                                <!-- 4.3 Multi-select internal -->
+                                <div class="dt-form-group" id="q43-group"
+                                     style="@(A("4.1") == "Internal users" || A("4.1") == "Both" ? "" : "display:none")">
+                                    <label class="dt-label">
+                                        4.3 Which internal users does this request intend to impact?
+                                        <span class="text-danger">*</span>
+                                    </label>
+                                    <span class="dt-label-hint">Select all that apply. Score: +2 per selection. "I don't know" is exclusive.</span>
+                                    @{
+                                        var q43Options = new[]
+                                        {
+                                            "DFE Workforce - Strategy and transformation",
+                                            "DFE Workforce - Analysis and Insight",
+                                            "DFE Workforce - Architecture",
+                                            "DFE Workforce - Business planning",
+                                            "DFE Workforce - Communications and engagement",
+                                            "DFE Workforce - Corporate services",
+                                            "DFE Workforce - Data",
+                                            "DFE Workforce - Digital",
+                                            "DFE Workforce - Efficiency and productivity",
+                                            "DFE Workforce - Finance and commercial",
+                                            "DFE Workforce - HR and workforce planning",
+                                            "DFE Workforce - Legal and compliance",
+                                            "DFE Workforce - Policy",
+                                            "DFE Workforce - Risk, assurance and governance",
+                                            "DFE Workforce - Service Management",
+                                            "DFE Workforce - Technology",
+                                            "I don't know",
+                                        };
+                                    }
+                                    <div class="dt-check-group">
+                                        @foreach (var opt in q43Options)
+                                        {
+                                            <label class="dt-check-option @(MultiChecked("4.3", opt) ? "selected" : "")">
+                                                <input type="checkbox" name="Answers[4.3]" id="q43_@opt.GetHashCode()" value="@opt"
+                                                       @(MultiChecked("4.3", opt) ? "checked" : "")
+                                                       data-exclusive="@(opt == "I don't know" ? "true" : "false")"
+                                                       data-group="q43" />
+                                                <span>@opt</span>
+                                                @if (opt != "I don't know") { <span class="dt-radio-score">+2</span> }
+                                            </label>
+                                        }
+                                    </div>
+                                </div>
+
+                                <!-- 4.4 Reach -->
+                                <div class="dt-form-group">
+                                    <label class="dt-label">
+                                        4.4 What proportion of users is expected to be affected?
+                                        <span class="text-danger">*</span>
+                                    </label>
+                                    @{
+                                        var q44Options = new[]
+                                        {
+                                            ("Nearly everyone", "10"),
+                                            ("More than half", "8"),
+                                            ("About half", "6"),
+                                            ("A smaller subset", "4"),
+                                            ("Not sure", "2"),
+                                        };
+                                    }
+                                    <div class="dt-radio-group">
+                                        @foreach (var (opt, score) in q44Options)
+                                        {
+                                            <label class="dt-radio-option @(Checked("4.4", opt) ? "selected" : "")">
+                                                <input type="radio" name="Answers[4.4]" id="q44_@opt.GetHashCode()" value="@opt"
+                                                       @(Checked("4.4", opt) ? "checked" : "") />
+                                                <span>@opt</span>
+                                                <span class="dt-radio-score">+@score</span>
+                                            </label>
+                                        }
+                                    </div>
+                                </div>
+
+                                <!-- 4.5 Free text -->
+                                <div class="dt-form-group">
+                                    <label class="dt-label">4.5 What measurable benefits and successes do you expect?</label>
+                                    <textarea name="FreeTexts[4.5]" class="dt-input" rows="3">@T("4.5")</textarea>
+                                </div>
+
+                                <!-- 4.6 Impact scale -->
+                                <div class="dt-form-group">
+                                    <label class="dt-label">
+                                        4.6 On what scale will the benefit of this request be realised?
+                                        <span class="text-danger">*</span>
+                                    </label>
+                                    @{
+                                        var q46Options = new[]
+                                        {
+                                            ("Project is delivered by external partner without DDT engagement", "0"),
+                                            ("Project is delivered by external partner with DDT engagement", "2"),
+                                            ("Project benefits are local to a single team", "2"),
+                                            ("The project benefits a single groups", "4"),
+                                            ("The project benefits multiple groups", "6"),
+                                            ("The project benefits the sector", "8"),
+                                            ("The project benefits the whole department", "10"),
+                                            ("Not sure", "2"),
+                                        };
+                                    }
+                                    <div class="dt-radio-group">
+                                        @foreach (var (opt, score) in q46Options)
+                                        {
+                                            <label class="dt-radio-option @(Checked("4.6", opt) ? "selected" : "")">
+                                                <input type="radio" name="Answers[4.6]" id="q46_@opt.GetHashCode()" value="@opt"
+                                                       @(Checked("4.6", opt) ? "checked" : "") />
+                                                <span>@opt</span>
+                                                @if (score != "0") { <span class="dt-radio-score">+@score</span> }
+                                            </label>
+                                        }
+                                    </div>
+                                </div>
+
+                                <!-- 4.7 Confidence -->
+                                <div class="dt-form-group">
+                                    <label class="dt-label">
+                                        4.7 How achievable is delivery within the proposed timeline?
+                                        <span class="text-danger">*</span>
+                                    </label>
+                                    @{
+                                        var q47Options = new[]
+                                        {
+                                            ("Very achievable", "10"),
+                                            ("Mostly achievable", "8"),
+                                            ("Somewhat achievable", "6"),
+                                            ("Slightly achievable", "4"),
+                                            ("Not achievable", "2"),
+                                        };
+                                    }
+                                    <div class="dt-radio-group">
+                                        @foreach (var (opt, score) in q47Options)
+                                        {
+                                            <label class="dt-radio-option @(Checked("4.7", opt) ? "selected" : "")">
+                                                <input type="radio" name="Answers[4.7]" id="q47_@opt.GetHashCode()" value="@opt"
+                                                       @(Checked("4.7", opt) ? "checked" : "") />
+                                                <span>@opt</span>
+                                                <span class="dt-radio-score">+@score</span>
+                                            </label>
+                                        }
+                                    </div>
+                                </div>
+
+                                <!-- 4.8 Effort -->
+                                <div class="dt-form-group">
+                                    <label class="dt-label">
+                                        4.8 What is the likely length of the project?
+                                        <span class="text-danger">*</span>
+                                    </label>
+                                    @{
+                                        var q48Options = new[]
+                                        {
+                                            ("0 - 3 months", "10"),
+                                            ("3 - 9 months", "6"),
+                                            ("longer than 9 months", "2"),
+                                            ("Not sure", "4"),
+                                        };
+                                    }
+                                    <div class="dt-radio-group">
+                                        @foreach (var (opt, score) in q48Options)
+                                        {
+                                            <label class="dt-radio-option @(Checked("4.8", opt) ? "selected" : "")">
+                                                <input type="radio" name="Answers[4.8]" id="q48_@opt.GetHashCode()" value="@opt"
+                                                       @(Checked("4.8", opt) ? "checked" : "") />
+                                                <span>@opt</span>
+                                                <span class="dt-radio-score">+@score</span>
+                                            </label>
+                                        }
+                                    </div>
+                                </div>
+
+                                <!-- 4.9 Headcount -->
+                                <div class="dt-form-group">
+                                    <label class="dt-label">
+                                        4.9 Does the request come with headcount to support delivery?
+                                        <span class="text-danger">*</span>
+                                    </label>
+                                    <div class="dt-radio-group">
+                                        @foreach (var (opt, score) in new[] { ("Yes", "2"), ("No", "0") })
+                                        {
+                                            <label class="dt-radio-option @(Checked("4.9", opt) ? "selected" : "")">
+                                                <input type="radio" name="Answers[4.9]" id="q49_@opt" value="@opt"
+                                                       @(Checked("4.9", opt) ? "checked" : "") />
+                                                <span>@opt</span>
+                                                @if (score != "0") { <span class="dt-radio-score">+@score</span> }
+                                            </label>
+                                        }
+                                    </div>
+                                </div>
+
+                                <div class="dt-form-group" id="q410-group" style="@(A("4.9") == "Yes" ? "" : "display:none")">
+                                    <label class="dt-label">4.10 Provide headcount details <span class="text-danger">*</span></label>
+                                    <textarea name="FreeTexts[4.10]" class="dt-input" rows="3">@T("4.10")</textarea>
+                                </div>
+
+                                <!-- 4.11 Risk free text -->
+                                <div class="dt-form-group">
+                                    <label class="dt-label">4.11 What is the risk to the department if not delivering?</label>
+                                    <textarea name="FreeTexts[4.11]" class="dt-input" rows="3">@T("4.11")</textarea>
+                                </div>
+                            }
+
+                        </div>
+
+                        <!-- Footer navigation -->
+                        <div style="padding:1rem 1.25rem;background:#f8f9fa;border-top:1px solid #e9ecef;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.5rem;">
+                            <div class="d-flex gap-2 flex-wrap">
+                                @if (Model.Section > 1)
+                                {
+                                    <a asp-action="Score" asp-controller="DemandTriage"
+                                       asp-route-id="@Model.DemandTriageRequestId"
+                                       asp-route-section="@(Model.Section - 1)"
+                                       class="dt-action-btn dt-action-btn--secondary" style="width:auto;padding:0.5rem 1rem;font-size:0.82rem;">
+                                        <i class="fas fa-arrow-left" aria-hidden="true"></i>
+                                        <span>Previous</span>
+                                    </a>
+                                }
+                                <button type="submit" name="action" value="save"
+                                        class="dt-action-btn dt-action-btn--primary" style="width:auto;padding:0.5rem 1.25rem;font-size:0.85rem;">
+                                    <i class="fas fa-save" aria-hidden="true"></i>
+                                    <span>Save section</span>
+                                </button>
+                                @if (Model.Section < 4)
+                                {
+                                    <button type="submit" name="action" value="next"
+                                            class="dt-action-btn dt-action-btn--secondary" style="width:auto;padding:0.5rem 1rem;font-size:0.82rem;">
+                                        <span>Next section</span>
+                                        <i class="fas fa-arrow-right" aria-hidden="true"></i>
+                                    </button>
+                                }
+                            </div>
+                            <a asp-action="Detail" asp-controller="DemandTriage" asp-route-id="@Model.DemandTriageRequestId"
+                               class="dt-action-btn dt-action-btn--secondary" style="width:auto;padding:0.5rem 1rem;font-size:0.82rem;">
+                                <i class="fas fa-times" aria-hidden="true"></i>
+                                <span>Exit scoring</span>
+                            </a>
+                        </div>
+                    </div>
+
+                </form>
+
+            </div>
+        </div>
+
+    </div>
+</section>
+
+@section Scripts {
+    <script>
+        // ── Conditional visibility ────────────────────────────────────────────
+        function toggleGroup(groupId, show) {
+            var el = document.getElementById(groupId);
+            if (el) el.style.display = show ? '' : 'none';
+        }
+
+        // Section 1
+        document.querySelectorAll('input[name="Answers[1.4]"]').forEach(function(r) {
+            r.addEventListener('change', function() {
+                toggleGroup('q15-group', this.value === 'Yes');
+                toggleGroup('q16-group', this.value === 'Other');
+            });
+        });
+
+        // Section 2
+        document.querySelectorAll('input[name="Answers[2.1]"]').forEach(function(r) {
+            r.addEventListener('change', function() {
+                toggleGroup('q22-group', this.value === 'Yes');
+            });
+        });
+        document.querySelectorAll('input[name="Answers[2.3]"]').forEach(function(r) {
+            r.addEventListener('change', function() {
+                var isNoCritical = this.value === 'No critical delivery date';
+                toggleGroup('q24-group', !isNoCritical);
+                toggleGroup('q25-group', isNoCritical);
+            });
+        });
+
+        // Section 3
+        document.querySelectorAll('input[name="Answers[3.2]"]').forEach(function(r) {
+            r.addEventListener('change', function() {
+                toggleGroup('q33-group', this.value === 'Yes');
+            });
+        });
+
+        // Section 4
+        document.querySelectorAll('input[name="Answers[4.1]"]').forEach(function(r) {
+            r.addEventListener('change', function() {
+                toggleGroup('q42-group', this.value === 'External users' || this.value === 'Both');
+                toggleGroup('q43-group', this.value === 'Internal users' || this.value === 'Both');
+            });
+        });
+        document.querySelectorAll('input[name="Answers[4.9]"]').forEach(function(r) {
+            r.addEventListener('change', function() {
+                toggleGroup('q410-group', this.value === 'Yes');
+            });
+        });
+
+        // ── Radio option highlighting ─────────────────────────────────────────
+        document.querySelectorAll('.dt-radio-option input[type="radio"], .dt-check-option input[type="checkbox"]').forEach(function(input) {
+            input.addEventListener('change', function() {
+                if (this.type === 'radio') {
+                    var name = this.name;
+                    document.querySelectorAll('.dt-radio-option input[name="' + name + '"]').forEach(function(r) {
+                        r.closest('.dt-radio-option').classList.toggle('selected', r.checked);
+                    });
+                } else {
+                    this.closest('.dt-check-option').classList.toggle('selected', this.checked);
+                }
+            });
+        });
+
+        // ── Exclusive checkbox logic ──────────────────────────────────────────
+        document.querySelectorAll('input[type="checkbox"][data-exclusive]').forEach(function(cb) {
+            cb.addEventListener('change', function() {
+                var group = this.dataset.group;
+                var isExclusive = this.dataset.exclusive === 'true';
+                if (isExclusive && this.checked) {
+                    document.querySelectorAll('input[data-group="' + group + '"]').forEach(function(other) {
+                        if (other !== cb) { other.checked = false; other.closest('.dt-check-option').classList.remove('selected'); }
+                    });
+                } else if (!isExclusive && this.checked) {
+                    document.querySelectorAll('input[data-group="' + group + '"][data-exclusive="true"]').forEach(function(excl) {
+                        excl.checked = false; excl.closest('.dt-check-option').classList.remove('selected');
+                    });
+                }
+            });
+        });
+
+        // ── Multi-select: combine into single hidden input on submit ──────────
+        document.querySelector('form').addEventListener('submit', function() {
+            ['4.2', '4.3'].forEach(function(code) {
+                var checkboxes = document.querySelectorAll('input[name="Answers[' + code + ']"]:checked');
+                if (checkboxes.length === 0) return;
+                var values = Array.from(checkboxes).map(function(c) { return c.value; }).join(',');
+                checkboxes.forEach(function(c) { c.disabled = true; });
+                var hidden = document.createElement('input');
+                hidden.type = 'hidden';
+                hidden.name = 'Answers[' + code + ']';
+                hidden.value = values;
+                document.querySelector('form').appendChild(hidden);
+            });
+        });
+    </script>
+}

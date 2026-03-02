@@ -1,0 +1,186 @@
+@model Compass.Controllers.ProductDqManagerIndexViewModel
+@{
+    var viewType = Model.ViewType ?? "MyServices";
+    var isMyServices = viewType == "MyServices";
+    var pageTitle = isMyServices ? "Product DQ Manager - My Services" : "Product DQ Manager - All Products";
+    ViewData["Title"] = pageTitle;
+    
+    // Format date helper
+    string FormatDate(DateTime? date)
+    {
+        if (!date.HasValue) return "-";
+        return date.Value.ToString("d MMM yyyy");
+    }
+}
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <li class="breadcrumb-item">
+                <a href="/" style="color: #005ea5; text-decoration: none; font-weight: 500;">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a href="@Url.Action("Index", "FipsManager")" style="color: #005ea5; text-decoration: none; font-weight: 500;">FIPS Manager</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page" style="color: #0b0c0c; font-weight: 600;">Product DQ Manager</li>
+        </ol>
+    </nav>
+}
+
+@{
+    ViewBag.BrandText = "Product DQ Manager";
+    ViewBag.NavLinks = new[]
+    {
+        new { Text = "My services", Action = "ProductDqManagerMyServices", Controller = "FipsManager", Url = Url.Action("ProductDqManagerMyServices", "FipsManager"), IsButton = false, IsActive = isMyServices },
+        new { Text = "All products", Action = "ProductDqManagerAllProducts", Controller = "FipsManager", Url = Url.Action("ProductDqManagerAllProducts", "FipsManager"), IsButton = false, IsActive = !isMyServices }
+    };
+}
+@await Html.PartialAsync("_ModuleNavbar")
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-12">
+                <h1 class="m-0">@pageTitle</h1>
+                <p class="text-muted mb-0">
+                    <small>Managing product data quality reviews</small>
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @Html.Raw(TempData["SuccessMessage"])
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        <!-- Products Table -->
+        <div class="row">
+            <div class="col-lg-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">@(isMyServices ? "My Services" : "All Products")</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0" id="productsTable">
+                                <thead>
+                                    <tr>
+                                        <th>Product name</th>
+                                        <th class="text-center">Data Quality score</th>
+                                        <th class="text-center">DQ last reviewed</th>
+                                        <th class="text-center">Next due</th>
+                                        <th class="text-center">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var item in Model.Products)
+                                    {
+                                        // Determine color based on DQ score
+                                        string badgeColor;
+                                        string textColor = "#ffffff"; // Default white text
+                                        if (item.DqScore >= 95)
+                                        {
+                                            badgeColor = "#0f7a52"; // Green
+                                        }
+                                        else if (item.DqScore >= 80)
+                                        {
+                                            badgeColor = "#ffdd00"; // Yellow
+                                            textColor = "#000000"; // Black text
+                                        }
+                                        else if (item.DqScore >= 60)
+                                        {
+                                            badgeColor = "#f47738"; // Orange
+                                        }
+                                        else if (item.DqScore >= 40)
+                                        {
+                                            badgeColor = "#ca3535"; // Red
+                                        }
+                                        else
+                                        {
+                                            badgeColor = "#651b1b"; // Dark red
+                                        }
+                                        
+                                        var isOverdue = item.NextDueDate < DateTime.UtcNow;
+                                        var isDueSoon = item.NextDueDate <= DateTime.UtcNow.AddDays(30) && item.NextDueDate >= DateTime.UtcNow;
+                                        <tr>
+                                            <td>
+                                                <strong>@item.Product.Title</strong>
+                                                @if (!string.IsNullOrEmpty(item.Product.FipsId))
+                                                {
+                                                    <br>
+                                                    <small class="text-muted">FIPS ID: @item.Product.FipsId</small>
+                                                }
+                                            </td>
+                                            <td class="text-center">
+                                                <span class="badge" style="font-size: 1rem; padding: 0.5rem 1rem; background-color: @badgeColor; color: @textColor;">
+                                                    @item.DqScore.ToString("F0")%
+                                                </span>
+                                            </td>
+                                            <td class="text-center">
+                                                <small>@FormatDate(item.LastReviewedDate)</small>
+                                            </td>
+                                            <td class="text-center">
+                                                @if (isOverdue)
+                                                {
+                                                    <div>
+                                                        <small>@FormatDate(item.NextDueDate)</small>
+                                                        <br>
+                                                        <span class="badge badge-danger">Overdue</span>
+                                                    </div>
+                                                }
+                                                else if (isDueSoon)
+                                                {
+                                                    <span class="badge badge-warning">@FormatDate(item.NextDueDate) (Due soon)</span>
+                                                }
+                                                else
+                                                {
+                                                    <small>@FormatDate(item.NextDueDate)</small>
+                                                }
+                                            </td>
+                                            <td class="text-center">
+                                                @if (item.HasReviewInProgress)
+                                                {
+                                                    <a href="@Url.Action("DqReviewCheck", "FipsManager", new { documentId = item.Product.DocumentId })" 
+                                                       class="btn btn-primary btn-sm">
+                                                        Continue DQ review
+                                                    </a>
+                                                }
+                                                else
+                                                {
+                                                    <a href="@Url.Action("StartDqReview", "FipsManager", new { documentId = item.Product.DocumentId })" 
+                                                       class="btn btn-primary btn-sm">
+                                                        Start product DQ review
+                                                    </a>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                        @if (!Model.Products.Any())
+                        {
+                            <div class="alert alert-info mt-3">
+                                <i class="fas fa-info-circle"></i> No products found.
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>

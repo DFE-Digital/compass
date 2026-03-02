@@ -13,7 +13,7 @@
         }
     </style>
     <nav aria-label="Breadcrumb">
-        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f8f9fa; padding: 0.75rem 1rem; border-radius: 0.375rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
             <li class="breadcrumb-item">
                 <a href="/" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Home</a>
             </li>
@@ -28,19 +28,20 @@
 <div class="content-header">
     <div class="container-fluid">
         <div class="row mb-2">
-            <div class="col-sm-6">
+            <div class="col-sm-12">
                 <h1 class="m-0">FIPS Completion %</h1>
                 <p class="text-muted mb-0">
                     <small>
                         Showing Active products only. 
-                        <a asp-action="AllCmsData" class="font-weight-bold">View all CMS data</a> (includes Active, New, Rejected, Deleted) | 
-                        <a asp-action="MultipleBusinessAreas" class="font-weight-bold text-warning">View products with multiple business areas</a>
+                        <a asp-action="AllCmsData" class="font-weight-bold">View all CMS data</a> (includes Active, New, Rejected, Deleted)
                     </small>
                 </p>
             </div>
         </div>
     </div>
 </div>
+
+@await Html.PartialAsync("_DataQualityNavigation")
 
 <section class="content">
     <div class="container-fluid">
@@ -64,7 +65,7 @@
         <!-- Summary Cards -->
         <div class="row mb-3">
             <!-- Business Area Completion -->
-            <div class="col-lg-8 col-md-12">
+            <div class="col-lg-12 col-md-12">
                 <div class="card">
                     <div class="card-header">
                         <h3 class="card-title">
@@ -113,93 +114,6 @@
                     </div>
                 </div>
             </div>
-
-            <!-- Right Side Cards -->
-            <div class="col-lg-4 col-md-12">
-                <!-- Average Completion Summary -->
-                <div class="card @(Model.AverageCompletionPercentage >= 80 ? "card-success" : Model.AverageCompletionPercentage >= 60 ? "card-warning" : "card-danger") mb-3" id="averageCompletionCard">
-                    <div class="card-header">
-                        <h3 class="card-title">
-                            Average completion across all products
-                        </h3>
-                    </div>
-                    <div class="card-body text-center">
-                        <h2 class="mb-0" style="font-size: 3rem; font-weight: bold;" id="averageCompletionValue">@Model.AverageCompletionPercentage.ToString("F1")%</h2>
-                        <p class="text-muted mb-0 mt-2" id="averageCompletionSubtitle">Based on @Model.Products.Count products</p>
-                        <div class="progress progress-lg mt-3">
-                            <div class="progress-bar @(Model.AverageCompletionPercentage >= 80 ? "bg-success" : Model.AverageCompletionPercentage >= 60 ? "bg-warning" : "bg-danger")" 
-                                 style="width: @Model.AverageCompletionPercentage%" id="averageCompletionProgress"></div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Zero Completion Count -->
-                <div class="card @(Model.ZeroCompletionCount > 0 ? "card-danger" : "card-success") mb-3" id="zeroCompletionCard">
-                    <div class="card-header">
-                        <h3 class="card-title">
-                            Products at 0% completion
-                        </h3>
-                    </div>
-                    <div class="card-body text-center">
-                        <h2 class="mb-0" style="font-size: 3rem; font-weight: bold;" id="zeroCompletionValue">@Model.ZeroCompletionCount</h2>
-                        <p class="text-muted mb-0 mt-2">
-                            @{
-                                var zeroPercentage = Model.Products.Any() ? (Model.ZeroCompletionCount / (double)Model.Products.Count) * 100 : 0;
-                            }
-                            @if (Model.ZeroCompletionCount == 0)
-                            {
-                                <span id="zeroCompletionText">All products have at least some completion data (@zeroPercentage.ToString("F1")%)</span>
-                            }
-                            else if (Model.ZeroCompletionCount == 1)
-                            {
-                                <span id="zeroCompletionText">product has no completion data (@zeroPercentage.ToString("F1")%)</span>
-                            }
-                            else
-                            {
-                                <span id="zeroCompletionText">products have no completion data (@zeroPercentage.ToString("F1")%)</span>
-                            }
-                        </p>
-                        <div class="progress progress-lg mt-3">
-                            <div class="progress-bar @(Model.ZeroCompletionCount > 0 ? "bg-danger" : "bg-success")" 
-                                 style="width: @zeroPercentage%" id="zeroCompletionProgress"></div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Full Completion Count -->
-                <div class="card @(Model.FullCompletionCount == Model.Products.Count ? "card-success" : "card-info")" id="fullCompletionCard">
-                    <div class="card-header">
-                        <h3 class="card-title">
-                            Products with 100% completion
-                        </h3>
-                    </div>
-                    <div class="card-body text-center">
-                        <h2 class="mb-0" style="font-size: 3rem; font-weight: bold;" id="fullCompletionValue">@Model.FullCompletionCount</h2>
-                        <p class="text-muted mb-0 mt-2">
-                            @{
-                                var fullPercentage = Model.Products.Any() ? (Model.FullCompletionCount / (double)Model.Products.Count) * 100 : 0;
-                                var fullColorClass = fullPercentage >= 80 ? "success" : fullPercentage >= 50 ? "warning" : "info";
-                            }
-                            @if (Model.FullCompletionCount == 0)
-                            {
-                                <span id="fullCompletionText">No products fully complete yet (@fullPercentage.ToString("F1")%)</span>
-                            }
-                            else if (Model.FullCompletionCount == 1)
-                            {
-                                <span id="fullCompletionText">product is fully complete (@fullPercentage.ToString("F1")%)</span>
-                            }
-                            else
-                            {
-                                <span id="fullCompletionText">products are fully complete (@fullPercentage.ToString("F1")%)</span>
-                            }
-                        </p>
-                        <div class="progress progress-lg mt-3">
-                            <div class="progress-bar bg-@fullColorClass" 
-                                 style="width: @fullPercentage%" id="fullCompletionProgress"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
         </div>
 
         <!-- Completion Stats -->
@@ -208,6 +122,7 @@
                 @{
                     var phasePercentage = Model.Products.Any() ? (Model.CompletedPhaseCount / (double)Model.Products.Count) * 100 : 0;
                     var phaseColorClass = phasePercentage >= 80 ? "success" : phasePercentage >= 50 ? "warning" : "danger";
+                    var phaseGap = Model.Products.Count - Model.CompletedPhaseCount;
                 }
                 <div class="card card-@phaseColorClass" id="completedPhaseCard">
                     <div class="card-header">
@@ -218,6 +133,7 @@
                     <div class="card-body text-center">
                         <h2 class="mb-0" style="font-size: 3rem; font-weight: bold;" id="completedPhaseValue">@Model.CompletedPhaseCount</h2>
                         <p class="text-muted mb-0 mt-2" id="completedPhaseText">of @Model.Products.Count products (@phasePercentage.ToString("F1")%)</p>
+                        <p class="text-muted mb-0" id="completedPhaseGap">Gap: @phaseGap products</p>
                         <div class="progress progress-lg mt-3">
                             <div class="progress-bar bg-@phaseColorClass" style="width: @phasePercentage%" id="completedPhaseProgress"></div>
                         </div>
@@ -229,6 +145,7 @@
                 @{
                     var businessAreaPercentage = Model.Products.Any() ? (Model.CompletedBusinessAreaCount / (double)Model.Products.Count) * 100 : 0;
                     var businessAreaColorClass = businessAreaPercentage >= 80 ? "success" : businessAreaPercentage >= 50 ? "warning" : "danger";
+                    var businessAreaGap = Model.Products.Count - Model.CompletedBusinessAreaCount;
                 }
                 <div class="card card-@businessAreaColorClass" id="completedBusinessAreaCard">
                     <div class="card-header">
@@ -239,6 +156,7 @@
                     <div class="card-body text-center">
                         <h2 class="mb-0" style="font-size: 3rem; font-weight: bold;" id="completedBusinessAreaValue">@Model.CompletedBusinessAreaCount</h2>
                         <p class="text-muted mb-0 mt-2" id="completedBusinessAreaText">of @Model.Products.Count products (@businessAreaPercentage.ToString("F1")%)</p>
+                        <p class="text-muted mb-0" id="completedBusinessAreaGap">Gap: @businessAreaGap products</p>
                         <div class="progress progress-lg mt-3">
                             <div class="progress-bar bg-@businessAreaColorClass" style="width: @businessAreaPercentage%" id="completedBusinessAreaProgress"></div>
                         </div>
@@ -250,6 +168,7 @@
                 @{
                     var urlPercentage = Model.Products.Any() ? (Model.CompletedUrlCount / (double)Model.Products.Count) * 100 : 0;
                     var urlColorClass = urlPercentage >= 80 ? "success" : urlPercentage >= 50 ? "warning" : "danger";
+                    var urlGap = Model.Products.Count - Model.CompletedUrlCount;
                 }
                 <div class="card card-@urlColorClass" id="completedUrlCard">
                     <div class="card-header">
@@ -260,8 +179,81 @@
                     <div class="card-body text-center">
                         <h2 class="mb-0" style="font-size: 3rem; font-weight: bold;" id="completedUrlValue">@Model.CompletedUrlCount</h2>
                         <p class="text-muted mb-0 mt-2" id="completedUrlText">of @Model.Products.Count products (@urlPercentage.ToString("F1")%)</p>
+                        <p class="text-muted mb-0" id="completedUrlGap">Gap: @urlGap products</p>
                         <div class="progress progress-lg mt-3">
                             <div class="progress-bar bg-@urlColorClass" style="width: @urlPercentage%" id="completedUrlProgress"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Additional Completion Stats -->
+        <div class="row mb-3">
+            <div class="col-lg-4 col-md-4 col-12">
+                @{
+                    var sroPercentage = Model.Products.Any() ? (Model.CompletedSroCount / (double)Model.Products.Count) * 100 : 0;
+                    var sroColorClass = sroPercentage >= 80 ? "success" : sroPercentage >= 50 ? "warning" : "danger";
+                    var sroGap = Model.Products.Count - Model.CompletedSroCount;
+                }
+                <div class="card card-@sroColorClass" id="completedSroCard">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            Completed SRO
+                        </h3>
+                    </div>
+                    <div class="card-body text-center">
+                        <h2 class="mb-0" style="font-size: 3rem; font-weight: bold;" id="completedSroValue">@Model.CompletedSroCount</h2>
+                        <p class="text-muted mb-0 mt-2" id="completedSroText">of @Model.Products.Count products (@sroPercentage.ToString("F1")%)</p>
+                        <p class="text-muted mb-0" id="completedSroGap">Gap: @sroGap products</p>
+                        <div class="progress progress-lg mt-3">
+                            <div class="progress-bar bg-@sroColorClass" style="width: @sroPercentage%" id="completedSroProgress"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-4 col-md-4 col-12">
+                @{
+                    var serviceOwnerPercentage = Model.Products.Any() ? (Model.CompletedServiceOwnerCount / (double)Model.Products.Count) * 100 : 0;
+                    var serviceOwnerColorClass = serviceOwnerPercentage >= 80 ? "success" : serviceOwnerPercentage >= 50 ? "warning" : "danger";
+                    var serviceOwnerGap = Model.Products.Count - Model.CompletedServiceOwnerCount;
+                }
+                <div class="card card-@serviceOwnerColorClass" id="completedServiceOwnerCard">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            Completed Service Owner
+                        </h3>
+                    </div>
+                    <div class="card-body text-center">
+                        <h2 class="mb-0" style="font-size: 3rem; font-weight: bold;" id="completedServiceOwnerValue">@Model.CompletedServiceOwnerCount</h2>
+                        <p class="text-muted mb-0 mt-2" id="completedServiceOwnerText">of @Model.Products.Count products (@serviceOwnerPercentage.ToString("F1")%)</p>
+                        <p class="text-muted mb-0" id="completedServiceOwnerGap">Gap: @serviceOwnerGap products</p>
+                        <div class="progress progress-lg mt-3">
+                            <div class="progress-bar bg-@serviceOwnerColorClass" style="width: @serviceOwnerPercentage%" id="completedServiceOwnerProgress"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-4 col-md-4 col-12">
+                @{
+                    var typePercentage = Model.Products.Any() ? (Model.CompletedTypeCount / (double)Model.Products.Count) * 100 : 0;
+                    var typeColorClass = typePercentage >= 80 ? "success" : typePercentage >= 50 ? "warning" : "danger";
+                    var typeGap = Model.Products.Count - Model.CompletedTypeCount;
+                }
+                <div class="card card-@typeColorClass" id="completedTypeCard">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            % Type completion
+                        </h3>
+                    </div>
+                    <div class="card-body text-center">
+                        <h2 class="mb-0" style="font-size: 3rem; font-weight: bold;" id="completedTypeValue">@typePercentage.ToString("F1")%</h2>
+                        <p class="text-muted mb-0 mt-2" id="completedTypeText">@Model.CompletedTypeCount of @Model.Products.Count products</p>
+                        <p class="text-muted mb-0" id="completedTypeGap">Gap: @typeGap products</p>
+                        <div class="progress progress-lg mt-3">
+                            <div class="progress-bar bg-@typeColorClass" style="width: @typePercentage%" id="completedTypeProgress"></div>
                         </div>
                     </div>
                 </div>
@@ -297,14 +289,18 @@
                 <div class="card">
                     <div class="card-header">
                         <h3 class="card-title">
-                            Filter products
+                            <a data-toggle="collapse" href="#filtersCollapse" role="button" aria-expanded="false" aria-controls="filtersCollapse" style="color: inherit; text-decoration: none;">
+                                Filter products
+                                <i class="fas fa-chevron-down float-right" id="filtersChevron"></i>
+                            </a>
                         </h3>
                     </div>
+                    <div class="collapse" id="filtersCollapse">
                     <div class="card-body">
                         <div class="row">
                             <div class="col-lg-4 col-md-6 col-12">
                                 <div class="form-group">
-                                    <label for="searchInput">Search by product name or FIPS ID</label>
+                                    <label for="searchInput">Search by product name</label>
                                     <input type="text" class="form-control" id="searchInput" placeholder="Search products...">
                                 </div>
                             </div>
@@ -320,7 +316,37 @@
                                     </select>
                                 </div>
                             </div>
-                            <div class="col-lg-3 col-md-6 col-12">
+                            <div class="col-lg-2 col-md-6 col-12">
+                                <div class="form-group">
+                                    <label for="phaseFilter">Phase</label>
+                                    <select class="form-control" id="phaseFilter">
+                                        <option value="">All phases</option>
+                                        @{
+                                            var phaseNames = ViewBag.PhaseNames as List<string> ?? new List<string>();
+                                        }
+                                        @foreach (var phase in phaseNames)
+                                        {
+                                            <option value="@phase">@phase</option>
+                                        }
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-lg-2 col-md-6 col-12">
+                                <div class="form-group">
+                                    <label for="typeFilter">Type</label>
+                                    <select class="form-control" id="typeFilter">
+                                        <option value="">All types</option>
+                                        @{
+                                            var typeNames = ViewBag.TypeNames as List<string> ?? new List<string>();
+                                        }
+                                        @foreach (var type in typeNames)
+                                        {
+                                            <option value="@type">@type</option>
+                                        }
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-lg-2 col-md-6 col-12">
                                 <div class="form-group">
                                     <label for="completionFilter">Filter by completion %</label>
                                     <select class="form-control" id="completionFilter">
@@ -333,7 +359,7 @@
                                     </select>
                                 </div>
                             </div>
-                            <div class="col-lg-3 col-md-6 col-12">
+                            <div class="col-lg-2 col-md-6 col-12">
                                 <div class="form-group">
                                     <label for="statusFilter">Filter by status</label>
                                     <select class="form-control" id="statusFilter">
@@ -389,6 +415,7 @@
                             </div>
                         </div>
                     </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -402,24 +429,20 @@
                             Product completion status
                         </h3>
                         <div class="card-tools">
-                            <button type="button" id="exportFilteredBtn" class="btn btn-outline-primary btn-sm mr-2">
-                                <i class="fas fa-file-excel mr-1"></i> Export filtered view
-                            </button>
-                            <a asp-action="ExportFipsCompletion" class="btn btn-outline-success btn-sm mr-2">
-                                <i class="fas fa-file-excel mr-1"></i> Export full data to Excel
+                            <a href="#" id="exportFilteredBtn" style="color: #005ea5; text-decoration: none; margin-right: 15px;">
+                                Export view
                             </a>
-                            <span class="badge badge-info" id="productCount">@Model.Products.Count products</span>
+                            <a asp-action="ExportFipsCompletion" style="color: #005ea5; text-decoration: none;">
+                                Export all
+                            </a>
                         </div>
                     </div>
                     <div class="card-body table-responsive p-0">
-                        <table class="table table-hover mb-0 sortable-table" id="completionTable">
+                        <table class="table table-hover sortable-table mb-0" id="completionTable">
                             <thead>
                                 <tr>
                                     <th class="sortable" data-column="ProductTitle" style="cursor: pointer;">
                                         Product <i class="fas fa-sort"></i>
-                                    </th>
-                                    <th class="sortable" data-column="FipsId" style="cursor: pointer;">
-                                        FIPS ID <i class="fas fa-sort"></i>
                                     </th>
                                     <th class="text-center sortable" data-column="Phase" style="cursor: pointer;">
                                         Phase <i class="fas fa-sort"></i>
@@ -436,19 +459,24 @@
                                     <th class="text-center sortable" data-column="UserGroups" style="cursor: pointer;">
                                         User groups <i class="fas fa-sort"></i>
                                     </th>
+                                    <th class="sortable" data-column="Type" style="cursor: pointer;">
+                                        Type <i class="fas fa-sort"></i>
+                                    </th>
                                     <th class="sortable" data-column="SeniorResponsibleOfficer" style="cursor: pointer;">
-                                        Senior Responsible Officer <i class="fas fa-sort"></i>
+                                        SRO <i class="fas fa-sort"></i>
+                                    </th>
+                                    <th class="sortable" data-column="ServiceOwner" style="cursor: pointer;">
+                                        Service Owner <i class="fas fa-sort"></i>
                                     </th>
                                     <th class="sortable" data-column="DeliveryManager" style="cursor: pointer;">
                                         Delivery Manager <i class="fas fa-sort"></i>
                                     </th>
                                     <th class="sortable" data-column="InformationAssetOwner" style="cursor: pointer;">
-                                        Information Asset Owner <i class="fas fa-sort"></i>
+                                        IAO <i class="fas fa-sort"></i>
                                     </th>
                                     <th class="text-center sortable" data-column="CompletionPercentage" style="cursor: pointer;">
                                         Completion % <i class="fas fa-sort"></i>
                                     </th>
-                                    <th class="text-center" style="width: 100px;">Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -457,18 +485,26 @@
                                     var sroDisplayList = product.SeniorResponsibleOfficerContacts ?? new List<string>();
                                     var iaoDisplayList = product.InformationAssetOwnerContacts ?? new List<string>();
                                     var deliveryDisplayList = product.DeliveryManagerContacts ?? new List<string>();
+                                    var serviceOwnerDisplayList = product.ServiceOwnerContacts ?? new List<string>();
                                     var sroDataValue = string.Join("||", sroDisplayList.Select(c => c.ToLowerInvariant()));
                                     var iaoDataValue = string.Join("||", iaoDisplayList.Select(c => c.ToLowerInvariant()));
                                     var deliveryManagerDataValue = string.Join("||", deliveryDisplayList.Select(c => c.ToLowerInvariant()));
+                                    var serviceOwnerDataValue = string.Join("||", serviceOwnerDisplayList.Select(c => c.ToLowerInvariant()));
                                     var userGroupDataValue = string.Join("||", (product.UserGroupNames ?? new List<string>()).Select(c => c.ToLowerInvariant()));
                                     var userGroupIdsDataValue = string.Join(",", product.UserGroupCategoryValueIds ?? new List<int>());
-                                    var userGroupTitle = product.UserGroupNames.Any()
+                                    var userGroupTitle = (product.UserGroupNames ?? new List<string>()).Any()
                                         ? string.Join(", ", product.UserGroupNames)
                                         : "No user groups";
+                                    var typeTitle = (product.TypeNames ?? new List<string>()).Any()
+                                        ? string.Join(", ", product.TypeNames)
+                                        : "No type";
+                                    var typeNamesDataValue = string.Join("||", (product.TypeNames ?? new List<string>()).Select(t => t.ToLowerInvariant()));
                                     <tr data-product-title="@product.ProductTitle.ToLowerInvariant()" 
-                                        data-fips-id="@product.FipsId.ToLowerInvariant()"
+                                        data-document-id="@product.DocumentId.ToLowerInvariant()"
                                         data-completion="@product.CompletionPercentage"
                                         data-business-area="@product.BusinessArea"
+                                        data-phase-name="@(product.PhaseName ?? "")"
+                                        data-type-names="@typeNamesDataValue"
                                         data-has-phase="@(product.HasPhase ? "true" : "false")"
                                         data-has-business-area="@(product.HasBusinessArea ? "true" : "false")"
                                         data-has-product-url="@(product.HasProductUrl ? "true" : "false")"
@@ -479,6 +515,9 @@
                                         data-sro="@sroDataValue"
                                         data-sro-names="@string.Join("||", sroDisplayList)"
                                         data-sro-display="@product.SeniorResponsibleOfficer"
+                                        data-service-owner="@serviceOwnerDataValue"
+                                        data-service-owner-names="@string.Join("||", serviceOwnerDisplayList)"
+                                        data-service-owner-display="@product.ServiceOwner"
                                         data-iao="@iaoDataValue"
                                         data-iao-names="@string.Join("||", iaoDisplayList)"
                                         data-iao-display="@product.InformationAssetOwner"
@@ -489,9 +528,6 @@
                                             <a href="@($"{fipsBaseUrl.TrimEnd('/')}/product/{product.FipsId}")" target="_blank" rel="noopener noreferrer" class="font-weight-bold">
                                                 @product.ProductTitle
                                             </a>
-                                        </td>
-                                        <td>
-                                            @product.FipsId
                                         </td>
                                         <td class="text-center">
                                             @if (product.HasPhase)
@@ -544,9 +580,29 @@
                                             }
                                         </td>
                                         <td>
+                                            @if ((product.TypeNames ?? new List<string>()).Any())
+                                            {
+                                                <span title="@typeTitle">@typeTitle</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">-</span>
+                                            }
+                                        </td>
+                                        <td>
                                             @if (!string.IsNullOrWhiteSpace(product.SeniorResponsibleOfficer))
                                             {
                                                 @product.SeniorResponsibleOfficer
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">-</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            @if (!string.IsNullOrWhiteSpace(product.ServiceOwner))
+                                            {
+                                                @product.ServiceOwner
                                             }
                                             else
                                             {
@@ -575,55 +631,6 @@
                                         </td>
                                         <td class="text-center">
                                             @product.CompletionPercentage.ToString("F1")%
-                                        </td>
-                                        <td class="text-center">
-                                            <div class="btn-group">
-                                                <button type="button" class="btn btn-sm btn-secondary dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                                                    <i class="fas fa-cog"></i>
-                                                </button>
-                                                <div class="dropdown-menu dropdown-menu-right">
-                                                    <a class="dropdown-item" href="#" data-action="set-phase" data-fips-id="@product.FipsId">
-                                                        <i class="fas fa-layer-group mr-2"></i> Set Phase
-                                                    </a>
-                                                    <a class="dropdown-item" href="#" data-action="set-business-area" data-fips-id="@product.FipsId">
-                                                        <i class="fas fa-building mr-2"></i> Set Business Area
-                                                    </a>
-                                                    <a class="dropdown-item" href="#" data-action="set-product-url" data-fips-id="@product.FipsId">
-                                                        <i class="fas fa-link mr-2"></i> Set Product URL
-                                                    </a>
-                                                    <a class="dropdown-item" href="#" data-action="set-user-groups" data-fips-id="@product.FipsId">
-                                                        <i class="fas fa-users mr-2"></i> Set User Groups
-                                                    </a>
-                                                    <a class="dropdown-item" href="#" data-action="set-service-owner" data-fips-id="@product.FipsId">
-                                                        <i class="fas fa-user-tie mr-2"></i> Set Service Owner
-                                                    </a>
-                                                    <a class="dropdown-item" href="#" data-action="set-product-manager" data-fips-id="@product.FipsId">
-                                                        <i class="fas fa-user-cog mr-2"></i> Set Product Manager
-                                                    </a>
-                                                    <a class="dropdown-item" href="#" data-action="set-delivery-manager" data-fips-id="@product.FipsId">
-                                                        <i class="fas fa-truck mr-2"></i> Set Delivery Manager
-                                                    </a>
-                                                    <a class="dropdown-item" href="#" data-action="set-information-asset-owner" data-fips-id="@product.FipsId">
-                                                        <i class="fas fa-shield-alt mr-2"></i> Set Information Asset Owner
-                                                    </a>
-                                                    <a class="dropdown-item" href="#" data-action="set-senior-responsible-officer" data-fips-id="@product.FipsId">
-                                                        <i class="fas fa-user-shield mr-2"></i> Set Senior Responsible Officer
-                                                    </a>
-                                                    <a class="dropdown-item" href="#" data-action="set-reporting-user" data-fips-id="@product.FipsId">
-                                                        <i class="fas fa-chart-line mr-2"></i> Set Reporting User
-                                                    </a>
-                                                    <a class="dropdown-item" href="#" data-action="set-service-designs" data-fips-id="@product.FipsId">
-                                                        <i class="fas fa-palette mr-2"></i> Set Service Designs
-                                                    </a>
-                                                    <a class="dropdown-item" href="#" data-action="set-user-researchers" data-fips-id="@product.FipsId">
-                                                        <i class="fas fa-search mr-2"></i> Set User Researchers
-                                                    </a>
-                                                    <div class="dropdown-divider"></div>
-                                                    <a class="dropdown-item text-danger" href="#" data-action="update-state-rejected" data-fips-id="@product.FipsId" data-product-title="@product.ProductTitle">
-                                                        <i class="fas fa-ban mr-2"></i> Update State to Rejected
-                                                    </a>
-                                                </div>
-                                            </div>
                                         </td>
                                     </tr>
                                 }
@@ -660,7 +667,7 @@
                 </button>
             </div>
             <form asp-action="UpdateProductPhase" method="post">
-                <input type="hidden" name="fipsId" id="phaseFipsId" />
+                <input type="hidden" name="documentId" id="phaseDocumentId" />
                 <div class="modal-body">
                     <p class="mb-3">Select the Phase for this product.</p>
                     <div class="form-group">
@@ -677,7 +684,7 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
                     @Html.AntiForgeryToken()
-                    <button type="submit" class="btn btn-primary">Save Phase</button>
+                    <button type="submit" class="btn btn-success">Save Phase</button>
                 </div>
             </form>
         </div>
@@ -695,7 +702,7 @@
                 </button>
             </div>
             <form asp-action="UpdateProductBusinessArea" method="post">
-                <input type="hidden" name="fipsId" id="businessAreaFipsId" />
+                <input type="hidden" name="documentId" id="businessAreaDocumentId" />
                 <div class="modal-body">
                     <p class="mb-3">Select the Business Area for this product.</p>
                     <div class="form-group">
@@ -712,7 +719,7 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
                     @Html.AntiForgeryToken()
-                    <button type="submit" class="btn btn-primary">Save Business Area</button>
+                    <button type="submit" class="btn btn-success">Save Business Area</button>
                 </div>
             </form>
         </div>
@@ -730,7 +737,7 @@
                 </button>
             </div>
             <form asp-action="UpdateProductUrl" method="post">
-                <input type="hidden" name="fipsId" id="productUrlFipsId" />
+                <input type="hidden" name="documentId" id="productUrlDocumentId" />
                 <div class="modal-body">
                     <p class="mb-3">The Product URL should be the main URL of the product website.</p>
                     <div class="form-group">
@@ -749,7 +756,7 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
                     @Html.AntiForgeryToken()
-                    <button type="submit" class="btn btn-primary">Save Product URL</button>
+                    <button type="submit" class="btn btn-success">Save Product URL</button>
                 </div>
             </form>
         </div>
@@ -767,13 +774,13 @@
                 </button>
             </div>
             <form asp-action="UpdateProductUserGroups" method="post">
-                <input type="hidden" name="fipsId" id="userGroupsFipsId" />
+                <input type="hidden" name="documentId" id="userGroupsDocumentId" />
                 <div class="modal-body">
                     <p class="mb-3">Select all user groups that apply to this product. Leave blank to clear user groups.</p>
                     <div class="form-group">
                         <label for="userGroupCategoryValueIds" class="form-label">User groups</label>
                         <select class="form-control" id="userGroupCategoryValueIds" name="userGroupCategoryValueIds" multiple size="10">
-                            @foreach (var userGroup in userGroupCategoryValues.OrderBy(u => u.SortOrder ?? int.MaxValue).ThenBy(u => u.Name))
+                            @foreach (var userGroup in userGroupCategoryValues.OrderBy(u => u.Name))
                             {
                                 <option value="@userGroup.Id">@userGroup.Name</option>
                             }
@@ -786,7 +793,7 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
                     @Html.AntiForgeryToken()
-                    <button type="submit" class="btn btn-primary">Save User Groups</button>
+                    <button type="submit" class="btn btn-success">Save User Groups</button>
                 </div>
             </form>
         </div>
@@ -804,7 +811,7 @@
                 </button>
             </div>
             <form asp-action="UpdateProductServiceOwner" method="post">
-                <input type="hidden" name="fipsId" id="serviceOwnerFipsId" />
+                <input type="hidden" name="documentId" id="serviceOwnerDocumentId" />
                 <div class="modal-body">
                     <p class="mb-3">Search for a colleague in Entra ID. The user will be automatically added to the CMS if they don't already exist.</p>
                     <div class="form-group">
@@ -833,7 +840,7 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
                     @Html.AntiForgeryToken()
-                    <button type="submit" class="btn btn-primary">Save Service Owner</button>
+                    <button type="submit" class="btn btn-success">Save Service Owner</button>
                 </div>
             </form>
         </div>
@@ -851,7 +858,7 @@
                 </button>
             </div>
             <form asp-action="UpdateProductRole" method="post">
-                <input type="hidden" name="fipsId" id="productManagerFipsId" />
+                <input type="hidden" name="documentId" id="productManagerDocumentId" />
                 <input type="hidden" name="roleFieldName" value="product_manager" />
                 <input type="hidden" name="roleDisplayName" value="Product Manager" />
                 <div class="modal-body">
@@ -882,7 +889,7 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
                     @Html.AntiForgeryToken()
-                    <button type="submit" class="btn btn-primary">Save Product Manager</button>
+                    <button type="submit" class="btn btn-success">Save Product Manager</button>
                 </div>
             </form>
         </div>
@@ -900,7 +907,7 @@
                 </button>
             </div>
             <form asp-action="UpdateProductRole" method="post">
-                <input type="hidden" name="fipsId" id="deliveryManagerFipsId" />
+                <input type="hidden" name="documentId" id="deliveryManagerDocumentId" />
                 <input type="hidden" name="roleFieldName" value="delivery_manager" />
                 <input type="hidden" name="roleDisplayName" value="Delivery Manager" />
                 <div class="modal-body">
@@ -931,7 +938,7 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
                     @Html.AntiForgeryToken()
-                    <button type="submit" class="btn btn-primary">Save Delivery Manager</button>
+                    <button type="submit" class="btn btn-success">Save Delivery Manager</button>
                 </div>
             </form>
         </div>
@@ -949,7 +956,7 @@
                 </button>
             </div>
             <form asp-action="UpdateProductRole" method="post">
-                <input type="hidden" name="fipsId" id="informationAssetOwnerFipsId" />
+                <input type="hidden" name="documentId" id="informationAssetOwnerDocumentId" />
                 <input type="hidden" name="roleFieldName" value="Information_asset_owner" />
                 <input type="hidden" name="roleDisplayName" value="Information Asset Owner" />
                 <div class="modal-body">
@@ -980,7 +987,7 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
                     @Html.AntiForgeryToken()
-                    <button type="submit" class="btn btn-primary">Save Information Asset Owner</button>
+                    <button type="submit" class="btn btn-success">Save Information Asset Owner</button>
                 </div>
             </form>
         </div>
@@ -998,7 +1005,7 @@
                 </button>
             </div>
             <form asp-action="UpdateProductRole" method="post">
-                <input type="hidden" name="fipsId" id="seniorResponsibleOfficerFipsId" />
+                <input type="hidden" name="documentId" id="seniorResponsibleOfficerDocumentId" />
                 <input type="hidden" name="roleFieldName" value="senior_responsible_officer" />
                 <input type="hidden" name="roleDisplayName" value="Senior Responsible Officer" />
                 <div class="modal-body">
@@ -1029,7 +1036,7 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
                     @Html.AntiForgeryToken()
-                    <button type="submit" class="btn btn-primary">Save Senior Responsible Officer</button>
+                    <button type="submit" class="btn btn-success">Save Senior Responsible Officer</button>
                 </div>
             </form>
         </div>
@@ -1047,7 +1054,7 @@
                 </button>
             </div>
             <form asp-action="UpdateProductRole" method="post">
-                <input type="hidden" name="fipsId" id="reportingUserFipsId" />
+                <input type="hidden" name="documentId" id="reportingUserDocumentId" />
                 <input type="hidden" name="roleFieldName" value="reporting_user" />
                 <input type="hidden" name="roleDisplayName" value="Reporting User" />
                 <div class="modal-body">
@@ -1078,7 +1085,7 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
                     @Html.AntiForgeryToken()
-                    <button type="submit" class="btn btn-primary">Save Reporting User</button>
+                    <button type="submit" class="btn btn-success">Save Reporting User</button>
                 </div>
             </form>
         </div>
@@ -1096,7 +1103,7 @@
                 </button>
             </div>
             <form asp-action="UpdateProductRole" method="post">
-                <input type="hidden" name="fipsId" id="serviceDesignsFipsId" />
+                <input type="hidden" name="documentId" id="serviceDesignsDocumentId" />
                 <input type="hidden" name="roleFieldName" value="service_designs" />
                 <input type="hidden" name="roleDisplayName" value="Service Designs" />
                 <div class="modal-body">
@@ -1127,7 +1134,7 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
                     @Html.AntiForgeryToken()
-                    <button type="submit" class="btn btn-primary">Save Service Designs</button>
+                    <button type="submit" class="btn btn-success">Save Service Designs</button>
                 </div>
             </form>
         </div>
@@ -1145,7 +1152,7 @@
                 </button>
             </div>
             <form asp-action="UpdateProductRole" method="post">
-                <input type="hidden" name="fipsId" id="userResearchersFipsId" />
+                <input type="hidden" name="documentId" id="userResearchersDocumentId" />
                 <input type="hidden" name="roleFieldName" value="user_researchers" />
                 <input type="hidden" name="roleDisplayName" value="User Researchers" />
                 <div class="modal-body">
@@ -1176,7 +1183,7 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
                     @Html.AntiForgeryToken()
-                    <button type="submit" class="btn btn-primary">Save User Researchers</button>
+                    <button type="submit" class="btn btn-success">Save User Researchers</button>
                 </div>
             </form>
         </div>
@@ -1194,7 +1201,7 @@
                 </button>
             </div>
             <form asp-action="UpdateProductState" method="post">
-                <input type="hidden" name="fipsId" id="stateFipsId" />
+                <input type="hidden" name="documentId" id="stateDocumentId" />
                 <input type="hidden" name="state" value="Rejected" />
                 <div class="modal-body">
                     <div class="alert alert-warning">
@@ -1221,8 +1228,9 @@
 }
 
 .sortable:hover {
-    background-color: #f8f9fa;
+    background-color: #f4f8fb;
 }
+
 
 .badge-lg {
     font-size: 1rem;
@@ -1249,7 +1257,7 @@
         $(document).ready(function() {
             initializeSortableTable($('#completionTable'));
 
-            $('#searchInput, #completionFilter, #statusFilter, #businessAreaFilter, #sroFilter, #iaoFilter, #deliveryManagerFilter')
+            $('#searchInput, #completionFilter, #statusFilter, #businessAreaFilter, #phaseFilter, #typeFilter, #sroFilter, #iaoFilter, #deliveryManagerFilter')
                 .on('input change', filterTable);
 
             // Handle filtered export
@@ -1258,6 +1266,8 @@
                 var completionFilter = $('#completionFilter').val() || '';
                 var statusFilter = $('#statusFilter').val() || '';
                 var businessAreaFilter = $('#businessAreaFilter').val() || '';
+                var phaseFilter = $('#phaseFilter').val() || '';
+                var typeFilter = $('#typeFilter').val() || '';
                 var sroFilter = $('#sroFilter').val() || '';
                 var iaoFilter = $('#iaoFilter').val() || '';
                 var deliveryManagerFilter = $('#deliveryManagerFilter').val() || '';
@@ -1267,6 +1277,8 @@
                 if (completionFilter) params.append('completionFilter', completionFilter);
                 if (statusFilter) params.append('statusFilter', statusFilter);
                 if (businessAreaFilter) params.append('businessAreaFilter', businessAreaFilter);
+                if (phaseFilter) params.append('phaseFilter', phaseFilter);
+                if (typeFilter) params.append('typeFilter', typeFilter);
                 if (sroFilter) params.append('sroFilter', sroFilter);
                 if (iaoFilter) params.append('iaoFilter', iaoFilter);
                 if (deliveryManagerFilter) params.append('deliveryManagerFilter', deliveryManagerFilter);
@@ -1289,8 +1301,8 @@
             $(document).on('click', '[data-action="set-phase"]', function(e) {
                 e.preventDefault();
                 e.stopPropagation();
-                var fipsId = $(this).data('fips-id');
-                $('#phaseFipsId').val(fipsId);
+                var documentId = $(this).data('document-id');
+                $('#phaseDocumentId').val(documentId);
                 $('#phaseCategoryValueId').val('');
                 $('#updatePhaseModal').modal('show');
                 return false;
@@ -1299,8 +1311,8 @@
             $(document).on('click', '[data-action="set-business-area"]', function(e) {
                 e.preventDefault();
                 e.stopPropagation();
-                var fipsId = $(this).data('fips-id');
-                $('#businessAreaFipsId').val(fipsId);
+                var documentId = $(this).data('document-id');
+                $('#businessAreaDocumentId').val(documentId);
                 $('#businessAreaCategoryValueId').val('');
                 $('#updateBusinessAreaModal').modal('show');
                 return false;
@@ -1309,8 +1321,8 @@
             $(document).on('click', '[data-action="set-product-url"]', function(e) {
                 e.preventDefault();
                 e.stopPropagation();
-                var fipsId = $(this).data('fips-id');
-                $('#productUrlFipsId').val(fipsId);
+                var documentId = $(this).data('document-id');
+                $('#productUrlDocumentId').val(documentId);
                 $('#productUrl').val('');
                 $('#updateProductUrlModal').modal('show');
                 return false;
@@ -1320,12 +1332,12 @@
                 e.preventDefault();
                 e.stopPropagation();
                 var $row = $(this).closest('tr');
-                var fipsId = $(this).data('fips-id');
+                var documentId = $(this).data('document-id');
                 var selectedIds = ($row.attr('data-user-group-ids') || '')
                     .toString()
                     .split(',')
                     .filter(Boolean);
-                $('#userGroupsFipsId').val(fipsId);
+                $('#userGroupsDocumentId').val(documentId);
                 var $select = $('#userGroupCategoryValueIds');
                 $select.val(null);
                 if (selectedIds.length) {
@@ -1338,8 +1350,8 @@
             $(document).on('click', '[data-action="set-service-owner"]', function(e) {
                 e.preventDefault();
                 e.stopPropagation();
-                var fipsId = $(this).data('fips-id');
-                $('#serviceOwnerFipsId').val(fipsId);
+                var documentId = $(this).data('document-id');
+                $('#serviceOwnerDocumentId').val(documentId);
                 // Clear the user picker
                 var $picker = $('#updateServiceOwnerModal [data-user-picker]');
                 var $clearBtn = $picker.find('.js-user-picker-clear');
@@ -1361,9 +1373,9 @@
             });
 
             // Generic function to open role modals
-            function openRoleModal(modalId, fipsIdInputId, searchInputId, defaultText) {
-                var fipsId = $(this).data('fips-id');
-                $(fipsIdInputId).val(fipsId);
+            function openRoleModal(modalId, documentIdInputId, searchInputId, defaultText) {
+                var documentId = $(this).data('document-id');
+                $(documentIdInputId).val(documentId);
                 var $picker = $(modalId + ' [data-user-picker]');
                 var $clearBtn = $picker.find('.js-user-picker-clear');
                 if ($clearBtn.length) {
@@ -1385,58 +1397,58 @@
             $(document).on('click', '[data-action="set-product-manager"]', function(e) {
                 e.preventDefault();
                 e.stopPropagation();
-                openRoleModal.call(this, '#updateProductManagerModal', '#productManagerFipsId', '#productManagerSearch', 'No product manager selected.');
+                openRoleModal.call(this, '#updateProductManagerModal', '#productManagerDocumentId', '#productManagerSearch', 'No product manager selected.');
                 return false;
             });
 
             $(document).on('click', '[data-action="set-delivery-manager"]', function(e) {
                 e.preventDefault();
                 e.stopPropagation();
-                openRoleModal.call(this, '#updateDeliveryManagerModal', '#deliveryManagerFipsId', '#deliveryManagerSearch', 'No delivery manager selected.');
+                openRoleModal.call(this, '#updateDeliveryManagerModal', '#deliveryManagerDocumentId', '#deliveryManagerSearch', 'No delivery manager selected.');
                 return false;
             });
 
             $(document).on('click', '[data-action="set-information-asset-owner"]', function(e) {
                 e.preventDefault();
                 e.stopPropagation();
-                openRoleModal.call(this, '#updateInformationAssetOwnerModal', '#informationAssetOwnerFipsId', '#informationAssetOwnerSearch', 'No information asset owner selected.');
+                openRoleModal.call(this, '#updateInformationAssetOwnerModal', '#informationAssetOwnerDocumentId', '#informationAssetOwnerSearch', 'No information asset owner selected.');
                 return false;
             });
 
             $(document).on('click', '[data-action="set-senior-responsible-officer"]', function(e) {
                 e.preventDefault();
                 e.stopPropagation();
-                openRoleModal.call(this, '#updateSeniorResponsibleOfficerModal', '#seniorResponsibleOfficerFipsId', '#seniorResponsibleOfficerSearch', 'No senior responsible officer selected.');
+                openRoleModal.call(this, '#updateSeniorResponsibleOfficerModal', '#seniorResponsibleOfficerDocumentId', '#seniorResponsibleOfficerSearch', 'No senior responsible officer selected.');
                 return false;
             });
 
             $(document).on('click', '[data-action="set-reporting-user"]', function(e) {
                 e.preventDefault();
                 e.stopPropagation();
-                openRoleModal.call(this, '#updateReportingUserModal', '#reportingUserFipsId', '#reportingUserSearch', 'No reporting user selected.');
+                openRoleModal.call(this, '#updateReportingUserModal', '#reportingUserDocumentId', '#reportingUserSearch', 'No reporting user selected.');
                 return false;
             });
 
             $(document).on('click', '[data-action="set-service-designs"]', function(e) {
                 e.preventDefault();
                 e.stopPropagation();
-                openRoleModal.call(this, '#updateServiceDesignsModal', '#serviceDesignsFipsId', '#serviceDesignsSearch', 'No service designs selected.');
+                openRoleModal.call(this, '#updateServiceDesignsModal', '#serviceDesignsDocumentId', '#serviceDesignsSearch', 'No service designs selected.');
                 return false;
             });
 
             $(document).on('click', '[data-action="set-user-researchers"]', function(e) {
                 e.preventDefault();
                 e.stopPropagation();
-                openRoleModal.call(this, '#updateUserResearchersModal', '#userResearchersFipsId', '#userResearchersSearch', 'No user researchers selected.');
+                openRoleModal.call(this, '#updateUserResearchersModal', '#userResearchersDocumentId', '#userResearchersSearch', 'No user researchers selected.');
                 return false;
             });
 
             $(document).on('click', '[data-action="update-state-rejected"]', function(e) {
                 e.preventDefault();
                 e.stopPropagation();
-                var fipsId = $(this).data('fips-id');
+                var documentId = $(this).data('document-id');
                 var productTitle = $(this).data('product-title');
-                $('#stateFipsId').val(fipsId);
+                $('#stateDocumentId').val(documentId);
                 $('#stateProductTitle').text(productTitle);
                 $('#updateStateModal').modal('show');
                 return false;
@@ -1573,13 +1585,13 @@
             }
 
             function updateRowWithProduct(product) {
-                if (!product || !product.fipsId) {
+                if (!product || !product.documentId) {
                     return;
                 }
 
-                var fipsId = (product.fipsId || '').toLowerCase();
+                var documentId = (product.documentId || '').toLowerCase();
                 var $row = $('#completionTable tbody tr').filter(function() {
-                    return $(this).attr('data-fips-id') === fipsId;
+                    return $(this).attr('data-document-id') === documentId;
                 });
 
                 if (!$row.length) {
@@ -1648,15 +1660,15 @@
                     ? escapeHtml(product.informationAssetOwner)
                     : '<span class="text-muted">-</span>';
 
-                $row.find('td').eq(2).html(phaseHtml);
-                $row.find('td').eq(3).html(businessAreaHtml);
-                $row.find('td').eq(4).html(contactsHtml);
-                $row.find('td').eq(5).html(productUrlHtml);
-                $row.find('td').eq(6).html(userGroupsHtml);
-                $row.find('td').eq(7).html(sroHtml);
-                $row.find('td').eq(8).html(deliveryManagerHtml);
-                $row.find('td').eq(9).html(iaoHtml);
-                $row.find('td').eq(10).text(completion.toFixed(1) + '%');
+                $row.find('td').eq(1).html(phaseHtml);
+                $row.find('td').eq(2).html(businessAreaHtml);
+                $row.find('td').eq(3).html(contactsHtml);
+                $row.find('td').eq(4).html(productUrlHtml);
+                $row.find('td').eq(5).html(userGroupsHtml);
+                $row.find('td').eq(6).html(sroHtml);
+                $row.find('td').eq(7).html(deliveryManagerHtml);
+                $row.find('td').eq(8).html(iaoHtml);
+                $row.find('td').eq(9).text(completion.toFixed(1) + '%');
             }
 
             function refreshBusinessAreaFilterOptions() {
@@ -1685,7 +1697,7 @@
                 var total = $rows.length;
                 var completionSum = 0;
                 var zeroCount = 0;
-                var fullCount = 0;
+                var productsWithContactCount = 0;
                 var phaseCount = 0;
                 var businessAreaCount = 0;
                 var urlCount = 0;
@@ -1694,9 +1706,10 @@
                 $rows.each(function() {
                     var $row = $(this);
                     var completion = parseFloat($row.attr('data-completion')) || 0;
+                    var contactsCount = parseInt($row.attr('data-contacts-count')) || 0;
                     completionSum += completion;
                     if (Math.abs(completion) < 0.0001) zeroCount++;
-                    if (Math.abs(completion - 100) < 0.0001) fullCount++;
+                    if (contactsCount > 0) productsWithContactCount++;
                     if (isTruthy($row.attr('data-has-phase'))) phaseCount++;
                     if (isTruthy($row.attr('data-has-business-area'))) businessAreaCount++;
                     if (isTruthy($row.attr('data-has-product-url'))) urlCount++;
@@ -1712,7 +1725,7 @@
                 var average = total ? completionSum / total : 0;
                 updateAverageCard(total, average);
                 updateZeroCard(total, zeroCount);
-                updateFullCard(total, fullCount);
+                updateProductsWithContactCard(total, productsWithContactCount);
                 updateCompletionCard('#completedPhaseCard', '#completedPhaseValue', '#completedPhaseText', '#completedPhaseProgress', phaseCount, total);
                 updateCompletionCard('#completedBusinessAreaCard', '#completedBusinessAreaValue', '#completedBusinessAreaText', '#completedBusinessAreaProgress', businessAreaCount, total);
                 updateCompletionCard('#completedUrlCard', '#completedUrlValue', '#completedUrlText', '#completedUrlProgress', urlCount, total);
@@ -1749,24 +1762,24 @@
                 $('#zeroCompletionProgress').removeClass('bg-success bg-danger').addClass(barClass).css('width', zeroPercentage + '%');
             }
 
-            function updateFullCard(total, fullCount) {
-                var fullPercentage = total ? (fullCount / total) * 100 : 0;
-                var cardClass = (fullCount === total && total > 0) ? 'card-success' : 'card-info';
-                var fullColorClass = fullPercentage >= 80 ? 'success' : fullPercentage >= 50 ? 'warning' : 'info';
+            function updateProductsWithContactCard(total, productsWithContactCount) {
+                var contactPercentage = total ? (productsWithContactCount / total) * 100 : 0;
+                var cardClass = (productsWithContactCount === total && total > 0) ? 'card-success' : (productsWithContactCount > 0 ? 'card-warning' : 'card-danger');
+                var contactColorClass = contactPercentage >= 80 ? 'success' : contactPercentage >= 50 ? 'warning' : 'danger';
                 var text;
 
-                if (fullCount === 0) {
-                    text = 'No products fully complete yet';
-                } else if (fullCount === 1) {
-                    text = 'product is fully complete';
+                if (productsWithContactCount === 0) {
+                    text = 'No products have contacts';
+                } else if (productsWithContactCount === 1) {
+                    text = 'product has at least 1 contact';
                 } else {
-                    text = 'products are fully complete';
+                    text = 'products have at least 1 contact';
                 }
 
-                $('#fullCompletionCard').removeClass('card-success card-info').addClass(cardClass);
-                $('#fullCompletionValue').text(fullCount);
-                $('#fullCompletionText').text(text + ' (' + fullPercentage.toFixed(1) + '%)');
-                $('#fullCompletionProgress').removeClass('bg-success bg-warning bg-info').addClass('bg-' + fullColorClass).css('width', fullPercentage + '%');
+                $('#productsWithContactCard').removeClass('card-success card-warning card-danger').addClass(cardClass);
+                $('#productsWithContactValue').text(productsWithContactCount);
+                $('#productsWithContactText').text(text + ' (' + contactPercentage.toFixed(1) + '%)');
+                $('#productsWithContactProgress').removeClass('bg-success bg-warning bg-danger').addClass('bg-' + contactColorClass).css('width', contactPercentage + '%');
             }
 
             function updateCompletionCard(cardSelector, valueSelector, textSelector, progressSelector, completedCount, total) {
@@ -1835,6 +1848,8 @@
                 var completionFilter = ($('#completionFilter').val() || '').toString();
                 var statusFilter = ($('#statusFilter').val() || '').toString();
                 var businessAreaFilter = ($('#businessAreaFilter').val() || '').toString();
+                var phaseFilter = ($('#phaseFilter').val() || '').toString();
+                var typeFilter = ($('#typeFilter').val() || '').toString();
                 var sroFilter = ($('#sroFilter').val() || '').toString();
                 var iaoFilter = ($('#iaoFilter').val() || '').toString();
                 var deliveryFilter = ($('#deliveryManagerFilter').val() || '').toString();
@@ -1844,15 +1859,18 @@
                 $('#completionTable tbody tr').each(function() {
                     var $row = $(this);
                     var productTitle = ($row.attr('data-product-title') || '').toString();
-                    var fipsId = ($row.attr('data-fips-id') || '').toString();
                     var completion = parseFloat($row.attr('data-completion')) || 0;
                     var businessArea = ($row.attr('data-business-area') || '').toString();
+                    var phaseName = ($row.attr('data-phase-name') || '').toString();
+                    var typeNames = splitDataList($row.attr('data-type-names'));
                     var rowSro = splitDataList($row.attr('data-sro'));
                     var rowIao = splitDataList($row.attr('data-iao'));
                     var rowDelivery = splitDataList($row.attr('data-delivery-manager'));
 
-                    var matchesSearch = !searchTerm || productTitle.includes(searchTerm) || fipsId.includes(searchTerm);
+                    var matchesSearch = !searchTerm || productTitle.includes(searchTerm);
                     var matchesBusinessArea = !businessAreaFilter || businessArea === businessAreaFilter;
+                    var matchesPhase = !phaseFilter || phaseName === phaseFilter;
+                    var matchesType = !typeFilter || typeNames.indexOf(typeFilter.toLowerCase()) !== -1;
 
                     var matchesCompletion = true;
                     if (completionFilter) {
@@ -1880,7 +1898,7 @@
                     var matchesIao = !iaoFilter || rowIao.indexOf(iaoFilter) !== -1;
                     var matchesDelivery = !deliveryFilter || rowDelivery.indexOf(deliveryFilter) !== -1;
 
-                    if (matchesSearch && matchesCompletion && matchesStatus && matchesBusinessArea && matchesSro && matchesIao && matchesDelivery) {
+                    if (matchesSearch && matchesCompletion && matchesStatus && matchesBusinessArea && matchesPhase && matchesType && matchesSro && matchesIao && matchesDelivery) {
                         $row.show();
                         visibleCount++;
                     } else {
@@ -2003,37 +2021,34 @@
                         if (column === 'ProductTitle') {
                             aVal = $(a).find('td').eq(0).find('a').text().trim().toLowerCase();
                             bVal = $(b).find('td').eq(0).find('a').text().trim().toLowerCase();
-                        } else if (column === 'FipsId') {
-                            aVal = $(a).find('td').eq(1).text().trim().toLowerCase();
-                            bVal = $(b).find('td').eq(1).text().trim().toLowerCase();
                         } else if (column === 'Phase') {
+                            aVal = $(a).find('td').eq(1).find('.fa-check-square').length > 0 ? 1 : 0;
+                            bVal = $(b).find('td').eq(1).find('.fa-check-square').length > 0 ? 1 : 0;
+                        } else if (column === 'BusinessArea') {
                             aVal = $(a).find('td').eq(2).find('.fa-check-square').length > 0 ? 1 : 0;
                             bVal = $(b).find('td').eq(2).find('.fa-check-square').length > 0 ? 1 : 0;
-                        } else if (column === 'BusinessArea') {
-                            aVal = $(a).find('td').eq(3).find('.fa-check-square').length > 0 ? 1 : 0;
-                            bVal = $(b).find('td').eq(3).find('.fa-check-square').length > 0 ? 1 : 0;
                         } else if (column === 'Contacts') {
-                            var aText = $(a).find('td').eq(4).text().trim();
-                            var bText = $(b).find('td').eq(4).text().trim();
+                            var aText = $(a).find('td').eq(3).text().trim();
+                            var bText = $(b).find('td').eq(3).text().trim();
                             aVal = parseInt(aText.match(/\d+/)?.[0]) || 0;
                             bVal = parseInt(bText.match(/\d+/)?.[0]) || 0;
                         } else if (column === 'ProductUrl') {
-                            aVal = $(a).find('td').eq(5).find('.fa-check-square').length > 0 ? 1 : 0;
-                            bVal = $(b).find('td').eq(5).find('.fa-check-square').length > 0 ? 1 : 0;
+                            aVal = $(a).find('td').eq(4).find('.fa-check-square').length > 0 ? 1 : 0;
+                            bVal = $(b).find('td').eq(4).find('.fa-check-square').length > 0 ? 1 : 0;
                         } else if (column === 'UserGroups') {
-                            var aText = $(a).find('td').eq(6).text().trim();
-                            var bText = $(b).find('td').eq(6).text().trim();
+                            var aText = $(a).find('td').eq(5).text().trim();
+                            var bText = $(b).find('td').eq(5).text().trim();
                             aVal = parseInt(aText.match(/\d+/)?.[0]) || 0;
                             bVal = parseInt(bText.match(/\d+/)?.[0]) || 0;
                         } else if (column === 'SeniorResponsibleOfficer') {
+                            aVal = $(a).find('td').eq(6).text().trim().toLowerCase();
+                            bVal = $(b).find('td').eq(6).text().trim().toLowerCase();
+                        } else if (column === 'DeliveryManager') {
                             aVal = $(a).find('td').eq(7).text().trim().toLowerCase();
                             bVal = $(b).find('td').eq(7).text().trim().toLowerCase();
-                        } else if (column === 'DeliveryManager') {
+                        } else if (column === 'InformationAssetOwner') {
                             aVal = $(a).find('td').eq(8).text().trim().toLowerCase();
                             bVal = $(b).find('td').eq(8).text().trim().toLowerCase();
-                        } else if (column === 'InformationAssetOwner') {
-                            aVal = $(a).find('td').eq(9).text().trim().toLowerCase();
-                            bVal = $(b).find('td').eq(9).text().trim().toLowerCase();
                         } else if (column === 'CompletionPercentage') {
                             aVal = parseFloat($(a).data('completion')) || 0;
                             bVal = parseFloat($(b).data('completion')) || 0;
@@ -2083,6 +2098,14 @@
                     header.append(' <i class="fas ' + iconClass + '"></i>');
                 }
             }
+        });
+
+        // Toggle chevron icon for filters collapse
+        $('#filtersCollapse').on('show.bs.collapse', function () {
+            $('#filtersChevron').removeClass('fa-chevron-down').addClass('fa-chevron-up');
+        });
+        $('#filtersCollapse').on('hide.bs.collapse', function () {
+            $('#filtersChevron').removeClass('fa-chevron-up').addClass('fa-chevron-down');
         });
     </script>
     <script src="~/js/user-picker.js" asp-append-version="true"></script>

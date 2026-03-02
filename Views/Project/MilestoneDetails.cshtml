@@ -2,6 +2,7 @@
 @using System.Linq
 @using Compass.Models
 @model Milestone
+@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
 
 @{
     ViewData["Title"] = "Milestone Details";
@@ -15,6 +16,37 @@
         .Where(ma => ma.Action != null && !ma.Action.IsDeleted)
         .ToList() ?? new List<MilestoneAction>();
     var linkedDecisions = (ViewBag.LinkedDecisions as IEnumerable<Decision>)?.ToList() ?? new List<Decision>();
+    var returnUrl = Model.Project != null 
+        ? Url.Action("Details", "Project", new { id = Model.ProjectId, tab = "milestones" })
+        : Url.Action("Index", "Project");
+    var projectTitle = Model.Project?.Title ?? "Work Item";
+    var isRaidEnabled = Configuration.GetValue<bool>("FeatureFlags:EnableRAIDManagement", false);
+}
+
+@section Breadcrumbs {
+    <style>
+        .breadcrumb a:hover {
+            color: #003078 !important;
+            text-decoration: underline !important;
+        }
+    </style>
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <li class="breadcrumb-item">
+                <a asp-controller="Home" asp-action="Index" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a asp-controller="Project" asp-action="Index" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Work reporting</a>
+            </li>
+            @if (Model.Project != null)
+            {
+                <li class="breadcrumb-item">
+                    <a href="@returnUrl" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">@projectTitle</a>
+                </li>
+            }
+            <li class="breadcrumb-item active" aria-current="page" style="color: #0b0c0c; font-weight: 600;">Milestone details</li>
+        </ol>
+    </nav>
 }
 
 <div class="content-header">
@@ -27,8 +59,8 @@
                        asp-route-id="@Model.ProjectId"
                        asp-route-tab="milestones"
                        class="btn btn-link px-0 mb-2"
-                       aria-label="Back to project">
-                        <i class="fas fa-arrow-left mr-2" aria-hidden="true"></i>Back to project
+                       aria-label="Back to work item">
+                        <i class="fas fa-arrow-left mr-2" aria-hidden="true"></i>Back to work item
                     </a>
                 }
                 <h1 class="m-0">@Model.Name</h1>
@@ -52,6 +84,26 @@
             <div class="alert alert-danger alert-dismissible fade show">
                 <button type="button" class="close" data-dismiss="alert">&times;</button>
                 @TempData["ErrorMessage"]
+            </div>
+        }
+
+        @{
+            var isOverdue = Model.DueDate.Date < DateTime.Today && 
+                           Model.Status != "complete" && 
+                           Model.Status != "cancelled";
+            var daysOverdue = isOverdue ? (DateTime.Today - Model.DueDate.Date).Days : 0;
+        }
+
+        @if (isOverdue)
+        {
+            <div class="alert alert-danger mb-4">
+                <div class="d-flex align-items-center">
+                    <i class="fas fa-exclamation-triangle fa-2x mr-3"></i>
+                    <div>
+                        <h5 class="mb-1">Milestone is Overdue</h5>
+                        <p class="mb-0">This milestone was due on <strong>@Model.DueDate.ToString("dd MMMM yyyy")</strong> and is <strong>@daysOverdue day(s) overdue</strong>. Please update the milestone status or adjust the due date.</p>
+                    </div>
+                </div>
             </div>
         }
 
@@ -100,7 +152,8 @@
             </div>
         </div>
 
-        @{
+        @if (isRaidEnabled)
+        {
             var milestoneRaidSummary = new[]
             {
                 new { Label = "Risks", Count = milestoneRisks.Count },
@@ -109,34 +162,34 @@
                 new { Label = "Decisions", Count = linkedDecisions.Count }
             };
             var milestoneHasRaidLinks = milestoneRaidSummary.Any(tile => tile.Count > 0);
-        }
 
-        <div class="card mb-4">
-            <div class="card-header">
-                <h3 class="card-title mb-0">RAID summary</h3>
-            </div>
-            <div class="card-body">
-                <div class="row text-center">
-                    @foreach (var tile in milestoneRaidSummary)
-                    {
-                        <div class="col-sm-6 col-lg-3 mb-3">
-                            <div class="border rounded p-3 h-100">
-                                <span class="text-uppercase text-muted small d-block">@tile.Label</span>
-                                <span class="h3 mb-0">@tile.Count</span>
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h3 class="card-title mb-0">RAID summary</h3>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center">
+                        @foreach (var tile in milestoneRaidSummary)
+                        {
+                            <div class="col-sm-6 col-lg-3 mb-3">
+                                <div class="border rounded p-3 h-100">
+                                    <span class="text-uppercase text-muted small d-block">@tile.Label</span>
+                                    <span class="h3 mb-0">@tile.Count</span>
+                                </div>
                             </div>
-                        </div>
+                        }
+                    </div>
+                    @if (!milestoneHasRaidLinks)
+                    {
+                        <p class="text-muted text-center mb-0">No RAID artefacts are linked to this milestone yet.</p>
                     }
                 </div>
-                @if (!milestoneHasRaidLinks)
-                {
-                    <p class="text-muted text-center mb-0">No RAID artefacts are linked to this milestone yet.</p>
-                }
             </div>
-        </div>
+        }
 
         <div class="row">
-            <!-- Left Column: Project Summary -->
-            <div class="col-xxl-3 col-xl-2 col-lg-4 col-md-5 mb-4">
+            <!-- Left Column: Work Item Summary -->
+            <div class="col-xxl-2 col-xl-2 col-lg-3 col-md-4 col-sm-12 col-12 mb-4">
                 @if (Model.Project != null)
                 {
                     var projectSummary = new Compass.ViewModels.ProjectSummaryViewModel
@@ -156,7 +209,7 @@
             </div>
 
             <!-- Right Column: Content -->
-            <div class="col-xxl-9 col-xl-9 col-lg-8 col-md-7 col-sm-12 col-12">
+            <div class="col-xxl-10 col-xl-10 col-lg-9 col-md-8 col-sm-12 col-12">
 
                 <!-- Milestone Details Card -->
                 <div class="card project-summary-card mb-4" id="details">
@@ -264,412 +317,118 @@
                                     </div>
                                 </div>
                             </li>
-                            <li class="list-group-item">
-                                <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center">
-                                    <div class="flex-grow-1">
-                                        <small class="text-muted d-block">Business area</small>
-                                        @if (!string.IsNullOrWhiteSpace(Model.BusinessArea))
-                                        {
-                                            <span class="badge badge-info">@Model.BusinessArea</span>
-                                        }
-                                        else
-                                        {
-                                            <span class="text-muted">Not set</span>
-                                        }
-                                    </div>
-                                    <div class="mt-2 mt-md-0 text-md-right">
-                                        <a href="#" class="change-link small" data-field="businessArea" data-value="@(Model.BusinessArea ?? string.Empty)">Change</a>
-                                    </div>
-                                </div>
-                            </li>
-                            <li class="list-group-item">
-                                <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center">
-                                    <div class="flex-grow-1">
-                                        <small class="text-muted d-block">Linked actions</small>
-                                        <span>@(milestoneActions.Any() ? $"{milestoneActions.Count} linked" : "No actions linked")</span>
-                                    </div>
-                                    <div class="mt-2 mt-md-0 text-md-right">
-                                        <a class="btn btn-link btn-sm px-0"
-                                           asp-controller="Action"
-                                           asp-action="Create"
-                                           asp-route-milestoneId="@Model.Id"
-                                           asp-route-returnTo="project-milestone">
-                                            <i class="fas fa-plus mr-1"></i>Add action
-                                        </a>
-                                    </div>
-                                </div>
-                            </li>
-                            <li class="list-group-item">
-                                <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center">
-                                    <div class="flex-grow-1">
-                                        <small class="text-muted d-block">Linked risks</small>
-                                        <span>@(milestoneRisks.Any() ? $"{milestoneRisks.Count} linked" : "No risks linked")</span>
-                                    </div>
-                                    <div class="mt-2 mt-md-0 text-md-right">
-                                        <a class="btn btn-link btn-sm px-0"
-                                           asp-controller="Risk"
-                                           asp-action="Create"
-                                           asp-route-milestoneId="@Model.Id"
-                                           asp-route-returnTo="project-milestone">
-                                            <i class="fas fa-plus mr-1"></i>Add risk
-                                        </a>
-                                    </div>
-                                </div>
-                            </li>
-                            <li class="list-group-item">
-                                <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center">
-                                    <div class="flex-grow-1">
-                                        <small class="text-muted d-block">Linked issues</small>
-                                        <span>@(milestoneIssues.Any() ? $"{milestoneIssues.Count} linked" : "No issues linked")</span>
-                                    </div>
-                                    <div class="mt-2 mt-md-0 text-md-right">
-                                        <a class="btn btn-link btn-sm px-0"
-                                           asp-controller="Issue"
-                                           asp-action="Create"
-                                           asp-route-milestoneId="@Model.Id"
-                                           asp-route-returnTo="project-milestone">
-                                            <i class="fas fa-plus mr-1"></i>Add issue
-                                        </a>
-                                    </div>
-                                </div>
-                            </li>
-                            @if (Model.ProjectId.HasValue)
-                            {
-                                <li class="list-group-item">
-                                    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center">
-                                        <div class="flex-grow-1">
-                                            <small class="text-muted d-block">Linked decisions</small>
-                                            <span>@(linkedDecisions.Any() ? $"{linkedDecisions.Count()} linked" : "No decisions linked")</span>
-                                        </div>
-                                        <div class="mt-2 mt-md-0 text-md-right">
-                                            <a class="btn btn-link btn-sm px-0"
-                                               asp-controller="Project"
-                                               asp-action="CreateDecision"
-                                               asp-route-projectId="@Model.ProjectId"
-                                               asp-route-milestoneId="@Model.Id">
-                                                <i class="fas fa-plus mr-1"></i>Record decision
-                                            </a>
-                                        </div>
-                                    </div>
-                                </li>
-                            }
                         </ul>
                     </div>
                 </div>
 
+                <!-- Add Milestone Update -->
                 <div class="card mb-4">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <h3 class="card-title mb-0">Linked risks</h3>
-                        <a class="btn btn-link btn-sm px-0"
-                           asp-controller="Risk"
-                           asp-action="Create"
-                           asp-route-milestoneId="@Model.Id"
-                           asp-route-returnTo="project-milestone">
-                            <i class="fas fa-plus mr-1"></i>Add risk
-                        </a>
+                    <div class="card-header">
+                        <h3 class="card-title mb-0">Add Update</h3>
                     </div>
-                    <div class="card-body p-0">
-                        @if (milestoneRisks.Any())
-                        {
-                            <ul class="list-group list-group-flush">
-                                @foreach (var mr in milestoneRisks)
-                                {
-                                    <li class="list-group-item d-flex justify-content-between align-items-center">
-                                        <div>
-                                            <a asp-controller="Risk" asp-action="Details" asp-route-id="@mr.Risk.Id">@mr.Risk.Title</a>
-                                            <small class="d-block text-muted">Score: @mr.Risk.RiskScore</small>
-                                        </div>
-                                        <span class="badge @(mr.Risk.RiskScore >= 15 ? "badge-danger" : mr.Risk.RiskScore >= 10 ? "badge-warning" : "badge-success")">
-                                            @mr.Risk.RiskScore
-                                        </span>
-                                    </li>
-                                }
-                            </ul>
-                        }
-                        else
-                        {
-                            <div class="p-4">
-                                <p class="mb-0 text-muted">No risks linked yet.</p>
+                    <div class="card-body">
+                        <form asp-controller="Milestone" asp-action="AddUpdate" method="post">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="milestoneId" value="@Model.Id" />
+                            
+                            <div class="form-group">
+                                <label for="updateDetails">Update Details <span class="text-danger">*</span></label>
+                                <textarea class="form-control" id="updateDetails" name="updateDetails" rows="4" required placeholder="Enter update details..."></textarea>
+                                <small class="form-text text-muted">Describe the progress or changes made to this milestone.</small>
                             </div>
-                        }
-                    </div>
-                </div>
-
-                <div class="card mb-4">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <h3 class="card-title mb-0">Linked issues</h3>
-                        <a class="btn btn-link btn-sm px-0"
-                           asp-controller="Issue"
-                           asp-action="Create"
-                           asp-route-milestoneId="@Model.Id"
-                           asp-route-returnTo="project-milestone">
-                            <i class="fas fa-plus mr-1"></i>Add issue
-                        </a>
-                    </div>
-                    <div class="card-body p-0">
-                        @if (milestoneIssues.Any())
-                        {
-                            <ul class="list-group list-group-flush">
-                                @foreach (var mi in milestoneIssues)
-                                {
-                                    <li class="list-group-item d-flex justify-content-between align-items-center">
-                                        <div>
-                                            <a asp-controller="Issue" asp-action="Details" asp-route-id="@mi.Issue.Id">@mi.Issue.Title</a>
-                                            <small class="d-block text-muted">Severity: @mi.Issue.Severity</small>
-                                        </div>
-                                        <span class="badge @(mi.Issue.Severity == "critical" ? "badge-danger" : mi.Issue.Severity == "high" ? "badge-warning" : "badge-info")">
-                                            @mi.Issue.Severity
-                                        </span>
-                                    </li>
-                                }
-                            </ul>
-                        }
-                        else
-                        {
-                            <div class="p-4">
-                                <p class="mb-0 text-muted">No issues linked yet.</p>
-                            </div>
-                        }
-                    </div>
-                </div>
-
-                <div class="card mb-4">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <h3 class="card-title mb-0">Linked actions</h3>
-                        <a class="btn btn-link btn-sm px-0"
-                           asp-controller="Action"
-                           asp-action="Create"
-                           asp-route-milestoneId="@Model.Id"
-                           asp-route-returnTo="project-milestone">
-                            <i class="fas fa-plus mr-1"></i>Add action
-                        </a>
-                    </div>
-                    <div class="card-body p-0">
-                        @if (milestoneActions.Any())
-                        {
-                            <div class="table-responsive">
-                                <table class="table table-hover mb-0">
-                                    <thead>
-                                        <tr>
-                                            <th>Title</th>
-                                            <th style="width: 150px;">Assigned to</th>
-                                            <th style="width: 120px;">Status</th>
-                                            <th style="width: 120px;">Due date</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        @foreach (var ma in milestoneActions)
-                                        {
-                                            var actionOverdue = ma.Action!.DueDate.HasValue &&
-                                                ma.Action.DueDate.Value.Date < System.DateTime.Today &&
-                                                ma.Action.Status != "done" && ma.Action.Status != "cancelled";
-                                            <tr class="@(actionOverdue ? "table-danger" : "")">
-                                                <td><a asp-controller="Action" asp-action="Details" asp-route-id="@ma.Action.Id">@ma.Action.Title</a></td>
-                                                <td>
-                                                    @if (!string.IsNullOrEmpty(ma.Action.AssignedToEmail))
-                                                    {
-                                                        <small><a href="mailto:@ma.Action.AssignedToEmail">@ma.Action.AssignedToEmail</a></small>
-                                                    }
-                                                    else
-                                                    {
-                                                        <span class="text-muted">-</span>
-                                                    }
-                                                </td>
-                                                <td>
-                                                    @switch (ma.Action.Status)
-                                                    {
-                                                        case "done":
-                                                            <span class="badge badge-success">Done</span>
-                                                            break;
-                                                        case "in_progress":
-                                                            <span class="badge badge-primary">In progress</span>
-                                                            break;
-                                                        case "blocked":
-                                                            <span class="badge badge-danger">Blocked</span>
-                                                            break;
-                                                        case "not_started":
-                                                            <span class="badge badge-secondary">Not started</span>
-                                                            break;
-                                                        case "cancelled":
-                                                            <span class="badge badge-dark">Cancelled</span>
-                                                            break;
-                                                        default:
-                                                            <span class="badge badge-secondary">@ma.Action.Status</span>
-                                                            break;
-                                                    }
-                                                </td>
-                                                <td>
-                                                    @if (ma.Action.DueDate.HasValue)
-                                                    {
-                                                        <span class="@(actionOverdue ? "text-danger" : "")">
-                                                            @ma.Action.DueDate.Value.ToString("dd MMM yyyy")
-                                                        </span>
-                                                    }
-                                                    else
-                                                    {
-                                                        <span class="text-muted">-</span>
-                                                    }
-                                                </td>
-                                            </tr>
-                                        }
-                                    </tbody>
-                                </table>
-                            </div>
-                        }
-                        else
-                        {
-                            <div class="p-4">
-                                <p class="mb-0 text-muted">No actions linked yet.</p>
-                            </div>
-                        }
-                    </div>
-                </div>
-
-                @if (Model.ProjectId.HasValue)
-                {
-                    <div class="card mb-4">
-                        <div class="card-header d-flex justify-content-between align-items-center">
-                            <h3 class="card-title mb-0">Linked decisions</h3>
-                            <a class="btn btn-link btn-sm px-0"
-                               asp-controller="Project"
-                               asp-action="CreateDecision"
-                               asp-route-projectId="@Model.ProjectId"
-                               asp-route-milestoneId="@Model.Id">
-                                <i class="fas fa-plus mr-1"></i>Record decision
-                            </a>
-                        </div>
-                        <div class="card-body p-0">
-                            @if (linkedDecisions.Any())
-                            {
-                                <ul class="list-group list-group-flush">
-                                    @foreach (var decision in linkedDecisions)
-                                    {
-                                    <li class="list-group-item">
-                                        @{
-                                            var decisionActions = decision.Actions.Where(a => !a.IsDeleted).OrderBy(a => a.Title).ToList();
-                                        }
-                                            <div class="d-flex justify-content-between align-items-start flex-wrap">
-                                                <div>
-                                                    <a asp-controller="Project"
-                                                       asp-action="DecisionDetails"
-                                                       asp-route-projectId="@Model.ProjectId"
-                                                       asp-route-decisionId="@decision.Id">@decision.Title</a>
-                                                    <small class="d-block text-muted">
-                                                        @(decision.DecisionDate?.ToString("dd MMM yyyy") ?? "No date")
-                                                    </small>
-                                                </div>
-                                                <div>
-                                                    @switch (decision.Status)
-                                                    {
-                                                        case "approved":
-                                                            <span class="badge badge-success">Approved</span>
-                                                            break;
-                                                        case "pending":
-                                                            <span class="badge badge-warning">Pending</span>
-                                                            break;
-                                                        case "rejected":
-                                                            <span class="badge badge-danger">Rejected</span>
-                                                            break;
-                                                        case "superseded":
-                                                            <span class="badge badge-secondary">Superseded</span>
-                                                            break;
-                                                        default:
-                                                            <span class="badge badge-secondary">@decision.Status</span>
-                                                            break;
-                                                    }
-                                                </div>
-                                            </div>
-                                            @if (decisionActions.Any())
-                                            {
-                                                <small class="d-block text-muted mt-1">
-                                                    Linked actions: @string.Join(", ", decisionActions.Select(a => a.Title))
-                                                </small>
-                                            }
-                                        </li>
-                                    }
-                                </ul>
-                            }
-                            else
-                            {
-                                <div class="p-4">
-                                    <p class="mb-0 text-muted">No decisions linked yet.</p>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="newStatus">Status (Optional)</label>
+                                        <select class="form-control" id="newStatus" name="newStatus">
+                                            <option value="">Keep current status</option>
+                                            <option value="not_started">Not Started</option>
+                                            <option value="planned">Planned</option>
+                                            <option value="in_progress">In Progress</option>
+                                            <option value="at_risk">At Risk</option>
+                                            <option value="complete">Complete</option>
+                                            <option value="cancelled">Cancelled</option>
+                                        </select>
+                                        <small class="form-text text-muted">Optionally update the milestone status.</small>
+                                    </div>
                                 </div>
-                            }
-                        </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="newProgress">Progress % (Optional)</label>
+                                        <input type="number" class="form-control" id="newProgress" name="newProgress" min="0" max="100" placeholder="0-100">
+                                        <small class="form-text text-muted">Optionally update the milestone progress percentage.</small>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="form-group mb-0">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-plus mr-2"></i>Add Update
+                                </button>
+                            </div>
+                        </form>
                     </div>
-                }
+                </div>
 
-                <!-- Milestone Updates History -->
+                <!-- Milestone Updates List -->
                 <div class="card">
                     <div class="card-header">
-                        <h3 class="card-title mb-0">Milestone updates history</h3>
+                        <h3 class="card-title mb-0">Updates</h3>
                     </div>
-                    <div class="card-body table-responsive p-0">
-                        @if (Model.MilestoneUpdates.Any())
+                    <div class="card-body">
+                        @{
+                            var updates = Model.MilestoneUpdates?.OrderByDescending(u => u.UpdatedAt).ToList() ?? new List<MilestoneUpdate>();
+                        }
+                        @if (updates.Any())
                         {
-                            <table class="table table-hover milestone-updates-table">
-                                <thead>
-                                    <tr>
-                                        <th>Date</th>
-                                        <th>Update Details</th>
-                                        <th>Status Change</th>
-                                        <th>Progress Change</th>
-                                        <th>Updated By</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach (var update in Model.MilestoneUpdates.OrderByDescending(u => u.UpdatedAt))
-                                    {
-                                        <tr>
-                                            <td>
-                                                <strong>@update.UpdatedAt.ToString("dd MMM yyyy")</strong>
-                                                <br><small class="text-muted">@update.UpdatedAt.ToString("HH:mm")</small>
-                                            </td>
-                                            <td>@update.UpdateDetails</td>
-                                            <td>
+                            <div class="list-group">
+                                @foreach (var update in updates)
+                                {
+                                    <div class="list-group-item">
+                                        <div class="d-flex justify-content-between align-items-start mb-2">
+                                            <div class="flex-grow-1">
+                                                <h6 class="mb-1">@update.UpdateDetails</h6>
+                                                <small class="text-muted">
+                                                    @update.UpdatedAt.ToString("dd MMMM yyyy 'at' HH:mm")
+                                                    @if (!string.IsNullOrEmpty(update.UpdatedByName) || !string.IsNullOrEmpty(update.UpdatedByEmail))
+                                                    {
+                                                        <span> by </span>
+                                                        <strong>@(!string.IsNullOrEmpty(update.UpdatedByName) ? update.UpdatedByName : update.UpdatedByEmail)</strong>
+                                                    }
+                                                </small>
+                                            </div>
+                                        </div>
+                                        @if ((!string.IsNullOrEmpty(update.PreviousStatus) && !string.IsNullOrEmpty(update.NewStatus)) || 
+                                             (update.PreviousProgress.HasValue && update.NewProgress.HasValue))
+                                        {
+                                            <div class="mt-2">
                                                 @if (!string.IsNullOrEmpty(update.PreviousStatus) && !string.IsNullOrEmpty(update.NewStatus))
                                                 {
-                                                    <span class="badge badge-secondary">@update.PreviousStatus.Replace("_", " ")</span>
-                                                    <i class="fas fa-arrow-right mx-1"></i>
+                                                    <span class="badge badge-secondary mr-1">@update.PreviousStatus.Replace("_", " ")</span>
+                                                    <i class="fas fa-arrow-right mx-1 text-muted"></i>
                                                     <span class="badge badge-@(update.NewStatus == "complete" ? "success" : update.NewStatus == "at_risk" ? "warning" : update.NewStatus == "in_progress" ? "info" : "secondary")">@update.NewStatus.Replace("_", " ")</span>
                                                 }
-                                                else
-                                                {
-                                                    <span class="text-muted">-</span>
-                                                }
-                                            </td>
-                                            <td>
                                                 @if (update.PreviousProgress.HasValue && update.NewProgress.HasValue)
                                                 {
+                                                    @if (!string.IsNullOrEmpty(update.PreviousStatus) && !string.IsNullOrEmpty(update.NewStatus))
+                                                    {
+                                                        <span class="mx-2">|</span>
+                                                    }
+                                                    <span class="text-muted">Progress: </span>
                                                     <span>@update.PreviousProgress%</span>
-                                                    <i class="fas fa-arrow-right mx-1"></i>
+                                                    <i class="fas fa-arrow-right mx-1 text-muted"></i>
                                                     <span class="font-weight-bold">@update.NewProgress%</span>
                                                 }
-                                                else
-                                                {
-                                                    <span class="text-muted">-</span>
-                                                }
-                                            </td>
-                                            <td>
-                                                @if (!string.IsNullOrEmpty(update.UpdatedByName))
-                                                {
-                                                    @update.UpdatedByName
-                                                }
-                                                else
-                                                {
-                                                    @update.UpdatedByEmail
-                                                }
-                                            </td>
-                                        </tr>
-                                    }
-                                </tbody>
-                            </table>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </div>
                         }
                         else
                         {
-                            <div class="p-4">
-                                <p class="text-muted mb-0">No updates recorded.</p>
-                            </div>
+                            <p class="text-muted mb-0">No updates have been added yet. Use the form above to add the first update.</p>
                         }
                     </div>
                 </div>
@@ -727,14 +486,10 @@
                         <label for="editNotes">Notes</label>
                         <textarea class="form-control" id="editNotes" name="notes" rows="4">@Model.Notes</textarea>
                     </div>
-                    <div class="form-group d-none" id="editBusinessAreaGroup">
-                        <label for="editBusinessArea">Business Area</label>
-                        <input type="text" class="form-control" id="editBusinessArea" name="businessArea" value="@Model.BusinessArea">
-                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                    <button type="submit" class="btn btn-success">Save Changes</button>
                 </div>
             </form>
         </div>
@@ -772,8 +527,7 @@
                     'dueDate': 'Edit Due Date',
                     'actualDate': 'Edit Actual Date',
                     'progress': 'Edit Progress',
-                    'notes': 'Edit Notes',
-                    'businessArea': 'Edit Business Area'
+                    'notes': 'Edit Notes'
                 };
                 
                 $('#editFieldModalLabel').text(fieldTitles[field] || 'Edit Field');
@@ -807,10 +561,6 @@
                     case 'notes':
                         $('#editNotesGroup').removeClass('d-none');
                         $('#editNotes').val(value);
-                        break;
-                    case 'businessArea':
-                        $('#editBusinessAreaGroup').removeClass('d-none');
-                        $('#editBusinessArea').val(value);
                         break;
                 }
                 

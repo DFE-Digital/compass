@@ -36,4 +36,6 @@ public partial class CompassDbContext
     public DbSet<IssueTag> IssueTags { get; set; }
     public DbSet<RiskTag> RiskTags { get; set; }
     public DbSet<DecisionTag> DecisionTags { get; set; }
+
+    public DbSet<DemandRequestStatus> DemandRequestStatuses { get; set; }
 }

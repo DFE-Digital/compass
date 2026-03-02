@@ -4,11 +4,13 @@ using Microsoft.EntityFrameworkCore;
 using Compass.Data;
 using Compass.Models;
 using Compass.Services;
+using Compass.Attributes;
 
 namespace Compass.Controllers.Admin
 {
     [Route("Admin/[controller]")]
     [Authorize]
+    [RequireAdmin]
     public class AccessibilityServiceController : Controller
     {
         private readonly CompassDbContext _context;
@@ -25,81 +27,6 @@ namespace Compass.Controllers.Admin
             _productsApiService = productsApiService;
         }
 
-        private async Task<bool> IsAuthorizedAsync()
-        {
-            if (!User.Identity?.IsAuthenticated ?? true)
-            {
-                return false;
-            }
-
-            // Get user email from claims
-            var userEmail = User.Identity?.Name 
-                ?? User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value 
-                ?? User.FindFirst("preferred_username")?.Value
-                ?? User.FindFirst("email")?.Value
-                ?? string.Empty;
-
-            if (string.IsNullOrEmpty(userEmail))
-            {
-                _logger.LogWarning("Cannot determine user email for authorization check");
-                return false;
-            }
-
-            // Get all role claims from various claim types
-            var roleClaims = User.FindAll(System.Security.Claims.ClaimTypes.Role)
-                .Concat(User.FindAll("role"))
-                .Concat(User.FindAll("roles"))
-                .Select(c => c.Value)
-                .Distinct()
-                .ToList();
-            
-            // Check for admin roles in claims - the Admin model uses "super_admin", "admin", "editor"
-            var validRoles = new[] { "super_admin", "admin", "Super admin", "SuperAdmin", "Admin" };
-            var hasAdminRole = validRoles.Any(role => 
-                User.IsInRole(role) || 
-                roleClaims.Any(rc => rc.Equals(role, StringComparison.OrdinalIgnoreCase)));
-            
-            // Also check if any role contains both "super" and "admin" (case-insensitive)
-            if (!hasAdminRole)
-            {
-                hasAdminRole = roleClaims.Any(role => 
-                    role.Contains("super", StringComparison.OrdinalIgnoreCase) && 
-                    role.Contains("admin", StringComparison.OrdinalIgnoreCase));
-            }
-
-            // If still not found in claims, check User model in database
-            if (!hasAdminRole)
-            {
-                var userEmailLower = userEmail.ToLower();
-                var user = await _context.Users
-                    .Where(u => u.Email.ToLower() == userEmailLower)
-                    .FirstOrDefaultAsync();
-                
-                if (user != null)
-                {
-                    // User model uses enum: Admin = 2, SuperAdmin = 3
-                    hasAdminRole = user.Role == Compass.Models.UserRole.Admin || 
-                                  user.Role == Compass.Models.UserRole.SuperAdmin;
-                }
-            }
-            
-            if (!hasAdminRole)
-            {
-                // Log for debugging - show all user roles and claims
-                _logger.LogWarning(
-                    "User {User} (email: {Email}) attempted to access Accessibility Service but doesn't have required role. " +
-                    "User roles from claims: {Roles}. All role-related claims: {AllClaims}",
-                    User.Identity?.Name ?? "Unknown",
-                    userEmail,
-                    string.Join(", ", roleClaims),
-                    string.Join("; ", User.Claims.Where(c => 
-                        c.Type.Contains("role", StringComparison.OrdinalIgnoreCase) || 
-                        c.Type == System.Security.Claims.ClaimTypes.Role)
-                        .Select(c => $"{c.Type}={c.Value}")));
-            }
-            
-            return hasAdminRole;
-        }
 
         // GET: Admin/AccessibilityService
         [HttpGet]
@@ -107,12 +34,6 @@ namespace Compass.Controllers.Admin
         [Route("Index")]
         public async Task<IActionResult> Index(string? search, string? statementStatus, string? enrollmentStatus, int page = 1)
         {
-            // Check authorization - Admin or Super admin
-            if (!await IsAuthorizedAsync())
-            {
-                TempData["ErrorMessage"] = "You do not have permission to access this section.";
-                return RedirectToAction("Index", "Home");
-            }
 
             const int pageSize = 20;
 
@@ -151,8 +72,10 @@ namespace Compass.Controllers.Admin
                 if (!string.IsNullOrWhiteSpace(search))
                 {
                     var searchLower = search.ToLower();
-                    if (!cmsProduct.Title.ToLower().Contains(searchLower) && 
-                        !cmsProduct.FipsId.ToLower().Contains(searchLower))
+                    var title = cmsProduct.Title ?? string.Empty;
+                    var fipsId = cmsProduct.FipsId ?? string.Empty;
+                    if (!title.ToLower().Contains(searchLower) && 
+                        !fipsId.ToLower().Contains(searchLower))
                     {
                         continue;
                     }
@@ -165,7 +88,7 @@ namespace Compass.Controllers.Admin
                 // Note: Statement status filter removed from "All Products" view
                 // It only applied to enrolled products which are now shown in separate table
 
-                if (isEnrolled)
+                if (isEnrolled && enrolled != null)
                 {
                     openIssuesCount = enrolled.Issues.Count(i => !i.IsDeleted && i.Status != "resolved" && i.Status != "wont_fix");
                     pastDueCount = enrolled.Issues.Count(i => 
@@ -229,12 +152,6 @@ namespace Compass.Controllers.Admin
         public async Task<IActionResult> RetestRequests(string? status)
         {
             // Check authorization
-            if (!await IsAuthorizedAsync())
-            {
-                TempData["ErrorMessage"] = "You do not have permission to access this section.";
-                return RedirectToAction("Index", "Home");
-            }
-
             var query = _context.AccessibilityRetestRequests
                 .Include(rr => rr.AccessibilityIssue)
                     .ThenInclude(ai => ai.ProductAccessibility)
@@ -279,12 +196,6 @@ namespace Compass.Controllers.Admin
         public async Task<IActionResult> RetestRequestDetails(int id)
         {
             // Check authorization
-            if (!await IsAuthorizedAsync())
-            {
-                TempData["ErrorMessage"] = "You do not have permission to access this section.";
-                return RedirectToAction("Index", "Home");
-            }
-
             var request = await _context.AccessibilityRetestRequests
                 .Include(rr => rr.AccessibilityIssue)
                     .ThenInclude(ai => ai.ProductAccessibility)
@@ -317,12 +228,6 @@ namespace Compass.Controllers.Admin
             string? outcome,
             string? adminNotes)
         {
-            // Check authorization
-            if (!await IsAuthorizedAsync())
-            {
-                TempData["ErrorMessage"] = "You do not have permission to perform this action.";
-                return RedirectToAction("Index", "Home");
-            }
 
             try
             {
@@ -378,12 +283,6 @@ namespace Compass.Controllers.Admin
         public async Task<IActionResult> EmailConfigurations()
         {
             // Check authorization
-            if (!await IsAuthorizedAsync())
-            {
-                TempData["ErrorMessage"] = "You do not have permission to access this section.";
-                return RedirectToAction("Index", "Home");
-            }
-
             var configurations = await _context.AccessibilityEmailConfigurations
                 .OrderBy(e => e.Purpose)
                 .ThenBy(e => e.SortOrder)
@@ -416,12 +315,6 @@ namespace Compass.Controllers.Admin
             string? description,
             int sortOrder)
         {
-            // Check authorization
-            if (!await IsAuthorizedAsync())
-            {
-                TempData["ErrorMessage"] = "You do not have permission to perform this action.";
-                return RedirectToAction("Index", "Home");
-            }
 
             try
             {
@@ -470,12 +363,6 @@ namespace Compass.Controllers.Admin
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> DeleteEmailConfiguration(int id)
         {
-            // Check authorization
-            if (!await IsAuthorizedAsync())
-            {
-                TempData["ErrorMessage"] = "You do not have permission to perform this action.";
-                return RedirectToAction("Index", "Home");
-            }
 
             try
             {
@@ -508,12 +395,6 @@ namespace Compass.Controllers.Admin
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> ToggleEmailConfiguration(int id)
         {
-            // Check authorization
-            if (!await IsAuthorizedAsync())
-            {
-                TempData["ErrorMessage"] = "You do not have permission to perform this action.";
-                return RedirectToAction("Index", "Home");
-            }
 
             try
             {
@@ -549,12 +430,6 @@ namespace Compass.Controllers.Admin
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> UpdateProductUrl(string fipsId, string productUrl)
         {
-            // Check authorization
-            if (!await IsAuthorizedAsync())
-            {
-                TempData["ErrorMessage"] = "You do not have permission to perform this action.";
-                return RedirectToAction("Index", "Home");
-            }
 
             try
             {
@@ -602,12 +477,6 @@ namespace Compass.Controllers.Admin
             bool statementInstalled,
             string? verificationMethod)
         {
-            // Check authorization
-            if (!await IsAuthorizedAsync())
-            {
-                TempData["ErrorMessage"] = "You do not have permission to perform this action.";
-                return RedirectToAction("Index", "Home");
-            }
 
             try
             {
@@ -782,12 +651,6 @@ namespace Compass.Controllers.Admin
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> EnrollProduct(string fipsId)
         {
-            // Check authorization
-            if (!await IsAuthorizedAsync())
-            {
-                TempData["ErrorMessage"] = "You do not have permission to perform this action.";
-                return RedirectToAction("Index", "Home");
-            }
 
             try
             {
@@ -840,12 +703,6 @@ namespace Compass.Controllers.Admin
         public async Task<IActionResult> ProductDetails(string fipsId)
         {
             // Check authorization
-            if (!await IsAuthorizedAsync())
-            {
-                TempData["ErrorMessage"] = "You do not have permission to access this section.";
-                return RedirectToAction("Index", "Home");
-            }
-
             // Get pending retest count for navigation
             var pendingRetestCount = await _context.AccessibilityRetestRequests
                 .CountAsync(rr => rr.IsCompleted == null);
@@ -901,12 +758,6 @@ namespace Compass.Controllers.Admin
         public async Task<IActionResult> StatementTemplates()
         {
             // Check authorization
-            if (!await IsAuthorizedAsync())
-            {
-                TempData["ErrorMessage"] = "You do not have permission to access this section.";
-                return RedirectToAction("Index", "Home");
-            }
-
             var templates = await _context.StatementTemplates
                 .Where(st => !st.IsDeleted)
                 .OrderBy(st => st.Name)
@@ -927,12 +778,6 @@ namespace Compass.Controllers.Admin
         public async Task<IActionResult> StatementTemplateDetails(int id)
         {
             // Check authorization
-            if (!await IsAuthorizedAsync())
-            {
-                TempData["ErrorMessage"] = "You do not have permission to access this section.";
-                return RedirectToAction("Index", "Home");
-            }
-
             var template = await _context.StatementTemplates
                 .FirstOrDefaultAsync(st => st.Id == id && !st.IsDeleted);
 
@@ -963,12 +808,6 @@ namespace Compass.Controllers.Admin
         public async Task<IActionResult> EditStatementTemplate(int id)
         {
             // Check authorization
-            if (!await IsAuthorizedAsync())
-            {
-                TempData["ErrorMessage"] = "You do not have permission to access this section.";
-                return RedirectToAction("Index", "Home");
-            }
-
             var template = await _context.StatementTemplates
                 .FirstOrDefaultAsync(st => st.Id == id && !st.IsDeleted);
 
@@ -995,12 +834,6 @@ namespace Compass.Controllers.Admin
             string content,
             string? description)
         {
-            // Check authorization
-            if (!await IsAuthorizedAsync())
-            {
-                TempData["ErrorMessage"] = "You do not have permission to perform this action.";
-                return RedirectToAction("Index", "Home");
-            }
 
             try
             {
@@ -1087,12 +920,6 @@ namespace Compass.Controllers.Admin
             string content,
             string? description)
         {
-            // Check authorization
-            if (!await IsAuthorizedAsync())
-            {
-                TempData["ErrorMessage"] = "You do not have permission to perform this action.";
-                return RedirectToAction("Index", "Home");
-            }
 
             try
             {

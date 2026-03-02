@@ -177,13 +177,14 @@
         }
 
         applySelection(user) {
+            // Use objectId from response (camelCase) or ObjectId (PascalCase), or fall back to the id
+            // The UserSelectionResponse has ObjectId (PascalCase) which might serialize as ObjectId or objectId
+            const objectIdValue = user?.objectId ?? user?.ObjectId ?? user?.id ?? '';
+            
             if (this.hidden) {
                 this.hidden.value = user?.id ?? '';
             }
             if (this.objectIdInput) {
-                // Use objectId from response (camelCase) or ObjectId (PascalCase), or fall back to the id
-                // The UserSelectionResponse has ObjectId (PascalCase) which might serialize as ObjectId or objectId
-                const objectIdValue = user?.objectId ?? user?.ObjectId ?? user?.id ?? '';
                 this.objectIdInput.value = objectIdValue;
                 console.log('Setting objectIdInput to:', objectIdValue, 'from user:', user);
             }
@@ -214,6 +215,30 @@
             }
 
             this.setMessage('User selected. Save your changes to store this contact.');
+
+            // Fire custom event for user selection
+            if (this.input) {
+                const event = new CustomEvent('userSelected', {
+                    detail: {
+                        objectId: objectIdValue,
+                        id: user?.id ?? '',
+                        name: user?.name ?? '',
+                        email: user?.email ?? ''
+                    },
+                    bubbles: true
+                });
+                this.input.dispatchEvent(event);
+                
+                // Also support jQuery event for backwards compatibility
+                if (typeof jQuery !== 'undefined') {
+                    jQuery(this.input).trigger('userSelected', [{
+                        objectId: objectIdValue,
+                        id: user?.id ?? '',
+                        name: user?.name ?? '',
+                        email: user?.email ?? ''
+                    }]);
+                }
+            }
         }
 
         clearSelection() {
@@ -272,11 +297,17 @@
         }[match]));
     }
 
-    document.addEventListener('DOMContentLoaded', () => {
-        document.querySelectorAll('[data-user-picker]').forEach(el => {
+    function initializePickers() {
+        document.querySelectorAll('[data-user-picker]:not([data-picker-initialized])').forEach(el => {
             pickers.push(new UserPicker(el));
+            el.setAttribute('data-picker-initialized', 'true');
         });
-    });
+    }
+
+    document.addEventListener('DOMContentLoaded', initializePickers);
+
+    // Expose initialization function for modals and dynamic content
+    window.initializeUserPickers = initializePickers;
 })();
 
 

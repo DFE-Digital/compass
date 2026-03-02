@@ -1,0 +1,201 @@
+@{
+    ViewData["Title"] = "Services by Business Area";
+    
+    var allBusinessAreas = ViewBag.AllBusinessAreas as List<string> ?? new List<string>();
+    var selectedBusinessArea = ViewBag.SelectedBusinessArea as string ?? "All";
+    var servicesWithDetails = ViewBag.ServicesWithDetails as List<dynamic> ?? new List<dynamic>();
+}
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="dfe-adminui-breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem;">
+            <li class="dfe-adminui-breadcrumb__item">
+                <a href="@Url.Action("Index", "Home")" style="color: #005ea5; text-decoration: none;">Home</a>
+            </li>
+            <li class="dfe-adminui-breadcrumb__item">
+                <a href="@Url.Action("Dashboard", "DesignOps")" style="color: #005ea5; text-decoration: none;">Design Operations</a>
+            </li>
+            <li class="dfe-adminui-breadcrumb__item">
+                <a href="@Url.Action("AccessibilityOversight", "DesignOps")" style="color: #005ea5; text-decoration: none;">Accessibility Issues</a>
+            </li>
+            <li class="dfe-adminui-breadcrumb__item dfe-adminui-breadcrumb__item--active" aria-current="page">Services by Business Area</li>
+        </ol>
+    </nav>
+}
+
+<section class="content">
+    <div class="container-fluid">
+        @{
+            var currentAction = ViewContext.RouteData.Values["action"]?.ToString() ?? "";
+            ViewBag.BrandText = "Design Operations";
+            ViewBag.NavLinks = new[]
+            {
+                new { Text = "Dashboard", Action = "Dashboard", Controller = "DesignOps", Url = (string)null, IsButton = false, IsActive = currentAction == "Dashboard" },
+                new { Text = "Accessibility oversight", Action = "AccessibilityOversight", Controller = "DesignOps", Url = (string)null, IsButton = false, IsActive = currentAction == "AccessibilityOversight" }
+            };
+        }
+        @await Html.PartialAsync("_ModuleNavbar")
+
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="dfe-adminui-alert dfe-adminui-alert--success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["SuccessMessage"]
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="dfe-adminui-alert dfe-adminui-alert--danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        <div class="row mb-4">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="dfe-adminui-card__header">
+                        <h3 class="card-title mb-0">Select Business Area</h3>
+                    </div>
+                    <div class="dfe-adminui-card__body">
+                        <form method="get" action="@Url.Action("BusinessAreaServices", "DesignOps")">
+                            <div class="form-group">
+                                <label for="businessArea">Business Area</label>
+                                <select name="businessArea" id="businessArea" class="form-control" onchange="this.form.submit()">
+                                    <option value="All" selected="@(selectedBusinessArea == "All")">All Business Areas</option>
+                                    @foreach (var area in allBusinessAreas)
+                                    {
+                                        <option value="@area" selected="@(selectedBusinessArea == area)">
+                                            @area
+                                        </option>
+                                    }
+                                </select>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @if (servicesWithDetails.Any())
+        {
+            <div class="card">
+                <div class="dfe-adminui-card__header">
+                    <h3 class="card-title mb-0">
+                        Services @(selectedBusinessArea != "All" ? $"in {selectedBusinessArea}" : "")
+                        <span class="dfe-adminui-badge dfe-adminui-badge--info">@servicesWithDetails.Count</span>
+                    </h3>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Service Name</th>
+                                    <th>Product Name</th>
+                                    @if (selectedBusinessArea == "All")
+                                    {
+                                        <th>Business Area</th>
+                                    }
+                                    <th>Total Issues</th>
+                                    <th>Level A</th>
+                                    <th>Level AA</th>
+                                    <th>Overdue</th>
+                                    <th>Won't Fix</th>
+                                    <th>Statement</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var service in servicesWithDetails)
+                                {
+                                    <tr>
+                                        <td><strong>@service.ServiceName</strong></td>
+                                        <td>@service.ProductName</td>
+                                        @if (selectedBusinessArea == "All")
+                                        {
+                                            <td>@service.BusinessArea</td>
+                                        }
+                                        <td>@service.TotalIssues</td>
+                                        <td>
+                                            @if (service.LevelACount > 0)
+                                            {
+                                                <span class="dfe-adminui-badge dfe-adminui-badge--warning">@service.LevelACount</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="dfe-adminui-text-muted">0</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            @if (service.LevelAACount > 0)
+                                            {
+                                                <span class="dfe-adminui-badge dfe-adminui-badge--danger">@service.LevelAACount</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="dfe-adminui-text-muted">0</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            @if (service.OverdueCount > 0)
+                                            {
+                                                <span class="dfe-adminui-badge dfe-adminui-badge--danger">@service.OverdueCount</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="dfe-adminui-text-muted">0</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            @if (service.WontFixCount > 0)
+                                            {
+                                                <span class="dfe-adminui-badge dfe-adminui-badge--secondary">@service.WontFixCount</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="dfe-adminui-text-muted">0</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            @if (service.StatementInstalled)
+                                            {
+                                                <span class="dfe-adminui-badge dfe-adminui-badge--success">Installed</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="dfe-adminui-badge dfe-adminui-badge--warning">Not Installed</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            <a href="@Url.Action("ServiceIssues", "DesignOps", new { serviceId = service.ServiceId })" class="btn btn-sm btn-primary">
+                                                <i class="fas fa-eye"></i> View Issues
+                                            </a>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="card">
+                <div class="dfe-adminui-card__body">
+                    <p class="dfe-adminui-text-muted">
+                        @if (selectedBusinessArea == "All")
+                        {
+                            <text>No services found.</text>
+                        }
+                        else
+                        {
+                            <text>No services found in the selected business area.</text>
+                        }
+                    </p>
+                </div>
+            </div>
+        }
+    </div>
+</section>

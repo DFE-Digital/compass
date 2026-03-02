@@ -1,0 +1,264 @@
+@model Compass.Services.ProjectImportPreview
+@{
+    ViewData["Title"] = "Preview Import";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1 class="m-0">Preview Import</h1>
+            </div>
+            <div class="col-sm-6">
+                <ol class="breadcrumb float-sm-right">
+                    <li class="breadcrumb-item"><a asp-action="Index">Work</a></li>
+                    <li class="breadcrumb-item"><a asp-action="Import">Import</a></li>
+                    <li class="breadcrumb-item active">Preview</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Import Preview</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <div class="info-box">
+                                    <span class="info-box-icon bg-info"><i class="fas fa-file-csv"></i></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-text">Total Rows</span>
+                                        <span class="info-box-number">@Model.Rows.Count</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="info-box">
+                                    <span class="info-box-icon @(Model.ValidationErrors.Any() ? "bg-warning" : "bg-success")">
+                                        <i class="fas fa-exclamation-triangle"></i>
+                                    </span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-text">Validation Errors</span>
+                                        <span class="info-box-number">@Model.ValidationErrors.Count</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Field Mapping Section -->
+                        <div class="card mb-4">
+                            <div class="card-header">
+                                <h3 class="card-title">CSV Column Mapping</h3>
+                            </div>
+                            <div class="card-body">
+                                <p class="text-muted">This table shows how CSV columns are mapped to Work Item fields.</p>
+                                
+                                @if (Model.MissingRequiredColumns.Any())
+                                {
+                                    <div class="alert alert-danger">
+                                        <strong>Missing Required Columns:</strong>
+                                        <ul class="mb-0">
+                                            @foreach (var col in Model.MissingRequiredColumns)
+                                            {
+                                                <li>@col</li>
+                                            }
+                                        </ul>
+                                    </div>
+                                }
+
+                                <div class="table-responsive">
+                                    <table class="table table-bordered table-sm">
+                                        <thead>
+                                            <tr>
+                                                <th style="width: 40%;">CSV Column</th>
+                                                <th style="width: 40%;">Maps to Work Item Field</th>
+                                                <th style="width: 20%;">Status</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var csvCol in Model.CsvColumns)
+                                            {
+                                                <tr class="@(Model.MappedColumns.Contains(csvCol) ? "" : "table-warning")">
+                                                    <td><code>@csvCol</code></td>
+                                                    <td>
+                                                        @if (Model.FieldMapping.ContainsKey(csvCol))
+                                                        {
+                                                            <span class="text-success">@Model.FieldMapping[csvCol]</span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="text-muted">Not mapped</span>
+                                                        }
+                                                    </td>
+                                                    <td>
+                                                        @if (Model.MappedColumns.Contains(csvCol))
+                                                        {
+                                                            <span class="badge badge-success">Mapped</span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="badge badge-warning">Unmapped</span>
+                                                        }
+                                                    </td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                @if (Model.UnmappedColumns.Any())
+                                {
+                                    <div class="alert alert-info mt-3">
+                                        <strong>Unmapped Columns:</strong> The following CSV columns were found but are not mapped to any Work Item fields. They will be ignored during import:
+                                        <ul class="mb-0 mt-2">
+                                            @foreach (var col in Model.UnmappedColumns)
+                                            {
+                                                <li><code>@col</code></li>
+                                            }
+                                        </ul>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+
+                        @if (Model.ValidationErrors.Any())
+                        {
+                            <div class="alert alert-warning">
+                                <h5><i class="icon fas fa-exclamation-triangle"></i> Validation Errors Found</h5>
+                                <p>The following errors were found in the CSV file. Please review and fix them before importing.</p>
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-bordered">
+                                        <thead>
+                                            <tr>
+                                                <th>Row</th>
+                                                <th>Field</th>
+                                                <th>Error</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var error in Model.ValidationErrors)
+                                            {
+                                                <tr>
+                                                    <td>@(error.RowNumber == 0 ? "File" : error.RowNumber.ToString())</td>
+                                                    <td>@error.Field</td>
+                                                    <td>@error.Message</td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        }
+
+                        <div class="table-responsive">
+                            <table class="table table-bordered table-striped table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Row</th>
+                                        <th>Deliverable</th>
+                                        <th>DeliverableID</th>
+                                        <th>Phase</th>
+                                        <th>Activity Type</th>
+                                        <th>Directorate</th>
+                                        <th>Budget Owner</th>
+                                        <th>Risk Appetite</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var row in Model.Rows)
+                                    {
+                                        <tr class="@(Model.ValidationErrors.Any(e => e.RowNumber == row.RowNumber) ? "table-warning" : "")">
+                                            <td>@row.RowNumber</td>
+                                            <td>@(row.Deliverable ?? "<em>Missing</em>")</td>
+                                            <td>@row.DeliverableID</td>
+                                            <td>@row.CurrentDeliveryPhase</td>
+                                            <td>@row.ActivityType</td>
+                                            <td>@row.Directorate</td>
+                                            <td>@row.BudgetOwner</td>
+                                            <td>@row.RiskAppetite</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="mt-4">
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle"></i> 
+                                <strong>Note:</strong> Please upload the same CSV file again to proceed with the import.
+                            </div>
+                            <form asp-action="ProcessImport" method="post" enctype="multipart/form-data" id="importForm">
+                                @Html.AntiForgeryToken()
+                                <div class="form-group">
+                                    <label for="csvFile">Select the same CSV file</label>
+                                    <div class="custom-file">
+                                        <input type="file" class="custom-file-input" id="csvFile" name="csvFile" accept=".csv" required />
+                                        <label class="custom-file-label" for="csvFile">Choose file...</label>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <div class="custom-control custom-checkbox">
+                                        <input type="checkbox" class="custom-control-input" id="confirmImport" required>
+                                        <label class="custom-control-label" for="confirmImport">
+                                            I have reviewed the preview and want to proceed with the import
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <button type="submit" class="btn btn-success" id="importBtn" disabled>
+                                        <i class="fas fa-check"></i> Proceed with Import
+                                    </button>
+                                    <a asp-action="Import" class="btn btn-secondary">Back to Upload</a>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+@section Scripts {
+    <script nonce="@Context.Items["Nonce"]">
+        $(document).ready(function() {
+            // Update file input label when file is selected
+            $('.custom-file-input').on('change', function() {
+                var fileName = $(this).val().split('\\').pop();
+                $(this).next('.custom-file-label').html(fileName || 'Choose file...');
+            });
+
+            // Enable/disable import button based on checkbox and file selection
+            function updateImportButton() {
+                var hasFile = $('#csvFile')[0].files.length > 0;
+                var isConfirmed = $('#confirmImport').is(':checked');
+                $('#importBtn').prop('disabled', !(hasFile && isConfirmed));
+            }
+
+            $('#confirmImport').on('change', updateImportButton);
+            $('#csvFile').on('change', updateImportButton);
+
+            $('#importForm').on('submit', function(e) {
+                if (!$('#confirmImport').is(':checked')) {
+                    e.preventDefault();
+                    alert('Please confirm that you have reviewed the preview.');
+                    return false;
+                }
+                if ($('#csvFile')[0].files.length === 0) {
+                    e.preventDefault();
+                    alert('Please select the CSV file to import.');
+                    return false;
+                }
+            });
+        });
+    </script>
+}
+

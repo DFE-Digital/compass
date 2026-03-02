@@ -35,6 +35,7 @@ public class UserBusinessAreaRoleAssignment
 public enum LeadershipRoleTier
 {
     PortfolioLead = 10, // G6 / Portfolio
+    HeadOfProfession = 15,
     DeputyDirectorOrSro = 20,
     CLevel = 30,
     DirectorGeneral = 40,

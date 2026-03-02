@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Compass.Data;
@@ -6,6 +7,7 @@ using Newtonsoft.Json;
 
 namespace Compass.Controllers;
 
+[Authorize]
 public class EnterpriseMetricController : Controller
 {
     private readonly CompassDbContext _context;

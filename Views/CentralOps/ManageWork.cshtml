@@ -1,0 +1,921 @@
+@model IEnumerable<Compass.Models.Project>
+@{
+    ViewData["Title"] = "Manage work";
+    var search = ViewBag.Search as string;
+    var businessArea = ViewBag.BusinessArea as string;
+    var priority = ViewBag.Priority as string;
+    var rag = ViewBag.Rag as string;
+    var status = ViewBag.Status as string;
+    var currentStatus = ViewBag.CurrentStatus as string ?? "Active";
+    var totalCount = ViewBag.TotalCount as int? ?? 0;
+    var businessAreas = ViewBag.BusinessAreas as List<string> ?? new List<string>();
+    var priorities = ViewBag.Priorities as string[] ?? new string[0];
+    var rags = ViewBag.Rags as string[] ?? new string[0];
+    var statuses = ViewBag.Statuses as string[] ?? new string[0];
+    var statusActiveCount = ViewBag.StatusActiveCount as int? ?? 0;
+    var statusPausedCount = ViewBag.StatusPausedCount as int? ?? 0;
+    var statusCompletedCount = ViewBag.StatusCompletedCount as int? ?? 0;
+    var statusCancelledCount = ViewBag.StatusCancelledCount as int? ?? 0;
+}
+@Html.AntiForgeryToken()
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem;">
+            <li class="breadcrumb-item">
+                <a href="/" style="color: #005ea5; text-decoration: none;">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a asp-controller="CentralOps" asp-action="Dashboard" style="color: #005ea5; text-decoration: none;">Central Operations</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page">Manage Work</li>
+        </ol>
+    </nav>
+}
+
+<section class="content">
+    <div class="container-fluid">
+        @await Html.PartialAsync("_CentralOpsNavigation")
+        
+        <div class="content-header">
+            <div class="container-fluid">
+                <div class="row mb-2">      
+                    <div class="col-sm-6">
+                        <h1 class="m-0">Manage work</h1>
+                    </div>
+                </div>
+            </div>
+        </div>
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                @TempData["ErrorMessage"]
+                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+        }
+
+        @{
+            var modelCount = Model?.Count() ?? 0;
+        }
+        @if (Model == null)
+        {
+            <div class="alert alert-warning">
+                <strong>Debug:</strong> Model is null. Check controller logs.
+            </div>
+        }
+                else if (modelCount == 0)
+        {
+            <div class="alert alert-info">
+                <strong>Info:</strong> No projects found. Model count: @modelCount, ViewBag total: @totalCount. 
+                @if (totalCount == 0)
+                {
+                    <text>This might indicate there are no projects in the database, or all projects are deleted.</text>
+                }
+                else
+                {
+                    <text>ViewBag shows @totalCount items but Model is empty. This suggests a data passing issue.</text>
+                }
+            </div>
+        }
+
+        <div class="row">
+            <!-- Left Column: Filters -->
+            <div class="col-xxl-2 col-xl-2 col-lg-3 col-md-4 col-sm-12 col-12">
+                <!-- Project Status Navigation -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h3 class="card-title">Project status</h3>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="list-group list-group-flush">
+                            <a href="@Url.Action("ManageWork", new { 
+                                search = search, 
+                                rag = rag, 
+                                businessArea = businessArea, 
+                                priority = priority,
+                                status = "Active"
+                            })" class="list-group-item list-group-item-action @(currentStatus == "Active" ? "active" : "")" style="display: flex !important; justify-content: space-between !important; align-items: center !important;">
+                                <span>Active</span>
+                                <span class="badge @(currentStatus == "Active" ? "badge-light" : "badge-secondary") badge-pill">@statusActiveCount</span>
+                            </a>
+                            <a href="@Url.Action("ManageWork", new { 
+                                search = search, 
+                                rag = rag, 
+                                businessArea = businessArea, 
+                                priority = priority,
+                                status = "Paused"
+                            })" class="list-group-item list-group-item-action @(currentStatus == "Paused" ? "active" : "")" style="display: flex !important; justify-content: space-between !important; align-items: center !important;">
+                                <span>Paused</span>
+                                <span class="badge @(currentStatus == "Paused" ? "badge-light" : "badge-secondary") badge-pill">@statusPausedCount</span>
+                            </a>
+                            <a href="@Url.Action("ManageWork", new { 
+                                search = search, 
+                                rag = rag, 
+                                businessArea = businessArea, 
+                                priority = priority,
+                                status = "Completed"
+                            })" class="list-group-item list-group-item-action @(currentStatus == "Completed" ? "active" : "")" style="display: flex !important; justify-content: space-between !important; align-items: center !important;">
+                                <span>Completed</span>
+                                <span class="badge @(currentStatus == "Completed" ? "badge-light" : "badge-secondary") badge-pill">@statusCompletedCount</span>
+                            </a>
+                            <a href="@Url.Action("ManageWork", new { 
+                                search = search, 
+                                rag = rag, 
+                                businessArea = businessArea, 
+                                priority = priority,
+                                status = "Cancelled"
+                            })" class="list-group-item list-group-item-action @(currentStatus == "Cancelled" ? "active" : "")" style="display: flex !important; justify-content: space-between !important; align-items: center !important;">
+                                <span>Cancelled</span>
+                                <span class="badge @(currentStatus == "Cancelled" ? "badge-light" : "badge-secondary") badge-pill">@statusCancelledCount</span>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-filter mr-2"></i>Filters
+                        </h3>
+                    </div>
+                    <div class="card-body">
+                        <form method="get" action="@Url.Action("ManageWork", "CentralOps")" id="filterForm">
+                            <div class="form-group">
+                                <label for="search">Search</label>
+                                <input type="text" class="form-control form-control-sm" id="search" name="search" value="@search" placeholder="Search title, code, or aim...">
+                            </div>
+
+                            <div class="form-group">
+                                <label for="businessArea">Business Area</label>
+                                <select class="form-control form-control-sm" id="businessArea" name="businessArea">
+                                    <option value="">All</option>
+                                    @foreach (var ba in businessAreas)
+                                    {
+                                        @if (businessArea == ba)
+                                        {
+                                            <option value="@ba" selected>@ba</option>
+                                        }
+                                        else
+                                        {
+                                            <option value="@ba">@ba</option>
+                                        }
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="priority">Priority</label>
+                                <select class="form-control form-control-sm" id="priority" name="priority">
+                                    <option value="">All</option>
+                                    @foreach (var p in priorities)
+                                    {
+                                        @if (priority == p)
+                                        {
+                                            <option value="@p" selected>@p</option>
+                                        }
+                                        else
+                                        {
+                                            <option value="@p">@p</option>
+                                        }
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="rag">RAG Status</label>
+                                <select class="form-control form-control-sm" id="rag" name="rag">
+                                    <option value="">All</option>
+                                    @foreach (var r in rags)
+                                    {
+                                        @if (rag == r)
+                                        {
+                                            <option value="@r" selected>@r</option>
+                                        }
+                                        else
+                                        {
+                                            <option value="@r">@r</option>
+                                        }
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="status">Status</label>
+                                <select class="form-control form-control-sm" id="status" name="status">
+                                    <option value="">All</option>
+                                    @foreach (var s in statuses)
+                                    {
+                                        @if (status == s)
+                                        {
+                                            <option value="@s" selected>@s</option>
+                                        }
+                                        else
+                                        {
+                                            <option value="@s">@s</option>
+                                        }
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <button type="submit" class="btn btn-primary btn-sm btn-block">
+                                    <i class="fas fa-search"></i> Apply Filters
+                                </button>
+                            </div>
+
+                            @if (!string.IsNullOrEmpty(search) || !string.IsNullOrEmpty(businessArea) || !string.IsNullOrEmpty(priority) || !string.IsNullOrEmpty(rag) || !string.IsNullOrEmpty(status))
+                            {
+                                <div class="form-group">
+                                    <a href="@Url.Action("ManageWork", "CentralOps")" class="btn btn-secondary btn-sm btn-block">
+                                        <i class="fas fa-times"></i> Clear Filters
+                                    </a>
+                                </div>
+                            }
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Table -->
+            <div class="col-xxl-10 col-xl-10 col-lg-9 col-md-8 col-sm-12 col-12">
+                <!-- Bulk Edit Card -->
+                <div class="card mb-3" id="bulkEditCard" style="display: none;">
+                    <div class="card-header bg-primary text-white">
+                        <h3 class="card-title mb-0">
+                            <i class="fas fa-edit mr-2"></i>Bulk Edit Mode
+                            <span class="badge badge-light ml-2" id="selectedCount">0 selected</span>
+                        </h3>
+                    </div>
+                    <div class="card-body">
+                        <form id="bulkEditForm">
+                            <div class="row">
+                                <div class="col-md-6 col-lg-3">
+                                    <div class="form-group">
+                                        <label for="bulkPrimaryContact">Primary Contact</label>
+                                        <div class="user-picker" data-user-picker data-search-url="/api/users/search" data-select-url="/api/users/select">
+                                            <div class="position-relative">
+                                                <input type="text"
+                                                       class="form-control form-control-sm js-user-picker-input"
+                                                       id="bulkPrimaryContact"
+                                                       autocomplete="off"
+                                                       placeholder="Search for user..." />
+                                                <span class="user-picker__spinner js-user-picker-spinner" aria-hidden="true" style="display: none;">Searching…</span>
+                                                <div class="user-picker__results js-user-picker-results" role="listbox" aria-live="polite"></div>
+                                            </div>
+                                            <p class="form-text text-muted js-user-picker-message" style="font-size: 0.875rem;"></p>
+                                            <input type="hidden" class="js-user-picker-value" id="bulkPrimaryContactUserId" />
+                                            <input type="hidden" class="js-user-picker-objectid" id="bulkPrimaryContactObjectId" />
+                                            <input type="hidden" class="js-user-picker-email" id="bulkPrimaryContactEmail" />
+                                            <input type="hidden" class="js-user-picker-name" id="bulkPrimaryContactName" />
+                                            <div class="user-picker__selected js-user-picker-summary" data-default-text="No primary contact selected." style="min-height: 20px; margin-top: 0.5rem;">
+                                                <span class="text-muted" style="font-size: 0.875rem;">No primary contact selected.</span>
+                                            </div>
+                                            <div class="form-check mt-2">
+                                                <input class="form-check-input" type="checkbox" id="bulkPrimaryContactClear" />
+                                                <label class="form-check-label" for="bulkPrimaryContactClear" style="font-size: 0.875rem;">
+                                                    Clear primary contact
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6 col-lg-3">
+                                    <div class="form-group">
+                                        <label for="bulkSro">Senior Responsible Officer (SRO)</label>
+                                        <div class="user-picker" data-user-picker data-search-url="/api/users/search" data-select-url="/api/users/select">
+                                            <div class="position-relative">
+                                                <input type="text"
+                                                       class="form-control form-control-sm js-user-picker-input"
+                                                       id="bulkSro"
+                                                       autocomplete="off"
+                                                       placeholder="Search for user..." />
+                                                <span class="user-picker__spinner js-user-picker-spinner" aria-hidden="true" style="display: none;">Searching…</span>
+                                                <div class="user-picker__results js-user-picker-results" role="listbox" aria-live="polite"></div>
+                                            </div>
+                                            <p class="form-text text-muted js-user-picker-message" style="font-size: 0.875rem;"></p>
+                                            <input type="hidden" class="js-user-picker-value" id="bulkSroUserId" />
+                                            <input type="hidden" class="js-user-picker-objectid" id="bulkSroObjectId" />
+                                            <input type="hidden" class="js-user-picker-email" id="bulkSroEmail" />
+                                            <input type="hidden" class="js-user-picker-name" id="bulkSroName" />
+                                            <div class="user-picker__selected js-user-picker-summary" data-default-text="No SRO selected." style="min-height: 20px; margin-top: 0.5rem;">
+                                                <span class="text-muted" style="font-size: 0.875rem;">No SRO selected.</span>
+                                            </div>
+                                            <div class="form-check mt-2">
+                                                <input class="form-check-input" type="checkbox" id="bulkSroClear" />
+                                                <label class="form-check-label" for="bulkSroClear" style="font-size: 0.875rem;">
+                                                    Clear SRO
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6 col-lg-3">
+                                    <div class="form-group">
+                                        <label for="bulkBusinessArea">Business Area</label>
+                                        <select class="form-control form-control-sm" id="bulkBusinessArea">
+                                            <option value="">-- No change --</option>
+                                            @foreach (var ba in businessAreas)
+                                            {
+                                                <option value="@ba">@ba</option>
+                                            }
+                                        </select>
+                                        <div class="form-check mt-2">
+                                            <input class="form-check-input" type="checkbox" id="bulkBusinessAreaClear" />
+                                            <label class="form-check-label" for="bulkBusinessAreaClear">
+                                                Clear business area
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6 col-lg-3">
+                                    <div class="form-group">
+                                        <label for="bulkPriority">Priority</label>
+                                        <select class="form-control form-control-sm" id="bulkPriority">
+                                            <option value="">-- No change --</option>
+                                            @foreach (var p in priorities)
+                                            {
+                                                <option value="@p">@p</option>
+                                            }
+                                        </select>
+                                        <div class="form-check mt-2">
+                                            <input class="form-check-input" type="checkbox" id="bulkPriorityClear" />
+                                            <label class="form-check-label" for="bulkPriorityClear">
+                                                Clear priority
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-12">
+                                    <div class="form-group">
+                                        <label for="bulkDirectorates">Directorates (multiple selection)</label>
+                                        <select class="form-control form-control-sm" id="bulkDirectorates" multiple size="5">
+                                            @{
+                                                var directorateLookups = ViewBag.Directorates as List<Compass.Models.Division> ?? new List<Compass.Models.Division>();
+                                            }
+                                            @foreach (var dir in directorateLookups)
+                                            {
+                                                <option value="@dir.Id">@dir.Name</option>
+                                            }
+                                        </select>
+                                        <small class="form-text text-muted">Hold Ctrl/Cmd to select multiple. Selected directorates will be added to projects.</small>
+                                        <div class="form-check mt-2">
+                                            <input class="form-check-input" type="checkbox" id="bulkDirectoratesClear" />
+                                            <label class="form-check-label" for="bulkDirectoratesClear">
+                                                Clear all directorates
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-12">
+                                    <button type="button" class="btn btn-primary" id="applyBulkChanges">
+                                        <i class="fas fa-check mr-2"></i>Apply Changes to Selected Items
+                                    </button>
+                                    <button type="button" class="btn btn-secondary ml-2" id="cancelBulkEdit">
+                                        <i class="fas fa-times mr-2"></i>Cancel
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Work</h3>
+                        <div class="card-tools">
+                            <a asp-action="ExportManageWork" 
+                               asp-route-search="@search" 
+                               asp-route-businessArea="@businessArea" 
+                               asp-route-priority="@priority" 
+                               asp-route-rag="@rag" 
+                               asp-route-status="@status" 
+                               style="color: #005ea5; text-decoration: none; margin-right: 1rem;">
+                                Export to Excel
+                            </a>
+                            <a href="#" id="toggleBulkEdit" class="card-tool-link">
+                                <i class="fas fa-edit mr-1"></i><span id="bulkEditToggleText">Enable Bulk Edit</span>
+                            </a>
+                        </div>
+                    </div>
+                    <div class="card-body table-responsive p-0" style="overflow-x: auto;">
+                        <table class="table table-hover sortable-table mb-0" id="workTable">
+                            <thead>
+                                <tr>
+                                    <th id="bulkSelectHeader" style="display: none; width: 40px;">
+                                        <input type="checkbox" id="selectAllCheckbox" title="Select all" />
+                                    </th>
+                                    <th class="sortable" data-column="Title" tabindex="0" role="button" aria-label="Sort by Title">Title <i class="fas fa-sort sort-icon"></i></th>
+                                    <th class="sortable" data-column="BusinessArea" tabindex="0" role="button" aria-label="Sort by Business Area">Business Area <i class="fas fa-sort sort-icon"></i></th>
+                                    <th class="sortable" data-column="Priority" tabindex="0" role="button" aria-label="Sort by Priority">Priority <i class="fas fa-sort sort-icon"></i></th>
+                                    <th class="sortable" data-column="Rag" tabindex="0" role="button" aria-label="Sort by RAG">RAG <i class="fas fa-sort sort-icon"></i></th>
+                                    <th class="sortable" data-column="Status" tabindex="0" role="button" aria-label="Sort by Status">Status <i class="fas fa-sort sort-icon"></i></th>
+                                    <th class="sortable" data-column="ActivityType" tabindex="0" role="button" aria-label="Sort by Activity Type">Activity Type <i class="fas fa-sort sort-icon"></i></th>
+                                    <th class="sortable" data-column="Flagship" tabindex="0" role="button" aria-label="Sort by Flagship">Flagship Project <i class="fas fa-sort sort-icon"></i></th>
+                                    <th class="sortable" data-column="Directorates" tabindex="0" role="button" aria-label="Sort by Directorates">Directorates <i class="fas fa-sort sort-icon"></i></th>
+                                    <th class="sortable" data-column="SRO" tabindex="0" role="button" aria-label="Sort by SRO">SRO <i class="fas fa-sort sort-icon"></i></th>
+                                    <th class="sortable" data-column="Milestones" tabindex="0" role="button" aria-label="Sort by Milestones">Count of Milestones <i class="fas fa-sort sort-icon"></i></th>
+                                    <th class="sortable" data-column="PrimaryContact" tabindex="0" role="button" aria-label="Sort by Primary Contact">Primary Contact <i class="fas fa-sort sort-icon"></i></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (Model != null && Model.Any())
+                                {
+                                    @foreach (var item in Model)
+                                    {
+                                        <tr data-project-id="@item.Id">
+                                            <td class="bulk-select-cell" style="display: none;">
+                                                <input type="checkbox" class="project-checkbox" value="@item.Id" />
+                                            </td>
+                                            <td>
+                                                <a asp-controller="CentralOps" asp-action="WorkItemDetails" asp-route-id="@item.Id" class="project-title-link"><strong>@item.Title</strong></a>
+                                                <div class="project-meta text-muted small mt-1">
+                                                    <span class="d-block"><span class="text-monospace">DFE-DDT-@item.Id</span></span>
+                                                </div>
+                                            </td>
+                                            <td>@(item.BusinessAreaLookup?.Name ?? "-")</td>
+                                            <td>
+                                                @if (item.DeliveryPriority != null)
+                                                {
+                                                    var priorityName = item.DeliveryPriority.Name.ToLower();
+                                                    var priorityClass = priorityName.Contains("critical") || priorityName.Contains("high") ? "badge-danger" :
+                                                                        priorityName.Contains("medium") ? "badge-warning" :
+                                                                        priorityName.Contains("low") ? "badge-secondary" : "badge-secondary";
+                                                    <span class="badge @priorityClass">@item.DeliveryPriority.Name</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (!string.IsNullOrEmpty(item.RagStatus))
+                                                {
+                                                    // Normalize the status - handle both "Amber-Green" and "Amber/Green" formats
+                                                    var normalized = item.RagStatus.Trim()
+                                                        .Replace(" / ", "-")
+                                                        .Replace("/", "-")
+                                                        .Replace(" /", "-")
+                                                        .Replace("/ ", "-");
+                                                    
+                                                    // Capitalize first letter of each word for consistency
+                                                    var parts = normalized.Split('-');
+                                                    for (int i = 0; i < parts.Length; i++)
+                                                    {
+                                                        if (parts[i].Length > 0)
+                                                        {
+                                                            parts[i] = char.ToUpperInvariant(parts[i][0]) + (parts[i].Length > 1 ? parts[i].Substring(1).ToLowerInvariant() : "");
+                                                        }
+                                                    }
+                                                    var displayRagStatus = string.Join("-", parts);
+                                                    
+                                                    var ragClass = displayRagStatus switch {
+                                                        "Green" => "badge badge-green",
+                                                        "Amber-Green" => "badge badge-amber-green",
+                                                        "Amber" => "badge badge-amber",
+                                                        "Amber-Red" => "badge badge-amber-red",
+                                                        "Red" => "badge badge-red",
+                                                        _ => "badge badge-secondary"
+                                                    };
+                                                    <span class="@ragClass">@displayRagStatus</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @switch (item.Status)
+                                                {
+                                                    case "Active":
+                                                        <span class="badge badge-success">Active</span>
+                                                        break;
+                                                    case "Paused":
+                                                        <span class="badge badge-warning">Paused</span>
+                                                        break;
+                                                    case "Completed":
+                                                        <span class="badge badge-success">Completed</span>
+                                                        break;
+                                                    case "Cancelled":
+                                                        <span class="badge badge-dark">Cancelled</span>
+                                                        break;
+                                                    default:
+                                                        <span class="badge badge-secondary">@item.Status</span>
+                                                        break;
+                                                }
+                                            </td>
+                                            <td>@(item.ActivityTypeLookup?.Name ?? "-")</td>
+                                            <td>
+                                                @if (item.IsFlagship)
+                                                {
+                                                    <span class="badge badge-info">Yes</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">No</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (item.Directorates != null && item.Directorates.Any())
+                                                {
+                                                    <div>
+                                                        @foreach (var directorate in item.Directorates.Select(d => d.Division?.Name).Where(n => !string.IsNullOrEmpty(n)))
+                                                        {
+                                                            <span class="badge badge-secondary mb-1 d-inline-block">@directorate</span>
+                                                        }
+                                                    </div>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (item.SeniorResponsibleOfficers != null && item.SeniorResponsibleOfficers.Any())
+                                                {
+                                                    <div>
+                                                        @foreach (var sro in item.SeniorResponsibleOfficers.Where(s => s.User != null))
+                                                        {
+                                                            <div class="mb-1">
+                                                                @if (!string.IsNullOrEmpty(sro.User.Email))
+                                                                {
+                                                                    <a href="mailto:@sro.User.Email">@sro.User.Name</a>
+                                                                }
+                                                                else
+                                                                {
+                                                                    @sro.User.Name
+                                                                }
+                                                            </div>
+                                                        }
+                                                    </div>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                            <td>@(item.Milestones?.Count ?? 0)</td>
+                                            <td>@(item.PrimaryContactUser?.Name ?? item.PrimaryContactUser?.Email ?? "-")</td>
+                                        </tr>
+                                    }
+                                }
+                                else
+                                {
+                                    <tr>
+                                        <td colspan="12" class="text-center text-muted py-3">No projects found</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+@section Scripts {
+    <script src="~/js/user-picker.js" asp-append-version="true"></script>
+    <script nonce="@Context.Items["Nonce"]">
+        $(document).ready(function() {
+            // Initialize sortable tables
+            $('.sortable-table').each(function() {
+                initializeSortableTable($(this));
+            });
+
+            // Bulk edit functionality
+            var bulkEditMode = false;
+
+            // Function to manually initialize user pickers when bulk edit card is shown
+            // This is needed because the user picker script initializes on DOMContentLoaded
+            // but the bulk edit card is hidden at that time
+            function initializeBulkEditUserPickers() {
+                setTimeout(function() {
+                    $('#bulkEditCard [data-user-picker]').each(function() {
+                        var pickerEl = this;
+                        // Check if already initialized by looking for event listeners
+                        var $input = $(pickerEl).find('.js-user-picker-input');
+                        if ($input.length > 0 && !$input.data('picker-initialized')) {
+                            // Manually initialize the picker functionality
+                            var searchUrl = $(pickerEl).data('search-url') || '/api/users/search';
+                            var selectUrl = $(pickerEl).data('select-url') || '/api/users/select';
+                            var $spinner = $(pickerEl).find('.js-user-picker-spinner');
+                            var $results = $(pickerEl).find('.js-user-picker-results');
+                            var $message = $(pickerEl).find('.js-user-picker-message');
+                            var $summary = $(pickerEl).find('.js-user-picker-summary');
+                            var defaultText = $summary.data('default-text') || 'No user selected.';
+                            
+                            var timeout = null;
+                            
+                            $input.on('input', function() {
+                                var query = $(this).val().trim();
+                                
+                                clearTimeout(timeout);
+                                
+                                if (query.length < 3) {
+                                    $results.hide().empty();
+                                    $message.hide();
+                                    return;
+                                }
+                                
+                                timeout = setTimeout(function() {
+                                    $spinner.show();
+                                    $results.hide().empty();
+                                    $message.hide();
+                                    
+                                    $.ajax({
+                                        url: searchUrl,
+                                        method: 'GET',
+                                        data: { q: query },
+                                        success: function(data) {
+                                            $spinner.hide();
+                                            if (data && data.length > 0) {
+                                                $results.empty();
+                                                data.forEach(function(user) {
+                                                    var displayName = user.displayName || user.name || '';
+                                                    var email = user.email || '';
+                                                    var $item = $('<div>')
+                                                        .addClass('user-picker__result')
+                                                        .attr('role', 'option')
+                                                        .attr('tabindex', '0')
+                                                        .css({ 'padding': '8px 12px', 'cursor': 'pointer', 'border-bottom': '1px solid #eee' })
+                                                        .html('<strong>' + escapeHtml(displayName) + '</strong><br><small>' + escapeHtml(email) + '</small>')
+                                                        .on('click', function() {
+                                                            selectUserInPicker(pickerEl, user);
+                                                        })
+                                                        .on('mouseenter', function() {
+                                                            $(this).css('background-color', '#f0f0f0');
+                                                        })
+                                                        .on('mouseleave', function() {
+                                                            $(this).css('background-color', '');
+                                                        });
+                                                    $results.append($item);
+                                                });
+                                                $results.css({ 'display': 'block', 'position': 'absolute', 'z-index': '1000', 'background': 'white', 'border': '1px solid #ccc', 'border-top': 'none', 'max-height': '200px', 'overflow-y': 'auto', 'width': '100%' }).show();
+                                            } else {
+                                                $message.text('No users found').show();
+                                            }
+                                        },
+                                        error: function() {
+                                            $spinner.hide();
+                                            $message.text('Error searching users').show();
+                                        }
+                                    });
+                                }, 250);
+                            });
+                            
+                            // Handle clear button
+                            $(pickerEl).on('click', '.js-user-picker-clear', function() {
+                                clearUserPicker(pickerEl);
+                            });
+                            
+                            $input.data('picker-initialized', true);
+                        }
+                    });
+                }, 300);
+            }
+            
+            function selectUserInPicker(pickerEl, user) {
+                var $picker = $(pickerEl);
+                // The search API returns: { id, name, email, jobTitle }
+                // The id is the Graph user ID (objectId/entraId)
+                var objectId = user.id || user.entraId || user.objectId || '';
+                var email = user.email || '';
+                var name = user.displayName || user.name || '';
+                
+                $picker.find('.js-user-picker-objectid').val(objectId);
+                $picker.find('.js-user-picker-email').val(email);
+                $picker.find('.js-user-picker-name').val(name);
+                $picker.find('.js-user-picker-value').val(user.id || '');
+                $picker.find('.js-user-picker-input').val(name);
+                $picker.find('.js-user-picker-results').hide().empty();
+                var defaultText = $picker.find('.js-user-picker-summary').data('default-text') || 'No user selected.';
+                $picker.find('.js-user-picker-summary').html(
+                    '<div style="padding: 8px; background: #f8f9fa; border-radius: 4px;">' +
+                    '<div style="font-weight: 500;">' + escapeHtml(name) + '</div>' +
+                    '<div style="font-size: 0.875rem; color: #6c757d;">' + escapeHtml(email) + '</div>' +
+                    '<button type="button" class="btn btn-link btn-sm js-user-picker-clear" style="padding: 0; margin-top: 4px;">Remove</button>' +
+                    '</div>'
+                );
+            }
+            
+            function clearUserPicker(pickerEl) {
+                var $picker = $(pickerEl);
+                $picker.find('.js-user-picker-objectid').val('');
+                $picker.find('.js-user-picker-email').val('');
+                $picker.find('.js-user-picker-name').val('');
+                $picker.find('.js-user-picker-value').val('');
+                $picker.find('.js-user-picker-input').val('');
+                var defaultText = $picker.find('.js-user-picker-summary').data('default-text') || 'No user selected.';
+                $picker.find('.js-user-picker-summary').html('<span class="text-muted">' + defaultText + '</span>');
+            }
+            
+            function escapeHtml(text) {
+                if (!text) return '';
+                var map = {
+                    '&': '&amp;',
+                    '<': '&lt;',
+                    '>': '&gt;',
+                    '"': '&quot;',
+                    "'": '&#39;'
+                };
+                return text.toString().replace(/[&<>"']/g, function(m) { return map[m]; });
+            }
+
+            $('#toggleBulkEdit').on('click', function(e) {
+                e.preventDefault();
+                bulkEditMode = !bulkEditMode;
+                if (bulkEditMode) {
+                    $('#bulkEditCard').slideDown(function() {
+                        initializeBulkEditUserPickers();
+                    });
+                    $('#bulkSelectHeader').show();
+                    $('.bulk-select-cell').show();
+                    $('#bulkEditToggleText').text('Disable Bulk Edit');
+                } else {
+                    $('#bulkEditCard').slideUp();
+                    $('#bulkSelectHeader').hide();
+                    $('.bulk-select-cell').hide();
+                    $('.project-checkbox').prop('checked', false);
+                    $('#selectAllCheckbox').prop('checked', false);
+                    $('#bulkEditToggleText').text('Enable Bulk Edit');
+                    updateSelectedCount();
+                }
+            });
+
+            $('#selectAllCheckbox').on('change', function() {
+                $('.project-checkbox').prop('checked', $(this).prop('checked'));
+                updateSelectedCount();
+            });
+
+            $(document).on('change', '.project-checkbox', function() {
+                var allChecked = $('.project-checkbox:visible').length === $('.project-checkbox:visible:checked').length;
+                $('#selectAllCheckbox').prop('checked', allChecked);
+                updateSelectedCount();
+            });
+
+            function updateSelectedCount() {
+                var count = $('.project-checkbox:checked').length;
+                $('#selectedCount').text(count + ' selected');
+            }
+
+            $('#cancelBulkEdit').on('click', function() {
+                $('#toggleBulkEdit').click();
+            });
+
+            $('#applyBulkChanges').on('click', function() {
+                var selectedIds = $('.project-checkbox:checked').map(function() {
+                    return $(this).val();
+                }).get();
+
+                if (selectedIds.length === 0) {
+                    alert('Please select at least one project.');
+                    return;
+                }
+
+                // Collect bulk edit values
+                var bulkData = {
+                    projectIds: selectedIds,
+                    primaryContactObjectId: $('#bulkPrimaryContactClear').prop('checked') ? null : $('#bulkPrimaryContactObjectId').val() || null,
+                    primaryContactEmail: $('#bulkPrimaryContactClear').prop('checked') ? null : $('#bulkPrimaryContactEmail').val() || null,
+                    primaryContactName: $('#bulkPrimaryContactClear').prop('checked') ? null : $('#bulkPrimaryContactName').val() || null,
+                    clearPrimaryContact: $('#bulkPrimaryContactClear').prop('checked'),
+                    sroObjectId: $('#bulkSroClear').prop('checked') ? null : $('#bulkSroObjectId').val() || null,
+                    sroEmail: $('#bulkSroClear').prop('checked') ? null : $('#bulkSroEmail').val() || null,
+                    sroName: $('#bulkSroClear').prop('checked') ? null : $('#bulkSroName').val() || null,
+                    clearSro: $('#bulkSroClear').prop('checked'),
+                    businessArea: $('#bulkBusinessAreaClear').prop('checked') ? null : $('#bulkBusinessArea').val() || null,
+                    clearBusinessArea: $('#bulkBusinessAreaClear').prop('checked'),
+                    priority: $('#bulkPriorityClear').prop('checked') ? null : $('#bulkPriority').val() || null,
+                    clearPriority: $('#bulkPriorityClear').prop('checked'),
+                    directorateIds: $('#bulkDirectoratesClear').prop('checked') ? [] : $('#bulkDirectorates').val() || [],
+                    clearDirectorates: $('#bulkDirectoratesClear').prop('checked')
+                };
+
+                // Check if any changes are specified
+                var hasPrimaryContact = bulkData.clearPrimaryContact || 
+                                       (bulkData.primaryContactObjectId && String(bulkData.primaryContactObjectId).trim() !== '') ||
+                                       (bulkData.primaryContactEmail && String(bulkData.primaryContactEmail).trim() !== '') ||
+                                       (bulkData.primaryContactName && String(bulkData.primaryContactName).trim() !== '');
+                var hasSro = bulkData.clearSro || 
+                            (bulkData.sroObjectId && String(bulkData.sroObjectId).trim() !== '') ||
+                            (bulkData.sroEmail && String(bulkData.sroEmail).trim() !== '') ||
+                            (bulkData.sroName && String(bulkData.sroName).trim() !== '');
+                var hasChanges = hasPrimaryContact ||
+                                hasSro ||
+                                bulkData.clearBusinessArea || (bulkData.businessArea && String(bulkData.businessArea).trim() !== '') ||
+                                bulkData.clearPriority || (bulkData.priority && String(bulkData.priority).trim() !== '') ||
+                                bulkData.clearDirectorates || (bulkData.directorateIds && bulkData.directorateIds.length > 0);
+
+                if (!hasChanges) {
+                    alert('Please specify at least one change to apply.');
+                    return;
+                }
+
+                if (!confirm('Are you sure you want to apply these changes to ' + selectedIds.length + ' project(s)?')) {
+                    return;
+                }
+
+                // Disable button and show loading
+                var $btn = $(this);
+                var originalText = $btn.html();
+                $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin mr-2"></i>Applying...');
+
+                $.ajax({
+                    url: '@Url.Action("BulkUpdateProjects", "CentralOps")',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify(bulkData),
+                    headers: {
+                        'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val(),
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            alert('Successfully updated ' + response.updatedCount + ' project(s).');
+                            location.reload();
+                        } else {
+                            alert('Error: ' + (response.message || 'Failed to update projects.'));
+                            $btn.prop('disabled', false).html(originalText);
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        alert('Error updating projects: ' + error);
+                        $btn.prop('disabled', false).html(originalText);
+                    }
+                });
+            });
+        });
+
+        function initializeSortableTable(table) {
+            var currentSort = { column: null, direction: 'asc' };
+
+            table.find('.sortable').on('click keypress', function(e) {
+                if (e.type === 'keypress' && e.which !== 13 && e.which !== 32) {
+                    return;
+                }
+                
+                var column = $(this).data('column');
+                var direction = 'asc';
+                
+                if (currentSort.column === column && currentSort.direction === 'asc') {
+                    direction = 'desc';
+                }
+                
+                sortTable(table, column, direction);
+                currentSort = { column: column, direction: direction };
+            });
+
+            function sortTable(table, column, direction) {
+                var tbody = table.find('tbody');
+                var rows = tbody.find('tr').toArray();
+                
+                rows.sort(function(a, b) {
+                    var aVal, bVal;
+                    var colIndex = table.find('thead th[data-column="' + column + '"]').index();
+                    
+                    if (column === 'Title') {
+                        // For Title column, get just the title text (first link text), ignore the code below
+                        aVal = $(a).find('td').eq(colIndex).find('a').first().text().trim().toLowerCase();
+                        bVal = $(b).find('td').eq(colIndex).find('a').first().text().trim().toLowerCase();
+                    } else if (column === 'Milestones') {
+                        // For Milestones column, sort numerically
+                        aVal = parseInt($(a).find('td').eq(colIndex).text().trim()) || 0;
+                        bVal = parseInt($(b).find('td').eq(colIndex).text().trim()) || 0;
+                    } else {
+                        // For other columns, get the full cell text
+                        aVal = $(a).find('td').eq(colIndex).text().trim().toLowerCase();
+                        bVal = $(b).find('td').eq(colIndex).text().trim().toLowerCase();
+                    }
+                    
+                    if (direction === 'asc') {
+                        return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+                    } else {
+                        return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
+                    }
+                });
+                
+                tbody.empty();
+                rows.forEach(function(row) {
+                    tbody.append(row);
+                });
+                
+                updateSortIcons(table, column, direction);
+            }
+
+            function updateSortIcons(table, column, direction) {
+                // Remove all sort icons and reset to default sort icon
+                table.find('.sortable .sort-icon').removeClass('fa-sort-up fa-sort-down').addClass('fa-sort');
+                var header = table.find('.sortable[data-column="' + column + '"]');
+                var iconClass = direction === 'asc' ? 'fa-sort-up' : 'fa-sort-down';
+                header.find('.sort-icon').removeClass('fa-sort').addClass(iconClass);
+            }
+        }
+    </script>
+}
+

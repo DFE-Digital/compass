@@ -1,0 +1,162 @@
+@model Compass.Controllers.DqReviewConfirmationViewModel
+@{
+    ViewData["Title"] = $"Product DQ Review - {Model.Product.Title}";
+}
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <li class="breadcrumb-item">
+                <a href="/" style="color: #005ea5; text-decoration: none; font-weight: 500;">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a href="@Url.Action("Index", "FipsManager")" style="color: #005ea5; text-decoration: none; font-weight: 500;">FIPS Manager</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a href="@Url.Action("ProductDqManagerAllProducts", "FipsManager")" style="color: #005ea5; text-decoration: none; font-weight: 500;">Product DQ Manager</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page" style="color: #0b0c0c; font-weight: 600;">DQ Review</li>
+        </ol>
+    </nav>
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-12">
+                <h1 class="m-0">Product DQ Review</h1>
+                <p class="text-muted mb-0">
+                    <small>@Model.Product.Title</small>
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        <form action="@Url.Action("SubmitDqReview", "FipsManager", new { documentId = Model.DocumentId })" method="post">
+            @Html.AntiForgeryToken()
+            
+            <div class="row">
+                <!-- Left Column: Navigation -->
+                <div class="col-xxl-2 col-xl-2 col-lg-3 col-md-4 col-sm-12 col-12">
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h3 class="card-title">Steps</h3>
+                        </div>
+                        <div class="card-body p-0">
+                            <div class="list-group list-group-flush">
+                                <a href="@Url.Action("DqReviewInterstitial", "FipsManager", new { documentId = Model.DocumentId })" class="list-group-item list-group-item-action">
+                                    <span>1. Overview</span>
+                                </a>
+                                <a href="@Url.Action("DqReviewCheck", "FipsManager", new { documentId = Model.DocumentId })" class="list-group-item list-group-item-action">
+                                    <span>2. Check & Update</span>
+                                </a>
+                                <div class="list-group-item active">
+                                    <span>3. Confirmation</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Middle Column: Content -->
+                <div class="col-xxl-7 col-xl-7 col-lg-6 col-md-8 col-sm-12 col-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">Confirm Changes</h3>
+                        </div>
+                        <div class="card-body">
+                            <p class="lead">Please review the changes that will be made to <strong>@Model.Product.Title</strong>.</p>
+
+                            @{
+                                // Filter out changes where both old and new are empty or "-"
+                                var meaningfulChanges = new List<(string Key, string OldValue, string NewValue)>();
+                                foreach (var change in Model.Changes)
+                                {
+                                    var changeObj = change.Value as System.Text.Json.JsonElement?;
+                                    string oldValue = "";
+                                    string newValue = "";
+                                    
+                                    if (changeObj.HasValue)
+                                    {
+                                        if (changeObj.Value.TryGetProperty("Old", out var oldProp))
+                                        {
+                                            oldValue = oldProp.GetString() ?? "";
+                                        }
+                                        if (changeObj.Value.TryGetProperty("New", out var newProp))
+                                        {
+                                            newValue = newProp.GetString() ?? "";
+                                        }
+                                    }
+                                    
+                                    // Only include if there's a meaningful change (not both empty or "-")
+                                    if (!string.IsNullOrWhiteSpace(oldValue) || !string.IsNullOrWhiteSpace(newValue))
+                                    {
+                                        if (oldValue != newValue || oldValue != "-" || newValue != "-")
+                                        {
+                                            meaningfulChanges.Add((change.Key, 
+                                                string.IsNullOrWhiteSpace(oldValue) ? "-" : oldValue, 
+                                                string.IsNullOrWhiteSpace(newValue) ? "-" : newValue));
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            @if (meaningfulChanges.Any())
+                            {
+                                <h5>Changes to be made in CMS:</h5>
+                                <div class="table-responsive">
+                                    <table class="table table-bordered">
+                                        <thead>
+                                            <tr>
+                                                <th>Field</th>
+                                                <th>Old Value</th>
+                                                <th>New Value</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var change in meaningfulChanges)
+                                            {
+                                                <tr>
+                                                    <td><strong>@change.Key</strong></td>
+                                                    <td>@change.OldValue</td>
+                                                    <td>@change.NewValue</td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="alert alert-info">
+                                    <i class="fas fa-info-circle"></i> No CMS changes were made. The review will be recorded with the current data.
+                                </div>
+                            }
+
+                            <div class="alert alert-warning mt-3">
+                                <i class="fas fa-info-circle"></i> 
+                                <strong>Note:</strong> Contacts can take up to 24–48 hours to update once submitted.
+                            </div>
+
+                            <div class="alert alert-warning mt-3">
+                                <i class="fas fa-exclamation-triangle"></i> 
+                                <strong>Important:</strong> Once you submit, all changes will be applied immediately in the CMS.
+                            </div>
+                        </div>
+                        <div class="card-footer">
+                            <a href="@Url.Action("DqReviewCheck", "FipsManager", new { documentId = Model.DocumentId })" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left"></i> Back
+                            </a>
+                            <button type="submit" class="btn btn-primary float-right">
+                                <i class="fas fa-check"></i> Submit Review
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+</section>

@@ -1,10 +1,12 @@
 using Compass.Data;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Compass.Services;
 
 namespace Compass.Controllers;
 
+[Authorize]
 public class UserSatisfactionSurveysController : Controller
 {
     private readonly CompassDbContext _db;

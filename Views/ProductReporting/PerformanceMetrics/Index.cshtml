@@ -1,172 +1,538 @@
 @model List<Compass.Models.ProductReturnStatusViewModel>
 @inject Compass.Services.IReturnStatusService ReturnStatusService
 @{
-    ViewData["Title"] = "Product performance metrics";
-    var currentPeriod = Model.FirstOrDefault();
-    var pageSize = 20;
-    var totalProducts = Model.Count;
-    var totalPages = (int)Math.Ceiling(totalProducts / (double)pageSize);
+    ViewData["Title"] = "Monthly operational performance reporting";
+    var currentView = ViewBag.CurrentView as string ?? "mine";
+    var isViewMine = string.Equals(currentView, "mine", StringComparison.OrdinalIgnoreCase);
+    var isViewWatched = string.Equals(currentView, "watched", StringComparison.OrdinalIgnoreCase);
+    var isViewAll = string.Equals(currentView, "all", StringComparison.OrdinalIgnoreCase);
 }
 
-<div class="content-header">
-    <div class="container-fluid">
-        <div class="row mb-2">
-            <div class="col-sm-6">
-                <ol class="breadcrumb">
-                    <li class="breadcrumb-item"><a href="/">Home</a></li>
-                    <li class="breadcrumb-item active">Operational reporting</li>
-                </ol>
-                <h1 class="m-0">Operational reporting</h1>
-            </div>
-            <div class="col-sm-6 text-right">
+@await Html.PartialAsync("_DashboardStyles")
 
-            </div>
-        </div>
-    </div>
-</div>
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <li class="breadcrumb-item">
+                <a href="/" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Home</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page" style="color: #0b0c0c; font-weight: 600;">Monthly operational performance reporting</li>
+        </ol>
+    </nav>
+}
+
+@{
+    ViewBag.BrandText = "Performance reporting";
+    ViewBag.NavLinks = new[]
+    {
+        new { Text = "Your products", Action = "PerformanceMetrics", Controller = "ProductReporting", Url = Url.Action("PerformanceMetrics", "ProductReporting", new { view = "mine" }), IsButton = false, IsActive = isViewMine },
+        new { Text = "Watched", Action = "PerformanceMetrics", Controller = "ProductReporting", Url = Url.Action("PerformanceMetrics", "ProductReporting", new { view = "watched" }), IsButton = false, IsActive = isViewWatched },
+        new { Text = "All products", Action = "PerformanceMetrics", Controller = "ProductReporting", Url = Url.Action("PerformanceMetrics", "ProductReporting", new { view = "all" }), IsButton = false, IsActive = isViewAll },
+        new { Text = "Guidance", Action = "PerformanceMetrics", Controller = "ProductReporting", Url = Url.Action("PerformanceMetrics", "ProductReporting", new { view = "guidance" }), IsButton = false, IsActive = false }
+    };
+}
 
 <section class="content">
     <div class="container-fluid">
-        @if (currentPeriod != null)
+        @await Html.PartialAsync("_ModuleNavbar")
+        @if (TempData["SuccessMessage"] != null)
         {
-            var periodStart = new DateTime(currentPeriod.CurrentPeriodYear, currentPeriod.CurrentPeriodMonth, 1);
-            var periodEnd = new DateTime(currentPeriod.CurrentPeriodYear, currentPeriod.CurrentPeriodMonth, DateTime.DaysInMonth(currentPeriod.CurrentPeriodYear, currentPeriod.CurrentPeriodMonth));
-            var dueDate = ReturnStatusService.GetReturnDueDate(currentPeriod.CurrentPeriodYear, currentPeriod.CurrentPeriodMonth);
-            
-            // Calculate status counts
-            var submittedCount = Model.Count(m => m.Status == Compass.Models.ReturnStatus.Submitted);
-            var lateCount = Model.Count(m => m.Status == Compass.Models.ReturnStatus.Late && (m.CompletedMetrics == 0 || m.CompletedMetrics == null));
-            var inProgressCount = Model.Count(m => (m.Status == Compass.Models.ReturnStatus.Due || m.Status == Compass.Models.ReturnStatus.Late) && m.CompletedMetrics > 0);
-            var dueCount = Model.Count(m => m.Status == Compass.Models.ReturnStatus.Due && (m.CompletedMetrics == 0 || m.CompletedMetrics == null));
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["SuccessMessage"]
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
         }
 
-       
-
         <div class="row">
-            <div class="col-12">
+            <!-- Left Column: Filters -->
+            <div class="col-xxl-2 col-xl-2 col-lg-3 col-md-4 col-sm-12 col-12">
+                <!-- Filters -->
                 <div class="card">
                     <div class="card-header">
-                        <h3 class="card-title">Your products</h3>
+                        <h3 class="card-title">Filters</h3>
                     </div>
-                    <div class="card-body table-responsive p-0">
-                        <table class="table table-hover text-nowrap sortable-table" id="userProductsTable">
-                        <thead>
-                            <tr>
-                                <th class="sortable col-product-name" data-column="ProductName" tabindex="0" role="button" aria-label="Sort by Product name">Product name <i class="fas fa-sort sort-icon"></i></th>
-                                <th class="sortable col-user-role" data-column="UserRole" tabindex="0" role="button" aria-label="Sort by Your role">Your role <i class="fas fa-sort sort-icon"></i></th>
-                                <th class="sortable col-status" data-column="Status" tabindex="0" role="button" aria-label="Sort by Status">Status <i class="fas fa-sort sort-icon"></i></th>
-                            </tr>
-                        </thead>
-                    <tbody>
-                        @if (Model != null && Model.Any())
-                        {
-                            @foreach (var item in Model.OrderBy(p => p.Product.Title))
-                            {
-                                <tr>
-                                    <td>
-                                        <a asp-action="ProductHistory" asp-route-fipsId="@item.Product.FipsId" class="font-weight-bold">
-                                            @item.Product.Title<br/>
-                                            <small class="text-muted product-fips-id">@item.Product.FipsId
-                                            @if (!string.IsNullOrEmpty(item.Product.Phase))
+                    <div class="card-body">
+                        @{
+                            var phases = ViewBag.Phases as List<string> ?? new List<string>();
+                            var businessAreas = ViewBag.BusinessAreas as List<string> ?? new List<string>();
+                        }
+                        <form method="get" id="filterForm">
+                            <input type="hidden" name="view" value="@currentView" />
+                            <div class="form-group">
+                                <label>Search</label>
+                                <input type="text" name="search" class="form-control form-control-sm" placeholder="Search products..." value="@ViewBag.CurrentSearch" />
+                            </div>
+
+                            <div class="form-group">
+                                <label for="phase">Phase</label>
+                                <select name="phase" id="phase" class="form-control form-control-sm">
+                                    <option value="">All</option>
+                                    @if (phases != null)
+                                    {
+                                        @foreach (var phaseOption in phases)
+                                        {
+                                            @if (ViewBag.CurrentPhase == phaseOption)
                                             {
-                                                <text> - </text>@item.Product.Phase
+                                                <option value="@phaseOption" selected>@phaseOption</option>
                                             }
-                                            </small>
-                                        </a>
-                                    </td>
-                                    <td>
-                                        @if (!string.IsNullOrEmpty(item.UserRole))
-                                        {
-                                            // UserRole may already be formatted (e.g., "Service Owner") or may need formatting (e.g., "delivery_manager")
-                                            var roleParts = item.UserRole.Split(',');
-                                            var formattedRoles = roleParts.Select(role => 
+                                            else
                                             {
-                                                var trimmed = role.Trim();
-                                                // If it contains underscores, format it; otherwise use as-is
-                                                if (trimmed.Contains('_'))
-                                                {
-                                                    return string.Join(" ", trimmed.Split('_').Select(word => System.Globalization.CultureInfo.CurrentCulture.TextInfo.ToTitleCase(word.ToLower())));
-                                                }
-                                                return trimmed;
-                                            });
-                                            @string.Join(", ", formattedRoles)
-                                        }
-                                        else
-                                        {
-                                            <span class="text-muted">-</span>
-                                        }
-                                    </td>
-                                    <td>
-                                        @if (item.Status.HasValue)
-                                        {
-                                            @switch (item.Status.Value)
-                                            {
-                                                case Compass.Models.ReturnStatus.Upcoming:
-                                                    <span class="badge badge-secondary">Upcoming</span>
-                                                    break;
-                                                case Compass.Models.ReturnStatus.Due:
-                                                    @if (item.TotalMetrics > 0 && item.CompletedMetrics > 0)
-                                                    {
-                                                        <span class="badge badge-info">In progress</span>
-                                                    }
-                                                    else
-                                                    {
-                                                        <span class="badge badge-warning">Due</span>
-                                                    }
-                                                    break;
-                                                case Compass.Models.ReturnStatus.Late:
-                                                    @if (item.TotalMetrics > 0 && item.CompletedMetrics > 0)
-                                                    {
-                                                        <span class="badge badge-warning">In progress (Late)</span>
-                                                    }
-                                                    else
-                                                    {
-                                                        <span class="badge badge-danger">Late</span>
-                                                    }
-                                                    break;
-                                                case Compass.Models.ReturnStatus.Submitted:
-                                                    <span class="badge badge-success">Submitted</span>
-                                                    break;
+                                                <option value="@phaseOption">@phaseOption</option>
                                             }
                                         }
-                                        else
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="businessArea">Business Area</label>
+                                <select name="businessArea" id="businessArea" class="form-control form-control-sm">
+                                    <option value="">All</option>
+                                    @if (businessAreas != null)
+                                    {
+                                        @foreach (var ba in businessAreas)
                                         {
-                                            <span class="text-muted">-</span>
+                                            @if (ViewBag.CurrentBusinessArea == ba)
+                                            {
+                                                <option value="@ba" selected>@ba</option>
+                                            }
+                                            else
+                                            {
+                                                <option value="@ba">@ba</option>
+                                            }
                                         }
-                                    </td>
-                                </tr>
-                            }
-                        }
-                        else
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="reportingStatus">Reporting Status</label>
+                                <select name="reportingStatus" id="reportingStatus" class="form-control form-control-sm">
+                                    <option value="">All</option>
+                                    @if (ViewBag.CurrentReportingStatus == "Due")
+                                    {
+                                        <option value="Due" selected>Due</option>
+                                    }
+                                    else
+                                    {
+                                        <option value="Due">Due</option>
+                                    }
+                                    @if (ViewBag.CurrentReportingStatus == "Late")
+                                    {
+                                        <option value="Late" selected>Late</option>
+                                    }
+                                    else
+                                    {
+                                        <option value="Late">Late</option>
+                                    }
+                                    @if (ViewBag.CurrentReportingStatus == "Submitted")
+                                    {
+                                        <option value="Submitted" selected>Submitted</option>
+                                    }
+                                    else
+                                    {
+                                        <option value="Submitted">Submitted</option>
+                                    }
+                                    @if (ViewBag.CurrentReportingStatus == "Upcoming")
+                                    {
+                                        <option value="Upcoming" selected>Upcoming</option>
+                                    }
+                                    else
+                                    {
+                                        <option value="Upcoming">Upcoming</option>
+                                    }
+                                    @if (ViewBag.CurrentReportingStatus == "Required")
+                                    {
+                                        <option value="Required" selected>Reporting required</option>
+                                    }
+                                    else
+                                    {
+                                        <option value="Required">Reporting required</option>
+                                    }
+                                    @if (ViewBag.CurrentReportingStatus == "NotRequired")
+                                    {
+                                        <option value="NotRequired" selected>Not required</option>
+                                    }
+                                    else
+                                    {
+                                        <option value="NotRequired">Not required</option>
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <button type="submit" class="btn btn-primary btn-sm btn-block">Apply filters</button>
+                                <a asp-action="PerformanceMetrics" asp-route-clearFilters="true" asp-route-view="@currentView" class="btn btn-default btn-sm btn-block">Clear all filters</a>
+                            </div>
+                        </form>
+                        
+                        @if (!string.IsNullOrEmpty(ViewBag.CurrentSearch?.ToString()) || 
+                             !string.IsNullOrEmpty(ViewBag.CurrentPhase?.ToString()) || 
+                             !string.IsNullOrEmpty(ViewBag.CurrentBusinessArea?.ToString()) || 
+                             !string.IsNullOrEmpty(ViewBag.CurrentReportingStatus?.ToString()))
                         {
-                            <tr>
-                                <td colspan="3" class="text-center">No products found</td>
-                            </tr>
+                            <div class="mt-3 pt-3 border-top">
+                                <strong class="d-block mb-2">Active Filters:</strong>
+                                @if (!string.IsNullOrEmpty(ViewBag.CurrentSearch?.ToString()))
+                                {
+                                    <a href="@Url.Action("PerformanceMetrics", new { 
+                                        view = currentView,
+                                        search = "",
+                                        phase = ViewBag.CurrentPhase, 
+                                        businessArea = ViewBag.CurrentBusinessArea, 
+                                        reportingStatus = ViewBag.CurrentReportingStatus
+                                    })" class="badge badge-info mb-2 mr-2 d-inline-flex align-items-center badge-link" title="Remove filter">
+                                        Search: @ViewBag.CurrentSearch <i class="fas fa-times ml-2"></i>
+                                    </a>
+                                }
+                                @if (!string.IsNullOrEmpty(ViewBag.CurrentPhase?.ToString()))
+                                {
+                                    <a href="@Url.Action("PerformanceMetrics", new { 
+                                        view = currentView,
+                                        search = ViewBag.CurrentSearch, 
+                                        phase = "",
+                                        businessArea = ViewBag.CurrentBusinessArea, 
+                                        reportingStatus = ViewBag.CurrentReportingStatus
+                                    })" class="badge badge-info mb-2 mr-2 d-inline-flex align-items-center badge-link" title="Remove filter">
+                                        Phase: @ViewBag.CurrentPhase <i class="fas fa-times ml-2"></i>
+                                    </a>
+                                }
+                                @if (!string.IsNullOrEmpty(ViewBag.CurrentBusinessArea?.ToString()))
+                                {
+                                    <a href="@Url.Action("PerformanceMetrics", new { 
+                                        view = currentView,
+                                        search = ViewBag.CurrentSearch, 
+                                        phase = ViewBag.CurrentPhase, 
+                                        businessArea = "",
+                                        reportingStatus = ViewBag.CurrentReportingStatus
+                                    })" class="badge badge-info mb-2 mr-2 d-inline-flex align-items-center badge-link" title="Remove filter">
+                                        Area: @ViewBag.CurrentBusinessArea <i class="fas fa-times ml-2"></i>
+                                    </a>
+                                }
+                                @if (!string.IsNullOrEmpty(ViewBag.CurrentReportingStatus?.ToString()))
+                                {
+                                    <a href="@Url.Action("PerformanceMetrics", new { 
+                                        view = currentView,
+                                        search = ViewBag.CurrentSearch, 
+                                        phase = ViewBag.CurrentPhase, 
+                                        businessArea = ViewBag.CurrentBusinessArea,
+                                        reportingStatus = ""
+                                    })" class="badge badge-info mb-2 mr-2 d-inline-flex align-items-center badge-link" title="Remove filter">
+                                        Status: @ViewBag.CurrentReportingStatus <i class="fas fa-times ml-2"></i>
+                                    </a>
+                                }
+                            </div>
                         }
-                        </tbody>
-                    </table>
-                    </div>
-                    <div class="card-footer">
-                        <div class="row align-items-center">
-                            <div class="col-md-6">
-                                <div class="text-muted">
-                                    Showing <span id="userShowingStart">1</span> to <span id="userShowingEnd">@Math.Min(pageSize, totalProducts)</span> of <strong id="userTotalCount">@totalProducts</strong> products
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <ul class="pagination pagination-sm m-0 float-right" id="userPaginationControls">
-                                    <!-- Pagination buttons will be generated by JavaScript -->
-                                </ul>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="card-footer">
-                        <a asp-action="ReportOtherProduct" class="btn btn-info">
-                            <i class="fas fa-plus-circle mr-2"></i>Report for another product
-                        </a>
-                        <small class="text-muted ml-3">If you're covering for someone or recently joined a team</small>
                     </div>
                 </div>
+            </div>
+
+            <!-- Right Column: Products Tables -->
+            <div class="col-xxl-10 col-xl-10 col-lg-9 col-md-8 col-sm-12 col-12">
+                @if (isViewMine)
+                {
+                    <!-- Your Products Section -->
+                    @if (Model != null && Model.Any())
+                    {
+                        <div class="card mb-4">
+                            <div class="card-header">
+                                <h3 class="card-title">Your products</h3>
+                                <div class="card-tools">
+                                    <a asp-action="ExportUserProducts" 
+                                       asp-route-search="@ViewBag.CurrentSearch"
+                                       asp-route-phase="@ViewBag.CurrentPhase"
+                                       asp-route-businessArea="@ViewBag.CurrentBusinessArea"
+                                       asp-route-reportingStatus="@ViewBag.CurrentReportingStatus"
+                                       style="color: #005ea5; text-decoration: none;">
+                                        Export to Excel
+                                    </a>
+                                </div>
+                            </div>
+                            <div class="card-body table-responsive p-0">
+                                <table class="table table-hover text-nowrap sortable-table mb-0" id="user-products-table">
+                                    <thead>
+                                        <tr>
+                                            <th class="sortable col-product-name" data-column="ProductName" tabindex="0" role="button" aria-label="Sort by Product name">Product name <i class="fas fa-sort sort-icon"></i></th>
+                                            <th class="sortable col-reporting-status" data-column="ReportingStatus" tabindex="0" role="button" aria-label="Sort by Reporting status">Reporting status <i class="fas fa-sort sort-icon"></i></th>
+                                            <th class="sortable col-status" data-column="Status" tabindex="0" role="button" aria-label="Sort by Status">Status <i class="fas fa-sort sort-icon"></i></th>
+                                            <th class="sortable col-reporting-period" data-column="ReportingPeriod" tabindex="0" role="button" aria-label="Sort by Reporting period">Reporting period <i class="fas fa-sort sort-icon"></i></th>
+                                            <th class="sortable col-due-date" data-column="DueDate" tabindex="0" role="button" aria-label="Sort by Due date">Due date <i class="fas fa-sort sort-icon"></i></th>
+                                            <th class="col-actions text-right">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var item in Model.OrderBy(p => p.Product.Title))
+                                        {
+                                            var reportingPeriod = item.CurrentPeriodYear > 0 && item.CurrentPeriodMonth > 0 
+                                                ? new DateTime(item.CurrentPeriodYear, item.CurrentPeriodMonth, 1).ToString("MMMM yyyy")
+                                                : "-";
+                                            var dueDate = item.CurrentPeriodDueDate?.ToString("d MMM yyyy") ?? 
+                                                         item.NextReportingPeriodDueDate?.ToString("d MMM yyyy") ?? "-";
+                                            
+                                            <tr>
+                                                <td>
+                                                    <a asp-controller="ProductReporting" asp-action="ProductHistory" asp-route-documentId="@(item.Product.DocumentId ?? item.Product.FipsId)" class="font-weight-bold">
+                                                        @item.Product.Title
+                                                        @if (!string.IsNullOrEmpty(item.Product.Phase))
+                                                        {
+                                                            <br/><small class="text-muted">@item.Product.Phase</small>
+                                                        }
+                                                    </a>
+                                                </td>
+                                                <td>
+                                                    @if (item.IsReportingRequired)
+                                                    {
+                                                        <span class="badge badge-success">Reporting required</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge badge-secondary">Not required</span>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    @if (item.Status.HasValue)
+                                                    {
+                                                        @switch (item.Status.Value)
+                                                        {
+                                                            case Compass.Models.ReturnStatus.Upcoming:
+                                                                <span class="badge badge-secondary">Upcoming</span>
+                                                                break;
+                                                            case Compass.Models.ReturnStatus.Due:
+                                                                @if (item.TotalMetrics > 0 && item.CompletedMetrics > 0)
+                                                                {
+                                                                    <span class="badge badge-info">In progress</span>
+                                                                }
+                                                                else
+                                                                {
+                                                                    <span class="badge badge-warning">Due</span>
+                                                                }
+                                                                break;
+                                                            case Compass.Models.ReturnStatus.Late:
+                                                                @if (item.TotalMetrics > 0 && item.CompletedMetrics > 0)
+                                                                {
+                                                                    <span class="badge badge-warning">In progress (Late)</span>
+                                                                }
+                                                                else
+                                                                {
+                                                                    <span class="badge badge-danger">Late</span>
+                                                                }
+                                                                break;
+                                                            case Compass.Models.ReturnStatus.Submitted:
+                                                                <span class="badge badge-success">Submitted</span>
+                                                                break;
+                                                        }
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">-</span>
+                                                    }
+                                                </td>
+                                                <td>@reportingPeriod</td>
+                                                <td>@dueDate</td>
+                                                <td class="text-right">
+                                                    @if (item.IsReportingRequired)
+                                                    {
+                                                        <a asp-controller="ProductReporting" asp-action="SubmitMetrics" 
+                                                           asp-route-documentId="@(item.Product.DocumentId ?? item.Product.FipsId)" 
+                                                           asp-route-year="@item.CurrentPeriodYear" 
+                                                           asp-route-month="@item.CurrentPeriodMonth" 
+                                                           class="btn btn-sm btn-primary">
+                                                            @if (item.Status == Compass.Models.ReturnStatus.Late)
+                                                            {
+                                                                <text>Complete return</text>
+                                                            }
+                                                            else
+                                                            {
+                                                                <text>Start return</text>
+                                                            }
+                                                        </a>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">-</span>
+                                                    }
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="card mb-4">
+                            <div class="card-body text-center py-5">
+                                <p class="text-muted mb-0">No products found.</p>
+                            </div>
+                        </div>
+                    }
+                }
+                else if (isViewWatched)
+                {
+                    <!-- Watched Products Section -->
+                    <div class="card mb-4">
+                        <div class="card-body text-center py-5">
+                            <p class="text-muted mb-0">Watched products functionality is not yet available.</p>
+                        </div>
+                    </div>
+                }
+                else if (isViewAll)
+                {
+                    <!-- All Products Section -->
+                    @if (Model != null && Model.Any())
+                    {
+                        <div class="card mb-4">
+                            <div class="card-header">
+                                <h3 class="card-title">
+                                    @{
+                                        var hasFilters = !string.IsNullOrEmpty(ViewBag.CurrentSearch?.ToString()) || 
+                                                        !string.IsNullOrEmpty(ViewBag.CurrentPhase?.ToString()) || 
+                                                        !string.IsNullOrEmpty(ViewBag.CurrentBusinessArea?.ToString()) || 
+                                                        !string.IsNullOrEmpty(ViewBag.CurrentReportingStatus?.ToString());
+                                    }
+                                    @(hasFilters ? "Filtered view of products" : "All products")
+                                </h3>
+                                <div class="card-tools">
+                                    <a asp-action="ExportAllProducts" 
+                                       asp-route-search="@ViewBag.CurrentSearch"
+                                       asp-route-phase="@ViewBag.CurrentPhase"
+                                       asp-route-businessArea="@ViewBag.CurrentBusinessArea"
+                                       asp-route-reportingStatus="@ViewBag.CurrentReportingStatus"
+                                       style="color: #005ea5; text-decoration: none;">
+                                        Export to Excel
+                                    </a>
+                                </div>
+                            </div>
+                            <div class="card-body table-responsive p-0">
+                                <table class="table table-hover text-nowrap sortable-table mb-0" id="all-products-table">
+                                    <thead>
+                                        <tr>
+                                            <th class="sortable col-product-name" data-column="ProductName" tabindex="0" role="button" aria-label="Sort by Product name">Product name <i class="fas fa-sort sort-icon"></i></th>
+                                            <th class="sortable col-reporting-status" data-column="ReportingStatus" tabindex="0" role="button" aria-label="Sort by Reporting status">Reporting status <i class="fas fa-sort sort-icon"></i></th>
+                                            <th class="sortable col-status" data-column="Status" tabindex="0" role="button" aria-label="Sort by Status">Status <i class="fas fa-sort sort-icon"></i></th>
+                                            <th class="sortable col-reporting-period" data-column="ReportingPeriod" tabindex="0" role="button" aria-label="Sort by Reporting period">Reporting period <i class="fas fa-sort sort-icon"></i></th>
+                                            <th class="sortable col-due-date" data-column="DueDate" tabindex="0" role="button" aria-label="Sort by Due date">Due date <i class="fas fa-sort sort-icon"></i></th>
+                                            <th class="col-actions text-right">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var item in Model.OrderBy(p => p.Product.Title))
+                                        {
+                                            var reportingPeriod = item.CurrentPeriodYear > 0 && item.CurrentPeriodMonth > 0 
+                                                ? new DateTime(item.CurrentPeriodYear, item.CurrentPeriodMonth, 1).ToString("MMMM yyyy")
+                                                : "-";
+                                            var dueDate = item.CurrentPeriodDueDate?.ToString("d MMM yyyy") ?? 
+                                                         item.NextReportingPeriodDueDate?.ToString("d MMM yyyy") ?? "-";
+                                            
+                                            <tr>
+                                                <td>
+                                                    <a asp-controller="ProductReporting" asp-action="ProductHistory" asp-route-documentId="@(item.Product.DocumentId ?? item.Product.FipsId)" class="font-weight-bold">
+                                                        @item.Product.Title
+                                                        @if (!string.IsNullOrEmpty(item.Product.Phase))
+                                                        {
+                                                            <br/><small class="text-muted">@item.Product.Phase</small>
+                                                        }
+                                                    </a>
+                                                </td>
+                                                <td>
+                                                    @if (item.IsReportingRequired)
+                                                    {
+                                                        <span class="badge badge-success">Reporting required</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge badge-secondary">Not required</span>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    @if (item.Status.HasValue)
+                                                    {
+                                                        @switch (item.Status.Value)
+                                                        {
+                                                            case Compass.Models.ReturnStatus.Upcoming:
+                                                                <span class="badge badge-secondary">Upcoming</span>
+                                                                break;
+                                                            case Compass.Models.ReturnStatus.Due:
+                                                                @if (item.TotalMetrics > 0 && item.CompletedMetrics > 0)
+                                                                {
+                                                                    <span class="badge badge-info">In progress</span>
+                                                                }
+                                                                else
+                                                                {
+                                                                    <span class="badge badge-warning">Due</span>
+                                                                }
+                                                                break;
+                                                            case Compass.Models.ReturnStatus.Late:
+                                                                @if (item.TotalMetrics > 0 && item.CompletedMetrics > 0)
+                                                                {
+                                                                    <span class="badge badge-warning">In progress (Late)</span>
+                                                                }
+                                                                else
+                                                                {
+                                                                    <span class="badge badge-danger">Late</span>
+                                                                }
+                                                                break;
+                                                            case Compass.Models.ReturnStatus.Submitted:
+                                                                <span class="badge badge-success">Submitted</span>
+                                                                break;
+                                                        }
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">-</span>
+                                                    }
+                                                </td>
+                                                <td>@reportingPeriod</td>
+                                                <td>@dueDate</td>
+                                                <td class="text-right">
+                                                    @if (item.IsReportingRequired)
+                                                    {
+                                                        <a asp-controller="ProductReporting" asp-action="SubmitMetrics" 
+                                                           asp-route-documentId="@(item.Product.DocumentId ?? item.Product.FipsId)" 
+                                                           asp-route-year="@item.CurrentPeriodYear" 
+                                                           asp-route-month="@item.CurrentPeriodMonth" 
+                                                           class="btn btn-sm btn-primary">
+                                                            @if (item.Status == Compass.Models.ReturnStatus.Late)
+                                                            {
+                                                                <text>Complete return</text>
+                                                            }
+                                                            else
+                                                            {
+                                                                <text>Start return</text>
+                                                            }
+                                                        </a>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">-</span>
+                                                    }
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="card mb-4">
+                            <div class="card-body p-0">
+                                <div class="p-3">
+                                    <p class="text-muted mb-0">No products found.</p>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                }
             </div>
         </div>
     </div>
@@ -175,205 +541,13 @@
 @section Scripts {
     <script nonce="@Context.Items["Nonce"]">
         $(document).ready(function() {
-            var pageSize = @pageSize;
-            
-            // User products pagination
-            var userCurrentPage = 1;
-            var userAllRows = $('#userProductsTable tbody tr').toArray();
-            
-            function filterAndPaginateUser() {
-                // Show all rows (no filtering)
-                var filteredRows = userAllRows;
-                
-                // Update total count
-                var totalFiltered = filteredRows.length;
-                $('#userTotalCount').text(totalFiltered);
-                
-                // Calculate pagination
-                var totalPages = Math.ceil(totalFiltered / pageSize);
-                
-                // Reset to page 1 if current page is beyond total pages
-                if (userCurrentPage > totalPages && totalPages > 0) {
-                    userCurrentPage = 1;
-                }
-                
-                // Hide all rows first
-                $(userAllRows).hide();
-                
-                // Show only rows for current page
-                var startIndex = (userCurrentPage - 1) * pageSize;
-                var endIndex = Math.min(startIndex + pageSize, totalFiltered);
-                
-                for (var i = startIndex; i < endIndex; i++) {
-                    $(filteredRows[i]).show();
-                }
-                
-                // Update pagination info
-                $('#userShowingStart').text(totalFiltered > 0 ? startIndex + 1 : 0);
-                $('#userShowingEnd').text(endIndex);
-                
-                // Generate pagination controls
-                generateUserPagination(totalPages, totalFiltered);
-            }
-            
-            function generateUserPagination(totalPages, totalFiltered) {
-                var paginationHtml = '';
-                
-                if (totalPages <= 1) {
-                    $('#userPaginationControls').html('');
-                    return;
-                }
-                
-                // Previous button
-                paginationHtml += '<li class="page-item ' + (userCurrentPage === 1 ? 'disabled' : '') + '">';
-                paginationHtml += '<a class="page-link" href="#" data-page="' + (userCurrentPage - 1) + '">Previous</a>';
-                paginationHtml += '</li>';
-                
-                // Page numbers
-                var startPage = Math.max(1, userCurrentPage - 2);
-                var endPage = Math.min(totalPages, userCurrentPage + 2);
-                
-                if (startPage > 1) {
-                    paginationHtml += '<li class="page-item"><a class="page-link" href="#" data-page="1">1</a></li>';
-                    if (startPage > 2) {
-                        paginationHtml += '<li class="page-item disabled"><span class="page-link">...</span></li>';
-                    }
-                }
-                
-                for (var i = startPage; i <= endPage; i++) {
-                    paginationHtml += '<li class="page-item ' + (i === userCurrentPage ? 'active' : '') + '">';
-                    paginationHtml += '<a class="page-link" href="#" data-page="' + i + '">' + i + '</a>';
-                    paginationHtml += '</li>';
-                }
-                
-                if (endPage < totalPages) {
-                    if (endPage < totalPages - 1) {
-                        paginationHtml += '<li class="page-item disabled"><span class="page-link">...</span></li>';
-                    }
-                    paginationHtml += '<li class="page-item"><a class="page-link" href="#" data-page="' + totalPages + '">' + totalPages + '</a></li>';
-                }
-                
-                // Next button
-                paginationHtml += '<li class="page-item ' + (userCurrentPage === totalPages ? 'disabled' : '') + '">';
-                paginationHtml += '<a class="page-link" href="#" data-page="' + (userCurrentPage + 1) + '">Next</a>';
-                paginationHtml += '</li>';
-                
-                $('#userPaginationControls').html(paginationHtml);
-                
-                // Bind click events
-                $('#userPaginationControls a').click(function(e) {
-                    e.preventDefault();
-                    var page = parseInt($(this).data('page'));
-                    if (!isNaN(page) && page > 0 && page <= totalPages) {
-                        userCurrentPage = page;
-                        filterAndPaginateUser();
-                    }
-                });
-            }
-            
-            // All products pagination
-            var allCurrentPage = 1;
-            var allAllRows = $('#allProductsTable tbody tr').toArray();
-            
-            function filterAndPaginateAllProducts() {
-                // Filter all rows
-                var filteredRows = allAllRows;
-                
-                // Update total count
-                var totalFiltered = filteredRows.length;
-                $('#allTotalCount').text(totalFiltered);
-                
-                // Calculate pagination
-                var totalPages = Math.ceil(totalFiltered / pageSize);
-                
-                // Reset to page 1 if current page is beyond total pages
-                if (allCurrentPage > totalPages && totalPages > 0) {
-                    allCurrentPage = 1;
-                }
-                
-                // Hide all rows first
-                $(allAllRows).hide();
-                
-                // Show only rows for current page
-                var startIndex = (allCurrentPage - 1) * pageSize;
-                var endIndex = Math.min(startIndex + pageSize, totalFiltered);
-                
-                for (var i = startIndex; i < endIndex; i++) {
-                    $(filteredRows[i]).show();
-                }
-                
-                // Update pagination info
-                $('#allShowingStart').text(totalFiltered > 0 ? startIndex + 1 : 0);
-                $('#allShowingEnd').text(endIndex);
-                
-                // Generate pagination controls
-                generateAllPagination(totalPages, totalFiltered);
-            }
-            
-            function generateAllPagination(totalPages, totalFiltered) {
-                var paginationHtml = '';
-                
-                if (totalPages <= 1) {
-                    $('#allPaginationControls').html('');
-                    return;
-                }
-                
-                // Previous button
-                paginationHtml += '<li class="page-item ' + (allCurrentPage === 1 ? 'disabled' : '') + '">';
-                paginationHtml += '<a class="page-link" href="#" data-page="' + (allCurrentPage - 1) + '">Previous</a>';
-                paginationHtml += '</li>';
-                
-                // Page numbers
-                var startPage = Math.max(1, allCurrentPage - 2);
-                var endPage = Math.min(totalPages, allCurrentPage + 2);
-                
-                if (startPage > 1) {
-                    paginationHtml += '<li class="page-item"><a class="page-link" href="#" data-page="1">1</a></li>';
-                    if (startPage > 2) {
-                        paginationHtml += '<li class="page-item disabled"><span class="page-link">...</span></li>';
-                    }
-                }
-                
-                for (var i = startPage; i <= endPage; i++) {
-                    paginationHtml += '<li class="page-item ' + (i === allCurrentPage ? 'active' : '') + '">';
-                    paginationHtml += '<a class="page-link" href="#" data-page="' + i + '">' + i + '</a>';
-                    paginationHtml += '</li>';
-                }
-                
-                if (endPage < totalPages) {
-                    if (endPage < totalPages - 1) {
-                        paginationHtml += '<li class="page-item disabled"><span class="page-link">...</span></li>';
-                    }
-                    paginationHtml += '<li class="page-item"><a class="page-link" href="#" data-page="' + totalPages + '">' + totalPages + '</a></li>';
-                }
-                
-                // Next button
-                paginationHtml += '<li class="page-item ' + (allCurrentPage === totalPages ? 'disabled' : '') + '">';
-                paginationHtml += '<a class="page-link" href="#" data-page="' + (allCurrentPage + 1) + '">Next</a>';
-                paginationHtml += '</li>';
-                
-                $('#allPaginationControls').html(paginationHtml);
-                
-                // Bind click events
-                $('#allPaginationControls a').click(function(e) {
-                    e.preventDefault();
-                    var page = parseInt($(this).data('page'));
-                    if (!isNaN(page) && page > 0 && page <= totalPages) {
-                        allCurrentPage = page;
-                        filterAndPaginateAllProducts();
-                    }
-                });
-            }
-            
-            // Initialize sortable tables using the same pattern as Project/Index
+            // Initialize sortable tables
             $('.sortable-table').each(function() {
                 initializeSortableTable($(this));
             });
 
             function initializeSortableTable(table) {
                 var currentSort = { column: null, direction: 'asc' };
-                var tableId = table.attr('id');
-                var isUserTable = tableId === 'userProductsTable';
 
                 table.find('.sortable').on('click keypress', function(e) {
                     if (e.type === 'keypress' && e.which !== 13 && e.which !== 32) {
@@ -387,11 +561,11 @@
                         direction = 'desc';
                     }
                     
-                    sortTable(table, column, direction, isUserTable);
+                    sortTable(table, column, direction);
                     currentSort = { column: column, direction: direction };
                 });
 
-                function sortTable(table, column, direction, isUserTable) {
+                function sortTable(table, column, direction) {
                     var tbody = table.find('tbody');
                     var rows = tbody.find('tr').toArray();
                     
@@ -403,6 +577,35 @@
                             // Status badges need special handling - sort by badge text
                             aVal = $(a).find('td').eq(colIndex).text().trim().toLowerCase();
                             bVal = $(b).find('td').eq(colIndex).text().trim().toLowerCase();
+                        } else if (column === 'ReportingPeriod') {
+                            // Sort by reporting period date
+                            aVal = $(a).find('td').eq(colIndex).text().trim();
+                            bVal = $(b).find('td').eq(colIndex).text().trim();
+                            // Parse dates for proper sorting
+                            if (aVal !== '-' && bVal !== '-') {
+                                try {
+                                    var aDate = new Date(aVal + ' 1');
+                                    var bDate = new Date(bVal + ' 1');
+                                    return direction === 'asc' ? aDate - bDate : bDate - aDate;
+                                } catch {
+                                    return aVal.localeCompare(bVal);
+                                }
+                            }
+                            return aVal.localeCompare(bVal);
+                        } else if (column === 'DueDate') {
+                            // Sort by due date
+                            aVal = $(a).find('td').eq(colIndex).text().trim();
+                            bVal = $(b).find('td').eq(colIndex).text().trim();
+                            if (aVal !== '-' && bVal !== '-') {
+                                try {
+                                    var aDate = new Date(aVal);
+                                    var bDate = new Date(bVal);
+                                    return direction === 'asc' ? aDate - bDate : bDate - aDate;
+                                } catch {
+                                    return aVal.localeCompare(bVal);
+                                }
+                            }
+                            return aVal.localeCompare(bVal);
                         } else {
                             aVal = $(a).find('td').eq(colIndex).text().trim().toLowerCase();
                             bVal = $(b).find('td').eq(colIndex).text().trim().toLowerCase();
@@ -421,13 +624,6 @@
                     });
                     
                     updateSortIcons(table, column, direction);
-                    
-                    // Re-paginate after sorting
-                    if (isUserTable) {
-                        userAllRows = rows;
-                        userCurrentPage = 1;
-                        filterAndPaginateUser();
-                    }
                 }
 
                 function updateSortIcons(table, column, direction) {
@@ -437,9 +633,6 @@
                     header.find('i').removeClass('fa-sort').addClass(iconClass);
                 }
             }
-            
-            // Initial pagination
-            filterAndPaginateUser();
         });
     </script>
 }

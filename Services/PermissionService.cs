@@ -9,8 +9,8 @@ public class PermissionService : IPermissionService
     private readonly CompassDbContext _context;
     private readonly ILogger<PermissionService> _logger;
 
-    // Super admin email - hardcoded as per requirements
-    private const string SuperAdminEmail = "andy.jones@education.gov.uk";
+    // Super Admin group name - users in this group have all permissions
+    private const string SuperAdminGroupName = "Super admin";
 
     // Central Operations Admin group name - default group with all permissions
     private const string CentralOpsAdminGroupName = "Central Operations Admin";
@@ -26,8 +26,8 @@ public class PermissionService : IPermissionService
         if (string.IsNullOrWhiteSpace(userEmail))
             return false;
 
-        // Check if user is the super admin
-        return userEmail.Equals(SuperAdminEmail, StringComparison.OrdinalIgnoreCase);
+        // Check if user is in the Super admin group
+        return await IsInGroupAsync(userEmail, SuperAdminGroupName);
     }
 
     public async Task<bool> HasPermissionAsync(string userEmail, string featureCode, PermissionType permission)
@@ -76,11 +76,15 @@ public class PermissionService : IPermissionService
         if (user == null)
             return false;
 
-        return await _context.UserGroups
+        // Materialize the groups first, then do case-insensitive comparison in memory
+        // This avoids EF Core translation issues with StringComparison.OrdinalIgnoreCase
+        var userGroups = await _context.UserGroups
             .Include(ug => ug.Group)
-            .AnyAsync(ug => ug.UserId == user.Id && 
-                          ug.Group.Name.Equals(groupName, StringComparison.OrdinalIgnoreCase) &&
-                          ug.Group.IsActive);
+            .Where(ug => ug.UserId == user.Id && ug.Group.IsActive)
+            .Select(ug => ug.Group.Name)
+            .ToListAsync();
+
+        return userGroups.Any(g => string.Equals(g, groupName, StringComparison.OrdinalIgnoreCase));
     }
 
     public async Task<List<string>> GetUserGroupsAsync(string userEmail)

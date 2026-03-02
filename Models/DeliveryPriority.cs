@@ -22,6 +22,9 @@ public class DeliveryPriority
 
     public bool IsActive { get; set; } = true;
 
+    [MaxLength(100)]
+    public string? CssClass { get; set; } // CSS class for styling the badge
+
     [Required]
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 

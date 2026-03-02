@@ -1,0 +1,828 @@
+@using Compass.Controllers
+@{
+    ViewData["Title"] = "Central Operations - Monthly Reporting";
+    var periodStats = ViewBag.PeriodStats as MonthlyUpdateStats;
+    var statusGroups = ViewBag.StatusGroups as Dictionary<string, List<Compass.Models.Project>> ?? new Dictionary<string, List<Compass.Models.Project>>();
+    var businessAreaGroups = ViewBag.BusinessAreaGroups as Dictionary<string, BusinessAreaMonthlyData> ?? new Dictionary<string, BusinessAreaMonthlyData>();
+    var monthName = ViewBag.MonthName as string ?? "";
+    var dueDate = ViewBag.DueDate as DateTime?;
+    var totalProjects = periodStats?.TotalProjects ?? 0;
+}
+
+@await Html.PartialAsync("_DashboardStyles")
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem;">
+            <li class="breadcrumb-item">
+                <a href="/" style="color: #005ea5; text-decoration: none;">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a asp-controller="CentralOps" asp-action="Summary" style="color: #005ea5; text-decoration: none;">Central Operations</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page">Monthly Reporting</li>
+        </ol>
+    </nav>
+}
+
+<section class="content">
+    <div class="container-fluid">
+        @await Html.PartialAsync("_CentralOpsNavigation")
+
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                @TempData["ErrorMessage"]
+                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+        }
+
+        <!-- Summary Cards -->
+        @if (periodStats != null)
+        {
+            var startedCount = periodStats.InProgress;
+            var submittedCount = periodStats.Submitted;
+            var totalCount = periodStats.TotalProjects;
+            
+            <div class="row mb-4">
+                <!-- Reporting Period Card -->
+                <div class="col-md-6 col-lg-3 mb-3">
+                    <div class="card border-left-primary shadow h-100">
+                        <div class="card-body">
+                            <div class="row no-gutters align-items-center">
+                                <div class="col mr-2">
+                                    <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">Reporting Period</div>
+                                    <div class="h5 mb-0 font-weight-bold text-gray-800">@monthName</div>
+                                    <div class="mt-2">
+                                        <a asp-action="GenerateMonthlyReport" asp-route-year="@ViewBag.ReportYear" asp-route-month="@ViewBag.ReportMonth" class="btn btn-sm btn-primary">
+                                            <i class="fas fa-file-alt mr-1"></i> Generate report
+                                        </a>
+                                    </div>
+                                    <div class="mt-2">
+                                        @if (ViewBag.HasPreviousMonth == true)
+                                        {
+                                            <a asp-action="MonthlyReporting" asp-route-year="@ViewBag.PreviousYear" asp-route-month="@ViewBag.PreviousMonth" class="btn btn-sm btn-outline-secondary mr-1">
+                                                <i class="fas fa-chevron-left mr-1"></i> Previous month
+                                            </a>
+                                        }
+                                        @if (ViewBag.HasNextMonth == true)
+                                        {
+                                            <a asp-action="MonthlyReporting" asp-route-year="@ViewBag.NextYear" asp-route-month="@ViewBag.NextMonth" class="btn btn-sm btn-outline-secondary">
+                                                Next month <i class="fas fa-chevron-right ml-1"></i>
+                                            </a>
+                                        }
+                                    </div>
+                                </div>
+                                <div class="col-auto">
+                                    <i class="fas fa-calendar-alt fa-2x text-gray-300"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Due Date Card -->
+                <div class="col-md-6 col-lg-3 mb-3">
+                    <div class="card border-left-warning shadow h-100">
+                        <div class="card-body">
+                            <div class="row no-gutters align-items-center">
+                                <div class="col mr-2">
+                                    <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">Due Date</div>
+                                    <div class="h5 mb-0 font-weight-bold text-gray-800">@(dueDate?.ToString("d MMMM yyyy") ?? "N/A")</div>
+                                </div>
+                                <div class="col-auto">
+                                    <i class="fas fa-clock fa-2x text-gray-300"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Progress Card -->
+                <div class="col-md-6 col-lg-3 mb-3">
+                    <div class="card border-left-info shadow h-100">
+                        <div class="card-body">
+                            <div class="row no-gutters align-items-center">
+                                <div class="col mr-2">
+                                    <div class="text-xs font-weight-bold text-info text-uppercase mb-1">Progress</div>
+                                    <div class="h5 mb-0 font-weight-bold text-gray-800">@submittedCount</div>
+                                    <small class="text-muted">Submitted</small>
+                                </div>
+                                <div class="col-auto">
+                                    <i class="fas fa-tasks fa-2x text-gray-300"></i>
+                                </div>
+                            </div>
+                            <div class="mt-3 pt-3 border-top">
+                                <div class="row">
+                                    <div class="col-6">
+                                        <div class="text-xs text-muted mb-1">Total</div>
+                                        <div class="h6 mb-0 font-weight-bold text-gray-800">@totalCount</div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="text-xs text-muted mb-1">In progress</div>
+                                        <div class="h6 mb-0 font-weight-bold text-warning">@startedCount</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <style>
+                .border-left-primary {
+                    border-left: 0.25rem solid #4e73df !important;
+                }
+                .border-left-warning {
+                    border-left: 0.25rem solid #f6c23e !important;
+                }
+                .border-left-info {
+                    border-left: 0.25rem solid #36b9cc !important;
+                }
+                .text-xs {
+                    font-size: 0.7rem;
+                }
+                .text-gray-300 {
+                    color: #dddfeb !important;
+                }
+                .text-gray-800 {
+                    color: #5a5c69 !important;
+                }
+                .shadow {
+                    box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15) !important;
+                }
+                /* Table responsive styling */
+                .table-responsive {
+                    position: relative;
+                    width: 100%;
+                    border: 1px solid #dee2e6;
+                    border-radius: 0.25rem;
+                    overflow-x: auto;
+                    overflow-y: auto;
+                    -webkit-overflow-scrolling: touch;
+                }
+                .table-responsive table {
+                    margin-bottom: 0;
+                    width: 100%;
+                    table-layout: auto;
+                }
+                .table-responsive thead th {
+                    position: sticky;
+                    top: 0;
+                    background-color: #f8f9fa;
+                    z-index: 10;
+                    border-bottom: 2px solid #dee2e6;
+                    white-space: nowrap;
+                }
+                .table-responsive tbody td {
+                    white-space: normal;
+                    word-wrap: break-word;
+                    max-width: 200px;
+                }
+                .table-responsive tbody td:first-child {
+                    min-width: 200px;
+                    max-width: 300px;
+                }
+                @@media (max-width: 768px) {
+                    .table-responsive {
+                        font-size: 0.875rem;
+                    }
+                    .table-responsive th,
+                    .table-responsive td {
+                        padding: 0.5rem;
+                        white-space: normal;
+                        word-wrap: break-word;
+                    }
+                    .table-responsive thead th {
+                        white-space: normal;
+                        font-size: 0.8rem;
+                    }
+                }
+                /* Ensure tables are accessible */
+                .table-responsive:focus {
+                    outline: 2px solid #005ea5;
+                    outline-offset: 2px;
+                }
+            </style>
+        }
+
+        <!-- Monthly Update Completion Status -->
+        @if (periodStats != null)
+        {
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h3 class="card-title mb-0">
+                        <i class="fas fa-calendar-check mr-2"></i>Monthly Update Completion Status
+                    </h3>
+                    <div class="card-tools">
+                        <button type="button" class="btn btn-sm btn-outline-primary" id="expandAllMonthlyPanels">
+                            <i class="fas fa-chevron-down"></i> Expand All
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary ml-2" id="collapseAllMonthlyPanels">
+                            <i class="fas fa-chevron-up"></i> Collapse All
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                <style>
+                    #monthlyStatusAccordion .card-header {
+                        background-color: #f8f9fa;
+                        border-bottom: 1px solid #dee2e6;
+                        transition: background-color 0.2s ease;
+                    }
+                    #monthlyStatusAccordion .card-header:hover {
+                        background-color: #e9ecef;
+                    }
+                    #monthlyStatusAccordion .card-header i {
+                        transition: transform 0.3s ease;
+                    }
+                    #monthlyStatusAccordion .card-header[aria-expanded="true"] i {
+                        transform: rotate(180deg);
+                    }
+                    #monthlyStatusAccordion .card-header[aria-expanded="false"] i {
+                        transform: rotate(0deg);
+                    }
+                </style>
+                <div class="accordion" id="monthlyStatusAccordion">
+                    @foreach (var statusInfo in new[] { 
+                        new { Status = "Submitted", BadgeClass = "badge badge-green", Count = periodStats.Submitted },
+                        new { Status = "Late", BadgeClass = "badge badge-red", Count = periodStats.Late },
+                        new { Status = "In Progress", BadgeClass = "badge badge-amber", Count = periodStats.InProgress },
+                        new { Status = "Not Started", BadgeClass = "badge badge-secondary", Count = periodStats.NotStarted }
+                    })
+                    {
+                        var status = statusInfo.Status;
+                        var badgeClass = statusInfo.BadgeClass;
+                        var count = statusInfo.Count;
+                        var percentage = totalProjects > 0 ? (count * 100.0 / totalProjects) : 0;
+                        var projects = statusGroups.ContainsKey(status) ? statusGroups[status] : new List<Compass.Models.Project>();
+                        var headingId = $"monthlyHeading{status.Replace(" ", "")}";
+                        var collapseId = $"monthlyCollapse{status.Replace(" ", "")}";
+
+                        <div class="card mb-2">
+                            <div class="card-header" id="@headingId" style="cursor: pointer;" data-toggle="collapse" data-target="#@collapseId" aria-expanded="false" aria-controls="@collapseId">
+                                <div class="d-flex align-items-center">
+                                    <i class="fas fa-chevron-down mr-3"></i>
+                                    <div class="flex-grow-1">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <div>
+                                                <span class="@badgeClass" style="font-size: 1rem;">@status</span>
+                                            </div>
+                                            <div class="d-flex align-items-center">
+                                                <span class="badge badge-primary mr-2">@count projects</span>
+                                                @{
+                                                    var progressBadgeClass = percentage switch {
+                                                        var p when p >= 90 => "badge-success",
+                                                        var p when p >= 70 => "badge-info",
+                                                        var p when p >= 50 => "badge-warning",
+                                                        _ => "badge-danger"
+                                                    };
+                                                }
+                                                <span class="badge @progressBadgeClass">@percentage.ToString("F1")%</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div id="@collapseId" class="collapse" aria-labelledby="@headingId" data-parent="#monthlyStatusAccordion">
+                                <div class="card-body p-0">
+                                    @if (projects.Any())
+                                    {
+                                        <div class="table-responsive" style="max-height: 600px; overflow-x: auto; overflow-y: auto; -webkit-overflow-scrolling: touch;">
+                                            <table class="table table-hover sortable-table mb-0" role="table" aria-label="Projects by @status status">
+                                                <thead>
+                                                    <tr>
+                                                        <th class="sortable" data-column="Title" tabindex="0" role="button" aria-label="Sort by Title">Title</th>
+                                                        <th class="sortable" data-column="Priority" tabindex="0" role="button" aria-label="Sort by Priority">Priority</th>
+                                                        <th class="sortable" data-column="Rag" tabindex="0" role="button" aria-label="Sort by RAG">RAG</th>
+                                                        <th class="sortable" data-column="BusinessArea" tabindex="0" role="button" aria-label="Sort by Business Area">Business Area</th>
+                                                        <th class="sortable" data-column="PrimaryContact" tabindex="0" role="button" aria-label="Sort by Primary Contact">Primary Contact</th>
+                                                        <th class="sortable" data-column="ServiceOwner" tabindex="0" role="button" aria-label="Sort by Service Owner">Service Owner</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    @foreach (var project in projects)
+                                                    {
+                                                        <tr>
+                                                            <td>
+                                                                <a asp-controller="Project" asp-action="Details" asp-route-id="@project.Id" style="font-weight: bold; color: #005ea5; text-decoration: none;">@project.Title</a>
+                                                                <br />
+                                                                <small class="text-muted">DFE-DDT-@project.Id</small>
+                                                            </td>
+                                                            <td>
+                                                                @if (project.DeliveryPriority != null && !string.IsNullOrEmpty(project.DeliveryPriority.Name))
+                                                                {
+                                                                    var priorityClass = project.DeliveryPriority.Name.ToLower() switch {
+                                                                        var p when p.Contains("critical") => "badge-danger",
+                                                                        var p when p.Contains("high") => "badge-danger",
+                                                                        var p when p.Contains("medium") => "badge-warning",
+                                                                        var p when p.Contains("low") => "badge-secondary",
+                                                                        _ => "badge-secondary"
+                                                                    };
+                                                                    <span class="badge @priorityClass">@project.DeliveryPriority.Name</span>
+                                                                }
+                                                                else
+                                                                {
+                                                                    <span class="text-muted">-</span>
+                                                                }
+                                                            </td>
+                                                            <td>
+                                                                @if (!string.IsNullOrEmpty(project.RagStatus))
+                                                                {
+                                                                    var normalized = project.RagStatus.Trim()
+                                                                        .Replace(" / ", "-")
+                                                                        .Replace("/", "-")
+                                                                        .Replace(" /", "-")
+                                                                        .Replace("/ ", "-");
+                                                                    
+                                                                    // Capitalize first letter of each word for consistency
+                                                                    var parts = normalized.Split('-');
+                                                                    for (int i = 0; i < parts.Length; i++)
+                                                                    {
+                                                                        if (parts[i].Length > 0)
+                                                                        {
+                                                                            parts[i] = char.ToUpperInvariant(parts[i][0]) + (parts[i].Length > 1 ? parts[i].Substring(1).ToLowerInvariant() : "");
+                                                                        }
+                                                                    }
+                                                                    var displayRagStatus = string.Join("-", parts);
+                                                                    
+                                                                    var projectRagClass = displayRagStatus switch {
+                                                                        "Red" => "badge badge-red",
+                                                                        "Amber-Red" => "badge badge-amber-red",
+                                                                        "Amber" => "badge badge-amber",
+                                                                        "Amber-Green" => "badge badge-amber-green",
+                                                                        "Green" => "badge badge-green",
+                                                                        _ => "badge badge-secondary"
+                                                                    };
+                                                                    <span class="@projectRagClass">@displayRagStatus</span>
+                                                                }
+                                                                else
+                                                                {
+                                                                    <span class="text-muted">-</span>
+                                                                }
+                                                            </td>
+                                                            <td>@(project.BusinessAreaLookup?.Name ?? "-")</td>
+                                                            <td>
+                                                                @if (project.PrimaryContactUser != null)
+                                                                {
+                                                                    @project.PrimaryContactUser.Name
+                                                                }
+                                                                else
+                                                                {
+                                                                    <span class="text-muted">-</span>
+                                                                }
+                                                            </td>
+                                                            <td>
+                                                                @if (project.ServiceOwners != null && project.ServiceOwners.Any())
+                                                                {
+                                                                    var serviceOwners = project.ServiceOwners.Where(so => so.User != null).Take(2).ToList();
+                                                                    @foreach (var so in serviceOwners)
+                                                                    {
+                                                                        <div>@so.User.Name</div>
+                                                                    }
+                                                                    @if (project.ServiceOwners.Count > 2)
+                                                                    {
+                                                                        <small class="text-muted">+ @(project.ServiceOwners.Count - 2) more</small>
+                                                                    }
+                                                                }
+                                                                else
+                                                                {
+                                                                    <span class="text-muted">-</span>
+                                                                }
+                                                            </td>
+                                                        </tr>
+                                                    }
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <div class="p-3 text-center text-muted">
+                                            No projects found with this status
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+                </div>
+            </div>
+        }
+
+        <!-- Business Areas Summary -->
+        @if (businessAreaGroups.Any())
+        {
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h3 class="card-title mb-0">
+                        <i class="fas fa-building mr-2"></i>Business Areas Summary
+                    </h3>
+                    <div class="card-tools">
+                        <button type="button" class="btn btn-sm btn-outline-primary" id="expandAllBusinessAreaPanels">
+                            <i class="fas fa-chevron-down"></i> Expand All
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary ml-2" id="collapseAllBusinessAreaPanels">
+                            <i class="fas fa-chevron-up"></i> Collapse All
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                <style>
+                    #businessAreaAccordion .card-header {
+                        background-color: #f8f9fa;
+                        border-bottom: 1px solid #dee2e6;
+                        transition: background-color 0.2s ease;
+                    }
+                    #businessAreaAccordion .card-header:hover {
+                        background-color: #e9ecef;
+                    }
+                    #businessAreaAccordion .card-header i {
+                        transition: transform 0.3s ease;
+                    }
+                    #businessAreaAccordion .card-header[aria-expanded="true"] i {
+                        transform: rotate(180deg);
+                    }
+                    #businessAreaAccordion .card-header[aria-expanded="false"] i {
+                        transform: rotate(0deg);
+                    }
+                </style>
+                <div class="accordion" id="businessAreaAccordion">
+                    @foreach (var businessArea in businessAreaGroups.OrderBy(ba => ba.Key))
+                    {
+                        var areaData = businessArea.Value;
+                        var submittedPercentage = areaData.TotalProjects > 0 ? (areaData.SubmittedCount * 100.0 / areaData.TotalProjects) : 0;
+                        var headingId = $"businessAreaHeading{businessArea.Key.Replace(" ", "").Replace("-", "")}";
+                        var collapseId = $"businessAreaCollapse{businessArea.Key.Replace(" ", "").Replace("-", "")}";
+
+                        <div class="card mb-2">
+                            <div class="card-header" id="@headingId" style="cursor: pointer;" data-toggle="collapse" data-target="#@collapseId" aria-expanded="false" aria-controls="@collapseId">
+                                <div class="d-flex align-items-center">
+                                    <i class="fas fa-chevron-down mr-3"></i>
+                                    <div class="flex-grow-1">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <div>
+                                                <strong style="font-size: 1rem;">@areaData.BusinessAreaName</strong>
+                                            </div>
+                                            <div class="d-flex align-items-center">
+                                                <span class="badge badge-primary mr-2">@areaData.SubmittedCount of @areaData.TotalProjects submitted</span>
+                                                @{
+                                                    var progressBadgeClass = submittedPercentage switch {
+                                                        var p when p >= 90 => "badge-success",
+                                                        var p when p >= 70 => "badge-info",
+                                                        var p when p >= 50 => "badge-warning",
+                                                        _ => "badge-danger"
+                                                    };
+                                                }
+                                                <span class="badge @progressBadgeClass">@submittedPercentage.ToString("F1")%</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div id="@collapseId" class="collapse" aria-labelledby="@headingId" data-parent="#businessAreaAccordion">
+                                <div class="card-body p-0">
+                                    @if (areaData.Projects.Any())
+                                    {
+                                        <div class="table-responsive" style="max-height: 600px; overflow-x: auto; overflow-y: auto; -webkit-overflow-scrolling: touch;">
+                                            <table class="table table-hover sortable-table mb-0" role="table" aria-label="Projects in @areaData.BusinessAreaName">
+                                                <thead>
+                                                    <tr>
+                                                        <th class="sortable" data-column="Title" tabindex="0" role="button" aria-label="Sort by Title">Title</th>
+                                                        <th class="sortable" data-column="Priority" tabindex="0" role="button" aria-label="Sort by Priority">Priority</th>
+                                                        <th class="sortable" data-column="Rag" tabindex="0" role="button" aria-label="Sort by RAG">RAG</th>
+                                                        <th class="sortable" data-column="PrimaryContact" tabindex="0" role="button" aria-label="Sort by Primary Contact">Primary Contact</th>
+                                                        <th class="sortable" data-column="ServiceOwner" tabindex="0" role="button" aria-label="Sort by Service Owner">Service Owner</th>
+                                                        <th class="sortable" data-column="Status" tabindex="0" role="button" aria-label="Sort by Status">Status</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    @{
+                                                        // Sort projects by status: Submitted first, then Not Started, then others
+                                                        var sortedProjects = areaData.Projects.OrderBy(p =>
+                                                        {
+                                                            var update = p.MonthlyUpdates?.FirstOrDefault(u => u.Year == ViewBag.ReportYear && u.Month == ViewBag.ReportMonth);
+                                                            var dueDate = ViewBag.DueDate as DateTime? ?? DateTime.UtcNow;
+                                                            
+                                                            if (update != null && update.SubmittedAt.HasValue)
+                                                            {
+                                                                return 1; // Submitted first
+                                                            }
+                                                            else if (DateTime.UtcNow <= dueDate)
+                                                            {
+                                                                if (update == null)
+                                                                {
+                                                                    return 2; // Not Started second
+                                                                }
+                                                                else if (!update.SubmittedAt.HasValue)
+                                                                {
+                                                                    return 3; // In Progress third
+                                                                }
+                                                            }
+                                                            return 4; // Late last
+                                                        }).ThenBy(p => p.Title).ToList();
+                                                    }
+                                                    @foreach (var project in sortedProjects)
+                                                    {
+                                                        // Determine project status for this reporting period
+                                                        var update = project.MonthlyUpdates?.FirstOrDefault(u => u.Year == ViewBag.ReportYear && u.Month == ViewBag.ReportMonth);
+                                                        string projectStatus;
+                                                        string statusBadgeClass;
+                                                        
+                                                        if (update != null && update.SubmittedAt.HasValue)
+                                                        {
+                                                            projectStatus = "Submitted";
+                                                            statusBadgeClass = "badge badge-green";
+                                                        }
+                                                        else if (DateTime.UtcNow > (ViewBag.DueDate as DateTime? ?? DateTime.UtcNow))
+                                                        {
+                                                            projectStatus = "Late";
+                                                            statusBadgeClass = "badge badge-red";
+                                                        }
+                                                        else if (update != null && !update.SubmittedAt.HasValue)
+                                                        {
+                                                            projectStatus = "In Progress";
+                                                            statusBadgeClass = "badge badge-amber";
+                                                        }
+                                                        else
+                                                        {
+                                                            projectStatus = "Not Started";
+                                                            statusBadgeClass = "badge badge-secondary";
+                                                        }
+
+                                                        <tr>
+                                                            <td>
+                                                                <a asp-controller="Project" asp-action="Details" asp-route-id="@project.Id" style="font-weight: bold; color: #005ea5; text-decoration: none;">@project.Title</a>
+                                                                <br />
+                                                                <small class="text-muted">DFE-DDT-@project.Id</small>
+                                                            </td>
+                                                            <td>
+                                                                @if (project.DeliveryPriority != null && !string.IsNullOrEmpty(project.DeliveryPriority.Name))
+                                                                {
+                                                                    var priorityClass = project.DeliveryPriority.Name.ToLower() switch {
+                                                                        var p when p.Contains("critical") => "badge-danger",
+                                                                        var p when p.Contains("high") => "badge-danger",
+                                                                        var p when p.Contains("medium") => "badge-warning",
+                                                                        var p when p.Contains("low") => "badge-secondary",
+                                                                        _ => "badge-secondary"
+                                                                    };
+                                                                    <span class="badge @priorityClass">@project.DeliveryPriority.Name</span>
+                                                                }
+                                                                else
+                                                                {
+                                                                    <span class="text-muted">-</span>
+                                                                }
+                                                            </td>
+                                                            <td>
+                                                                @if (!string.IsNullOrEmpty(project.RagStatus))
+                                                                {
+                                                                    var normalized = project.RagStatus.Trim()
+                                                                        .Replace(" / ", "-")
+                                                                        .Replace("/", "-")
+                                                                        .Replace(" /", "-")
+                                                                        .Replace("/ ", "-");
+                                                                    
+                                                                    // Capitalize first letter of each word for consistency
+                                                                    var parts = normalized.Split('-');
+                                                                    for (int i = 0; i < parts.Length; i++)
+                                                                    {
+                                                                        if (parts[i].Length > 0)
+                                                                        {
+                                                                            parts[i] = char.ToUpperInvariant(parts[i][0]) + (parts[i].Length > 1 ? parts[i].Substring(1).ToLowerInvariant() : "");
+                                                                        }
+                                                                    }
+                                                                    var displayRagStatus = string.Join("-", parts);
+                                                                    
+                                                                    var projectRagClass = displayRagStatus switch {
+                                                                        "Red" => "badge badge-red",
+                                                                        "Amber-Red" => "badge badge-amber-red",
+                                                                        "Amber" => "badge badge-amber",
+                                                                        "Amber-Green" => "badge badge-amber-green",
+                                                                        "Green" => "badge badge-green",
+                                                                        _ => "badge badge-secondary"
+                                                                    };
+                                                                    <span class="@projectRagClass">@displayRagStatus</span>
+                                                                }
+                                                                else
+                                                                {
+                                                                    <span class="text-muted">-</span>
+                                                                }
+                                                            </td>
+                                                            <td>
+                                                                @if (project.PrimaryContactUser != null)
+                                                                {
+                                                                    @project.PrimaryContactUser.Name
+                                                                }
+                                                                else
+                                                                {
+                                                                    <span class="text-muted">-</span>
+                                                                }
+                                                            </td>
+                                                            <td>
+                                                                @if (project.ServiceOwners != null && project.ServiceOwners.Any())
+                                                                {
+                                                                    var serviceOwners = project.ServiceOwners.Where(so => so.User != null).Take(2).ToList();
+                                                                    @foreach (var so in serviceOwners)
+                                                                    {
+                                                                        <div>@so.User.Name</div>
+                                                                    }
+                                                                    @if (project.ServiceOwners.Count > 2)
+                                                                    {
+                                                                        <small class="text-muted">+ @(project.ServiceOwners.Count - 2) more</small>
+                                                                    }
+                                                                }
+                                                                else
+                                                                {
+                                                                    <span class="text-muted">-</span>
+                                                                }
+                                                            </td>
+                                                            <td>
+                                                                <span class="@statusBadgeClass">@projectStatus</span>
+                                                            </td>
+                                                        </tr>
+                                                    }
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <div class="p-3 text-center text-muted">
+                                            No projects found in this business area
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+                </div>
+            </div>
+        }
+
+    </div>
+</section>
+
+@section Scripts {
+    <script nonce="@Context.Items["Nonce"]">
+        $(document).ready(function() {
+            // Initialize sortable tables
+            $('.sortable-table').each(function() {
+                initializeSortableTable($(this));
+            });
+
+            // Handle accordion collapse/expand events to update chevron icons
+            $('#monthlyStatusAccordion').on('show.bs.collapse', function(e) {
+                var header = $(e.target).prev('.card-header');
+                header.attr('aria-expanded', 'true');
+            });
+
+            $('#monthlyStatusAccordion').on('hide.bs.collapse', function(e) {
+                var header = $(e.target).prev('.card-header');
+                header.attr('aria-expanded', 'false');
+            });
+
+            // Expand all panels
+            $('#expandAllMonthlyPanels').on('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                // Remove data-parent temporarily to allow all panels to be open
+                $('#monthlyStatusAccordion .collapse').each(function() {
+                    var $collapse = $(this);
+                    var $header = $collapse.prev('.card-header');
+                    if (!$collapse.hasClass('show')) {
+                        $collapse.removeAttr('data-parent');
+                        $collapse.addClass('show');
+                        $header.attr('aria-expanded', 'true');
+                        // Trigger Bootstrap event
+                        $collapse.trigger('shown.bs.collapse');
+                    }
+                });
+            });
+
+            // Collapse all panels
+            $('#collapseAllMonthlyPanels').on('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                $('#monthlyStatusAccordion .collapse').each(function() {
+                    var $collapse = $(this);
+                    var $header = $collapse.prev('.card-header');
+                    if ($collapse.hasClass('show')) {
+                        $collapse.removeClass('show');
+                        $header.attr('aria-expanded', 'false');
+                        // Restore data-parent and trigger Bootstrap event
+                        $collapse.attr('data-parent', '#monthlyStatusAccordion');
+                        $collapse.trigger('hidden.bs.collapse');
+                    }
+                });
+            });
+
+            // Handle business area accordion collapse/expand events
+            $('#businessAreaAccordion').on('show.bs.collapse', function(e) {
+                var header = $(e.target).prev('.card-header');
+                header.attr('aria-expanded', 'true');
+            });
+
+            $('#businessAreaAccordion').on('hide.bs.collapse', function(e) {
+                var header = $(e.target).prev('.card-header');
+                header.attr('aria-expanded', 'false');
+            });
+
+            // Expand all business area panels
+            $('#expandAllBusinessAreaPanels').on('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                $('#businessAreaAccordion .collapse').each(function() {
+                    var $collapse = $(this);
+                    var $header = $collapse.prev('.card-header');
+                    if (!$collapse.hasClass('show')) {
+                        $collapse.removeAttr('data-parent');
+                        $collapse.addClass('show');
+                        $header.attr('aria-expanded', 'true');
+                        $collapse.trigger('shown.bs.collapse');
+                    }
+                });
+            });
+
+            // Collapse all business area panels
+            $('#collapseAllBusinessAreaPanels').on('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                $('#businessAreaAccordion .collapse').each(function() {
+                    var $collapse = $(this);
+                    var $header = $collapse.prev('.card-header');
+                    if ($collapse.hasClass('show')) {
+                        $collapse.removeClass('show');
+                        $header.attr('aria-expanded', 'false');
+                        $collapse.attr('data-parent', '#businessAreaAccordion');
+                        $collapse.trigger('hidden.bs.collapse');
+                    }
+                });
+            });
+        });
+
+        function initializeSortableTable(table) {
+            var currentSort = { column: null, direction: 'asc' };
+
+            table.find('.sortable').on('click keypress', function(e) {
+                if (e.type === 'keypress' && e.which !== 13 && e.which !== 32) {
+                    return;
+                }
+                
+                var column = $(this).data('column');
+                var direction = 'asc';
+                
+                if (currentSort.column === column && currentSort.direction === 'asc') {
+                    direction = 'desc';
+                }
+                
+                sortTable(table, column, direction);
+                currentSort = { column: column, direction: direction };
+            });
+
+            function sortTable(table, column, direction) {
+                var tbody = table.find('tbody');
+                var rows = tbody.find('tr').toArray();
+                
+                rows.sort(function(a, b) {
+                    var aVal, bVal;
+                    var colIndex = table.find('thead th[data-column="' + column + '"]').index();
+                    
+                    if (column === 'Priority' || column === 'Rag') {
+                        // Text sorting for badges
+                        aVal = $(a).find('td').eq(colIndex).text().trim().toLowerCase();
+                        bVal = $(b).find('td').eq(colIndex).text().trim().toLowerCase();
+                    } else {
+                        // Text sorting
+                        aVal = $(a).find('td').eq(colIndex).text().trim().toLowerCase();
+                        bVal = $(b).find('td').eq(colIndex).text().trim().toLowerCase();
+                    }
+                    
+                    if (direction === 'asc') {
+                        return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+                    } else {
+                        return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
+                    }
+                });
+                
+                tbody.empty();
+                rows.forEach(function(row) {
+                    tbody.append(row);
+                });
+                
+                updateSortIcons(table, column, direction);
+            }
+
+            function updateSortIcons(table, column, direction) {
+                table.find('.sortable i').remove();
+                var header = table.find('.sortable[data-column="' + column + '"]');
+                var iconClass = direction === 'asc' ? 'fa-sort-up' : 'fa-sort-down';
+                header.append(' <i class="fas ' + iconClass + '"></i>');
+            }
+        }
+    </script>
+}
+

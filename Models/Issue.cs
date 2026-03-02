@@ -27,6 +27,9 @@ public class Issue
     [MaxLength(50)]
     public string? FipsId { get; set; }
 
+    [MaxLength(100)]
+    public string? ProductDocumentId { get; set; } // Product DocumentID from CMS (primary identifier)
+
     [Required]
     [MaxLength(200)]
     public string Title { get; set; } = string.Empty;
@@ -180,6 +183,8 @@ public class Issue
     public ICollection<Dependency> DependenciesAsTarget { get; set; } = new List<Dependency>();
 
     public ICollection<IssueDecision> IssueDecisions { get; set; } = new List<IssueDecision>();
+
+    public ICollection<IssueRisk> IssueRisks { get; set; } = new List<IssueRisk>();
     public ICollection<IssueComment> Comments { get; set; } = new List<IssueComment>();
     public ICollection<IssueHistory> HistoryEntries { get; set; } = new List<IssueHistory>();
     public ICollection<IssueWcagCriterion> WcagCriteria { get; set; } = new List<IssueWcagCriterion>();

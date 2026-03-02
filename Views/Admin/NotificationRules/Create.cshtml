@@ -1,0 +1,184 @@
+@model Compass.Models.NotificationRule
+@{
+    ViewData["Title"] = "Create Notification Rule";
+    var templates = ViewBag.Templates as List<Compass.Models.NotificationTemplate> ?? new List<Compass.Models.NotificationTemplate>();
+    var triggerCodes = ViewBag.TriggerCodes as List<string> ?? new List<string>();
+    var recipientTypes = ViewBag.RecipientTypes as List<string> ?? new List<string>();
+    var ragStatuses = ViewBag.RagStatuses as List<string> ?? new List<string>();
+}
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <li class="breadcrumb-item">
+                <a href="/" style="color: #005ea5; text-decoration: none; font-weight: 500;">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a asp-controller="Admin" asp-action="Index" style="color: #005ea5; text-decoration: none; font-weight: 500;">Administration</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a asp-controller="NotificationRules" asp-action="Index" style="color: #005ea5; text-decoration: none; font-weight: 500;">Notification Rules</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page" style="color: #0b0c0c; font-weight: 600;">Create Rule</li>
+        </ol>
+    </nav>
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1 class="m-0">Create Notification Rule</h1>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-lg-8">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Rule Details</h3>
+                    </div>
+                    <form asp-action="Create" asp-controller="NotificationRules" method="post">
+                        <div class="card-body">
+                            <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+                            
+                            <div class="form-group">
+                                <label class="control-label">Name *</label>
+                                <input name="name" class="form-control" placeholder="e.g., Notify SRO on RAG Status Change" required />
+                                <span class="text-danger"></span>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="control-label">Description</label>
+                                <textarea name="description" class="form-control" rows="2" placeholder="Optional description of this rule"></textarea>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="control-label">Template *</label>
+                                <select name="notificationTemplateId" class="form-control" required>
+                                    <option value="">-- Select Template --</option>
+                                    @foreach (var template in templates)
+                                    {
+                                        <option value="@template.Id">@template.Name (@template.TriggerCode)</option>
+                                    }
+                                </select>
+                                <small class="form-text text-muted">The email template to use for this rule</small>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="control-label">Trigger Code *</label>
+                                <select name="triggerCode" class="form-control" required>
+                                    <option value="">-- Select Trigger Code --</option>
+                                    @foreach (var triggerCode in triggerCodes)
+                                    {
+                                        <option value="@triggerCode">@triggerCode</option>
+                                    }
+                                </select>
+                                <small class="form-text text-muted">The event that triggers this notification</small>
+                            </div>
+
+                            <div class="form-group">
+                                <div class="form-check">
+                                    <input name="isEnabled" class="form-check-input" type="checkbox" checked />
+                                    <label class="form-check-label">
+                                        Enabled
+                                    </label>
+                                </div>
+                            </div>
+
+                            <hr />
+
+                            <h5>Recipients</h5>
+                            <div class="form-group">
+                                <label class="control-label">Recipient Types</label>
+                                <select name="recipientTypes" class="form-control" multiple size="5">
+                                    @foreach (var recipientType in recipientTypes)
+                                    {
+                                        <option value="@recipientType">@recipientType</option>
+                                    }
+                                </select>
+                                <small class="form-text text-muted">Hold Ctrl/Cmd to select multiple. Options: team_member, added_team_member, sro, primary_contact, team, all</small>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="control-label">Specific Email Addresses</label>
+                                <textarea name="specificEmails" class="form-control" rows="3" placeholder="Enter email addresses, one per line"></textarea>
+                                <small class="form-text text-muted">Optional: Enter specific email addresses to always include (one per line)</small>
+                            </div>
+
+                            <hr />
+
+                            <h5>Conditions</h5>
+                            <div class="form-group">
+                                <label class="control-label">RAG Statuses (optional)</label>
+                                <select name="ragStatuses" class="form-control" multiple size="5">
+                                    @foreach (var ragStatus in ragStatuses)
+                                    {
+                                        <option value="@ragStatus">@ragStatus</option>
+                                    }
+                                </select>
+                                <small class="form-text text-muted">Hold Ctrl/Cmd to select multiple. Only send when RAG status matches one of these values.</small>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="control-label">Project Statuses (optional)</label>
+                                <input name="projectStatuses" class="form-control" placeholder="e.g., Active, In Progress (comma-separated)" />
+                                <small class="form-text text-muted">Optional: Comma-separated list of project statuses. Only send when project status matches one of these values.</small>
+                            </div>
+                        </div>
+                        <div class="card-footer">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save mr-1"></i> Create Rule
+                            </button>
+                            <a href="@Url.Action("Index", "NotificationRules")" class="btn btn-secondary">
+                                Cancel
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <div class="col-lg-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Guidance</h3>
+                    </div>
+                    <div class="card-body">
+                        <h6>Recipient Types</h6>
+                        <ul class="small">
+                            <li><strong>team_member</strong> - The team member who triggered the event</li>
+                            <li><strong>added_team_member</strong> - The person who was added to the team</li>
+                            <li><strong>sro</strong> - Senior Responsible Officers</li>
+                            <li><strong>primary_contact</strong> - Primary contact</li>
+                            <li><strong>team</strong> - All team members</li>
+                            <li><strong>all</strong> - All project stakeholders</li>
+                        </ul>
+
+                        <h6 class="mt-3">Conditions</h6>
+                        <p class="small">Conditions determine when this rule applies. If no conditions are set, the rule applies to all instances of the trigger.</p>
+
+                        <h6 class="mt-3">Trigger Codes</h6>
+                        <ul class="small">
+                            <li><code>team_member_added</code> - When someone joins a team</li>
+                            <li><code>sro_assigned</code> - When SRO is assigned</li>
+                            <li><code>primary_contact_assigned</code> - When primary contact is assigned</li>
+                            <li><code>rag_status_changed</code> - When RAG status changes</li>
+                            <li><code>report_reminder</code> - Report submission reminders</li>
+                            <li><code>project_created</code> - When a project is created</li>
+                            <li><code>project_status_changed</code> - When project status changes</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+}
+
