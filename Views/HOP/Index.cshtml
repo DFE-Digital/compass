@@ -1,0 +1,284 @@
+@model List<Compass.Models.TrainingRequest>
+
+@{
+    ViewData["Title"] = "HOP dashboard";
+}
+
+@await Html.PartialAsync("_DashboardStyles")
+
+@{
+    var currentAction = ViewContext.RouteData.Values["action"]?.ToString() ?? "";
+    ViewBag.BrandText = "Skills and Learning";
+    ViewBag.NavLinks = new[]
+    {
+        new { Text = "My skills and learning", Action = "Index", Controller = "SkillsAndLearning", Url = (string)null, IsButton = false, IsActive = currentAction == "Index" },
+        new { Text = "Browse courses", Action = "BrowseCourses", Controller = "SkillsAndLearning", Url = (string)null, IsButton = false, IsActive = currentAction == "BrowseCourses" },
+        new { Text = "My requests", Action = "MyRequests", Controller = "SkillsAndLearning", Url = (string)null, IsButton = false, IsActive = currentAction == "MyRequests" },
+        new { Text = "HOP dashboard", Action = "HOPDashboard", Controller = "SkillsAndLearning", Url = (string)null, IsButton = false, IsActive = currentAction == "HOPDashboard" }
+    };
+}
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <li class="breadcrumb-item">
+                <a href="/" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a asp-action="Index" asp-controller="SkillsAndLearning" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">My skills and learning</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page" style="color: #0b0c0c; font-weight: 600;">HOP dashboard</li>
+        </ol>
+    </nav>
+}
+
+<section class="content">
+    <div class="container-fluid">
+        @await Html.PartialAsync("_ModuleNavbar")
+        
+        <div class="content-header">
+            <div class="container-fluid">
+                <div class="row mb-2">
+                    <div class="col-sm-6">
+                        <h1 class="m-0">Head of Profession dashboard</h1>
+                        <p class="text-muted mb-0">Forecast cost and L&D demand for your profession</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- Statistics Cards -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card border-left-primary shadow h-100">
+                    <div class="card-body">
+                        <div class="row no-gutters align-items-center">
+                            <div class="col mr-2">
+                                <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">Total requests</div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800">@ViewBag.TotalRequests</div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="fas fa-clipboard-list fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-left-info shadow h-100">
+                    <div class="card-body">
+                        <div class="row no-gutters align-items-center">
+                            <div class="col mr-2">
+                                <div class="text-xs font-weight-bold text-info text-uppercase mb-1">Pending</div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800">@ViewBag.PendingRequests</div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="fas fa-clock fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-left-success shadow h-100">
+                    <div class="card-body">
+                        <div class="row no-gutters align-items-center">
+                            <div class="col mr-2">
+                                <div class="text-xs font-weight-bold text-success text-uppercase mb-1">Total spent</div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800">£@(((decimal?)ViewBag.TotalSpent ?? 0).ToString("N0"))</div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="fas fa-pound-sign fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-left-warning shadow h-100">
+                    <div class="card-body">
+                        <div class="row no-gutters align-items-center">
+                            <div class="col mr-2">
+                                <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">Estimated cost</div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800">£@(((decimal?)ViewBag.EstimatedCost ?? 0).ToString("N0"))</div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="fas fa-calculator fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Training Requests Table -->
+        <div class="row">
+            <!-- Left Column: Navigation -->
+            <div class="col-xxl-2 col-xl-2 col-lg-3 col-md-4 col-sm-12 col-12">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h3 class="card-title">Status</h3>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="list-group list-group-flush">
+                            <a asp-action="HOPDashboard" asp-route-statusFilter="New" 
+                               class="list-group-item list-group-item-action @(ViewBag.StatusFilter == "New" ? "active" : "")">
+                                New
+                                <span class="badge badge-light float-right">@ViewBag.NewCount</span>
+                            </a>
+                            <a asp-action="HOPDashboard" asp-route-statusFilter="Approved" 
+                               class="list-group-item list-group-item-action @(ViewBag.StatusFilter == "Approved" ? "active" : "")">
+                                Approved
+                                <span class="badge badge-light float-right">@ViewBag.ApprovedCount</span>
+                            </a>
+                            <a asp-action="HOPDashboard" asp-route-statusFilter="Rejected" 
+                               class="list-group-item list-group-item-action @(ViewBag.StatusFilter == "Rejected" ? "active" : "")">
+                                Rejected
+                                <span class="badge badge-light float-right">@ViewBag.RejectedCount</span>
+                            </a>
+                            <a asp-action="HOPDashboard" asp-route-statusFilter="Completed" 
+                               class="list-group-item list-group-item-action @(ViewBag.StatusFilter == "Completed" ? "active" : "")">
+                                Completed
+                                <span class="badge badge-light float-right">@ViewBag.CompletedCount</span>
+                            </a>
+                            <a asp-action="HOPDashboard" asp-route-statusFilter="Cancelled" 
+                               class="list-group-item list-group-item-action @(ViewBag.StatusFilter == "Cancelled" ? "active" : "")">
+                                Cancelled
+                                <span class="badge badge-light float-right">@ViewBag.CancelledCount</span>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Table -->
+            <div class="col-xxl-10 col-xl-10 col-lg-9 col-md-8 col-sm-12 col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Training requests (@Model.Count)</h3>
+                    </div>
+                    <div class="card-body p-0">
+                        @if (Model.Any())
+                        {
+                            <table class="table table-hover text-nowrap sortable-table mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Course</th>
+                                        <th>Status</th>
+                                        <th>Requested</th>
+                                        <th>Approved/Rejected</th>
+                                        @if (ViewBag.StatusFilter == "Completed")
+                                        {
+                                            <th>Completed Date</th>
+                                        }
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var request in Model)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <strong>@(request.User?.Name ?? "Unknown")</strong>
+                                                @if (!string.IsNullOrEmpty(request.User?.Email))
+                                                {
+                                                    <br><small class="text-muted">@request.User.Email</small>
+                                                }
+                                            </td>
+                                            <td>
+                                                <strong>@(request.Course?.Title ?? request.CustomCourseTitle ?? "Custom course")</strong>
+                                                @if (request.Course != null && !string.IsNullOrEmpty(request.Course.Provider))
+                                                {
+                                                    <br><small class="text-muted">Provider: @request.Course.Provider</small>
+                                                }
+                                            </td>
+                                            <td>
+                                                @switch (request.Status)
+                                                {
+                                                    case "Submitted":
+                                                        <span class="badge badge-info">New</span>
+                                                        break;
+                                                    case "Approved":
+                                                        @if (request.TrainingCompleted == true)
+                                                        {
+                                                            <span class="badge badge-success">Completed</span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="badge badge-success">Approved</span>
+                                                        }
+                                                        break;
+                                                    case "Rejected":
+                                                        <span class="badge badge-danger">Rejected</span>
+                                                        break;
+                                                    default:
+                                                        <span class="badge badge-secondary">@request.Status</span>
+                                                        break;
+                                                }
+                                                @if (request.WithdrawalRequested)
+                                                {
+                                                    <br><span class="badge badge-secondary mt-1">Withdrawal requested</span>
+                                                }
+                                            </td>
+                                            <td>@request.CreatedAt.ToString("dd MMM yyyy")</td>
+                                            <td>
+                                                @if (request.ApprovedAt.HasValue)
+                                                {
+                                                    @request.ApprovedAt.Value.ToString("dd MMM yyyy")
+                                                    @if (!string.IsNullOrEmpty(request.ApprovedBy))
+                                                    {
+                                                        <br><small class="text-muted">by @request.ApprovedBy</small>
+                                                    }
+                                                }
+                                                else if (request.Status == "Rejected")
+                                                {
+                                                    <span class="text-muted">Rejected</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                            @if (ViewBag.StatusFilter == "Completed")
+                                            {
+                                                <td>
+                                                    @if (request.CompletedDate.HasValue)
+                                                    {
+                                                        @request.CompletedDate.Value.ToString("dd MMM yyyy")
+                                                    }
+                                                    else if (request.PlannedDate.HasValue)
+                                                    {
+                                                        <span class="text-muted">Planned: @request.PlannedDate.Value.ToString("dd MMM yyyy")</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">-</span>
+                                                    }
+                                                </td>
+                                            }
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        }
+                        else
+                        {
+                            <div class="p-3">
+                                <p class="text-muted mb-0">No training requests found for this status.</p>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<style>
+    .border-left-primary { border-left: 0.25rem solid #4e73df !important; }
+    .border-left-info { border-left: 0.25rem solid #36b9cc !important; }
+    .border-left-success { border-left: 0.25rem solid #1cc88a !important; }
+    .border-left-warning { border-left: 0.25rem solid #f6c23e !important; }
+    .text-gray-800 { color: #5a5c69 !important; }
+    .text-gray-300 { color: #dddfeb !important; }
+</style>
+

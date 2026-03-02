@@ -1,0 +1,157 @@
+@model Compass.Models.NotificationTemplate
+@{
+    ViewData["Title"] = "Notification Template Details";
+}
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <li class="breadcrumb-item">
+                <a href="/" style="color: #005ea5; text-decoration: none; font-weight: 500;">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a asp-controller="Admin" asp-action="Index" style="color: #005ea5; text-decoration: none; font-weight: 500;">Administration</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a asp-controller="NotificationTemplates" asp-action="Index" style="color: #005ea5; text-decoration: none; font-weight: 500;">Notification Templates</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page" style="color: #0b0c0c; font-weight: 600;">@Model.Name</li>
+        </ol>
+    </nav>
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1 class="m-0">@Model.Name</h1>
+            </div>
+            <div class="col-sm-6">
+                <div class="float-right">
+                    <a href="@Url.Action("Edit", "NotificationTemplates", new { id = Model.Id })" class="btn btn-primary">
+                        <i class="fas fa-edit mr-1"></i> Edit
+                    </a>
+                    <a href="@Url.Action("Index", "NotificationTemplates")" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left mr-1"></i> Back to List
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-lg-8">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Template Details</h3>
+                    </div>
+                    <div class="card-body">
+                        <dl class="row">
+                            <dt class="col-sm-3">Name</dt>
+                            <dd class="col-sm-9"><strong>@Model.Name</strong></dd>
+
+                            <dt class="col-sm-3">Description</dt>
+                            <dd class="col-sm-9">@(Model.Description ?? "N/A")</dd>
+
+                            <dt class="col-sm-3">Trigger Code</dt>
+                            <dd class="col-sm-9"><span class="badge badge-secondary">@Model.TriggerCode</span></dd>
+
+                            <dt class="col-sm-3">Status</dt>
+                            <dd class="col-sm-9">
+                                @if (Model.IsActive)
+                                {
+                                    <span class="badge badge-success">Active</span>
+                                }
+                                else
+                                {
+                                    <span class="badge badge-secondary">Inactive</span>
+                                }
+                            </dd>
+
+                            <dt class="col-sm-3">Email Subject</dt>
+                            <dd class="col-sm-9">
+                                <code>@Model.Subject</code>
+                            </dd>
+
+                            <dt class="col-sm-3">Email Body</dt>
+                            <dd class="col-sm-9">
+                                <pre class="bg-light p-3 border rounded" style="white-space: pre-wrap; word-wrap: break-word;">@Model.Body</pre>
+                            </dd>
+                        </dl>
+                    </div>
+                </div>
+
+                @if (Model.NotificationRules != null && Model.NotificationRules.Any())
+                {
+                    <div class="card mt-3">
+                        <div class="card-header">
+                            <h3 class="card-title">Rules Using This Template (@Model.NotificationRules.Count)</h3>
+                        </div>
+                        <div class="card-body">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Rule Name</th>
+                                        <th>Trigger Code</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var rule in Model.NotificationRules)
+                                    {
+                                        <tr>
+                                            <td>@rule.Name</td>
+                                            <td><span class="badge badge-secondary">@rule.TriggerCode</span></td>
+                                            <td>
+                                                @if (rule.IsEnabled)
+                                                {
+                                                    <span class="badge badge-success">Enabled</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge badge-secondary">Disabled</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                <a href="@Url.Action("Details", "NotificationRules", new { id = rule.Id })" class="btn btn-sm btn-info">
+                                                    <i class="fas fa-eye"></i>
+                                                </a>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <div class="col-lg-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Metadata</h3>
+                    </div>
+                    <div class="card-body">
+                        <dl class="mb-0">
+                            <dt>Created At</dt>
+                            <dd>@Model.CreatedAt.ToString("dd MMM yyyy HH:mm")</dd>
+                            <dt>Created By</dt>
+                            <dd>@(Model.CreatedBy ?? "Unknown")</dd>
+                            <dt>Last Updated</dt>
+                            <dd>@Model.UpdatedAt.ToString("dd MMM yyyy HH:mm")</dd>
+                            <dt>Updated By</dt>
+                            <dd>@(Model.UpdatedBy ?? "Unknown")</dd>
+                            <dt>Rules Using This Template</dt>
+                            <dd>@(Model.NotificationRules?.Count ?? 0)</dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+

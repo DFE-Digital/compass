@@ -1,0 +1,426 @@
+@{
+    ViewData["Title"] = "Central Operations - All Work";
+    var allProjects = ViewBag.AllProjects as List<Compass.Models.Project> ?? new List<Compass.Models.Project>();
+}
+
+@await Html.PartialAsync("_DashboardStyles")
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem;">
+            <li class="breadcrumb-item">
+                <a href="/" style="color: #005ea5; text-decoration: none;">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a asp-controller="CentralOps" asp-action="Summary" style="color: #005ea5; text-decoration: none;">Central Operations</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page">All Work</li>
+        </ol>
+    </nav>
+}
+
+<section class="content">
+    <div class="container-fluid">
+        @await Html.PartialAsync("_CentralOpsNavigation")
+
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                @TempData["ErrorMessage"]
+                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+        }
+
+        <div class="row">
+                <!-- Left Column: Filters -->
+                <div class="col-xxl-2 col-xl-2 col-lg-3 col-md-4 col-sm-12 col-12">
+                    <!-- Filters -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">Filters</h3>
+                        </div>
+                        <div class="card-body">
+                            @{
+                                var deliveryPriorities = ViewBag.DeliveryPriorities as IEnumerable<Compass.Models.DeliveryPriority> ?? Array.Empty<Compass.Models.DeliveryPriority>();
+                                var currentPriorityId = ViewBag.CurrentPriority as int?;
+                            }
+                            <form method="get" id="filterForm">
+                                <div class="form-group">
+                                    <label>Search</label>
+                                    <input type="text" name="search" class="form-control form-control-sm" placeholder="Search work items..." value="@ViewBag.CurrentSearch" />
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="ragStatus">RAG Status</label>
+                                    <select name="ragStatus" id="ragStatus" class="form-control form-control-sm">
+                                        <option value="">All</option>
+                                        @if (ViewBag.CurrentRagStatus == "Green")
+                                        {
+                                            <option value="Green" selected>Green</option>
+                                        }
+                                        else
+                                        {
+                                            <option value="Green">Green</option>
+                                        }
+                                        @if (ViewBag.CurrentRagStatus == "Amber-Green")
+                                        {
+                                            <option value="Amber-Green" selected>Amber-Green</option>
+                                        }
+                                        else
+                                        {
+                                            <option value="Amber-Green">Amber-Green</option>
+                                        }
+                                        @if (ViewBag.CurrentRagStatus == "Amber")
+                                        {
+                                            <option value="Amber" selected>Amber</option>
+                                        }
+                                        else
+                                        {
+                                            <option value="Amber">Amber</option>
+                                        }
+                                        @if (ViewBag.CurrentRagStatus == "Amber-Red")
+                                        {
+                                            <option value="Amber-Red" selected>Amber-Red</option>
+                                        }
+                                        else
+                                        {
+                                            <option value="Amber-Red">Amber-Red</option>
+                                        }
+                                        @if (ViewBag.CurrentRagStatus == "Red")
+                                        {
+                                            <option value="Red" selected>Red</option>
+                                        }
+                                        else
+                                        {
+                                            <option value="Red">Red</option>
+                                        }
+                                        @if (ViewBag.CurrentRagStatus == "Not set" || (ViewBag.CurrentRagStatus == null && ViewBag.CurrentRagStatus == ""))
+                                        {
+                                            <option value="" selected>Not set</option>
+                                        }
+                                        else
+                                        {
+                                            <option value="">Not set</option>
+                                        }
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="businessArea">Business Area</label>
+                                    <select name="businessArea" id="businessArea" class="form-control form-control-sm">
+                                        <option value="">All</option>
+                                        @if (ViewBag.BusinessAreas != null)
+                                        {
+                                            @foreach (var ba in ViewBag.BusinessAreas)
+                                            {
+                                                @if (ViewBag.CurrentBusinessArea == ba)
+                                                {
+                                                    <option value="@ba" selected>@ba</option>
+                                                }
+                                                else
+                                                {
+                                                    <option value="@ba">@ba</option>
+                                                }
+                                            }
+                                        }
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="phase">Phase</label>
+                                    <select name="phase" id="phase" class="form-control form-control-sm">
+                                        <option value="">All</option>
+                                        @if (ViewBag.Phases != null)
+                                        {
+                                            @foreach (var phase in ViewBag.Phases)
+                                            {
+                                                @if (ViewBag.CurrentPhase == phase)
+                                                {
+                                                    <option value="@phase" selected>@phase</option>
+                                                }
+                                                else
+                                                {
+                                                    <option value="@phase">@phase</option>
+                                                }
+                                            }
+                                        }
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="flagship">Flagship</label>
+                                    <select name="flagship" id="flagship" class="form-control form-control-sm">
+                                        <option value="">All</option>
+                                        @if (ViewBag.CurrentFlagship == "true")
+                                        {
+                                            <option value="true" selected>Yes</option>
+                                        }
+                                        else
+                                        {
+                                            <option value="true">Yes</option>
+                                        }
+                                        @if (ViewBag.CurrentFlagship == "false")
+                                        {
+                                            <option value="false" selected>No</option>
+                                        }
+                                        else
+                                        {
+                                            <option value="false">No</option>
+                                        }
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="priority">Priority</label>
+                                    <select name="priority" id="priority" class="form-control form-control-sm">
+                                        <option value="">All</option>
+                                        @foreach (var priorityOption in deliveryPriorities)
+                                        {
+                                            if (currentPriorityId == priorityOption.Id)
+                                            {
+                                                <option value="@priorityOption.Id" selected="selected">@priorityOption.Name</option>
+                                            }
+                                            else
+                                            {
+                                                <option value="@priorityOption.Id">@priorityOption.Name</option>
+                                            }
+                                        }
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <button type="submit" class="btn btn-primary btn-sm btn-block">Apply filters</button>
+                                    <a asp-action="AllWork" asp-route-clearFilters="true" class="btn btn-default btn-sm btn-block">Clear all filters</a>
+                                </div>
+                            </form>
+                            
+                            @if (!string.IsNullOrEmpty(ViewBag.CurrentSearch?.ToString()) || 
+                                 !string.IsNullOrEmpty(ViewBag.CurrentRagStatus?.ToString()) || 
+                                 !string.IsNullOrEmpty(ViewBag.CurrentBusinessArea?.ToString()) || 
+                                 !string.IsNullOrEmpty(ViewBag.CurrentPhase?.ToString()) || 
+                                 !string.IsNullOrEmpty(ViewBag.CurrentFlagship?.ToString()) ||
+                                 currentPriorityId.HasValue)
+                            {
+                                <div class="mt-3 pt-3 border-top">
+                                    <strong class="d-block mb-2">Active Filters:</strong>
+                                    @if (!string.IsNullOrEmpty(ViewBag.CurrentSearch?.ToString()))
+                                    {
+                                        <a href="@Url.Action("AllWork", new { 
+                                            search = "",
+                                            ragStatus = ViewBag.CurrentRagStatus, 
+                                            businessArea = ViewBag.CurrentBusinessArea, 
+                                            phase = ViewBag.CurrentPhase, 
+                                            flagship = ViewBag.CurrentFlagship,
+                                            priority = currentPriorityId
+                                        })" class="badge badge-info mb-2 mr-2 d-inline-flex align-items-center badge-link" title="Remove filter">
+                                            Search: @ViewBag.CurrentSearch <i class="fas fa-times ml-2"></i>
+                                        </a>
+                                    }
+                                    @if (!string.IsNullOrEmpty(ViewBag.CurrentRagStatus?.ToString()))
+                                    {
+                                        <a href="@Url.Action("AllWork", new { 
+                                            search = ViewBag.CurrentSearch, 
+                                            ragStatus = "",
+                                            businessArea = ViewBag.CurrentBusinessArea, 
+                                            phase = ViewBag.CurrentPhase, 
+                                            flagship = ViewBag.CurrentFlagship,
+                                            priority = currentPriorityId
+                                        })" class="badge badge-info mb-2 mr-2 d-inline-flex align-items-center badge-link" title="Remove filter">
+                                            RAG: @ViewBag.CurrentRagStatus <i class="fas fa-times ml-2"></i>
+                                        </a>
+                                    }
+                                    @if (!string.IsNullOrEmpty(ViewBag.CurrentBusinessArea?.ToString()))
+                                    {
+                                        <a href="@Url.Action("AllWork", new { 
+                                            search = ViewBag.CurrentSearch, 
+                                            ragStatus = ViewBag.CurrentRagStatus, 
+                                            businessArea = "",
+                                            phase = ViewBag.CurrentPhase, 
+                                            flagship = ViewBag.CurrentFlagship,
+                                            priority = currentPriorityId
+                                        })" class="badge badge-info mb-2 mr-2 d-inline-flex align-items-center badge-link" title="Remove filter">
+                                            Area: @ViewBag.CurrentBusinessArea <i class="fas fa-times ml-2"></i>
+                                        </a>
+                                    }
+                                    @if (!string.IsNullOrEmpty(ViewBag.CurrentPhase?.ToString()))
+                                    {
+                                        <a href="@Url.Action("AllWork", new { 
+                                            search = ViewBag.CurrentSearch, 
+                                            ragStatus = ViewBag.CurrentRagStatus, 
+                                            businessArea = ViewBag.CurrentBusinessArea, 
+                                            phase = "",
+                                            flagship = ViewBag.CurrentFlagship,
+                                            priority = currentPriorityId
+                                        })" class="badge badge-info mb-2 mr-2 d-inline-flex align-items-center badge-link" title="Remove filter">
+                                            Phase: @ViewBag.CurrentPhase <i class="fas fa-times ml-2"></i>
+                                        </a>
+                                    }
+                                    @if (!string.IsNullOrEmpty(ViewBag.CurrentFlagship?.ToString()))
+                                    {
+                                        <a href="@Url.Action("AllWork", new { 
+                                            search = ViewBag.CurrentSearch, 
+                                            ragStatus = ViewBag.CurrentRagStatus, 
+                                            businessArea = ViewBag.CurrentBusinessArea, 
+                                            phase = ViewBag.CurrentPhase,
+                                            flagship = "",
+                                            priority = currentPriorityId
+                                        })" class="badge badge-info mb-2 mr-2 d-inline-flex align-items-center badge-link" title="Remove filter">
+                                            Flagship: @(ViewBag.CurrentFlagship == "true" ? "Yes" : "No") <i class="fas fa-times ml-2"></i>
+                                        </a>
+                                    }
+                                    @if (currentPriorityId.HasValue)
+                                    {
+                                        var currentPriority = deliveryPriorities.FirstOrDefault(p => p.Id == currentPriorityId.Value);
+                                        <a href="@Url.Action("AllWork", new { 
+                                            search = ViewBag.CurrentSearch, 
+                                            ragStatus = ViewBag.CurrentRagStatus, 
+                                            businessArea = ViewBag.CurrentBusinessArea, 
+                                            phase = ViewBag.CurrentPhase,
+                                            flagship = ViewBag.CurrentFlagship,
+                                            priority = (int?)null
+                                        })" class="badge badge-info mb-2 mr-2 d-inline-flex align-items-center badge-link" title="Remove filter">
+                                            Priority: @(currentPriority?.Name ?? currentPriorityId.ToString()) <i class="fas fa-times ml-2"></i>
+                                        </a>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Column: Work Items Tables -->
+                <div class="col-xxl-10 col-xl-10 col-lg-9 col-md-8 col-sm-12 col-12">
+                    <!-- All Work Items Section -->
+                    <div class="card mb-4" id="all-work-items-card">
+                        <div class="card-header">
+                            <h3 class="card-title">
+                                @{
+                                    var hasFilters = !string.IsNullOrEmpty(ViewBag.CurrentSearch?.ToString()) || 
+                                                    !string.IsNullOrEmpty(ViewBag.CurrentRagStatus?.ToString()) || 
+                                                    !string.IsNullOrEmpty(ViewBag.CurrentBusinessArea?.ToString()) || 
+                                                    !string.IsNullOrEmpty(ViewBag.CurrentPhase?.ToString()) || 
+                                                    !string.IsNullOrEmpty(ViewBag.CurrentFlagship?.ToString()) ||
+                                                    (ViewBag.CurrentPriority as int?).HasValue;
+                                }
+                                @(hasFilters ? "Filtered view of work items" : "All work items")
+                            </h3>
+                            <div class="card-tools">
+                                <a asp-action="ExportAllWork" 
+                                   asp-route-search="@ViewBag.CurrentSearch"
+                                   asp-route-ragStatus="@ViewBag.CurrentRagStatus"
+                                   asp-route-businessArea="@ViewBag.CurrentBusinessArea"
+                                   asp-route-phase="@ViewBag.CurrentPhase"
+                                   asp-route-flagship="@ViewBag.CurrentFlagship"
+                                   asp-route-priority="@ViewBag.CurrentPriority"
+                                   style="color: #005ea5; text-decoration: none;">
+                                    Export to Excel
+                                </a>
+                            </div>
+                        </div>
+                        @if (allProjects != null && allProjects.Any())
+                        {
+                            ViewData["TableId"] = "all-work-table";
+                            ViewData["TableClass"] = "all-work-table";
+                            ViewData["ShowPagination"] = false;
+                            ViewData["ShowMonthlyUpdateStatus"] = true;
+                            <partial name="_ProjectTable" model="allProjects" view-data="ViewData" />
+                        }
+                        else
+                        {
+                            <div class="card-body p-0">
+                                <div class="p-3">
+                                    <p class="text-muted mb-0">No work items recorded.</p>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+    </div>
+</section>
+
+@section Scripts {
+    <script nonce="@Context.Items["Nonce"]">
+        $(document).ready(function() {
+            // Initialize sortable tables
+            $('.sortable-table').each(function() {
+                initializeSortableTable($(this));
+            });
+        });
+
+        function initializeSortableTable(table) {
+            var currentSort = { column: null, direction: 'asc' };
+
+            table.find('.sortable').on('click keypress', function(e) {
+                if (e.type === 'keypress' && e.which !== 13 && e.which !== 32) {
+                    return;
+                }
+                
+                var column = $(this).data('column');
+                var direction = 'asc';
+                
+                if (currentSort.column === column && currentSort.direction === 'asc') {
+                    direction = 'desc';
+                }
+                
+                sortTable(table, column, direction);
+                currentSort = { column: column, direction: direction };
+            });
+
+            function sortTable(table, column, direction) {
+                var tbody = table.find('tbody');
+                var rows = tbody.find('tr').toArray();
+                
+                rows.sort(function(a, b) {
+                    var aVal, bVal;
+                    var colIndex = table.find('thead th[data-column="' + column + '"]').index();
+                    
+                    if (column === 'Flagship') {
+                        var aText = $(a).find('td').eq(colIndex).text().trim().toLowerCase();
+                        var bText = $(b).find('td').eq(colIndex).text().trim().toLowerCase();
+                        aVal = aText === 'yes' ? 1 : 0;
+                        bVal = bText === 'yes' ? 1 : 0;
+                    } else if (column === 'MonthlyUpdateStatus') {
+                        // Sort by status priority: Not started (1) < In progress (2) < Late (3) < Submitted (4)
+                        var statusOrder = {
+                            'not started': 1,
+                            'in progress': 2,
+                            'late': 3,
+                            'submitted': 4
+                        };
+                        var aStatus = $(a).find('td').eq(colIndex).text().trim().toLowerCase();
+                        var bStatus = $(b).find('td').eq(colIndex).text().trim().toLowerCase();
+                        aVal = statusOrder[aStatus] || 0;
+                        bVal = statusOrder[bStatus] || 0;
+                    } else {
+                        aVal = $(a).find('td').eq(colIndex).text().trim().toLowerCase();
+                        bVal = $(b).find('td').eq(colIndex).text().trim().toLowerCase();
+                    }
+                    
+                    if (direction === 'asc') {
+                        return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+                    } else {
+                        return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
+                    }
+                });
+                
+                tbody.empty();
+                rows.forEach(function(row) {
+                    tbody.append(row);
+                });
+                
+                updateSortIcons(table, column, direction);
+            }
+
+            function updateSortIcons(table, column, direction) {
+                table.find('.sortable .fa-sort-up, .sortable .fa-sort-down').removeClass('fa-sort-up fa-sort-down').addClass('fa-sort');
+                var header = table.find('.sortable[data-column="' + column + '"]');
+                var iconClass = direction === 'asc' ? 'fa-sort-up' : 'fa-sort-down';
+                header.find('i').removeClass('fa-sort').addClass(iconClass);
+            }
+        }
+    </script>
+}
+

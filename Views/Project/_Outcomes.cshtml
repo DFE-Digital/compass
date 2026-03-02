@@ -1,7 +1,6 @@
 @model Compass.Models.Project
 
 @{
-    var problemStatement = Model.ProblemStatements.FirstOrDefault();
     var needs = Model.Needs
         .OrderBy(n => n.SortOrder)
         .ToList();
@@ -10,36 +9,95 @@
         .ToList();
 }
 
-<!-- Problem Statement Card -->
-<div class="card mb-4" id="problem-statement">
+<!-- Outcomes Card -->
+<div class="card mb-4" id="outcomes">
     <div class="card-header">
-        <h3 class="card-title">Problem statement</h3>
+        <h3 class="card-title">Work outcomes</h3>
         <div class="card-tools">
-            @if (problemStatement != null)
-            {
-                <a asp-controller="Project" asp-action="EditProblemStatement" asp-route-projectId="@Model.Id">Edit</a>
-                <span class="mx-2">|</span>
-                <a asp-controller="Project" asp-action="ProblemStatementDetails" asp-route-projectId="@Model.Id">View</a>
-            }
-            else
-            {
-                <a asp-controller="Project" asp-action="CreateProblemStatement" asp-route-projectId="@Model.Id">Add problem statement</a>
-            }
+            <a asp-controller="Project" asp-action="CreateOutcome" asp-route-projectId="@Model.Id">Add outcome</a>
         </div>
     </div>
-    <div class="card-body">
-        @if (problemStatement != null)
+    <div class="card-body table-responsive p-0">
+        @if (outcomes.Any())
         {
-            <div class="preserve-formatting">@problemStatement.ProblemStatement</div>
-            <small class="text-muted mt-2 d-block">
-                Created by @(string.IsNullOrWhiteSpace(problemStatement.CreatedByName) ? problemStatement.CreatedByEmail ?? "Unknown" : problemStatement.CreatedByName)
-                on @problemStatement.CreatedAt.ToString("dd MMM yyyy")
-            </small>
+            <table class="table table-hover text-nowrap sortable-table mb-0 outcomes-table">
+                <thead>
+                    <tr>
+                        <th class="col-width-25 sortable" data-column="Outcome" tabindex="0" role="button" aria-label="Sort by Outcome">
+                            Outcome
+                            <i class="fas fa-sort float-right opacity-03"></i>
+                        </th>
+                        <th class="col-width-30 sortable" data-column="Measure" tabindex="0" role="button" aria-label="Sort by Measure of Success">
+                            Measure of success
+                            <i class="fas fa-sort float-right opacity-03"></i>
+                        </th>
+                        <th class="col-width-15 sortable text-right" data-column="ConfidenceLevel" tabindex="0" role="button" aria-label="Sort by Confidence">
+                            Confidence
+                            <i class="fas fa-sort float-right opacity-03"></i>
+                        </th>
+                        <th class="col-width-15 sortable text-right" data-column="AchievementStatus" tabindex="0" role="button" aria-label="Sort by Achievement Status">
+                            Achievement status
+                            <i class="fas fa-sort float-right opacity-03"></i>
+                        </th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var outcome in outcomes)
+                    {
+                        var achievementStatus = outcome.AchievementStatus ?? "In progress";
+                        <tr>
+                            <td>
+                                <a asp-controller="Project" asp-action="OutcomeDetails" asp-route-projectId="@Model.Id" asp-route-outcomeId="@outcome.Id">
+                                    @outcome.Outcome
+                                </a>
+                                @if (!string.IsNullOrWhiteSpace(outcome.ConfidenceExplanation))
+                                {
+                                    <br />
+                                    <small class="text-muted">@outcome.ConfidenceExplanation</small>
+                                }
+                            </td>
+                            <td>@outcome.MeasureOfSuccess</td>
+                            <td class="text-right">
+                                <span class="badge badge-@(outcome.ConfidenceLevel switch { "High" => "success", "Low" => "danger", _ => "warning" })">
+                                    @outcome.ConfidenceLevel
+                                </span>
+                            </td>
+                            <td class="text-right">
+                                <span class="badge badge-@(achievementStatus switch { "Yes" => "success", "No" => "danger", _ => "secondary" })">
+                                    @achievementStatus
+                                </span>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
         }
         else
         {
-            <p class="text-muted mb-2">No problem statement recorded yet.</p>
-            <a asp-controller="Project" asp-action="CreateProblemStatement" asp-route-projectId="@Model.Id" class="text-block-link">Add problem statement</a>
+            <div class="p-3">
+                <p class="text-muted mb-2">No work outcomes recorded yet.</p>
+                <a asp-controller="Project" asp-action="CreateOutcome" asp-route-projectId="@Model.Id" class="text-block-link">Add the first work outcome</a>
+            </div>
+        }
+    </div>
+</div>
+
+<!-- Service Users Card -->
+<div class="card mb-4" id="service-users">
+    <div class="card-header">
+        <h3 class="card-title">Service users</h3>
+        <div class="card-tools">
+            <a href="#" data-toggle="modal" data-target="#editServiceUsersModal">Change</a>
+        </div>
+    </div>
+    <div class="card-body">
+        @if (!string.IsNullOrEmpty(Model.ServiceUsers))
+        {
+            <div class="preserve-formatting">@Model.ServiceUsers</div>
+        }
+        else
+        {
+            <p class="text-muted mb-0">No service users description recorded yet.</p>
         }
     </div>
 </div>
@@ -55,12 +113,21 @@
     <div class="card-body table-responsive p-0">
         @if (needs.Any())
         {
-            <table class="table table-hover sortable-table needs-table">
+            <table class="table table-hover text-nowrap sortable-table mb-0 needs-table">
                 <thead>
                     <tr>
-                        <th style="width: 40%;" class="sortable" data-column="Need" tabindex="0" role="button" aria-label="Sort by Need">Need</th>
-                        <th style="width: 30%;" class="sortable" data-column="Source" tabindex="0" role="button" aria-label="Sort by Source">Source</th>
-                        <th style="width: 15%;" class="sortable text-right" data-column="Validated" tabindex="0" role="button" aria-label="Sort by Validated">Validated</th>
+                        <th class="col-width-70 sortable" data-column="Need" tabindex="0" role="button" aria-label="Sort by Need">
+                            Need
+                            <i class="fas fa-sort float-right opacity-03"></i>
+                        </th>
+                        <th class="col-width-15 sortable" data-column="Source" tabindex="0" role="button" aria-label="Sort by Source">
+                            Source
+                            <i class="fas fa-sort float-right opacity-03"></i>
+                        </th>
+                        <th class="col-width-15 sortable text-right" data-column="Validated" tabindex="0" role="button" aria-label="Sort by Validated">
+                            Validated
+                            <i class="fas fa-sort float-right opacity-03"></i>
+                        </th>
                     </tr>
                 </thead>
                 <tbody>
@@ -87,10 +154,23 @@
                     }
                 </tbody>
             </table>
+            @if (needs.Count > 10)
+            {
+                <div class="p-3 border-top">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            Showing <span id="needsShowingStart">1</span> to <span id="needsShowingEnd">@Math.Min(10, needs.Count)</span> of <strong id="needsTotalCount">@needs.Count</strong> needs
+                        </div>
+                        <ul class="pagination pagination-sm m-0" id="needsPaginationControls">
+                            <!-- Pagination buttons will be generated by JavaScript -->
+                        </ul>
+                    </div>
+                </div>
+            }
         }
         else
         {
-            <div class="p-4">
+            <div class="p-3">
                 <p class="text-muted mb-2">No high level needs recorded yet.</p>
                 <a asp-controller="Project" asp-action="CreateNeed" asp-route-projectId="@Model.Id" class="text-block-link">Add the first need</a>
             </div>
@@ -98,56 +178,402 @@
     </div>
 </div>
 
-<!-- Outcomes Card -->
-<div class="card mb-4" id="outcomes">
-    <div class="card-header">
-        <h3 class="card-title">Delivery outcomes</h3>
-        <div class="card-tools">
-            <a asp-controller="Project" asp-action="CreateOutcome" asp-route-projectId="@Model.Id">Add outcome</a>
-        </div>
-    </div>
-    <div class="card-body table-responsive p-0">
-        @if (outcomes.Any())
-        {
-            <table class="table table-hover sortable-table outcomes-table">
-                <thead>
-                    <tr>
-                        <th style="width: 35%;" class="sortable" data-column="Outcome" tabindex="0" role="button" aria-label="Sort by Outcome">Outcome</th>
-                        <th style="width: 35%;" class="sortable" data-column="Measure" tabindex="0" role="button" aria-label="Sort by Measure of Success">Measure of success</th>
-                        <th style="width: 15%;" class="sortable text-right" data-column="ConfidenceLevel" tabindex="0" role="button" aria-label="Sort by Confidence">Confidence</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var outcome in outcomes)
-                    {
-                        <tr>
-                            <td>
-                                <a asp-controller="Project" asp-action="OutcomeDetails" asp-route-projectId="@Model.Id" asp-route-outcomeId="@outcome.Id">
-                                    @outcome.Outcome
-                                </a>
-                                @if (!string.IsNullOrWhiteSpace(outcome.ConfidenceExplanation))
-                                {
-                                    <br />
-                                    <small class="text-muted">@outcome.ConfidenceExplanation</small>
-                                }
-                            </td>
-                            <td>@outcome.MeasureOfSuccess</td>
-                            <td class="text-right">
-                                <span class="badge badge-@(outcome.ConfidenceLevel switch { "High" => "success", "Low" => "danger", _ => "warning" })">
-                                    @outcome.ConfidenceLevel
-                                </span>
-                            </td>
-                        </tr>
+<script nonce="@Context.Items["Nonce"]">
+    (function() {
+        // Initialize outcomes table sorting
+        function initOutcomesTableSorting() {
+            var outcomesTable = document.querySelector('.outcomes-table');
+            if (!outcomesTable) {
+                return;
+            }
+            
+            var currentSort = { column: null, direction: 'asc' };
+            var sortableHeaders = outcomesTable.querySelectorAll('.sortable');
+            
+            sortableHeaders.forEach(function(header) {
+                header.style.cursor = 'pointer';
+                
+                header.addEventListener('click', function(e) {
+                    handleSort(e, header);
+                });
+                
+                header.addEventListener('keypress', function(e) {
+                    if (e.which === 13 || e.which === 32) {
+                        e.preventDefault();
+                        handleSort(e, header);
                     }
-                </tbody>
-            </table>
+                });
+            });
+            
+            function handleSort(e, header) {
+                var column = header.getAttribute('data-column');
+                var direction = 'asc';
+                
+                if (currentSort.column === column && currentSort.direction === 'asc') {
+                    direction = 'desc';
+                }
+                
+                sortTable(column, direction);
+                currentSort = { column: column, direction: direction };
+            }
+            
+            function sortTable(column, direction) {
+                var tbody = outcomesTable.querySelector('tbody');
+                var rows = Array.from(tbody.querySelectorAll('tr'));
+                var colIndex = Array.from(outcomesTable.querySelectorAll('thead th')).findIndex(function(th) {
+                    return th.getAttribute('data-column') === column;
+                });
+                
+                rows.sort(function(a, b) {
+                    var aVal, bVal;
+                    var aCell = a.querySelectorAll('td')[colIndex];
+                    var bCell = b.querySelectorAll('td')[colIndex];
+                    
+                    if (column === 'ConfidenceLevel' || column === 'AchievementStatus') {
+                        // Sort by badge text
+                        var aBadge = aCell.querySelector('.badge');
+                        var bBadge = bCell.querySelector('.badge');
+                        aVal = aBadge ? aBadge.textContent.trim().toLowerCase() : '';
+                        bVal = bBadge ? bBadge.textContent.trim().toLowerCase() : '';
+                    } else if (column === 'Outcome') {
+                        // Sort by link text
+                        var aLink = aCell.querySelector('a');
+                        var bLink = bCell.querySelector('a');
+                        aVal = aLink ? aLink.textContent.trim().toLowerCase() : aCell.textContent.trim().toLowerCase();
+                        bVal = bLink ? bLink.textContent.trim().toLowerCase() : bCell.textContent.trim().toLowerCase();
+                    } else {
+                        aVal = aCell.textContent.trim().toLowerCase();
+                        bVal = bCell.textContent.trim().toLowerCase();
+                    }
+                    
+                    if (direction === 'asc') {
+                        return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+                    } else {
+                        return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
+                    }
+                });
+                
+                tbody.innerHTML = '';
+                rows.forEach(function(row) {
+                    tbody.appendChild(row);
+                });
+                
+                updateSortIcons(column, direction);
+            }
+            
+            function updateSortIcons(column, direction) {
+                var allHeaders = outcomesTable.querySelectorAll('.sortable i');
+                allHeaders.forEach(function(icon) {
+                    icon.className = 'fas fa-sort float-right';
+                    icon.style.opacity = '0.3';
+                });
+                
+                var activeHeader = outcomesTable.querySelector('.sortable[data-column="' + column + '"]');
+                if (activeHeader) {
+                    var icon = activeHeader.querySelector('i');
+                    if (icon) {
+                        icon.className = direction === 'asc' ? 'fas fa-sort-up float-right' : 'fas fa-sort-down float-right';
+                        icon.style.opacity = '1';
+                    }
+                }
+            }
         }
-        else
-        {
-            <div class="p-4">
-                <p class="text-muted mb-2">No delivery outcomes recorded yet.</p>
-                <a asp-controller="Project" asp-action="CreateOutcome" asp-route-projectId="@Model.Id" class="text-block-link">Add the first delivery outcome</a>
+        
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initOutcomesTableSorting);
+        } else {
+            initOutcomesTableSorting();
+        }
+    })();
+</script>
+
+@if (needs.Any())
+{
+    <script nonce="@Context.Items["Nonce"]">
+        (function() {
+            var pageSize = 10;
+            var needsCurrentPage = 1;
+            var needsAllRows = [];
+            var currentSort = { column: null, direction: 'asc' };
+            var needsCount = @needs.Count;
+            
+            function initTable() {
+                var table = document.querySelector('.needs-table');
+                if (!table) {
+                    return;
+                }
+                
+                var tbody = table.querySelector('tbody');
+                if (!tbody) {
+                    return;
+                }
+                
+                needsAllRows = Array.from(tbody.querySelectorAll('tr'));
+                
+                if (needsAllRows.length === 0) {
+                    return;
+                }
+                
+                initSorting(table);
+                
+                // Only paginate if we have more than 10 needs
+                if (needsCount > 10) {
+                    paginateNeeds();
+                }
+            }
+            
+            function initSorting(table) {
+                var sortableHeaders = table.querySelectorAll('.sortable');
+                
+                sortableHeaders.forEach(function(header) {
+                    header.style.cursor = 'pointer';
+                    
+                    header.addEventListener('click', function(e) {
+                        handleSort(e, header);
+                    });
+                    
+                    header.addEventListener('keypress', function(e) {
+                        if (e.which === 13 || e.which === 32) {
+                            e.preventDefault();
+                            handleSort(e, header);
+                        }
+                    });
+                });
+            }
+            
+            function handleSort(e, header) {
+                var column = header.getAttribute('data-column');
+                var direction = 'asc';
+                
+                if (currentSort.column === column && currentSort.direction === 'asc') {
+                    direction = 'desc';
+                }
+                
+                sortTable(column, direction);
+                currentSort = { column: column, direction: direction };
+            }
+            
+            function updateSortIcons(column, direction) {
+                var table = document.querySelector('.needs-table');
+                var allHeaders = table.querySelectorAll('.sortable i');
+                
+                // Reset all icons
+                allHeaders.forEach(function(icon) {
+                    icon.className = 'fas fa-sort float-right';
+                    icon.style.opacity = '0.3';
+                });
+                
+                // Update active column icon
+                var activeHeader = table.querySelector('.sortable[data-column="' + column + '"]');
+                if (activeHeader) {
+                    var icon = activeHeader.querySelector('i');
+                    if (icon) {
+                        icon.className = direction === 'asc' ? 'fas fa-sort-up float-right' : 'fas fa-sort-down float-right';
+                        icon.style.opacity = '1';
+                    }
+                }
+            }
+            
+            function paginateNeeds() {
+                var totalNeeds = needsAllRows.length;
+                var totalPages = Math.ceil(totalNeeds / pageSize);
+                
+                // Reset to page 1 if current page is beyond total pages
+                if (needsCurrentPage > totalPages && totalPages > 0) {
+                    needsCurrentPage = 1;
+                }
+                
+                // Hide all rows first
+                needsAllRows.forEach(function(row) {
+                    row.style.display = 'none';
+                });
+                
+                // Show only rows for current page
+                var startIndex = (needsCurrentPage - 1) * pageSize;
+                var endIndex = Math.min(startIndex + pageSize, totalNeeds);
+                
+                for (var i = startIndex; i < endIndex; i++) {
+                    needsAllRows[i].style.display = '';
+                }
+                
+                // Update pagination info
+                var showingStart = document.getElementById('needsShowingStart');
+                var showingEnd = document.getElementById('needsShowingEnd');
+                if (showingStart) {
+                    showingStart.textContent = totalNeeds > 0 ? startIndex + 1 : 0;
+                }
+                if (showingEnd) {
+                    showingEnd.textContent = endIndex;
+                }
+                
+                // Always generate pagination controls if we have more than 10 needs
+                if (totalNeeds > 10) {
+                    generateNeedsPagination(totalPages, totalNeeds);
+                }
+            }
+            
+            function generateNeedsPagination(totalPages, totalNeeds) {
+                var paginationControls = document.getElementById('needsPaginationControls');
+                if (!paginationControls) {
+                    console.error('Pagination controls element not found');
+                    return;
+                }
+                
+                // Only generate pagination if we have more than one page
+                if (totalPages <= 1) {
+                    paginationControls.innerHTML = '';
+                    return;
+                }
+                
+                var paginationHtml = '';
+                
+                // Previous button
+                paginationHtml += '<li class="page-item ' + (needsCurrentPage === 1 ? 'disabled' : '') + '">';
+                paginationHtml += '<a class="page-link" href="#" data-page="' + (needsCurrentPage - 1) + '">Previous</a>';
+                paginationHtml += '</li>';
+                
+                // Page numbers
+                var startPage = Math.max(1, needsCurrentPage - 2);
+                var endPage = Math.min(totalPages, needsCurrentPage + 2);
+                
+                if (startPage > 1) {
+                    paginationHtml += '<li class="page-item"><a class="page-link" href="#" data-page="1">1</a></li>';
+                    if (startPage > 2) {
+                        paginationHtml += '<li class="page-item disabled"><span class="page-link">...</span></li>';
+                    }
+                }
+                
+                for (var i = startPage; i <= endPage; i++) {
+                    paginationHtml += '<li class="page-item ' + (i === needsCurrentPage ? 'active' : '') + '">';
+                    paginationHtml += '<a class="page-link" href="#" data-page="' + i + '">' + i + '</a>';
+                    paginationHtml += '</li>';
+                }
+                
+                if (endPage < totalPages) {
+                    if (endPage < totalPages - 1) {
+                        paginationHtml += '<li class="page-item disabled"><span class="page-link">...</span></li>';
+                    }
+                    paginationHtml += '<li class="page-item"><a class="page-link" href="#" data-page="' + totalPages + '">' + totalPages + '</a></li>';
+                }
+                
+                // Next button
+                paginationHtml += '<li class="page-item ' + (needsCurrentPage === totalPages ? 'disabled' : '') + '">';
+                paginationHtml += '<a class="page-link" href="#" data-page="' + (needsCurrentPage + 1) + '">Next</a>';
+                paginationHtml += '</li>';
+                
+                paginationControls.innerHTML = paginationHtml;
+                
+                // Bind click events using event delegation (remove old listener first)
+                var oldHandler = paginationControls._paginationHandler;
+                if (oldHandler) {
+                    paginationControls.removeEventListener('click', oldHandler);
+                }
+                
+                var clickHandler = function(e) {
+                    var link = e.target.closest('.page-link');
+                    if (link && !link.closest('.disabled')) {
+                        e.preventDefault();
+                        var page = parseInt(link.getAttribute('data-page'));
+                        var totalPages = Math.ceil(needsAllRows.length / pageSize);
+                        if (!isNaN(page) && page > 0 && page <= totalPages) {
+                            needsCurrentPage = page;
+                            paginateNeeds();
+                        }
+                    }
+                };
+                
+                paginationControls._paginationHandler = clickHandler;
+                paginationControls.addEventListener('click', clickHandler);
+            }
+            
+            function sortTable(column, direction) {
+                var table = document.querySelector('.needs-table');
+                var tbody = table.querySelector('tbody');
+                var colIndex = Array.from(table.querySelectorAll('thead th')).findIndex(function(th) {
+                    return th.getAttribute('data-column') === column;
+                });
+                
+                needsAllRows.sort(function(a, b) {
+                    var aVal, bVal;
+                    var aCell = a.querySelectorAll('td')[colIndex];
+                    var bCell = b.querySelectorAll('td')[colIndex];
+                    
+                    if (column === 'Validated') {
+                        // Sort by badge text
+                        var aBadge = aCell.querySelector('.badge');
+                        var bBadge = bCell.querySelector('.badge');
+                        aVal = aBadge ? aBadge.textContent.trim().toLowerCase() : '';
+                        bVal = bBadge ? bBadge.textContent.trim().toLowerCase() : '';
+                    } else if (column === 'Need') {
+                        // Sort by the link text (title)
+                        var aLink = aCell.querySelector('a');
+                        var bLink = bCell.querySelector('a');
+                        aVal = aLink ? aLink.textContent.trim().toLowerCase() : aCell.textContent.trim().toLowerCase();
+                        bVal = bLink ? bLink.textContent.trim().toLowerCase() : bCell.textContent.trim().toLowerCase();
+                    } else {
+                        // Sort by cell text
+                        aVal = aCell.textContent.trim().toLowerCase();
+                        bVal = bCell.textContent.trim().toLowerCase();
+                    }
+                    
+                    if (direction === 'asc') {
+                        return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+                    } else {
+                        return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
+                    }
+                });
+                
+                // Rebuild tbody with sorted rows
+                tbody.innerHTML = '';
+                needsAllRows.forEach(function(row) {
+                    tbody.appendChild(row);
+                });
+                
+                // Update sort icons
+                updateSortIcons(column, direction);
+                
+                // Re-paginate if needed
+                if (needsCount > 10) {
+                    needsCurrentPage = 1;
+                    paginateNeeds();
+                }
+            }
+            
+            // Initialize table when DOM is ready
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', initTable);
+            } else {
+                // DOM is already ready
+                setTimeout(initTable, 100);
+            }
+        })();
+    </script>
+}
+
+<!-- Edit Service Users Modal -->
+<div class="modal fade" id="editServiceUsersModal" tabindex="-1" role="dialog" aria-labelledby="editServiceUsersModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editServiceUsersModalLabel">Edit service users</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
             </div>
-        }
+            <form asp-action="UpdateServiceUsers" method="post">
+                <input type="hidden" name="id" value="@Model.Id" />
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="serviceUsers">Service users</label>
+                        <textarea class="form-control" id="serviceUsers" name="serviceUsers" rows="4" placeholder="Describe the service users">@Model.ServiceUsers</textarea>
+                        <small class="form-text text-muted">Free text description of the service users</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success">Save changes</button>
+                </div>
+            </form>
+        </div>
     </div>
 </div>

@@ -3,22 +3,39 @@
 @using System.Globalization
 
 @{
-    ViewData["Title"] = "Accessibility Management";
+    ViewData["Title"] = "Accessibility issues and statements";
     var summaryStats = ViewBag.SummaryStats as dynamic;
     var activeTab = ViewBag.ActiveTab as string ?? "products";
+    
+    // User-specific statistics
+    var myProductsTotal = ViewBag.MyProductsTotal as int? ?? 0;
+    var myProductsOpenIssues = ViewBag.MyProductsOpenIssues as int? ?? 0;
+    var myProductsOverdueIssues = ViewBag.MyProductsOverdueIssues as int? ?? 0;
+    var myProductsCompliant = ViewBag.MyProductsCompliant as int? ?? 0;
+    var myProductsPartiallyCompliant = ViewBag.MyProductsPartiallyCompliant as int? ?? 0;
+    var myProductsNonCompliant = ViewBag.MyProductsNonCompliant as int? ?? 0;
+    var myProductsVerified = ViewBag.MyProductsVerified as int? ?? 0;
+    var myProducts = ViewBag.MyProducts as List<dynamic> ?? new List<dynamic>();
+    var enrolledProducts = ViewBag.EnrolledProducts as List<dynamic> ?? new List<dynamic>();
+    
+    // Global statistics (for reference)
     var totalOpenIssues = (int)(summaryStats?.TotalOpenIssues ?? 0);
-    var openIssuesBgClass = totalOpenIssues == 0 ? "bg-success" : (totalOpenIssues < 5 ? "bg-warning" : "bg-danger");
-    var openIssuesIcon = totalOpenIssues == 0 ? "fa-check-circle" : (totalOpenIssues < 5 ? "fa-exclamation-triangle" : "fa-times-circle");
-
     var enrolledProductsCount = (int)(summaryStats?.TotalEnrolledProducts ?? 0);
     var totalProducts = (int)(summaryStats?.TotalProducts ?? 0);
-    var productsBgClass = totalProducts == 0 ? "bg-secondary" : (enrolledProductsCount == totalProducts ? "bg-success" : "bg-primary");
-
     var overdueIssues = (int)(summaryStats?.OverdueIssues ?? 0);
-    var overdueBgClass = overdueIssues == 0 ? "bg-success" : "bg-danger";
-
     var totalAuditSpend = (decimal)(summaryStats?.TotalAuditSpend ?? 0m);
-    var auditBgClass = totalAuditSpend > 0 ? "bg-primary" : "bg-secondary";
+}
+
+@{
+    var currentAction = ViewContext.RouteData.Values["action"]?.ToString() ?? "";
+    var currentController = ViewContext.RouteData.Values["controller"]?.ToString() ?? "";
+    ViewBag.BrandText = "Accessibility Issues and Statements";
+    ViewBag.NavLinks = new[]
+    {
+        new { Text = "Dashboard", Action = "Index", Controller = "Accessibility", Url = (string)null, IsButton = false, IsActive = currentAction == "Index" && currentController == "Accessibility" && activeTab != "heatmap" },
+        new { Text = "Heatmap", Action = "Index", Controller = "Accessibility", Url = Url.Action("Index", new { tab = "heatmap" }), IsButton = false, IsActive = currentAction == "Index" && currentController == "Accessibility" && activeTab == "heatmap" },
+    };
+    ViewBag.NavbarActionButton = ("Enrol product", "Accessibility", "Enroll", "btn-success");
 }
 
 @section Breadcrumbs {
@@ -29,37 +46,24 @@
         }
     </style>
     <nav aria-label="Breadcrumb">
-        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f8f9fa; padding: 0.75rem 1rem; border-radius: 0.375rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
             <li class="breadcrumb-item">
                 <a href="@Url.Action("Index", "Home")" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Home</a>
             </li>
             <li class="breadcrumb-item">
                 <a href="@Url.Action("Index", "Apps")" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Apps</a>
             </li>
-            <li class="breadcrumb-item active" aria-current="page" style="color: #0b0c0c; font-weight: 600;">Accessibility Issues and Statements</li>
+            <li class="breadcrumb-item active" aria-current="page" style="color: #0b0c0c; font-weight: 600;">Accessibility</li>
         </ol>
     </nav>
 }
 
-<div class="content-header">
-    <div class="container-fluid">
-        <div class="row mb-2">
-            <div class="col-sm-6">
-                <h1 class="m-0">Accessibility Issues and Statements</h1>
-            </div>
-            <div class="col-sm-6">
-                <div class="float-right">
-                    <button type="button" class="btn btn-primary" data-toggle="modal" data-target="#enrollProductModal">
-                        Enrol Product
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
+@await Html.PartialAsync("_DashboardStyles")
 
 <section class="content">
     <div class="container-fluid">
+        @await Html.PartialAsync("_ModuleNavbar")
+        
         @if (TempData["SuccessMessage"] != null)
         {
             <div class="alert alert-success alert-dismissible fade show">
@@ -75,105 +79,189 @@
             </div>
         }
 
-        <!-- Summary Cards -->
-        <div class="row mb-4">
-            <div class="col-lg-3 col-12">
-                <div class="small-box @openIssuesBgClass">
-                    <div class="inner">
-                        <h3 class="small-box-text-heading">@totalOpenIssues</h3>
-                        <p>Open Issues</p>
+        <!-- Summary Cards - CentralOps Style -->
+        @if (activeTab == "your-products")
+        {
+            var notEnrolledCount = totalProducts - enrolledProductsCount;
+            var totalIssues = totalOpenIssues;
+
+            <div class="row mb-4">
+
+             <!-- Your Products Card -->
+                <div class="col-md-6 col-lg-3 mb-3">
+                    <div class="card border-left-info shadow h-100">
+                        <div class="card-body">
+                            <div class="row no-gutters align-items-center">
+                                <div class="col mr-2">
+                                    <div class="text-xs font-weight-bold text-info text-uppercase mb-1">Your Products</div>
+                                    <div class="h5 mb-0 font-weight-bold text-gray-800">@myProductsTotal</div>
+                                    <small class="text-muted">Assigned to You</small>
+                                </div>
+                                <div class="col-auto">
+                                    <i class="fas fa-box fa-2x text-gray-300"></i>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="icon">
-                        <i class="fas @openIssuesIcon"></i>
-                    </div>
-                    <a href="@Url.Action("Index", new { tab = "issues" })" class="small-box-footer">
-                        View issues <i class="fas fa-arrow-circle-right"></i>
-                    </a>
                 </div>
-            </div>
-            <div class="col-lg-3 col-12">
-                <div class="small-box @productsBgClass">
-                    <div class="inner">
-                        <h3 class="small-box-text-heading">@enrolledProductsCount <small class="text-white-50">/ @totalProducts</small></h3>
-                        <p>Products Enrolled</p>
+                
+                <!-- Issues Card -->
+                <div class="col-md-6 col-lg-3 mb-3">
+                    <div class="card border-left-danger shadow h-100">
+                        <div class="card-body">
+                            <div class="row no-gutters align-items-center">
+                                <div class="col mr-2">
+                                    <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">Issues</div>
+                                    <div class="h5 mb-0 font-weight-bold text-gray-800">@totalIssues</div>
+                                    <small class="text-muted">Total Issues</small>
+                                </div>
+                                <div class="col-auto">
+                                    <i class="fas fa-exclamation-triangle fa-2x text-gray-300"></i>
+                                </div>
+                            </div>
+                            <div class="mt-3 pt-3 border-top">
+                                <div class="row">
+                                    <div class="col-6">
+                                        <div class="text-xs text-muted mb-1">Open</div>
+                                        <div class="h6 mb-0 font-weight-bold @(totalOpenIssues > 0 ? "text-danger" : "text-success")">@totalOpenIssues</div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="text-xs text-muted mb-1">Overdue</div>
+                                        <div class="h6 mb-0 font-weight-bold @(overdueIssues > 0 ? "text-danger" : "text-success")">@overdueIssues</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="icon">
-                        <i class="fas fa-box"></i>
-                    </div>
-                    <a href="@Url.Action("Index", new { tab = "products" })" class="small-box-footer">
-                        Manage products <i class="fas fa-arrow-circle-right"></i>
-                    </a>
                 </div>
-            </div>
-            <div class="col-lg-3 col-12">
-                <div class="small-box @overdueBgClass">
-                    <div class="inner">
-                        <h3 class="small-box-text-heading">@overdueIssues</h3>
-                        <p>Overdue Issues</p>
+
+                <!-- Compliance Card -->
+                <div class="col-md-6 col-lg-3 mb-3">
+                    <div class="card border-left-success shadow h-100">
+                        <div class="card-body">
+                            <div class="row no-gutters align-items-center">
+                                <div class="col mr-2">
+                                    <div class="text-xs font-weight-bold text-success text-uppercase mb-1">Compliance</div>
+                                    <div class="h5 mb-0 font-weight-bold text-gray-800">@(myProductsCompliant + myProductsPartiallyCompliant + myProductsNonCompliant)</div>
+                                    <small class="text-muted">Total Assessed</small>
+                                </div>
+                                <div class="col-auto">
+                                    <i class="fas fa-check-circle fa-2x text-gray-300"></i>
+                                </div>
+                            </div>
+                            <div class="mt-3 pt-3 border-top">
+                                <div class="row">
+                                    <div class="col-4">
+                                        <div class="text-xs text-muted mb-1">Fully</div>
+                                        <div class="h6 mb-0 font-weight-bold text-success">@myProductsCompliant</div>
+                                    </div>
+                                    <div class="col-4">
+                                        <div class="text-xs text-muted mb-1">Partial</div>
+                                        <div class="h6 mb-0 font-weight-bold text-warning">@myProductsPartiallyCompliant</div>
+                                    </div>
+                                    <div class="col-4">
+                                        <div class="text-xs text-muted mb-1">Non</div>
+                                        <div class="h6 mb-0 font-weight-bold text-danger">@myProductsNonCompliant</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="icon">
-                        <i class="fas fa-clock"></i>
-                    </div>
-                    <a href="@Url.Action("Index", new { tab = "issues", issueStatus = "open" })" class="small-box-footer">
-                        Prioritise fixes <i class="fas fa-arrow-circle-right"></i>
-                    </a>
                 </div>
+
+           
+
+               
             </div>
-            <div class="col-lg-3 col-12">
-                <div class="small-box @auditBgClass">
-                    <div class="inner">
-                        <h3 class="small-box-text-heading">£@totalAuditSpend.ToString("N2")</h3>
-                        <p>Total Audit Spend</p>
-                    </div>
-                    <div class="icon">
-                        <i class="fas fa-pound-sign"></i>
-                    </div>
-                    <a href="@Url.Action("Index", new { tab = "audits" })" class="small-box-footer">
-                        Review audits <i class="fas fa-arrow-circle-right"></i>
-                    </a>
-                </div>
-            </div>
-        </div>
+        }
 
         <div class="row">
             <!-- Left Column: Navigation Pills -->
-            <div class="col-lg-3 col-md-4 col-12">
+            <div class="col-xxl-2 col-xl-2 col-lg-3 col-md-4 col-sm-12 col-12">
+                <!-- Your Products and Issues -->
                 <div class="card">
                     <div class="card-header">
-                        <h3 class="card-title">Navigation</h3>
+                        <h3 class="card-title">Your Products and Issues</h3>
                     </div>
                     <div class="card-body p-0">
-                        <ul class="nav nav-pills flex-column">
-                            <li class="nav-item">
-                                <a class="nav-link @(activeTab == "products" ? "active" : "")" 
-                                   href="@Url.Action("Index", new { tab = "products" })">
-                                    <i class="fas fa-box mr-2"></i> Products
-                                </a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link @(activeTab == "issues" ? "active" : "")" 
-                                   href="@Url.Action("Index", new { tab = "issues" })">
-                                    <i class="fas fa-exclamation-triangle mr-2"></i> Issues
-                                </a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link @(activeTab == "audits" ? "active" : "")" 
-                                   href="@Url.Action("Index", new { tab = "audits" })">
-                                    <i class="fas fa-clipboard-check mr-2"></i> Audits
-                                </a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link @(activeTab == "heatmap" ? "active" : "")"
-                                   href="@Url.Action("Index", new { tab = "heatmap" })">
-                                    <i class="fas fa-th-large mr-2"></i> Heatmap report
-                                </a>
-                            </li>
-                        </ul>
+                        <div class="list-group list-group-flush">
+                            <a href="@Url.Action("Index", new { tab = "your-products" })" 
+                               class="list-group-item list-group-item-action @(activeTab == "your-products" ? "active" : "")">
+                                Your Products
+                                @{
+                                    var yourProductsCount = ViewBag.YourProductsCount as int? ?? 0;
+                                }
+                                <span class="badge badge-light float-right">@yourProductsCount</span>
+                            </a>
+                            <a href="@Url.Action("Index", new { tab = "your-issues" })" 
+                               class="list-group-item list-group-item-action @(activeTab == "your-issues" ? "active" : "")">
+                                Your Issues
+                                @{
+                                    var yourIssuesCount = ViewBag.YourIssuesCount as int? ?? 0;
+                                }
+                                <span class="badge badge-light float-right">@yourIssuesCount</span>
+                            </a>
+                            <a href="@Url.Action("Index", new { tab = "your-audits" })" 
+                               class="list-group-item list-group-item-action @(activeTab == "your-audits" ? "active" : "")">
+                                Your Audits
+                                @{
+                                    var yourAuditsCount = ViewBag.YourAuditsCount as int? ?? 0;
+                                }
+                                <span class="badge badge-light float-right">@yourAuditsCount</span>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- All Products and Issues -->
+                <div class="card mt-3">
+                    <div class="card-header">
+                        <h3 class="card-title">All Products and Issues</h3>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="list-group list-group-flush">
+                            <a href="@Url.Action("Index", new { tab = "all-products" })" 
+                               class="list-group-item list-group-item-action @(activeTab == "all-products" ? "active" : "")">
+                                All Products
+                                @{
+                                    var allProductsCount = ViewBag.AllProductsCount as int? ?? 0;
+                                }
+                                <span class="badge badge-light float-right">@allProductsCount</span>
+                            </a>
+                            <a href="@Url.Action("Index", new { tab = "all-issues" })" 
+                               class="list-group-item list-group-item-action @(activeTab == "all-issues" ? "active" : "")">
+                                All Issues
+                                @{
+                                    var allIssuesCount = ViewBag.AllIssuesCount as int? ?? 0;
+                                }
+                                <span class="badge badge-light float-right">@allIssuesCount</span>
+                            </a>
+                            <a href="@Url.Action("Index", new { tab = "all-audits" })" 
+                               class="list-group-item list-group-item-action @(activeTab == "all-audits" ? "active" : "")">
+                                All Audits
+                                @{
+                                    var allAuditsCount = ViewBag.AllAuditsCount as int? ?? 0;
+                                }
+                                <span class="badge badge-light float-right">@allAuditsCount</span>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Other Navigation -->
+                <div class="card mt-3">
+                    <div class="card-body p-0">
+                        <div class="list-group list-group-flush">
+                            <a href="@Url.Action("Index", new { tab = "heatmap" })" 
+                               class="list-group-item list-group-item-action @(activeTab == "heatmap" ? "active" : "")">
+                                Heatmap report
+                            </a>
+                        </div>
                     </div>
                 </div>
 
                 <!-- Tab-specific filters -->
-                @if (activeTab == "products")
+                @if (activeTab == "your-products" || activeTab == "all-products")
                 {
                     <div class="card mt-3">
                         <div class="card-header">
@@ -181,7 +269,7 @@
                         </div>
                         <div class="card-body">
                             <form method="get" action="@Url.Action("Index")">
-                                <input type="hidden" name="tab" value="products" />
+                                <input type="hidden" name="tab" value="@activeTab" />
                                 <input type="hidden" name="productsPage" value="1" />
                                 
                                 <div class="form-group">
@@ -221,13 +309,13 @@
 
                                 <div class="form-group">
                                     <button type="submit" class="btn btn-primary btn-sm btn-block">Apply Filters</button>
-                                    <a href="@Url.Action("Index", new { tab = "products" })" class="btn btn-default btn-sm btn-block">Clear All</a>
+                                    <a href="@Url.Action("Index", new { tab = activeTab })" class="btn btn-default btn-sm btn-block">Clear All</a>
                                 </div>
                             </form>
                         </div>
                     </div>
                 }
-                else if (activeTab == "issues")
+                else if (activeTab == "your-issues" || activeTab == "all-issues")
                 {
                     <div class="card mt-3">
                         <div class="card-header">
@@ -235,7 +323,7 @@
                         </div>
                         <div class="card-body">
                             <form method="get" action="@Url.Action("Index")">
-                                <input type="hidden" name="tab" value="issues" />
+                                <input type="hidden" name="tab" value="@activeTab" />
                                 <input type="hidden" name="issuesPage" value="1" />
                                 
                                 <div class="form-group">
@@ -262,13 +350,13 @@
 
                                 <div class="form-group">
                                     <button type="submit" class="btn btn-primary btn-sm btn-block">Apply Filters</button>
-                                    <a href="@Url.Action("Index", new { tab = "issues" })" class="btn btn-default btn-sm btn-block">Clear All</a>
+                                    <a href="@Url.Action("Index", new { tab = activeTab })" class="btn btn-default btn-sm btn-block">Clear All</a>
                                 </div>
                             </form>
                         </div>
                     </div>
                 }
-                else if (activeTab == "audits")
+                else if (activeTab == "your-audits" || activeTab == "all-audits")
                 {
                     <div class="card mt-3">
                         <div class="card-header">
@@ -276,7 +364,7 @@
                         </div>
                         <div class="card-body">
                             <form method="get" action="@Url.Action("Index")">
-                                <input type="hidden" name="tab" value="audits" />
+                                <input type="hidden" name="tab" value="@activeTab" />
                                 <input type="hidden" name="auditsPage" value="1" />
                                 
                                 <div class="form-group">
@@ -290,7 +378,7 @@
 
                                 <div class="form-group">
                                     <button type="submit" class="btn btn-primary btn-sm btn-block">Apply Filters</button>
-                                    <a href="@Url.Action("Index", new { tab = "audits" })" class="btn btn-default btn-sm btn-block">Clear All</a>
+                                    <a href="@Url.Action("Index", new { tab = activeTab })" class="btn btn-default btn-sm btn-block">Clear All</a>
                                 </div>
                             </form>
                         </div>
@@ -344,18 +432,18 @@
             </div>
 
             <!-- Right Column: Content -->
-            <div class="col-lg-9 col-md-8 col-12">
-                @if (activeTab == "products")
+            <div class="col-xxl-10 col-xl-10 col-lg-9 col-md-8 col-sm-12 col-12">
+                @if (activeTab == "your-products" || activeTab == "all-products")
                 {
-                    var myProducts = ViewBag.MyProducts as List<dynamic> ?? new List<dynamic>();
-                    @if (myProducts.Any())
+                    var productsToDisplay = activeTab == "your-products" ? myProducts : enrolledProducts;
+                    @if (productsToDisplay.Any())
                     {
                         <div class="card mb-3">
                             <div class="card-header">
-                                <h3 class="card-title">My Products (@myProducts.Count)</h3>
+                                <h3 class="card-title">@(activeTab == "your-products" ? "Your Products" : "All Products") (@productsToDisplay.Count)</h3>
                             </div>
                             <div class="card-body table-responsive p-0">
-                                <table class="table table-hover text-nowrap">
+                                <table class="table table-hover text-nowrap sortable-table mb-0">
                                     <thead>
                                         <tr>
                                             <th>Product Name</th>
@@ -366,7 +454,7 @@
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        @foreach (var product in myProducts)
+                                        @foreach (var product in productsToDisplay)
                                         {
                                             var productAccessibility = product.ProductAccessibility as Compass.Models.ProductAccessibility;
                                             var openIssues = (int)product.OpenIssuesCount;
@@ -378,10 +466,14 @@
                                             
                                             <tr>
                                                 <td>
-                                                    <a href="@Url.Action("Details", new { fipsId = product.FipsId })">
+                                                    <a href="@Url.Action("Details", new { documentId = product.DocumentId ?? product.FipsId })">
                                                         <strong>@product.ProductName</strong>
                                                     </a>
-                                                    @if (!string.IsNullOrEmpty(product.FipsId))
+                                                    @if (!string.IsNullOrEmpty(product.DocumentId))
+                                                    {
+                                                        <br><small class="text-muted mr-2">@product.DocumentId</small>
+                                                    }
+                                                    else if (!string.IsNullOrEmpty(product.FipsId))
                                                     {
                                                         <br><small class="text-muted mr-2">@product.FipsId</small>
                                                     }
@@ -410,7 +502,7 @@
                                                 <td>
                                                     @if (openIssues > 0)
                                                     {
-                                                        <span class="badge badge-warning">@openIssues open</span>
+                                                        <span class="badge badge-warning">@openIssues</span>
                                                         if (levelAAIssues > 0)
                                                         {
                                                             <small class="text-danger ml-1">(@levelAAIssues Level A/AA)</small>
@@ -426,7 +518,7 @@
                                                     @if (product.LastAudit != null)
                                                     {
                                                         var lastAudit = product.LastAudit as Compass.Models.AuditHistory;
-                                                            <span class="badge badge-@(lastAudit.AuditType == "External" ? "primary" : "secondary")">@lastAudit.AuditType</span>
+                                                        <small>@lastAudit.AuditDate.ToString("dd MMM yyyy")</small>
                                                     }
                                                     else
                                                     {
@@ -440,197 +532,8 @@
                             </div>
                         </div>
                     }
-
-                    var enrolledProducts = ViewBag.EnrolledProducts as List<dynamic> ?? new List<dynamic>();
-                    @if (enrolledProducts.Any())
-                    {
-                        <div class="card collapsed-card mb-3">
-                            <div class="card-header">
-                                <h3 class="card-title">Enrolled Products (@enrolledProducts.Count)</h3>
-                                <div class="card-tools">
-                                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
-                                        <i class="fas fa-plus"></i>
-                                    </button>
-                                </div>
-                            </div>
-                            <div class="card-body table-responsive p-0" style="display: none;">
-                                <table class="table table-hover text-nowrap">
-                                    <thead>
-                                        <tr>
-                                            <th>Product Name</th>
-                                            <th>Statement Status</th>
-                                            <th>Compliance Status</th>
-                                            <th>Open Issues</th>
-                                            <th>Last Audit</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        @foreach (var product in enrolledProducts)
-                                        {
-                                            var productAccessibility = product.ProductAccessibility as Compass.Models.ProductAccessibility;
-                                            var openIssues = (int)product.OpenIssuesCount;
-                                            var levelAAIssues = 0;
-                                            if (productAccessibility != null)
-                                            {
-                                                levelAAIssues = productAccessibility.Issues.Count(i => !i.IsDeleted && (i.WcagLevel == "A" || i.WcagLevel == "AA") && i.Status != "resolved");
-                                            }
-                                            
-                                            <tr>
-                                                <td>
-                                                    <a href="@Url.Action("Details", new { fipsId = product.FipsId })">
-                                                        <strong>@product.ProductName</strong>
-                                                    </a>
-                                                    @if (!string.IsNullOrEmpty(product.FipsId))
-                                                    {
-                                                        <br><small class="text-muted mr-2">@product.FipsId</small>
-                                                    }
-                                                    @if (!string.IsNullOrEmpty(product.Phase))
-                                                    {
-                                                        <small class="text-muted">@product.Phase</small>
-                                                    }
-                                                </td>
-                                                
-                                                <td>
-                                                    @if (product.IsVerified)
-                                                    {
-                                                        <span class="badge bg-success">Verified</span>
-                                                    }
-                                                    else
-                                                    {
-                                                        <span class="badge bg-secondary">Not Verified</span>
-                                                    }
-                                                </td>
-                                             
-                                                <td>
-                                                    <span class="badge @product.ComplianceBadge">
-                                                        @product.ComplianceStatus
-                                                    </span>
-                                                </td>
-                                                <td>
-                                                    @if (openIssues > 0)
-                                                    {
-                                                        <span class="badge badge-warning">@openIssues open</span>
-                                                        if (levelAAIssues > 0)
-                                                        {
-                                                            <small class="text-danger ml-1">(@levelAAIssues Level A/AA)</small>
-                                                        }
-                                                    }
-                                                    else
-                                                    {
-                                                        <span class="text-muted">None</span>
-                                                    }
-                                                </td>
-                                               
-                                                <td>
-                                                    @if (product.LastAudit != null)
-                                                    {
-                                                        var lastAudit = product.LastAudit as Compass.Models.AuditHistory;
-                                                            <span class="badge badge-@(lastAudit.AuditType == "External" ? "primary" : "secondary")">@lastAudit.AuditType</span>
-                                                    }
-                                                    else
-                                                    {
-                                                        <span class="text-muted">None</span>
-                                                    }
-                                                </td>
-                                            </tr>
-                                        }
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    }
-
-                    var nonEnrolledProducts = ViewBag.NonEnrolledProducts as List<dynamic> ?? new List<dynamic>();
-                    var productsTotalCount = (int)(ViewBag.ProductsTotalCount ?? 0);
-                    <div class="card collapsed-card">
-                        <div class="card-header">
-                            <h3 class="card-title">All Products (@productsTotalCount)</h3>
-                            <div class="card-tools">
-                                <button type="button" class="btn btn-tool" data-card-widget="collapse">
-                                    <i class="fas fa-plus"></i>
-                                </button>
-                            </div>
-                        </div>
-                        <div class="card-body table-responsive p-0" style="display: none;">
-                            @if (nonEnrolledProducts.Any())
-                            {
-                                <table class="table table-hover text-nowrap">
-                                    <thead>
-                                        <tr>
-                                            <th>Product</th>
-                                            <th>Enrollment Status</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        @foreach (var product in nonEnrolledProducts)
-                                        {
-                                            <tr>
-                                                <td>
-                                                    <a href="@Url.Action("Details", new { fipsId = product.FipsId })" class="text-decoration-none">
-                                                        <strong>@product.ProductName</strong>
-                                                    </a>
-                                                    <br>
-                                                    @if (!string.IsNullOrEmpty(product.FipsId))
-                                                    {
-                                                        <small class="text-muted mr-2">@product.FipsId</small>
-                                                    }
-                                                    @if (!string.IsNullOrEmpty(product.Phase))
-                                                    {
-                                                        <small class="text-muted">@product.Phase</small>
-                                                    }
-                                                </td>
-                                                <td>
-                                                    <span class="badge bg-secondary">Not Enrolled</span>
-                                                </td>
-                                            </tr>
-                                        }
-                                    </tbody>
-                                </table>
-
-                                @if (ViewBag.ProductsTotalPages != null && (int)ViewBag.ProductsTotalPages > 1)
-                                {
-                                    <div class="card-footer">
-                                        <nav>
-                                            <ul class="pagination pagination-sm justify-content-center mb-0">
-                                                @{
-                                                    var productsPage = (int)(ViewBag.ProductsPage ?? 1);
-                                                    var productsTotalPages = (int)(ViewBag.ProductsTotalPages ?? 1);
-                                                    var productsStartPage = Math.Max(1, productsPage - 2);
-                                                    var productsEndPage = Math.Min(productsTotalPages, productsPage + 2);
-                                                }
-                                                <li class="page-item @(productsPage == 1 ? "disabled" : "")">
-                                                    <a class="page-link" href="@Url.Action("Index", new { tab = "products", productsPage = productsPage - 1, search = ViewBag.CurrentSearch, status = ViewBag.CurrentStatus, issues = ViewBag.CurrentIssues, statement = ViewBag.CurrentStatement })">Previous</a>
-                                                </li>
-                                                @for (int i = productsStartPage; i <= productsEndPage; i++)
-                                                {
-                                                    <li class="page-item @(i == productsPage ? "active" : "")">
-                                                        <a class="page-link" href="@Url.Action("Index", new { tab = "products", productsPage = i, search = ViewBag.CurrentSearch, status = ViewBag.CurrentStatus, issues = ViewBag.CurrentIssues, statement = ViewBag.CurrentStatement })">@i</a>
-                                                    </li>
-                                                }
-                                                <li class="page-item @(productsPage == productsTotalPages ? "disabled" : "")">
-                                                    <a class="page-link" href="@Url.Action("Index", new { tab = "products", productsPage = productsPage + 1, search = ViewBag.CurrentSearch, status = ViewBag.CurrentStatus, issues = ViewBag.CurrentIssues, statement = ViewBag.CurrentStatement })">Next</a>
-                                                </li>
-                                            </ul>
-                                        </nav>
-                                        <div class="text-center text-muted mt-2">
-                                            Showing @(((productsPage - 1) * 25) + 1) to @(Math.Min(productsPage * 25, productsTotalCount)) of @productsTotalCount products
-                                        </div>
-                                    </div>
-                                }
-                            }
-                            else
-                            {
-                                <div class="text-center p-4">
-                                    <p class="text-muted">No products found matching the current filters.</p>
-                                    <button type="button" class="btn btn-primary" data-toggle="modal" data-target="#enrollProductModal">
-                                        Enrol First Product
-                                    </button>
-                                </div>
-                            }
-                        </div>
-                    </div>
                 }
-                else if (activeTab == "issues")
+                else if (activeTab == "your-issues" || activeTab == "all-issues")
                 {
                     var issues = ViewBag.Issues as List<Compass.Models.AccessibilityIssue>;
                     <div class="card">
@@ -643,11 +546,10 @@
                                 <table class="table table-hover">
                                     <thead>
                                         <tr>
-                                            <th>Product</th>
-                                            <th>Issue</th>
+                                            <th>Issue Title</th>
+                                            <th>Criteria</th>
                                             <th>WCAG Level</th>
                                             <th>Status</th>
-                                            <th>Identified Date</th>
                                             <th>Planned Resolution</th>
                                         </tr>
                                     </thead>
@@ -658,7 +560,7 @@
                                             var levelBadge = "badge-secondary";
                                             if (issue.IssueType == "Best Practice")
                                             {
-                                                wcagLevel = "Best Practice";
+                                                wcagLevel = "BP";
                                                 levelBadge = "badge-info";
                                             }
                                             else if (issue.WcagCriteriaLinks.Any())
@@ -686,11 +588,28 @@
                                                            issue.PlannedResolutionDate.Value < DateTime.UtcNow.Date && 
                                                            issue.Status != "resolved";
                                             
-                                            <tr>
+                                            string issueTitle = "";
+                                            if (!string.IsNullOrEmpty(issue.IssueTitle))
+                                            {
+                                                issueTitle = issue.IssueTitle;
+                                            }
+                                            else if (issue.IssueType == "WCAG" && issue.WcagCriteriaLinks.Any())
+                                            {
+                                                issueTitle = string.Join(", ", issue.WcagCriteriaLinks.Select(l => l.WcagCriterion.Criterion));
+                                            }
+                                            else if (!string.IsNullOrEmpty(issue.WcagCriteria))
+                                            {
+                                                issueTitle = issue.WcagCriteria;
+                                            }
+                                            else
+                                            {
+                                                issueTitle = $"{issue.IssueType} Issue";
+                                            }
+                                            
+                                            <tr class="@(isOverdue ? "table-danger" : "")">
                                                 <td>
-                                                    <a href="@Url.Action("Details", new { fipsId = issue.ProductAccessibility.FipsId, tab = "issues" })">
-                                                        <strong>@issue.ProductAccessibility.ProductName</strong><br>
-                                                        <small class="text-muted">@issue.ProductAccessibility.FipsId</small>
+                                                    <a href="@Url.Action("ViewIssue", new { id = issue.Id, documentId = issue.ProductAccessibility.ProductDocumentId ?? issue.ProductAccessibility.FipsId })">
+                                                        <strong>@issueTitle</strong>
                                                     </a>
                                                 </td>
                                                 <td>
@@ -703,21 +622,17 @@
                                                             </div>
                                                         }
                                                     }
-                                                    else if (!string.IsNullOrEmpty(issue.IssueTitle))
-                                                    {
-                                                        <strong>@issue.IssueTitle</strong>
-                                                    }
                                                     else if (!string.IsNullOrEmpty(issue.WcagCriteria))
                                                     {
                                                         <strong>@issue.WcagCriteria</strong>
                                                     }
+                                                    else if (issue.IssueType == "Best Practice")
+                                                    {
+                                                        <strong>Best Practice</strong>
+                                                    }
                                                     else
                                                     {
                                                         <strong>@issue.IssueType Issue</strong>
-                                                    }
-                                                    @if (!string.IsNullOrEmpty(issue.IssueDescription))
-                                                    {
-                                                        <br><small class="text-muted">@(issue.IssueDescription.Length > 100 ? issue.IssueDescription.Substring(0, 100) + "..." : issue.IssueDescription)</small>
                                                     }
                                                 </td>
                                                 <td>
@@ -727,18 +642,15 @@
                                                     <span class="badge @statusBadge">@issue.Status.Replace("_", " ")</span>
                                                 </td>
                                                 <td>
-                                                    <small>@issue.IdentifiedDate.ToString("dd MMM yyyy")</small>
-                                                </td>
-                                                <td>
                                                     @if (issue.PlannedResolutionDate.HasValue)
                                                     {
-                                                        <small class="@(isOverdue ? "text-danger font-weight-bold" : "")">
+                                                        <span class="@(isOverdue ? "text-danger font-weight-bold" : "")">
                                                             @issue.PlannedResolutionDate.Value.ToString("dd MMM yyyy")
                                                             @if (isOverdue)
                                                             {
-                                                                <br><span class="badge badge-danger">Overdue</span>
+                                                                <br><span class="badge badge-danger"><i class="fas fa-exclamation-triangle"></i> Overdue</span>
                                                             }
-                                                        </small>
+                                                        </span>
                                                     }
                                                     else
                                                     {
@@ -762,16 +674,16 @@
                                                     var issuesEndPage = Math.Min(issuesTotalPages, issuesPage + 2);
                                                 }
                                                 <li class="page-item @(issuesPage == 1 ? "disabled" : "")">
-                                                    <a class="page-link" href="@Url.Action("Index", new { tab = "issues", issuesPage = issuesPage - 1, issueStatus = ViewBag.CurrentIssueStatus, issueLevel = ViewBag.CurrentIssueLevel })">Previous</a>
+                                                    <a class="page-link" href="@Url.Action("Index", new { tab = activeTab, issuesPage = issuesPage - 1, issueStatus = ViewBag.CurrentIssueStatus, issueLevel = ViewBag.CurrentIssueLevel })">Previous</a>
                                                 </li>
                                                 @for (int i = issuesStartPage; i <= issuesEndPage; i++)
                                                 {
                                                     <li class="page-item @(i == issuesPage ? "active" : "")">
-                                                        <a class="page-link" href="@Url.Action("Index", new { tab = "issues", issuesPage = i, issueStatus = ViewBag.CurrentIssueStatus, issueLevel = ViewBag.CurrentIssueLevel })">@i</a>
+                                                        <a class="page-link" href="@Url.Action("Index", new { tab = activeTab, issuesPage = i, issueStatus = ViewBag.CurrentIssueStatus, issueLevel = ViewBag.CurrentIssueLevel })">@i</a>
                                                     </li>
                                                 }
                                                 <li class="page-item @(issuesPage == issuesTotalPages ? "disabled" : "")">
-                                                    <a class="page-link" href="@Url.Action("Index", new { tab = "issues", issuesPage = issuesPage + 1, issueStatus = ViewBag.CurrentIssueStatus, issueLevel = ViewBag.CurrentIssueLevel })">Next</a>
+                                                    <a class="page-link" href="@Url.Action("Index", new { tab = activeTab, issuesPage = issuesPage + 1, issueStatus = ViewBag.CurrentIssueStatus, issueLevel = ViewBag.CurrentIssueLevel })">Next</a>
                                                 </li>
                                             </ul>
                                         </nav>
@@ -790,7 +702,7 @@
                         </div>
                     </div>
                 }
-                else if (activeTab == "audits")
+                else if (activeTab == "your-audits" || activeTab == "all-audits")
                 {
                     var audits = ViewBag.Audits as List<Compass.Models.AuditHistory>;
                     <div class="card">
@@ -817,7 +729,7 @@
                                             <tr>
                                                 <td>@audit.AuditDate.ToString("dd MMM yyyy")</td>
                                                 <td>
-                                                    <a href="@Url.Action("Details", new { fipsId = audit.ProductAccessibility.FipsId, tab = "audits" })">
+                                                    <a href="@Url.Action("Details", new { documentId = audit.ProductAccessibility.ProductDocumentId ?? audit.ProductAccessibility.FipsId, tab = "audits" })">
                                                         <strong>@audit.ProductAccessibility.ProductName</strong><br>
                                                         <small class="text-muted">@audit.ProductAccessibility.FipsId</small>
                                                     </a>
@@ -865,16 +777,16 @@
                                                     var auditsEndPage = Math.Min(auditsTotalPages, auditsPage + 2);
                                                 }
                                                 <li class="page-item @(auditsPage == 1 ? "disabled" : "")">
-                                                    <a class="page-link" href="@Url.Action("Index", new { tab = "audits", auditsPage = auditsPage - 1, auditType = ViewBag.CurrentAuditType })">Previous</a>
+                                                    <a class="page-link" href="@Url.Action("Index", new { tab = activeTab, auditsPage = auditsPage - 1, auditType = ViewBag.CurrentAuditType })">Previous</a>
                                                 </li>
                                                 @for (int i = auditsStartPage; i <= auditsEndPage; i++)
                                                 {
                                                     <li class="page-item @(i == auditsPage ? "active" : "")">
-                                                        <a class="page-link" href="@Url.Action("Index", new { tab = "audits", auditsPage = i, auditType = ViewBag.CurrentAuditType })">@i</a>
+                                                        <a class="page-link" href="@Url.Action("Index", new { tab = activeTab, auditsPage = i, auditType = ViewBag.CurrentAuditType })">@i</a>
                                                     </li>
                                                 }
                                                 <li class="page-item @(auditsPage == auditsTotalPages ? "disabled" : "")">
-                                                    <a class="page-link" href="@Url.Action("Index", new { tab = "audits", auditsPage = auditsPage + 1, auditType = ViewBag.CurrentAuditType })">Next</a>
+                                                    <a class="page-link" href="@Url.Action("Index", new { tab = activeTab, auditsPage = auditsPage + 1, auditType = ViewBag.CurrentAuditType })">Next</a>
                                                 </li>
                                             </ul>
                                         </nav>
@@ -1011,7 +923,7 @@
                                                             var color = levelColourLookup.TryGetValue(segment.Label, out var lookupColor) ? lookupColor : "#475467";
                                                             var dashArray = $"{segment.Dash.ToString("0.##", CultureInfo.InvariantCulture)} {(pieCircumference - segment.Dash).ToString("0.##", CultureInfo.InvariantCulture)}";
                                                             var dashOffset = segment.Offset.ToString("0.##", CultureInfo.InvariantCulture);
-                                                            <circle class="wcag-pie-segment" cx="70" cy="70" r="@pieRadius" stroke="@color" stroke-dasharray="@dashArray" stroke-dashoffset="@dashOffset" transform="rotate(-90 70 70)"></circle>
+                                                            <circle class="wcag-pie-segment" cx="70" cy="70" r="@pieRadius" stroke="@color" stroke-dasharray="@dashArray" stroke-dashoffset="@dashOffset" transform="rotate(-90 70 70)" aria-label="WCAG level @segment.Label segment, @segment.Count issues"></circle>
                                                         }
                                                     }
                                                     else
@@ -1026,7 +938,7 @@
                                                     var colour = levelColourLookup.TryGetValue(slice.Key, out var lookupColor) ? lookupColor : "#475467";
                                                     var percentage = levelTotalIssues > 0 ? Math.Round((double)slice.Value / levelTotalIssues * 100) : 0;
                                                     <li role="listitem">
-                                                        <span class="wcag-level-dot" style="background-color: @colour"></span>
+                                                        <span class="wcag-level-dot" style="background-color: @colour" aria-label="WCAG level @slice.Key indicator"></span>
                                                         <span class="wcag-level-label">@slice.Key</span>
                                                         <span class="wcag-level-value">@slice.Value <span class="text-muted">(@percentage%)</span></span>
                                                     </li>
@@ -1057,19 +969,20 @@
                                                 {
                                                     var colour = levelColourLookup.TryGetValue(tuple.Item4 ?? string.Empty, out var lookupColor) ? lookupColor : "#2E90FA";
                                                     var width = topCriteriaMax > 0 ? Math.Round((double)tuple.Item3 / topCriteriaMax * 100) : 0;
+                                                    var levelLabel = string.IsNullOrWhiteSpace(tuple.Item4) ? "" : $"WCAG level {tuple.Item4}";
                                                     <div class="wcag-bar-item" role="listitem">
                                                         <div class="wcag-bar-heading">
                                                             <span class="wcag-bar-code">
                                                                 @tuple.Item1
                                                                 @if (!string.IsNullOrWhiteSpace(tuple.Item4))
                                                                 {
-                                                                    <span class="badge wcag-bar-badge" style="color: @colour">@tuple.Item4</span>
+                                                                    <span class="badge wcag-bar-badge" style="color: @colour" aria-label="@levelLabel">@tuple.Item4</span>
                                                                 }
                                                             </span>
                                                             <span class="wcag-bar-count">@tuple.Item3 @((tuple.Item3 == 1) ? "issue" : "issues")</span>
                                                         </div>
-                                                        <div class="wcag-bar-track" aria-hidden="true">
-                                                            <div class="wcag-bar-fill" style="width: @width%; background-color: @colour"></div>
+                                                        <div class="wcag-bar-track" aria-label="Bar showing @tuple.Item3 issues for @tuple.Item1, @levelLabel" role="img">
+                                                            <div class="wcag-bar-fill" style="width: @width%; background-color: @colour" aria-hidden="true"></div>
                                                         </div>
                                                         <div class="wcag-bar-title text-muted">@tuple.Item2</div>
                                                     </div>
@@ -1131,7 +1044,7 @@
                                                     <div class="heatmap-grid-code">@row.Criterion</div>
                                                     <div class="heatmap-grid-count">@row.IssueCount</div>
                                                     <div class="heatmap-grid-meta">
-                                                        <span class="badge badge-secondary">@row.Level</span>
+                                                        <span class="badge badge-level-@row.Level.ToLower()">@row.Level</span>
                                                         <span class="text-muted">WCAG @row.Version</span>
                                                     </div>
                                                     <div class="heatmap-grid-title text-muted">@row.Title</div>
@@ -1178,6 +1091,7 @@
                         <div id="selectedProductTitle"></div>
                         <small class="text-muted" id="selectedProductDetails"></small>
                     </div>
+                    <input type="hidden" name="documentId" id="selectedProductDocumentId" />
                     <input type="hidden" name="fipsId" id="selectedProductFipsId" />
                 </div>
                 <div class="modal-footer">
@@ -1218,11 +1132,27 @@
                     data: { q: searchTerm },
                     dataType: 'json',
                     success: function(data) {
-                        displayProductResults(data.results, $resultsContainer);
+                        if (data && data.results) {
+                            displayProductResults(data.results, $resultsContainer);
+                        } else {
+                            console.error('Unexpected response format:', data);
+                            $resultsContainer.html('<div class="autocomplete-item no-results">Error: Unexpected response format</div>');
+                            $resultsContainer.removeClass('d-none');
+                        }
                     },
                     error: function(xhr, status, error) {
-                        console.error('Failed to search products:', status, error);
-                        $resultsContainer.html('<div class="autocomplete-item no-results">Error searching products</div>');
+                        console.error('Failed to search products:', status, error, xhr.responseText);
+                        var errorMessage = 'Error searching products';
+                        if (xhr.responseJSON && xhr.responseJSON.error) {
+                            errorMessage = xhr.responseJSON.error;
+                        } else if (xhr.status === 401) {
+                            errorMessage = 'Authentication required';
+                        } else if (xhr.status === 403) {
+                            errorMessage = 'Access denied';
+                        } else if (xhr.status === 500) {
+                            errorMessage = 'Server error occurred';
+                        }
+                        $resultsContainer.html('<div class="autocomplete-item no-results">' + errorMessage + '</div>');
                         $resultsContainer.removeClass('d-none');
                     }
                 });
@@ -1288,6 +1218,7 @@
             $input.val('');
             $resultsContainer.addClass('d-none').empty();
             $('#selectedProductDisplay').addClass('d-none');
+            $('#selectedProductDocumentId').val('');
             $('#selectedProductFipsId').val('');
             $('#enrollProductSubmitBtn').prop('disabled', true);
         });
@@ -1303,6 +1234,7 @@
         }
 
         results.forEach(function(product) {
+            var productId = product.documentId || product.fipsId;
             var isEnrolled = enrolledFipsIds.includes(product.fipsId);
             var $item = $('<div class="autocomplete-item"></div>');
             
@@ -1310,11 +1242,12 @@
                 $item.addClass('disabled');
             }
             
+            var displayId = product.documentId || product.fipsId;
             $item.html(
                 '<div class="autocomplete-name">' + product.title + 
                 (isEnrolled ? ' <span class="badge badge-success ml-2">Already enrolled</span>' : '') + 
                 '</div>' +
-                '<div class="autocomplete-details">' + product.fipsId + ' • ' + product.phase + '</div>'
+                '<div class="autocomplete-details">' + displayId + ' • ' + product.phase + '</div>'
             );
 
             if (!isEnrolled) {
@@ -1332,9 +1265,11 @@
 
     function selectProduct(product) {
         $('#productSearch').val(product.title);
-        $('#selectedProductFipsId').val(product.fipsId);
+        var productId = product.documentId || product.fipsId;
+        $('#selectedProductDocumentId').val(productId);
+        $('#selectedProductFipsId').val(product.fipsId || '');
         $('#selectedProductTitle').text(product.title);
-        $('#selectedProductDetails').text(product.fipsId + ' • ' + product.phase);
+        $('#selectedProductDetails').text((product.documentId || product.fipsId) + ' • ' + product.phase);
         $('#selectedProductDisplay').removeClass('d-none');
         $('#enrollProductSubmitBtn').prop('disabled', false);
     }
@@ -1349,9 +1284,32 @@
         });
     }
 })();
+
 </script>
 
 <style>
+    .border-left-primary {
+        border-left: 0.25rem solid #4e73df !important;
+    }
+    .border-left-danger {
+        border-left: 0.25rem solid #e74a3b !important;
+    }
+    .border-left-warning {
+        border-left: 0.25rem solid #f6c23e !important;
+    }
+    .border-left-success {
+        border-left: 0.25rem solid #1cc88a !important;
+    }
+    .border-left-info {
+        border-left: 0.25rem solid #36b9cc !important;
+    }
+    .text-gray-800 {
+        color: #5a5c69 !important;
+    }
+    .text-gray-300 {
+        color: #dddfeb !important;
+    }
+
     .heatmap-card {
         border: 1px solid #e2e8f0;
     }
@@ -1637,6 +1595,21 @@
         font-weight: 600;
     }
 
+    .heatmap-grid-meta .badge-level-a {
+        background-color: #dc2626;
+        color: #ffffff;
+    }
+
+    .heatmap-grid-meta .badge-level-aa {
+        background-color: #ea580c;
+        color: #ffffff;
+    }
+
+    .heatmap-grid-meta .badge-level-aaa {
+        background-color: #eab308;
+        color: #000000;
+    }
+
     .heatmap-grid-cell .text-muted {
         color: #475467 !important;
     }
@@ -1649,6 +1622,21 @@
     .heatmap-cell-max .heatmap-grid-meta .badge {
         background-color: rgba(255, 255, 255, 0.2);
         color: #ffffff;
+    }
+
+    .heatmap-cell-max .heatmap-grid-meta .badge-level-a {
+        background-color: #dc2626;
+        color: #ffffff;
+    }
+
+    .heatmap-cell-max .heatmap-grid-meta .badge-level-aa {
+        background-color: #ea580c;
+        color: #ffffff;
+    }
+
+    .heatmap-cell-max .heatmap-grid-meta .badge-level-aaa {
+        background-color: #eab308;
+        color: #000000;
     }
 
     .heatmap-cell-max .text-muted {

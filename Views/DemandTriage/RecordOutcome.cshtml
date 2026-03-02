@@ -1,0 +1,319 @@
+@model Compass.ViewModels.DemandTriage.TriageOutcomeViewModel
+
+@{
+    ViewData["Title"] = $"Triage outcome — {Model.RequestReference}";
+
+    string BandClass(string? band) => band switch
+    {
+        "High" => "dt-heatmap-cell--high",
+        "Medium" => "dt-heatmap-cell--medium",
+        _ => "dt-heatmap-cell--low"
+    };
+}
+
+@await Html.PartialAsync("_DemandTriageStyles")
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb" class="govuk-breadcrumbs">
+        <ol class="govuk-breadcrumbs__list">
+            <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="/">Home</a></li>
+            <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" asp-action="Index" asp-controller="DemandTriage">Demand triage</a></li>
+            <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" asp-action="Detail" asp-controller="DemandTriage" asp-route-id="@Model.DemandTriageRequestId">@Model.RequestReference</a></li>
+            <li class="govuk-breadcrumbs__list-item" aria-current="page">Record outcome</li>
+        </ol>
+    </nav>
+}
+
+<!-- ── Header ────────────────────────────────────────────────────────────── -->
+<div class="dt-header">
+    <div class="dt-header-inner">
+        <div>
+            <div class="dt-breadcrumb">
+                <a href="@Url.Action("Index","DemandTriage")">Demand triage</a>
+                <span>/</span>
+                <a href="@Url.Action("Detail","DemandTriage", new{id=Model.DemandTriageRequestId})">@Model.RequestReference</a>
+                <span>/</span> Record outcome
+            </div>
+            <h1><i class="fas fa-gavel mr-2" aria-hidden="true"></i>Record triage outcome</h1>
+            <p>@Model.RequestReference — @Model.RequestName</p>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid pt-3">
+
+        @if (Model.ValidationErrors.Any())
+        {
+            <div class="dt-notice dt-notice--danger mb-3">
+                <i class="fas fa-exclamation-circle"></i>
+                <div>
+                    <strong>Please fix the following:</strong>
+                    <ul class="mb-0 mt-1">
+                        @foreach (var e in Model.ValidationErrors) { <li>@e</li> }
+                    </ul>
+                </div>
+            </div>
+        }
+
+        <div class="row">
+
+            <!-- ── Scorecard summary ──────────────────────────────────────── -->
+            <div class="col-lg-4">
+
+                <div class="dt-section-card">
+                    <div class="dt-section-header">
+                        <h3><i class="fas fa-star-half-alt" aria-hidden="true"></i> Scorecard summary</h3>
+                    </div>
+                    <div class="dt-section-body">
+
+                        <!-- Heatmap -->
+                        <div class="dt-heatmap">
+                            <div class="dt-heatmap-cell @BandClass(Model.StrategicAlignmentBand)">
+                                <div class="dt-heatmap-cell-label">Strategic alignment</div>
+                                <div class="dt-heatmap-cell-score">@Model.StrategicAlignmentScore <span class="dt-heatmap-cell-max">/ 15</span></div>
+                                <div class="dt-heatmap-cell-band">@(Model.StrategicAlignmentBand ?? "—")</div>
+                            </div>
+                            <div class="dt-heatmap-cell @BandClass(Model.UrgencyBand)">
+                                <div class="dt-heatmap-cell-label">Urgency</div>
+                                <div class="dt-heatmap-cell-score">@Model.UrgencyScore <span class="dt-heatmap-cell-max">/ 10</span></div>
+                                <div class="dt-heatmap-cell-band">@(Model.UrgencyBand ?? "—")</div>
+                            </div>
+                            <div class="dt-heatmap-cell @BandClass(Model.FundingBand)">
+                                <div class="dt-heatmap-cell-label">Funding</div>
+                                <div class="dt-heatmap-cell-score">@Model.FundingScore <span class="dt-heatmap-cell-max">/ 22</span></div>
+                                <div class="dt-heatmap-cell-band">@(Model.FundingBand ?? "—")</div>
+                            </div>
+                            <div class="dt-heatmap-cell @BandClass(Model.RiceBand)">
+                                <div class="dt-heatmap-cell-label">RICE</div>
+                                <div class="dt-heatmap-cell-score">@Model.RiceScore <span class="dt-heatmap-cell-max">/ 42</span></div>
+                                <div class="dt-heatmap-cell-band">@(Model.RiceBand ?? "—")</div>
+                            </div>
+                        </div>
+
+                        <!-- Total score -->
+                        @{
+                            var pct = Model.TotalScore;
+                            var fillClass = Model.SuggestionBand == "Must do" ? "dt-score-progress-fill--must-do"
+                                          : Model.SuggestionBand == "Could do" ? "dt-score-progress-fill--could-do"
+                                          : "dt-score-progress-fill--do-not-do";
+                        }
+                        <div class="dt-total-score-bar mt-3">
+                            <div>
+                                <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#6c757d;margin-bottom:0.2rem;">Total</div>
+                                <div class="dt-total-score-number">@Model.TotalScore <span>/ 100</span></div>
+                            </div>
+                            <div class="dt-score-progress">
+                                <div class="dt-score-progress-bar">
+                                    <div class="dt-score-progress-fill @fillClass" style="width:@pct%"></div>
+                                </div>
+                                @if (!string.IsNullOrWhiteSpace(Model.SuggestionBand))
+                                {
+                                    var sugClass = Model.SuggestionBand == "Must do" ? "dt-suggestion dt-suggestion--must-do"
+                                                 : Model.SuggestionBand == "Could do" ? "dt-suggestion dt-suggestion--could-do"
+                                                 : "dt-suggestion dt-suggestion--do-not-do";
+                                    <div class="mt-2">
+                                        <span class="@sugClass">
+                                            <i class="fas fa-lightbulb" aria-hidden="true"></i>
+                                            Suggestion: @Model.SuggestionBand
+                                        </span>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+
+                        @if (Model.UrgencyScore == 0)
+                        {
+                            <div class="dt-notice dt-notice--info mt-3">
+                                <i class="fas fa-info-circle"></i>
+                                <span>Score indicates no compelling reason to act now or critical delivery date recorded.</span>
+                            </div>
+                        }
+
+                    </div>
+                </div>
+
+                <!-- Banding reference -->
+                <div class="dt-section-card mt-3">
+                    <div class="dt-section-header">
+                        <h3><i class="fas fa-table" aria-hidden="true"></i> Banding reference</h3>
+                    </div>
+                    <div class="dt-section-body" style="font-size:0.8rem;">
+                        <table style="width:100%;border-collapse:collapse;">
+                            <thead>
+                                <tr style="background:#f8f9fa;">
+                                    <th style="padding:0.4rem 0.5rem;text-align:left;font-size:0.7rem;text-transform:uppercase;letter-spacing:0.04em;color:#6c757d;">Section</th>
+                                    <th style="padding:0.4rem 0.5rem;text-align:center;color:#dc3545;">Low</th>
+                                    <th style="padding:0.4rem 0.5rem;text-align:center;color:#856404;">Med</th>
+                                    <th style="padding:0.4rem 0.5rem;text-align:center;color:#155724;">High</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @{
+                                    var bands = new[]
+                                    {
+                                        ("Strategic (15)", Model.StrategicAlignmentScore, 0, 5, 6, 10, 11, 15),
+                                        ("Urgency (10)",   Model.UrgencyScore,            0, 2, 3, 5,  6,  10),
+                                        ("Funding (22)",   Model.FundingScore,            0, 2, 3, 14, 15, 22),
+                                        ("RICE (42)",      Model.RiceScore,               0, 11,12, 24, 25, 42),
+                                    };
+                                }
+                                @foreach (var (label, score, l1, l2, m1, m2, h1, h2) in bands)
+                                {
+                                    <tr style="border-top:1px solid #f0f0f0;">
+                                        <td style="padding:0.4rem 0.5rem;color:#495057;">@label</td>
+                                        <td style="padding:0.4rem 0.5rem;text-align:center;@(score >= l1 && score <= l2 ? "background:#f8d7da;font-weight:700;" : "")">@l1–@l2</td>
+                                        <td style="padding:0.4rem 0.5rem;text-align:center;@(score >= m1 && score <= m2 ? "background:#fff3cd;font-weight:700;" : "")">@m1–@m2</td>
+                                        <td style="padding:0.4rem 0.5rem;text-align:center;@(score >= h1 && score <= h2 ? "background:#d4edda;font-weight:700;" : "")">@h1–@h2</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                        <p style="font-size:0.72rem;color:#6c757d;margin-top:0.5rem;margin-bottom:0;">
+                            Total: Do not do (1–20) · Could do (21–56) · Must do (57–87)
+                        </p>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- ── Outcome form ───────────────────────────────────────────── -->
+            <div class="col-lg-8">
+
+                <form asp-action="RecordOutcome" asp-controller="DemandTriage"
+                      asp-route-id="@Model.DemandTriageRequestId" method="post" novalidate>
+                    @Html.AntiForgeryToken()
+
+                    <div class="dt-form-section">
+                        <div class="dt-form-section-header">
+                            <div class="dt-section-num">1</div>
+                            <h3>Triage decision</h3>
+                        </div>
+                        <div class="dt-form-section-body">
+
+                            <div class="dt-form-group">
+                                <label asp-for="OutcomeSelection" class="dt-label">
+                                    Proposed outcome <span class="text-danger">*</span>
+                                </label>
+                                <span class="dt-label-hint">Select the triage outcome for this request</span>
+                                <div class="dt-radio-group">
+                                    @{
+                                        var outcomes = new[]
+                                        {
+                                            ("Progress to next stage", "fa-arrow-right", "The request should proceed"),
+                                            ("Reject", "fa-times-circle", "The request should not proceed"),
+                                            ("Pause", "fa-pause-circle", "The request should be paused pending further information"),
+                                            ("Further investigation required", "fa-search", "More information is needed before a decision can be made"),
+                                        };
+                                    }
+                                    @foreach (var (val, icon, hint) in outcomes)
+                                    {
+                                        <label class="dt-radio-option @(Model.OutcomeSelection == val ? "selected" : "")" id="outcome-opt-@val.GetHashCode()">
+                                            <input type="radio" asp-for="OutcomeSelection" id="outcome_@val.GetHashCode()" value="@val" />
+                                            <div>
+                                                <span class="font-weight-600"><i class="fas @icon mr-1" aria-hidden="true"></i>@val</span>
+                                                <div style="font-size:0.78rem;color:#6c757d;margin-top:0.1rem;">@hint</div>
+                                            </div>
+                                        </label>
+                                    }
+                                </div>
+                            </div>
+
+                            <!-- Override warning -->
+                            <div class="dt-notice dt-notice--warning" id="overrideWarning"
+                                 style="@(Model.OverrideRequired ? "" : "display:none")">
+                                <i class="fas fa-exclamation-triangle"></i>
+                                <div>
+                                    <strong>Override required.</strong>
+                                    The selected outcome conflicts with the suggested band
+                                    (<strong>@Model.SuggestionBand</strong>). You must provide a reason below.
+                                </div>
+                            </div>
+
+                            <div class="dt-form-group" id="overrideReasonGroup"
+                                 style="@(Model.OverrideRequired ? "" : "display:none")">
+                                <label asp-for="OverrideReason" class="dt-label">
+                                    Override reason <span class="text-danger">*</span>
+                                </label>
+                                <span class="dt-label-hint">Explain why you are overriding the suggested outcome</span>
+                                <textarea asp-for="OverrideReason" class="dt-input" rows="4"
+                                          placeholder="Provide a clear rationale for overriding the scoring suggestion"></textarea>
+                            </div>
+
+                        </div>
+                    </div>
+
+                    <div class="dt-form-section">
+                        <div class="dt-form-section-header">
+                            <div class="dt-section-num">2</div>
+                            <h3>Outcome details</h3>
+                        </div>
+                        <div class="dt-form-section-body">
+
+                            <div class="dt-form-group">
+                                <label asp-for="OutcomeSummary" class="dt-label">
+                                    Outcome summary / recommendation <span class="text-danger">*</span>
+                                </label>
+                                <span class="dt-label-hint">Summarise the triage outcome, rationale, and any recommendations</span>
+                                <textarea asp-for="OutcomeSummary" class="dt-input" rows="6"
+                                          placeholder="Provide a clear summary of the triage decision and next steps"></textarea>
+                            </div>
+
+                            <div class="dt-form-group">
+                                <label asp-for="RoutedToArea" class="dt-label">
+                                    Which area is the demand going to? <span class="text-danger">*</span>
+                                </label>
+                                <span class="dt-label-hint">Where will this request be routed following the triage decision?</span>
+                                <input asp-for="RoutedToArea" class="dt-input"
+                                       placeholder="e.g. Digital Delivery, Data, Architecture, Rejected" />
+                            </div>
+
+                        </div>
+                    </div>
+
+                    <div class="d-flex align-items-center gap-3 flex-wrap">
+                        <button type="submit" class="dt-action-btn dt-action-btn--success" style="width:auto;padding:0.65rem 1.5rem;">
+                            <i class="fas fa-check-circle" aria-hidden="true"></i>
+                            <span>Save triage outcome</span>
+                        </button>
+                        <a asp-action="Detail" asp-controller="DemandTriage" asp-route-id="@Model.DemandTriageRequestId"
+                           class="dt-action-btn dt-action-btn--secondary" style="width:auto;padding:0.65rem 1.25rem;">
+                            <i class="fas fa-times" aria-hidden="true"></i>
+                            <span>Cancel</span>
+                        </a>
+                    </div>
+
+                </form>
+
+            </div>
+        </div>
+
+    </div>
+</section>
+
+@section Scripts {
+    <script>
+        (function () {
+            var suggestionBand = '@Html.Raw(Model.SuggestionBand ?? "")';
+
+            function outcomeConflicts(outcome) {
+                if (!outcome || !suggestionBand) return false;
+                if (suggestionBand === 'Do not do' && outcome === 'Progress to next stage') return true;
+                if (suggestionBand === 'Must do' && outcome === 'Reject') return true;
+                return false;
+            }
+
+            document.querySelectorAll('input[name="OutcomeSelection"]').forEach(function(radio) {
+                radio.addEventListener('change', function() {
+                    var conflicts = outcomeConflicts(this.value);
+                    document.getElementById('overrideWarning').style.display = conflicts ? '' : 'none';
+                    document.getElementById('overrideReasonGroup').style.display = conflicts ? '' : 'none';
+                    // Highlight selected option
+                    document.querySelectorAll('.dt-radio-option input[name="OutcomeSelection"]').forEach(function(r) {
+                        r.closest('.dt-radio-option').classList.toggle('selected', r.checked);
+                    });
+                });
+            });
+        })();
+    </script>
+}

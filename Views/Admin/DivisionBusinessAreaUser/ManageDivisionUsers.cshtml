@@ -1,0 +1,151 @@
+@model Compass.Models.Division
+@{
+    ViewData["Title"] = $"Manage people - {Model.Name}";
+}
+
+@section Breadcrumbs {
+    <style>
+        .breadcrumb a:hover {
+            color: #003078 !important;
+            text-decoration: underline !important;
+        }
+    </style>
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <li class="breadcrumb-item">
+                <a href="@Url.Action("Index", "Home")" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a href="@Url.Action("Index", "Admin")" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Administration</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a href="@Url.Action("Index", "DivisionBusinessAreaUser")" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Division, business area and users</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page" style="color: #0b0c0c; font-weight: 600;">Manage people - @Model.Name</li>
+        </ol>
+    </nav>
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1 class="m-0">Manage people - @Model.Name</h1>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["SuccessMessage"]
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Add person to division</h3>
+            </div>
+            <form asp-action="AddUserToDivision" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="divisionId" value="@Model.Id" />
+                <div class="card-body">
+                    <p class="mb-3">Search for a colleague in Entra ID to add to this division. The user will be automatically added to the CMS if they don't already exist.</p>
+                    
+                    <div class="form-group">
+                        <label class="control-label" for="userSearch">Search for a colleague</label>
+                        <small class="form-text text-muted">Start typing a name or email address to look up someone in Entra ID.</small>
+                        <div class="user-picker" data-user-picker data-search-url="/api/users/search" data-select-url="/api/users/select">
+                            <div class="position-relative">
+                                <input type="text"
+                                       class="form-control js-user-picker-input"
+                                       id="userSearch"
+                                       autocomplete="off"
+                                       placeholder="e.g. Alex Smith or alex.smith@education.gov.uk" />
+                                <span class="user-picker__spinner js-user-picker-spinner" aria-hidden="true">Searching…</span>
+                                <div class="user-picker__results js-user-picker-results" role="listbox" aria-live="polite"></div>
+                            </div>
+                            <p class="form-text text-muted js-user-picker-message"></p>
+                            <input type="hidden" name="entraUserObjectId" class="js-user-picker-objectid" id="userObjectId" />
+                            <input type="hidden" name="entraUserEmail" class="js-user-picker-email" id="userEmail" />
+                            <input type="hidden" name="entraUserName" class="js-user-picker-name" id="userName" />
+                            <div class="user-picker__selected js-user-picker-summary" data-default-text="No user selected.">
+                                <span class="text-muted">No user selected.</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-user-plus"></i> Add person to division
+                    </button>
+                    <a href="@Url.Action("Index", "DivisionBusinessAreaUser")" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left"></i> Back
+                    </a>
+                </div>
+            </form>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-header">
+                <h3 class="card-title">People in this division</h3>
+            </div>
+            <div class="card-body">
+                @if (Model.DivisionUsers.Any())
+                {
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Email</th>
+                                    <th>Assigned</th>
+                                    <th class="col-actions">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var divisionUser in Model.DivisionUsers.OrderBy(du => du.User.Name))
+                                {
+                                    <tr>
+                                        <td>@divisionUser.User.Name</td>
+                                        <td>@divisionUser.User.Email</td>
+                                        <td>@divisionUser.CreatedAt.ToString("dd/MM/yyyy")</td>
+                                        <td class="col-actions">
+                                            <form asp-action="RemoveUserFromDivision" method="post" style="display: inline;">
+                                                @Html.AntiForgeryToken()
+                                                <input type="hidden" name="divisionId" value="@Model.Id" />
+                                                <input type="hidden" name="userId" value="@divisionUser.UserId" />
+                                                <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Are you sure you want to remove @divisionUser.User.Name from this division?');">
+                                                    <i class="fas fa-trash"></i> Remove
+                                                </button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                else
+                {
+                    <p class="text-muted">No people are currently assigned to this division.</p>
+                }
+            </div>
+        </div>
+    </div>
+</section>
+
+@section Scripts {
+    <script src="~/js/user-picker.js" asp-append-version="true"></script>
+}

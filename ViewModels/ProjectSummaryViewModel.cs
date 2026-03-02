@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace Compass.ViewModels;
 
@@ -25,5 +26,13 @@ public class ProjectSummaryViewModel
     public string? PrimaryContactName { get; set; }
 
     public string? PrimaryContactEmail { get; set; }
+
+    public List<PmoContactInfo> PmoContacts { get; set; } = new List<PmoContactInfo>();
+}
+
+public class PmoContactInfo
+{
+    public string Name { get; set; } = string.Empty;
+    public string? Email { get; set; }
 }
 

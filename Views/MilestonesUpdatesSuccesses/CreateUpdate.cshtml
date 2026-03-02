@@ -1,0 +1,867 @@
+@model Compass.Models.ProjectMonthlyUpdate
+@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
+
+@{
+    ViewData["Title"] = "Create Monthly Update";
+    var projectId = ViewBag.ProjectId as int?;
+    var projectTitle = ViewBag.ProjectTitle as string;
+    var projectCode = ViewBag.ProjectCode as string;
+    var year = ViewBag.Year as int?;
+    var month = ViewBag.Month as int?;
+    var periodName = ViewBag.PeriodName as string;
+    var isRaidEnabled = Configuration.GetValue<bool>("FeatureFlags:EnableRAIDManagement", false);
+}
+
+@section Breadcrumbs {
+    <style>
+        .breadcrumb a:hover {
+            color: #003078 !important;
+            text-decoration: underline !important;
+        }
+    </style>
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <li class="breadcrumb-item">
+                <a href="/" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a href="@Url.Action("Index", "Project")" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Work reporting</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a href="@Url.Action("Details", "Project", new { id = projectId })" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">@projectTitle</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a href="@Url.Action("Updates", "MilestonesUpdatesSuccesses", new { projectId = projectId })" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Monthly Updates</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page" style="color: #0b0c0c; font-weight: 600;">Create Update - @periodName</li>
+        </ol>
+    </nav>
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-3">
+            <div class="col-12">
+                <a class="btn btn-link px-0 mb-2" href="@Url.Action("Details", "Project", new { id = projectId })" aria-label="Back to work item">
+                    <i class="fas fa-arrow-left mr-2" aria-hidden="true"></i>Back to work item
+                </a>
+                <h1 class="m-0">Monthly update for @periodName</h1>
+                <p class="text-muted mb-0">Project: @projectTitle</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["SuccessMessage"]
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+        @if (TempData["InfoMessage"] != null)
+        {
+            <div class="alert alert-info alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["InfoMessage"]
+            </div>
+        }
+        
+
+        <div class="row">
+            <!-- Left Column: Navigation -->
+            <div class="col-xxl-2 col-xl-2 col-lg-3 col-md-4 col-sm-12 col-12">
+                <!-- Project Navigation Card -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h3 class="card-title">Navigation</h3>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="list-group list-group-flush">
+                            @{
+                                var navProject = ViewBag.Project as Compass.Models.Project;
+                                var dependencyCount = (navProject?.DependenciesAsSource?.Count() ?? 0) + (navProject?.DependenciesAsTarget?.Count() ?? 0);
+                                var teamCount = navProject?.ProjectContacts?.Count ?? 0;
+                                var hasDigitalDirectorate = ViewBag.HasDigitalDirectorate as bool? ?? false;
+                                var isMusSectionActive = ViewContext.RouteData.Values["Controller"]?.ToString() == "MilestonesUpdatesSuccesses";
+                                var currentMusAction = ViewContext.RouteData.Values["Action"]?.ToString();
+                                var submittedWeeklySuccessesCount = (navProject?.WeeklySuccessUpdates?.Count(s => s.IsReportedToSlt) ?? 0) + 
+                                    (navProject?.Successes?.Count(s => s.IsReportedToSlt) ?? 0);
+                            }
+                            <a href="@Url.Action("Details", "Project", new { id = projectId, tab = "overview" })"
+                               class="list-group-item list-group-item-action">
+                                Overview
+                            </a>
+                            <a href="@Url.Action("Updates", "MilestonesUpdatesSuccesses", new { projectId = projectId })"
+                               class="list-group-item list-group-item-action @(isMusSectionActive && (currentMusAction == "CreateUpdate" || currentMusAction == "Updates") ? "active" : "")">
+                                Monthly Updates
+                            </a>
+                            <a href="@Url.Action("Successes", "MilestonesUpdatesSuccesses", new { projectId = projectId })"
+                               class="list-group-item list-group-item-action @(isMusSectionActive && currentMusAction == "Successes" ? "active" : "")">
+                                Significant successes
+                                <span class="badge badge-light float-right">@submittedWeeklySuccessesCount</span>
+                            </a>
+                            <a href="@Url.Action("Details", "Project", new { id = projectId, tab = "rag" })"
+                               class="list-group-item list-group-item-action">
+                                RAG Tracking
+                            </a>
+                            <a href="@Url.Action("Milestones", "MilestonesUpdatesSuccesses", new { projectId = projectId })"
+                               class="list-group-item list-group-item-action @(isMusSectionActive && currentMusAction == "Milestones" ? "active" : "")">
+                                Milestones
+                                <span class="badge badge-light float-right">@(navProject?.Milestones?.Count(m => !m.IsDeleted) ?? 0)</span>
+                            </a>
+                            <a href="@Url.Action("Details", "Project", new { id = projectId, tab = "contactsandgovernance" })"
+                               class="list-group-item list-group-item-action">
+                                Contacts & Governance
+                            </a>
+                            <a href="@Url.Action("Details", "Project", new { id = projectId, tab = "strategicalignment" })"
+                               class="list-group-item list-group-item-action">
+                                Strategic Alignment
+                            </a>
+                            <a href="@Url.Action("Details", "Project", new { id = projectId, tab = "team" })"
+                               class="list-group-item list-group-item-action">
+                                Team
+                                <span class="badge badge-light float-right">@teamCount</span>
+                            </a>
+                            @if (hasDigitalDirectorate)
+                            {
+                                <a href="@Url.Action("Details", "Project", new { id = projectId, tab = "deliveryphases" })"
+                                   class="list-group-item list-group-item-action">
+                                    Delivery phases
+                                </a>
+                            }
+                            <a href="@Url.Action("Details", "Project", new { id = projectId, tab = "dependencies" })"
+                               class="list-group-item list-group-item-action">
+                                Dependencies
+                                <span class="badge badge-light float-right">@dependencyCount</span>
+                            </a>
+                            <a href="@Url.Action("Details", "Project", new { id = projectId, tab = "products" })"
+                               class="list-group-item list-group-item-action">
+                                Linked Products
+                                <span class="badge badge-light float-right">@(navProject?.ProjectProducts?.Count ?? 0)</span>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Content -->
+            <div class="col-xxl-10 col-xl-10 col-lg-9 col-md-8 col-sm-12 col-12">
+                @if (!ViewData.ModelState.IsValid)
+                {
+                    <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+                }
+                
+                @{
+                    var existingUpdate = ViewBag.ExistingUpdate as Compass.Models.ProjectMonthlyUpdate;
+                    var canEdit = ViewBag.CanEdit as bool? ?? true;
+                    var dueDate = ViewBag.DueDate as DateTime? ?? DateTime.UtcNow;
+                    var closeDate = ViewBag.CloseDate as DateTime? ?? DateTime.UtcNow.AddDays(10);
+                    var canSubmit = ViewBag.CanSubmit as bool? ?? false;
+                    var narratives = existingUpdate?.MonthlyUpdateNarratives?.OrderBy(n => n.CreatedAt).ToList() ?? new List<Compass.Models.MonthlyUpdateNarrative>();
+                    var hasNarratives = narratives.Any();
+                    var isSubmitted = existingUpdate?.SubmittedAt.HasValue ?? false;
+                    var isWithinCloseDate = DateTime.UtcNow <= closeDate;
+                    var canSubmitOrUnsubmit = canSubmit && isWithinCloseDate;
+                    var project = ViewBag.Project as Compass.Models.Project;
+                    var currentRagStatus = project?.RagStatusLookup?.Name ?? project?.RagStatus ?? "";
+                    var currentRagJustification = project?.RagJustification ?? "";
+                    var currentPathToGreen = project?.PathToGreen ?? "";
+                    var ragStatuses = ViewBag.RagStatuses as List<Compass.Models.RagStatusLookup> ?? new List<Compass.Models.RagStatusLookup>();
+                }
+
+                <!-- Monthly Update Form -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title mb-0">Monthly updates</h3>
+                        @if (!canEdit)
+                        {
+                            <div class="card-tools">
+                                <small class="text-muted">Reporting window closed (@closeDate.ToString("dd MMM yyyy"))</small>
+                            </div>
+                        }
+                    </div>
+                    <div class="card-body">
+                        
+                        @if (narratives.Any())
+                        {
+                            <div id="narrativesList" class="mb-4">
+                                @foreach (var narrative in narratives)
+                                {
+                                    <div class="narrative-item mb-3 p-3 border rounded bg-light" data-narrative-id="@narrative.Id">
+                                        <div class="d-flex align-items-start">
+                                            <div class="flex-grow-1">
+                                                <p class="mb-2 text-break">@narrative.Narrative</p>
+                                                <small class="text-muted">
+                                                    <i class="fas fa-clock mr-1"></i>Added @narrative.CreatedAt.ToString("dd MMM yyyy HH:mm")
+                                                    @if (!string.IsNullOrEmpty(narrative.CreatedByName))
+                                                    {
+                                                        <text> by <strong>@narrative.CreatedByName</strong></text>
+                                                    }
+                                                </small>
+                                            </div>
+                                            @if (canEdit && !isSubmitted)
+                                            {
+                                                <div class="ml-3 d-flex flex-column gap-1">
+                                                    <a href="@Url.Action("EditNarrative", new { projectId = projectId, year = year, month = month, narrativeId = narrative.Id })" 
+                                                       class="btn btn-sm btn-outline-primary" title="Edit this update">
+                                                        <i class="fas fa-edit mr-1"></i>Edit
+                                                    </a>
+                                                    <button type="button" class="btn btn-sm btn-outline-danger" 
+                                                            data-toggle="modal" 
+                                                            data-target="#deleteNarrativeModal_@narrative.Id"
+                                                            title="Delete this update">
+                                                        <i class="fas fa-trash mr-1"></i>Delete
+                                                    </button>
+                                                    
+                                                    <!-- Delete Confirmation Modal -->
+                                                    <div class="modal fade" id="deleteNarrativeModal_@narrative.Id" tabindex="-1" role="dialog" aria-labelledby="deleteNarrativeModalLabel_@narrative.Id" aria-hidden="true">
+                                                        <div class="modal-dialog" role="document">
+                                                            <div class="modal-content">
+                                                                <div class="modal-header">
+                                                                    <h5 class="modal-title" id="deleteNarrativeModalLabel_@narrative.Id">Delete update</h5>
+                                                                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                                                                        <span aria-hidden="true">&times;</span>
+                                                                    </button>
+                                                                </div>
+                                                                <div class="modal-body">
+                                                                    <p>Are you sure you want to delete this update?</p>
+                                                                    <div class="alert alert-warning">
+                                                                        <strong>Update:</strong><br>
+                                                                        <em>@narrative.Narrative</em>
+                                                                    </div>
+                                                                    <p class="text-danger"><strong>This action cannot be undone.</strong></p>
+                                                                </div>
+                                                                <div class="modal-footer">
+                                                                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                                                                    <form method="post" action="@Url.Action("DeleteNarrative", new { projectId = projectId, year = year, month = month, narrativeId = narrative.Id })" class="d-inline">
+                                                                        @Html.AntiForgeryToken()
+                                                                        <button type="submit" class="btn btn-danger">
+                                                                            <i class="fas fa-trash mr-1"></i>Delete update
+                                                                        </button>
+                                                                    </form>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            }
+                                            else if (isSubmitted)
+                                            {
+                                                <div class="ml-3">
+                                                    <span class="badge badge-success">
+                                                        <i class="fas fa-check-circle mr-1"></i>Submitted
+                                                    </span>
+                                                </div>
+                                            }
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <div id="narrativesList" class="mb-4">
+                                <p class="text-muted">No updates added yet.</p>
+                            </div>
+                        }
+                        
+                        @if (canEdit)
+                        {
+                            <div class="border-top pt-3">
+                                <h5 class="mb-3">Add update</h5>
+                                <form method="post" action="@Url.Action("CreateNarrative")" id="addNarrativeForm">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="projectId" value="@projectId" />
+                                    <input type="hidden" name="year" value="@year" />
+                                    <input type="hidden" name="month" value="@month" />
+                                    
+                                    <div class="form-group">
+                                        <label for="newNarrative" class="control-label font-weight-bold">Update <span class="text-danger">*</span></label>
+                                        <small class="form-text text-muted">Add a monthly update entry (required)</small>
+                                        <textarea name="narrative" id="newNarrative" class="form-control" rows="6" placeholder="Enter your monthly update..." required></textarea>
+                                    </div>
+                                    
+                                    @{
+                                        var previousMonthUpdate = ViewBag.PreviousMonthUpdate as Compass.Models.ProjectMonthlyUpdate;
+                                        var previousMonthPeriodName = ViewBag.PreviousMonthPeriodName as string ?? "";
+                                        var hasPreviousUpdate = previousMonthUpdate != null;
+                                        var previousNarratives = previousMonthUpdate?.MonthlyUpdateNarratives?.OrderBy(n => n.CreatedAt).ToList() ?? new List<Compass.Models.MonthlyUpdateNarrative>();
+                                        var isPreviousNilReturn = hasPreviousUpdate && previousNarratives.Any() && previousNarratives.Any(n => n.Narrative == "No update provided this month");
+                                    }
+                                    
+                                    @if (!string.IsNullOrEmpty(previousMonthPeriodName))
+                                    {
+                                        <div class="form-group">
+                                            <div class="card border-secondary">
+                                                <div class="card-header bg-light" style="cursor: pointer;" data-toggle="collapse" data-target="#previousMonthUpdatePanel" aria-expanded="false" aria-controls="previousMonthUpdatePanel">
+                                                    <h6 class="mb-0 d-flex justify-content-between align-items-center">
+                                                        <span>
+                                                            <i class="fas fa-chevron-down mr-2"></i>
+                                                            Previous month update (@previousMonthPeriodName)
+                                                        </span>
+                                                        <small class="text-muted">
+                                                            @if (hasPreviousUpdate)
+                                                            {
+                                                                if (isPreviousNilReturn)
+                                                                {
+                                                                    <span class="badge badge-warning">Nil Return</span>
+                                                                }
+                                                                else
+                                                                {
+                                                                    <span class="badge badge-info">@previousNarratives.Count update(s)</span>
+                                                                }
+                                                            }
+                                                            else
+                                                            {
+                                                                <span class="badge badge-secondary">No update submitted</span>
+                                                            }
+                                                        </small>
+                                                    </h6>
+                                                </div>
+                                                <div id="previousMonthUpdatePanel" class="collapse">
+                                                    <div class="card-body">
+                                                        @if (hasPreviousUpdate)
+                                                        {
+                                                            if (isPreviousNilReturn)
+                                                            {
+                                                                <div class="alert alert-warning mb-0">
+                                                                    <i class="fas fa-ban mr-2"></i>
+                                                                    <strong>Nil Return:</strong> No update was provided for @previousMonthPeriodName.
+                                                                </div>
+                                                            }
+                                                            else if (previousNarratives.Any())
+                                                            {
+                                                                <p class="text-muted mb-3"><strong>Submitted on:</strong> @previousMonthUpdate.SubmittedAt?.ToString("dd MMM yyyy HH:mm") ?? "Not submitted"</p>
+                                                                @foreach (var narrative in previousNarratives)
+                                                                {
+                                                                    <div class="mb-3 p-3 border rounded bg-light">
+                                                                        <p class="mb-2 text-break">@narrative.Narrative</p>
+                                                                        <small class="text-muted">
+                                                                            <i class="fas fa-clock mr-1"></i>Added @narrative.CreatedAt.ToString("dd MMM yyyy HH:mm")
+                                                                            @if (!string.IsNullOrEmpty(narrative.CreatedByName))
+                                                                            {
+                                                                                <text> by <strong>@narrative.CreatedByName</strong></text>
+                                                                            }
+                                                                        </small>
+                                                                    </div>
+                                                                }
+                                                            }
+                                                            else
+                                                            {
+                                                                <p class="text-muted mb-0">No updates were added for @previousMonthPeriodName.</p>
+                                                            }
+                                                        }
+                                                        else
+                                                        {
+                                                            <p class="text-muted mb-0">No update was submitted for @previousMonthPeriodName.</p>
+                                                        }
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    }
+                                    
+                                    <div class="form-group mb-0">
+                                        <button type="submit" class="btn btn-success mr-3">Save update</button>
+                                        <a href="@Url.Action("Details", "Project", new { id = projectId, tab = "monthlyupdates" })" class="btn btn-outline-secondary">Cancel</a>
+                                    </div>
+                                </form>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <!-- Nil Return Card -->
+                @if (canSubmitOrUnsubmit && !isSubmitted)
+                {
+                    <div class="card mt-3">
+                        <div class="card-header">
+                            <h3 class="card-title mb-0"><i class="fas fa-ban mr-2"></i>Nil Return</h3>
+                        </div>
+                        <div class="card-body">
+                            <p class="mb-3">If you have no updates to report for this period, check the box below to confirm a nil return. This will create an entry stating "No update provided this month".</p>
+                            <div class="form-check">
+                                <input type="checkbox" class="form-check-input" id="nilReturnCheckbox" name="isNilReturn" />
+                                <label class="form-check-label" for="nilReturnCheckbox">
+                                    Confirm nil return (no updates to report)
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                }
+
+                <!-- RAG Status Review Card -->
+                <div class="card mt-3">
+                    <div class="card-header">
+                        <h3 class="card-title mb-0"><i class="fas fa-flag mr-2"></i>Review RAG Status</h3>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted mb-3">Please review and confirm the RAG status for this monthly update submission.</p>
+                        
+                        <div class="form-group">
+                            <label for="ragStatusReview">Current RAG Status</label>
+                            <div class="mb-2">
+                                @if (!string.IsNullOrEmpty(currentRagStatus))
+                                {
+                                    var currentRagLookup = project?.RagStatusLookup;
+                                    string ragClass;
+                                    if (currentRagLookup != null && !string.IsNullOrEmpty(currentRagLookup.CssClass))
+                                    {
+                                        ragClass = currentRagLookup.CssClass;
+                                    }
+                                    else
+                                    {
+                                        ragClass = currentRagStatus.Trim().Replace(" / ", "-").Replace("/", "-") switch {
+                                            "Red" => "badge badge-red",
+                                            "Amber-Red" => "badge badge-amber-red",
+                                            "Amber" => "badge badge-amber",
+                                            "Amber-Green" => "badge badge-amber-green",
+                                            "Green" => "badge badge-green",
+                                            _ => "badge badge-secondary"
+                                        };
+                                    }
+                                    <span class="@ragClass" style="font-size: 1rem;">@currentRagStatus</span>
+                                }
+                                else
+                                {
+                                    <span class="badge badge-secondary">Not set</span>
+                                }
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="ragStatusSelect">RAG Status <span class="text-danger">*</span></label>
+                            <select id="ragStatusSelect" name="ragStatus" class="form-control" required>
+                                <option value="">Select RAG status</option>
+                                @foreach (var ragStatus in ragStatuses)
+                                {
+                                    @if (currentRagStatus == ragStatus.Name)
+                                    {
+                                        <option value="@ragStatus.Name" selected>@ragStatus.Name</option>
+                                    }
+                                    else
+                                    {
+                                        <option value="@ragStatus.Name">@ragStatus.Name</option>
+                                    }
+                                }
+                            </select>
+                            <small class="form-text text-muted">Confirm or update the RAG status for this reporting period</small>
+                        </div>
+
+                        <div class="form-group" id="ragJustificationGroup">
+                            <label for="ragJustification">RAG Justification <span class="text-danger" id="ragJustificationRequired" style="display: none;">*</span></label>
+                            <textarea id="ragJustification" name="ragJustification" class="form-control" rows="3" placeholder="Provide justification for the RAG status..." maxlength="1000">@currentRagJustification</textarea>
+                            <small class="form-text text-muted">Required if RAG status has changed or is not Green (max 1000 characters)</small>
+                        </div>
+
+                        <div class="form-group" id="pathToGreenGroup" style="display: none;">
+                            <label for="pathToGreen">Path to Green <span class="text-danger">*</span></label>
+                            <textarea id="pathToGreen" name="pathToGreen" class="form-control" rows="3" placeholder="Describe the path to achieving Green RAG status..." maxlength="1000">@currentPathToGreen</textarea>
+                            <small class="form-text text-muted">Required when RAG status is not Green (max 1000 characters)</small>
+                        </div>
+
+                        @if (canEdit)
+                        {
+                            <div class="form-group mb-0">
+                                <form method="post" action="@Url.Action("SaveRagStatus")" id="saveRagStatusForm">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="projectId" value="@projectId" />
+                                    <input type="hidden" name="year" value="@year" />
+                                    <input type="hidden" name="month" value="@month" />
+                                    <input type="hidden" name="ragStatus" id="saveRagStatus" value="" />
+                                    <input type="hidden" name="ragJustification" id="saveRagJustification" value="" />
+                                    <input type="hidden" name="pathToGreen" id="savePathToGreen" value="" />
+                                    <button type="submit" class="btn btn-primary" id="saveRagStatusButton">
+                                        <i class="fas fa-save mr-2"></i>Save RAG status
+                                    </button>
+                                </form>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <!-- Submit Monthly Update Card -->
+                @if (canSubmitOrUnsubmit && !isSubmitted)
+                {
+                    <div class="card mt-3">
+                        <div class="card-header">
+                            <h3 class="card-title mb-0"><i class="fas fa-paper-plane mr-2"></i>Submit Monthly Update</h3>
+                        </div>
+                        <div class="card-body">
+                            <p class="mb-3">Once submitted, the monthly update cannot be edited until unsubmitted.</p>
+                            <div class="d-flex align-items-center">
+                                <button type="button" class="btn btn-primary" data-toggle="modal" data-target="#submitMonthlyUpdateModal">
+                                    <i class="fas fa-paper-plane mr-2"></i>Submit monthly update
+                                </button>
+                                <small class="ml-3 text-muted">Due date: @dueDate.ToString("dd MMM yyyy")</small>
+                            </div>
+                        </div>
+                    </div>
+                }
+                else if (isSubmitted && canSubmitOrUnsubmit)
+                {
+                    <div class="card mt-3">
+                        <div class="card-footer d-flex align-items-center justify-content-between">
+                            <div class="alert alert-success mb-0 flex-grow-1 mr-3">
+                                <i class="fas fa-check-circle mr-2"></i>
+                                <strong>Submitted</strong> on @existingUpdate.SubmittedAt.Value.ToString("dd MMM yyyy HH:mm")
+                            </div>
+                            <button type="button" class="btn btn-warning" data-toggle="modal" data-target="#unsubmitMonthlyUpdateModal">
+                                <i class="fas fa-undo mr-2"></i>Unsubmit
+                            </button>
+                        </div>
+                    </div>
+                }
+                else if (isSubmitted && !isWithinCloseDate)
+                {
+                    <div class="card mt-3">
+                        <div class="card-footer">
+                            <div class="alert alert-info mb-0">
+                                <i class="fas fa-info-circle mr-2"></i>
+                                <strong>Submitted</strong> on @existingUpdate.SubmittedAt.Value.ToString("dd MMM yyyy HH:mm"). The reporting window has closed, so this update cannot be unsubmitted.
+                            </div>
+                        </div>
+                    </div>
+                }
+                else if (!isWithinCloseDate && hasNarratives)
+                {
+                    <div class="card mt-3">
+                        <div class="card-footer">
+                            <div class="alert alert-warning mb-0">
+                                <i class="fas fa-exclamation-triangle mr-2"></i>
+                                The reporting window closed on @closeDate.ToString("dd MMM yyyy"). This monthly update can no longer be submitted.
+                            </div>
+                        </div>
+                    </div>
+                }
+
+            </div>
+        </div>
+    </div>
+</section>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+    
+    <script nonce="@Context.Items["Nonce"]">
+        $(document).ready(function() {
+            var currentRagStatus = '@currentRagStatus';
+            var originalRagStatus = '@currentRagStatus';
+            
+            // Check on page load if current RAG status is not Green and show path to green
+            if (currentRagStatus && currentRagStatus !== '' && currentRagStatus !== 'Green') {
+                $('#pathToGreenGroup').show();
+                $('#pathToGreen').prop('required', true);
+            }
+            
+            // Handle RAG status change
+            $('#ragStatusSelect').on('change', function() {
+                var selectedRag = $(this).val();
+                var ragChanged = selectedRag !== originalRagStatus;
+                var isNotGreen = selectedRag !== '' && selectedRag !== 'Green';
+                // If both current RAG and selected RAG are Green, don't require justification or path to green
+                var bothGreen = originalRagStatus && originalRagStatus === 'Green' && selectedRag === 'Green';
+                
+                // Clear justification if RAG status changed
+                if (ragChanged) {
+                    $('#ragJustification').val('');
+                }
+                
+                // Show/hide path to green
+                if (isNotGreen) {
+                    $('#pathToGreenGroup').show();
+                    $('#pathToGreen').prop('required', true);
+                } else {
+                    $('#pathToGreenGroup').hide();
+                    $('#pathToGreen').prop('required', false);
+                }
+                
+                // Require justification if RAG changed or not green, but not if both current and selected are Green
+                if (!bothGreen && (ragChanged || isNotGreen)) {
+                    $('#ragJustification').prop('required', true);
+                    $('#ragJustificationRequired').show();
+                } else {
+                    $('#ragJustification').prop('required', false);
+                    $('#ragJustificationRequired').hide();
+                }
+            });
+            
+            // Trigger on page load
+            $('#ragStatusSelect').trigger('change');
+            
+            // Handle Save RAG Status form submission
+            $('#saveRagStatusForm').on('submit', function(e) {
+                var ragStatus = $('#ragStatusSelect').val();
+                var ragJustification = $('#ragJustification').val().trim();
+                var pathToGreen = $('#pathToGreen').val().trim();
+                var ragChanged = ragStatus !== originalRagStatus;
+                var isNotGreen = ragStatus !== '' && ragStatus !== 'Green';
+                // If both current RAG and selected RAG are Green, don't require justification or path to green
+                var bothGreen = originalRagStatus && originalRagStatus === 'Green' && ragStatus === 'Green';
+                
+                var errors = [];
+                
+                if (!ragStatus) {
+                    errors.push('RAG status is required');
+                }
+                
+                // Don't require justification if both current and selected RAG are Green
+                if (!bothGreen && (ragChanged || isNotGreen) && !ragJustification) {
+                    errors.push('RAG justification is required when RAG status has changed or is not Green');
+                }
+                
+                // Don't require path to green if both current and selected RAG are Green
+                if (!bothGreen && isNotGreen && !pathToGreen) {
+                    errors.push('Path to Green is required when RAG status is not Green');
+                }
+                
+                if (errors.length > 0) {
+                    e.preventDefault();
+                    alert('Please fix the following errors before saving:\n\n' + errors.join('\n'));
+                    return false;
+                }
+                
+                // Update hidden fields
+                $('#saveRagStatus').val(ragStatus);
+                $('#saveRagJustification').val(ragJustification);
+                $('#savePathToGreen').val(pathToGreen);
+            });
+            
+            // Validate before opening modal
+            $('#submitMonthlyUpdateModal').on('show.bs.modal', function(e) {
+                var ragStatus = $('#ragStatusSelect').val();
+                var ragJustification = $('#ragJustification').val().trim();
+                var pathToGreen = $('#pathToGreen').val().trim();
+                var ragChanged = ragStatus !== originalRagStatus;
+                var isNotGreen = ragStatus !== '' && ragStatus !== 'Green';
+                // If both current RAG and selected RAG are Green, don't require justification or path to green
+                var bothGreen = originalRagStatus && originalRagStatus === 'Green' && ragStatus === 'Green';
+                var isNilReturn = $('#nilReturnCheckbox').is(':checked');
+                var hasNarratives = @(hasNarratives ? "true" : "false");
+                
+                var errors = [];
+                
+                if (!isNilReturn && !hasNarratives) {
+                    errors.push('Please add at least one monthly update or confirm a nil return');
+                }
+                
+                if (!ragStatus) {
+                    errors.push('RAG status is required');
+                }
+                
+                // Don't require justification if both current and selected RAG are Green
+                if (!bothGreen && (ragChanged || isNotGreen) && !ragJustification) {
+                    errors.push('RAG justification is required when RAG status has changed or is not Green');
+                }
+                
+                // Don't require path to green if both current and selected RAG are Green
+                if (!bothGreen && isNotGreen && !pathToGreen) {
+                    errors.push('Path to Green is required when RAG status is not Green');
+                }
+                
+                if (errors.length > 0) {
+                    e.preventDefault();
+                    alert('Please fix the following errors before submitting:\n\n' + errors.join('\n'));
+                    return false;
+                }
+                
+                // Update modal content based on nil return
+                if (isNilReturn) {
+                    $('#updatesListSection').hide();
+                    $('#nilReturnSection').show();
+                } else {
+                    $('#updatesListSection').show();
+                    $('#nilReturnSection').hide();
+                    $('#updatesCount').text(@narratives.Count);
+                }
+                
+                // Update hidden fields in modal form
+                $('#modalRagStatus').val(ragStatus);
+                $('#modalRagJustification').val(ragJustification);
+                $('#modalPathToGreen').val(pathToGreen);
+                $('#modalIsNilReturn').val(isNilReturn ? 'true' : 'false');
+            });
+            
+        });
+    </script>
+}
+
+@if (canSubmitOrUnsubmit && !isSubmitted)
+{
+    <!-- Submit Monthly Update Confirmation Modal -->
+    <div class="modal fade" id="submitMonthlyUpdateModal" tabindex="-1" role="dialog" aria-labelledby="submitMonthlyUpdateModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="submitMonthlyUpdateModalLabel">Submit monthly update</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body" id="submitModalBody">
+                    <p class="mb-3">Please review all updates before submitting. Once submitted, the monthly update cannot be edited.</p>
+                    
+                    <div id="updatesListSection" style="display: none;">
+                        <h6 class="mb-3">Updates to be submitted (<span id="updatesCount">0</span>):</h6>
+                        <div class="list-group mb-3" id="updatesList">
+                            @foreach (var narrative in narratives.OrderBy(n => n.CreatedAt))
+                            {
+                                <div class="list-group-item">
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <div class="flex-grow-1">
+                                            <p class="mb-1">@narrative.Narrative</p>
+                                            <small class="text-muted">
+                                                Added @narrative.CreatedAt.ToString("dd MMM yyyy HH:mm")
+                                                @if (!string.IsNullOrEmpty(narrative.CreatedByName))
+                                                {
+                                                    <text> by @narrative.CreatedByName</text>
+                                                }
+                                            </small>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                    
+                    <div id="nilReturnSection" style="display: none;">
+                        <div class="alert alert-info mb-3">
+                            <i class="fas fa-info-circle mr-2"></i>
+                            <strong>Nil Return:</strong> This submission will create an entry stating "No update provided this month".
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-info mb-3">
+                        <i class="fas fa-info-circle mr-2"></i>
+                        <strong>Due date:</strong> @dueDate.ToString("dd MMM yyyy")
+                    </div>
+                    
+                    <div class="alert alert-warning mb-0">
+                        <i class="fas fa-exclamation-triangle mr-2"></i>
+                        <strong>Are you sure you want to submit this monthly update?</strong> Once submitted, individual updates cannot be edited until unsubmitted.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <form method="post" action="@Url.Action("SubmitMonthlyUpdate")" class="d-inline" id="submitMonthlyUpdateForm">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="projectId" value="@projectId" />
+                        <input type="hidden" name="year" value="@year" />
+                        <input type="hidden" name="month" value="@month" />
+                        <input type="hidden" name="ragStatus" id="modalRagStatus" value="" />
+                        <input type="hidden" name="ragJustification" id="modalRagJustification" value="" />
+                        <input type="hidden" name="pathToGreen" id="modalPathToGreen" value="" />
+                        <input type="hidden" name="isNilReturn" id="modalIsNilReturn" value="false" />
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-paper-plane mr-2"></i>Confirm and submit
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (isSubmitted && canSubmitOrUnsubmit)
+                    {
+                        <div class="card-footer d-flex align-items-center justify-content-between">
+                            <div class="alert alert-success mb-0 flex-grow-1 mr-3">
+                                <i class="fas fa-check-circle mr-2"></i>
+                                <strong>Submitted</strong> on @existingUpdate.SubmittedAt.Value.ToString("dd MMM yyyy HH:mm")
+                            </div>
+                            <button type="button" class="btn btn-warning" data-toggle="modal" data-target="#unsubmitMonthlyUpdateModal">
+                                <i class="fas fa-undo mr-2"></i>Unsubmit
+                            </button>
+                        </div>
+                    }
+                    else if (isSubmitted && !isWithinCloseDate)
+                    {
+                        <div class="card-footer">
+                            <div class="alert alert-info mb-0">
+                                <i class="fas fa-info-circle mr-2"></i>
+                                <strong>Submitted</strong> on @existingUpdate.SubmittedAt.Value.ToString("dd MMM yyyy HH:mm"). The reporting window has closed, so this update cannot be unsubmitted.
+                            </div>
+                        </div>
+                    }
+                    else if (!isWithinCloseDate && hasNarratives)
+                    {
+                        <div class="card-footer">
+                            <div class="alert alert-warning mb-0">
+                                <i class="fas fa-exclamation-triangle mr-2"></i>
+                                The reporting window closed on @closeDate.ToString("dd MMM yyyy"). This monthly update can no longer be submitted.
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+@if (isSubmitted && canSubmitOrUnsubmit)
+{
+    <!-- Unsubmit Monthly Update Confirmation Modal -->
+    <div class="modal fade" id="unsubmitMonthlyUpdateModal" tabindex="-1" role="dialog" aria-labelledby="unsubmitMonthlyUpdateModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="unsubmitMonthlyUpdateModalLabel">Unsubmit monthly update</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-3">Unsubmitting this monthly update will allow you to edit or delete individual updates before resubmitting.</p>
+                    
+                    <h6 class="mb-3">Current updates (@narratives.Count):</h6>
+                    <div class="list-group mb-3">
+                        @foreach (var narrative in narratives.OrderBy(n => n.CreatedAt))
+                        {
+                            <div class="list-group-item">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div class="flex-grow-1">
+                                        <p class="mb-1">@narrative.Narrative</p>
+                                        <small class="text-muted">
+                                            Added @narrative.CreatedAt.ToString("dd MMM yyyy HH:mm")
+                                            @if (!string.IsNullOrEmpty(narrative.CreatedByName))
+                                            {
+                                                <text> by @narrative.CreatedByName</text>
+                                            }
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                    
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle mr-2"></i>
+                        <strong>Are you sure you want to unsubmit this monthly update?</strong> You will be able to make changes and resubmit before the reporting window closes (@closeDate.ToString("dd MMM yyyy")).
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <form method="post" action="@Url.Action("UnsubmitMonthlyUpdate")" class="d-inline">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="projectId" value="@projectId" />
+                        <input type="hidden" name="year" value="@year" />
+                        <input type="hidden" name="month" value="@month" />
+                        <button type="submit" class="btn btn-warning">
+                            <i class="fas fa-undo mr-2"></i>Confirm and unsubmit
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+}

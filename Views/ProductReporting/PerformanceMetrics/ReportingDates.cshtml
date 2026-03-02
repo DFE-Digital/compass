@@ -1,0 +1,295 @@
+@using Compass.Models
+@{
+    ViewData["Title"] = "Reporting dates";
+    var reportingPeriods = ViewBag.ReportingPeriods as List<(int Year, int Month, DateTime DueDate, bool HasOverride, string? OverrideReason)> ?? new List<(int, int, DateTime, bool, string?)>();
+    var defaultRule = ViewBag.DefaultRule as string ?? "Returns are due by the 3rd working day of the following month";
+    var periodExclusions = ViewBag.PeriodExclusions as List<PerformanceReportingPeriodExclusion> ?? new List<PerformanceReportingPeriodExclusion>();
+    var businessAreaConfigs = ViewBag.BusinessAreaConfigs as List<PerformanceReportingBusinessAreaConfig> ?? new List<PerformanceReportingBusinessAreaConfig>();
+    var tasksCount = ViewBag.TasksCount as int? ?? 0;
+    var yourProductsCount = ViewBag.YourProductsCount as int? ?? 0;
+    var allProductsCount = ViewBag.AllProductsCount as int? ?? 0;
+}
+
+@{
+    ViewBag.BrandText = "Performance reporting";
+    ViewBag.NavLinks = new[]
+    {
+        new { Text = "Performance metrics", Action = "PerformanceMetrics", Controller = "ProductReporting", Url = (string)null, IsButton = false, IsActive = false }
+    };
+}
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb" class="mb-3">
+        <ol class="breadcrumb mb-0 pl-4 breadcrumb-standard">
+            <li class="breadcrumb-item">
+                <a href="/" class="breadcrumb-link-standard">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a asp-controller="ProductReporting" asp-action="PerformanceMetrics" class="breadcrumb-link-standard">Product performance metrics</a>
+            </li>
+            <li class="breadcrumb-item active breadcrumb-active-standard" aria-current="page">Reporting dates</li>
+        </ol>
+    </nav>
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1 class="m-0">Reporting dates</h1>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @await Html.PartialAsync("_ModuleNavbar")
+        <div class="row">
+            <!-- Left Column: Navigation -->
+            <div class="col-xxl-2 col-xl-2 col-lg-3 col-md-4 col-sm-12 col-12">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h3 class="card-title">Navigation</h3>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="list-group list-group-flush">
+                            <a href="@Url.Action("PerformanceMetrics", new { view = "tasks" })"
+                               class="list-group-item list-group-item-action">
+                                Your tasks
+                                @if (tasksCount > 0)
+                                {
+                                    <span class="badge badge-light float-right">@tasksCount</span>
+                                }
+                            </a>
+                            <a href="@Url.Action("PerformanceMetrics", new { view = "products" })"
+                               class="list-group-item list-group-item-action">
+                                Your products
+                                @if (yourProductsCount > 0)
+                                {
+                                    <span class="badge badge-light float-right">@yourProductsCount</span>
+                                }
+                            </a>
+                            <a href="@Url.Action("PerformanceMetrics", new { view = "all" })"
+                               class="list-group-item list-group-item-action">
+                                All products
+                                @if (allProductsCount > 0)
+                                {
+                                    <span class="badge badge-light float-right">@allProductsCount</span>
+                                }
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Help Navigation Card -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h3 class="card-title">Help</h3>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="list-group list-group-flush">
+                            <a href="@Url.Action("WhatYouNeedToReport", "ProductReporting")"
+                               class="list-group-item list-group-item-action">
+                                What you need to report
+                            </a>
+                            <a href="@Url.Action("ReportingDates", "ProductReporting")"
+                               class="list-group-item list-group-item-action active">
+                                Reporting dates
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Content -->
+            <div class="col-xxl-10 col-xl-10 col-lg-9 col-md-8 col-sm-12 col-12">
+                <!-- Period Exclusions Section -->
+                @if (periodExclusions.Any())
+                {
+                    <div class="card mb-4">
+                        <div class="card-header bg-warning">
+                            <h3 class="card-title mb-0">Period exclusions</h3>
+                        </div>
+                        <div class="card-body">
+                            <p class="mb-3">The following reporting periods are excluded from performance reporting requirements. Products in these periods will not be required to report unless their business area has a specific configuration (see below).</p>
+                            <div class="table-responsive">
+                                <table class="table table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>Period</th>
+                                            <th>Reason</th>
+                                            <th>Notes</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var exclusion in periodExclusions)
+                                        {
+                                            var periodDate = new DateTime(exclusion.Year, exclusion.Month, 1);
+                                            <tr>
+                                                <td><strong>@periodDate.ToString("MMMM yyyy")</strong></td>
+                                                <td>@exclusion.Reason</td>
+                                                <td>@(string.IsNullOrEmpty(exclusion.Notes) ? "-" : exclusion.Notes)</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h3 class="card-title mb-0">Period exclusions</h3>
+                        </div>
+                        <div class="card-body">
+                            <p class="mb-0 text-muted">No period exclusions are currently configured. All reporting periods are active.</p>
+                        </div>
+                    </div>
+                }
+                
+                <!-- Business Area Configurations Section -->
+                @if (businessAreaConfigs.Any())
+                {
+                    <div class="card mb-4">
+                        <div class="card-header bg-info">
+                            <h3 class="card-title mb-0">Business area configurations</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="alert alert-info mb-3">
+                                <strong>Important:</strong> Configure which business areas/portfolios are subject to performance reporting requirements and from which date they are applicable. <strong>Business area configurations override period-level exclusions.</strong>
+                            </div>
+                            <p class="mb-3">The following business areas are configured for performance reporting. These configurations override any period exclusions listed above.</p>
+                            <div class="table-responsive">
+                                <table class="table table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>Business area</th>
+                                            <th>Applicable from</th>
+                                            <th>Applicable until</th>
+                                            <th>Notes</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var config in businessAreaConfigs)
+                                        {
+                                            var fromDate = new DateTime(config.ApplicableFromYear, config.ApplicableFromMonth, 1);
+                                            var untilDate = config.ApplicableUntilYear.HasValue && config.ApplicableUntilMonth.HasValue
+                                                ? new DateTime(config.ApplicableUntilYear.Value, config.ApplicableUntilMonth.Value, 1)
+                                                : (DateTime?)null;
+                                            <tr>
+                                                <td><strong>@config.BusinessAreaName</strong></td>
+                                                <td>@fromDate.ToString("MMMM yyyy")</td>
+                                                <td>@(untilDate.HasValue ? untilDate.Value.ToString("MMMM yyyy") : "Indefinitely")</td>
+                                                <td>@(string.IsNullOrEmpty(config.Notes) ? "-" : config.Notes)</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h3 class="card-title mb-0">Business area configurations</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="alert alert-info mb-3">
+                                <strong>Important:</strong> Configure which business areas/portfolios are subject to performance reporting requirements and from which date they are applicable. <strong>Business area configurations override period-level exclusions.</strong>
+                            </div>
+                            <p class="mb-0 text-muted">No business area configurations are currently set up. All products follow the default reporting requirements, subject to any period exclusions.</p>
+                        </div>
+                    </div>
+                }
+                
+                <!-- Reporting Due Dates Section -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Reporting due dates</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="alert alert-info">
+                            <strong>Default rule:</strong> @defaultRule
+                        </div>
+                        
+                        <p class="mb-3">The table below shows the due dates for upcoming reporting periods. Any periods with overrides are highlighted.</p>
+                        
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Reporting period</th>
+                                        <th>Due date</th>
+                                        <th>Status</th>
+                                        <th>Notes</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var period in reportingPeriods)
+                                    {
+                                        var periodDate = new DateTime(period.Year, period.Month, 1);
+                                        var now = DateTime.UtcNow;
+                                        var isPast = period.DueDate < now;
+                                        var isUpcoming = period.DueDate > now && period.DueDate <= now.AddDays(10);
+                                        
+                                        <tr class="@(period.HasOverride ? "table-warning" : "")">
+                                            <td>
+                                                <strong>@periodDate.ToString("MMMM yyyy")</strong>
+                                            </td>
+                                            <td>
+                                                @if (period.HasOverride)
+                                                {
+                                                    <strong class="text-warning">@period.DueDate.ToString("d MMMM yyyy")</strong>
+                                                    <br/>
+                                                    <small class="text-muted">(Override)</small>
+                                                }
+                                                else
+                                                {
+                                                    @period.DueDate.ToString("d MMMM yyyy")
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (isPast)
+                                                {
+                                                    <span class="badge badge-secondary">Past</span>
+                                                }
+                                                else if (isUpcoming)
+                                                {
+                                                    <span class="badge badge-warning">Due soon</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge badge-info">Upcoming</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (period.HasOverride && !string.IsNullOrEmpty(period.OverrideReason))
+                                                {
+                                                    <small class="text-muted">@period.OverrideReason</small>
+                                                }
+                                                else if (period.HasOverride)
+                                                {
+                                                    <small class="text-muted">Due date has been overridden</small>
+                                                }
+                                                else
+                                                {
+                                                    <small class="text-muted">-</small>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+

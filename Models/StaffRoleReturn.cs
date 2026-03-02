@@ -186,5 +186,10 @@ public class Skill
     /// Navigation properties
     /// </summary>
     public List<StaffRoleReturnSkill> StaffRoleReturns { get; set; } = new();
+
+    /// <summary>
+    /// Professions that include this skill
+    /// </summary>
+    public virtual ICollection<ProfessionSkill> ProfessionSkills { get; set; } = new List<ProfessionSkill>();
 }
 

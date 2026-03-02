@@ -27,6 +27,9 @@ public class Risk
     [MaxLength(50)]
     public string? FipsId { get; set; }
 
+    [MaxLength(100)]
+    public string? ProductDocumentId { get; set; } // Product DocumentID from CMS (primary identifier)
+
     [Required]
     [MaxLength(200)]
     public string Title { get; set; } = string.Empty;
@@ -149,6 +152,9 @@ public class Risk
 
     public string? ResponseStrategy { get; set; }
 
+    [MaxLength(1000)]
+    public string? HowIdentified { get; set; }
+
     public int? CreatedByUserId { get; set; }
 
     [ForeignKey(nameof(CreatedByUserId))]
@@ -186,5 +192,7 @@ public class Risk
 
     public ICollection<RiskRiskType> RiskRiskTypes { get; set; } = new List<RiskRiskType>();
     public ICollection<RiskDecision> RiskDecisions { get; set; } = new List<RiskDecision>();
+
+    public ICollection<IssueRisk> IssueRisks { get; set; } = new List<IssueRisk>();
 }
 

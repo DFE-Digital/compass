@@ -1,0 +1,454 @@
+@inject Compass.Services.IPermissionService PermissionService
+@{
+    ViewData["Title"] = "DDT Standards Dashboard";
+    
+    var isStandardsManager = ViewBag.IsStandardsManager as bool? ?? false;
+    var allDraftsCount = ViewBag.AllDraftsCount as int? ?? 0;
+    var allInReviewCount = ViewBag.AllInReviewCount as int? ?? 0;
+    var allForApprovalCount = ViewBag.AllForApprovalCount as int? ?? 0;
+    var allPublishedCount = ViewBag.AllPublishedCount as int? ?? 0;
+    var allUnpublishedCount = ViewBag.AllUnpublishedCount as int? ?? 0;
+    var approvedProductsCount = ViewBag.ApprovedProductsCount as int? ?? 0;
+    var exceptionsCount = ViewBag.ExceptionsCount as int? ?? 0;
+    
+    var standardsRequiringApproval = ViewBag.StandardsRequiringApproval as List<Compass.Models.DdtStandard> ?? new List<Compass.Models.DdtStandard>();
+    var newStandards = ViewBag.NewStandards as List<Compass.Models.DdtStandard> ?? new List<Compass.Models.DdtStandard>();
+    var recentlyUpdated = ViewBag.RecentlyUpdated as List<Compass.Models.DdtStandard> ?? new List<Compass.Models.DdtStandard>();
+    var allStandards = ViewBag.AllStandards as List<Compass.Models.DdtStandard> ?? new List<Compass.Models.DdtStandard>();
+}
+
+@await Html.PartialAsync("_DashboardStyles")
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem;">
+            <li class="breadcrumb-item">
+                <a href="/" style="color: #005ea5; text-decoration: none;">Home</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page">DDT Standards</li>
+        </ol>
+    </nav>
+}
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["SuccessMessage"]
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        <!-- Dashboard Header -->
+        <div class="dashboard-header">
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <h1>DDT Standards</h1>
+                    <p>Manage and track DDT standards through their lifecycle</p>
+                </div>
+                <div>
+                    <a asp-controller="DdtStandards" asp-action="Create" class="btn btn-success">
+                        <i class="fas fa-plus"></i> Create Standard
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        @if (isStandardsManager)
+        {
+            var publishedStandards = allStandards.Where(s => s.Stage != "Unpublished").ToList();
+            
+            <!-- Standards Manager View -->
+            <!-- Summary Cards -->
+            <div class="dashboard-summary-cards">
+                <a href="@Url.Action("Drafts")" class="dashboard-card bg-info" style="text-decoration: none; color: inherit;">
+                    <div class="dashboard-card-value">@allDraftsCount</div>
+                    <div class="dashboard-card-label">Drafts</div>
+                    <div class="dashboard-card-icon"><i class="fas fa-file-alt"></i></div>
+                </a>
+                <a href="@Url.Action("Index", new { view = "in-review" })" class="dashboard-card bg-warning" style="text-decoration: none; color: inherit;">
+                    <div class="dashboard-card-value">@allInReviewCount</div>
+                    <div class="dashboard-card-label">For Approval</div>
+                    <div class="dashboard-card-icon"><i class="fas fa-clipboard-check"></i></div>
+                </a>
+                <a href="@Url.Action("Index", new { view = "for-approval" })" class="dashboard-card bg-primary" style="text-decoration: none; color: inherit;">
+                    <div class="dashboard-card-value">@allForApprovalCount</div>
+                    <div class="dashboard-card-label">Awaiting Publication</div>
+                    <div class="dashboard-card-icon"><i class="fas fa-hourglass-half"></i></div>
+                </a>
+                <a href="@Url.Action("Index", new { view = "published" })" class="dashboard-card bg-success" style="text-decoration: none; color: inherit;">
+                    <div class="dashboard-card-value">@allPublishedCount</div>
+                    <div class="dashboard-card-label">Published</div>
+                    <div class="dashboard-card-icon"><i class="fas fa-check-circle"></i></div>
+                </a>
+                <a href="@Url.Action("Index", new { view = "unpublished" })" class="dashboard-card" style="text-decoration: none; color: white !important; background: linear-gradient(145deg, #6c757d, #5a6268) !important;">
+                    <div class="dashboard-card-value">@allUnpublishedCount</div>
+                    <div class="dashboard-card-label">Unpublished</div>
+                    <div class="dashboard-card-icon"><i class="fas fa-archive"></i></div>
+                </a>
+            </div>
+
+            <!-- Published Standards List -->
+            @if (publishedStandards.Any())
+            {
+                <div class="dashboard-section">
+                    <div class="dashboard-section-header">
+                        <h3>Published standards</h3>
+                    </div>
+                    <div class="card">
+                        <div class="card-body table-responsive p-0">
+                            <table class="table table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Title</th>
+                                        <th>Version</th>
+                                        <th>Categories</th>
+                                        <th>Standard owner</th>
+                                        <th>Updated</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var standard in publishedStandards)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <a asp-action="Details" asp-route-id="@standard.Id" style="font-weight: 600; color: #005ea5;">@standard.Title</a>
+                                                @if (!string.IsNullOrEmpty(standard.Summary))
+                                                {
+                                                    <br /><small class="text-muted">@(standard.Summary.Length > 100 ? standard.Summary.Substring(0, 100) + "..." : standard.Summary)</small>
+                                                }
+                                            </td>
+                                            <td>@standard.Version</td>
+                                            <td>
+                                                @if (standard.Categories.Any())
+                                                {
+                                                    @foreach (var cat in standard.Categories.Take(2))
+                                                    {
+                                                        <span class="badge badge-light">@cat.Category.Name</span>
+                                                    }
+                                                    @if (standard.Categories.Count > 2)
+                                                    {
+                                                        <small class="text-muted">+@(standard.Categories.Count - 2) more</small>
+                                                    }
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (standard.Owners != null && standard.Owners.Any())
+                                                {
+                                                    @standard.Owners.First().User?.Name
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                            <td>@standard.UpdatedAt.ToString("dd MMM yyyy")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            <!-- Standards Requiring Approval -->
+            @if (standardsRequiringApproval.Any())
+            {
+                <div class="dashboard-section">
+                    <div class="dashboard-section-header">
+                        <h2><i class="fas fa-exclamation-circle"></i> Standards Requiring Approval</h2>
+                        <a href="@Url.Action("Index", new { view = "in-review" })" class="btn btn-sm btn-outline-primary">View All</a>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Title</th>
+                                    <th>Stage</th>
+                                    <th>Version</th>
+                                    <th>Created By</th>
+                                    <th>Updated</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var standard in standardsRequiringApproval)
+                                {
+                                    <tr>
+                                        <td>
+                                            <a asp-action="Details" asp-route-id="@standard.Id" style="font-weight: 600; color: #005ea5;">@standard.Title</a>
+                                            @if (!string.IsNullOrEmpty(standard.Summary))
+                                            {
+                                                <br /><small class="text-muted">@(standard.Summary.Length > 100 ? standard.Summary.Substring(0, 100) + "..." : standard.Summary)</small>
+                                            }
+                                        </td>
+                                        <td>
+                                            <span class="badge @(standard.Stage == "For Approval" ? "badge-warning" : "badge-primary")">@standard.Stage</span>
+                                        </td>
+                                        <td>@standard.Version</td>
+                                        <td>@(standard.CreatorUser?.Name ?? "Unknown")</td>
+                                        <td>@standard.UpdatedAt.ToString("dd MMM yyyy")</td>
+                                        <td>
+                                            <a asp-action="Details" asp-route-id="@standard.Id" class="btn btn-sm btn-primary">Review</a>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            }
+        }
+        else
+        {
+            <!-- Regular User View -->
+            <!-- Summary Cards -->
+            <div class="dashboard-summary-cards">
+                <a href="@Url.Action("Drafts")" class="dashboard-card bg-info" style="text-decoration: none; color: inherit;">
+                    <div class="dashboard-card-value">@allDraftsCount</div>
+                    <div class="dashboard-card-label">Drafts</div>
+                    <div class="dashboard-card-icon"><i class="fas fa-file-alt"></i></div>
+                </a>
+                <a href="@Url.Action("Index", new { view = "published" })" class="dashboard-card bg-success" style="text-decoration: none; color: inherit;">
+                    <div class="dashboard-card-value">@allPublishedCount</div>
+                    <div class="dashboard-card-label">Published</div>
+                    <div class="dashboard-card-icon"><i class="fas fa-check-circle"></i></div>
+                </a>
+            </div>
+
+            <!-- Published Standards List -->
+            var publishedStandardsRegular = allStandards.Where(s => s.Stage != "Unpublished").ToList();
+            if (publishedStandardsRegular.Any())
+            {
+                <div class="dashboard-section">
+                    <div class="dashboard-section-header">
+                        <h3>Published standards</h3>
+                    </div>
+                    <div class="card">
+                        <div class="card-body table-responsive p-0">
+                            <table class="table table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Title</th>
+                                        <th>Version</th>
+                                        <th>Categories</th>
+                                        <th>Standard owner</th>
+                                        <th>Updated</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var standard in publishedStandardsRegular)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <a asp-action="Details" asp-route-id="@standard.Id" style="font-weight: 600; color: #005ea5;">@standard.Title</a>
+                                                @if (!string.IsNullOrEmpty(standard.Summary))
+                                                {
+                                                    <br /><small class="text-muted">@(standard.Summary.Length > 100 ? standard.Summary.Substring(0, 100) + "..." : standard.Summary)</small>
+                                                }
+                                            </td>
+                                            <td>@standard.Version</td>
+                                            <td>
+                                                @if (standard.Categories.Any())
+                                                {
+                                                    @foreach (var cat in standard.Categories.Take(2))
+                                                    {
+                                                        <span class="badge badge-light">@cat.Category.Name</span>
+                                                    }
+                                                    @if (standard.Categories.Count > 2)
+                                                    {
+                                                        <small class="text-muted">+@(standard.Categories.Count - 2) more</small>
+                                                    }
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (standard.Owners != null && standard.Owners.Any())
+                                                {
+                                                    @standard.Owners.First().User?.Name
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                            <td>@standard.UpdatedAt.ToString("dd MMM yyyy")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            <!-- New Standards -->
+            @if (newStandards.Any())
+            {
+                <div class="dashboard-section">
+                    <div class="dashboard-section-header">
+                        <h2><i class="fas fa-star"></i> New Standards (Last 30 Days)</h2>
+                        <a href="@Url.Action("Index", new { view = "published" })" class="btn btn-sm btn-outline-primary">View All Published</a>
+                    </div>
+                    <div class="row">
+                        @foreach (var standard in newStandards.Take(6))
+                        {
+                            <div class="col-md-4 mb-3">
+                                <div class="card h-100">
+                                    <div class="card-body">
+                                        <h5 class="card-title">
+                                            <a asp-action="Details" asp-route-id="@standard.Id" style="color: #005ea5; text-decoration: none;">@standard.Title</a>
+                                        </h5>
+                                        <p class="card-text">
+                                            <small class="text-muted">Version @standard.Version</small><br />
+                                            @if (!string.IsNullOrEmpty(standard.Summary))
+                                            {
+                                                <span>@(standard.Summary.Length > 150 ? standard.Summary.Substring(0, 150) + "..." : standard.Summary)</span>
+                                            }
+                                        </p>
+                                        <div class="mt-2">
+                                            @if (standard.Categories.Any())
+                                            {
+                                                @foreach (var cat in standard.Categories.Take(2))
+                                                {
+                                                    <span class="badge badge-light">@cat.Category.Name</span>
+                                                }
+                                            }
+                                        </div>
+                                    </div>
+                                    <div class="card-footer">
+                                        <small class="text-muted">Created @standard.CreatedAt.ToString("dd MMM yyyy")</small>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+
+            <!-- Recently Updated Standards -->
+            @if (recentlyUpdated.Any())
+            {
+                <div class="dashboard-section">
+                    <div class="dashboard-section-header">
+                        <h2><i class="fas fa-sync"></i> Recently Updated Standards</h2>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Title</th>
+                                    <th>Version</th>
+                                    <th>Categories</th>
+                                    <th>Updated</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var standard in recentlyUpdated.Take(10))
+                                {
+                                    <tr>
+                                        <td>
+                                            <a asp-action="Details" asp-route-id="@standard.Id" style="font-weight: 600; color: #005ea5;">@standard.Title</a>
+                                        </td>
+                                        <td>@standard.Version</td>
+                                        <td>
+                                            @if (standard.Categories.Any())
+                                            {
+                                                @foreach (var cat in standard.Categories.Take(2))
+                                                {
+                                                    <span class="badge badge-light">@cat.Category.Name</span>
+                                                }
+                                            }
+                                        </td>
+                                        <td>@standard.UpdatedAt.ToString("dd MMM yyyy")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            }
+
+            <!-- How to Create a Standard -->
+            <div class="dashboard-section">
+                <div class="dashboard-section-header">
+                    <h2><i class="fas fa-question-circle"></i> How to Create a New Standard</h2>
+                </div>
+                <div class="row">
+                    <div class="col-md-8">
+                        <div class="alert alert-info">
+                            <h5><i class="fas fa-lightbulb mr-2"></i>Getting Started</h5>
+                            <p>To create a new DDT standard:</p>
+                            <ol>
+                                <li>Click the <strong>"Create Standard"</strong> button above</li>
+                                <li>Fill in the standard details including title, summary, and categories</li>
+                                <li>Add owners and contacts who will manage the standard</li>
+                                <li>Save as a draft and continue editing until ready</li>
+                                <li>Submit for approval when complete</li>
+                            </ol>
+                            <a asp-action="Create" class="btn btn-primary mt-2">
+                                <i class="fas fa-plus"></i> Create Your First Standard
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Standards Process Timeline -->
+            <div class="dashboard-section">
+                <div class="dashboard-section-header">
+                    <h2><i class="fas fa-project-diagram"></i> Standards Process</h2>
+                </div>
+                <div class="dashboard-timeline">
+                    <div class="dashboard-timeline-item completed">
+                        <div class="dashboard-timeline-content">
+                            <h4>Draft</h4>
+                            <p>Create and edit your standard. Add content, categories, owners, and contacts. Save as draft until ready for review.</p>
+                        </div>
+                    </div>
+                    <div class="dashboard-timeline-item">
+                        <div class="dashboard-timeline-content">
+                            <h4>For Approval</h4>
+                            <p>Submit your standard for review. Standards Managers will review and approve or request changes.</p>
+                        </div>
+                    </div>
+                    <div class="dashboard-timeline-item">
+                        <div class="dashboard-timeline-content">
+                            <h4>Awaiting Publication</h4>
+                            <p>Once approved, your standard moves to publication queue. Admins will publish when ready.</p>
+                        </div>
+                    </div>
+                    <div class="dashboard-timeline-item">
+                        <div class="dashboard-timeline-content">
+                            <h4>Published</h4>
+                            <p>Your standard is now live and visible to all users. Products can report compliance against published standards.</p>
+                        </div>
+                    </div>
+                    <div class="dashboard-timeline-item">
+                        <div class="dashboard-timeline-content">
+                            <h4>Report Compliance</h4>
+                            <p>Products report their compliance status against published standards. Track compliance across your portfolio.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</section>
+

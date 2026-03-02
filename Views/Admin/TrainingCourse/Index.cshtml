@@ -1,0 +1,143 @@
+@model List<Compass.Models.TrainingCourse>
+
+@{
+    ViewData["Title"] = "Training course library";
+}
+
+@await Html.PartialAsync("_DashboardStyles")
+
+@await Html.PartialAsync("_AdminPageHeader", new { 
+    Title = "Training course library", 
+    Description = "Manage the training course library",
+    Actions = new[] {
+        new { Text = "Add new course", Action = "Create", Controller = "TrainingCourse", Class = "btn-primary", Icon = "fas fa-plus" }
+    }
+})
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["SuccessMessage"]
+            </div>
+        }
+
+        <!-- Filters -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h3 class="card-title">Filters</h3>
+            </div>
+            <div class="card-body">
+                <form method="get" asp-action="Index">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label>Search</label>
+                                <input type="text" name="search" class="form-control" value="@ViewBag.Search" placeholder="Search courses..." />
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-group">
+                                <label>Status</label>
+                                <select name="activeFilter" class="form-control">
+                                    <option value="">All</option>
+                                    <option value="true" selected="@(ViewBag.ActiveFilter == true)">Active</option>
+                                    <option value="false" selected="@(ViewBag.ActiveFilter == false)">Archived</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-group">
+                                <label>&nbsp;</label>
+                                <div>
+                                    <button type="submit" class="btn btn-primary btn-block">Apply filters</button>
+                                    <a asp-action="Index" class="btn btn-default btn-block">Clear</a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Courses List -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Training courses (@Model.Count)</h3>
+                <div class="card-tools">
+                    <a asp-action="Create" class="btn btn-success btn-sm">
+                        <i class="fas fa-plus"></i> Add new course
+                    </a>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                @if (Model.Any())
+                {
+                    <table class="table table-hover text-nowrap sortable-table mb-0">
+                        <thead>
+                            <tr>
+                                <th>Title</th>
+                                <th>Provider</th>
+                                <th>Format</th>
+                                <th>Cost</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var course in Model)
+                            {
+                                <tr>
+                                    <td><strong>@course.Title</strong></td>
+                                    <td>@(course.Provider ?? "N/A")</td>
+                                    <td>@(course.Format ?? "N/A")</td>
+                                    <td>@(course.Cost.HasValue ? $"£{course.Cost.Value:N0}" : "N/A")</td>
+                                    <td>
+                                        @if (course.Active)
+                                        {
+                                            <span class="badge badge-success">Active</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge badge-secondary">Archived</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        <a asp-action="Details" asp-route-id="@course.Id" class="btn btn-sm btn-info">View</a>
+                                        <a asp-action="Edit" asp-route-id="@course.Id" class="btn btn-sm btn-primary">Edit</a>
+                                        @if (course.Active)
+                                        {
+                                            <form asp-action="Archive" method="post" style="display: inline;">
+                                                @Html.AntiForgeryToken()
+                                                <input type="hidden" name="id" value="@course.Id" />
+                                                <button type="submit" class="btn btn-sm btn-warning" onclick="return confirm('Are you sure you want to archive this course?')">Archive</button>
+                                            </form>
+                                        }
+                                        else
+                                        {
+                                            <form asp-action="Restore" method="post" style="display: inline;">
+                                                @Html.AntiForgeryToken()
+                                                <input type="hidden" name="id" value="@course.Id" />
+                                                <button type="submit" class="btn btn-sm btn-success">Restore</button>
+                                            </form>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+                else
+                {
+                    <div class="p-3">
+                        <p class="text-muted mb-0">No courses found.</p>
+                        <a asp-action="Create" class="btn btn-primary mt-2">Create your first course</a>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</section>
+

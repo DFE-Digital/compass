@@ -1,7 +1,7 @@
 @model Compass.Models.Project
 
 @{
-    ViewData["Title"] = "Edit Project";
+    ViewData["Title"] = "Edit Work";
 }
 
 @section Breadcrumbs {
@@ -12,12 +12,12 @@
         }
     </style>
     <nav aria-label="Breadcrumb">
-        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f8f9fa; padding: 0.75rem 1rem; border-radius: 0.375rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
             <li class="breadcrumb-item">
                 <a href="/" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Home</a>
             </li>
             <li class="breadcrumb-item">
-                <a asp-action="Index" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Delivery reporting</a>
+                <a asp-action="Index" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Work reporting</a>
             </li>
             <li class="breadcrumb-item active" aria-current="page" style="color: #0b0c0c; font-weight: 600;">Edit</li>
         </ol>
@@ -28,7 +28,7 @@
     <div class="container-fluid">
         <div class="row mb-2">
             <div class="col-sm-6">
-                <h1 class="m-0">Edit Project</h1>
+                <h1 class="m-0">Edit Work</h1>
             </div>
         </div>
     </div>
@@ -55,7 +55,7 @@
             <div class="col-12">
                 <div class="card">
                     <div class="card-header">
-                        <h3 class="card-title">Edit Project</h3>
+                        <h3 class="card-title">Edit Work</h3>
                     </div>
                     <form asp-action="Edit" method="post">
                         <div class="card-body">
@@ -149,9 +149,234 @@
                                     </div>
                                 </div>
                             </div>
+
+                            <div class="form-group">
+                                <label asp-for="BusinessCaseApproval" class="control-label">Business case approval</label>
+                                <select asp-for="BusinessCaseApproval" class="form-control">
+                                    <option value="">Select an option</option>
+                                    <option value="Yes" selected="@(Model.BusinessCaseApproval == "Yes")">Yes</option>
+                                    <option value="No" selected="@(Model.BusinessCaseApproval == "No")">No</option>
+                                    <option value="Not applicable" selected="@(Model.BusinessCaseApproval == "Not applicable")">Not applicable</option>
+                                </select>
+                                <span asp-validation-for="BusinessCaseApproval" class="text-danger"></span>
+                                <small class="form-text text-muted">Has the business case been approved?</small>
+                            </div>
+
+                            <hr class="my-4" />
+                            <h5 class="mb-3">Project Classification</h5>
+
+                            <div class="form-group">
+                                <label asp-for="ActivityTypeLookupId" class="control-label">Activity Type</label>
+                                <select asp-for="ActivityTypeLookupId" class="form-control">
+                                    <option value="">Select activity type</option>
+                                    @if (ViewBag.ActivityTypes != null)
+                                    {
+                                        @foreach (var activityType in ViewBag.ActivityTypes)
+                                        {
+                                            <option value="@activityType.Id" selected="@(Model.ActivityTypeLookupId == activityType.Id)">@activityType.Name</option>
+                                        }
+                                    }
+                                </select>
+                                <span asp-validation-for="ActivityTypeLookupId" class="text-danger"></span>
+                            </div>
+
+                            <div class="form-group">
+                                <label asp-for="RiskAppetiteLookupId" class="control-label">Risk Appetite</label>
+                                <select asp-for="RiskAppetiteLookupId" class="form-control">
+                                    <option value="">Select risk appetite</option>
+                                    @if (ViewBag.RiskAppetites != null)
+                                    {
+                                        @foreach (var riskAppetite in ViewBag.RiskAppetites)
+                                        {
+                                            <option value="@riskAppetite.Id" selected="@(Model.RiskAppetiteLookupId == riskAppetite.Id)">@riskAppetite.Name</option>
+                                        }
+                                    }
+                                </select>
+                                <span asp-validation-for="RiskAppetiteLookupId" class="text-danger"></span>
+                            </div>
+
+                            <div class="form-group">
+                                <label asp-for="ServiceUsers" class="control-label">Service Users</label>
+                                <textarea asp-for="ServiceUsers" class="form-control" rows="3" placeholder="Describe the service users"></textarea>
+                                <span asp-validation-for="ServiceUsers" class="text-danger"></span>
+                                <small class="form-text text-muted">Free text description of the service users</small>
+                            </div>
+
+                            <div class="form-group">
+                                <div class="form-check">
+                                    <input asp-for="IsInternal" class="form-check-input" id="isInternal" />
+                                    <label asp-for="IsInternal" class="form-check-label">Internal</label>
+                                </div>
+                                <div class="form-check">
+                                    <input asp-for="IsExternal" class="form-check-input" id="isExternal" />
+                                    <label asp-for="IsExternal" class="form-check-label">External</label>
+                                </div>
+                                <small class="form-text text-muted">Select whether the service is internal, external, or both</small>
+                            </div>
+
+                            <hr class="my-4" />
+                            <h5 class="mb-3">Project Contacts</h5>
+
+                            <div class="form-group">
+                                <label class="control-label">Senior Responsible Officer(s)</label>
+                                <div class="input-group">
+                                    <input type="text" class="form-control" id="sroSearch" placeholder="Search for users..." />
+                                    <div class="input-group-append">
+                                        <button type="button" class="btn btn-outline-secondary" id="addSroBtn">Add</button>
+                                    </div>
+                                </div>
+                                <div id="selectedSros" class="mt-2"></div>
+                                <input type="hidden" name="SelectedSroUserIds" id="selectedSroUserIds" />
+                                <small class="form-text text-muted">Select one or more Senior Responsible Officers</small>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="control-label">PMO Contact(s)</label>
+                                <div class="input-group">
+                                    <input type="text" class="form-control" id="pmoSearch" placeholder="Search for users..." />
+                                    <div class="input-group-append">
+                                        <button type="button" class="btn btn-outline-secondary" id="addPmoBtn">Add</button>
+                                    </div>
+                                </div>
+                                <div id="selectedPmos" class="mt-2"></div>
+                                <input type="hidden" name="SelectedPmoUserIds" id="selectedPmoUserIds" />
+                                <small class="form-text text-muted">Select one or more PMO contacts</small>
+                            </div>
+
+                            <hr class="my-4" />
+                            <h5 class="mb-3">Organisational Structure</h5>
+
+                            <div class="form-group">
+                                <label class="control-label">Directorate(s)</label>
+                                <div class="border p-3" style="max-height: 200px; overflow-y: auto;">
+                                    @if (ViewBag.Directorates != null)
+                                    {
+                                        @foreach (var directorate in ViewBag.Directorates)
+                                        {
+                                            var isSelected = Model.Directorates?.Any(d => d.DivisionId == directorate.Id) == true;
+                                            <div class="form-check">
+                                                <input type="checkbox" class="form-check-input directorate-checkbox" 
+                                                       name="SelectedDirectorateIds" value="@directorate.Id" 
+                                                       id="directorate_@directorate.Id" @(isSelected ? "checked" : "") />
+                                                <label class="form-check-label" for="directorate_@directorate.Id">
+                                                    @directorate.Name
+                                                </label>
+                                            </div>
+                                        }
+                                    }
+                                </div>
+                                <small class="form-text text-muted">Select one or more directorates</small>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="control-label">Budget Owner(s)</label>
+                                <div class="border p-3" style="max-height: 200px; overflow-y: auto;">
+                                    @if (ViewBag.BudgetOwnerBusinessAreas != null)
+                                    {
+                                        @foreach (var businessArea in ViewBag.BudgetOwnerBusinessAreas)
+                                        {
+                                            var isSelected = Model.BudgetOwners?.Any(bo => bo.BusinessAreaLookupId == businessArea.Id) == true;
+                                            <div class="form-check">
+                                                <input type="checkbox" class="form-check-input budgetowner-checkbox" 
+                                                       name="SelectedBudgetOwnerIds" value="@businessArea.Id" 
+                                                       id="budgetowner_@businessArea.Id" @(isSelected ? "checked" : "") />
+                                                <label class="form-check-label" for="budgetowner_@businessArea.Id">
+                                                    @businessArea.Name
+                                                </label>
+                                            </div>
+                                        }
+                                    }
+                                </div>
+                                <small class="form-text text-muted">Select one or more budget owners from business areas</small>
+                            </div>
+
+                            <hr class="my-4" />
+                            <h5 class="mb-3">Phase Dates</h5>
+
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h6>Discovery</h6>
+                                    <div class="form-group">
+                                        <label class="control-label">Start Date (Planned)</label>
+                                        <input type="date" asp-for="DiscoveryStartDatePlanned" class="form-control" />
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="control-label">Start Date (Actual)</label>
+                                        <input type="date" asp-for="DiscoveryStartDateActual" class="form-control" />
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="control-label">End Date (Planned)</label>
+                                        <input type="date" asp-for="DiscoveryEndDatePlanned" class="form-control" />
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="control-label">End Date (Actual)</label>
+                                        <input type="date" asp-for="DiscoveryEndDateActual" class="form-control" />
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <h6>Alpha</h6>
+                                    <div class="form-group">
+                                        <label class="control-label">Start Date (Planned)</label>
+                                        <input type="date" asp-for="AlphaStartDatePlanned" class="form-control" />
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="control-label">Start Date (Actual)</label>
+                                        <input type="date" asp-for="AlphaStartDateActual" class="form-control" />
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="control-label">End Date (Planned)</label>
+                                        <input type="date" asp-for="AlphaEndDatePlanned" class="form-control" />
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="control-label">End Date (Actual)</label>
+                                        <input type="date" asp-for="AlphaEndDateActual" class="form-control" />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="row mt-3">
+                                <div class="col-md-6">
+                                    <h6>Private Beta</h6>
+                                    <div class="form-group">
+                                        <label class="control-label">Start Date (Planned)</label>
+                                        <input type="date" asp-for="PrivateBetaStartDatePlanned" class="form-control" />
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="control-label">Start Date (Actual)</label>
+                                        <input type="date" asp-for="PrivateBetaStartDateActual" class="form-control" />
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="control-label">End Date (Planned)</label>
+                                        <input type="date" asp-for="PrivateBetaEndDatePlanned" class="form-control" />
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="control-label">End Date (Actual)</label>
+                                        <input type="date" asp-for="PrivateBetaEndDateActual" class="form-control" />
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <h6>Public Beta</h6>
+                                    <div class="form-group">
+                                        <label class="control-label">Start Date (Planned)</label>
+                                        <input type="date" asp-for="PublicBetaStartDatePlanned" class="form-control" />
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="control-label">Start Date (Actual)</label>
+                                        <input type="date" asp-for="PublicBetaStartDateActual" class="form-control" />
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="control-label">End Date (Planned)</label>
+                                        <input type="date" asp-for="PublicBetaEndDatePlanned" class="form-control" />
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="control-label">End Date (Actual)</label>
+                                        <input type="date" asp-for="PublicBetaEndDateActual" class="form-control" />
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                         <div class="card-footer">
-                            <button type="submit" class="btn btn-primary">Update Project</button>
+                            <button type="submit" class="btn btn-success">Update Project</button>
                             <a asp-action="Details" asp-route-id="@Model.Id" class="btn btn-secondary">Cancel</a>
                         </div>
                     </form>
@@ -331,6 +556,267 @@
                 !e.target.closest('#departmentSearch') && 
                 !e.target.closest('#departmentResults')) {
                 hideDepartmentResults();
+            }
+        });
+
+        // ========================================
+        // Senior Responsible Officers (SROs)
+        // ========================================
+        let selectedSros = [];
+        let sroSearchTimeout;
+
+        // Initialize with existing SROs
+        @if (Model.SeniorResponsibleOfficers != null && Model.SeniorResponsibleOfficers.Any())
+        {
+            @foreach (var sro in Model.SeniorResponsibleOfficers)
+            {
+                @if (sro.User != null && !string.IsNullOrEmpty(sro.User.AzureObjectId))
+                {
+                    <text>
+                    selectedSros.push({
+                        id: '@sro.User.AzureObjectId',
+                        name: '@Html.Raw(sro.User.Name?.Replace("'", "\\'") ?? "")',
+                        email: '@Html.Raw(sro.User.Email?.Replace("'", "\\'") ?? "")'
+                    });
+                    </text>
+                }
+            }
+            <text>
+            updateSelectedSros();
+            </text>
+        }
+
+        const sroSearchInput = document.getElementById('sroSearch');
+        if (sroSearchInput) {
+            sroSearchInput.addEventListener('input', function() {
+                clearTimeout(sroSearchTimeout);
+                const query = this.value;
+                
+                if (query.length < 2) {
+                    hideSroResults();
+                    return;
+                }
+                
+                sroSearchTimeout = setTimeout(() => {
+                    searchUsers(query, 'sro');
+                }, 300);
+            });
+        }
+
+        document.getElementById('addSroBtn')?.addEventListener('click', function() {
+            const query = sroSearchInput?.value;
+            if (query && query.length >= 2) {
+                searchUsers(query, 'sro', true);
+            }
+        });
+
+        function addSro(user) {
+            if (!selectedSros.find(s => s.id === user.id)) {
+                selectedSros.push(user);
+                updateSelectedSros();
+            }
+            if (sroSearchInput) sroSearchInput.value = '';
+            hideSroResults();
+        }
+
+        function removeSro(userId) {
+            selectedSros = selectedSros.filter(s => s.id !== userId);
+            updateSelectedSros();
+        }
+
+        function updateSelectedSros() {
+            const container = document.getElementById('selectedSros');
+            const hiddenInput = document.getElementById('selectedSroUserIds');
+            
+            if (!container || !hiddenInput) return;
+            
+            if (selectedSros.length === 0) {
+                container.innerHTML = '';
+                hiddenInput.value = '';
+                return;
+            }
+            
+            let html = '<div class="mt-2"><strong>Selected SROs:</strong></div>';
+            selectedSros.forEach(sro => {
+                html += `
+                    <div class="badge badge-primary mr-2 mb-2">
+                        ${sro.name}${sro.email ? ` (${sro.email})` : ''}
+                        <button type="button" class="btn btn-sm btn-outline-light ml-2" onclick="removeSro('${sro.id}')">×</button>
+                    </div>
+                `;
+            });
+            
+            container.innerHTML = html;
+            hiddenInput.value = selectedSros.map(s => s.id).join(',');
+        }
+
+        // ========================================
+        // PMO Contacts
+        // ========================================
+        let selectedPmos = [];
+        let pmoSearchTimeout;
+
+        // Initialize with existing PMO contacts
+        @if (Model.PmoContacts != null && Model.PmoContacts.Any())
+        {
+            @foreach (var pmo in Model.PmoContacts)
+            {
+                @if (pmo.User != null && !string.IsNullOrEmpty(pmo.User.AzureObjectId))
+                {
+                    <text>
+                    selectedPmos.push({
+                        id: '@pmo.User.AzureObjectId',
+                        name: '@Html.Raw(pmo.User.Name?.Replace("'", "\\'") ?? "")',
+                        email: '@Html.Raw(pmo.User.Email?.Replace("'", "\\'") ?? "")'
+                    });
+                    </text>
+                }
+            }
+            <text>
+            updateSelectedPmos();
+            </text>
+        }
+
+        const pmoSearchInput = document.getElementById('pmoSearch');
+        if (pmoSearchInput) {
+            pmoSearchInput.addEventListener('input', function() {
+                clearTimeout(pmoSearchTimeout);
+                const query = this.value;
+                
+                if (query.length < 2) {
+                    hidePmoResults();
+                    return;
+                }
+                
+                pmoSearchTimeout = setTimeout(() => {
+                    searchUsers(query, 'pmo');
+                }, 300);
+            });
+        }
+
+        document.getElementById('addPmoBtn')?.addEventListener('click', function() {
+            const query = pmoSearchInput?.value;
+            if (query && query.length >= 2) {
+                searchUsers(query, 'pmo', true);
+            }
+        });
+
+        function addPmo(user) {
+            if (!selectedPmos.find(p => p.id === user.id)) {
+                selectedPmos.push(user);
+                updateSelectedPmos();
+            }
+            if (pmoSearchInput) pmoSearchInput.value = '';
+            hidePmoResults();
+        }
+
+        function removePmo(userId) {
+            selectedPmos = selectedPmos.filter(p => p.id !== userId);
+            updateSelectedPmos();
+        }
+
+        function updateSelectedPmos() {
+            const container = document.getElementById('selectedPmos');
+            const hiddenInput = document.getElementById('selectedPmoUserIds');
+            
+            if (!container || !hiddenInput) return;
+            
+            if (selectedPmos.length === 0) {
+                container.innerHTML = '';
+                hiddenInput.value = '';
+                return;
+            }
+            
+            let html = '<div class="mt-2"><strong>Selected PMO Contacts:</strong></div>';
+            selectedPmos.forEach(pmo => {
+                html += `
+                    <div class="badge badge-primary mr-2 mb-2">
+                        ${pmo.name}${pmo.email ? ` (${pmo.email})` : ''}
+                        <button type="button" class="btn btn-sm btn-outline-light ml-2" onclick="removePmo('${pmo.id}')">×</button>
+                    </div>
+                `;
+            });
+            
+            container.innerHTML = html;
+            hiddenInput.value = selectedPmos.map(p => p.id).join(',');
+        }
+
+        // ========================================
+        // User Search (shared for SROs and PMO)
+        // ========================================
+        function searchUsers(query, type, selectFirst = false) {
+            fetch(`/Users/Search?term=${encodeURIComponent(query)}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (selectFirst && data.length > 0) {
+                        if (type === 'sro') {
+                            addSro({ id: data[0].id, name: data[0].displayName || data[0].name, email: data[0].email });
+                        } else if (type === 'pmo') {
+                            addPmo({ id: data[0].id, name: data[0].displayName || data[0].name, email: data[0].email });
+                        }
+                    } else {
+                        showUserResults(data, type);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error searching users:', error);
+                });
+        }
+
+        function showUserResults(users, type) {
+            const containerId = type === 'sro' ? 'sroResults' : 'pmoResults';
+            let container = document.getElementById(containerId);
+            const searchInput = type === 'sro' ? sroSearchInput : pmoSearchInput;
+            
+            if (!container) {
+                container = document.createElement('div');
+                container.id = containerId;
+                container.className = 'list-group mt-2';
+                if (searchInput && searchInput.parentNode) {
+                    searchInput.parentNode.appendChild(container);
+                }
+            }
+            
+            container.innerHTML = '';
+            
+            if (users.length === 0) {
+                container.innerHTML = '<div class="list-group-item text-muted">No users found</div>';
+            } else {
+                users.forEach(user => {
+                    const item = document.createElement('div');
+                    item.className = 'list-group-item list-group-item-action';
+                    item.innerHTML = `<strong>${user.displayName || user.name}</strong>${user.email ? ` (${user.email})` : ''}`;
+                    item.addEventListener('click', () => {
+                        if (type === 'sro') {
+                            addSro({ id: user.id, name: user.displayName || user.name, email: user.email });
+                        } else if (type === 'pmo') {
+                            addPmo({ id: user.id, name: user.displayName || user.name, email: user.email });
+                        }
+                    });
+                    container.appendChild(item);
+                });
+            }
+            
+            container.style.display = 'block';
+        }
+
+        function hideSroResults() {
+            const container = document.getElementById('sroResults');
+            if (container) container.style.display = 'none';
+        }
+
+        function hidePmoResults() {
+            const container = document.getElementById('pmoResults');
+            if (container) container.style.display = 'none';
+        }
+
+        // Hide user results when clicking outside
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('#sroSearch') && !e.target.closest('#sroResults')) {
+                hideSroResults();
+            }
+            if (!e.target.closest('#pmoSearch') && !e.target.closest('#pmoResults')) {
+                hidePmoResults();
             }
         });
     </script>

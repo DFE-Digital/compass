@@ -1,0 +1,748 @@
+@using Compass.Controllers
+@{
+    ViewData["Title"] = "Central Operations Dashboard";
+    var businessAreaSummary = ViewBag.BusinessAreaSummary as List<BusinessAreaSummaryItem> ?? new List<BusinessAreaSummaryItem>();
+    var activeWorkItems = ViewBag.ActiveWorkItems as int? ?? 0;
+    var allProjects = ViewBag.AllProjects as List<Compass.Models.Project> ?? new List<Compass.Models.Project>();
+    var previousMonthStats = ViewBag.PreviousMonthStats as MonthlyUpdateStats;
+    var currentMonthStats = ViewBag.CurrentMonthStats as MonthlyUpdateStats;
+    var previousMonthName = ViewBag.PreviousMonthName as string ?? "";
+    var currentMonthName = ViewBag.CurrentMonthName as string ?? "";
+}
+
+@await Html.PartialAsync("_DashboardStyles")
+
+<style>
+    /* Business Area Summary Table - 1rem font size */
+    .dashboard-section table.sortable-table {
+        font-size: 1rem;
+    }
+    
+    .dashboard-section table.sortable-table th,
+    .dashboard-section table.sortable-table td {
+        font-size: 1rem;
+    }
+    
+    .dashboard-section table.sortable-table .badge {
+        font-size: 1rem;
+    }
+    
+    .dashboard-section table.sortable-table a {
+        font-size: 1rem;
+    }
+</style>
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4 breadcrumb-standard">
+            <li class="breadcrumb-item">
+                <a href="/" class="breadcrumb-link-standard">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a asp-controller="CentralOps" asp-action="Dashboard" class="breadcrumb-link-standard">Central Operations</a>
+            </li>
+            <li class="breadcrumb-item active breadcrumb-active-standard" aria-current="page">Dashboard</li>
+        </ol>
+    </nav>
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Dashboard Header -->
+<div class="dashboard-header">
+    <h1>Central Operations</h1>
+    <p>Overview of all work items, projects, and operational reporting</p>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                @TempData["ErrorMessage"]
+                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+        }
+
+        <!-- Summary Cards -->
+        <div class="dashboard-summary-cards">
+            <div class="dashboard-card bg-success">
+                <div class="dashboard-card-value">@activeWorkItems</div>
+                <div class="dashboard-card-label">Active Work Items</div>
+                <div class="dashboard-card-icon"><i class="fas fa-check-circle"></i></div>
+            </div>
+            <div class="dashboard-card bg-info">
+                <div class="dashboard-card-value">@allProjects.Count</div>
+                <div class="dashboard-card-label">Total Work Items</div>
+                <div class="dashboard-card-icon"><i class="fas fa-list"></i></div>
+            </div>
+            <div class="dashboard-card bg-danger">
+                <div class="dashboard-card-value">
+                        @{
+                            var redItems = allProjects.Count(p => {
+                                if (string.IsNullOrEmpty(p.RagStatus)) return false;
+                                var normalized = p.RagStatus.Trim()
+                                    .Replace(" / ", "-")
+                                    .Replace("/", "-")
+                                    .Replace(" /", "-")
+                                    .Replace("/ ", "-");
+                                return normalized == "Red" || normalized == "Amber-Red";
+                            });
+                        }
+                    @redItems
+                </div>
+                <div class="dashboard-card-label">Red/Amber-Red Items</div>
+                <div class="dashboard-card-icon"><i class="fas fa-times-circle"></i></div>
+            </div>
+        </div>
+
+        <!-- Monthly Update Completion Status -->
+        @if (previousMonthStats != null || currentMonthStats != null)
+        {
+            <div class="dashboard-section">
+                <div class="dashboard-section-header">
+                    <h2><i class="fas fa-calendar-check"></i> Monthly Update Completion Status</h2>
+                    <div>
+                        <a asp-controller="CentralOps" asp-action="MonthlySummary" class="btn btn-primary btn-sm">
+                            <i class="fas fa-chart-line"></i> Monthly Summary
+                        </a>
+                    </div>
+                        </div>
+                            <div class="table-responsive">
+                                <table class="table table-sm table-bordered">
+                                    <thead>
+                                        <tr>
+                                            <th class="width-25pct">Status</th>
+                                            <th colspan="2" class="table-header-center table-header-bg table-header-border-right-2">@previousMonthName</th>
+                                            <th colspan="2" class="table-header-center table-header-bg">@currentMonthName</th>
+                                            <th class="col-width-10 table-header-center">Change</th>
+                                        </tr>
+                                        <tr>
+                                            <th></th>
+                                            <th class="table-header-center table-header-bg table-header-border-right">Count</th>
+                                            <th class="table-header-center table-header-bg table-header-border-right-2">%</th>
+                                            <th class="table-header-center table-header-bg table-header-border-right">Count</th>
+                                            <th class="table-header-center table-header-bg table-header-border-right-2">%</th>
+                                            <th class="table-header-center"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @{
+                                            var submittedChange = currentMonthStats != null && previousMonthStats != null ? currentMonthStats.Submitted - previousMonthStats.Submitted : 0;
+                                            var lateChange = currentMonthStats != null && previousMonthStats != null ? currentMonthStats.Late - previousMonthStats.Late : 0;
+                                            var inProgressChange = currentMonthStats != null && previousMonthStats != null ? currentMonthStats.InProgress - previousMonthStats.InProgress : 0;
+                                            var notStartedChange = currentMonthStats != null && previousMonthStats != null ? currentMonthStats.NotStarted - previousMonthStats.NotStarted : 0;
+                                        }
+                                        <tr>
+                                            <td>
+                                                @if (currentMonthStats != null)
+                                                {
+                                                    <a asp-controller="CentralOps" asp-action="MonthlyUpdateStatus" asp-route-year="@currentMonthStats.Year" asp-route-month="@currentMonthStats.Month" asp-route-status="Submitted" class="text-decoration-none">
+                                                        <span class="badge badge-success">Submitted <i class="fas fa-external-link-alt ml-1 font-size-075em"></i></span>
+                                                    </a>
+                                                }
+                                                else if (previousMonthStats != null)
+                                                {
+                                                    <a asp-controller="CentralOps" asp-action="MonthlyUpdateStatus" asp-route-year="@previousMonthStats.Year" asp-route-month="@previousMonthStats.Month" asp-route-status="Submitted" class="text-decoration-none">
+                                                        <span class="badge badge-success">Submitted <i class="fas fa-external-link-alt ml-1 font-size-075em"></i></span>
+                                                    </a>
+                                                }
+                                            </td>
+                                            <td class="table-cell-center table-cell-border-right">@(previousMonthStats?.Submitted ?? 0)</td>
+                                            <td class="table-cell-center table-cell-border-right-2">
+                                                @(previousMonthStats != null && previousMonthStats.TotalProjects > 0 ? ((previousMonthStats.Submitted * 100.0) / previousMonthStats.TotalProjects).ToString("F1") : "0.0")%
+                                            </td>
+                                            <td class="table-cell-center table-cell-border-right">@(currentMonthStats?.Submitted ?? 0)</td>
+                                            <td class="table-cell-center table-cell-border-right-2">
+                                                @(currentMonthStats != null && currentMonthStats.TotalProjects > 0 ? ((currentMonthStats.Submitted * 100.0) / currentMonthStats.TotalProjects).ToString("F1") : "0.0")%
+                                            </td>
+                                            <td class="table-cell-center">
+                                                @if (submittedChange != 0)
+                                                {
+                                                    @* For Submitted: increase is good (green), decrease is bad (red) *@
+                                                    <span class="badge @(submittedChange > 0 ? "badge-success" : "badge-danger")">
+                                                        @(submittedChange > 0 ? "+" : "")@submittedChange
+                                                    </span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td>
+                                                @if (currentMonthStats != null)
+                                                {
+                                                    <a asp-controller="CentralOps" asp-action="MonthlyUpdateStatus" asp-route-year="@currentMonthStats.Year" asp-route-month="@currentMonthStats.Month" asp-route-status="Late" class="text-decoration-none">
+                                                        <span class="badge badge-danger">Late <i class="fas fa-external-link-alt ml-1 font-size-075em"></i></span>
+                                                    </a>
+                                                }
+                                                else if (previousMonthStats != null)
+                                                {
+                                                    <a asp-controller="CentralOps" asp-action="MonthlyUpdateStatus" asp-route-year="@previousMonthStats.Year" asp-route-month="@previousMonthStats.Month" asp-route-status="Late" class="text-decoration-none">
+                                                        <span class="badge badge-danger">Late <i class="fas fa-external-link-alt ml-1 font-size-075em"></i></span>
+                                                    </a>
+                                                }
+                                            </td>
+                                            <td class="table-cell-center table-cell-border-right">@(previousMonthStats?.Late ?? 0)</td>
+                                            <td class="table-cell-center table-cell-border-right-2">
+                                                @(previousMonthStats != null && previousMonthStats.TotalProjects > 0 ? ((previousMonthStats.Late * 100.0) / previousMonthStats.TotalProjects).ToString("F1") : "0.0")%
+                                            </td>
+                                            <td class="table-cell-center table-cell-border-right">@(currentMonthStats?.Late ?? 0)</td>
+                                            <td class="table-cell-center table-cell-border-right-2">
+                                                @(currentMonthStats != null && currentMonthStats.TotalProjects > 0 ? ((currentMonthStats.Late * 100.0) / currentMonthStats.TotalProjects).ToString("F1") : "0.0")%
+                                            </td>
+                                            <td class="table-cell-center">
+                                                @if (lateChange != 0)
+                                                {
+                                                    @* For Late: increase is bad (red), decrease is good (green) *@
+                                                    <span class="badge @(lateChange > 0 ? "badge-danger" : "badge-success")">
+                                                        @(lateChange > 0 ? "+" : "")@lateChange
+                                                    </span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td>
+                                                @if (currentMonthStats != null)
+                                                {
+                                                    <a asp-controller="CentralOps" asp-action="MonthlyUpdateStatus" asp-route-year="@currentMonthStats.Year" asp-route-month="@currentMonthStats.Month" asp-route-status="In Progress" class="text-decoration-none">
+                                                        <span class="badge badge-warning">In Progress <i class="fas fa-external-link-alt ml-1 font-size-075em"></i></span>
+                                                    </a>
+                                                }
+                                                else if (previousMonthStats != null)
+                                                {
+                                                    <a asp-controller="CentralOps" asp-action="MonthlyUpdateStatus" asp-route-year="@previousMonthStats.Year" asp-route-month="@previousMonthStats.Month" asp-route-status="In Progress" class="text-decoration-none">
+                                                        <span class="badge badge-warning">In Progress <i class="fas fa-external-link-alt ml-1 font-size-075em"></i></span>
+                                                    </a>
+                                                }
+                                            </td>
+                                            <td class="table-cell-center table-cell-border-right">@(previousMonthStats?.InProgress ?? 0)</td>
+                                            <td class="table-cell-center table-cell-border-right-2">
+                                                @(previousMonthStats != null && previousMonthStats.TotalProjects > 0 ? ((previousMonthStats.InProgress * 100.0) / previousMonthStats.TotalProjects).ToString("F1") : "0.0")%
+                                            </td>
+                                            <td class="table-cell-center table-cell-border-right">@(currentMonthStats?.InProgress ?? 0)</td>
+                                            <td class="table-cell-center table-cell-border-right-2">
+                                                @(currentMonthStats != null && currentMonthStats.TotalProjects > 0 ? ((currentMonthStats.InProgress * 100.0) / currentMonthStats.TotalProjects).ToString("F1") : "0.0")%
+                                            </td>
+                                            <td class="table-cell-center">
+                                                @if (inProgressChange != 0)
+                                                {
+                                                    <span class="badge @(inProgressChange > 0 ? "badge-warning" : "badge-success")">
+                                                        @(inProgressChange > 0 ? "+" : "")@inProgressChange
+                                                    </span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td>
+                                                @if (currentMonthStats != null)
+                                                {
+                                                    <a asp-controller="CentralOps" asp-action="MonthlyUpdateStatus" asp-route-year="@currentMonthStats.Year" asp-route-month="@currentMonthStats.Month" asp-route-status="Not Started" class="text-decoration-none">
+                                                        <span class="badge badge-secondary">Not Started <i class="fas fa-external-link-alt ml-1 font-size-075em"></i></span>
+                                                    </a>
+                                                }
+                                                else if (previousMonthStats != null)
+                                                {
+                                                    <a asp-controller="CentralOps" asp-action="MonthlyUpdateStatus" asp-route-year="@previousMonthStats.Year" asp-route-month="@previousMonthStats.Month" asp-route-status="Not Started" class="text-decoration-none">
+                                                        <span class="badge badge-secondary">Not Started <i class="fas fa-external-link-alt ml-1 font-size-075em"></i></span>
+                                                    </a>
+                                                }
+                                            </td>
+                                            <td class="table-cell-center table-cell-border-right">@(previousMonthStats?.NotStarted ?? 0)</td>
+                                            <td class="table-cell-center table-cell-border-right-2">
+                                                @(previousMonthStats != null && previousMonthStats.TotalProjects > 0 ? ((previousMonthStats.NotStarted * 100.0) / previousMonthStats.TotalProjects).ToString("F1") : "0.0")%
+                                            </td>
+                                            <td class="table-cell-center table-cell-border-right">@(currentMonthStats?.NotStarted ?? 0)</td>
+                                            <td class="table-cell-center table-cell-border-right-2">
+                                                @(currentMonthStats != null && currentMonthStats.TotalProjects > 0 ? ((currentMonthStats.NotStarted * 100.0) / currentMonthStats.TotalProjects).ToString("F1") : "0.0")%
+                                            </td>
+                                            <td class="table-cell-center">
+                                                @if (notStartedChange != 0)
+                                                {
+                                                    @* For Not Started: increase is bad (red), decrease is good (green) *@
+                                                    <span class="badge @(notStartedChange > 0 ? "badge-danger" : "badge-success")">
+                                                        @(notStartedChange > 0 ? "+" : "")@notStartedChange
+                                                    </span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                        </tr>
+                                        <tr class="table-info">
+                                            <td><strong>Total Projects</strong></td>
+                                            <td class="table-cell-center table-cell-border-right"><strong>@(previousMonthStats?.TotalProjects ?? 0)</strong></td>
+                                            <td style="text-align: center; border-right: 2px solid #dee2e6;"><strong>100.0%</strong></td>
+                                            <td style="text-align: center; border-right: 1px solid #dee2e6;"><strong>@(currentMonthStats?.TotalProjects ?? 0)</strong></td>
+                                            <td style="text-align: center; border-right: 2px solid #dee2e6;"><strong>100.0%</strong></td>
+                                            <td class="table-cell-center">
+                                                @{
+                                                    var totalChange = currentMonthStats != null && previousMonthStats != null ? currentMonthStats.TotalProjects - previousMonthStats.TotalProjects : 0;
+                                                }
+                                                @if (totalChange != 0)
+                                                {
+                                                    <strong>@(totalChange > 0 ? "+" : "")@totalChange</strong>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="mt-2">
+                                @if (previousMonthStats != null)
+                                {
+                                    <small class="text-muted">@previousMonthName due date: @previousMonthStats.DueDate.ToString("dd MMMM yyyy")</small>
+                                }
+                                @if (previousMonthStats != null && currentMonthStats != null)
+                                {
+                                    <span class="text-muted"> | </span>
+                                }
+                                @if (currentMonthStats != null)
+                                {
+                                    <small class="text-muted">@currentMonthName due date: @currentMonthStats.DueDate.ToString("dd MMMM yyyy")</small>
+                                }
+                </div>
+            </div>
+        }
+
+        <!-- Business Area Summary -->
+        <div class="dashboard-section">
+            <div class="dashboard-section-header">
+                <h2><i class="fas fa-building"></i> Summary by Business Area</h2>
+            </div>
+            <div class="card">
+                <div class="card-body table-responsive p-0">
+                    <table class="table table-hover text-nowrap sortable-table mb-0" style="border-collapse: collapse; font-size: 1rem;">
+                            <thead>
+                                <tr>
+                                    <th rowspan="2" class="sortable" data-column="BusinessArea" tabindex="0" role="button" aria-label="Sort by Business Area" style="border-right: 2px solid #dee2e6; font-size: 1rem;">Business Area</th>
+                                    <th rowspan="2" style="width: 70px; text-align: center; border-right: 2px solid #dee2e6; font-size: 1rem;" class="sortable" data-column="Total" tabindex="0" role="button" aria-label="Sort by Work items">Work items</th>
+                                    <th colspan="6" style="text-align: center; background-color: #f4f8fb; font-weight: 600; border-right: 2px solid #dee2e6; font-size: 1rem;">RAG Ratings</th>
+                                    <th colspan="5" style="text-align: center; background-color: #f4f8fb; font-weight: 600; border-right: 2px solid #dee2e6; font-size: 1rem;">Priority</th>
+                                    <th colspan="2" style="text-align: center; background-color: #f4f8fb; font-weight: 600; border-right: 2px solid #dee2e6; font-size: 1rem;">Reporting</th>
+                                </tr>
+                                <tr>
+                                    <th style="width: 70px; text-align: center; border-right: 1px solid #dee2e6; font-size: 1rem;" class="sortable" data-column="Red" tabindex="0" role="button" aria-label="Sort by Red">Red</th>
+                                    <th style="width: 90px; text-align: center; border-right: 1px solid #dee2e6; font-size: 1rem;" class="sortable" data-column="AmberRed" tabindex="0" role="button" aria-label="Sort by Amber-Red">Amber-Red</th>
+                                    <th style="width: 70px; text-align: center; border-right: 1px solid #dee2e6; font-size: 1rem;" class="sortable" data-column="Amber" tabindex="0" role="button" aria-label="Sort by Amber">Amber</th>
+                                    <th style="width: 90px; text-align: center; border-right: 1px solid #dee2e6; font-size: 1rem;" class="sortable" data-column="AmberGreen" tabindex="0" role="button" aria-label="Sort by Amber-Green">Amber-Green</th>
+                                    <th style="width: 70px; text-align: center; border-right: 1px solid #dee2e6; font-size: 1rem;" class="sortable" data-column="Green" tabindex="0" role="button" aria-label="Sort by Green">Green</th>
+                                    <th style="width: 80px; text-align: center; border-right: 2px solid #dee2e6; font-size: 1rem;" class="sortable" data-column="RagNotSet" tabindex="0" role="button" aria-label="Sort by RAG Not Set">Not set</th>
+                                    <th style="width: 75px; text-align: center; border-right: 1px solid #dee2e6; font-size: 1rem;" class="sortable" data-column="CriticalPriority" tabindex="0" role="button" aria-label="Sort by Critical Priority">Critical</th>
+                                    <th style="width: 70px; text-align: center; border-right: 1px solid #dee2e6; font-size: 1rem;" class="sortable" data-column="HighPriority" tabindex="0" role="button" aria-label="Sort by High Priority">High</th>
+                                    <th style="width: 80px; text-align: center; border-right: 1px solid #dee2e6; font-size: 1rem;" class="sortable" data-column="MediumPriority" tabindex="0" role="button" aria-label="Sort by Medium Priority">Medium</th>
+                                    <th style="width: 70px; text-align: center; border-right: 1px solid #dee2e6; font-size: 1rem;" class="sortable" data-column="LowPriority" tabindex="0" role="button" aria-label="Sort by Low Priority">Low</th>
+                                    <th style="width: 80px; text-align: center; border-right: 2px solid #dee2e6; font-size: 1rem;" class="sortable" data-column="PriorityNotSet" tabindex="0" role="button" aria-label="Sort by Priority Not Set">Not set</th>
+                                    <th style="width: 100px; text-align: center; border-right: 1px solid #dee2e6; font-size: 1rem;" class="sortable" data-column="PrevMonthReporting" tabindex="0" role="button" aria-label="Sort by Previous Month Reporting">@ViewBag.PreviousMonthName</th>
+                                    <th style="width: 100px; text-align: center; border-right: 2px solid #dee2e6; font-size: 1rem;" class="sortable" data-column="CurrentMonthReporting" tabindex="0" role="button" aria-label="Sort by Current Month Reporting">@ViewBag.CurrentMonthName</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (businessAreaSummary != null && businessAreaSummary.Any())
+                                {
+                                    @foreach (var item in businessAreaSummary)
+                                    {
+                                        <tr>
+                                            <td style="border-right: 2px solid #dee2e6; font-size: 1rem;">
+                                                <a asp-controller="CentralOps" asp-action="BusinessAreaDetails" asp-route-businessArea="@item.BusinessArea" style="font-weight: bold; color: #005ea5; text-decoration: none; font-size: 1rem;">
+                                                    @item.BusinessArea
+                                                </a>
+                                            </td>
+                                            <td style="text-align: center; border-right: 2px solid #dee2e6; font-size: 1rem;">@item.Count</td>
+                                            <td style="text-align: center; border-right: 1px solid #dee2e6; font-size: 1rem;">
+                                                @if (item.RedCount > 0)
+                                                {
+                                                    <span class="badge badge-red" style="font-size: 1rem;">@item.RedCount</span>
+                                                }
+                                                else
+                                                {
+                                                    <span style="font-size: 1rem;">0</span>
+                                                }
+                                            </td>
+                                            <td style="text-align: center; border-right: 1px solid #dee2e6; font-size: 1rem;">
+                                                @if (item.AmberRedCount > 0)
+                                                {
+                                                    <span class="badge badge-amber-red" style="font-size: 1rem;">@item.AmberRedCount</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted" style="font-size: 1rem;">0</span>
+                                                }
+                                            </td>
+                                            <td style="text-align: center; border-right: 1px solid #dee2e6; font-size: 1rem;">
+                                                @if (item.AmberCount > 0)
+                                                {
+                                                    <span class="badge badge-amber" style="font-size: 1rem;">@item.AmberCount</span>
+                                                }
+                                                else
+                                                {
+                                                    <span style="font-size: 1rem;">0</span>
+                                                }
+                                            </td>
+                                            <td style="text-align: center; border-right: 1px solid #dee2e6; font-size: 1rem;">
+                                                @if (item.AmberGreenCount > 0)
+                                                {
+                                                    <span class="badge badge-amber-green" style="font-size: 1rem;">@item.AmberGreenCount</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted" style="font-size: 1rem;">0</span>
+                                                }
+                                            </td>
+                                            <td style="text-align: center; border-right: 1px solid #dee2e6; font-size: 1rem;">
+                                                @if (item.GreenCount > 0)
+                                                {
+                                                    <span class="badge badge-green" style="font-size: 1rem;">@item.GreenCount</span>
+                                                }
+                                                else
+                                                {
+                                                    <span style="font-size: 1rem;">0</span>
+                                                }
+                                            </td>
+                                            <td style="text-align: center; border-right: 2px solid #dee2e6; font-size: 1rem;">
+                                                @if (item.RagNotSetCount > 0)
+                                                {
+                                                    <span class="badge badge-secondary" style="font-size: 1rem;">@item.RagNotSetCount</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted" style="font-size: 1rem;">0</span>
+                                                }
+                                            </td>
+                                            <td style="text-align: center; border-right: 1px solid #dee2e6; font-size: 1rem;">
+                                                @if (item.CriticalPriorityCount > 0)
+                                                {
+                                                    <span class="badge badge-danger" style="font-size: 1rem;">@item.CriticalPriorityCount</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted" style="font-size: 1rem;">0</span>
+                                                }
+                                            </td>
+                                            <td style="text-align: center; border-right: 1px solid #dee2e6; font-size: 1rem;">
+                                                @if (item.HighPriorityCount > 0)
+                                                {
+                                                    <span class="badge badge-danger" style="font-size: 1rem;">@item.HighPriorityCount</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted" style="font-size: 1rem;">0</span>
+                                                }
+                                            </td>
+                                            <td style="text-align: center; border-right: 1px solid #dee2e6; font-size: 1rem;">
+                                                @if (item.MediumPriorityCount > 0)
+                                                {
+                                                    <span class="badge badge-warning" style="font-size: 1rem;">@item.MediumPriorityCount</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted" style="font-size: 1rem;">0</span>
+                                                }
+                                            </td>
+                                            <td style="text-align: center; border-right: 1px solid #dee2e6; font-size: 1rem;">
+                                                @if (item.LowPriorityCount > 0)
+                                                {
+                                                    <span class="badge badge-secondary" style="font-size: 1rem;">@item.LowPriorityCount</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted" style="font-size: 1rem;">0</span>
+                                                }
+                                            </td>
+                                            <td style="text-align: center; border-right: 2px solid #dee2e6; font-size: 1rem;">
+                                                @if (item.PriorityNotSetCount > 0)
+                                                {
+                                                    <span class="badge badge-secondary" style="font-size: 1rem;">@item.PriorityNotSetCount</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted" style="font-size: 1rem;">0</span>
+                                                }
+                                            </td>
+                                            <td style="text-align: center; border-right: 1px solid #dee2e6; font-size: 1rem;">
+                                                @if (previousMonthStats != null)
+                                                {
+                                                    <a asp-controller="CentralOps" asp-action="MonthlyUpdateStatus" asp-route-year="@previousMonthStats.Year" asp-route-month="@previousMonthStats.Month" asp-route-status="Submitted" style="text-decoration: none; color: inherit; font-size: 1rem;">
+                                                        <span class="badge @(item.PreviousMonthSubmittedPercent >= 100 ? "badge-success" : item.PreviousMonthSubmittedPercent >= 80 ? "badge-warning" : "badge-danger")" style="font-size: 1rem;">
+                                                            @item.PreviousMonthSubmitted / @item.Count
+                                                            <i class="fas fa-external-link-alt ml-1" style="font-size: 0.75em;"></i>
+                                                        </span>
+                                                    </a>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge @(item.PreviousMonthSubmittedPercent >= 100 ? "badge-success" : item.PreviousMonthSubmittedPercent >= 80 ? "badge-warning" : "badge-danger")" style="font-size: 1rem;">
+                                                        @item.PreviousMonthSubmitted / @item.Count
+                                                    </span>
+                                                }
+                                            </td>
+                                            <td style="text-align: center; border-right: 2px solid #dee2e6; font-size: 1rem;">
+                                                @if (currentMonthStats != null)
+                                                {
+                                                    <a asp-controller="CentralOps" asp-action="MonthlyUpdateStatus" asp-route-year="@currentMonthStats.Year" asp-route-month="@currentMonthStats.Month" asp-route-status="Submitted" style="text-decoration: none; color: inherit; font-size: 1rem;">
+                                                        <span class="badge @(item.CurrentMonthSubmittedPercent >= 100 ? "badge-success" : item.CurrentMonthSubmittedPercent >= 80 ? "badge-warning" : "badge-danger")" style="font-size: 1rem;">
+                                                            @item.CurrentMonthSubmitted / @item.Count
+                                                            <i class="fas fa-external-link-alt ml-1" style="font-size: 0.75em;"></i>
+                                                        </span>
+                                                    </a>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge @(item.CurrentMonthSubmittedPercent >= 100 ? "badge-success" : item.CurrentMonthSubmittedPercent >= 80 ? "badge-warning" : "badge-danger")" style="font-size: 1rem;">
+                                                        @item.CurrentMonthSubmitted / @item.Count
+                                                    </span>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                                else
+                                {
+                                    <tr>
+                                        <td colspan="15" class="text-center text-muted py-3">No business area data available</td>
+                                    </tr>
+                                }
+                            </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- All Work Items -->
+        <div class="dashboard-section">
+            <div class="dashboard-section-header">
+                <h2><i class="fas fa-tasks"></i> All Work Items</h2>
+            </div>
+            <div class="card">
+                <div class="card-body table-responsive p-0">
+                    <table class="table table-hover text-nowrap sortable-table mb-0">
+                            <thead>
+                                <tr>
+                                    <th style="width: 250px;" class="sortable" data-column="Title" tabindex="0" role="button" aria-label="Sort by Title">Title</th>
+                                    <th style="width: 100px;" class="sortable" data-column="Priority" tabindex="0" role="button" aria-label="Sort by Priority">Priority</th>
+                                    <th style="width: 120px;" class="sortable" data-column="Rag" tabindex="0" role="button" aria-label="Sort by RAG">RAG</th>
+                                    <th style="width: 150px;" class="sortable" data-column="BusinessArea" tabindex="0" role="button" aria-label="Sort by Business Area">Business Area</th>
+                                    <th style="width: 150px;" class="sortable" data-column="PrimaryContact" tabindex="0" role="button" aria-label="Sort by Primary Contact">Primary Contact</th>
+                                    <th style="width: 200px;" class="sortable" data-column="ServiceOwner" tabindex="0" role="button" aria-label="Sort by Service Owner">Service Owner</th>
+                                    <th style="width: 100px;" class="sortable" data-column="Flagship" tabindex="0" role="button" aria-label="Sort by Flagship">Flagship</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (allProjects != null && allProjects.Any())
+                                {
+                                    @foreach (var item in allProjects)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <a asp-controller="Project" asp-action="Details" asp-route-id="@item.Id" style="font-weight: bold; color: #005ea5; text-decoration: none;">@item.Title</a>
+                                                <br />
+                                                <small class="text-muted">DFE-DDT-@item.Id</small>
+                                            </td>
+                                            <td>
+                                                @if (item.DeliveryPriority != null && !string.IsNullOrEmpty(item.DeliveryPriority.Name))
+                                                {
+                                                    var priorityClass = item.DeliveryPriority.Name.ToLower() switch {
+                                                        var p when p.Contains("critical") => "badge-danger",
+                                                        var p when p.Contains("high") => "badge-danger",
+                                                        var p when p.Contains("medium") => "badge-warning",
+                                                        var p when p.Contains("low") => "badge-secondary",
+                                                        _ => "badge-secondary"
+                                                    };
+                                                    <span class="badge @priorityClass">@item.DeliveryPriority.Name</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (!string.IsNullOrEmpty(item.RagStatus))
+                                                {
+                                                    var normalized = item.RagStatus.Trim()
+                                                        .Replace(" / ", "-")
+                                                        .Replace("/", "-")
+                                                        .Replace(" /", "-")
+                                                        .Replace("/ ", "-");
+                                                    
+                                                    var ragClass = normalized switch {
+                                                        "Red" => "badge badge-red",
+                                                        "Amber-Red" => "badge badge-amber-red",
+                                                        "Amber" => "badge badge-amber",
+                                                        "Amber-Green" => "badge badge-amber-green",
+                                                        "Green" => "badge badge-green",
+                                                        _ => "badge badge-secondary"
+                                                    };
+                                                    <span class="@ragClass">@item.RagStatus</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                            <td>@(item.BusinessAreaLookup?.Name ?? "-")</td>
+                                            <td>
+                                                @if (item.PrimaryContactUser != null)
+                                                {
+                                                    @item.PrimaryContactUser.Name
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (item.ServiceOwners != null && item.ServiceOwners.Any())
+                                                {
+                                                    var serviceOwners = item.ServiceOwners.Where(so => so.User != null).Take(2).ToList();
+                                                    @foreach (var so in serviceOwners)
+                                                    {
+                                                        <div>@so.User.Name</div>
+                                                    }
+                                                    @if (item.ServiceOwners.Count > 2)
+                                                    {
+                                                        <small class="text-muted">+ @(item.ServiceOwners.Count - 2) more</small>
+                                                    }
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (item.IsFlagship)
+                                                {
+                                                    <span class="badge badge-info">Yes</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">No</span>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                                else
+                                {
+                                    <tr>
+                                        <td colspan="7" class="text-center text-muted py-3">No work items found</td>
+                                    </tr>
+                                }
+                            </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+@section Scripts {
+    <script nonce="@Context.Items["Nonce"]">
+        $(document).ready(function() {
+            // Initialize sortable tables
+            $('.sortable-table').each(function() {
+                initializeSortableTable($(this));
+            });
+        });
+
+        function initializeSortableTable(table) {
+            var currentSort = { column: null, direction: 'asc' };
+
+            table.find('.sortable').on('click keypress', function(e) {
+                if (e.type === 'keypress' && e.which !== 13 && e.which !== 32) {
+                    return;
+                }
+                
+                var column = $(this).data('column');
+                var direction = 'asc';
+                
+                if (currentSort.column === column && currentSort.direction === 'asc') {
+                    direction = 'desc';
+                }
+                
+                sortTable(table, column, direction);
+                currentSort = { column: column, direction: direction };
+            });
+
+            function sortTable(table, column, direction) {
+                var tbody = table.find('tbody');
+                var rows = tbody.find('tr').toArray();
+                
+                rows.sort(function(a, b) {
+                    var aVal, bVal;
+                    var colIndex = table.find('thead th[data-column="' + column + '"]').index();
+                    
+                    if (column === 'DueDate') {
+                        var aDate = $(a).find('td').eq(colIndex).text().trim();
+                        var bDate = $(b).find('td').eq(colIndex).text().trim();
+                        aVal = aDate === '-' ? new Date(9999, 11, 31) : new Date(aDate);
+                        bVal = bDate === '-' ? new Date(9999, 11, 31) : new Date(bDate);
+                    } else if (['PrevMonthReporting', 'CurrentMonthReporting'].includes(column)) {
+                        // Percentage sorting for reporting columns
+                        var aText = $(a).find('td').eq(colIndex).find('.badge').text().trim();
+                        var bText = $(b).find('td').eq(colIndex).find('.badge').text().trim();
+                        aVal = parseFloat(aText.replace('%', '')) || 0;
+                        bVal = parseFloat(bText.replace('%', '')) || 0;
+                    } else if (['Total', 'Red', 'AmberRed', 'Amber', 'AmberGreen', 'Green', 'RagNotSet', 'CriticalPriority', 'HighPriority', 'MediumPriority', 'LowPriority', 'PriorityNotSet'].includes(column)) {
+                        // Numeric sorting for summary columns
+                        aVal = parseInt($(a).find('td').eq(colIndex).text().trim()) || 0;
+                        bVal = parseInt($(b).find('td').eq(colIndex).text().trim()) || 0;
+                    } else if (column === 'Flagship') {
+                        // Sort by Yes/No for Flagship
+                        var aText = $(a).find('td').eq(colIndex).text().trim().toLowerCase();
+                        var bText = $(b).find('td').eq(colIndex).text().trim().toLowerCase();
+                        aVal = aText === 'yes' ? 1 : 0;
+                        bVal = bText === 'yes' ? 1 : 0;
+                    } else {
+                        aVal = $(a).find('td').eq(colIndex).text().trim().toLowerCase();
+                        bVal = $(b).find('td').eq(colIndex).text().trim().toLowerCase();
+                    }
+                    
+                    if (direction === 'asc') {
+                        return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+                    } else {
+                        return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
+                    }
+                });
+                
+                tbody.empty();
+                rows.forEach(function(row) {
+                    tbody.append(row);
+                });
+                
+                updateSortIcons(table, column, direction);
+            }
+
+            function updateSortIcons(table, column, direction) {
+                table.find('.sortable i').remove();
+                var header = table.find('.sortable[data-column="' + column + '"]');
+                var iconClass = direction === 'asc' ? 'fa-sort-up' : 'fa-sort-down';
+                header.append(' <i class="fas ' + iconClass + '"></i>');
+            }
+        }
+    </script>
+}
+

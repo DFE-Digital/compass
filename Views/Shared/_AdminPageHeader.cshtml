@@ -1,0 +1,194 @@
+@*
+ * Reusable page header partial for admin pages
+ * Usage:
+ * @await Html.PartialAsync("_AdminPageHeader", new { 
+ *     Title = "Risk Types",
+ *     Description = "Manage risk type configurations",
+ *     Actions = new[] {
+ *         new { Text = "Create", Action = "CreateRiskType", Controller = "Admin", Class = "btn-primary" }
+ *     }
+ * })
+ * Or with modal trigger:
+ * @await Html.PartialAsync("_AdminPageHeader", new { 
+ *     Title = "Risk Types",
+ *     Actions = new[] {
+ *         new { Text = "Create", ModalTarget = "#riskTypeModal", Class = "btn-primary" }
+ *     }
+ * })
+ *@
+
+@model dynamic
+
+@functions {
+    private object? GetPropertyValue(dynamic obj, string propertyName)
+    {
+        try
+        {
+            var property = ((object)obj).GetType().GetProperty(propertyName);
+            return property?.GetValue(obj);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+}
+
+@{
+    var title = Model?.Title as string ?? ViewData["Title"]?.ToString() ?? "Page";
+    var description = Model?.Description as string;
+    IEnumerable<dynamic> actions = new List<dynamic>();
+    try
+    {
+        actions = Model?.Actions as IEnumerable<dynamic> ?? new List<dynamic>();
+    }
+    catch
+    {
+        // Actions property doesn't exist on the model, use empty list
+        actions = new List<dynamic>();
+    }
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1 class="m-0">@title</h1>
+                @if (!string.IsNullOrEmpty(description))
+                {
+                    <p class="text-muted mb-0">@description</p>
+                }
+            </div>
+            @if (actions.Any())
+            {
+                <div class="col-sm-6">
+                    <div class="float-right">
+                        @if (actions.Count() == 1)
+                        {
+                            var action = actions.First();
+                            var modalTarget = GetPropertyValue(action, "ModalTarget") as string;
+                            var actionValue = GetPropertyValue(action, "Action") as string;
+                            var controllerValue = GetPropertyValue(action, "Controller") as string;
+                            var urlValue = GetPropertyValue(action, "Url") as string;
+                            var onClickValue = GetPropertyValue(action, "OnClick") as string;
+                            var classValue = GetPropertyValue(action, "Class") as string;
+                            var iconValue = GetPropertyValue(action, "Icon") as string;
+                            var textValue = GetPropertyValue(action, "Text") as string;
+                            
+                            if (!string.IsNullOrEmpty(modalTarget))
+                            {
+                                <button type="button" class="btn @(classValue ?? "btn-primary")" data-toggle="modal" data-target="@modalTarget" onclick="@(onClickValue ?? "")">
+                                    @if (!string.IsNullOrEmpty(iconValue))
+                                    {
+                                        <i class="@iconValue" aria-hidden="true"></i>
+                                    }
+                                    @textValue
+                                </button>
+                            }
+                            else if (!string.IsNullOrEmpty(actionValue))
+                            {
+                                string actionName = actionValue;
+                                string controllerName = controllerValue ?? "Admin";
+                                string url;
+                                var routeValues = GetPropertyValue(action, "RouteValues");
+                                if (routeValues != null)
+                                {
+                                    url = Url.Action(actionName, controllerName, (object)routeValues);
+                                }
+                                else
+                                {
+                                    url = Url.Action(actionName, controllerName);
+                                }
+                                <a href="@url" class="btn @(classValue ?? "btn-primary")">
+                                    @if (!string.IsNullOrEmpty(iconValue))
+                                    {
+                                        <i class="@iconValue" aria-hidden="true"></i>
+                                    }
+                                    @textValue
+                                </a>
+                            }
+                            else if (!string.IsNullOrEmpty(urlValue))
+                            {
+                                <a href="@urlValue" class="btn @(classValue ?? "btn-primary")">
+                                    @if (!string.IsNullOrEmpty(iconValue))
+                                    {
+                                        <i class="@iconValue" aria-hidden="true"></i>
+                                    }
+                                    @textValue
+                                </a>
+                            }
+                        }
+                        else
+                        {
+                            <div class="btn-group">
+                                <button type="button" class="btn btn-primary dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                                    Actions
+                                </button>
+                                <div class="dropdown-menu dropdown-menu-right">
+                                    @foreach (var actionItem in actions)
+                                    {
+                                        var itemModalTarget = GetPropertyValue(actionItem, "ModalTarget") as string;
+                                        var itemAction = GetPropertyValue(actionItem, "Action") as string;
+                                        var itemController = GetPropertyValue(actionItem, "Controller") as string;
+                                        var itemUrl = GetPropertyValue(actionItem, "Url") as string;
+                                        var itemOnClick = GetPropertyValue(actionItem, "OnClick") as string;
+                                        var itemIcon = GetPropertyValue(actionItem, "Icon") as string;
+                                        var itemText = GetPropertyValue(actionItem, "Text") as string;
+                                        
+                                        if (!string.IsNullOrEmpty(itemModalTarget))
+                                        {
+                                            <a class="dropdown-item" href="#" data-toggle="modal" data-target="@itemModalTarget" onclick="@(itemOnClick ?? "")">
+                                                @if (!string.IsNullOrEmpty(itemIcon))
+                                                {
+                                                    <i class="@itemIcon mr-2" aria-hidden="true"></i>
+                                                }
+                                                @itemText
+                                            </a>
+                                        }
+                                        else if (!string.IsNullOrEmpty(itemAction))
+                                        {
+                                            string actionName = itemAction;
+                                            string controllerName = itemController ?? "Admin";
+                                            string url;
+                                            var routeValues = GetPropertyValue(actionItem, "RouteValues");
+                                            if (routeValues != null)
+                                            {
+                                                url = Url.Action(actionName, controllerName, (object)routeValues);
+                                            }
+                                            else
+                                            {
+                                                url = Url.Action(actionName, controllerName);
+                                            }
+                                            <a class="dropdown-item" href="@url">
+                                                @if (!string.IsNullOrEmpty(itemIcon))
+                                                {
+                                                    <i class="@itemIcon mr-2" aria-hidden="true"></i>
+                                                }
+                                                @itemText
+                                            </a>
+                                        }
+                                        else if (!string.IsNullOrEmpty(itemUrl))
+                                        {
+                                            <a class="dropdown-item" href="@itemUrl">
+                                                @if (!string.IsNullOrEmpty(itemIcon))
+                                                {
+                                                    <i class="@itemIcon mr-2" aria-hidden="true"></i>
+                                                }
+                                                @itemText
+                                            </a>
+                                        }
+                                        @if (actionItem != actions.Last())
+                                        {
+                                            <div class="dropdown-divider"></div>
+                                        }
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+

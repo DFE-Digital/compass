@@ -8,6 +8,30 @@
         "Partially" => "badge-warning",
         _ => "badge-secondary"
     };
+    var returnUrl = Url.Action("Details", "Project", new { id = Model.ProjectId, tab = "outcomes" });
+}
+
+@section Breadcrumbs {
+    <style>
+        .breadcrumb a:hover {
+            color: #003078 !important;
+            text-decoration: underline !important;
+        }
+    </style>
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <li class="breadcrumb-item">
+                <a asp-controller="Home" asp-action="Index" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a asp-controller="Project" asp-action="Index" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Work reporting</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a href="@returnUrl" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">@Model.ProjectTitle</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page" style="color: #0b0c0c; font-weight: 600;">Need details</li>
+        </ol>
+    </nav>
 }
 
 <div class="content-header">
@@ -18,11 +42,11 @@
                    asp-route-id="@Model.ProjectId"
                    asp-route-tab="outcomes"
                    class="btn btn-link px-0 mb-2"
-                   aria-label="Back to project">
-                    <i class="fas fa-arrow-left mr-2" aria-hidden="true"></i>Back to project
+                   aria-label="Back to work item">
+                    <i class="fas fa-arrow-left mr-2" aria-hidden="true"></i>Back to work item
                 </a>
                 <h1 class="m-0">Need details</h1>
-                <p class="text-muted mb-0">Project: @Model.ProjectTitle</p>
+                <p class="text-muted mb-0">Work: @Model.ProjectTitle</p>
             </div>
         </div>
     </div>
@@ -31,10 +55,10 @@
 <section class="content">
     <div class="container-fluid">
         <div class="row">
-            <aside class="col-xxl-3 col-xl-2 col-lg-4 col-md-5 mb-4">
+            <aside class="col-xxl-2 col-xl-2 col-lg-3 col-md-4 col-sm-12 col-12 mb-4">
                 <partial name="_ProjectSummarySidebar" model="Model.ProjectSummary" />
             </aside>
-            <div class="col-xxl-9 col-xl-9 col-lg-8 col-md-7">
+            <div class="col-xxl-10 col-xl-10 col-lg-9 col-md-8 col-sm-12 col-12">
                 <div class="card project-summary-card mb-4" id="need-details">
                     <div class="card-header">
                         <h3 class="card-title mb-0">Need information</h3>
@@ -78,6 +102,11 @@
                                     <td class="summary-label"><strong>Validated</strong></td>
                                     <td class="summary-value">
                                         <span class="badge @ValidatedBadgeClass(Model.Validated)">@Model.Validated</span>
+                                        @if (Model.Validated == "Yes" && Model.ValidatedAt.HasValue)
+                                        {
+                                            <br />
+                                            <small class="text-muted">Validated on @Model.ValidatedAt.Value.ToString("dd MMM yyyy HH:mm") (UTC)</small>
+                                        }
                                     </td>
                                     <td class="text-right">
                                         <a class="small"
@@ -86,6 +115,19 @@
                                            asp-route-needId="@Model.NeedId">Change</a>
                                     </td>
                                 </tr>
+                                @if (Model.Validated == "Yes" && !string.IsNullOrWhiteSpace(Model.ValidationNotes))
+                                {
+                                    <tr>
+                                        <td class="summary-label"><strong>Validation notes</strong></td>
+                                        <td class="summary-value preserve-formatting">@Model.ValidationNotes</td>
+                                        <td class="text-right">
+                                            <a class="small"
+                                               asp-action="EditNeed"
+                                               asp-route-projectId="@Model.ProjectId"
+                                               asp-route-needId="@Model.NeedId">Change</a>
+                                        </td>
+                                    </tr>
+                                }
                                 <tr>
                                     <td class="summary-label"><strong>Display order</strong></td>
                                     <td class="summary-value">@Model.SortOrder</td>

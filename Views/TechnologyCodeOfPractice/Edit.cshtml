@@ -1,0 +1,150 @@
+@model Compass.Models.TechnologyCodeOfPractice
+
+@{
+    ViewData["Title"] = $"Edit Technology Code of Practice Point {Model.PointNumber}";
+}
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem;">
+            <li class="breadcrumb-item">
+                <a href="@Url.Action("Index", "Home")" style="color: #005ea5; text-decoration: none;">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a href="@Url.Action("Index", "TechnologyCodeOfPractice")" style="color: #005ea5; text-decoration: none;">Technology Code of Practice</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page">Edit Point @Model.PointNumber</li>
+        </ol>
+    </nav>
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1>Edit Technology Code of Practice Point @Model.PointNumber</h1>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Edit Point</h3>
+                    </div>
+                    <form asp-action="Edit" method="post">
+                        <div class="card-body">
+                            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+                            <input type="hidden" asp-for="Id" />
+                            <input type="hidden" asp-for="PointNumber" />
+
+                            <div class="form-group">
+                                <label asp-for="Title"></label>
+                                <input asp-for="Title" class="form-control" />
+                                <span asp-validation-for="Title" class="text-danger"></span>
+                            </div>
+
+                            <div class="form-group">
+                                <label asp-for="Slug"></label>
+                                <input asp-for="Slug" class="form-control" />
+                                <span asp-validation-for="Slug" class="text-danger"></span>
+                                <small class="form-text text-muted">URL-friendly identifier</small>
+                            </div>
+
+                            <div class="form-group">
+                                <label asp-for="Summary"></label>
+                                <textarea asp-for="Summary" class="form-control" rows="3"></textarea>
+                                <span asp-validation-for="Summary" class="text-danger"></span>
+                                <small class="form-text text-muted">Brief summary of the point</small>
+                            </div>
+
+                            <div class="form-group">
+                                <label asp-for="Description"></label>
+                                <textarea asp-for="Description" class="form-control" rows="10"></textarea>
+                                <span asp-validation-for="Description" class="text-danger"></span>
+                                <small class="form-text text-muted">Full description (markdown supported)</small>
+                            </div>
+
+                            <div class="form-group">
+                                <label asp-for="GuidanceUrl"></label>
+                                <input asp-for="GuidanceUrl" class="form-control" type="url" />
+                                <span asp-validation-for="GuidanceUrl" class="text-danger"></span>
+                                <small class="form-text text-muted">Link to external guidance (e.g., GOV.UK page)</small>
+                            </div>
+
+                            <div class="form-group">
+                                <div class="form-check">
+                                    <input asp-for="IsActive" class="form-check-input" />
+                                    <label asp-for="IsActive" class="form-check-label">Active</label>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label asp-for="DisplayOrder"></label>
+                                <input asp-for="DisplayOrder" class="form-control" type="number" />
+                                <span asp-validation-for="DisplayOrder" class="text-danger"></span>
+                            </div>
+
+                            <div class="form-group">
+                                <label>DDaT Professions</label>
+                                <small class="form-text text-muted d-block mb-2">Select which DDaT professions this point applies to</small>
+                                @{
+                                    var allProfessions = ViewBag.AllProfessions as List<Compass.Models.DdatProfession> ?? new List<Compass.Models.DdatProfession>();
+                                    var selectedIds = ViewBag.SelectedProfessionIds as List<int> ?? new List<int>();
+                                    var groupedProfessions = allProfessions
+                                        .GroupBy(p => p.RoleGroup ?? "Other")
+                                        .OrderBy(g => g.Key);
+                                }
+                                @foreach (var group in groupedProfessions)
+                                {
+                                    <div class="mb-3">
+                                        <h5 class="mb-2" style="font-weight: 600; color: #495057; border-bottom: 1px solid #dee2e6; padding-bottom: 0.5rem;">@group.Key</h5>
+                                        <div class="row">
+                                            @foreach (var profession in group.OrderBy(p => p.Name))
+                                            {
+                                                <div class="col-md-6 mb-2">
+                                                    <div class="form-check">
+                                                        <input type="checkbox" 
+                                                               class="form-check-input" 
+                                                               name="selectedProfessionIds" 
+                                                               value="@profession.Id" 
+                                                               id="profession_@profession.Id"
+                                                               @(selectedIds.Contains(profession.Id) ? "checked" : "") />
+                                                        <label class="form-check-label" for="profession_@profession.Id">
+                                                            @profession.Name
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                            }
+                                        </div>
+                                    </div>
+                                }
+                                @if (!allProfessions.Any())
+                                {
+                                    <div class="alert alert-info">
+                                        <i class="fas fa-info-circle"></i> No professions available. Please seed the DDaT professions first.
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                        <div class="card-footer">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save"></i> Save Changes
+                            </button>
+                            <a asp-action="Index" class="btn btn-secondary">Cancel</a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+}
+

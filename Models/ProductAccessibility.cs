@@ -6,8 +6,11 @@ namespace Compass.Models
     {
         public int Id { get; set; }
         
-        [Required]
-        public string FipsId { get; set; } = string.Empty; // Product FIPS ID
+        [MaxLength(100)]
+        public string? ProductDocumentId { get; set; } // Product DocumentID from CMS (primary identifier) - nullable initially, will be required after data migration
+        
+        [MaxLength(50)]
+        public string? FipsId { get; set; } // Product FIPS ID (legacy, kept for backwards compatibility)
         
         public string? ProductName { get; set; } // Cached from CMS API
         public string? ProductPhase { get; set; } // Cached from CMS API
@@ -45,6 +48,9 @@ namespace Compass.Models
         
         // Legacy ID from old accessibility service
         public int? LegacyId { get; set; } // Legacy product ID from old accessibility issues and statement service
+        
+        // Navigation properties
+        public ICollection<StatementVerificationRequest> VerificationRequests { get; set; } = new List<StatementVerificationRequest>();
         
         // Navigation properties
         public ICollection<ContactMethod> ContactMethods { get; set; } = new List<ContactMethod>();

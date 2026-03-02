@@ -1,0 +1,278 @@
+@model Compass.Models.BusinessAreasViewModel
+@{
+    ViewData["Title"] = "Business areas - Performance reporting";
+    var selectedCommission = Model.Commission;
+    var activeCommissions = ViewBag.ActiveCommissions as List<Compass.Models.Commission> ?? new List<Compass.Models.Commission>();
+}
+
+@await Html.PartialAsync("_DashboardStyles")
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <li class="breadcrumb-item">
+                <a href="/" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a asp-controller="ProductReporting" asp-action="Commission" asp-route-commissionId="@selectedCommission.Id" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Performance reporting</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page" style="color: #0b0c0c; font-weight: 600;">Business areas</li>
+        </ol>
+    </nav>
+}
+
+@{
+    ViewBag.BrandText = "Performance reporting";
+    var currentAction = ViewContext.RouteData.Values["Action"]?.ToString() ?? "";
+    var isBusinessAreasView = currentAction == "BusinessAreasIndex" || currentAction == "BusinessAreasDetails";
+    ViewBag.NavLinks = new[]
+    {
+        new { Text = "My services", Action = "Commission", Controller = "ProductReporting", Url = Url.Action("Commission", "ProductReporting", new { view = "mine", commissionId = selectedCommission.Id }), IsButton = false, IsActive = currentAction == "Commission" && (ViewContext.RouteData.Values["view"]?.ToString() == "mine") },
+        new { Text = "All services", Action = "Commission", Controller = "ProductReporting", Url = Url.Action("Commission", "ProductReporting", new { view = "all", commissionId = selectedCommission.Id }), IsButton = false, IsActive = currentAction == "Commission" && (ViewContext.RouteData.Values["view"]?.ToString() == "all" || string.IsNullOrEmpty(ViewContext.RouteData.Values["view"]?.ToString())) },
+        new { Text = "Business areas", Action = "BusinessAreasIndex", Controller = "ProductReporting", Url = Url.Action("BusinessAreasIndex", "ProductReporting", new { commissionId = selectedCommission.Id }), IsButton = false, IsActive = currentAction == "BusinessAreasIndex" || currentAction == "BusinessAreasDetails" },
+        new { Text = "Guidance on reporting", Action = "GuidanceOnReporting", Controller = "ProductReporting", Url = Url.Action("GuidanceOnReporting", "ProductReporting", new { commissionId = selectedCommission.Id }), IsButton = false, IsActive = currentAction == "GuidanceOnReporting" }
+    };
+}
+
+<section class="content">
+    <div class="container-fluid">
+        @await Html.PartialAsync("_ModuleNavbar")
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["SuccessMessage"]
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        @if (selectedCommission != null)
+        {
+            var now = DateTime.UtcNow;
+            var isPastDue = now > selectedCommission.DueDate;
+            var dueDateBorderClass = isPastDue ? "border-left-danger" : "border-left-warning";
+            var dueDateTextClass = isPastDue ? "text-danger" : "text-warning";
+            <div class="row mb-4">
+                <div class="col-md-12">
+                    <div class="card mb-3">
+                        <div class="card-header bg-light">
+                            <div class="row align-items-center">
+                                <div class="col-md-12">
+                                    <h3 class="card-title mb-0">@selectedCommission.Name</h3>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            @if (!string.IsNullOrEmpty(selectedCommission.Description))
+                            {
+                                <p class="text-muted mb-3">@selectedCommission.Description</p>
+                            }
+                            <div class="row">
+                                <!-- Commission Period Card -->
+                                <div class="col-md-6 mb-3 mb-md-0">
+                                    <div class="card border-left-info shadow h-100">
+                                        <div class="card-body">
+                                            <div class="row no-gutters align-items-center">
+                                                <div class="col mr-2">
+                                                    <div class="text-xs font-weight-bold text-info text-uppercase mb-1">Data required for period</div>
+                                                    <div class="h6 mb-0 font-weight-bold text-gray-800">
+                                                        @selectedCommission.StartDate.ToString("d MMMM yyyy")<br />
+                                                        <small class="text-muted">to</small><br />
+                                                        @selectedCommission.EndDate.ToString("d MMMM yyyy")
+                                                        @if (!string.IsNullOrEmpty(selectedCommission.Quarter))
+                                                        {
+                                                            <span class="badge badge-info ml-2">@selectedCommission.Quarter</span>
+                                                        }
+                                                    </div>
+                                                </div>
+                                                <div class="col-auto">
+                                                    <i class="fas fa-calendar-alt fa-2x text-gray-300"></i>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Due Date Card -->
+                                <div class="col-md-6">
+                                    <div class="card @dueDateBorderClass shadow h-100">
+                                        <div class="card-body">
+                                            <div class="row no-gutters align-items-center">
+                                                <div class="col mr-2">
+                                                    <div class="text-xs font-weight-bold @dueDateTextClass text-uppercase mb-1">Due date</div>
+                                                    <div class="h6 mb-0 font-weight-bold text-gray-800">@selectedCommission.DueDate.ToString("d MMMM yyyy")</div>
+                                                    @if (isPastDue)
+                                                    {
+                                                        <small class="text-danger">Past due</small>
+                                                    }
+                                                </div>
+                                                <div class="col-auto">
+                                                    <i class="fas fa-clock fa-2x text-gray-300"></i>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <!-- Overall Completion Statistics -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card border-left-primary shadow h-100">
+                    <div class="card-body">
+                        <div class="row no-gutters align-items-center">
+                            <div class="col mr-2">
+                                <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">Total products</div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800">@Model.TotalProducts</div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="fas fa-box fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-left-success shadow h-100">
+                    <div class="card-body">
+                        <div class="row no-gutters align-items-center">
+                            <div class="col mr-2">
+                                <div class="text-xs font-weight-bold text-success text-uppercase mb-1">Completed</div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800">@Model.CompletedProducts</div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="fas fa-check-circle fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-left-warning shadow h-100">
+                    <div class="card-body">
+                        <div class="row no-gutters align-items-center">
+                            <div class="col mr-2">
+                                <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">In progress</div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800">@Model.InProgressProducts</div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="fas fa-spinner fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-left-info shadow h-100">
+                    <div class="card-body">
+                        <div class="row no-gutters align-items-center">
+                            <div class="col mr-2">
+                                <div class="text-xs font-weight-bold text-info text-uppercase mb-1">Completion</div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800">@Model.CompletionPercentage%</div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="fas fa-percentage fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Business Area Completion Table -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Business area completion</h3>
+            </div>
+            <div class="card-body table-responsive p-0">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Business area</th>
+                            <th>Total products</th>
+                            <th>Completed</th>
+                            <th>In progress</th>
+                            <th>Not started</th>
+                            <th>Completion %</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @{
+                            var sortedBusinessAreas = Model.BusinessAreaCompletions
+                                .OrderByDescending(ba => ba.CompletionPercentage)
+                                .ThenByDescending(ba => ba.CompletedProducts)
+                                .ToList();
+                        }
+                        @foreach (var ba in sortedBusinessAreas)
+                        {
+                            var completionPercentage = (double)ba.CompletionPercentage;
+                            var progressBarClass = completionPercentage >= 80 ? "bg-success" 
+                                : completionPercentage >= 50 ? "bg-warning" 
+                                : "bg-danger";
+                            <tr>
+                                <td>
+                                    <a href="@Url.Action("BusinessAreasDetails", "ProductReporting", new { businessAreaName = ba.BusinessAreaName, commissionId = selectedCommission?.Id })" style="color: #005ea5; text-decoration: underline; font-weight: 600;">
+                                        @ba.BusinessAreaName
+                                    </a>
+                                </td>
+                                <td>@ba.TotalProducts</td>
+                                <td>
+                                    <span class="badge badge-success">@ba.CompletedProducts</span>
+                                </td>
+                                <td>
+                                    <span class="badge badge-warning">@ba.InProgressProducts</span>
+                                </td>
+                                <td>
+                                    <span class="badge badge-secondary">@ba.NotStartedProducts</span>
+                                </td>
+                                <td style="min-width: 150px;">
+                                    <div class="progress" style="height: 20px;">
+                                        <div class="progress-bar @progressBarClass" role="progressbar" 
+                                             style="width: @completionPercentage%;" 
+                                             aria-valuenow="@completionPercentage" 
+                                             aria-valuemin="0" 
+                                             aria-valuemax="100">
+                                            <span style="font-size: 0.75rem; font-weight: 500;">@ba.CompletionPercentage%</span>
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</section>
+
+<style nonce="@Context.Items["Nonce"]">
+    .border-left-primary {
+        border-left: 0.25rem solid #4e73df !important;
+    }
+    .border-left-success {
+        border-left: 0.25rem solid #1cc88a !important;
+    }
+    .border-left-warning {
+        border-left: 0.25rem solid #f6c23e !important;
+    }
+    .border-left-info {
+        border-left: 0.25rem solid #36b9cc !important;
+    }
+    .text-gray-800 {
+        color: #5a5c69 !important;
+    }
+    .text-gray-300 {
+        color: #dddfeb !important;
+    }
+</style>

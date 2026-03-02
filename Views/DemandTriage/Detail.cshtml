@@ -1,0 +1,702 @@
+@model Compass.ViewModels.DemandTriage.DemandTriageDetailViewModel
+@using Compass.Models.DemandTriage
+@using Compass.Services.DemandTriage
+@using System.Globalization
+
+@{
+    ViewData["Title"] = $"{Model.Request.RequestReference} — Demand triage";
+    var r = Model.Request;
+    var uk = CultureInfo.GetCultureInfo("en-GB");
+
+    string Fmt(DateTime? d)   => d.HasValue ? d.Value.ToString("dd MMM yyyy", uk) : "—";
+    string FmtDt(DateTime? d) => d.HasValue ? d.Value.ToString("dd MMM yyyy HH:mm", uk) : "—";
+    string FmtBool(bool? b)   => b.HasValue ? (b.Value ? "Yes" : "No") : "—";
+    string Val(string? s)     => string.IsNullOrWhiteSpace(s) ? "—" : s;
+
+    // Stage tracker definition
+    var trackerStages = new[]
+    {
+        (Key: "draft",    Label: "Draft",           Icon: "fa-pencil-alt"),
+        (Key: "submit",   Label: "Submitted",        Icon: "fa-paper-plane"),
+        (Key: "review",   Label: "Exploratory review", Icon: "fa-search"),
+        (Key: "scoring",  Label: "Scoring",          Icon: "fa-star-half-alt"),
+        (Key: "triage",   Label: "Triage",           Icon: "fa-gavel"),
+        (Key: "outcome",  Label: "Outcome",          Icon: "fa-check-double"),
+    };
+
+    // Map status to active stage index (0-based)
+    int activeStage = r.Status switch
+    {
+        DemandTriageStatus.Draft                       => 0,
+        DemandTriageStatus.ReturnedForClarification    => 0,
+        DemandTriageStatus.Submitted                   => 1,
+        DemandTriageStatus.ExploratoryReviewInProgress => 2,
+        DemandTriageStatus.ExploratoryReviewComplete   => 2,
+        DemandTriageStatus.ScoringInProgress           => 3,
+        DemandTriageStatus.ScoredFinalised             => 3,
+        DemandTriageStatus.TriagePending               => 4,
+        DemandTriageStatus.Triaged                     => 5,
+        DemandTriageStatus.Closed                      => 5,
+        _                                              => 0
+    };
+
+    string StatusBadge(string status) => status switch
+    {
+        DemandTriageStatus.Draft                       => "dt-badge dt-badge-draft",
+        DemandTriageStatus.Submitted                   => "dt-badge dt-badge-submitted",
+        DemandTriageStatus.ExploratoryReviewInProgress => "dt-badge dt-badge-review",
+        DemandTriageStatus.ExploratoryReviewComplete   => "dt-badge dt-badge-review",
+        DemandTriageStatus.ScoringInProgress           => "dt-badge dt-badge-scoring",
+        DemandTriageStatus.ScoredFinalised             => "dt-badge dt-badge-scoring",
+        DemandTriageStatus.TriagePending               => "dt-badge dt-badge-triage",
+        DemandTriageStatus.Triaged                     => "dt-badge dt-badge-triaged",
+        DemandTriageStatus.Closed                      => "dt-badge dt-badge-closed",
+        DemandTriageStatus.ReturnedForClarification    => "dt-badge dt-badge-returned",
+        _                                              => "dt-badge dt-badge-draft"
+    };
+}
+
+@await Html.PartialAsync("_DemandTriageStyles")
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb" class="govuk-breadcrumbs">
+        <ol class="govuk-breadcrumbs__list">
+            <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="/">Home</a></li>
+            <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" asp-action="Index" asp-controller="DemandTriage">Demand triage</a></li>
+            <li class="govuk-breadcrumbs__list-item" aria-current="page">@r.RequestReference</li>
+        </ol>
+    </nav>
+}
+
+<!-- ── Detail header ─────────────────────────────────────────────────────── -->
+<div class="dt-detail-header">
+    <div class="d-flex align-items-start justify-content-between flex-wrap gap-2">
+        <div>
+            <div class="dt-breadcrumb" style="margin-bottom:0.4rem;">
+                <a href="@Url.Action("Index","DemandTriage")" style="color:rgba(255,255,255,0.7);">Demand triage</a>
+                <span>/</span> @r.RequestReference
+            </div>
+            <h2>@(r.RequestName ?? r.ProposedRequestTitle ?? r.RequestReference)</h2>
+            <div class="d-flex align-items-center gap-2 flex-wrap mt-1">
+                <span class="dt-ref" style="font-family:monospace;font-size:0.82rem;opacity:0.7;">@r.RequestReference</span>
+                <span class="@StatusBadge(r.Status)">@DemandTriageStatus.DisplayName(r.Status)</span>
+                @if (!string.IsNullOrWhiteSpace(r.DepartmentGroup))
+                {
+                    <span style="font-size:0.8rem;opacity:0.75;"><i class="fas fa-building mr-1" aria-hidden="true"></i>@r.DepartmentGroup</span>
+                }
+            </div>
+        </div>
+        @if (Model.CanEdit)
+        {
+            <a asp-action="Edit" asp-controller="DemandTriage" asp-route-id="@r.Id"
+               class="btn btn-outline-light btn-sm mt-1">
+                <i class="fas fa-edit mr-1" aria-hidden="true"></i> Edit request
+            </a>
+        }
+    </div>
+</div>
+
+<!-- ── Stage tracker ─────────────────────────────────────────────────────── -->
+<div class="dt-stage-tracker" role="list" aria-label="Triage stages">
+    @for (int i = 0; i < trackerStages.Length; i++)
+    {
+        var stage = trackerStages[i];
+        bool isDone   = i < activeStage;
+        bool isActive = i == activeStage;
+        <div class="dt-tracker-step" role="listitem">
+            <div class="dt-tracker-step-inner">
+                <div class="dt-tracker-dot @(isDone ? "dt-tracker-dot--done" : isActive ? "dt-tracker-dot--active" : "")">
+                    @if (isDone)
+                    {
+                        <i class="fas fa-check" aria-hidden="true"></i>
+                    }
+                    else
+                    {
+                        <i class="fas @stage.Icon" aria-hidden="true"></i>
+                    }
+                </div>
+                <span class="dt-tracker-label @(isDone ? "dt-tracker-label--done" : isActive ? "dt-tracker-label--active" : "")">
+                    @stage.Label
+                </span>
+            </div>
+            @if (i < trackerStages.Length - 1)
+            {
+                <div class="dt-tracker-connector @(isDone ? "dt-tracker-connector--done" : "")"></div>
+            }
+        </div>
+    }
+</div>
+
+<!-- ── Main content ──────────────────────────────────────────────────────── -->
+<section class="content">
+    <div class="container-fluid">
+
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="dt-notice dt-notice--success mb-3">
+                <i class="fas fa-check-circle"></i>
+                <span>@TempData["SuccessMessage"]</span>
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="dt-notice dt-notice--danger mb-3">
+                <i class="fas fa-exclamation-circle"></i>
+                <span>@TempData["ErrorMessage"]</span>
+            </div>
+        }
+        @if (TempData["ErrorMessages"] != null)
+        {
+            var msgs = TempData["ErrorMessages"]!.ToString()!.Split('|');
+            <div class="dt-notice dt-notice--danger mb-3">
+                <i class="fas fa-exclamation-circle"></i>
+                <div>
+                    <strong>Please fix the following:</strong>
+                    <ul class="mb-0 mt-1">@foreach (var m in msgs){<li>@m</li>}</ul>
+                </div>
+            </div>
+        }
+
+        @if (r.Status == DemandTriageStatus.ReturnedForClarification)
+        {
+            <div class="dt-notice dt-notice--warning mb-3">
+                <i class="fas fa-undo"></i>
+                <div>
+                    <strong>Returned for clarification</strong><br />
+                    <span>@Val(r.ReturnReason)</span><br />
+                    <small>Returned by @Val(r.ReturnedBy) on @FmtDt(r.ReturnedAt)</small>
+                </div>
+            </div>
+        }
+
+        <div class="row">
+
+            <!-- ── Left: main content ──────────────────────────────────────── -->
+            <div class="col-lg-8">
+
+                <!-- Request details -->
+                <div class="dt-section-card">
+                    <div class="dt-section-header">
+                        <h3><i class="fas fa-file-alt" aria-hidden="true"></i> Request details</h3>
+                        @if (Model.CanEdit)
+                        {
+                            <a asp-action="Edit" asp-controller="DemandTriage" asp-route-id="@r.Id"
+                               class="btn btn-sm btn-outline-secondary">
+                                <i class="fas fa-edit mr-1" aria-hidden="true"></i>Edit
+                            </a>
+                        }
+                    </div>
+                    <div class="dt-section-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <dl class="dt-dl">
+                                    <dt>Request name</dt>
+                                    <dd>@Val(r.RequestName)</dd>
+                                    <dt>Proposed title</dt>
+                                    <dd>@Val(r.ProposedRequestTitle)</dd>
+                                    <dt>Requester</dt>
+                                    <dd>@Val(r.RequesterFullName)</dd>
+                                    <dt>Department group</dt>
+                                    <dd>@Val(r.DepartmentGroup)</dd>
+                                    <dt>DDT portfolio support</dt>
+                                    <dd>@Val(r.DdtPortfolioSupport)</dd>
+                                    <dt>SRO</dt>
+                                    <dd>@Val(r.SroName)</dd>
+                                    <dt>Points of contact</dt>
+                                    <dd>@Val(r.PointsOfContact)</dd>
+                                </dl>
+                            </div>
+                            <div class="col-md-6">
+                                <dl class="dt-dl">
+                                    <dt>Target delivery</dt>
+                                    <dd>@Fmt(r.TargetDeliveryDate)</dd>
+                                    <dt>Digital service?</dt>
+                                    <dd>@FmtBool(r.NewOrChangedDigitalService)</dd>
+                                    @if (r.NewOrChangedDigitalService == true)
+                                    {
+                                        <dt>Service details</dt>
+                                        <dd>@Val(r.NewOrChangedServiceDetails)</dd>
+                                    }
+                                    <dt>Public-facing?</dt>
+                                    <dd>@FmtBool(r.PublicFacingDigitalService)</dd>
+                                    @if (r.BusinessCase != null)
+                                    {
+                                        <dt>Business case</dt>
+                                        <dd><a asp-action="BusinessCaseDetails" asp-controller="DemandManagement" asp-route-id="@r.BusinessCaseId">@r.BusinessCase.Title</a></dd>
+                                    }
+                                </dl>
+                            </div>
+                        </div>
+
+                        @if (!string.IsNullOrWhiteSpace(r.RequestOverview))
+                        {
+                            <hr class="my-3" />
+                            <h4 style="font-size:0.82rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#6c757d;margin-bottom:0.5rem;">Overview</h4>
+                            <p style="font-size:0.9rem;white-space:pre-wrap;margin:0;">@r.RequestOverview</p>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(r.ExpectedBenefits))
+                        {
+                            <hr class="my-3" />
+                            <h4 style="font-size:0.82rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#6c757d;margin-bottom:0.5rem;">Expected benefits</h4>
+                            <p style="font-size:0.9rem;white-space:pre-wrap;margin:0;">@r.ExpectedBenefits</p>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(r.RiskConsequence))
+                        {
+                            <hr class="my-3" />
+                            <h4 style="font-size:0.82rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#6c757d;margin-bottom:0.5rem;">Risk / consequence</h4>
+                            <p style="font-size:0.9rem;white-space:pre-wrap;margin:0;">@r.RiskConsequence</p>
+                        }
+                    </div>
+                </div>
+
+                <!-- Exploratory review -->
+                @if (r.ExploratoryReview != null || Model.CanStartExploratoryReview || Model.CanCompleteExploratoryReview)
+                {
+                    <div class="dt-section-card">
+                        <div class="dt-section-header">
+                            <h3><i class="fas fa-search" aria-hidden="true"></i> Exploratory review</h3>
+                            @if (r.ExploratoryReview?.CompletedAt.HasValue == true)
+                            {
+                                <span class="dt-badge dt-badge-triage"><i class="fas fa-check mr-1"></i>Complete</span>
+                            }
+                            else if (r.Status == DemandTriageStatus.ExploratoryReviewInProgress)
+                            {
+                                <a asp-action="ExploratoryReview" asp-controller="DemandTriage" asp-route-id="@r.Id"
+                                   class="btn btn-sm btn-outline-secondary">
+                                    <i class="fas fa-edit mr-1" aria-hidden="true"></i>Edit review
+                                </a>
+                            }
+                        </div>
+                        <div class="dt-section-body">
+                            @if (r.ExploratoryReview == null)
+                            {
+                                <div class="dt-notice dt-notice--info">
+                                    <i class="fas fa-info-circle"></i>
+                                    <span>Exploratory review not yet started.</span>
+                                </div>
+                            }
+                            else
+                            {
+                                var rev = r.ExploratoryReview;
+                                <dl class="dt-dl">
+                                    <dt>Summary findings</dt>
+                                    <dd style="white-space:pre-wrap;">@Val(rev.SummaryFindings)</dd>
+                                    <dt>Key risks</dt>
+                                    <dd style="white-space:pre-wrap;">@Val(rev.KeyRisks)</dd>
+                                    <dt>Dependencies</dt>
+                                    <dd style="white-space:pre-wrap;">@Val(rev.Dependencies)</dd>
+                                    <dt>Recommendation</dt>
+                                    <dd>
+                                        @if (rev.RecommendationToProceed == true)
+                                        {
+                                            <span class="dt-badge dt-badge-triage"><i class="fas fa-thumbs-up mr-1"></i>Proceed</span>
+                                        }
+                                        else if (rev.RecommendationToProceed == false)
+                                        {
+                                            <span class="dt-badge dt-badge-returned"><i class="fas fa-thumbs-down mr-1"></i>Do not proceed</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="dt-empty-val">—</span>
+                                        }
+                                    </dd>
+                                    @if (rev.RecommendationToProceed == false && !string.IsNullOrWhiteSpace(rev.ReasonNotProceeding))
+                                    {
+                                        <dt>Reason</dt>
+                                        <dd>@rev.ReasonNotProceeding</dd>
+                                    }
+                                    @if (rev.CompletedAt.HasValue)
+                                    {
+                                        <dt>Completed</dt>
+                                        <dd>@FmtDt(rev.CompletedAt) by @Val(rev.CompletedBy)</dd>
+                                    }
+                                </dl>
+                            }
+                        </div>
+                    </div>
+                }
+
+                <!-- Scorecard -->
+                @if (r.Scorecard != null || Model.CanStartScoring)
+                {
+                    <div class="dt-section-card">
+                        <div class="dt-section-header">
+                            <h3>
+                                <i class="fas fa-star-half-alt" aria-hidden="true"></i> Prioritisation scorecard
+                                @if (r.Scorecard?.IsLocked == true)
+                                {
+                                    <span class="dt-badge dt-badge-closed ml-2" style="font-size:0.68rem;"><i class="fas fa-lock mr-1"></i>Locked</span>
+                                }
+                            </h3>
+                            @if (r.Status == DemandTriageStatus.ScoringInProgress && !(r.Scorecard?.IsLocked ?? false))
+                            {
+                                <a asp-action="Score" asp-controller="DemandTriage" asp-route-id="@r.Id"
+                                   class="btn btn-sm btn-outline-secondary">
+                                    <i class="fas fa-edit mr-1" aria-hidden="true"></i>Edit scoring
+                                </a>
+                            }
+                        </div>
+                        <div class="dt-section-body">
+                            @if (r.Scorecard == null)
+                            {
+                                <div class="dt-notice dt-notice--info">
+                                    <i class="fas fa-info-circle"></i>
+                                    <span>Scoring has not yet been started.</span>
+                                </div>
+                            }
+                            else
+                            {
+                                var sc = r.Scorecard;
+                                <!-- Heatmap grid -->
+                                <div class="dt-heatmap">
+                                    @{
+                                        string BandClass(string? band) => band switch
+                                        {
+                                            "High" => "dt-heatmap-cell--high",
+                                            "Medium" => "dt-heatmap-cell--medium",
+                                            _ => "dt-heatmap-cell--low"
+                                        };
+                                    }
+                                    <div class="dt-heatmap-cell @BandClass(sc.StrategicAlignmentBand)">
+                                        <div class="dt-heatmap-cell-label">Strategic alignment</div>
+                                        <div class="dt-heatmap-cell-score">@sc.StrategicAlignmentScore <span class="dt-heatmap-cell-max">/ 15</span></div>
+                                        <div class="dt-heatmap-cell-band">@(sc.StrategicAlignmentBand ?? "—")</div>
+                                    </div>
+                                    <div class="dt-heatmap-cell @BandClass(sc.UrgencyBand)">
+                                        <div class="dt-heatmap-cell-label">Urgency</div>
+                                        <div class="dt-heatmap-cell-score">@sc.UrgencyScore <span class="dt-heatmap-cell-max">/ 10</span></div>
+                                        <div class="dt-heatmap-cell-band">@(sc.UrgencyBand ?? "—")</div>
+                                    </div>
+                                    <div class="dt-heatmap-cell @BandClass(sc.FundingBand)">
+                                        <div class="dt-heatmap-cell-label">Funding</div>
+                                        <div class="dt-heatmap-cell-score">@sc.FundingScore <span class="dt-heatmap-cell-max">/ 22</span></div>
+                                        <div class="dt-heatmap-cell-band">@(sc.FundingBand ?? "—")</div>
+                                    </div>
+                                    <div class="dt-heatmap-cell @BandClass(sc.RiceBand)">
+                                        <div class="dt-heatmap-cell-label">RICE</div>
+                                        <div class="dt-heatmap-cell-score">@sc.RiceScore <span class="dt-heatmap-cell-max">/ 42</span></div>
+                                        <div class="dt-heatmap-cell-band">@(sc.RiceBand ?? "—")</div>
+                                    </div>
+                                </div>
+
+                                <!-- Total score bar -->
+                                var pct = sc.TotalScore;
+                                var fillClass = sc.SuggestionBand == "Must do" ? "dt-score-progress-fill--must-do"
+                                              : sc.SuggestionBand == "Could do" ? "dt-score-progress-fill--could-do"
+                                              : "dt-score-progress-fill--do-not-do";
+                                <div class="dt-total-score-bar">
+                                    <div>
+                                        <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#6c757d;margin-bottom:0.2rem;">Total score</div>
+                                        <div class="dt-total-score-number">@sc.TotalScore <span>/ 100</span></div>
+                                    </div>
+                                    <div class="dt-score-progress">
+                                        <div class="dt-score-progress-bar">
+                                            <div class="dt-score-progress-fill @fillClass" style="width:@pct%"></div>
+                                        </div>
+                                        @if (!string.IsNullOrWhiteSpace(sc.SuggestionBand))
+                                        {
+                                            var sugClass = sc.SuggestionBand == "Must do" ? "dt-suggestion dt-suggestion--must-do"
+                                                         : sc.SuggestionBand == "Could do" ? "dt-suggestion dt-suggestion--could-do"
+                                                         : "dt-suggestion dt-suggestion--do-not-do";
+                                            <span class="@sugClass">
+                                                <i class="fas fa-lightbulb" aria-hidden="true"></i>
+                                                Suggestion: @sc.SuggestionBand
+                                            </span>
+                                        }
+                                    </div>
+                                </div>
+
+                                @if (sc.UrgencyScore == 0)
+                                {
+                                    <div class="dt-notice dt-notice--info mt-3">
+                                        <i class="fas fa-info-circle"></i>
+                                        <span>Score indicates no compelling reason to act now or critical delivery date recorded.</span>
+                                    </div>
+                                }
+                                @if (sc.FinalisedAt.HasValue)
+                                {
+                                    <p class="text-muted small mt-2 mb-0">
+                                        <i class="fas fa-lock mr-1"></i>Finalised @FmtDt(sc.FinalisedAt) by @Val(sc.FinalisedBy)
+                                    </p>
+                                }
+                            }
+                        </div>
+                    </div>
+                }
+
+                <!-- Triage outcome -->
+                @if (r.TriageOutcome != null)
+                {
+                    <div class="dt-section-card" style="border-color:#28a745;">
+                        <div class="dt-section-header" style="background:#e8f5e9;">
+                            <h3 style="color:#155724;"><i class="fas fa-gavel" aria-hidden="true"></i> Triage outcome</h3>
+                        </div>
+                        <div class="dt-section-body">
+                            <dl class="dt-dl">
+                                <dt>Decision</dt>
+                                <dd><strong style="font-size:1rem;">@r.TriageOutcome.OutcomeSelection</strong></dd>
+                                <dt>Summary</dt>
+                                <dd style="white-space:pre-wrap;">@Val(r.TriageOutcome.OutcomeSummary)</dd>
+                                <dt>Routed to</dt>
+                                <dd>@Val(r.TriageOutcome.RoutedToArea)</dd>
+                                @if (r.TriageOutcome.OverrodeRecommendation)
+                                {
+                                    <dt>Override reason</dt>
+                                    <dd>
+                                        <span class="dt-badge dt-badge-override mr-1"><i class="fas fa-exclamation-triangle mr-1"></i>Override used</span>
+                                        @Val(r.TriageOutcome.OverrideReason)
+                                    </dd>
+                                }
+                                <dt>Decided</dt>
+                                <dd>@FmtDt(r.TriageOutcome.DecidedAt) by @Val(r.TriageOutcome.DecidedBy)</dd>
+                            </dl>
+                        </div>
+                    </div>
+                }
+
+                <!-- Converted project -->
+                @if (r.ConvertedProject != null)
+                {
+                    <div class="dt-section-card" style="border-color:#16548a;">
+                        <div class="dt-section-header" style="background:#e3f2fd;">
+                            <h3 style="color:#0d47a1;"><i class="fas fa-project-diagram" aria-hidden="true"></i> Project created</h3>
+                        </div>
+                        <div class="dt-section-body">
+                            <p class="mb-0">
+                                This demand has been converted to a project:
+                                <a asp-action="Details" asp-controller="Project" asp-route-id="@r.ConvertedProjectId" class="font-weight-bold">
+                                    @r.ConvertedProject.Title
+                                </a>
+                            </p>
+                        </div>
+                    </div>
+                }
+
+                <!-- Audit history -->
+                @if (r.AuditEvents.Any())
+                {
+                    <div class="dt-section-card">
+                        <div class="dt-section-header">
+                            <h3><i class="fas fa-history" aria-hidden="true"></i> Audit history</h3>
+                        </div>
+                        <div class="dt-section-body">
+                            <div class="dt-timeline">
+                                @foreach (var ev in r.AuditEvents.OrderByDescending(e => e.OccurredAt))
+                                {
+                                    var dotClass = ev.Action?.Contains("status") == true || ev.Action?.Contains("Status") == true
+                                        ? "dt-timeline-dot--status"
+                                        : ev.Action?.Contains("return") == true || ev.Action?.Contains("Return") == true
+                                        ? "dt-timeline-dot--return"
+                                        : ev.Action?.Contains("override") == true || ev.Action?.Contains("Override") == true
+                                        ? "dt-timeline-dot--admin"
+                                        : "";
+                                    <div class="dt-timeline-item">
+                                        <div class="dt-timeline-dot @dotClass"></div>
+                                        <div class="dt-timeline-time">@FmtDt(ev.OccurredAt)</div>
+                                        <div class="dt-timeline-action">@ev.Action</div>
+                                        <div class="dt-timeline-actor">@Val(ev.ActorDisplayName ?? ev.ActorEmail)</div>
+                                        @if (!string.IsNullOrWhiteSpace(ev.FromStatus) || !string.IsNullOrWhiteSpace(ev.ToStatus))
+                                        {
+                                            <div class="dt-timeline-transition">
+                                                @if (!string.IsNullOrWhiteSpace(ev.FromStatus))
+                                                {
+                                                    <span>@DemandTriageStatus.DisplayName(ev.FromStatus)</span>
+                                                }
+                                                @if (!string.IsNullOrWhiteSpace(ev.ToStatus))
+                                                {
+                                                    <span class="arrow">→</span>
+                                                    <span class="font-weight-600">@DemandTriageStatus.DisplayName(ev.ToStatus)</span>
+                                                }
+                                            </div>
+                                        }
+                                        @if (!string.IsNullOrWhiteSpace(ev.Notes))
+                                        {
+                                            <div class="dt-timeline-notes">"@ev.Notes"</div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                }
+
+            </div>
+
+            <!-- ── Right: action panel ─────────────────────────────────────── -->
+            <div class="col-lg-4">
+                <div class="dt-action-panel">
+                    <div class="dt-action-panel-header">
+                        <i class="fas fa-bolt mr-1" aria-hidden="true"></i> Actions
+                    </div>
+                    <div class="dt-action-panel-body">
+
+                        @if (Model.CanSubmit)
+                        {
+                            <form asp-action="Submit" asp-controller="DemandTriage" asp-route-id="@r.Id" method="post">
+                                @Html.AntiForgeryToken()
+                                <button type="submit" class="dt-action-btn dt-action-btn--primary"
+                                        onclick="return confirm('Submit this request for review?')">
+                                    <i class="fas fa-paper-plane" aria-hidden="true"></i>
+                                    <span>Submit request</span>
+                                </button>
+                            </form>
+                        }
+
+                        @if (Model.CanStartExploratoryReview)
+                        {
+                            <form asp-action="StartExploratoryReview" asp-controller="DemandTriage" asp-route-id="@r.Id" method="post">
+                                @Html.AntiForgeryToken()
+                                <button type="submit" class="dt-action-btn dt-action-btn--info">
+                                    <i class="fas fa-search" aria-hidden="true"></i>
+                                    <span>Start exploratory review</span>
+                                </button>
+                            </form>
+                        }
+
+                        @if (Model.CanCompleteExploratoryReview)
+                        {
+                            <a asp-action="ExploratoryReview" asp-controller="DemandTriage" asp-route-id="@r.Id"
+                               class="dt-action-btn dt-action-btn--info">
+                                <i class="fas fa-clipboard-check" aria-hidden="true"></i>
+                                <span>Complete exploratory review</span>
+                            </a>
+                        }
+
+                        @if (Model.CanReturnForClarification)
+                        {
+                            <a asp-action="ReturnForClarification" asp-controller="DemandTriage" asp-route-id="@r.Id"
+                               class="dt-action-btn dt-action-btn--warning">
+                                <i class="fas fa-undo" aria-hidden="true"></i>
+                                <span>Return for clarification</span>
+                            </a>
+                        }
+
+                        @if (Model.CanStartScoring)
+                        {
+                            <form asp-action="StartScoring" asp-controller="DemandTriage" asp-route-id="@r.Id" method="post">
+                                @Html.AntiForgeryToken()
+                                <button type="submit" class="dt-action-btn dt-action-btn--primary">
+                                    <i class="fas fa-star-half-alt" aria-hidden="true"></i>
+                                    <span>Start scoring</span>
+                                </button>
+                            </form>
+                        }
+
+                        @if (r.Status == DemandTriageStatus.ScoringInProgress && !(r.Scorecard?.IsLocked ?? false))
+                        {
+                            <a asp-action="Score" asp-controller="DemandTriage" asp-route-id="@r.Id"
+                               class="dt-action-btn dt-action-btn--secondary">
+                                <i class="fas fa-pencil-alt" aria-hidden="true"></i>
+                                <span>Continue scoring</span>
+                            </a>
+                        }
+
+                        @if (Model.CanFinaliseScorecard)
+                        {
+                            <form asp-action="FinaliseScorecard" asp-controller="DemandTriage" asp-route-id="@r.Id" method="post">
+                                @Html.AntiForgeryToken()
+                                <button type="submit" class="dt-action-btn dt-action-btn--success"
+                                        onclick="return confirm('Finalise and lock the scorecard?')">
+                                    <i class="fas fa-lock" aria-hidden="true"></i>
+                                    <span>Finalise scorecard</span>
+                                </button>
+                            </form>
+                        }
+
+                        @if (Model.CanUnlockScorecard)
+                        {
+                            <form asp-action="UnlockScorecard" asp-controller="DemandTriage" asp-route-id="@r.Id" method="post">
+                                @Html.AntiForgeryToken()
+                                <button type="submit" class="dt-action-btn dt-action-btn--warning"
+                                        onclick="return confirm('Unlock the scorecard for editing?')">
+                                    <i class="fas fa-unlock" aria-hidden="true"></i>
+                                    <span>Unlock scorecard</span>
+                                </button>
+                            </form>
+                        }
+
+                        @if (Model.CanSendToTriage)
+                        {
+                            <form asp-action="SendToTriage" asp-controller="DemandTriage" asp-route-id="@r.Id" method="post">
+                                @Html.AntiForgeryToken()
+                                <button type="submit" class="dt-action-btn dt-action-btn--primary"
+                                        onclick="return confirm('Send this request to triage?')">
+                                    <i class="fas fa-gavel" aria-hidden="true"></i>
+                                    <span>Send to triage</span>
+                                </button>
+                            </form>
+                        }
+
+                        @if (Model.CanRecordOutcome)
+                        {
+                            <a asp-action="RecordOutcome" asp-controller="DemandTriage" asp-route-id="@r.Id"
+                               class="dt-action-btn dt-action-btn--success">
+                                <i class="fas fa-check-double" aria-hidden="true"></i>
+                                <span>Record triage outcome</span>
+                            </a>
+                        }
+
+                        @if (Model.CanCreateProject)
+                        {
+                            <form asp-action="CreateProject" asp-controller="DemandTriage" asp-route-id="@r.Id" method="post">
+                                @Html.AntiForgeryToken()
+                                <button type="submit" class="dt-action-btn dt-action-btn--success"
+                                        onclick="return confirm('Create a project record from this demand?')">
+                                    <i class="fas fa-project-diagram" aria-hidden="true"></i>
+                                    <span>Create project record</span>
+                                </button>
+                            </form>
+                        }
+
+                        @if (Model.CanClose)
+                        {
+                            <form asp-action="Close" asp-controller="DemandTriage" asp-route-id="@r.Id" method="post">
+                                @Html.AntiForgeryToken()
+                                <button type="submit" class="dt-action-btn dt-action-btn--secondary"
+                                        onclick="return confirm('Close this request?')">
+                                    <i class="fas fa-times-circle" aria-hidden="true"></i>
+                                    <span>Close request</span>
+                                </button>
+                            </form>
+                        }
+
+                        @if (Model.CanAdminOverride)
+                        {
+                            <hr class="dt-action-divider" />
+                            <a asp-action="AdminOverride" asp-controller="DemandTriage" asp-route-id="@r.Id"
+                               class="dt-action-btn dt-action-btn--danger">
+                                <i class="fas fa-user-shield" aria-hidden="true"></i>
+                                <span>Admin: override status</span>
+                            </a>
+                        }
+
+                    </div>
+                </div>
+
+                <!-- Metadata card -->
+                <div class="dt-section-card mt-3">
+                    <div class="dt-section-header">
+                        <h3><i class="fas fa-info-circle" aria-hidden="true"></i> Record metadata</h3>
+                    </div>
+                    <div class="dt-section-body">
+                        <dl class="dt-dl" style="font-size:0.82rem;">
+                            <dt>Owner</dt>
+                            <dd>@Val(r.OwnerUserName ?? r.OwnerUserEmail)</dd>
+                            <dt>Created</dt>
+                            <dd>@FmtDt(r.CreatedAt)</dd>
+                            <dt>Last updated</dt>
+                            <dd>@FmtDt(r.UpdatedAt)</dd>
+                            @if (r.SubmittedAt.HasValue)
+                            {
+                                <dt>Submitted</dt>
+                                <dd>@FmtDt(r.SubmittedAt)</dd>
+                            }
+                        </dl>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+    </div>
+</section>

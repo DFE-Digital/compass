@@ -6,8 +6,12 @@ public interface IProductsApiService
 {
     Task<List<ProductDto>> GetProductsAsync(string? userEmail = null);
     Task<List<ProductDto>> GetProductsByServiceOwnerAsync(string? userEmail);
+    Task<List<ProductDto>> GetProductsByProductManagerAsync(string? userEmail);
+    Task<List<ProductDto>> GetProductsByDeliveryManagerAsync(string? userEmail);
+    Task<List<ProductDto>> GetProductsByReportingUserAsync(string? userEmail);
     Task<List<ProductDto>> GetAllProductsAsync(string? userEmail = null);
     Task<ProductDto?> GetProductByFipsIdAsync(string fipsId);
+    Task<ProductDto?> GetProductByDocumentIdAsync(string documentId);
     Task<List<string>> GetPhasesAsync();
     Task<List<string>> GetTypesAsync();
     Task<List<string>> GetBusinessAreasAsync();
@@ -16,6 +20,7 @@ public interface IProductsApiService
     Task<List<CategoryValueDto>> GetBusinessAreaCategoryValuesAsync();
     Task<List<CategoryValueDto>> GetUserGroupCategoryValuesAsync();
     Task<bool> UpdateProductPhaseAsync(string fipsId, int phaseCategoryValueId);
+    Task<bool> RemoveDuplicatePhasesAsync(string fipsId, int phaseCategoryValueIdToKeep);
     Task<bool> UpdateProductBusinessAreaAsync(string fipsId, int businessAreaCategoryValueId);
     Task<bool> UpdateProductUserGroupsAsync(string fipsId, IEnumerable<int> userGroupCategoryValueIds);
     Task<bool> UpdateProductStateAsync(string fipsId, string state);
@@ -25,5 +30,8 @@ public interface IProductsApiService
     Task<EntraUserDto?> GetOrCreateEntraUserAsync(string emailAddress, string? entraId = null, string? displayName = null, string? firstName = null, string? lastName = null);
     Task<bool> UpdateProductServiceOwnerAsync(string fipsId, int entraUserId);
     Task<bool> UpdateProductRoleAsync(string fipsId, string roleFieldName, int entraUserId);
+    Task<bool> UpdateProductBasicInfoAsync(string fipsId, string? title, string? shortDescription, string? longDescription, string? cmdbSysId);
+    Task<Dictionary<string, List<CategoryValueDto>>> GetAllCategoryValuesByTypeAsync();
+    Task<bool> UpdateProductCategoryValuesAsync(string fipsId, List<int> categoryValueIds);
 }
 

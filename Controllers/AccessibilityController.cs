@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Data.SqlClient;
 using Compass.Data;
 using Compass.Models;
 using Compass.Services;
@@ -15,15 +16,26 @@ namespace Compass.Controllers
         private readonly CompassDbContext _context;
         private readonly ILogger<AccessibilityController> _logger;
         private readonly IProductsApiService _productsApiService;
+        private readonly IPermissionService _permissionService;
 
         public AccessibilityController(
             CompassDbContext context, 
             ILogger<AccessibilityController> logger,
-            IProductsApiService productsApiService)
+            IProductsApiService productsApiService,
+            IPermissionService permissionService)
         {
             _context = context;
             _logger = logger;
             _productsApiService = productsApiService;
+            _permissionService = permissionService;
+        }
+
+        // Helper method to get documentId from ProductAccessibility (prefer ProductDocumentId, fallback to FipsId)
+        private static string GetDocumentId(ProductAccessibility productAccessibility)
+        {
+            return !string.IsNullOrEmpty(productAccessibility.ProductDocumentId) 
+                ? productAccessibility.ProductDocumentId 
+                : productAccessibility.FipsId ?? "unknown";
         }
 
         // GET: Accessibility/SearchProducts (for autocomplete)
@@ -49,7 +61,8 @@ namespace Compass.Controllers
                             (p.Phase != null && p.Phase.Contains(q, StringComparison.OrdinalIgnoreCase))))
                 .Take(10)
                 .Select(p => new {
-                    fipsId = p.FipsId,
+                    documentId = p.DocumentId ?? p.FipsId, // Use DocumentId as primary identifier
+                    fipsId = p.FipsId, // Keep for backwards compatibility
                     title = p.Title,
                     phase = p.Phase
                 })
@@ -76,22 +89,37 @@ namespace Compass.Controllers
             const int pageSize = 25;
             
             // Load all products with issues and audits for summary calculations
+            // Load all issues (not filtered) and filter in code for reliability
             var allProducts = await _context.ProductAccessibilities
-                .Include(pa => pa.Issues.Where(i => !i.IsDeleted))
+                .Include(pa => pa.Issues)
                     .ThenInclude(i => i.WcagCriteriaLinks)
                         .ThenInclude(link => link.WcagCriterion)
-                .Include(pa => pa.AuditHistories.Where(ah => !ah.IsDeleted))
+                .Include(pa => pa.AuditHistories)
                 .Where(pa => !pa.IsDeleted && pa.IsActive)
                 .ToListAsync();
+            
+            // Explicitly load all issues for each product to ensure they're available
+            // This is more reliable than relying solely on Include
+            foreach (var product in allProducts)
+            {
+                // Always explicitly load to ensure all issues (including Best Practice) are loaded
+                await _context.Entry(product)
+                    .Collection(pa => pa.Issues)
+                    .Query()
+                    .Include(i => i.WcagCriteriaLinks)
+                        .ThenInclude(link => link.WcagCriterion)
+                    .LoadAsync();
+            }
 
-            // Get total products from CMS
-            var cmsProducts = await _productsApiService.GetProductsAsync();
+            // Get total products from CMS (for "all-products" tab, we'll get all products regardless of state)
+            var cmsProducts = await _productsApiService.GetAllProductsAsync();
             var totalProducts = cmsProducts?.Count ?? 0;
 
             // Calculate summary statistics
-            var totalOpenIssues = allProducts.Sum(p => p.Issues.Count(i => i.Status != "resolved"));
+            var totalOpenIssues = allProducts.Sum(p => p.Issues.Count(i => !i.IsDeleted && i.Status != "resolved"));
             var totalEnrolledProducts = allProducts.Count;
             var overdueIssues = allProducts.Sum(p => p.Issues.Count(i => 
+                !i.IsDeleted &&
                 i.Status != "resolved" && 
                 i.PlannedResolutionDate.HasValue && 
                 i.PlannedResolutionDate.Value < DateTime.UtcNow.Date));
@@ -108,22 +136,126 @@ namespace Compass.Controllers
                 TotalAuditSpend = totalAuditSpend
             };
 
+            // Normalize tab for backward compatibility
+            if (tab == "products") tab = "your-products";
+            if (tab == "issues") tab = "your-issues";
+            if (tab == "audits") tab = "your-audits";
+            
             ViewBag.ActiveTab = tab;
 
-            // Handle Products tab
-            if (tab == "products")
+            // Calculate navigation counts for badges (for user-assigned products)
+            var currentUserEmail = User.Identity?.Name?.ToLower();
+            var userProductFipsIds = new HashSet<string>();
+            
+            if (!string.IsNullOrEmpty(currentUserEmail))
             {
-                // Get all CMS products
-                if (cmsProducts == null)
+                // Get user's assigned products from CMS
+                var productsByServiceOwner = await _productsApiService.GetProductsByServiceOwnerAsync(currentUserEmail);
+                var productsByProductManager = await _productsApiService.GetProductsByProductManagerAsync(currentUserEmail);
+                var productsByDeliveryManager = await _productsApiService.GetProductsByDeliveryManagerAsync(currentUserEmail);
+                
+                var allUserProducts = productsByServiceOwner
+                    .Concat(productsByProductManager)
+                    .Concat(productsByDeliveryManager)
+                    .GroupBy(p => p.FipsId)
+                    .Select(g => g.First())
+                    .ToList();
+                
+                userProductFipsIds = allUserProducts
+                    .Where(p => !string.IsNullOrEmpty(p.FipsId))
+                    .Select(p => p.FipsId!)
+                    .ToHashSet();
+            }
+
+            // Calculate "Your" Products count (user-assigned products that are enrolled)
+            var yourProductsCount = 0;
+            if (userProductFipsIds.Any())
+            {
+                yourProductsCount = allProducts
+                    .Count(pa => userProductFipsIds.Contains(pa.FipsId));
+            }
+
+            // Calculate "All" Products count (will be recalculated after we determine enrolled CMS products)
+            var allProductsCount = allProducts.Count;
+
+            // Calculate "Your" Issues count (open issues for user-assigned products)
+            var yourIssuesCount = 0;
+            if (userProductFipsIds.Any())
+            {
+                yourIssuesCount = allProducts
+                    .Where(pa => userProductFipsIds.Contains(pa.FipsId))
+                    .Sum(pa => pa.Issues.Count(i => !i.IsDeleted && i.Status != "resolved"));
+            }
+
+            // Calculate "All" Issues count (all open issues)
+            var allIssuesCount = allProducts
+                .Sum(pa => pa.Issues.Count(i => !i.IsDeleted && i.Status != "resolved"));
+
+            // Calculate "Your" Audits count (for user-assigned products)
+            var yourAuditsCount = 0;
+            if (userProductFipsIds.Any())
+            {
+                yourAuditsCount = allProducts
+                    .Where(pa => userProductFipsIds.Contains(pa.FipsId))
+                    .Sum(pa => pa.AuditHistories.Count(ah => !ah.IsDeleted));
+            }
+
+            // Calculate "All" Audits count (all audits)
+            var allAuditsCount = allProducts
+                .Sum(pa => pa.AuditHistories.Count(ah => !ah.IsDeleted));
+
+            ViewBag.YourProductsCount = yourProductsCount;
+            ViewBag.AllProductsCount = allProductsCount;
+            ViewBag.YourIssuesCount = yourIssuesCount;
+            ViewBag.AllIssuesCount = allIssuesCount;
+            ViewBag.YourAuditsCount = yourAuditsCount;
+            ViewBag.AllAuditsCount = allAuditsCount;
+
+            // Handle Products tabs
+            if (tab == "your-products" || tab == "all-products")
+            {
+                var isYourProducts = tab == "your-products";
+                
+                // Get products based on tab type
+                if (isYourProducts)
                 {
-                    cmsProducts = await _productsApiService.GetProductsAsync();
+                    // For "your-products", get user's assigned products
+                    var userAssignedProducts = new List<ProductDto>();
+                    if (!string.IsNullOrEmpty(currentUserEmail))
+                    {
+                        // Get products where user is a service owner
+                        var productsByServiceOwner = await _productsApiService.GetProductsByServiceOwnerAsync(currentUserEmail);
+                        
+                        // Get products where user is a product manager
+                        var productsByProductManager = await _productsApiService.GetProductsByProductManagerAsync(currentUserEmail);
+                        
+                        // Get products where user is a delivery manager
+                        var productsByDeliveryManager = await _productsApiService.GetProductsByDeliveryManagerAsync(currentUserEmail);
+                        
+                        // Combine and deduplicate by FipsId
+                        var allUserProducts = productsByServiceOwner
+                            .Concat(productsByProductManager)
+                            .Concat(productsByDeliveryManager)
+                            .GroupBy(p => p.FipsId)
+                            .Select(g => g.First())
+                            .ToList();
+                        
+                        userAssignedProducts = allUserProducts;
+                    }
+                    
+                    cmsProducts = userAssignedProducts;
+                }
+                else
+                {
+                    // For "all-products", get all products regardless of state
+                    if (cmsProducts == null)
+                    {
+                        cmsProducts = await _productsApiService.GetAllProductsAsync();
+                    }
                 }
                 
                 // Create a dictionary for quick lookup of enrolled products
                 var enrolledDict = allProducts.ToDictionary(pa => pa.FipsId, pa => pa);
-
-                // Get current user's email for filtering "My Products"
-                var currentUserEmail = User.Identity?.Name?.ToLower();
 
                 // Create view model lists
                 var myProductViewModels = new List<dynamic>();
@@ -156,16 +288,29 @@ namespace Compass.Controllers
 
                     if (isEnrolled)
                     {
-                        openIssuesCount = enrolled.Issues.Count(i => i.Status != "resolved" && !i.IsDeleted);
-                        pastDueCount = enrolled.Issues.Count(i => 
-                            !i.IsDeleted && 
-                            i.Status != "resolved" && 
-                            i.PlannedResolutionDate.HasValue &&
-                            i.PlannedResolutionDate.Value < DateTime.UtcNow.Date);
+                        // Query issues directly from database to ensure we get all issues (including Best Practice)
+                        // This is more reliable than using the navigation property
+                        openIssuesCount = await _context.AccessibilityIssues
+                            .CountAsync(i => i.ProductAccessibilityId == enrolled.Id && 
+                                           i.Status != "resolved" && 
+                                           !i.IsDeleted);
+                        pastDueCount = await _context.AccessibilityIssues
+                            .CountAsync(i => i.ProductAccessibilityId == enrolled.Id &&
+                                           !i.IsDeleted && 
+                                           i.Status != "resolved" && 
+                                           i.PlannedResolutionDate.HasValue &&
+                                           i.PlannedResolutionDate.Value < DateTime.UtcNow.Date);
                         isVerified = enrolled.StatementInstalled && enrolled.VerifiedAt.HasValue;
                         
                         // Calculate compliance status with WCAG criteria percentage
-                        var openIssues = enrolled.Issues.Where(i => i.Status != "resolved" && !i.IsDeleted).ToList();
+                        // Query issues directly from database to ensure we get all issues (including Best Practice)
+                        var openIssues = await _context.AccessibilityIssues
+                            .Include(i => i.WcagCriteriaLinks)
+                                .ThenInclude(link => link.WcagCriterion)
+                            .Where(i => i.ProductAccessibilityId == enrolled.Id && 
+                                       i.Status != "resolved" && 
+                                       !i.IsDeleted)
+                            .ToListAsync();
                         if (!openIssues.Any())
                         {
                             complianceStatus = "compliant";
@@ -232,7 +377,8 @@ namespace Compass.Controllers
 
                     var productViewModel = new
                     {
-                        FipsId = cmsProduct.FipsId,
+                        DocumentId = cmsProduct.DocumentId ?? cmsProduct.FipsId, // Use DocumentId as primary identifier
+                        FipsId = cmsProduct.FipsId, // Keep for backwards compatibility
                         ProductName = cmsProduct.Title,
                         Phase = cmsProduct.Phase,
                         IsEnrolled = isEnrolled,
@@ -245,15 +391,12 @@ namespace Compass.Controllers
                         LastAudit = lastAudit
                     };
 
-                    // Check if current user is responsible for this product
-                    var isMyProduct = false;
-                    if (!string.IsNullOrEmpty(currentUserEmail) && cmsProduct.ProductContacts != null)
-                    {
-                        isMyProduct = cmsProduct.ProductContacts.Any(pc => 
-                            pc.UsersPermissionsUser != null && 
-                            !string.IsNullOrEmpty(pc.UsersPermissionsUser.Email) &&
-                            pc.UsersPermissionsUser.Email.ToLower() == currentUserEmail);
-                    }
+                    // Check if this product is assigned to the current user
+                    // For "your-products" tab, cmsProducts is already filtered to user-assigned products
+                    // For "all-products" tab, we need to check if the product is in the user's assigned list
+                    var isMyProduct = isYourProducts || 
+                        (!string.IsNullOrEmpty(currentUserEmail) && 
+                         userProductFipsIds.Contains(cmsProduct.FipsId ?? string.Empty));
 
                     if (isEnrolled)
                     {
@@ -331,12 +474,30 @@ namespace Compass.Controllers
                     .Take(pageSize)
                     .ToList();
 
+                // Calculate user-specific statistics
+                var myProductsOpenIssues = myProductViewModels.Sum(p => ((dynamic)p).OpenIssuesCount);
+                var myProductsOverdueIssues = myProductViewModels.Sum(p => ((dynamic)p).PastDueCount);
+                var myProductsCompliant = myProductViewModels.Count(p => ((dynamic)p).ComplianceStatus == "compliant");
+                var myProductsPartiallyCompliant = myProductViewModels.Count(p => ((dynamic)p).ComplianceStatus == "partially compliant");
+                var myProductsNonCompliant = myProductViewModels.Count(p => ((dynamic)p).ComplianceStatus == "non-compliant");
+                var myProductsVerified = myProductViewModels.Count(p => ((dynamic)p).IsVerified);
+                var myProductsTotal = myProductViewModels.Count;
+
                 ViewBag.MyProducts = myProductViewModels;
                 ViewBag.EnrolledProducts = enrolledProductViewModels;
                 ViewBag.NonEnrolledProducts = pagedNonEnrolledProducts;
                 ViewBag.ProductsPage = productsPage;
                 ViewBag.ProductsTotalPages = totalPages;
                 ViewBag.ProductsTotalCount = totalCount;
+                
+                // User-specific statistics
+                ViewBag.MyProductsOpenIssues = myProductsOpenIssues;
+                ViewBag.MyProductsOverdueIssues = myProductsOverdueIssues;
+                ViewBag.MyProductsCompliant = myProductsCompliant;
+                ViewBag.MyProductsPartiallyCompliant = myProductsPartiallyCompliant;
+                ViewBag.MyProductsNonCompliant = myProductsNonCompliant;
+                ViewBag.MyProductsVerified = myProductsVerified;
+                ViewBag.MyProductsTotal = myProductsTotal;
                 
                 // Pass search filter to view if set
                 if (!string.IsNullOrWhiteSpace(search))
@@ -356,18 +517,48 @@ namespace Compass.Controllers
                     .OrderBy(pa => pa.ProductName)
                     .ToList();
                 
+                // Recalculate "All" Products count for "all-products" tab to match what's displayed
+                // This ensures the badge count matches the actual enrolled CMS products shown
+                if (tab == "all-products")
+                {
+                    allProductsCount = enrolledProductViewModels.Count;
+                    ViewBag.AllProductsCount = allProductsCount;
+                }
+                
                 return View("~/Views/Apps/Accessibility/Index.cshtml", enrolledProductAccessibilities);
             }
 
-            // Handle Issues tab
-            if (tab == "issues")
+            // Handle Issues tabs
+            if (tab == "your-issues" || tab == "all-issues")
             {
+                var isYourIssues = tab == "your-issues";
+                
                 var issuesQuery = _context.AccessibilityIssues
                     .Include(i => i.ProductAccessibility)
                     .Include(i => i.WcagCriteriaLinks)
                         .ThenInclude(link => link.WcagCriterion)
                     .Where(i => !i.IsDeleted)
                     .AsQueryable();
+                
+                // Filter based on tab type
+                if (isYourIssues)
+                {
+                    // Filter to only issues for user-assigned products
+                    // If user has no assigned products, show no issues
+                    if (userProductFipsIds.Any())
+                    {
+                        issuesQuery = issuesQuery.Where(i => 
+                            i.ProductAccessibility != null && 
+                            !string.IsNullOrEmpty(i.ProductAccessibility.FipsId) &&
+                            userProductFipsIds.Contains(i.ProductAccessibility.FipsId));
+                    }
+                    else
+                    {
+                        // User has no assigned products, so return empty query
+                        issuesQuery = issuesQuery.Where(i => false);
+                    }
+                }
+                // For "all-issues", no additional filtering needed - show all issues
 
                 // Filter by status
                 if (!string.IsNullOrWhiteSpace(issueStatus))
@@ -438,13 +629,35 @@ namespace Compass.Controllers
                 return View("~/Views/Apps/Accessibility/Index.cshtml", allProducts);
             }
 
-            // Handle Audits tab
-            if (tab == "audits")
+            // Handle Audits tabs
+            if (tab == "your-audits" || tab == "all-audits")
             {
+                var isYourAudits = tab == "your-audits";
+                
                 var auditsQuery = _context.AuditHistories
                     .Include(ah => ah.ProductAccessibility)
                     .Where(ah => !ah.IsDeleted)
                     .AsQueryable();
+
+                // Filter based on tab type
+                if (isYourAudits)
+                {
+                    // Filter to only audits for user-assigned products
+                    // If user has no assigned products, show no audits
+                    if (userProductFipsIds.Any())
+                    {
+                        auditsQuery = auditsQuery.Where(ah => 
+                            ah.ProductAccessibility != null && 
+                            !string.IsNullOrEmpty(ah.ProductAccessibility.FipsId) &&
+                            userProductFipsIds.Contains(ah.ProductAccessibility.FipsId));
+                    }
+                    else
+                    {
+                        // User has no assigned products, so return empty query
+                        auditsQuery = auditsQuery.Where(ah => false);
+                    }
+                }
+                // For "all-audits", no additional filtering needed - show all audits
 
                 if (!string.IsNullOrWhiteSpace(auditType))
                 {
@@ -640,8 +853,8 @@ namespace Compass.Controllers
                 return View("~/Views/Apps/Accessibility/Index.cshtml", allProducts);
             }
  
-            // Default to products tab
-            ViewBag.ActiveTab = "products";
+            // Default to your-products tab
+            ViewBag.ActiveTab = "your-products";
             return View("~/Views/Apps/Accessibility/Index.cshtml", allProducts.Take(pageSize).ToList());
         }
         
@@ -657,29 +870,28 @@ namespace Compass.Controllers
             return View("~/Views/Apps/Accessibility/AllIssues.cshtml", allIssues);
         }
 
-        // GET: Accessibility/Details/{fipsId}?tab=overview
-        public async Task<IActionResult> Details(string fipsId, string tab = "overview")
+        // GET: Accessibility/Details/{documentId}?tab=overview
+        // Supports both DocumentId (primary) and FipsId (legacy) for backwards compatibility
+        public async Task<IActionResult> Details(string documentId, string tab = "overview")
         {
-            // Get CMS product info first
+            // Get CMS product info first - try to find by DocumentId (primary) or FipsId (legacy)
             var cmsProducts = await _productsApiService.GetProductsAsync();
-            var productInfo = cmsProducts?.FirstOrDefault(p => p.FipsId == fipsId);
+            var productInfo = cmsProducts?.FirstOrDefault(p => 
+                p.DocumentId == documentId || p.FipsId == documentId);
             
             if (productInfo == null)
             {
                 return NotFound();
             }
             
+            // Use DocumentId for database lookup (primary identifier)
+            var productDocumentId = productInfo.DocumentId ?? documentId;
             var productAccessibility = await _context.ProductAccessibilities
                 .Include(pa => pa.ContactMethods.Where(cm => cm.IsActive))
                 .Include(pa => pa.AuditHistories.Where(ah => !ah.IsDeleted))
-                .Include(pa => pa.Issues.Where(i => !i.IsDeleted))
-                    .ThenInclude(i => i.Comments.Where(c => !c.IsDeleted))
-                .Include(pa => pa.Issues.Where(i => !i.IsDeleted))
-                    .ThenInclude(i => i.History)
-                .Include(pa => pa.Issues.Where(i => !i.IsDeleted))
-                    .ThenInclude(i => i.WcagCriteriaLinks)
-                        .ThenInclude(link => link.WcagCriterion)
-                .FirstOrDefaultAsync(pa => pa.FipsId == fipsId && !pa.IsDeleted);
+                .FirstOrDefaultAsync(pa => 
+                    (pa.ProductDocumentId == productDocumentId || (string.IsNullOrEmpty(pa.ProductDocumentId) && pa.FipsId == documentId)) 
+                    && !pa.IsDeleted);
             
             // If product not enrolled, show enrollment option
             if (productAccessibility == null)
@@ -688,6 +900,24 @@ namespace Compass.Controllers
                 ViewBag.IsNotEnrolled = true;
                 ViewBag.CurrentTab = tab;
                 return View("~/Views/Apps/Accessibility/Details.cshtml", (ProductAccessibility?)null);
+            }
+            
+            // Explicitly load issues with all related data (load all, filter in memory for reliability)
+            // Query issues directly to ensure they're loaded correctly
+            var issues = await _context.AccessibilityIssues
+                .Include(i => i.Comments.Where(c => !c.IsDeleted))
+                .Include(i => i.History)
+                .Include(i => i.WcagCriteriaLinks)
+                    .ThenInclude(link => link.WcagCriterion)
+                .Where(i => i.ProductAccessibilityId == productAccessibility.Id)
+                .ToListAsync();
+            
+            // Manually populate the Issues collection to ensure it's available
+            // Clear existing collection and add loaded issues
+            productAccessibility.Issues.Clear();
+            foreach (var issue in issues)
+            {
+                productAccessibility.Issues.Add(issue);
             }
             
             // Update cached product info from CMS
@@ -780,11 +1010,19 @@ namespace Compass.Controllers
             ViewBag.ComplianceBgClass = complianceBgClass;
             
             ViewBag.CurrentTab = tab;
+            
+            // Check if user is in Design Operations group for bulk edit functionality
+            var userEmail = User.Identity?.Name ?? string.Empty;
+            var isDesignOps = !string.IsNullOrEmpty(userEmail) && 
+                            await _permissionService.IsInGroupAsync(userEmail, "Design Operations");
+            ViewBag.IsDesignOps = isDesignOps;
+            
             return View("~/Views/Apps/Accessibility/Details.cshtml", productAccessibility);
         }
 
-        // GET: Accessibility/ViewIssue/{id}?fipsId={fipsId}
-        public async Task<IActionResult> ViewIssue(int id, string fipsId)
+        // GET: Accessibility/ViewIssue/{id}?documentId={documentId}
+        // Supports both DocumentId (primary) and FipsId (legacy) for backwards compatibility
+        public async Task<IActionResult> ViewIssue(int id, string documentId)
         {
             var issue = await _context.AccessibilityIssues
                 .Include(i => i.ProductAccessibility)
@@ -799,21 +1037,31 @@ namespace Compass.Controllers
                 return NotFound();
             }
             
-            // Verify the issue belongs to the correct product
-            if (issue.ProductAccessibility.FipsId != fipsId)
+            // Verify the issue belongs to the correct product (check by DocumentId or FipsId)
+            var productDocumentId = issue.ProductAccessibility.ProductDocumentId ?? issue.ProductAccessibility.FipsId;
+            if (productDocumentId != documentId && issue.ProductAccessibility.FipsId != documentId)
             {
                 return NotFound();
             }
             
-            ViewBag.FipsId = fipsId;
+            // Get CMS product info for sidebar
+            var cmsProducts = await _productsApiService.GetProductsAsync();
+            var cmsProduct = cmsProducts?.FirstOrDefault(p => 
+                p.DocumentId == documentId || p.FipsId == documentId);
+            
+            ViewBag.DocumentId = documentId;
+            ViewBag.FipsId = issue.ProductAccessibility.FipsId; // Keep for backwards compatibility
             ViewBag.ProductName = issue.ProductAccessibility.ProductName;
+            ViewBag.CmsProduct = cmsProduct;
             return View("~/Views/Apps/Accessibility/IssueDetails.cshtml", issue);
         }
 
         // GET: Accessibility/Enroll
-        public async Task<IActionResult> Enroll(string? fipsId)
+        // Supports both DocumentId (primary) and FipsId (legacy) for backwards compatibility
+        public async Task<IActionResult> Enroll(string? documentId)
         {
-            ViewBag.FipsId = fipsId;
+            ViewBag.DocumentId = documentId;
+            ViewBag.FipsId = documentId; // Keep for backwards compatibility
             
             // Get CMS products for autocomplete
             ViewBag.CmsProducts = await _productsApiService.GetProductsAsync();
@@ -828,24 +1076,52 @@ namespace Compass.Controllers
         {
             try
             {
-                // Check if product already enrolled
+                // Get product info from CMS first to get DocumentId
+                // Support both documentId (from form) and fipsId (legacy)
+                var documentIdFromForm = Request.Form["documentId"].ToString();
+                var fipsIdFromForm = productAccessibility.FipsId ?? Request.Form["fipsId"].ToString();
+                
+                var cmsProducts = await _productsApiService.GetProductsAsync();
+                var productInfo = cmsProducts?.FirstOrDefault(p => 
+                    (!string.IsNullOrEmpty(documentIdFromForm) && (p.DocumentId == documentIdFromForm || p.FipsId == documentIdFromForm)) ||
+                    (!string.IsNullOrEmpty(fipsIdFromForm) && (p.FipsId == fipsIdFromForm || p.DocumentId == fipsIdFromForm)));
+                
+                if (productInfo == null)
+                {
+                    TempData["ErrorMessage"] = "Product not found in CMS.";
+                    return View(productAccessibility);
+                }
+                
+                // Set ProductDocumentId (primary identifier)
+                if (string.IsNullOrEmpty(productInfo.DocumentId))
+                {
+                    TempData["ErrorMessage"] = "Product DocumentId is required but not found in CMS.";
+                    return View(productAccessibility);
+                }
+                productAccessibility.ProductDocumentId = productInfo.DocumentId;
+                
+                // Check if product already enrolled (by DocumentId or FipsId for backwards compatibility)
                 var existing = await _context.ProductAccessibilities
-                    .FirstOrDefaultAsync(pa => pa.FipsId == productAccessibility.FipsId && !pa.IsDeleted);
+                    .FirstOrDefaultAsync(pa => 
+                        (pa.ProductDocumentId == productAccessibility.ProductDocumentId || 
+                         (string.IsNullOrEmpty(pa.ProductDocumentId) && pa.FipsId == productAccessibility.FipsId)) 
+                        && !pa.IsDeleted);
                 
                 if (existing != null)
                 {
                     TempData["ErrorMessage"] = "This product is already enrolled in the accessibility management service.";
-                    return RedirectToAction(nameof(Details), new { fipsId = productAccessibility.FipsId });
+                    return RedirectToAction(nameof(Details), new { documentId = productAccessibility.ProductDocumentId ?? productAccessibility.FipsId });
                 }
-                
-                // Get product info from CMS
-                var cmsProducts = await _productsApiService.GetProductsAsync();
-                var productInfo = cmsProducts?.FirstOrDefault(p => p.FipsId == productAccessibility.FipsId);
                 
                 if (productInfo != null)
                 {
                     productAccessibility.ProductName = productInfo.Title;
                     productAccessibility.ProductPhase = productInfo.Phase;
+                    // Ensure FipsId is set for backwards compatibility
+                    if (string.IsNullOrEmpty(productAccessibility.FipsId) && !string.IsNullOrEmpty(productInfo.FipsId))
+                    {
+                        productAccessibility.FipsId = productInfo.FipsId;
+                    }
                 }
                 
                 productAccessibility.EnrolledAt = DateTime.UtcNow;
@@ -873,7 +1149,7 @@ namespace Compass.Controllers
                 }
                 
                 TempData["SuccessMessage"] = "Product enrolled successfully in accessibility management service.";
-                return RedirectToAction(nameof(Details), new { fipsId = productAccessibility.FipsId });
+                return RedirectToAction(nameof(Details), new { documentId = productAccessibility.ProductDocumentId ?? productAccessibility.FipsId });
             }
             catch (Exception ex)
             {
@@ -886,12 +1162,17 @@ namespace Compass.Controllers
         // POST: Accessibility/UpdateSettings
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> UpdateSettings(string fipsId, int slaResponseDays, string complaintsEmail)
+        // Supports both DocumentId (primary) and FipsId (legacy) for backwards compatibility
+        public async Task<IActionResult> UpdateSettings(string documentId, int slaResponseDays, string complaintsEmail)
         {
+            ProductAccessibility? productAccessibility = null;
             try
             {
-                var productAccessibility = await _context.ProductAccessibilities
-                    .FirstOrDefaultAsync(pa => pa.FipsId == fipsId && !pa.IsDeleted);
+                // Try to find by DocumentId first, then FipsId for backwards compatibility
+                productAccessibility = await _context.ProductAccessibilities
+                    .FirstOrDefaultAsync(pa => 
+                        (pa.ProductDocumentId == documentId || (string.IsNullOrEmpty(pa.ProductDocumentId) && pa.FipsId == documentId)) 
+                        && !pa.IsDeleted);
                 
                 if (productAccessibility == null)
                 {
@@ -913,17 +1194,20 @@ namespace Compass.Controllers
                 TempData["ErrorMessage"] = "An error occurred while updating settings.";
             }
             
-            return RedirectToAction(nameof(Details), new { fipsId, tab = "settings" });
+            var productDocId = productAccessibility?.ProductDocumentId ?? documentId;
+            return RedirectToAction(nameof(Details), new { documentId = productDocId, tab = "settings" });
         }
 
         // POST: Accessibility/AddContactMethod
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> AddContactMethod(int productAccessibilityId, string fipsId, string type, string detail, string? description, int sortOrder)
+        // Supports both DocumentId (primary) and FipsId (legacy) for backwards compatibility
+        public async Task<IActionResult> AddContactMethod(int productAccessibilityId, string documentId, string type, string detail, string? description, int sortOrder)
         {
+            ProductAccessibility? productAccessibility = null;
             try
             {
-                var productAccessibility = await _context.ProductAccessibilities
+                productAccessibility = await _context.ProductAccessibilities
                     .FirstOrDefaultAsync(pa => pa.Id == productAccessibilityId && !pa.IsDeleted);
                 
                 if (productAccessibility == null)
@@ -946,24 +1230,33 @@ namespace Compass.Controllers
                 await _context.SaveChangesAsync();
                 
                 TempData["SuccessMessage"] = "Contact method added successfully.";
-                return RedirectToAction(nameof(Details), new { fipsId, tab = "settings" });
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error adding contact method");
                 TempData["ErrorMessage"] = "An error occurred while adding contact method.";
-                return RedirectToAction(nameof(Details), new { fipsId, tab = "settings" });
+                if (productAccessibility == null)
+                {
+                    productAccessibility = await _context.ProductAccessibilities
+                        .FirstOrDefaultAsync(pa => pa.Id == productAccessibilityId && !pa.IsDeleted);
+                }
             }
+            
+            var productDocId = productAccessibility?.ProductDocumentId ?? documentId;
+            return RedirectToAction(nameof(Details), new { documentId = productDocId, tab = "settings" });
         }
 
         // POST: Accessibility/DeleteContactMethod
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> DeleteContactMethod(int id, string fipsId)
+        // Supports both DocumentId (primary) and FipsId (legacy) for backwards compatibility
+        public async Task<IActionResult> DeleteContactMethod(int id, string documentId)
         {
+            ProductAccessibility? productAccessibility = null;
             try
             {
                 var contactMethod = await _context.ContactMethods
+                    .Include(cm => cm.ProductAccessibility)
                     .FirstOrDefaultAsync(cm => cm.Id == id);
                 
                 if (contactMethod == null)
@@ -971,18 +1264,27 @@ namespace Compass.Controllers
                     return NotFound();
                 }
                 
+                productAccessibility = contactMethod.ProductAccessibility;
                 _context.ContactMethods.Remove(contactMethod);
                 await _context.SaveChangesAsync();
                 
                 TempData["SuccessMessage"] = "Contact method deleted successfully.";
-                return RedirectToAction(nameof(Details), new { fipsId, tab = "settings" });
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error deleting contact method");
                 TempData["ErrorMessage"] = "An error occurred while deleting contact method.";
-                return RedirectToAction(nameof(Details), new { fipsId, tab = "settings" });
+                if (productAccessibility == null)
+                {
+                    var contactMethod = await _context.ContactMethods
+                        .Include(cm => cm.ProductAccessibility)
+                        .FirstOrDefaultAsync(cm => cm.Id == id);
+                    productAccessibility = contactMethod?.ProductAccessibility;
+                }
             }
+            
+            var productDocId = productAccessibility?.ProductDocumentId ?? documentId;
+            return RedirectToAction(nameof(Details), new { documentId = productDocId, tab = "settings" });
         }
 
         // POST: Accessibility/AddAudit
@@ -1018,24 +1320,32 @@ namespace Compass.Controllers
                 await _context.SaveChangesAsync();
                 
                 TempData["SuccessMessage"] = "Audit record added successfully.";
-                return RedirectToAction(nameof(Details), new { fipsId, tab = "audits" });
+                return RedirectToAction(nameof(Details), new { documentId = GetDocumentId(productAccessibility), tab = "audits" });
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error adding audit record");
+                var productAccessibility = await _context.ProductAccessibilities
+                    .FirstOrDefaultAsync(pa => pa.Id == productAccessibilityId && !pa.IsDeleted);
+                if (productAccessibility == null)
+                {
+                    TempData["ErrorMessage"] = "An error occurred while adding audit record. Product not found.";
+                    return RedirectToAction(nameof(Index));
+                }
                 TempData["ErrorMessage"] = "An error occurred while adding audit record.";
-                return RedirectToAction(nameof(Details), new { fipsId, tab = "audits" });
+                return RedirectToAction(nameof(Details), new { documentId = GetDocumentId(productAccessibility), tab = "audits" });
             }
         }
 
         // POST: Accessibility/DeleteAudit
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> DeleteAudit(int id, string fipsId)
+        public async Task<IActionResult> DeleteAudit(int id)
         {
             try
             {
                 var audit = await _context.AuditHistories
+                    .Include(ah => ah.ProductAccessibility)
                     .FirstOrDefaultAsync(ah => ah.Id == id);
                 
                 if (audit == null)
@@ -1043,6 +1353,7 @@ namespace Compass.Controllers
                     return NotFound();
                 }
                 
+                var productAccessibility = audit.ProductAccessibility;
                 audit.IsDeleted = true;
                 audit.UpdatedAt = DateTime.UtcNow;
                 audit.UpdatedBy = User.Identity?.Name;
@@ -1050,20 +1361,29 @@ namespace Compass.Controllers
                 await _context.SaveChangesAsync();
                 
                 TempData["SuccessMessage"] = "Audit record deleted successfully.";
-                return RedirectToAction(nameof(Details), new { fipsId, tab = "audits" });
+                return RedirectToAction(nameof(Details), new { documentId = GetDocumentId(productAccessibility), tab = "audits" });
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error deleting audit record");
+                // Try to get productAccessibility from the audit if it wasn't loaded
+                var audit = await _context.AuditHistories
+                    .Include(ah => ah.ProductAccessibility)
+                    .FirstOrDefaultAsync(ah => ah.Id == id);
+                if (audit?.ProductAccessibility == null)
+                {
+                    TempData["ErrorMessage"] = "An error occurred while deleting audit record. Product not found.";
+                    return RedirectToAction(nameof(Index));
+                }
                 TempData["ErrorMessage"] = "An error occurred while deleting audit record.";
-                return RedirectToAction(nameof(Details), new { fipsId, tab = "audits" });
+                return RedirectToAction(nameof(Details), new { documentId = GetDocumentId(audit.ProductAccessibility), tab = "audits" });
             }
         }
 
         // POST: Accessibility/AddIssue
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> AddIssue(int productAccessibilityId, AccessibilityIssue issue, string? wcagCriteriaIds)
+        public async Task<IActionResult> AddIssue(int productAccessibilityId, AccessibilityIssue issue, string? wcagCriteriaIds, string? issueTitle)
         {
             try
             {
@@ -1074,6 +1394,37 @@ namespace Compass.Controllers
                 {
                     return NotFound();
                 }
+
+                // Note: IssueDescription now supports unlimited length (nvarchar(MAX))
+                // No length validation needed
+                
+                // Explicitly set IssueType from form data (handles model binding issues)
+                // Check both "issue.IssueType" (with prefix) and "issueType" (without prefix)
+                if (Request.Form.ContainsKey("issue.IssueType") && !string.IsNullOrWhiteSpace(Request.Form["issue.IssueType"]))
+                {
+                    issue.IssueType = Request.Form["issue.IssueType"].ToString().Trim();
+                }
+                else if (Request.Form.ContainsKey("issueType") && !string.IsNullOrWhiteSpace(Request.Form["issueType"]))
+                {
+                    issue.IssueType = Request.Form["issueType"].ToString().Trim();
+                }
+                // If model binding worked, issue.IssueType should already be set, but ensure it has a default
+                if (string.IsNullOrWhiteSpace(issue.IssueType))
+                {
+                    issue.IssueType = "WCAG"; // Default fallback
+                }
+                
+                // Explicitly set IssueTitle from form data (handles model binding issues)
+                // Try from explicit parameter first, then from Request.Form, then from model binding
+                if (!string.IsNullOrWhiteSpace(issueTitle))
+                {
+                    issue.IssueTitle = issueTitle.Trim();
+                }
+                else if (Request.Form.ContainsKey("issueTitle") && !string.IsNullOrWhiteSpace(Request.Form["issueTitle"]))
+                {
+                    issue.IssueTitle = Request.Form["issueTitle"].ToString().Trim();
+                }
+                // If model binding worked, issue.IssueTitle should already be set
                 
                 issue.ProductAccessibilityId = productAccessibilityId;
                 issue.CreatedAt = DateTime.UtcNow;
@@ -1120,12 +1471,33 @@ namespace Compass.Controllers
                 await _context.SaveChangesAsync();
                 
                 TempData["SuccessMessage"] = "Accessibility issue added successfully.";
-                return RedirectToAction(nameof(Details), new { fipsId = productAccessibility.FipsId, tab = "issues" });
+                return RedirectToAction(nameof(Details), new { documentId = GetDocumentId(productAccessibility), tab = "issues" });
+            }
+            catch (DbUpdateException dbEx) when (dbEx.InnerException is SqlException sqlEx && sqlEx.Message.Contains("String or binary data would be truncated"))
+            {
+                _logger.LogError(dbEx, "Error adding accessibility issue - data truncation");
+                var productAccessibility = await _context.ProductAccessibilities
+                    .FirstOrDefaultAsync(pa => pa.Id == productAccessibilityId && !pa.IsDeleted);
+                if (productAccessibility == null)
+                {
+                    TempData["ErrorMessage"] = "An error occurred while saving the issue. Product not found.";
+                    return RedirectToAction(nameof(Index));
+                }
+                TempData["ErrorMessage"] = "An error occurred while saving the issue. Please check that all fields are within their limits and try again.";
+                return RedirectToAction(nameof(Details), new { documentId = GetDocumentId(productAccessibility), tab = "issues" });
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error adding accessibility issue");
-                return Json(new { success = false, message = "Error adding issue" });
+                var productAccessibility = await _context.ProductAccessibilities
+                    .FirstOrDefaultAsync(pa => pa.Id == productAccessibilityId && !pa.IsDeleted);
+                if (productAccessibility == null)
+                {
+                    TempData["ErrorMessage"] = "An error occurred while adding the issue. Product not found.";
+                    return RedirectToAction(nameof(Index));
+                }
+                TempData["ErrorMessage"] = "An error occurred while adding the issue. Please try again.";
+                return RedirectToAction(nameof(Details), new { documentId = GetDocumentId(productAccessibility), tab = "issues" });
             }
         }
 
@@ -1148,93 +1520,169 @@ namespace Compass.Controllers
                 // Track changes
                 var changes = new List<IssueHistory>();
                 
-                if (issue.IssueDescription != updatedIssue.IssueDescription)
+                // Only update fields that are actually provided in the form to avoid wiping out data
+                // Check Request.Form to see which fields were submitted
+                
+                if (Request.Form.ContainsKey("issueDescription"))
                 {
-                    changes.Add(new IssueHistory { 
-                        FieldChanged = "Description", 
-                        OldValue = issue.IssueDescription ?? "", 
-                        NewValue = updatedIssue.IssueDescription ?? "" 
-                    });
-                    issue.IssueDescription = updatedIssue.IssueDescription;
+                    if (issue.IssueDescription != updatedIssue.IssueDescription)
+                    {
+                        changes.Add(new IssueHistory { 
+                            FieldChanged = "Description", 
+                            OldValue = issue.IssueDescription ?? "", 
+                            NewValue = updatedIssue.IssueDescription ?? "" 
+                        });
+                        issue.IssueDescription = updatedIssue.IssueDescription;
+                    }
                 }
                 
-                if (issue.Status != updatedIssue.Status)
+                if (Request.Form.ContainsKey("status"))
                 {
-                    changes.Add(new IssueHistory { 
-                        FieldChanged = "Status", 
-                        OldValue = issue.Status, 
-                        NewValue = updatedIssue.Status 
-                    });
-                    issue.Status = updatedIssue.Status;
+                    if (issue.Status != updatedIssue.Status)
+                    {
+                        changes.Add(new IssueHistory { 
+                            FieldChanged = "Status", 
+                            OldValue = issue.Status, 
+                            NewValue = updatedIssue.Status 
+                        });
+                        issue.Status = updatedIssue.Status;
+                    }
                 }
                 
-                if (issue.IsResolving != updatedIssue.IsResolving)
+                if (Request.Form.ContainsKey("isResolving"))
                 {
-                    changes.Add(new IssueHistory { 
-                        FieldChanged = "Resolving", 
-                        OldValue = issue.IsResolving.ToString(), 
-                        NewValue = updatedIssue.IsResolving.ToString() 
-                    });
-                    issue.IsResolving = updatedIssue.IsResolving;
+                    if (issue.IsResolving != updatedIssue.IsResolving)
+                    {
+                        changes.Add(new IssueHistory { 
+                            FieldChanged = "Resolving", 
+                            OldValue = issue.IsResolving.ToString(), 
+                            NewValue = updatedIssue.IsResolving.ToString() 
+                        });
+                        issue.IsResolving = updatedIssue.IsResolving;
+                    }
                 }
                 
-                if (issue.PlannedResolutionDate != updatedIssue.PlannedResolutionDate)
+                if (Request.Form.ContainsKey("plannedResolutionDate"))
                 {
-                    changes.Add(new IssueHistory { 
-                        FieldChanged = "Planned Resolution Date", 
-                        OldValue = issue.PlannedResolutionDate?.ToString("yyyy-MM-dd"), 
-                        NewValue = updatedIssue.PlannedResolutionDate?.ToString("yyyy-MM-dd") 
-                    });
-                    issue.PlannedResolutionDate = updatedIssue.PlannedResolutionDate;
+                    if (issue.PlannedResolutionDate != updatedIssue.PlannedResolutionDate)
+                    {
+                        changes.Add(new IssueHistory { 
+                            FieldChanged = "Planned Resolution Date", 
+                            OldValue = issue.PlannedResolutionDate?.ToString("yyyy-MM-dd"), 
+                            NewValue = updatedIssue.PlannedResolutionDate?.ToString("yyyy-MM-dd") 
+                        });
+                        issue.PlannedResolutionDate = updatedIssue.PlannedResolutionDate;
+                    }
                 }
                 
-                if (issue.NonResolutionReason != updatedIssue.NonResolutionReason)
+                if (Request.Form.ContainsKey("nonResolutionReason"))
                 {
-                    changes.Add(new IssueHistory { 
-                        FieldChanged = "Reason Not Resolving", 
-                        OldValue = issue.NonResolutionReason ?? "", 
-                        NewValue = updatedIssue.NonResolutionReason ?? "" 
-                    });
-                    issue.NonResolutionReason = updatedIssue.NonResolutionReason;
+                    if (issue.NonResolutionReason != updatedIssue.NonResolutionReason)
+                    {
+                        changes.Add(new IssueHistory { 
+                            FieldChanged = "Reason Not Resolving", 
+                            OldValue = issue.NonResolutionReason ?? "", 
+                            NewValue = updatedIssue.NonResolutionReason ?? "" 
+                        });
+                        issue.NonResolutionReason = updatedIssue.NonResolutionReason;
+                    }
                 }
                 
-                if (issue.ActualResolutionDate != updatedIssue.ActualResolutionDate)
+                if (Request.Form.ContainsKey("actualResolutionDate"))
                 {
-                    changes.Add(new IssueHistory { 
-                        FieldChanged = "Closure Date", 
-                        OldValue = issue.ActualResolutionDate?.ToString("yyyy-MM-dd"), 
-                        NewValue = updatedIssue.ActualResolutionDate?.ToString("yyyy-MM-dd") 
-                    });
-                    issue.ActualResolutionDate = updatedIssue.ActualResolutionDate;
+                    if (issue.ActualResolutionDate != updatedIssue.ActualResolutionDate)
+                    {
+                        changes.Add(new IssueHistory { 
+                            FieldChanged = "Closure Date", 
+                            OldValue = issue.ActualResolutionDate?.ToString("yyyy-MM-dd"), 
+                            NewValue = updatedIssue.ActualResolutionDate?.ToString("yyyy-MM-dd") 
+                        });
+                        issue.ActualResolutionDate = updatedIssue.ActualResolutionDate;
+                    }
                 }
                 
-                if (issue.ResolutionNotes != updatedIssue.ResolutionNotes)
+                if (Request.Form.ContainsKey("resolutionNotes"))
                 {
-                    changes.Add(new IssueHistory { 
-                        FieldChanged = issue.Status == "closed" ? "Closure Explanation" : "Resolution Notes", 
-                        OldValue = issue.ResolutionNotes ?? "", 
-                        NewValue = updatedIssue.ResolutionNotes ?? "" 
-                    });
-                    issue.ResolutionNotes = updatedIssue.ResolutionNotes;
+                    if (issue.ResolutionNotes != updatedIssue.ResolutionNotes)
+                    {
+                        changes.Add(new IssueHistory { 
+                            FieldChanged = issue.Status == "closed" ? "Closure Explanation" : "Resolution Notes", 
+                            OldValue = issue.ResolutionNotes ?? "", 
+                            NewValue = updatedIssue.ResolutionNotes ?? "" 
+                        });
+                        issue.ResolutionNotes = updatedIssue.ResolutionNotes;
+                    }
                 }
                 
-                if (issue.VerificationNotes != updatedIssue.VerificationNotes)
+                if (Request.Form.ContainsKey("verificationNotes"))
                 {
-                    changes.Add(new IssueHistory { 
-                        FieldChanged = "Verification Notes", 
-                        OldValue = issue.VerificationNotes ?? "", 
-                        NewValue = updatedIssue.VerificationNotes ?? "" 
-                    });
-                    issue.VerificationNotes = updatedIssue.VerificationNotes;
+                    if (issue.VerificationNotes != updatedIssue.VerificationNotes)
+                    {
+                        changes.Add(new IssueHistory { 
+                            FieldChanged = "Verification Notes", 
+                            OldValue = issue.VerificationNotes ?? "", 
+                            NewValue = updatedIssue.VerificationNotes ?? "" 
+                        });
+                        issue.VerificationNotes = updatedIssue.VerificationNotes;
+                    }
                 }
                 
-                // Update other fields (no history tracking needed for these)
-                issue.IssueTitle = updatedIssue.IssueTitle;
-                issue.WcagCriteria = updatedIssue.WcagCriteria;
-                issue.WcagLevel = updatedIssue.WcagLevel;
-                issue.WcagVersion = updatedIssue.WcagVersion;
-                issue.IdentifiedDate = updatedIssue.IdentifiedDate;
-                issue.IdentifiedVia = updatedIssue.IdentifiedVia;
+                if (Request.Form.ContainsKey("IssueTitle") || Request.Form.ContainsKey("issueTitle"))
+                {
+                    var newTitle = Request.Form.ContainsKey("IssueTitle") ? Request.Form["IssueTitle"].ToString() : Request.Form["issueTitle"].ToString();
+                    if (issue.IssueTitle != newTitle)
+                    {
+                        changes.Add(new IssueHistory { 
+                            FieldChanged = "Issue Title", 
+                            OldValue = issue.IssueTitle ?? "", 
+                            NewValue = newTitle ?? "" 
+                        });
+                        issue.IssueTitle = newTitle;
+                    }
+                }
+                
+                // Update other fields only if they're provided in the form (to avoid wiping out data when only updating specific fields)
+                // These fields don't have history tracking, so only update if provided and different
+                if (Request.Form.ContainsKey("identifiedDate") && !string.IsNullOrWhiteSpace(Request.Form["identifiedDate"]))
+                {
+                    if (DateTime.TryParse(Request.Form["identifiedDate"], out var identifiedDate) && issue.IdentifiedDate != identifiedDate)
+                    {
+                        issue.IdentifiedDate = identifiedDate;
+                    }
+                }
+                
+                if (Request.Form.ContainsKey("identifiedVia") && !string.IsNullOrWhiteSpace(Request.Form["identifiedVia"]))
+                {
+                    if (issue.IdentifiedVia != updatedIssue.IdentifiedVia)
+                    {
+                        issue.IdentifiedVia = updatedIssue.IdentifiedVia;
+                    }
+                }
+                
+                if (Request.Form.ContainsKey("wcagCriteria"))
+                {
+                    if (issue.WcagCriteria != updatedIssue.WcagCriteria)
+                    {
+                        issue.WcagCriteria = updatedIssue.WcagCriteria;
+                    }
+                }
+                
+                if (Request.Form.ContainsKey("wcagLevel") && !string.IsNullOrWhiteSpace(Request.Form["wcagLevel"]))
+                {
+                    if (issue.WcagLevel != updatedIssue.WcagLevel)
+                    {
+                        issue.WcagLevel = updatedIssue.WcagLevel;
+                    }
+                }
+                
+                if (Request.Form.ContainsKey("wcagVersion") && !string.IsNullOrWhiteSpace(Request.Form["wcagVersion"]))
+                {
+                    if (issue.WcagVersion != updatedIssue.WcagVersion)
+                    {
+                        issue.WcagVersion = updatedIssue.WcagVersion;
+                    }
+                }
+                
                 issue.UpdatedAt = DateTime.UtcNow;
                 issue.UpdatedBy = User.Identity?.Name;
                 
@@ -1251,13 +1699,172 @@ namespace Compass.Controllers
                 await _context.SaveChangesAsync();
                 
                 TempData["SuccessMessage"] = "Issue updated successfully.";
-                return RedirectToAction(nameof(ViewIssue), new { id, fipsId = issue.ProductAccessibility.FipsId });
+                return RedirectToAction(nameof(ViewIssue), new { id, documentId = GetDocumentId(issue.ProductAccessibility) });
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error updating accessibility issue");
+                var issue = await _context.AccessibilityIssues
+                    .Include(i => i.ProductAccessibility)
+                    .FirstOrDefaultAsync(i => i.Id == id && !i.IsDeleted);
+                if (issue == null)
+                {
+                    TempData["ErrorMessage"] = "An error occurred while updating the issue. Issue not found.";
+                    return RedirectToAction(nameof(Index));
+                }
                 TempData["ErrorMessage"] = "An error occurred while updating the issue.";
-                return RedirectToAction(nameof(ViewIssue), new { id });
+                return RedirectToAction(nameof(ViewIssue), new { id, documentId = GetDocumentId(issue.ProductAccessibility) });
+            }
+        }
+
+        // POST: Accessibility/BulkUpdateIssues
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> BulkUpdateIssues(string documentId, List<int> issueIds, string? status, DateTime? identifiedDate, string? isResolving, DateTime? plannedResolutionDate, string? changeNote)
+        {
+            try
+            {
+                // Check if user is in Design Operations group
+                var userEmail = User.Identity?.Name ?? string.Empty;
+                if (string.IsNullOrEmpty(userEmail) || !await _permissionService.IsInGroupAsync(userEmail, "Design Operations"))
+                {
+                    TempData["ErrorMessage"] = "You do not have permission to perform bulk updates.";
+                    return RedirectToAction(nameof(Details), new { documentId, tab = "issues" });
+                }
+                
+                if (issueIds == null || !issueIds.Any())
+                {
+                    TempData["ErrorMessage"] = "No issues selected for update.";
+                    return RedirectToAction(nameof(Details), new { documentId, tab = "issues" });
+                }
+                
+                // Get the product to verify documentId (supports both DocumentId and FipsId)
+                var productAccessibility = await _context.ProductAccessibilities
+                    .FirstOrDefaultAsync(pa => 
+                        (pa.ProductDocumentId == documentId || (string.IsNullOrEmpty(pa.ProductDocumentId) && pa.FipsId == documentId)) 
+                        && !pa.IsDeleted);
+                
+                if (productAccessibility == null)
+                {
+                    return NotFound();
+                }
+                
+                // Get all issues to update
+                var issues = await _context.AccessibilityIssues
+                    .Where(i => issueIds.Contains(i.Id) && 
+                               i.ProductAccessibilityId == productAccessibility.Id && 
+                               !i.IsDeleted)
+                    .ToListAsync();
+                
+                if (!issues.Any())
+                {
+                    TempData["ErrorMessage"] = "No valid issues found to update.";
+                    return RedirectToAction(nameof(Details), new { documentId = GetDocumentId(productAccessibility), tab = "issues" });
+                }
+                
+                var changes = new List<IssueHistory>();
+                var updatedCount = 0;
+                
+                foreach (var issue in issues)
+                {
+                    var issueChanged = false;
+                    
+                    // Update status if provided
+                    if (!string.IsNullOrEmpty(status) && issue.Status != status)
+                    {
+                        changes.Add(new IssueHistory
+                        {
+                            AccessibilityIssueId = issue.Id,
+                            FieldChanged = "Status",
+                            OldValue = issue.Status,
+                            NewValue = status,
+                            ChangedAt = DateTime.UtcNow,
+                            ChangedBy = userEmail,
+                            ChangeNote = changeNote
+                        });
+                        issue.Status = status;
+                        issueChanged = true;
+                    }
+                    
+                    // Update identified date if provided
+                    if (identifiedDate.HasValue && issue.IdentifiedDate != identifiedDate.Value)
+                    {
+                        issue.IdentifiedDate = identifiedDate.Value;
+                        issueChanged = true;
+                    }
+                    
+                    // Update resolving status if provided
+                    if (!string.IsNullOrEmpty(isResolving))
+                    {
+                        bool newResolvingValue = bool.Parse(isResolving);
+                        if (issue.IsResolving != newResolvingValue)
+                        {
+                            changes.Add(new IssueHistory
+                            {
+                                AccessibilityIssueId = issue.Id,
+                                FieldChanged = "Resolving",
+                                OldValue = issue.IsResolving.ToString(),
+                                NewValue = newResolvingValue.ToString(),
+                                ChangedAt = DateTime.UtcNow,
+                                ChangedBy = userEmail,
+                                ChangeNote = changeNote
+                            });
+                            issue.IsResolving = newResolvingValue;
+                            issueChanged = true;
+                        }
+                    }
+                    
+                    // Update planned resolution date if provided
+                    if (plannedResolutionDate.HasValue && issue.PlannedResolutionDate != plannedResolutionDate.Value)
+                    {
+                        changes.Add(new IssueHistory
+                        {
+                            AccessibilityIssueId = issue.Id,
+                            FieldChanged = "Planned Resolution Date",
+                            OldValue = issue.PlannedResolutionDate?.ToString("yyyy-MM-dd") ?? "",
+                            NewValue = plannedResolutionDate.Value.ToString("yyyy-MM-dd"),
+                            ChangedAt = DateTime.UtcNow,
+                            ChangedBy = userEmail,
+                            ChangeNote = changeNote
+                        });
+                        issue.PlannedResolutionDate = plannedResolutionDate.Value;
+                        issueChanged = true;
+                    }
+                    
+                    if (issueChanged)
+                    {
+                        issue.UpdatedAt = DateTime.UtcNow;
+                        issue.UpdatedBy = userEmail;
+                        updatedCount++;
+                    }
+                }
+                
+                // Add all history entries
+                if (changes.Any())
+                {
+                    _context.IssueHistories.AddRange(changes);
+                }
+                
+                await _context.SaveChangesAsync();
+                
+                TempData["SuccessMessage"] = $"Successfully updated {updatedCount} issue(s).";
+                return RedirectToAction(nameof(Details), new { documentId = GetDocumentId(productAccessibility), tab = "issues" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error performing bulk update on issues");
+                // Try to get productAccessibility for redirect
+                var productAccessibility = await _context.ProductAccessibilities
+                    .FirstOrDefaultAsync(pa => 
+                        (pa.ProductDocumentId == documentId || (string.IsNullOrEmpty(pa.ProductDocumentId) && pa.FipsId == documentId)) 
+                        && !pa.IsDeleted);
+                if (productAccessibility == null)
+                {
+                    TempData["ErrorMessage"] = "An error occurred while updating issues. Product not found.";
+                    return RedirectToAction(nameof(Index));
+                }
+                TempData["ErrorMessage"] = "An error occurred while updating issues. Please try again.";
+                return RedirectToAction(nameof(Details), new { documentId = GetDocumentId(productAccessibility), tab = "issues" });
             }
         }
 
@@ -1277,7 +1884,6 @@ namespace Compass.Controllers
                     return NotFound();
                 }
                 
-                var fipsId = issue.ProductAccessibility.FipsId;
                 issue.IsDeleted = true;
                 issue.UpdatedAt = DateTime.UtcNow;
                 issue.UpdatedBy = User.Identity?.Name;
@@ -1285,7 +1891,7 @@ namespace Compass.Controllers
                 await _context.SaveChangesAsync();
                 
                 TempData["SuccessMessage"] = "Issue deleted successfully.";
-                return RedirectToAction(nameof(Details), new { fipsId, tab = "issues" });
+                return RedirectToAction(nameof(Details), new { documentId = GetDocumentId(issue.ProductAccessibility), tab = "issues" });
             }
             catch (Exception ex)
             {
@@ -1350,13 +1956,21 @@ namespace Compass.Controllers
                 await _context.SaveChangesAsync();
                 
                 TempData["SuccessMessage"] = "Issue closed successfully.";
-                return RedirectToAction(nameof(ViewIssue), new { id, fipsId = issue.ProductAccessibility.FipsId });
+                return RedirectToAction(nameof(ViewIssue), new { id, documentId = GetDocumentId(issue.ProductAccessibility) });
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error closing accessibility issue");
+                var issue = await _context.AccessibilityIssues
+                    .Include(i => i.ProductAccessibility)
+                    .FirstOrDefaultAsync(i => i.Id == id && !i.IsDeleted);
+                if (issue == null)
+                {
+                    TempData["ErrorMessage"] = "An error occurred while closing the issue. Issue not found.";
+                    return RedirectToAction(nameof(Index));
+                }
                 TempData["ErrorMessage"] = "An error occurred while closing the issue.";
-                return RedirectToAction(nameof(ViewIssue), new { id });
+                return RedirectToAction(nameof(ViewIssue), new { id, documentId = GetDocumentId(issue.ProductAccessibility) });
             }
         }
 
@@ -1385,14 +1999,14 @@ namespace Compass.Controllers
                 if (existingRequest != null)
                 {
                     TempData["ErrorMessage"] = "There is already a pending retest request for this issue.";
-                    return RedirectToAction(nameof(Details), new { fipsId = issue.ProductAccessibility.FipsId, tab = "issues" });
+                    return RedirectToAction(nameof(Details), new { documentId = GetDocumentId(issue.ProductAccessibility), tab = "issues" });
                 }
 
                 var retestRequest = new AccessibilityRetestRequest
                 {
                     AccessibilityIssueId = issueId,
                     RequestedBy = User.Identity?.Name ?? "Unknown",
-                    RequestorEmail = requestorEmail?.Trim(),
+                    RequestorEmail = requestorEmail?.Trim() ?? User.Identity?.Name ?? "Unknown",
                     RequestNotes = requestNotes?.Trim(),
                     RequestedAt = DateTime.UtcNow,
                     CreatedAt = DateTime.UtcNow,
@@ -1406,20 +2020,83 @@ namespace Compass.Controllers
                 // await SendRetestRequestEmails(retestRequest);
 
                 TempData["SuccessMessage"] = "Retest request submitted successfully. An administrator will review your request.";
-                return RedirectToAction(nameof(Details), new { fipsId = issue.ProductAccessibility.FipsId, tab = "issues" });
+                return RedirectToAction(nameof(Details), new { documentId = GetDocumentId(issue.ProductAccessibility), tab = "issues" });
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error creating retest request");
+                var issue = await _context.AccessibilityIssues
+                    .Include(i => i.ProductAccessibility)
+                    .FirstOrDefaultAsync(i => i.Id == issueId && !i.IsDeleted);
+                if (issue == null)
+                {
+                    TempData["ErrorMessage"] = "An error occurred while submitting the retest request. Issue not found.";
+                    return RedirectToAction(nameof(Index));
+                }
                 TempData["ErrorMessage"] = "An error occurred while submitting the retest request.";
-                return RedirectToAction(nameof(Details), new { fipsId = "unknown", tab = "issues" });
+                return RedirectToAction(nameof(Details), new { documentId = GetDocumentId(issue.ProductAccessibility), tab = "issues" });
+            }
+        }
+
+        // POST: Accessibility/RequestVerification
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> RequestVerification(string fipsId, string? requestNotes)
+        {
+            try
+            {
+                var productAccessibility = await _context.ProductAccessibilities
+                    .FirstOrDefaultAsync(pa => pa.FipsId == fipsId && !pa.IsDeleted);
+                
+                if (productAccessibility == null)
+                {
+                    return NotFound();
+                }
+
+                // Check if there's already a pending verification request
+                var existingRequest = await _context.StatementVerificationRequests
+                    .FirstOrDefaultAsync(vr => 
+                        vr.ProductAccessibilityId == productAccessibility.Id && 
+                        vr.IsCompleted == null);
+                
+                if (existingRequest != null)
+                {
+                    TempData["ErrorMessage"] = "There is already a pending verification request for this statement.";
+                    return RedirectToAction(nameof(Details), new { fipsId, tab = "statement" });
+                }
+
+                var verificationRequest = new StatementVerificationRequest
+                {
+                    ProductAccessibilityId = productAccessibility.Id,
+                    RequestedBy = User.Identity?.Name ?? "Unknown",
+                    RequestorEmail = User.Identity?.Name ?? "Unknown",
+                    RequestNotes = requestNotes?.Trim(),
+                    RequestedAt = DateTime.UtcNow,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
+
+                _context.StatementVerificationRequests.Add(verificationRequest);
+                await _context.SaveChangesAsync();
+
+                // TODO: Send email notifications to configured admin emails
+                // await SendVerificationRequestEmails(verificationRequest);
+
+                TempData["SuccessMessage"] = "Verification request submitted successfully. An administrator will review your request.";
+                return RedirectToAction(nameof(Details), new { fipsId, tab = "statement" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating verification request");
+                TempData["ErrorMessage"] = "An error occurred while submitting the verification request.";
+                return RedirectToAction(nameof(Details), new { fipsId, tab = "statement" });
             }
         }
 
         // POST: Accessibility/AddComment
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> AddComment(int issueId, string commentText, string? fipsId)
+        public async Task<IActionResult> AddComment(int issueId, string commentText)
         {
             try
             {
@@ -1443,17 +2120,22 @@ namespace Compass.Controllers
                 _context.IssueComments.Add(comment);
                 await _context.SaveChangesAsync();
                 
-                // Use provided fipsId or get from issue
-                var redirectFipsId = fipsId ?? issue.ProductAccessibility.FipsId;
                 TempData["SuccessMessage"] = "Comment added successfully.";
-                return RedirectToAction(nameof(ViewIssue), new { id = issueId, fipsId = redirectFipsId });
+                return RedirectToAction(nameof(ViewIssue), new { id = issueId, documentId = GetDocumentId(issue.ProductAccessibility) });
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error adding comment");
+                var issue = await _context.AccessibilityIssues
+                    .Include(i => i.ProductAccessibility)
+                    .FirstOrDefaultAsync(i => i.Id == issueId && !i.IsDeleted);
+                if (issue == null)
+                {
+                    TempData["ErrorMessage"] = "An error occurred while adding the comment. Issue not found.";
+                    return RedirectToAction(nameof(Index));
+                }
                 TempData["ErrorMessage"] = "An error occurred while adding the comment.";
-                var redirectFipsId = fipsId ?? "unknown";
-                return RedirectToAction(nameof(ViewIssue), new { id = issueId, fipsId = redirectFipsId });
+                return RedirectToAction(nameof(ViewIssue), new { id = issueId, documentId = GetDocumentId(issue.ProductAccessibility) });
             }
         }
 

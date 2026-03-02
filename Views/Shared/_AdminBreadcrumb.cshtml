@@ -1,0 +1,63 @@
+@*
+ * Reusable breadcrumb partial for admin pages
+ * Usage in Breadcrumbs section:
+ * @section Breadcrumbs {
+ *     @await Html.PartialAsync("_AdminBreadcrumb", new { Items = new[] { 
+ *         new { Text = "Administration", Action = "Index", Controller = "Admin" }, 
+ *         new { Text = "Risk Types" } 
+ *     }})
+ * }
+ *@
+
+@model dynamic
+
+@{
+    var items = Model?.Items as IEnumerable<dynamic> ?? new List<dynamic>();
+}
+
+<nav aria-label="Breadcrumb" class="mb-3">
+    <ol class="breadcrumb mb-0 pl-4 breadcrumb-standard">
+        <li class="breadcrumb-item">
+            <a href="@Url.Action("Index", "Home")" class="breadcrumb-link-standard">Home</a>
+        </li>
+        @if (items.Any())
+        {
+            @foreach (var item in items)
+            {
+                if (item == items.Last())
+                {
+                    <li class="breadcrumb-item active breadcrumb-active-standard" aria-current="page">@item.Text</li>
+                }
+                else
+                {
+                    <li class="breadcrumb-item">
+                        @if (item.Action != null && item.Controller != null)
+                        {
+                            string actionName = item.Action?.ToString() ?? "";
+                            string controllerName = item.Controller?.ToString() ?? "";
+                            string url;
+                            if (item.RouteValues != null)
+                            {
+                                url = Url.Action(actionName, controllerName, (object)item.RouteValues);
+                            }
+                            else
+                            {
+                                url = Url.Action(actionName, controllerName);
+                            }
+                            <a href="@url" class="breadcrumb-link-standard">@item.Text</a>
+                        }
+                        else if (item.Url != null)
+                        {
+                            <a href="@item.Url" class="breadcrumb-link-standard">@item.Text</a>
+                        }
+                        else
+                        {
+                            <span class="breadcrumb-link-standard">@item.Text</span>
+                        }
+                    </li>
+                }
+            }
+        }
+    </ol>
+</nav>
+

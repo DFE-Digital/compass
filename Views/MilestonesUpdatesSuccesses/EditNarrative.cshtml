@@ -1,0 +1,150 @@
+@model Compass.Models.MonthlyUpdateNarrative
+@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
+
+@{
+    ViewData["Title"] = "Edit Narrative Entry";
+    var projectId = ViewBag.ProjectId as int?;
+    var projectTitle = ViewBag.ProjectTitle as string;
+    var projectCode = ViewBag.ProjectCode as string;
+    var year = ViewBag.Year as int?;
+    var month = ViewBag.Month as int?;
+    var periodName = ViewBag.PeriodName as string;
+    var narrativeId = ViewBag.NarrativeId as int?;
+}
+
+@section Breadcrumbs {
+    <style>
+        .breadcrumb a:hover {
+            color: #003078 !important;
+            text-decoration: underline !important;
+        }
+    </style>
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <li class="breadcrumb-item">
+                <a href="/" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a href="@Url.Action("Index", "Project")" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Work reporting</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a href="@Url.Action("Details", "Project", new { id = projectId })" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">@projectTitle</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a href="@Url.Action("CreateUpdate", "MilestonesUpdatesSuccesses", new { projectId = projectId, year = year, month = month })" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Monthly Updates - @periodName</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page" style="color: #0b0c0c; font-weight: 600;">Edit Entry</li>
+        </ol>
+    </nav>
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-3">
+            <div class="col-12">
+                <a class="btn btn-link px-0 mb-2" href="@Url.Action("CreateUpdate", "MilestonesUpdatesSuccesses", new { projectId = projectId, year = year, month = month })" aria-label="Back to updates">
+                    <i class="fas fa-arrow-left mr-2" aria-hidden="true"></i>Back to updates
+                </a>
+                <h1 class="m-0">Edit update for @periodName</h1>
+                <p class="text-muted mb-0">Project: @projectTitle</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["SuccessMessage"]
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        <div class="row">
+            <aside class="col-xxl-2 col-xl-2 col-lg-3 col-md-4 col-sm-12 col-12 mb-4">
+                @{
+                    var projectSummary = ViewBag.ProjectSummary as Compass.ViewModels.ProjectSummaryViewModel;
+                }
+                @if (projectSummary != null)
+                {
+                    <partial name="~/Views/Project/_ProjectSummarySidebar.cshtml" model="projectSummary" />
+                }
+            </aside>
+            <div class="col-xxl-10 col-xl-10 col-lg-9 col-md-8 col-sm-12 col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title mb-0">Edit update</h3>
+                    </div>
+                    <div class="card-body">
+                        @if (!ViewData.ModelState.IsValid)
+                        {
+                            <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+                        }
+
+                        <form asp-action="EditNarrative" method="post" id="editNarrativeForm">
+                            @Html.AntiForgeryToken()
+                            
+                            <input type="hidden" name="projectId" value="@projectId" />
+                            <input type="hidden" name="year" value="@year" />
+                            <input type="hidden" name="month" value="@month" />
+                            <input type="hidden" name="narrativeId" value="@narrativeId" />
+
+                            <div class="form-group">
+                                <label for="narrative" class="control-label font-weight-bold">Update <span class="text-danger">*</span></label>
+                                <small class="form-text text-muted">Edit update entry for @periodName (required, max 450 characters)</small>
+                                <textarea name="narrative" id="narrative" class="form-control" rows="6" placeholder="Enter your update..." maxlength="450" required>@Model.Narrative</textarea>
+                                <small class="form-text text-muted">
+                                    <span id="charCount">@Model.Narrative.Length</span> / 450 characters
+                                </small>
+                                <span asp-validation-for="Narrative" class="text-danger"></span>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="card-footer d-flex align-items-center">
+                        <button type="submit" form="editNarrativeForm" class="btn btn-success mr-3">Save changes</button>
+                        <a href="@Url.Action("CreateUpdate", "MilestonesUpdatesSuccesses", new { projectId = projectId, year = year, month = month })" class="btn btn-outline-secondary">Cancel</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+    
+    <script nonce="@Context.Items["Nonce"]">
+        $(document).ready(function() {
+            var $narrative = $('#narrative');
+            var $charCount = $('#charCount');
+            
+            function updateCharCount() {
+                var length = $narrative.val().length;
+                $charCount.text(length);
+                if (length > 400) {
+                    $charCount.addClass('text-warning');
+                } else {
+                    $charCount.removeClass('text-warning');
+                }
+                if (length >= 450) {
+                    $charCount.addClass('text-danger');
+                } else {
+                    $charCount.removeClass('text-danger');
+                }
+            }
+            
+            $narrative.on('input', updateCharCount);
+            updateCharCount();
+        });
+    </script>
+}
+

@@ -1,6 +1,9 @@
 using System;
 using System.Linq;
 using System.Collections.Generic;
+using System.IO;
+using System.Globalization;
+using System.Text;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
@@ -9,15 +12,21 @@ using Compass.Models;
 using Microsoft.AspNetCore.Authorization;
 using Compass.Services;
 using Compass.ViewModels.Admin;
+using Compass.Attributes;
+using CsvHelper;
+using CsvHelper.Configuration;
 
 namespace Compass.Controllers;
 
 [Authorize]
+[RequireAdmin]
 public class AdminController : Controller
 {
     private readonly CompassDbContext _context;
     private readonly ILogger<AdminController> _logger;
     private readonly IApiTokenService _apiTokenService;
+    private readonly IConfiguration _configuration;
+    private readonly IProductsApiService _productsApiService;
 
     private static readonly IReadOnlyList<RaidLookupDefinition> _raidLookupDefinitions = new List<RaidLookupDefinition>
     {
@@ -43,7 +52,8 @@ public class AdminController : Controller
         CreateLookupDefinition<RiskProximity>("risk-proximities", "Risk proximities", "Timeline bands for when a risk may materialise."),
         CreateLookupDefinition<RiskCategory>("risk-categories", "Risk categories", "Categorisation for risk libraries."),
         CreateLookupDefinition<RaidEvidenceType>("raid-evidence-types", "Evidence types", "Shared evidence/documentation types."),
-        CreateLookupDefinition<GovernanceBoard>("governance-boards", "Governance boards", "Committees and boards used for RAID escalation.")
+        CreateLookupDefinition<GovernanceBoard>("governance-boards", "Governance boards", "Committees and boards used for RAID escalation."),
+        CreateLookupDefinition<DemandRequestStatus>("demand-request-statuses", "Demand request statuses", "Workflow states for demand requests.")
     };
 
     private static RaidLookupDefinition CreateLookupDefinition<TLookup>(string key, string label, string? description = null)
@@ -56,17 +66,38 @@ public class AdminController : Controller
             description);
 
 
-    public AdminController(CompassDbContext context, ILogger<AdminController> logger, IApiTokenService apiTokenService)
+    public AdminController(CompassDbContext context, ILogger<AdminController> logger, IApiTokenService apiTokenService, IConfiguration configuration, IProductsApiService productsApiService)
     {
         _context = context;
         _logger = logger;
         _apiTokenService = apiTokenService;
+        _configuration = configuration;
+        _productsApiService = productsApiService;
     }
 
     // GET: Admin/Index
     public IActionResult Index()
     {
         return View("~/Views/Admin/Index.cshtml");
+    }
+
+    // GET: Admin/ChatbotConversations
+    public async Task<IActionResult> ChatbotConversations(int page = 1, int pageSize = 50)
+    {
+        var totalCount = await _context.ChatConversations.CountAsync();
+        var conversations = await _context.ChatConversations
+            .Include(c => c.User)
+            .OrderByDescending(c => c.CreatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync();
+
+        ViewBag.TotalCount = totalCount;
+        ViewBag.Page = page;
+        ViewBag.PageSize = pageSize;
+        ViewBag.TotalPages = totalCount > 0 ? (int)Math.Ceiling(totalCount / (double)pageSize) : 1;
+
+        return View(conversations);
     }
 
     // ==================== RAID SETTINGS ====================
@@ -285,13 +316,15 @@ public class AdminController : Controller
         {
             try
             {
+                // Set default role - roles are managed through groups in UserManagement
+                user.Role = UserRole.Visitor;
                 user.CreatedAt = DateTime.UtcNow;
                 user.UpdatedAt = DateTime.UtcNow;
                 
                 _context.Users.Add(user);
                 await _context.SaveChangesAsync();
                 
-                TempData["SuccessMessage"] = $"User '{user.Name}' has been created successfully.";
+                TempData["SuccessMessage"] = $"User '{user.Name}' has been created successfully. Assign them to groups in User Management to grant permissions.";
                 return RedirectToAction(nameof(Users));
             }
             catch (Exception ex)
@@ -663,7 +696,9 @@ public class AdminController : Controller
             .AsQueryable();
         if (!string.IsNullOrWhiteSpace(fipsId))
         {
-            query = query.Where(r => r.SurveyInstance!.Service!.FipsId == fipsId);
+            query = query.Where(r => r.SurveyInstance != null && 
+                                     r.SurveyInstance.Service != null && 
+                                     r.SurveyInstance.Service.FipsId == fipsId);
         }
         if (from.HasValue)
         {
@@ -713,9 +748,19 @@ public class AdminController : Controller
         {
             try
             {
-                user.UpdatedAt = DateTime.UtcNow;
+                // Get existing user to preserve Role - roles are managed through groups in UserManagement
+                var existingUser = await _context.Users.FindAsync(id);
+                if (existingUser == null)
+                {
+                    return NotFound();
+                }
+
+                // Only update Name and Email - Role is managed through groups
+                existingUser.Name = user.Name;
+                existingUser.Email = user.Email;
+                existingUser.UpdatedAt = DateTime.UtcNow;
                 
-                _context.Update(user);
+                _context.Update(existingUser);
                 await _context.SaveChangesAsync();
                 
                 TempData["SuccessMessage"] = $"User '{user.Name}' has been updated successfully.";
@@ -1620,7 +1665,7 @@ public class AdminController : Controller
     // POST: Admin/CreateDeliveryPriority
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> CreateDeliveryPriority([Bind("Name,Summary,Description,SortOrder,IsActive")] DeliveryPriority deliveryPriority)
+    public async Task<IActionResult> CreateDeliveryPriority([Bind("Name,Summary,Description,SortOrder,IsActive,CssClass")] DeliveryPriority deliveryPriority)
     {
         if (ModelState.IsValid)
         {
@@ -1659,7 +1704,7 @@ public class AdminController : Controller
     // POST: Admin/EditDeliveryPriority
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> EditDeliveryPriority(int id, [Bind("Id,Name,Summary,Description,SortOrder,IsActive")] DeliveryPriority deliveryPriority)
+    public async Task<IActionResult> EditDeliveryPriority(int id, [Bind("Id,Name,Summary,Description,SortOrder,IsActive,CssClass")] DeliveryPriority deliveryPriority)
     {
         if (id != deliveryPriority.Id)
         {
@@ -1688,6 +1733,7 @@ public class AdminController : Controller
                 existingPriority.Description = deliveryPriority.Description;
                 existingPriority.SortOrder = deliveryPriority.SortOrder;
                 existingPriority.IsActive = deliveryPriority.IsActive;
+                existingPriority.CssClass = deliveryPriority.CssClass;
                 existingPriority.UpdatedAt = DateTime.UtcNow;
 
                 await _context.SaveChangesAsync();
@@ -1699,6 +1745,40 @@ public class AdminController : Controller
 
         TempData["ErrorMessage"] = "Unable to update delivery priority. Please fix the errors and try again.";
         return await DeliveryPriorities();
+    }
+
+    // POST: Admin/DeleteDeliveryPriority
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> DeleteDeliveryPriority(int id)
+    {
+        try
+        {
+            var deliveryPriority = await _context.DeliveryPriorities.FindAsync(id);
+            if (deliveryPriority != null)
+            {
+                // Check if any projects are using this delivery priority
+                var projectCount = await _context.Projects.CountAsync(p => p.DeliveryPriorityId == deliveryPriority.Id && !p.IsDeleted);
+                if (projectCount > 0)
+                {
+                    TempData["ErrorMessage"] = $"Cannot delete delivery priority '{deliveryPriority.Name}' as it is being used by {projectCount} project(s).";
+                }
+                else
+                {
+                    _context.DeliveryPriorities.Remove(deliveryPriority);
+                    await _context.SaveChangesAsync();
+                    
+                    TempData["SuccessMessage"] = $"Delivery priority '{deliveryPriority.Name}' has been deleted successfully.";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting delivery priority");
+            TempData["ErrorMessage"] = "An error occurred while deleting the delivery priority. Please try again.";
+        }
+
+        return RedirectToAction(nameof(DeliveryPriorities));
     }
 
     // GET: Admin/CreateActionSource
@@ -1879,12 +1959,14 @@ public class AdminController : Controller
 
     // API Token Management
 
+    [RequireSuperAdmin]
     public async Task<IActionResult> ApiTokens()
     {
         var tokens = await _apiTokenService.GetAllTokensAsync();
         return View("~/Views/Admin/ApiTokens/Index.cshtml", tokens);
     }
 
+    [RequireSuperAdmin]
     public IActionResult CreateApiToken()
     {
         return View("~/Views/Admin/ApiTokens/Create.cshtml");
@@ -1892,6 +1974,7 @@ public class AdminController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
+    [RequireSuperAdmin]
     public async Task<IActionResult> CreateApiToken(string name, string? description, DateTime? expiresAt)
     {
         if (string.IsNullOrWhiteSpace(name))
@@ -1918,6 +2001,7 @@ public class AdminController : Controller
         }
     }
 
+    [RequireSuperAdmin]
     public async Task<IActionResult> ConfigurePermissions(int id)
     {
         var token = await _apiTokenService.GetByIdAsync(id);
@@ -1929,7 +2013,7 @@ public class AdminController : Controller
 
         var permissions = await _apiTokenService.GetPermissionsAsync(id);
 
-        var resources = new[] { "Risks", "Issues", "Actions", "Milestones", "PerformanceMetrics", "EnterpriseMetrics", "FunctionalStandards", "AccessibilityIssues", "SurveysAdmin", "UserSatisfactionQuestions", "UserSatisfactionResponses" };
+        var resources = new[] { "Risks", "Issues", "Actions", "Milestones", "PerformanceMetrics", "EnterpriseMetrics", "FunctionalStandards", "AccessibilityIssues", "SurveysAdmin", "UserSatisfactionQuestions", "UserSatisfactionResponses", "DdtStandards" };
         
         ViewBag.Token = token;
         ViewBag.Permissions = permissions;
@@ -1940,13 +2024,14 @@ public class AdminController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
+    [RequireSuperAdmin]
     public async Task<IActionResult> SavePermissions(int id, Dictionary<string, string> permissions)
     {
         try
         {
             var permissionsDict = new Dictionary<string, (bool read, bool create, bool update, bool delete)>();
 
-            foreach (var resource in new[] { "Risks", "Issues", "Actions", "Milestones", "PerformanceMetrics", "EnterpriseMetrics", "FunctionalStandards", "AccessibilityIssues", "SurveysAdmin", "UserSatisfactionQuestions", "UserSatisfactionResponses" })
+            foreach (var resource in new[] { "Risks", "Issues", "Actions", "Milestones", "PerformanceMetrics", "EnterpriseMetrics", "FunctionalStandards", "AccessibilityIssues", "SurveysAdmin", "UserSatisfactionQuestions", "UserSatisfactionResponses", "DdtStandards" })
             {
                 var read = permissions.ContainsKey($"{resource}_read") && permissions[$"{resource}_read"] == "on";
                 var create = permissions.ContainsKey($"{resource}_create") && permissions[$"{resource}_create"] == "on";
@@ -1974,6 +2059,7 @@ public class AdminController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
+    [RequireSuperAdmin]
     public async Task<IActionResult> RecycleApiToken(int id)
     {
         try
@@ -2003,6 +2089,7 @@ public class AdminController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
+    [RequireSuperAdmin]
     public async Task<IActionResult> ToggleApiToken(int id)
     {
         try
@@ -2033,6 +2120,7 @@ public class AdminController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
+    [RequireSuperAdmin]
     public async Task<IActionResult> DeleteApiToken(int id)
     {
         try
@@ -2057,6 +2145,7 @@ public class AdminController : Controller
         }
     }
 
+    [RequireSuperAdmin]
     public async Task<IActionResult> ApiLogs(int? tokenId = null)
     {
         var query = _context.ApiRequestLogs
@@ -2682,7 +2771,7 @@ public class AdminController : Controller
             if (businessArea != null)
             {
                 // Check if any projects are using this business area
-                var projectCount = await _context.Projects.CountAsync(p => p.BusinessArea == businessArea.Name && !p.IsDeleted);
+                var projectCount = await _context.Projects.CountAsync(p => p.BusinessAreaId == businessArea.Id && !p.IsDeleted);
                 if (projectCount > 0)
                 {
                     TempData["ErrorMessage"] = $"Cannot delete business area '{businessArea.Name}' as it is being used by {projectCount} project(s).";
@@ -2703,6 +2792,406 @@ public class AdminController : Controller
         }
 
         return RedirectToAction(nameof(BusinessAreas));
+    }
+
+    // GET: api/Admin/BusinessAreas
+    [HttpGet]
+    [Route("api/Admin/BusinessAreas")]
+    public async Task<IActionResult> GetBusinessAreasApi()
+    {
+        try
+        {
+            var businessAreas = await _context.BusinessAreaLookups
+                .Where(ba => ba.IsActive)
+                .OrderBy(ba => ba.SortOrder)
+                .ThenBy(ba => ba.Name)
+                .Select(ba => new
+                {
+                    id = ba.Id,
+                    name = ba.Name,
+                    description = ba.Description,
+                    sortOrder = ba.SortOrder,
+                    isActive = ba.IsActive
+                })
+                .ToListAsync();
+
+            return Json(businessAreas);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching business areas for API");
+            return StatusCode(500, new { error = "An error occurred while fetching business areas." });
+        }
+    }
+
+    // GET: api/Admin/BusinessAreas/PreviewSync
+    [HttpGet]
+    [Route("api/Admin/BusinessAreas/PreviewSync")]
+    public async Task<IActionResult> PreviewBusinessAreasSync()
+    {
+        try
+        {
+            var cmsBusinessAreas = await GetBusinessAreasFromCmsAsync();
+            var existingBusinessAreas = await _context.BusinessAreaLookups.ToListAsync();
+            
+            var matches = new List<object>();
+            var newAreas = new List<object>();
+            var exactMatches = new List<object>();
+
+            foreach (var cmsBa in cmsBusinessAreas)
+            {
+                // Try to find a match by exact name first
+                var exactMatch = existingBusinessAreas.FirstOrDefault(ba => 
+                    ba.Name.Equals(cmsBa.Name, StringComparison.OrdinalIgnoreCase));
+                
+                if (exactMatch != null)
+                {
+                    exactMatches.Add(new { cmsName = cmsBa.Name, existingName = exactMatch.Name });
+                    continue;
+                }
+
+                // Try to match by name variations (e.g., "CXD" -> "Customer Experience and Design")
+                var nameMatch = FindMatchingBusinessArea(cmsBa.Name, existingBusinessAreas);
+                
+                if (nameMatch != null)
+                {
+                    matches.Add(new { cmsName = cmsBa.Name, existingName = nameMatch.Name });
+                    continue;
+                }
+
+                // No match found, will be created
+                newAreas.Add(new { name = cmsBa.Name, description = cmsBa.Description });
+            }
+
+            return Json(new 
+            { 
+                success = true,
+                exactMatches = exactMatches,
+                matches = matches,
+                newAreas = newAreas
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error previewing business areas sync");
+            return Json(new 
+            { 
+                success = false, 
+                message = "An error occurred while previewing sync. Please check the logs." 
+            });
+        }
+    }
+
+    // POST: api/Admin/BusinessAreas/SyncFromCms
+    [HttpPost]
+    [Route("api/Admin/BusinessAreas/SyncFromCms")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> SyncBusinessAreasFromCms()
+    {
+        _logger.LogInformation("SyncBusinessAreasFromCms endpoint called");
+        try
+        {
+            // Get confirmed matches from form data
+            List<ConfirmedMatch>? confirmedMatches = null;
+            
+            if (Request.Form.ContainsKey("confirmedMatches"))
+            {
+                var confirmedMatchesJson = Request.Form["confirmedMatches"].ToString();
+                _logger.LogInformation("Received confirmedMatches: {Json}", confirmedMatchesJson);
+                
+                if (!string.IsNullOrEmpty(confirmedMatchesJson) && confirmedMatchesJson != "[]")
+                {
+                    try
+                    {
+                        confirmedMatches = System.Text.Json.JsonSerializer.Deserialize<List<ConfirmedMatch>>(confirmedMatchesJson);
+                        _logger.LogInformation("Parsed {Count} confirmed matches from request", confirmedMatches?.Count ?? 0);
+                        if (confirmedMatches != null)
+                        {
+                            foreach (var match in confirmedMatches)
+                            {
+                                _logger.LogInformation("Confirmed match: '{ExistingName}' -> '{CmsName}'", 
+                                    match.ExistingName, match.CmsName);
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        // If JSON parsing fails, continue without confirmed matches
+                        _logger.LogWarning(ex, "Failed to parse confirmedMatches JSON: {Json}", confirmedMatchesJson);
+                    }
+                }
+                else
+                {
+                    _logger.LogInformation("confirmedMatches is empty or '[]'");
+                }
+            }
+            else
+            {
+                _logger.LogInformation("No confirmedMatches key in request form");
+            }
+
+            var cmsBusinessAreas = await GetBusinessAreasFromCmsAsync();
+            _logger.LogInformation("Retrieved {Count} business areas from CMS", cmsBusinessAreas.Count);
+            
+            // Load existing business areas - ensure they're tracked by EF
+            var existingBusinessAreas = await _context.BusinessAreaLookups.ToListAsync();
+            _logger.LogInformation("Found {Count} existing business areas in database", existingBusinessAreas.Count);
+            
+            int created = 0;
+            int updated = 0;
+            int matched = 0;
+            var appliedMatches = new List<object>();
+
+            foreach (var cmsBa in cmsBusinessAreas)
+            {
+                // Try to find a match by exact name first
+                var exactMatch = existingBusinessAreas.FirstOrDefault(ba => 
+                    ba.Name.Equals(cmsBa.Name, StringComparison.OrdinalIgnoreCase));
+                
+                if (exactMatch != null)
+                {
+                    // Update existing record with CMS data
+                    _logger.LogInformation("Exact match found: '{Name}' (Id: {Id}), updating sort order from {OldSort} to {NewSort}", 
+                        exactMatch.Name, exactMatch.Id, exactMatch.SortOrder, cmsBa.SortOrder);
+                    
+                    // Reload from database to ensure we have a tracked entity
+                    var trackedEntity = await _context.BusinessAreaLookups.FindAsync(exactMatch.Id);
+                    if (trackedEntity != null)
+                    {
+                        trackedEntity.SortOrder = cmsBa.SortOrder;
+                        trackedEntity.UpdatedAt = DateTime.UtcNow;
+                        // Keep existing description and IsActive status unless they're empty/null
+                        if (string.IsNullOrWhiteSpace(trackedEntity.Description))
+                        {
+                            trackedEntity.Description = cmsBa.Description;
+                        }
+                        updated++;
+                        matched++;
+                    }
+                    continue;
+                }
+
+                // Try to match by name variations (e.g., "CXD" -> "Customer Experience and Design")
+                var nameMatch = FindMatchingBusinessArea(cmsBa.Name, existingBusinessAreas);
+                
+                if (nameMatch != null)
+                {
+                    // Check if this match was confirmed (if confirmation was required)
+                    var originalName = nameMatch.Name;
+                    var needsConfirmation = !nameMatch.Name.Equals(cmsBa.Name, StringComparison.OrdinalIgnoreCase);
+                    
+                    if (needsConfirmation)
+                    {
+                        // This match needs confirmation - check if it was confirmed
+                        var isConfirmed = confirmedMatches != null && confirmedMatches.Any(cm => 
+                            cm.ExistingName.Equals(originalName, StringComparison.OrdinalIgnoreCase) &&
+                            cm.CmsName.Equals(cmsBa.Name, StringComparison.OrdinalIgnoreCase));
+                        
+                        _logger.LogInformation("Match found: '{OriginalName}' -> '{CmsName}', Confirmed: {IsConfirmed}", 
+                            originalName, cmsBa.Name, isConfirmed);
+                        
+                        if (!isConfirmed)
+                        {
+                            _logger.LogInformation("Skipping unconfirmed match: '{OriginalName}' -> '{CmsName}'", 
+                                originalName, cmsBa.Name);
+                            continue; // Skip unconfirmed matches
+                        }
+                    }
+                    
+                    // Update the matched record with CMS name and data
+                    _logger.LogInformation("Updating business area: '{OriginalName}' (Id: {Id}) -> '{CmsName}'", 
+                        originalName, nameMatch.Id, cmsBa.Name);
+                    
+                    // Reload from database to ensure we have a tracked entity
+                    var trackedEntity = await _context.BusinessAreaLookups.FindAsync(nameMatch.Id);
+                    if (trackedEntity != null)
+                    {
+                        trackedEntity.Name = cmsBa.Name; // Update to CMS name
+                        trackedEntity.SortOrder = cmsBa.SortOrder;
+                        trackedEntity.UpdatedAt = DateTime.UtcNow;
+                        if (string.IsNullOrWhiteSpace(trackedEntity.Description))
+                        {
+                            trackedEntity.Description = cmsBa.Description;
+                        }
+                        updated++;
+                        matched++;
+                    }
+                    
+                    if (needsConfirmation)
+                    {
+                        appliedMatches.Add(new { existingName = originalName, cmsName = cmsBa.Name });
+                    }
+                    continue;
+                }
+
+                // No match found, create new record
+                var newBusinessArea = new BusinessAreaLookup
+                {
+                    Name = cmsBa.Name,
+                    Description = cmsBa.Description,
+                    SortOrder = cmsBa.SortOrder,
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
+                
+                _context.BusinessAreaLookups.Add(newBusinessArea);
+                created++;
+            }
+
+            _logger.LogInformation("About to save changes. Created: {Created}, Updated: {Updated}, Matched: {Matched}", 
+                created, updated, matched);
+            
+            // Force Entity Framework to detect changes
+            _context.ChangeTracker.DetectChanges();
+            
+            // Log what EF thinks has changed
+            var changedEntries = _context.ChangeTracker.Entries()
+                .Where(e => e.State == Microsoft.EntityFrameworkCore.EntityState.Modified || 
+                           e.State == Microsoft.EntityFrameworkCore.EntityState.Added)
+                .ToList();
+            _logger.LogInformation("ChangeTracker found {Count} modified/added entities", changedEntries.Count);
+            foreach (var entry in changedEntries)
+            {
+                if (entry.Entity is BusinessAreaLookup ba)
+                {
+                    _logger.LogInformation("Entity {Id} ({Name}) state: {State}", ba.Id, ba.Name, entry.State);
+                    if (entry.State == Microsoft.EntityFrameworkCore.EntityState.Modified)
+                    {
+                        foreach (var prop in entry.Properties.Where(p => p.IsModified))
+                        {
+                            _logger.LogInformation("  Property {Property}: {Original} -> {Current}", 
+                                prop.Metadata.Name, prop.OriginalValue, prop.CurrentValue);
+                        }
+                    }
+                }
+            }
+            
+            var saveResult = await _context.SaveChangesAsync();
+            _logger.LogInformation("SaveChangesAsync returned: {Result} (created: {Created}, updated: {Updated}, matched: {Matched})", 
+                saveResult, created, updated, matched);
+
+            // Verify the changes were actually saved by reloading
+            if (updated > 0 || created > 0)
+            {
+                var verifyCount = await _context.BusinessAreaLookups.CountAsync();
+                _logger.LogInformation("Verification: Total business areas in database after save: {Count}", verifyCount);
+            }
+
+            return Json(new 
+            { 
+                success = true, 
+                message = $"Sync completed: {created} created, {updated} updated, {matched} matched from CMS. {saveResult} records saved.",
+                created = created,
+                updated = updated,
+                matched = matched,
+                matches = appliedMatches,
+                recordsSaved = saveResult
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error syncing business areas from CMS");
+            return Json(new 
+            { 
+                success = false, 
+                message = "An error occurred while syncing business areas from CMS. Please check the logs." 
+            });
+        }
+    }
+
+    private class ConfirmedMatch
+    {
+        public string ExistingName { get; set; } = string.Empty;
+        public string CmsName { get; set; } = string.Empty;
+    }
+
+    private BusinessAreaLookup? FindMatchingBusinessArea(string cmsName, List<BusinessAreaLookup> existingAreas)
+    {
+        var normalizedCmsName = cmsName.Trim();
+        
+        foreach (var existing in existingAreas)
+        {
+            var existingName = existing.Name.Trim();
+            
+            // Check if names match exactly (case-insensitive)
+            if (normalizedCmsName.Equals(existingName, StringComparison.OrdinalIgnoreCase))
+            {
+                return existing;
+            }
+            
+            // Handle CXD -> Customer Experience and Design mapping
+            // If CMS has "Customer Experience and Design" and Compass has "CXD" (or contains "CXD")
+            if (normalizedCmsName.Equals("Customer Experience and Design", StringComparison.OrdinalIgnoreCase))
+            {
+                // Match with entries containing "CXD" (case-insensitive)
+                if (existingName.Contains("CXD", StringComparison.OrdinalIgnoreCase))
+                {
+                    return existing;
+                }
+            }
+            
+            // If CMS has something with "CXD" and Compass has "Customer Experience and Design"
+            if (normalizedCmsName.Contains("CXD", StringComparison.OrdinalIgnoreCase) &&
+                existingName.Contains("Customer Experience and Design", StringComparison.OrdinalIgnoreCase))
+            {
+                return existing;
+            }
+            
+            // Check if one name contains the other (for partial matches)
+            // This handles cases where names are similar but not exact
+            if (normalizedCmsName.Contains(existingName, StringComparison.OrdinalIgnoreCase) ||
+                existingName.Contains(normalizedCmsName, StringComparison.OrdinalIgnoreCase))
+            {
+                // Only match if the shorter name is at least 3 characters (to avoid false matches)
+                var shorterLength = Math.Min(normalizedCmsName.Length, existingName.Length);
+                if (shorterLength >= 3)
+                {
+                    return existing;
+                }
+            }
+        }
+        
+        return null;
+    }
+
+    private async Task<List<CmsBusinessArea>> GetBusinessAreasFromCmsAsync()
+    {
+        var businessAreas = new List<CmsBusinessArea>();
+        
+        try
+        {
+            // Use the ProductsApiService which already has working CMS API integration
+            var categoryValues = await _productsApiService.GetBusinessAreaCategoryValuesAsync();
+            
+            foreach (var cv in categoryValues)
+            {
+                if (!string.IsNullOrEmpty(cv.Name))
+                {
+                    businessAreas.Add(new CmsBusinessArea
+                    {
+                        Name = cv.Name,
+                        SortOrder = cv.SortOrder ?? 0,
+                        Description = null // Description not available in CategoryValueDto
+                    });
+                }
+            }
+            
+            _logger.LogInformation("Found {Count} business areas from CMS", businessAreas.Count);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching business areas from CMS");
+        }
+        
+        return businessAreas;
+    }
+
+    private class CmsBusinessArea
+    {
+        public string Name { get; set; } = string.Empty;
+        public int SortOrder { get; set; }
+        public string? Description { get; set; }
     }
 
     // ========================================
@@ -2845,7 +3334,7 @@ public class AdminController : Controller
             if (phase != null)
             {
                 // Check if any projects are using this phase
-                var projectCount = await _context.Projects.CountAsync(p => p.Phase == phase.Name && !p.IsDeleted);
+                var projectCount = await _context.Projects.CountAsync(p => p.PhaseId == phase.Id && !p.IsDeleted);
                 if (projectCount > 0)
                 {
                     TempData["ErrorMessage"] = $"Cannot delete phase '{phase.Name}' as it is being used by {projectCount} project(s).";
@@ -2866,6 +3355,614 @@ public class AdminController : Controller
         }
 
         return RedirectToAction(nameof(Phases));
+    }
+
+    // ========================================
+    // SETTINGS - RAG Statuses
+    // ========================================
+
+    // GET: Admin/RagStatuses
+    public async Task<IActionResult> RagStatuses()
+    {
+        var ragStatuses = await _context.RagStatusLookups
+            .OrderBy(r => r.SortOrder)
+            .ThenBy(r => r.Name)
+            .ToListAsync();
+        
+        return View("~/Views/Admin/Settings/RagStatuses.cshtml", ragStatuses);
+    }
+
+    // POST: Admin/CreateRagStatus
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> CreateRagStatus([Bind("Name,Description,SortOrder,IsActive,CssClass")] RagStatusLookup ragStatus)
+    {
+        if (ModelState.IsValid)
+        {
+            try
+            {
+                // Check if name already exists
+                if (await _context.RagStatusLookups.AnyAsync(r => r.Name == ragStatus.Name))
+                {
+                    TempData["ErrorMessage"] = "A RAG status with this name already exists.";
+                }
+                else
+                {
+                    ragStatus.CreatedAt = DateTime.UtcNow;
+                    ragStatus.UpdatedAt = DateTime.UtcNow;
+                    _context.Add(ragStatus);
+                    await _context.SaveChangesAsync();
+                    
+                    TempData["SuccessMessage"] = $"RAG status '{ragStatus.Name}' has been created successfully.";
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating RAG status");
+                TempData["ErrorMessage"] = "An error occurred while creating the RAG status. Please try again.";
+            }
+        }
+
+        return RedirectToAction(nameof(RagStatuses));
+    }
+
+    // POST: Admin/EditRagStatus
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> EditRagStatus(int id, string name, string? description, int sortOrder, bool isActive = false, string? cssClass = null)
+    {
+        _logger.LogInformation("EditRagStatus POST called - ID: {Id}, Name: {Name}, Description: {Description}, SortOrder: {SortOrder}, IsActive: {IsActive}, CssClass: {CssClass}", 
+            id, name, description, sortOrder, isActive, cssClass);
+        
+        // Also check form values directly if model binding failed
+        var formId = Request.Form["id"].ToString();
+        var formName = Request.Form["name"].ToString();
+        var formDescription = Request.Form["description"].ToString();
+        var formSortOrder = Request.Form["sortOrder"].ToString();
+        var formIsActive = Request.Form["isActive"].ToString();
+        var formCssClass = Request.Form["cssClass"].ToString();
+        
+        _logger.LogInformation("Form values - id: {FormId}, name: {FormName}, description: {FormDescription}, sortOrder: {FormSortOrder}, isActive: {FormIsActive}, cssClass: {FormCssClass}", 
+            formId, formName, formDescription, formSortOrder, formIsActive, formCssClass);
+        
+        try
+        {
+            // Use form values if model binding didn't work
+            if (id == 0 && !string.IsNullOrEmpty(formId) && int.TryParse(formId, out int parsedId))
+            {
+                id = parsedId;
+            }
+            if (string.IsNullOrEmpty(name) && !string.IsNullOrEmpty(formName))
+            {
+                name = formName;
+            }
+            if (string.IsNullOrEmpty(description) && !string.IsNullOrEmpty(formDescription))
+            {
+                description = formDescription;
+            }
+            if (sortOrder == 0 && !string.IsNullOrEmpty(formSortOrder) && int.TryParse(formSortOrder, out int parsedSortOrder))
+            {
+                sortOrder = parsedSortOrder;
+            }
+            if (!string.IsNullOrEmpty(formIsActive))
+            {
+                isActive = formIsActive == "true" || formIsActive.Contains("true");
+            }
+            if (string.IsNullOrEmpty(cssClass) && !string.IsNullOrEmpty(formCssClass))
+            {
+                cssClass = formCssClass;
+            }
+            
+            var existingRagStatus = await _context.RagStatusLookups.FindAsync(id);
+            if (existingRagStatus == null)
+            {
+                _logger.LogWarning("RAG status not found with ID: {Id}", id);
+                TempData["ErrorMessage"] = "RAG status not found.";
+                return RedirectToAction(nameof(RagStatuses));
+            }
+
+            // Check if name already exists for a different record
+            if (await _context.RagStatusLookups.AnyAsync(r => r.Name == name && r.Id != id))
+            {
+                TempData["ErrorMessage"] = "A RAG status with this name already exists.";
+            }
+            else
+            {
+                _logger.LogInformation("Updating RAG status {Id} - Name: {Name}, IsActive: {IsActive}, CssClass: {CssClass}", id, name, isActive, cssClass);
+                
+                existingRagStatus.Name = name;
+                existingRagStatus.Description = description;
+                existingRagStatus.SortOrder = sortOrder;
+                existingRagStatus.IsActive = isActive;
+                existingRagStatus.CssClass = cssClass;
+                existingRagStatus.UpdatedAt = DateTime.UtcNow;
+
+                await _context.SaveChangesAsync();
+                
+                TempData["SuccessMessage"] = $"RAG status '{name}' has been updated successfully.";
+                _logger.LogInformation("RAG status {Id} updated successfully", id);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating RAG status {RagStatusId}", id);
+            TempData["ErrorMessage"] = "An error occurred while updating the RAG status. Please try again.";
+        }
+
+        return RedirectToAction(nameof(RagStatuses));
+    }
+
+    // POST: Admin/DeleteRagStatus
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> DeleteRagStatus(int id)
+    {
+        try
+        {
+            var ragStatus = await _context.RagStatusLookups.FindAsync(id);
+            if (ragStatus != null)
+            {
+                // Check if any projects are using this RAG status
+                var projectCount = await _context.Projects.CountAsync(p => p.RagStatusLookupId == ragStatus.Id && !p.IsDeleted);
+                if (projectCount > 0)
+                {
+                    TempData["ErrorMessage"] = $"Cannot delete RAG status '{ragStatus.Name}' as it is being used by {projectCount} project(s).";
+                }
+                else
+                {
+                    _context.RagStatusLookups.Remove(ragStatus);
+                    await _context.SaveChangesAsync();
+                    
+                    TempData["SuccessMessage"] = $"RAG status '{ragStatus.Name}' has been deleted successfully.";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting RAG status");
+            TempData["ErrorMessage"] = "An error occurred while deleting the RAG status. Please try again.";
+        }
+
+        return RedirectToAction(nameof(RagStatuses));
+    }
+
+    // ========================================
+    // SETTINGS - Business Case Statuses
+    // ========================================
+
+    // GET: Admin/BusinessCaseStatuses
+    public async Task<IActionResult> BusinessCaseStatuses()
+    {
+        var statuses = await _context.BusinessCaseStatusLookups
+            .OrderBy(s => s.SortOrder)
+            .ThenBy(s => s.Name)
+            .ToListAsync();
+        
+        return View("~/Views/Admin/Settings/BusinessCaseStatuses.cshtml", statuses);
+    }
+
+    // POST: Admin/CreateBusinessCaseStatus
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> CreateBusinessCaseStatus([Bind("Name,Description,SortOrder,IsActive,CssClass")] BusinessCaseStatusLookup status)
+    {
+        if (ModelState.IsValid)
+        {
+            try
+            {
+                // Check if name already exists
+                if (await _context.BusinessCaseStatusLookups.AnyAsync(s => s.Name == status.Name))
+                {
+                    TempData["ErrorMessage"] = "A business case status with this name already exists.";
+                }
+                else
+                {
+                    status.CreatedAt = DateTime.UtcNow;
+                    status.UpdatedAt = DateTime.UtcNow;
+                    _context.Add(status);
+                    await _context.SaveChangesAsync();
+                    
+                    TempData["SuccessMessage"] = $"Business case status '{status.Name}' has been created successfully.";
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating business case status");
+                TempData["ErrorMessage"] = "An error occurred while creating the business case status. Please try again.";
+            }
+        }
+
+        return RedirectToAction(nameof(BusinessCaseStatuses));
+    }
+
+    // POST: Admin/EditBusinessCaseStatus
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> EditBusinessCaseStatus(int id, string name, string? description, int sortOrder, bool isActive = false, string? cssClass = null)
+    {
+        _logger.LogInformation("EditBusinessCaseStatus POST called - ID: {Id}, Name: {Name}, Description: {Description}, SortOrder: {SortOrder}, IsActive: {IsActive}, CssClass: {CssClass}", 
+            id, name, description, sortOrder, isActive, cssClass);
+        
+        // Also check form values directly if model binding failed
+        var formId = Request.Form["id"].ToString();
+        var formName = Request.Form["name"].ToString();
+        var formDescription = Request.Form["description"].ToString();
+        var formSortOrder = Request.Form["sortOrder"].ToString();
+        var formIsActive = Request.Form["isActive"].ToString();
+        var formCssClass = Request.Form["cssClass"].ToString();
+        
+        _logger.LogInformation("Form values - id: {FormId}, name: {FormName}, description: {FormDescription}, sortOrder: {FormSortOrder}, isActive: {FormIsActive}, cssClass: {FormCssClass}", 
+            formId, formName, formDescription, formSortOrder, formIsActive, formCssClass);
+        
+        try
+        {
+            // Use form values if model binding didn't work
+            if (id == 0 && !string.IsNullOrEmpty(formId) && int.TryParse(formId, out int parsedId))
+            {
+                id = parsedId;
+            }
+            if (string.IsNullOrEmpty(name) && !string.IsNullOrEmpty(formName))
+            {
+                name = formName;
+            }
+            if (string.IsNullOrEmpty(description) && !string.IsNullOrEmpty(formDescription))
+            {
+                description = formDescription;
+            }
+            if (sortOrder == 0 && !string.IsNullOrEmpty(formSortOrder) && int.TryParse(formSortOrder, out int parsedSortOrder))
+            {
+                sortOrder = parsedSortOrder;
+            }
+            if (!string.IsNullOrEmpty(formIsActive))
+            {
+                isActive = formIsActive == "true" || formIsActive.Contains("true");
+            }
+            if (string.IsNullOrEmpty(cssClass) && !string.IsNullOrEmpty(formCssClass))
+            {
+                cssClass = formCssClass;
+            }
+            
+            var existingStatus = await _context.BusinessCaseStatusLookups.FindAsync(id);
+            if (existingStatus == null)
+            {
+                _logger.LogWarning("Business case status not found with ID: {Id}", id);
+                TempData["ErrorMessage"] = "Business case status not found.";
+                return RedirectToAction(nameof(BusinessCaseStatuses));
+            }
+
+            // Check if name already exists for a different record
+            if (await _context.BusinessCaseStatusLookups.AnyAsync(s => s.Name == name && s.Id != id))
+            {
+                TempData["ErrorMessage"] = "A business case status with this name already exists.";
+            }
+            else
+            {
+                _logger.LogInformation("Updating business case status {Id} - Name: {Name}, IsActive: {IsActive}, CssClass: {CssClass}", id, name, isActive, cssClass);
+                
+                existingStatus.Name = name;
+                existingStatus.Description = description;
+                existingStatus.SortOrder = sortOrder;
+                existingStatus.IsActive = isActive;
+                existingStatus.CssClass = cssClass;
+                existingStatus.UpdatedAt = DateTime.UtcNow;
+
+                await _context.SaveChangesAsync();
+                
+                TempData["SuccessMessage"] = $"Business case status '{name}' has been updated successfully.";
+                _logger.LogInformation("Business case status {Id} updated successfully", id);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating business case status {StatusId}", id);
+            TempData["ErrorMessage"] = "An error occurred while updating the business case status. Please try again.";
+        }
+
+        return RedirectToAction(nameof(BusinessCaseStatuses));
+    }
+
+    // POST: Admin/DeleteBusinessCaseStatus
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> DeleteBusinessCaseStatus(int id)
+    {
+        try
+        {
+            var status = await _context.BusinessCaseStatusLookups.FindAsync(id);
+            if (status != null)
+            {
+                // Check if any business cases are using this status
+                var businessCaseCount = await _context.BusinessCases.CountAsync(bc => bc.StatusLookupId == status.Id);
+                if (businessCaseCount > 0)
+                {
+                    TempData["ErrorMessage"] = $"Cannot delete business case status '{status.Name}' as it is being used by {businessCaseCount} business case(s).";
+                }
+                else
+                {
+                    _context.BusinessCaseStatusLookups.Remove(status);
+                    await _context.SaveChangesAsync();
+                    
+                    TempData["SuccessMessage"] = $"Business case status '{status.Name}' has been deleted successfully.";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting business case status");
+            TempData["ErrorMessage"] = "An error occurred while deleting the business case status. Please try again.";
+        }
+
+        return RedirectToAction(nameof(BusinessCaseStatuses));
+    }
+
+    // ========================================
+    // SETTINGS - Activity Types
+    // ========================================
+
+    // GET: Admin/ActivityTypes
+    public async Task<IActionResult> ActivityTypes()
+    {
+        var activityTypes = await _context.ActivityTypeLookups
+            .OrderBy(at => at.SortOrder)
+            .ThenBy(at => at.Name)
+            .ToListAsync();
+        
+        return View("~/Views/Admin/Settings/ActivityTypes.cshtml", activityTypes);
+    }
+
+    // POST: Admin/CreateActivityType
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> CreateActivityType([Bind("Name,Description,SortOrder,IsActive")] ActivityTypeLookup activityType)
+    {
+        if (ModelState.IsValid)
+        {
+            try
+            {
+                if (await _context.ActivityTypeLookups.AnyAsync(at => at.Name == activityType.Name))
+                {
+                    TempData["ErrorMessage"] = "An activity type with this name already exists.";
+                }
+                else
+                {
+                    activityType.CreatedAt = DateTime.UtcNow;
+                    activityType.UpdatedAt = DateTime.UtcNow;
+                    _context.Add(activityType);
+                    await _context.SaveChangesAsync();
+                    
+                    TempData["SuccessMessage"] = $"Activity type '{activityType.Name}' has been created successfully.";
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating activity type");
+                TempData["ErrorMessage"] = "An error occurred while creating the activity type. Please try again.";
+            }
+        }
+
+        return RedirectToAction(nameof(ActivityTypes));
+    }
+
+    // POST: Admin/EditActivityType
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> EditActivityType(int id, [Bind("Id,Name,Description,SortOrder,IsActive")] ActivityTypeLookup activityType)
+    {
+        if (id != activityType.Id)
+        {
+            return NotFound();
+        }
+
+        if (ModelState.IsValid)
+        {
+            try
+            {
+                if (await _context.ActivityTypeLookups.AnyAsync(at => at.Name == activityType.Name && at.Id != id))
+                {
+                    TempData["ErrorMessage"] = "An activity type with this name already exists.";
+                }
+                else
+                {
+                    var existing = await _context.ActivityTypeLookups.FindAsync(id);
+                    if (existing == null)
+                    {
+                        return NotFound();
+                    }
+
+                    existing.Name = activityType.Name;
+                    existing.Description = activityType.Description;
+                    existing.SortOrder = activityType.SortOrder;
+                    existing.IsActive = activityType.IsActive;
+                    existing.UpdatedAt = DateTime.UtcNow;
+
+                    await _context.SaveChangesAsync();
+                    
+                    TempData["SuccessMessage"] = $"Activity type '{activityType.Name}' has been updated successfully.";
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating activity type");
+                TempData["ErrorMessage"] = "An error occurred while updating the activity type. Please try again.";
+            }
+        }
+
+        return RedirectToAction(nameof(ActivityTypes));
+    }
+
+    // POST: Admin/DeleteActivityType
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> DeleteActivityType(int id)
+    {
+        try
+        {
+            var activityType = await _context.ActivityTypeLookups.FindAsync(id);
+            if (activityType != null)
+            {
+                var projectCount = await _context.Projects.CountAsync(p => p.ActivityTypeLookupId == id && !p.IsDeleted);
+                if (projectCount > 0)
+                {
+                    TempData["ErrorMessage"] = $"Cannot delete activity type '{activityType.Name}' as it is being used by {projectCount} project(s).";
+                }
+                else
+                {
+                    _context.ActivityTypeLookups.Remove(activityType);
+                    await _context.SaveChangesAsync();
+                    
+                    TempData["SuccessMessage"] = $"Activity type '{activityType.Name}' has been deleted successfully.";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting activity type");
+            TempData["ErrorMessage"] = "An error occurred while deleting the activity type. Please try again.";
+        }
+
+        return RedirectToAction(nameof(ActivityTypes));
+    }
+
+    // ========================================
+    // SETTINGS - Directorates (Redirected to Divisions)
+    // ========================================
+
+    // GET: Admin/Directorates
+    // Directorates are now managed through Divisions
+    public IActionResult Directorates()
+    {
+        return RedirectToAction("Index", "DivisionBusinessAreaUser", new { area = "" });
+    }
+
+    // Note: Directorates are now managed through Divisions
+    // Create, Edit, and Delete operations should be done through /Admin/DivisionBusinessAreaUser
+
+    // ========================================
+    // SETTINGS - Risk Appetite
+    // ========================================
+
+    // GET: Admin/RiskAppetites
+    public async Task<IActionResult> RiskAppetites()
+    {
+        var riskAppetites = await _context.RiskAppetiteLookups
+            .OrderBy(ra => ra.SortOrder)
+            .ThenBy(ra => ra.Name)
+            .ToListAsync();
+        
+        return View("~/Views/Admin/Settings/RiskAppetites.cshtml", riskAppetites);
+    }
+
+    // POST: Admin/CreateRiskAppetite
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> CreateRiskAppetite([Bind("Name,Description,SortOrder,IsActive")] RiskAppetiteLookup riskAppetite)
+    {
+        if (ModelState.IsValid)
+        {
+            try
+            {
+                if (await _context.RiskAppetiteLookups.AnyAsync(ra => ra.Name == riskAppetite.Name))
+                {
+                    TempData["ErrorMessage"] = "A risk appetite with this name already exists.";
+                }
+                else
+                {
+                    riskAppetite.CreatedAt = DateTime.UtcNow;
+                    riskAppetite.UpdatedAt = DateTime.UtcNow;
+                    _context.Add(riskAppetite);
+                    await _context.SaveChangesAsync();
+                    
+                    TempData["SuccessMessage"] = $"Risk appetite '{riskAppetite.Name}' has been created successfully.";
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating risk appetite");
+                TempData["ErrorMessage"] = "An error occurred while creating the risk appetite. Please try again.";
+            }
+        }
+
+        return RedirectToAction(nameof(RiskAppetites));
+    }
+
+    // POST: Admin/EditRiskAppetite
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> EditRiskAppetite(int id, [Bind("Id,Name,Description,SortOrder,IsActive")] RiskAppetiteLookup riskAppetite)
+    {
+        if (id != riskAppetite.Id)
+        {
+            return NotFound();
+        }
+
+        if (ModelState.IsValid)
+        {
+            try
+            {
+                if (await _context.RiskAppetiteLookups.AnyAsync(ra => ra.Name == riskAppetite.Name && ra.Id != id))
+                {
+                    TempData["ErrorMessage"] = "A risk appetite with this name already exists.";
+                }
+                else
+                {
+                    var existing = await _context.RiskAppetiteLookups.FindAsync(id);
+                    if (existing == null)
+                    {
+                        return NotFound();
+                    }
+
+                    existing.Name = riskAppetite.Name;
+                    existing.Description = riskAppetite.Description;
+                    existing.SortOrder = riskAppetite.SortOrder;
+                    existing.IsActive = riskAppetite.IsActive;
+                    existing.UpdatedAt = DateTime.UtcNow;
+
+                    await _context.SaveChangesAsync();
+                    
+                    TempData["SuccessMessage"] = $"Risk appetite '{riskAppetite.Name}' has been updated successfully.";
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating risk appetite");
+                TempData["ErrorMessage"] = "An error occurred while updating the risk appetite. Please try again.";
+            }
+        }
+
+        return RedirectToAction(nameof(RiskAppetites));
+    }
+
+    // POST: Admin/DeleteRiskAppetite
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> DeleteRiskAppetite(int id)
+    {
+        try
+        {
+            var riskAppetite = await _context.RiskAppetiteLookups.FindAsync(id);
+            if (riskAppetite != null)
+            {
+                var projectCount = await _context.Projects.CountAsync(p => p.RiskAppetiteLookupId == id && !p.IsDeleted);
+                if (projectCount > 0)
+                {
+                    TempData["ErrorMessage"] = $"Cannot delete risk appetite '{riskAppetite.Name}' as it is being used by {projectCount} project(s).";
+                }
+                else
+                {
+                    _context.RiskAppetiteLookups.Remove(riskAppetite);
+                    await _context.SaveChangesAsync();
+                    
+                    TempData["SuccessMessage"] = $"Risk appetite '{riskAppetite.Name}' has been deleted successfully.";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting risk appetite");
+            TempData["ErrorMessage"] = "An error occurred while deleting the risk appetite. Please try again.";
+        }
+
+        return RedirectToAction(nameof(RiskAppetites));
     }
 
     // ========================================
@@ -3140,6 +4237,757 @@ public class AdminController : Controller
     }
 
     // ========================================
+    // DDAT FRAMEWORK - Skills
+    // ========================================
+
+    // GET: Admin/DdatFrameworkSkills
+    public async Task<IActionResult> DdatFrameworkSkills(int? versionId)
+    {
+        var activeVersion = await _context.DdatFrameworkVersions
+            .FirstOrDefaultAsync(v => v.IsActive);
+
+        var versionIdToUse = versionId ?? activeVersion?.Id;
+        
+        var skills = new List<DdatFrameworkSkill>();
+        if (versionIdToUse.HasValue)
+        {
+            skills = await _context.DdatFrameworkSkills
+                .Include(s => s.FrameworkVersion)
+                .Include(s => s.GradeMappings)
+                .Where(s => s.FrameworkVersionId == versionIdToUse.Value)
+                .OrderBy(s => s.SkillName)
+                .ToListAsync();
+        }
+
+        ViewBag.ActiveVersion = activeVersion;
+        ViewBag.Versions = await _context.DdatFrameworkVersions
+            .OrderByDescending(v => v.ImportedAt)
+            .ToListAsync();
+        ViewBag.SelectedVersionId = versionIdToUse;
+
+        return View("~/Views/Admin/DdatFramework/Skills.cshtml", skills);
+    }
+
+    // GET: Admin/DdatFrameworkSkills/Details/5
+    public async Task<IActionResult> DdatFrameworkSkillDetails(int id)
+    {
+        var skill = await _context.DdatFrameworkSkills
+            .Include(s => s.FrameworkVersion)
+            .Include(s => s.GradeMappings)
+            .FirstOrDefaultAsync(s => s.Id == id);
+
+        if (skill == null)
+        {
+            return NotFound();
+        }
+
+        return View("~/Views/Admin/DdatFramework/SkillDetails.cshtml", skill);
+    }
+
+    // GET: Admin/DdatFrameworkSkills/Edit/5
+    public async Task<IActionResult> EditDdatFrameworkSkill(int id)
+    {
+        var skill = await _context.DdatFrameworkSkills
+            .Include(s => s.GradeMappings)
+            .FirstOrDefaultAsync(s => s.Id == id);
+
+        if (skill == null)
+        {
+            return NotFound();
+        }
+
+        ViewBag.CapabilityLevels = new[] { "Awareness", "Working", "Practitioner", "Expert" };
+        ViewBag.Grades = await _context.Grades
+            .Where(g => g.IsActive)
+            .OrderBy(g => g.DisplayOrder)
+            .ThenBy(g => g.Code)
+            .ToListAsync();
+
+        return View("~/Views/Admin/DdatFramework/EditSkill.cshtml", skill);
+    }
+
+    // POST: Admin/DdatFrameworkSkills/Edit/5
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> EditDdatFrameworkSkill(int id, DdatFrameworkSkill skill, IFormCollection form)
+    {
+        if (id != skill.Id)
+        {
+            return NotFound();
+        }
+
+        try
+        {
+            var existingSkill = await _context.DdatFrameworkSkills
+                .Include(s => s.GradeMappings)
+                .FirstOrDefaultAsync(s => s.Id == id);
+
+            if (existingSkill == null)
+            {
+                return NotFound();
+            }
+
+            // Update skill properties
+            existingSkill.SkillName = skill.SkillName;
+            existingSkill.SkillDescription = skill.SkillDescription;
+            existingSkill.AwarenessDescription = skill.AwarenessDescription;
+            existingSkill.WorkingDescription = skill.WorkingDescription;
+            existingSkill.PractitionerDescription = skill.PractitionerDescription;
+            existingSkill.ExpertDescription = skill.ExpertDescription;
+            existingSkill.RolesThatRequireSkill = skill.RolesThatRequireSkill;
+            existingSkill.UpdatedAt = DateTime.UtcNow;
+
+            // Update grade mappings
+            var gradeMappingKeys = form.Keys.Where(k => k.StartsWith("gradeMappings[") && k.Contains("].capabilityLevel")).ToList();
+            if (gradeMappingKeys.Any())
+            {
+                // Remove existing mappings
+                _context.DdatFrameworkSkillGradeMappings.RemoveRange(existingSkill.GradeMappings);
+
+                // Add new mappings
+                foreach (var key in gradeMappingKeys)
+                {
+                    var indexMatch = System.Text.RegularExpressions.Regex.Match(key, @"\[(\d+)\]");
+                    if (indexMatch.Success)
+                    {
+                        var index = indexMatch.Groups[1].Value;
+                        var capabilityLevel = form[$"gradeMappings[{index}].capabilityLevel"].ToString();
+                        var grade = form[$"gradeMappings[{index}].grade"].ToString();
+
+                        if (!string.IsNullOrWhiteSpace(capabilityLevel) && !string.IsNullOrWhiteSpace(grade))
+                        {
+                            existingSkill.GradeMappings.Add(new DdatFrameworkSkillGradeMapping
+                            {
+                                DdatFrameworkSkillId = existingSkill.Id,
+                                CapabilityLevel = capabilityLevel,
+                                Grade = grade,
+                                CreatedAt = DateTime.UtcNow,
+                                UpdatedAt = DateTime.UtcNow
+                            });
+                        }
+                    }
+                }
+            }
+            else
+            {
+                // Remove all mappings if none provided
+                _context.DdatFrameworkSkillGradeMappings.RemoveRange(existingSkill.GradeMappings);
+            }
+
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = $"DDAT Framework Skill '{skill.SkillName}' has been updated successfully.";
+            return RedirectToAction(nameof(DdatFrameworkSkills), new { versionId = existingSkill.FrameworkVersionId });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating DDAT Framework skill {SkillId}", id);
+            TempData["ErrorMessage"] = "An error occurred while updating the skill. Please try again.";
+        }
+
+        ViewBag.CapabilityLevels = new[] { "Awareness", "Working", "Practitioner", "Expert" };
+        ViewBag.Grades = await _context.Grades
+            .Where(g => g.IsActive)
+            .OrderBy(g => g.DisplayOrder)
+            .ThenBy(g => g.Code)
+            .ToListAsync();
+        return View("~/Views/Admin/DdatFramework/EditSkill.cshtml", skill);
+    }
+
+    // ========================================
+    // DDAT FRAMEWORK - Roles
+    // ========================================
+
+    // GET: Admin/DdatFrameworkRoles
+    public async Task<IActionResult> DdatFrameworkRoles(int? versionId)
+    {
+        var activeVersion = await _context.DdatFrameworkVersions
+            .FirstOrDefaultAsync(v => v.IsActive);
+
+        var versionIdToUse = versionId ?? activeVersion?.Id;
+
+        var roles = new List<DdatFrameworkRole>();
+        if (versionIdToUse.HasValue)
+        {
+            roles = await _context.DdatFrameworkRoles
+                .Include(r => r.FrameworkVersion)
+                .Include(r => r.RoleSkills)
+                .Where(r => r.FrameworkVersionId == versionIdToUse.Value)
+                .OrderBy(r => r.RoleFamily)
+                .ThenBy(r => r.Role)
+                .ThenBy(r => r.RoleLevel)
+                .ToListAsync();
+        }
+
+        ViewBag.ActiveVersion = activeVersion;
+        ViewBag.Versions = await _context.DdatFrameworkVersions
+            .OrderByDescending(v => v.ImportedAt)
+            .ToListAsync();
+        ViewBag.SelectedVersionId = versionIdToUse;
+
+        return View("~/Views/Admin/DdatFramework/Roles.cshtml", roles);
+    }
+
+    // GET: Admin/DdatFrameworkRoles/Details/5
+    public async Task<IActionResult> DdatFrameworkRoleDetails(int id)
+    {
+        var role = await _context.DdatFrameworkRoles
+            .Include(r => r.FrameworkVersion)
+            .Include(r => r.RoleSkills)
+            .FirstOrDefaultAsync(r => r.Id == id);
+
+        if (role == null)
+        {
+            return NotFound();
+        }
+
+        return View("~/Views/Admin/DdatFramework/RoleDetails.cshtml", role);
+    }
+
+    // ========================================
+    // DDAT FRAMEWORK - Import/Sync
+    // ========================================
+
+    // GET: Admin/DdatFrameworkImport
+    public async Task<IActionResult> DdatFrameworkImport()
+    {
+        var versions = await _context.DdatFrameworkVersions
+            .OrderByDescending(v => v.ImportedAt)
+            .ToListAsync();
+
+        ViewBag.Versions = versions;
+        ViewBag.ActiveVersion = versions.FirstOrDefault(v => v.IsActive);
+
+        return View("~/Views/Admin/DdatFramework/Import.cshtml");
+    }
+
+    // POST: Admin/DdatFrameworkImportFromUrl
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> DdatFrameworkImportFromUrl(string skillsCsvUrl, string rolesCsvUrl, string versionIdentifier, string? versionName, string? notes)
+    {
+        if (string.IsNullOrWhiteSpace(skillsCsvUrl) || string.IsNullOrWhiteSpace(rolesCsvUrl))
+        {
+            TempData["ErrorMessage"] = "Please provide URLs for both Skills and Roles CSV files.";
+            return RedirectToAction(nameof(DdatFrameworkImport));
+        }
+
+        if (string.IsNullOrWhiteSpace(versionIdentifier))
+        {
+            TempData["ErrorMessage"] = "Please provide a version identifier (e.g., '2025-12-05').";
+            return RedirectToAction(nameof(DdatFrameworkImport));
+        }
+
+        try
+        {
+            // Check if version already exists
+            var existingVersion = await _context.DdatFrameworkVersions
+                .FirstOrDefaultAsync(v => v.VersionIdentifier == versionIdentifier);
+
+            if (existingVersion != null)
+            {
+                TempData["ErrorMessage"] = $"Version '{versionIdentifier}' already exists. Please use a different version identifier.";
+                return RedirectToAction(nameof(DdatFrameworkImport));
+            }
+
+            // Download CSV files
+            using var httpClient = new HttpClient();
+            var skillsCsvContent = await httpClient.GetStringAsync(skillsCsvUrl);
+            var rolesCsvContent = await httpClient.GetStringAsync(rolesCsvUrl);
+
+            // Save CSV files locally
+            var csvDirectory = Path.Combine(Directory.GetCurrentDirectory(), "requirements", "ddat-framework");
+            Directory.CreateDirectory(csvDirectory);
+
+            var skillsCsvPath = Path.Combine(csvDirectory, $"Skills-{versionIdentifier}.csv");
+            var rolesCsvPath = Path.Combine(csvDirectory, $"Roles-{versionIdentifier}.csv");
+
+            await System.IO.File.WriteAllTextAsync(skillsCsvPath, skillsCsvContent);
+            await System.IO.File.WriteAllTextAsync(rolesCsvPath, rolesCsvContent);
+
+            // Create framework version
+            var frameworkVersion = new DdatFrameworkVersion
+            {
+                VersionIdentifier = versionIdentifier,
+                VersionName = versionName ?? versionIdentifier,
+                SkillsCsvUrl = skillsCsvUrl,
+                RolesCsvUrl = rolesCsvUrl,
+                SkillsCsvPath = skillsCsvPath,
+                RolesCsvPath = rolesCsvPath,
+                Notes = notes,
+                ImportedBy = User.Identity?.Name ?? "System",
+                ImportedAt = DateTime.UtcNow,
+                IsActive = false // Will be set to active after successful import
+            };
+
+            _context.DdatFrameworkVersions.Add(frameworkVersion);
+            await _context.SaveChangesAsync();
+
+            // Import skills
+            var skillsCount = await ImportDdatFrameworkSkillsAsync(skillsCsvPath, frameworkVersion.Id);
+            frameworkVersion.SkillsCount = skillsCount;
+
+            // Import roles
+            var rolesCount = await ImportDdatFrameworkRolesAsync(rolesCsvPath, frameworkVersion.Id);
+            frameworkVersion.RolesCount = rolesCount;
+
+            // Deactivate previous versions
+            await _context.DdatFrameworkVersions
+                .Where(v => v.Id != frameworkVersion.Id && v.IsActive)
+                .ExecuteUpdateAsync(s => s.SetProperty(v => v.IsActive, false));
+
+            // Activate this version
+            frameworkVersion.IsActive = true;
+            frameworkVersion.UpdatedAt = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = $"DDAT Framework version '{versionIdentifier}' imported successfully. {skillsCount} skills and {rolesCount} roles imported.";
+            return RedirectToAction(nameof(DdatFrameworkImport));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error importing DDAT Framework from URLs");
+            TempData["ErrorMessage"] = $"Error importing framework: {ex.Message}";
+            return RedirectToAction(nameof(DdatFrameworkImport));
+        }
+    }
+
+    // POST: Admin/DdatFrameworkImportFromFile
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> DdatFrameworkImportFromFile(IFormFile skillsCsvFile, IFormFile rolesCsvFile, string versionIdentifier, string? versionName, string? notes)
+    {
+        if (skillsCsvFile == null || rolesCsvFile == null)
+        {
+            TempData["ErrorMessage"] = "Please upload both Skills and Roles CSV files.";
+            return RedirectToAction(nameof(DdatFrameworkImport));
+        }
+
+        if (string.IsNullOrWhiteSpace(versionIdentifier))
+        {
+            TempData["ErrorMessage"] = "Please provide a version identifier (e.g., '2025-12-05').";
+            return RedirectToAction(nameof(DdatFrameworkImport));
+        }
+
+        try
+        {
+            // Check if version already exists
+            var existingVersion = await _context.DdatFrameworkVersions
+                .FirstOrDefaultAsync(v => v.VersionIdentifier == versionIdentifier);
+
+            if (existingVersion != null)
+            {
+                TempData["ErrorMessage"] = $"Version '{versionIdentifier}' already exists. Please use a different version identifier.";
+                return RedirectToAction(nameof(DdatFrameworkImport));
+            }
+
+            // Save uploaded files
+            var csvDirectory = Path.Combine(Directory.GetCurrentDirectory(), "requirements", "ddat-framework");
+            Directory.CreateDirectory(csvDirectory);
+
+            var skillsCsvPath = Path.Combine(csvDirectory, $"Skills-{versionIdentifier}.csv");
+            var rolesCsvPath = Path.Combine(csvDirectory, $"Roles-{versionIdentifier}.csv");
+
+            using (var stream = new FileStream(skillsCsvPath, FileMode.Create))
+            {
+                await skillsCsvFile.CopyToAsync(stream);
+            }
+
+            using (var stream = new FileStream(rolesCsvPath, FileMode.Create))
+            {
+                await rolesCsvFile.CopyToAsync(stream);
+            }
+
+            // Create framework version
+            var frameworkVersion = new DdatFrameworkVersion
+            {
+                VersionIdentifier = versionIdentifier,
+                VersionName = versionName ?? versionIdentifier,
+                SkillsCsvPath = skillsCsvPath,
+                RolesCsvPath = rolesCsvPath,
+                Notes = notes,
+                ImportedBy = User.Identity?.Name ?? "System",
+                ImportedAt = DateTime.UtcNow,
+                IsActive = false
+            };
+
+            _context.DdatFrameworkVersions.Add(frameworkVersion);
+            await _context.SaveChangesAsync();
+
+            // Import skills
+            var skillsCount = await ImportDdatFrameworkSkillsAsync(skillsCsvPath, frameworkVersion.Id);
+            frameworkVersion.SkillsCount = skillsCount;
+
+            // Import roles
+            var rolesCount = await ImportDdatFrameworkRolesAsync(rolesCsvPath, frameworkVersion.Id);
+            frameworkVersion.RolesCount = rolesCount;
+
+            // Deactivate previous versions
+            await _context.DdatFrameworkVersions
+                .Where(v => v.Id != frameworkVersion.Id && v.IsActive)
+                .ExecuteUpdateAsync(s => s.SetProperty(v => v.IsActive, false));
+
+            // Activate this version
+            frameworkVersion.IsActive = true;
+            frameworkVersion.UpdatedAt = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = $"DDAT Framework version '{versionIdentifier}' imported successfully. {skillsCount} skills and {rolesCount} roles imported.";
+            return RedirectToAction(nameof(DdatFrameworkImport));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error importing DDAT Framework from files");
+            TempData["ErrorMessage"] = $"Error importing framework: {ex.Message}";
+            return RedirectToAction(nameof(DdatFrameworkImport));
+        }
+    }
+
+    // Helper method to import skills from CSV
+    private async Task<int> ImportDdatFrameworkSkillsAsync(string csvPath, int frameworkVersionId)
+    {
+        var skillsCount = 0;
+        var existingSkills = await _context.DdatFrameworkSkills
+            .Where(s => s.FrameworkVersionId == frameworkVersionId)
+            .Select(s => s.SkillName)
+            .ToListAsync();
+
+        using var reader = new StreamReader(csvPath);
+        using var csv = new CsvHelper.CsvReader(reader, new CsvHelper.Configuration.CsvConfiguration(System.Globalization.CultureInfo.InvariantCulture)
+        {
+            HasHeaderRecord = true,
+            TrimOptions = CsvHelper.Configuration.TrimOptions.Trim
+        });
+
+        await foreach (var record in csv.GetRecordsAsync<dynamic>())
+        {
+            var skillName = ((IDictionary<string, object>)record)["Skill Name"]?.ToString()?.Trim();
+            if (string.IsNullOrWhiteSpace(skillName))
+                continue;
+
+            // Skip if already exists
+            if (existingSkills.Contains(skillName))
+                continue;
+
+            var skill = new DdatFrameworkSkill
+            {
+                SkillName = skillName,
+                SkillDescription = ((IDictionary<string, object>)record)["Skill Description"]?.ToString()?.Trim(),
+                AwarenessDescription = ((IDictionary<string, object>)record)["Awareness"]?.ToString()?.Trim(),
+                WorkingDescription = ((IDictionary<string, object>)record)["Working"]?.ToString()?.Trim(),
+                PractitionerDescription = ((IDictionary<string, object>)record)["Practitioner"]?.ToString()?.Trim(),
+                ExpertDescription = ((IDictionary<string, object>)record)["Expert"]?.ToString()?.Trim(),
+                RolesThatRequireSkill = ((IDictionary<string, object>)record)["Roles that require Skill"]?.ToString()?.Trim(),
+                FrameworkVersionId = frameworkVersionId,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+
+            _context.DdatFrameworkSkills.Add(skill);
+            skillsCount++;
+        }
+
+        await _context.SaveChangesAsync();
+        return skillsCount;
+    }
+
+    // Helper method to import roles from CSV
+    private async Task<int> ImportDdatFrameworkRolesAsync(string csvPath, int frameworkVersionId)
+    {
+        var rolesCount = 0;
+        var existingRoles = new HashSet<string>();
+
+        using var reader = new StreamReader(csvPath);
+        using var csv = new CsvHelper.CsvReader(reader, new CsvHelper.Configuration.CsvConfiguration(System.Globalization.CultureInfo.InvariantCulture)
+        {
+            HasHeaderRecord = true,
+            TrimOptions = CsvHelper.Configuration.TrimOptions.Trim
+        });
+
+        DdatFrameworkRole? currentRole = null;
+        var roleKey = "";
+
+        await foreach (var record in csv.GetRecordsAsync<dynamic>())
+        {
+            var roleFamily = ((IDictionary<string, object>)record)["Role Family"]?.ToString()?.Trim() ?? "";
+            var role = ((IDictionary<string, object>)record)["Role"]?.ToString()?.Trim() ?? "";
+            var roleLevel = ((IDictionary<string, object>)record)["Role Level"]?.ToString()?.Trim() ?? "";
+            var newRoleKey = $"{roleFamily}|{role}|{roleLevel}";
+
+            // Create new role if this is a different role/level combination
+            if (newRoleKey != roleKey || currentRole == null)
+            {
+                if (currentRole != null)
+                {
+                    _context.DdatFrameworkRoles.Add(currentRole);
+                    rolesCount++;
+                }
+
+                if (!existingRoles.Contains(newRoleKey))
+                {
+                    currentRole = new DdatFrameworkRole
+                    {
+                        RoleFamily = roleFamily,
+                        Role = role,
+                        RoleDescription = ((IDictionary<string, object>)record)["Role Description"]?.ToString()?.Trim(),
+                        RoleLevel = roleLevel,
+                        RoleLevelDescription = ((IDictionary<string, object>)record)["Role Level Description"]?.ToString()?.Trim(),
+                        RoleType = ((IDictionary<string, object>)record)["Role Type"]?.ToString()?.Trim(),
+                        FrameworkVersionId = frameworkVersionId,
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow
+                    };
+                    roleKey = newRoleKey;
+                    existingRoles.Add(newRoleKey);
+                }
+                else
+                {
+                    currentRole = null;
+                    roleKey = "";
+                }
+            }
+
+            // Add skill requirement to current role
+            if (currentRole != null)
+            {
+                var skillName = ((IDictionary<string, object>)record)["Skill Name"]?.ToString()?.Trim();
+                if (!string.IsNullOrWhiteSpace(skillName))
+                {
+                    currentRole.RoleSkills.Add(new DdatFrameworkRoleSkill
+                    {
+                        SkillName = skillName,
+                        SkillDescription = ((IDictionary<string, object>)record)["Skill Description"]?.ToString()?.Trim(),
+                        SkillLevel = ((IDictionary<string, object>)record)["Skill Level"]?.ToString()?.Trim() ?? "",
+                        SkillLevelDescription = ((IDictionary<string, object>)record)["Skill Level Description"]?.ToString()?.Trim(),
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow
+                    });
+                }
+            }
+        }
+
+        // Add the last role
+        if (currentRole != null)
+        {
+            _context.DdatFrameworkRoles.Add(currentRole);
+            rolesCount++;
+        }
+
+        await _context.SaveChangesAsync();
+        return rolesCount;
+    }
+
+    // POST: Admin/DdatFrameworkSync
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> DdatFrameworkSync(int versionId)
+    {
+        try
+        {
+            var version = await _context.DdatFrameworkVersions.FindAsync(versionId);
+            if (version == null)
+            {
+                TempData["ErrorMessage"] = "Framework version not found.";
+                return RedirectToAction(nameof(DdatFrameworkImport));
+            }
+
+            if (string.IsNullOrWhiteSpace(version.SkillsCsvUrl) || string.IsNullOrWhiteSpace(version.RolesCsvUrl))
+            {
+                TempData["ErrorMessage"] = "This version does not have CSV URLs configured for syncing.";
+                return RedirectToAction(nameof(DdatFrameworkImport));
+            }
+
+            // Archive existing skills and roles
+            await _context.DdatFrameworkSkills
+                .Where(s => s.FrameworkVersionId == versionId && !s.IsArchived)
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(sk => sk.IsArchived, true)
+                    .SetProperty(sk => sk.ArchivedAt, DateTime.UtcNow));
+
+            await _context.DdatFrameworkRoles
+                .Where(r => r.FrameworkVersionId == versionId && !r.IsArchived)
+                .ExecuteUpdateAsync(r => r
+                    .SetProperty(ro => ro.IsArchived, true)
+                    .SetProperty(ro => ro.ArchivedAt, DateTime.UtcNow));
+
+            // Download and import new data
+            using var httpClient = new HttpClient();
+            var skillsCsvContent = await httpClient.GetStringAsync(version.SkillsCsvUrl);
+            var rolesCsvContent = await httpClient.GetStringAsync(version.RolesCsvUrl);
+
+            // Update local files
+            if (!string.IsNullOrWhiteSpace(version.SkillsCsvPath))
+            {
+                await System.IO.File.WriteAllTextAsync(version.SkillsCsvPath, skillsCsvContent);
+            }
+
+            if (!string.IsNullOrWhiteSpace(version.RolesCsvPath))
+            {
+                await System.IO.File.WriteAllTextAsync(version.RolesCsvPath, rolesCsvContent);
+            }
+
+            // Import new skills and roles
+            var skillsCount = await ImportDdatFrameworkSkillsAsync(version.SkillsCsvPath ?? "", versionId);
+            var rolesCount = await ImportDdatFrameworkRolesAsync(version.RolesCsvPath ?? "", versionId);
+
+            version.SkillsCount = skillsCount;
+            version.RolesCount = rolesCount;
+            version.UpdatedAt = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = $"Framework version '{version.VersionIdentifier}' synced successfully. {skillsCount} skills and {rolesCount} roles imported.";
+            return RedirectToAction(nameof(DdatFrameworkImport));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error syncing DDAT Framework version {VersionId}", versionId);
+            TempData["ErrorMessage"] = $"Error syncing framework: {ex.Message}";
+            return RedirectToAction(nameof(DdatFrameworkImport));
+        }
+    }
+
+    // ========================================
+    // SETTINGS - Grades
+    // ========================================
+
+    // GET: Admin/Grades
+    public async Task<IActionResult> Grades()
+    {
+        var grades = await _context.Grades
+            .OrderBy(g => g.DisplayOrder)
+            .ThenBy(g => g.Code)
+            .ToListAsync();
+        
+        return View("~/Views/Admin/Settings/Grades.cshtml", grades);
+    }
+
+    // GET: Admin/CreateGrade
+    public IActionResult CreateGrade()
+    {
+        return View("~/Views/Admin/Settings/CreateGrade.cshtml");
+    }
+
+    // POST: Admin/CreateGrade
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> CreateGrade([Bind("Code,DisplayName,DisplayOrder,IsActive")] Grade grade)
+    {
+        if (ModelState.IsValid)
+        {
+            try
+            {
+                grade.CreatedAt = DateTime.UtcNow;
+                grade.UpdatedAt = DateTime.UtcNow;
+                _context.Grades.Add(grade);
+                await _context.SaveChangesAsync();
+                
+                TempData["SuccessMessage"] = $"Grade '{grade.Code}' has been created successfully.";
+                _logger.LogInformation("Grade created: {Code}", grade.Code);
+                return RedirectToAction(nameof(Grades));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating grade");
+                TempData["ErrorMessage"] = "An error occurred while creating the grade. Please try again.";
+            }
+        }
+
+        return View("~/Views/Admin/Settings/CreateGrade.cshtml", grade);
+    }
+
+    // GET: Admin/EditGrade/5
+    public async Task<IActionResult> EditGrade(int id)
+    {
+        var grade = await _context.Grades.FindAsync(id);
+        if (grade == null)
+        {
+            return NotFound();
+        }
+
+        return View("~/Views/Admin/Settings/EditGrade.cshtml", grade);
+    }
+
+    // POST: Admin/EditGrade/5
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> EditGrade(int id, [Bind("Id,Code,DisplayName,DisplayOrder,IsActive")] Grade grade)
+    {
+        if (id != grade.Id)
+        {
+            return NotFound();
+        }
+
+        if (ModelState.IsValid)
+        {
+            try
+            {
+                var existingGrade = await _context.Grades.FindAsync(id);
+                if (existingGrade != null)
+                {
+                    existingGrade.Code = grade.Code;
+                    existingGrade.DisplayName = grade.DisplayName;
+                    existingGrade.DisplayOrder = grade.DisplayOrder;
+                    existingGrade.IsActive = grade.IsActive;
+                    existingGrade.UpdatedAt = DateTime.UtcNow;
+
+                    await _context.SaveChangesAsync();
+                    
+                    TempData["SuccessMessage"] = $"Grade '{grade.Code}' has been updated successfully.";
+                    _logger.LogInformation("Grade {Id} updated successfully", id);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating grade {GradeId}", id);
+                TempData["ErrorMessage"] = "An error occurred while updating the grade. Please try again.";
+            }
+
+            return RedirectToAction(nameof(Grades));
+        }
+
+        return View("~/Views/Admin/Settings/EditGrade.cshtml", grade);
+    }
+
+    // POST: Admin/DeleteGrade
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> DeleteGrade(int id)
+    {
+        try
+        {
+            var grade = await _context.Grades.FindAsync(id);
+            if (grade != null)
+            {
+                // Check if grade is being used
+                var usageCount = await _context.DdatFrameworkSkillGradeMappings.CountAsync(gm => gm.Grade == grade.Code);
+                var userProfileUsageCount = await _context.UserProfessionalProfiles.CountAsync(upp => upp.SubstantiveGrade == grade.Code);
+                
+                if (usageCount > 0 || userProfileUsageCount > 0)
+                {
+                    TempData["ErrorMessage"] = $"Cannot delete grade '{grade.Code}' as it is being used by {usageCount + userProfileUsageCount} record(s).";
+                }
+                else
+                {
+                    _context.Grades.Remove(grade);
+                    await _context.SaveChangesAsync();
+                    
+                    TempData["SuccessMessage"] = $"Grade '{grade.Code}' has been deleted successfully.";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting grade");
+            TempData["ErrorMessage"] = "An error occurred while deleting the grade. Please try again.";
+        }
+
+        return RedirectToAction(nameof(Grades));
+    }
+
+    // ========================================
     // DATA MANAGEMENT
     // ========================================
 
@@ -3184,133 +5032,6 @@ public class AdminController : Controller
             TempData["ErrorMessage"] = "An error occurred while clearing performance returns. Please try again.";
             return RedirectToAction(nameof(ClearPerformanceReturns));
         }
-    }
-
-    // DEMAND MANAGEMENT TRIAGE MEETINGS
-
-    public async Task<IActionResult> TriageMeetings()
-    {
-        var meetings = await _context.TriageMeetings
-            .Include(tm => tm.DemandRequests)
-            .OrderByDescending(tm => tm.StartAt)
-            .ToListAsync();
-
-        return View("~/Views/Admin/TriageMeeting/Index.cshtml", meetings);
-    }
-
-    public IActionResult CreateTriageMeeting()
-    {
-        var model = new TriageMeeting
-        {
-            StartAt = DateTime.UtcNow.Date.AddHours(9),
-            EndAt = DateTime.UtcNow.Date.AddHours(10)
-        };
-
-        return View("~/Views/Admin/TriageMeeting/Create.cshtml", model);
-    }
-
-    [HttpPost]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> CreateTriageMeeting(TriageMeeting model)
-    {
-        if (model.EndAt <= model.StartAt)
-        {
-            ModelState.AddModelError(nameof(model.EndAt), "End time must be after the start time.");
-        }
-
-        if (!ModelState.IsValid)
-        {
-            return View("~/Views/Admin/TriageMeeting/Create.cshtml", model);
-        }
-
-        model.Title = model.Title?.Trim() ?? string.Empty;
-        model.Description = string.IsNullOrWhiteSpace(model.Description) ? null : model.Description.Trim();
-        model.Location = string.IsNullOrWhiteSpace(model.Location) ? null : model.Location.Trim();
-        model.CreatedAt = DateTime.UtcNow;
-        model.UpdatedAt = DateTime.UtcNow;
-
-        _context.TriageMeetings.Add(model);
-        await _context.SaveChangesAsync();
-
-        TempData["SuccessMessage"] = "Triage meeting created.";
-        return RedirectToAction(nameof(TriageMeetings));
-    }
-
-    public async Task<IActionResult> EditTriageMeeting(int id)
-    {
-        var meeting = await _context.TriageMeetings.FindAsync(id);
-        if (meeting == null)
-        {
-            return NotFound();
-        }
-
-        return View("~/Views/Admin/TriageMeeting/Edit.cshtml", meeting);
-    }
-
-    [HttpPost]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> EditTriageMeeting(int id, TriageMeeting model)
-    {
-        if (id != model.Id)
-        {
-            return BadRequest();
-        }
-
-        if (model.EndAt <= model.StartAt)
-        {
-            ModelState.AddModelError(nameof(model.EndAt), "End time must be after the start time.");
-        }
-
-        if (!ModelState.IsValid)
-        {
-            return View("~/Views/Admin/TriageMeeting/Edit.cshtml", model);
-        }
-
-        var meeting = await _context.TriageMeetings.FindAsync(id);
-        if (meeting == null)
-        {
-            return NotFound();
-        }
-
-        meeting.Title = model.Title?.Trim() ?? string.Empty;
-        meeting.Description = string.IsNullOrWhiteSpace(model.Description) ? null : model.Description.Trim();
-        meeting.Location = string.IsNullOrWhiteSpace(model.Location) ? null : model.Location.Trim();
-        meeting.StartAt = model.StartAt;
-        meeting.EndAt = model.EndAt;
-        meeting.IsActive = model.IsActive;
-        meeting.UpdatedAt = DateTime.UtcNow;
-
-        _context.TriageMeetings.Update(meeting);
-        await _context.SaveChangesAsync();
-
-        TempData["SuccessMessage"] = "Triage meeting updated.";
-        return RedirectToAction(nameof(TriageMeetings));
-    }
-
-    [HttpPost]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> DeleteTriageMeeting(int id)
-    {
-        var meeting = await _context.TriageMeetings
-            .Include(tm => tm.DemandRequests)
-            .FirstOrDefaultAsync(tm => tm.Id == id);
-
-        if (meeting == null)
-        {
-            return NotFound();
-        }
-
-        if (meeting.DemandRequests.Any())
-        {
-            TempData["ErrorMessage"] = "Cannot delete a triage meeting that has demand requests assigned.";
-            return RedirectToAction(nameof(TriageMeetings));
-        }
-
-        _context.TriageMeetings.Remove(meeting);
-        await _context.SaveChangesAsync();
-
-        TempData["SuccessMessage"] = "Triage meeting deleted.";
-        return RedirectToAction(nameof(TriageMeetings));
     }
 
     private RaidLookupDefinition? ResolveRaidLookupDefinition(string? key) =>
@@ -3368,5 +5089,273 @@ public class AdminController : Controller
         Func<CompassDbContext, IQueryable<RaidLookupBase>> Query,
         Func<RaidLookupBase> Factory,
         string? Description);
+
+    // ========================================
+    // PROFESSIONS MANAGEMENT
+    // ========================================
+
+    // GET: Admin/Professions
+    public async Task<IActionResult> Professions()
+    {
+        var professions = await _context.DdatProfessions
+            .OrderBy(p => p.DisplayOrder)
+            .ThenBy(p => p.Name)
+            .ToListAsync();
+        
+        return View("~/Views/Admin/Professions/Index.cshtml", professions);
+    }
+
+    // GET: Admin/Professions/Details/5
+    public async Task<IActionResult> ProfessionDetails(int id)
+    {
+        var profession = await _context.DdatProfessions
+            .Include(p => p.ProfessionSkills)
+                .ThenInclude(ps => ps.Skill)
+            .FirstOrDefaultAsync(p => p.Id == id);
+
+        if (profession == null)
+        {
+            return NotFound();
+        }
+
+        // Get Head of Profession for this profession
+        var hop = await _context.HOPS
+            .Include(h => h.User)
+            .FirstOrDefaultAsync(h => h.DdatProfessionId == id);
+
+        ViewBag.HeadOfProfession = hop;
+        ViewBag.AllSkills = await _context.Skills
+            .Where(s => s.IsActive)
+            .OrderBy(s => s.SkillName)
+            .ToListAsync();
+
+        return View("~/Views/Admin/Professions/Details.cshtml", profession);
+    }
+
+    // GET: Admin/Professions/Edit/5
+    public async Task<IActionResult> EditProfession(int id)
+    {
+        var profession = await _context.DdatProfessions.FindAsync(id);
+        if (profession == null)
+        {
+            return NotFound();
+        }
+
+        return View("~/Views/Admin/Professions/Edit.cshtml", profession);
+    }
+
+    // POST: Admin/Professions/Edit/5
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> EditProfession(int id, [Bind("Id,Name,Slug,Description,RoleGroup,DisplayOrder,IsActive")] DdatProfession profession)
+    {
+        if (id != profession.Id)
+        {
+            return NotFound();
+        }
+
+        if (ModelState.IsValid)
+        {
+            try
+            {
+                var existingProfession = await _context.DdatProfessions.FindAsync(id);
+                if (existingProfession != null)
+                {
+                    existingProfession.Name = profession.Name;
+                    existingProfession.Slug = profession.Slug;
+                    existingProfession.Description = profession.Description;
+                    existingProfession.RoleGroup = profession.RoleGroup;
+                    existingProfession.DisplayOrder = profession.DisplayOrder;
+                    existingProfession.IsActive = profession.IsActive;
+                    existingProfession.UpdatedAt = DateTime.UtcNow;
+
+                    await _context.SaveChangesAsync();
+                    
+                    TempData["SuccessMessage"] = $"Profession '{profession.Name}' has been updated successfully.";
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating profession {ProfessionId}", id);
+                TempData["ErrorMessage"] = "An error occurred while updating the profession. Please try again.";
+            }
+
+            return RedirectToAction(nameof(Professions));
+        }
+
+        return View("~/Views/Admin/Professions/Edit.cshtml", profession);
+    }
+
+    // POST: Admin/Professions/AssignSkills
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> AssignSkillsToProfession(int professionId, int[] skillIds)
+    {
+        try
+        {
+            var profession = await _context.DdatProfessions.FindAsync(professionId);
+            if (profession == null)
+            {
+                TempData["ErrorMessage"] = "Profession not found.";
+                return RedirectToAction(nameof(Professions));
+            }
+
+            // Remove existing skill assignments
+            var existingAssignments = await _context.ProfessionSkills
+                .Where(ps => ps.DdatProfessionId == professionId)
+                .ToListAsync();
+            _context.ProfessionSkills.RemoveRange(existingAssignments);
+
+            // Add new skill assignments
+            foreach (var skillId in skillIds)
+            {
+                var skill = await _context.Skills.FindAsync(skillId);
+                if (skill != null)
+                {
+                    _context.ProfessionSkills.Add(new ProfessionSkill
+                    {
+                        DdatProfessionId = professionId,
+                        SkillId = skillId,
+                        CreatedAt = DateTime.UtcNow
+                    });
+                }
+            }
+
+            await _context.SaveChangesAsync();
+            
+            TempData["SuccessMessage"] = $"Skills have been assigned to profession '{profession.Name}' successfully.";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error assigning skills to profession {ProfessionId}", professionId);
+            TempData["ErrorMessage"] = "An error occurred while assigning skills. Please try again.";
+        }
+
+        return RedirectToAction(nameof(ProfessionDetails), new { id = professionId });
+    }
+
+    // ========================================
+    // HEADS OF PROFESSION MANAGEMENT
+    // ========================================
+
+    // GET: Admin/HeadsOfProfession
+    public async Task<IActionResult> HeadsOfProfession()
+    {
+        var hops = await _context.HOPS
+            .Include(h => h.User)
+            .Include(h => h.DdatProfession)
+            .OrderBy(h => h.DdatProfession != null ? h.DdatProfession.Name : string.Empty)
+            .ThenBy(h => h.User != null ? h.User.Name : string.Empty)
+            .ToListAsync();
+
+        ViewBag.Professions = await _context.DdatProfessions
+            .Where(p => p.IsActive)
+            .OrderBy(p => p.Name)
+            .ToListAsync();
+
+        return View("~/Views/Admin/HeadsOfProfession/Index.cshtml", hops);
+    }
+
+    // POST: Admin/HeadsOfProfession/Create
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> CreateHeadOfProfession(string userEmail, int professionId)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(userEmail))
+            {
+                TempData["ErrorMessage"] = "Please select a user from the search results.";
+                return RedirectToAction(nameof(HeadsOfProfession));
+            }
+
+            // Get or create user by email
+            var normalizedEmail = userEmail.ToLowerInvariant().Trim();
+            var user = await _context.Users
+                .FirstOrDefaultAsync(u => u.Email.ToLower() == normalizedEmail);
+
+            if (user == null)
+            {
+                // Create user if they don't exist
+                user = new User
+                {
+                    Email = normalizedEmail,
+                    Name = normalizedEmail.Split('@')[0].Replace(".", " "),
+                    Role = UserRole.Visitor,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
+
+                _context.Users.Add(user);
+                await _context.SaveChangesAsync();
+
+                _logger.LogInformation("Created new user for Head of Profession: {Email}", normalizedEmail);
+            }
+
+            // Check if this assignment already exists
+            var existing = await _context.HOPS
+                .FirstOrDefaultAsync(h => h.UserId == user.Id && h.DdatProfessionId == professionId);
+
+            if (existing != null)
+            {
+                TempData["ErrorMessage"] = "This user is already assigned as Head of Profession for this profession.";
+                return RedirectToAction(nameof(HeadsOfProfession));
+            }
+
+            var hop = new HOPS
+            {
+                UserId = user.Id,
+                DdatProfessionId = professionId,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+
+            _context.HOPS.Add(hop);
+            await _context.SaveChangesAsync();
+
+            var profession = await _context.DdatProfessions.FindAsync(professionId);
+            
+            TempData["SuccessMessage"] = $"{user.Name} ({user.Email}) has been assigned as Head of Profession for '{profession?.Name}'.";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error creating Head of Profession");
+            TempData["ErrorMessage"] = "An error occurred while creating the Head of Profession assignment. Please try again.";
+        }
+
+        return RedirectToAction(nameof(HeadsOfProfession));
+    }
+
+    // POST: Admin/HeadsOfProfession/Delete/5
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> DeleteHeadOfProfession(int id)
+    {
+        try
+        {
+            var hop = await _context.HOPS
+                .Include(h => h.User)
+                .Include(h => h.DdatProfession)
+                .FirstOrDefaultAsync(h => h.Id == id);
+
+            if (hop != null)
+            {
+                var userName = hop.User?.Name;
+                var professionName = hop.DdatProfession?.Name;
+
+                _context.HOPS.Remove(hop);
+                await _context.SaveChangesAsync();
+
+                TempData["SuccessMessage"] = $"{userName} has been removed as Head of Profession for '{professionName}'.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting Head of Profession {HopId}", id);
+            TempData["ErrorMessage"] = "An error occurred while deleting the Head of Profession assignment. Please try again.";
+        }
+
+        return RedirectToAction(nameof(HeadsOfProfession));
+    }
 
 }

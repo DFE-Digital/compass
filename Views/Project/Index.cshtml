@@ -1,45 +1,64 @@
 @using System.Linq
 @model Compass.ViewModels.ProjectIndexViewModel
+@inject Compass.Services.IMonthlyUpdateService MonthlyUpdateService
 
 @{
-    ViewData["Title"] = "Delivery";
+    ViewData["Title"] = "Work";
+    var dueCount = ViewBag.MonthlyUpdateDueCount as int? ?? 0;
+    var lateCount = ViewBag.MonthlyUpdateLateCount as int? ?? 0;
+    var inProgressCount = ViewBag.MonthlyUpdateInProgressCount as int? ?? 0;
+    var submittedCount = ViewBag.MonthlyUpdateSubmittedCount as int? ?? 0;
+    var reportingPeriod = ViewBag.CurrentReportingMonthName as string ?? "Current Period";
 }
 
+@await Html.PartialAsync("_DashboardStyles")
+
 @section Breadcrumbs {
-    <style>
-        .breadcrumb a:hover {
-            color: #003078 !important;
-            text-decoration: underline !important;
-        }
-    </style>
-    <nav aria-label="Breadcrumb">
-        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f8f9fa; padding: 0.75rem 1rem; border-radius: 0.375rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+ <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
             <li class="breadcrumb-item">
                 <a href="/" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Home</a>
             </li>
-            <li class="breadcrumb-item active" aria-current="page" style="color: #0b0c0c; font-weight: 600;">Delivery reporting</li>
+            <li class="breadcrumb-item active" aria-current="page" style="color: #0b0c0c; font-weight: 600;">Work reporting</li>
         </ol>
     </nav>
 }
 
-<div class="content-header">
-    <div class="container-fluid">
-        <div class="row mb-3 align-items-center">
-            <div class="col-lg-8 col-md-7 col-sm-12">
-                <h1 class="m-0">Delivery reporting</h1>
-            </div>
-            @if (ViewBag.HasAdminRole == true)
-            {
-                <div class="col-lg-4 col-md-5 col-sm-12 text-md-right">
-                    <a asp-action="Create" class="btn btn-success">Create entry</a>
-                </div>
-            }
-        </div>
-    </div>
-</div>
+@{
+    // Determine current view from ViewBag or route
+    var currentView = ViewBag.CurrentView as string;
+    if (string.IsNullOrEmpty(currentView))
+    {
+        // Try to determine from route/action
+        var actionName = ViewContext.RouteData.Values["action"]?.ToString() ?? "";
+        currentView = actionName.ToLower() switch
+        {
+            "yourwork" => "your-work",
+            "watched" => "watched",
+            "all" => "all",
+            "viewas" or "viewasuser" => "view-as",
+            _ => "your-work" // Default to "Your work"
+        };
+    }
+    var isViewMine = string.Equals(currentView, "your-work", StringComparison.OrdinalIgnoreCase) || string.Equals(currentView, "mine", StringComparison.OrdinalIgnoreCase);
+    var isViewWatched = string.Equals(currentView, "watched", StringComparison.OrdinalIgnoreCase);
+    var isViewAll = string.Equals(currentView, "all", StringComparison.OrdinalIgnoreCase);
+    var isViewAs = string.Equals(currentView, "view-as", StringComparison.OrdinalIgnoreCase) || string.Equals(currentView, "viewas", StringComparison.OrdinalIgnoreCase);
+    
+    ViewBag.BrandText = "Work reporting";
+    ViewBag.NavLinks = new[]
+    {
+        new { Text = "Your work", Action = "YourWork", Controller = "Project", Url = Url.Action("YourWork", "Project"), IsButton = false, IsActive = isViewMine },
+        new { Text = "Watched", Action = "Watched", Controller = "Project", Url = Url.Action("Watched", "Project"), IsButton = false, IsActive = isViewWatched },
+        new { Text = "All work", Action = "All", Controller = "Project", Url = Url.Action("All", "Project"), IsButton = false, IsActive = isViewAll },
+        new { Text = "View as", Action = "ViewAs", Controller = "Project", Url = Url.Action("ViewAs", "Project"), IsButton = false, IsActive = isViewAs },
+        new { Text = "Create work entry", Action = "Create", Controller = "Project", Url = (string)null, IsButton = true, IsActive = false }
+    };
+}
 
 <section class="content">
     <div class="container-fluid">
+        @await Html.PartialAsync("_ModuleNavbar")
         @if (TempData["SuccessMessage"] != null)
         {
             <div class="alert alert-success alert-dismissible fade show">
@@ -55,23 +74,89 @@
             </div>
         }
 
+
+        @{
+            // Declare variables needed for both Project Status and Filters sections
+            var deliveryPriorities = ViewBag.DeliveryPriorities as IEnumerable<Compass.Models.DeliveryPriority> ?? Array.Empty<Compass.Models.DeliveryPriority>();
+            var currentPriorityId = ViewBag.CurrentPriority as int?;
+            var filterActionName = currentView.ToLower() switch
+            {
+                "your-work" or "mine" => ViewBag.ViewAsMode == true ? "ViewAsUser" : "YourWork",
+                "watched" => "Watched",
+                "all" => "All",
+                "view-as" => "ViewAsUser",
+                _ => ViewBag.ViewAsMode == true ? "ViewAsUser" : "YourWork"
+            };
+            var statusActive = ViewBag.StatusActiveCount as int? ?? 0;
+            var statusCompleted = ViewBag.StatusCompletedCount as int? ?? 0;
+            var statusCancelled = ViewBag.StatusCancelledCount as int? ?? 0;
+            var currentStatus = ViewBag.CurrentStatus as string;
+            var targetUserId = ViewBag.TargetUserId as int?;
+        }
+
         <div class="row">
             <!-- Left Column: Filters -->
             <div class="col-xxl-2 col-xl-2 col-lg-3 col-md-4 col-sm-12 col-12">
+                <!-- Project Status Navigation -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h3 class="card-title">Project status</h3>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="list-group list-group-flush">
+                            <a href="@Url.Action(filterActionName, new { 
+                                userId = targetUserId,
+                                search = ViewBag.CurrentSearch, 
+                                ragStatus = ViewBag.CurrentRagStatus, 
+                                businessArea = ViewBag.CurrentBusinessArea, 
+                                phase = ViewBag.CurrentPhase,
+                                flagship = ViewBag.CurrentFlagship,
+                                priority = currentPriorityId,
+                                status = "Active"
+                            })" class="list-group-item list-group-item-action @(currentStatus == "Active" ? "active" : "")" style="display: flex !important; justify-content: space-between !important; align-items: center !important;">
+                                <span>Active</span>
+                                <span class="badge @(currentStatus == "Active" ? "badge-light" : "badge-secondary") badge-pill">@statusActive</span>
+                            </a>
+                            <a href="@Url.Action(filterActionName, new { 
+                                userId = targetUserId,
+                                search = ViewBag.CurrentSearch, 
+                                ragStatus = ViewBag.CurrentRagStatus, 
+                                businessArea = ViewBag.CurrentBusinessArea, 
+                                phase = ViewBag.CurrentPhase,
+                                flagship = ViewBag.CurrentFlagship,
+                                priority = currentPriorityId,
+                                status = "Completed"
+                            })" class="list-group-item list-group-item-action @(currentStatus == "Completed" ? "active" : "")" style="display: flex !important; justify-content: space-between !important; align-items: center !important;">
+                                <span>Completed</span>
+                                <span class="badge @(currentStatus == "Completed" ? "badge-light" : "badge-secondary") badge-pill">@statusCompleted</span>
+                            </a>
+                            <a href="@Url.Action(filterActionName, new { 
+                                userId = targetUserId,
+                                search = ViewBag.CurrentSearch, 
+                                ragStatus = ViewBag.CurrentRagStatus, 
+                                businessArea = ViewBag.CurrentBusinessArea, 
+                                phase = ViewBag.CurrentPhase,
+                                flagship = ViewBag.CurrentFlagship,
+                                priority = currentPriorityId,
+                                status = "Cancelled"
+                            })" class="list-group-item list-group-item-action @(currentStatus == "Cancelled" ? "active" : "")" style="display: flex !important; justify-content: space-between !important; align-items: center !important;">
+                                <span>Cancelled</span>
+                                <span class="badge @(currentStatus == "Cancelled" ? "badge-light" : "badge-secondary") badge-pill">@statusCancelled</span>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Filters -->
                 <div class="card">
                     <div class="card-header">
                         <h3 class="card-title">Filters</h3>
                     </div>
                     <div class="card-body">
-                        @{
-                            var deliveryPriorities = ViewBag.DeliveryPriorities as IEnumerable<Compass.Models.DeliveryPriority> ?? Array.Empty<Compass.Models.DeliveryPriority>();
-                            var currentPriorityId = ViewBag.CurrentPriority as int?;
-                        }
-                        <form method="get" id="filterForm">
+                        <form method="get" id="filterForm" asp-action="@filterActionName" asp-route-userId="@targetUserId">
                             <div class="form-group">
                                 <label>Search</label>
-                                <input type="text" name="search" class="form-control form-control-sm" placeholder="Search projects..." value="@ViewBag.CurrentSearch" />
+                                <input type="text" name="search" id="searchInput" class="form-control form-control-sm" placeholder="Search work items..." value="@ViewBag.CurrentSearch" />
                             </div>
 
                             <div class="form-group">
@@ -205,8 +290,38 @@
                             </div>
 
                             <div class="form-group">
+                                <label for="primaryContactId">Primary Contact</label>
+                                <select name="primaryContactId" id="primaryContactId" class="form-control form-control-sm">
+                                    <option value="">All</option>
+                                    @if (ViewBag.CurrentPrimaryContactId != null && (int)ViewBag.CurrentPrimaryContactId == -1)
+                                    {
+                                        <option value="-1" selected>No primary contact</option>
+                                    }
+                                    else
+                                    {
+                                        <option value="-1">No primary contact</option>
+                                    }
+                                    @if (ViewBag.PrimaryContacts != null)
+                                    {
+                                        @foreach (var contact in ViewBag.PrimaryContacts)
+                                        {
+                                            var contactId = contact.Id;
+                                            @if (ViewBag.CurrentPrimaryContactId != null && (int)ViewBag.CurrentPrimaryContactId == contactId)
+                                            {
+                                                <option value="@contactId" selected>@contact.Name</option>
+                                            }
+                                            else
+                                            {
+                                                <option value="@contactId">@contact.Name</option>
+                                            }
+                                        }
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="form-group">
                                 <button type="submit" class="btn btn-primary btn-sm btn-block">Apply filters</button>
-                                <a asp-action="Index" class="btn btn-default btn-sm btn-block">Clear all filters</a>
+                                <a asp-action="@filterActionName" asp-route-clearFilters="true" class="btn btn-default btn-sm btn-block">Clear all filters</a>
                             </div>
                         </form>
                         
@@ -215,100 +330,147 @@
                              !string.IsNullOrEmpty(ViewBag.CurrentBusinessArea?.ToString()) || 
                              !string.IsNullOrEmpty(ViewBag.CurrentPhase?.ToString()) || 
                              !string.IsNullOrEmpty(ViewBag.CurrentFlagship?.ToString()) ||
-                             currentPriorityId.HasValue)
+                             currentPriorityId.HasValue ||
+                             ViewBag.CurrentPrimaryContactId != null ||
+                             !string.IsNullOrEmpty(currentStatus))
                         {
                             <div class="mt-3 pt-3 border-top">
                                 <strong class="d-block mb-2">Active Filters:</strong>
+                                @if (!string.IsNullOrEmpty(currentStatus))
+                                {
+                                    <a href="@Url.Action(filterActionName, new { 
+                                        userId = targetUserId,
+                                        search = ViewBag.CurrentSearch,
+                                        ragStatus = ViewBag.CurrentRagStatus, 
+                                        businessArea = ViewBag.CurrentBusinessArea, 
+                                        phase = ViewBag.CurrentPhase, 
+                                        flagship = ViewBag.CurrentFlagship,
+                                        priority = currentPriorityId,
+                                        primaryContactId = ViewBag.CurrentPrimaryContactId,
+                                        status = (string)null
+                                    })" class="badge badge-info mb-2 mr-2 d-inline-flex align-items-center badge-link" title="Remove filter">
+                                        Status: @currentStatus <i class="fas fa-times ml-2"></i>
+                                    </a>
+                                }
                                 @if (!string.IsNullOrEmpty(ViewBag.CurrentSearch?.ToString()))
                                 {
-                                    <div class="d-flex justify-content-between align-items-center mb-2">
-                                        <span class="badge badge-info">Search: @ViewBag.CurrentSearch</span>
-                                        <a href="@Url.Action("Index", new { 
-                                            ragStatus = ViewBag.CurrentRagStatus, 
-                        businessArea = ViewBag.CurrentBusinessArea, 
-                                            phase = ViewBag.CurrentPhase, 
-                                            flagship = ViewBag.CurrentFlagship,
-                                            priority = currentPriorityId
-                                        })" class="text-danger" title="Remove filter">
-                                            <i class="fas fa-times"></i>
-                                        </a>
-                                    </div>
+                                    <a href="@Url.Action(filterActionName, new { 
+                                        userId = targetUserId,
+                                        search = (string)null,
+                                        ragStatus = ViewBag.CurrentRagStatus, 
+                                        businessArea = ViewBag.CurrentBusinessArea, 
+                                        phase = ViewBag.CurrentPhase, 
+                                        flagship = ViewBag.CurrentFlagship,
+                                        priority = currentPriorityId,
+                                        primaryContactId = ViewBag.CurrentPrimaryContactId,
+                                        status = currentStatus
+                                    })" class="badge badge-info mb-2 mr-2 d-inline-flex align-items-center badge-link" title="Remove filter">
+                                        Search: @ViewBag.CurrentSearch <i class="fas fa-times ml-2"></i>
+                                    </a>
                                 }
                                 @if (!string.IsNullOrEmpty(ViewBag.CurrentRagStatus?.ToString()))
                                 {
-                                    <div class="d-flex justify-content-between align-items-center mb-2">
-                                        <span class="badge badge-info">RAG: @ViewBag.CurrentRagStatus</span>
-                                        <a href="@Url.Action("Index", new { 
-                                            search = ViewBag.CurrentSearch, 
-                                            businessArea = ViewBag.CurrentBusinessArea, 
-                                            phase = ViewBag.CurrentPhase, 
-                                            flagship = ViewBag.CurrentFlagship,
-                                            priority = currentPriorityId
-                                        })" class="text-danger" title="Remove filter">
-                                            <i class="fas fa-times"></i>
-                                        </a>
-                                    </div>
+                                    <a href="@Url.Action(filterActionName, new { 
+                                        userId = targetUserId,
+                                        search = ViewBag.CurrentSearch, 
+                                        ragStatus = (string)null,
+                                        businessArea = ViewBag.CurrentBusinessArea, 
+                                        phase = ViewBag.CurrentPhase, 
+                                        flagship = ViewBag.CurrentFlagship,
+                                        priority = currentPriorityId,
+                                        primaryContactId = ViewBag.CurrentPrimaryContactId,
+                                        status = currentStatus
+                                    })" class="badge badge-info mb-2 mr-2 d-inline-flex align-items-center badge-link" title="Remove filter">
+                                        RAG: @ViewBag.CurrentRagStatus <i class="fas fa-times ml-2"></i>
+                                    </a>
                                 }
                                 @if (!string.IsNullOrEmpty(ViewBag.CurrentBusinessArea?.ToString()))
                                 {
-                                    <div class="d-flex justify-content-between align-items-center mb-2">
-                                        <span class="badge badge-info">Area: @ViewBag.CurrentBusinessArea</span>
-                                        <a href="@Url.Action("Index", new { 
-                                            search = ViewBag.CurrentSearch, 
-                                            ragStatus = ViewBag.CurrentRagStatus, 
-                                            phase = ViewBag.CurrentPhase, 
-                                            flagship = ViewBag.CurrentFlagship,
-                                            priority = currentPriorityId
-                                        })" class="text-danger" title="Remove filter">
-                                            <i class="fas fa-times"></i>
-                                        </a>
-                                    </div>
+                                    <a href="@Url.Action(filterActionName, new { 
+                                        userId = targetUserId,
+                                        search = ViewBag.CurrentSearch, 
+                                        ragStatus = ViewBag.CurrentRagStatus, 
+                                        businessArea = (string)null,
+                                        phase = ViewBag.CurrentPhase, 
+                                        flagship = ViewBag.CurrentFlagship,
+                                        priority = currentPriorityId,
+                                        primaryContactId = ViewBag.CurrentPrimaryContactId,
+                                        status = currentStatus
+                                    })" class="badge badge-info mb-2 mr-2 d-inline-flex align-items-center badge-link" title="Remove filter">
+                                        Area: @ViewBag.CurrentBusinessArea <i class="fas fa-times ml-2"></i>
+                                    </a>
                                 }
                                 @if (!string.IsNullOrEmpty(ViewBag.CurrentPhase?.ToString()))
                                 {
-                                    <div class="d-flex justify-content-between align-items-center mb-2">
-                                        <span class="badge badge-info">Phase: @ViewBag.CurrentPhase</span>
-                                        <a href="@Url.Action("Index", new { 
-                                            search = ViewBag.CurrentSearch, 
-                                            ragStatus = ViewBag.CurrentRagStatus, 
-                                            businessArea = ViewBag.CurrentBusinessArea, 
-                                            flagship = ViewBag.CurrentFlagship,
-                                            priority = currentPriorityId
-                                        })" class="text-danger" title="Remove filter">
-                                            <i class="fas fa-times"></i>
-                                        </a>
-                                    </div>
+                                    <a href="@Url.Action(filterActionName, new { 
+                                        userId = targetUserId,
+                                        search = ViewBag.CurrentSearch, 
+                                        ragStatus = ViewBag.CurrentRagStatus, 
+                                        businessArea = ViewBag.CurrentBusinessArea, 
+                                        phase = (string)null,
+                                        flagship = ViewBag.CurrentFlagship,
+                                        priority = currentPriorityId,
+                                        primaryContactId = ViewBag.CurrentPrimaryContactId,
+                                        status = currentStatus
+                                    })" class="badge badge-info mb-2 mr-2 d-inline-flex align-items-center badge-link" title="Remove filter">
+                                        Phase: @ViewBag.CurrentPhase <i class="fas fa-times ml-2"></i>
+                                    </a>
                                 }
                                 @if (!string.IsNullOrEmpty(ViewBag.CurrentFlagship?.ToString()))
                                 {
-                                    <div class="d-flex justify-content-between align-items-center mb-2">
-                                        <span class="badge badge-info">Flagship: @(ViewBag.CurrentFlagship == "true" ? "Yes" : "No")</span>
-                                        <a href="@Url.Action("Index", new { 
-                                            search = ViewBag.CurrentSearch, 
-                                            ragStatus = ViewBag.CurrentRagStatus, 
-                                            businessArea = ViewBag.CurrentBusinessArea, 
-                                            phase = ViewBag.CurrentPhase,
-                                            priority = currentPriorityId
-                                        })" class="text-danger" title="Remove filter">
-                                            <i class="fas fa-times"></i>
-                                        </a>
-                                    </div>
+                                    <a href="@Url.Action(filterActionName, new { 
+                                        userId = targetUserId,
+                                        search = ViewBag.CurrentSearch, 
+                                        ragStatus = ViewBag.CurrentRagStatus, 
+                                        businessArea = ViewBag.CurrentBusinessArea, 
+                                        phase = ViewBag.CurrentPhase,
+                                        flagship = (string)null,
+                                        priority = currentPriorityId,
+                                        primaryContactId = ViewBag.CurrentPrimaryContactId,
+                                        status = currentStatus
+                                    })" class="badge badge-info mb-2 mr-2 d-inline-flex align-items-center badge-link" title="Remove filter">
+                                        Flagship: @(ViewBag.CurrentFlagship == "true" ? "Yes" : "No") <i class="fas fa-times ml-2"></i>
+                                    </a>
                                 }
                                 @if (currentPriorityId.HasValue)
                                 {
                                     var currentPriority = deliveryPriorities.FirstOrDefault(p => p.Id == currentPriorityId.Value);
-                                    <div class="d-flex justify-content-between align-items-center mb-2">
-                                        <span class="badge badge-info">Priority: @(currentPriority?.Name ?? currentPriorityId.ToString())</span>
-                                        <a href="@Url.Action("Index", new { 
-                                            search = ViewBag.CurrentSearch, 
-                                            ragStatus = ViewBag.CurrentRagStatus, 
-                                            businessArea = ViewBag.CurrentBusinessArea, 
-                                            phase = ViewBag.CurrentPhase,
-                                            flagship = ViewBag.CurrentFlagship 
-                                        })" class="text-danger" title="Remove filter">
-                                            <i class="fas fa-times"></i>
-                                        </a>
-                                    </div>
+                                    <a href="@Url.Action(filterActionName, new { 
+                                        userId = targetUserId,
+                                        search = ViewBag.CurrentSearch, 
+                                        ragStatus = ViewBag.CurrentRagStatus, 
+                                        businessArea = ViewBag.CurrentBusinessArea, 
+                                        phase = ViewBag.CurrentPhase,
+                                        flagship = ViewBag.CurrentFlagship,
+                                        priority = (int?)null,
+                                        primaryContactId = ViewBag.CurrentPrimaryContactId,
+                                        status = currentStatus
+                                    })" class="badge badge-info mb-2 mr-2 d-inline-flex align-items-center badge-link" title="Remove filter">
+                                        Priority: @(currentPriority?.Name ?? currentPriorityId.ToString()) <i class="fas fa-times ml-2"></i>
+                                    </a>
+                                }
+                                @if (ViewBag.CurrentPrimaryContactId != null)
+                                {
+                                    var currentPrimaryContactId = (int)ViewBag.CurrentPrimaryContactId;
+                                    string primaryContactName = "No primary contact";
+                                    if (currentPrimaryContactId != -1 && ViewBag.PrimaryContacts != null)
+                                    {
+                                        var contact = ((List<Compass.Models.User>)ViewBag.PrimaryContacts).FirstOrDefault(c => c.Id == currentPrimaryContactId);
+                                        primaryContactName = contact?.Name ?? "Unknown";
+                                    }
+                                    <a href="@Url.Action(filterActionName, new { 
+                                        userId = targetUserId,
+                                        search = ViewBag.CurrentSearch, 
+                                        ragStatus = ViewBag.CurrentRagStatus, 
+                                        businessArea = ViewBag.CurrentBusinessArea, 
+                                        phase = ViewBag.CurrentPhase,
+                                        flagship = ViewBag.CurrentFlagship,
+                                        priority = currentPriorityId,
+                                        primaryContactId = (int?)null,
+                                        status = currentStatus
+                                    })" class="badge badge-info mb-2 mr-2 d-inline-flex align-items-center badge-link" title="Remove filter">
+                                        Primary Contact: @primaryContactName <i class="fas fa-times ml-2"></i>
+                                    </a>
                                 }
                             </div>
                         }
@@ -316,278 +478,449 @@
                 </div>
             </div>
 
-            <!-- Right Column: Projects Tables -->
+            <!-- Right Column: Work Items Tables -->
             <div class="col-xxl-10 col-xl-10 col-lg-9 col-md-8 col-sm-12 col-12">
-                @if (Model.UserProjects.Any())
+                @if (ViewBag.ViewAsMode == true && !string.IsNullOrEmpty(ViewBag.TargetUserName as string))
                 {
-                    <!-- Your Projects Section -->
-                    <div class="card mb-4">
-                        <div class="card-header">
-                            <h3 class="card-title">Your Projects</h3>
-                        </div>
-                        <div class="card-body table-responsive p-0">
-                            <table class="table table-hover text-nowrap sortable-table user-projects-table">
-                                <thead>
-                                    <tr>
-                                        <th class="col-project-title sortable" data-column="Title" tabindex="0" role="button" aria-label="Sort by Title">Title <i class="fas fa-sort sort-icon"></i></th>
-                                        <th class="col-project-business-area sortable" data-column="BusinessArea" tabindex="0" role="button" aria-label="Sort by Business Area">Business Area <i class="fas fa-sort sort-icon"></i></th>
-                                        <th class="col-project-priority sortable" data-column="Priority" tabindex="0" role="button" aria-label="Sort by Priority">Priority <i class="fas fa-sort sort-icon"></i></th>
-                                        <th class="col-project-rag sortable" data-column="RAGStatus" tabindex="0" role="button" aria-label="Sort by RAG Status">RAG Status <i class="fas fa-sort sort-icon"></i></th>
-                                        <th class="col-project-phase sortable" data-column="Phase" tabindex="0" role="button" aria-label="Sort by Phase">Phase <i class="fas fa-sort sort-icon"></i></th>
-                                        <th class="col-project-target sortable" data-column="TargetDate" tabindex="0" role="button" aria-label="Sort by Target Date">Target Date <i class="fas fa-sort sort-icon"></i></th>
-                                        <th class="col-project-flagship sortable" data-column="Flagship" tabindex="0" role="button" aria-label="Sort by Flagship">Flagship <i class="fas fa-sort sort-icon"></i></th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach (var project in Model.UserProjects)
-                                    {
-                                        <tr>
-                                            <td>
-                                                <a asp-action="Details" asp-route-id="@project.Id" class="project-title-link">@project.Title</a>
-                                                <div class="project-meta text-muted small mt-1">
-                                                    <span class="d-block">Delivery code: <span class="text-monospace">@GetDeliveryCode(project)</span></span>
-                                                </div>
-                                            </td>
-                                            <td>@(string.IsNullOrWhiteSpace(project.BusinessArea) ? "-" : project.BusinessArea)</td>
-                                            <td>
-                                                @if (project.DeliveryPriority != null)
-                                                {
-                                                    <span class="@GetPriorityBadgeClass(project.DeliveryPriority.Name)">@project.DeliveryPriority.Name</span>
-                                                }
-                                                else
-                                                {
-                                                    <span class="text-muted">Not set</span>
-                                                }
-                                            </td>
-                                            <td>
-                                                @if (!string.IsNullOrEmpty(project.RagStatus))
-                                                {
-                                                    <span class="@GetRagBadgeClass(project.RagStatus)">@project.RagStatus</span>
-                                                }
-                                                else
-                                                {
-                                                    <span class="badge badge-secondary">Not set</span>
-                                                }
-                                            </td>
-                                            <td>@project.Phase</td>
-                                            <td>
-                                                @if (project.TargetDeliveryDate.HasValue && project.TargetDeliveryDate.Value.Year > 1)
-                                                {
-                                                    @project.TargetDeliveryDate.Value.ToString("d MMMM yyyy")
-                                                }
-                                                else
-                                                {
-                                                    <span class="text-muted">No end date</span>
-                                                }
-                                            </td>
-                                            <td>
-                                                @if (project.IsFlagship)
-                                                {
-                                                    <span class="badge badge-primary">Yes</span>
-                                                }
-                                                else
-                                                {
-                                                    <span class="badge badge-secondary">No</span>
-                                                }
-                                            </td>
-                                        </tr>
-                                    }
-                                </tbody>
-                            </table>
-                        </div>
+                    <div class="alert alert-info alert-dismissible fade show mb-3" role="alert">
+                        <strong>Viewing as:</strong> @ViewBag.TargetUserName (@ViewBag.TargetUserEmail)
+                        <a href="@Url.Action("YourWork", "Project")" class="btn btn-sm btn-secondary ml-3">Return to your view</a>
+                        <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
                     </div>
                 }
-                
-
-                <!-- All Projects Section -->
-                <div class="card mb-4">
-                    <div class="card-header">
-                        <h3 class="card-title">All Projects</h3>
-                         <div class="card-tools">
-                  <button type="button" class="btn btn-tool" style="color: black !important;" data-card-widget="collapse" aria-label="Collapse All Projects section"><i class="fas fa-minus" aria-hidden="true"></i>
-                  </button>
-                </div>
-                    </div>
-                    <div class="card-body table-responsive p-0">
+                @if (isViewMine)
+                {
+                    <!-- Your Work Section -->
+                    @if (Model.UserProjects.Any())
+                    {
+                        <div class="card mb-4">
+                            <div class="card-header">
+                                <h3 class="card-title">Your work</h3>
+                                <div class="card-tools">
+                                    <a href="#" 
+                                       class="export-link"
+                                       data-export-action="ExportUserProjects"
+                                       data-export-search="@ViewBag.CurrentSearch"
+                                       data-export-ragStatus="@ViewBag.CurrentRagStatus"
+                                       data-export-businessArea="@ViewBag.CurrentBusinessArea"
+                                       data-export-phase="@ViewBag.CurrentPhase"
+                                       data-export-flagship="@ViewBag.CurrentFlagship"
+                                       data-export-priority="@ViewBag.CurrentPriority"
+                                       data-export-primaryContactId="@ViewBag.CurrentPrimaryContactId"
+                                       data-export-status="@ViewBag.CurrentStatus"
+                                       style="color: #005ea5; text-decoration: none;">
+                                        Export to Excel
+                                    </a>
+                                </div>
+                            </div>
+                            @{
+                                ViewData["TableId"] = "user-projects-table";
+                                ViewData["TableClass"] = "user-projects-table";
+                                ViewData["ShowPagination"] = false;
+                                ViewData["PaginationIdPrefix"] = "userProjects";
+                                ViewData["ShowMonthlyUpdateStatus"] = true;
+                            }
+                            <partial name="_ProjectTable" model="Model.UserProjects" view-data="ViewData" />
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="card mb-4">
+                            <div class="card-body text-center py-5">
+                                <p class="text-muted mb-0">No work items assigned to you.</p>
+                            </div>
+                        </div>
+                    }
+                }
+                else if (isViewWatched)
+                {
+                    <!-- Watched Work Section -->
+                    @if (Model.WatchedProjects.Any())
+                    {
+                        <div class="card mb-4">
+                            <div class="card-header">
+                                <h3 class="card-title">Watched work</h3>
+                                <div class="card-tools">
+                                    <a href="#" 
+                                       class="export-link"
+                                       data-export-action="ExportWatchedProjects"
+                                       data-export-search="@ViewBag.CurrentSearch"
+                                       data-export-ragStatus="@ViewBag.CurrentRagStatus"
+                                       data-export-businessArea="@ViewBag.CurrentBusinessArea"
+                                       data-export-phase="@ViewBag.CurrentPhase"
+                                       data-export-flagship="@ViewBag.CurrentFlagship"
+                                       data-export-priority="@ViewBag.CurrentPriority"
+                                       data-export-primaryContactId="@ViewBag.CurrentPrimaryContactId"
+                                       data-export-status="@ViewBag.CurrentStatus"
+                                       style="color: #005ea5; text-decoration: none;">
+                                        Export to Excel
+                                    </a>
+                                </div>
+                            </div>
+                            @{
+                                ViewData["TableId"] = "watched-projects-table";
+                                ViewData["TableClass"] = "watched-projects-table";
+                                ViewData["ShowPagination"] = false;
+                                ViewData["PaginationIdPrefix"] = "watchedProjects";
+                                ViewData["ShowMonthlyUpdateStatus"] = false;
+                            }
+                            <partial name="_ProjectTable" model="Model.WatchedProjects" view-data="ViewData" />
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="card mb-4">
+                            <div class="card-body text-center py-5">
+                                <p class="text-muted mb-0">No watched work items.</p>
+                            </div>
+                        </div>
+                    }
+                }
+                else if (isViewAll)
+                {
+                    <!-- All Work Items Section -->
+                    <div class="card mb-4" id="all-work-items-card">
+                        <div class="card-header">
+                            <h3 class="card-title">
+                                @{
+                                    var hasFilters = !string.IsNullOrEmpty(ViewBag.CurrentSearch?.ToString()) || 
+                                                    !string.IsNullOrEmpty(ViewBag.CurrentRagStatus?.ToString()) || 
+                                                    !string.IsNullOrEmpty(ViewBag.CurrentBusinessArea?.ToString()) || 
+                                                    !string.IsNullOrEmpty(ViewBag.CurrentPhase?.ToString()) || 
+                                                    !string.IsNullOrEmpty(ViewBag.CurrentFlagship?.ToString()) ||
+                                                    (ViewBag.CurrentPriority as int?).HasValue ||
+                                                    !string.IsNullOrEmpty(ViewBag.CurrentStatus?.ToString());
+                                }
+                                @(hasFilters ? "Filtered view of work items" : "All work items")
+                            </h3>
+                            <div class="card-tools">
+                                <a href="#" 
+                                   class="export-link"
+                                   data-export-action="ExportAllProjects"
+                                   data-export-search="@ViewBag.CurrentSearch"
+                                   data-export-ragStatus="@ViewBag.CurrentRagStatus"
+                                   data-export-businessArea="@ViewBag.CurrentBusinessArea"
+                                   data-export-phase="@ViewBag.CurrentPhase"
+                                   data-export-flagship="@ViewBag.CurrentFlagship"
+                                   data-export-priority="@ViewBag.CurrentPriority"
+                                   data-export-status="@ViewBag.CurrentStatus"
+                                   style="color: #005ea5; text-decoration: none;">
+                                    Export to Excel
+                                </a>
+                            </div>
+                        </div>
                         @if (Model.Projects.Any())
                         {
-                            <table class="table table-hover text-nowrap sortable-table projects-index-table">
-                                <thead>
-                                    <tr>
-                                        <th class="col-project-title sortable" data-column="Title" tabindex="0" role="button" aria-label="Sort by Title">Title <i class="fas fa-sort sort-icon"></i></th>
-                                        <th class="col-project-business-area sortable" data-column="BusinessArea" tabindex="0" role="button" aria-label="Sort by Business Area">Business Area <i class="fas fa-sort sort-icon"></i></th>
-                                        <th class="col-project-priority sortable" data-column="Priority" tabindex="0" role="button" aria-label="Sort by Priority">Priority <i class="fas fa-sort sort-icon"></i></th>
-                                        <th class="col-project-rag sortable" data-column="RAGStatus" tabindex="0" role="button" aria-label="Sort by RAG Status">RAG Status <i class="fas fa-sort sort-icon"></i></th>
-                                        <th class="col-project-phase sortable" data-column="Phase" tabindex="0" role="button" aria-label="Sort by Phase">Phase <i class="fas fa-sort sort-icon"></i></th>
-                                        <th class="col-project-target sortable" data-column="TargetDate" tabindex="0" role="button" aria-label="Sort by Target Date">Target Date <i class="fas fa-sort sort-icon"></i></th>
-                                        <th class="col-project-flagship sortable" data-column="Flagship" tabindex="0" role="button" aria-label="Sort by Flagship">Flagship <i class="fas fa-sort sort-icon"></i></th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach (var project in Model.Projects)
-                                    {
-                                        <tr>
-                                            <td>
-                                                <a asp-action="Details" asp-route-id="@project.Id" class="project-title-link">@project.Title</a>
-                                                <div class="project-meta text-muted small mt-1">
-                                                    <span class="d-block">Delivery code: <span class="text-monospace">@GetDeliveryCode(project)</span></span>
-                                                </div>
-                                            </td>
-                                            <td>@(string.IsNullOrWhiteSpace(project.BusinessArea) ? "-" : project.BusinessArea)</td>
-                                            <td>
-                                                @if (project.DeliveryPriority != null)
-                                                {
-                                                    <span class="@GetPriorityBadgeClass(project.DeliveryPriority.Name)">@project.DeliveryPriority.Name</span>
-                                                }
-                                                else
-                                                {
-                                                    <span class="text-muted">Not set</span>
-                                                }
-                                            </td>
-                                            <td>
-                                                @if (!string.IsNullOrEmpty(project.RagStatus))
-                                                {
-                                                    <span class="@GetRagBadgeClass(project.RagStatus)">@project.RagStatus</span>
-                                                }
-                                                else
-                                                {
-                                                    <span class="badge badge-secondary">Not set</span>
-                                                }
-                                            </td>
-                                            <td>@project.Phase</td>
-                                            <td>
-                                                @if (project.TargetDeliveryDate.HasValue && project.TargetDeliveryDate.Value.Year > 1)
-                                                {
-                                                    @project.TargetDeliveryDate.Value.ToString("d MMMM yyyy")
-                                                }
-                                                else
-                                                {
-                                                    <span class="text-muted">No end date</span>
-                                                }
-                                            </td>
-                                            <td>
-                                                @if (project.IsFlagship)
-                                                {
-                                                    <span class="badge badge-primary">Yes</span>
-                                                }
-                                                else
-                                                {
-                                                    <span class="badge badge-secondary">No</span>
-                                                }
-                                            </td>
-                                        </tr>
-                                    }
-                                </tbody>
-                            </table>
+                            ViewData["TableId"] = "all-projects-table";
+                            ViewData["TableClass"] = "projects-index-table";
+                            ViewData["ShowPagination"] = true;
+                            ViewData["TotalCount"] = Model.TotalCount;
+                            ViewData["PageNumber"] = Model.PageNumber;
+                            ViewData["PageSize"] = Model.PageSize;
+                            ViewData["TotalPages"] = Model.TotalPages;
+                            ViewData["HasPreviousPage"] = Model.HasPreviousPage;
+                            ViewData["HasNextPage"] = Model.HasNextPage;
+                            ViewData["ShowMonthlyUpdateStatus"] = true;
+                            ViewData["CurrentSearch"] = ViewBag.CurrentSearch;
+                            ViewData["CurrentRagStatus"] = ViewBag.CurrentRagStatus;
+                            ViewData["CurrentBusinessArea"] = ViewBag.CurrentBusinessArea;
+                            ViewData["CurrentPhase"] = ViewBag.CurrentPhase;
+                            ViewData["CurrentFlagship"] = ViewBag.CurrentFlagship;
+                            ViewData["CurrentPriority"] = ViewBag.CurrentPriority;
+                            ViewData["CurrentStatus"] = ViewBag.CurrentStatus;
+                            ViewData["CurrentView"] = isViewAll ? "all" : (currentView ?? "all");
+                            <partial name="_ProjectTable" model="Model.Projects" view-data="ViewData" />
                         }
                         else
                         {
-                            <div class="p-4">
-                                <p class="text-muted mb-0">No projects recorded.</p>
+                            <div class="card-body p-0">
+                                <div class="p-3">
+                                    <p class="text-muted mb-0">No work items recorded.</p>
+                                </div>
                             </div>
                         }
                     </div>
-                    @if (Model.TotalPages > 1)
-                    {
-                        <div class="card-footer">
-                            <nav aria-label="All projects pagination">
-                                <ul class="pagination justify-content-center mb-0">
-                                    <li class="page-item @(Model.HasPreviousPage ? string.Empty : "disabled")">
-                                        <a class="page-link"
-                                           asp-action="Index"
-                                           asp-route-page="@(Model.PageNumber > 1 ? Model.PageNumber - 1 : 1)"
-                                           asp-route-search="@ViewBag.CurrentSearch"
-                                           asp-route-ragStatus="@ViewBag.CurrentRagStatus"
-                                           asp-route-businessArea="@ViewBag.CurrentBusinessArea"
-                                           asp-route-phase="@ViewBag.CurrentPhase"
-                                           asp-route-flagship="@ViewBag.CurrentFlagship"
-                                           asp-route-priority="@ViewBag.CurrentPriority"
-                                           rel="prev">Previous</a>
-                                    </li>
-                                    @for (var i = 1; i <= Model.TotalPages; i++)
-                                    {
-                                        <li class="page-item @(i == Model.PageNumber ? "active" : string.Empty)">
-                                            <a class="page-link"
-                                               asp-action="Index"
-                                               asp-route-page="@i"
-                                               asp-route-search="@ViewBag.CurrentSearch"
-                                               asp-route-ragStatus="@ViewBag.CurrentRagStatus"
-                                               asp-route-businessArea="@ViewBag.CurrentBusinessArea"
-                                               asp-route-phase="@ViewBag.CurrentPhase"
-                                               asp-route-flagship="@ViewBag.CurrentFlagship"
-                                               asp-route-priority="@ViewBag.CurrentPriority">@i</a>
-                                        </li>
-                                    }
-                                    <li class="page-item @(Model.HasNextPage ? string.Empty : "disabled")">
-                                        <a class="page-link"
-                                           asp-action="Index"
-                                           asp-route-page="@(Model.PageNumber < Model.TotalPages ? Model.PageNumber + 1 : Model.TotalPages)"
-                                           asp-route-search="@ViewBag.CurrentSearch"
-                                           asp-route-ragStatus="@ViewBag.CurrentRagStatus"
-                                           asp-route-businessArea="@ViewBag.CurrentBusinessArea"
-                                           asp-route-phase="@ViewBag.CurrentPhase"
-                                           asp-route-flagship="@ViewBag.CurrentFlagship"
-                                           asp-route-priority="@ViewBag.CurrentPriority"
-                                           rel="next">Next</a>
-                                    </li>
-                                </ul>
-                            </nav>
-                        </div>
-                    }
-                </div>
+                }
             </div>
         </div>
     </div>
 </section>
 
-@functions {
-    string GetDeliveryCode(Compass.Models.Project project)
-    {
-        return $"DEL-DDT-{project.Id}";
-    }
-
-    string GetRagBadgeClass(string ragStatus)
-    {
-        return ragStatus switch
-        {
-            "Green" => "badge badge-green",
-            "Amber-Green" => "badge badge-amber-green",
-            "Amber" => "badge badge-amber",
-            "Amber-Red" => "badge badge-amber-red",
-            "Red" => "badge badge-red",
-            _ => "badge badge-secondary"
-        };
-    }
-
-    string GetPriorityBadgeClass(string priorityName)
-    {
-        if (string.IsNullOrWhiteSpace(priorityName))
-        {
-            return "badge badge-secondary";
-        }
-
-        var normalized = priorityName.Trim().ToLowerInvariant();
-        return normalized switch
-        {
-            "high" => "badge badge-red",
-            "medium" => "badge badge-amber",
-            "low" => "badge badge-green",
-            _ => "badge badge-secondary"
-        };
-    }
-}
+<!-- Export Loading Modal -->
+<div class="modal fade" id="exportLoadingModal" tabindex="-1" role="dialog" aria-labelledby="exportLoadingModalLabel" aria-hidden="true" data-backdrop="static" data-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <div class="modal-body text-center py-4">
+                <div class="mb-3">
+                    <i class="fas fa-spinner fa-spin text-primary" style="font-size: 3rem;"></i>
+                </div>
+                <h5 class="modal-title" id="exportLoadingModalLabel">Generating Excel download</h5>
+                <p class="mb-0 mt-2">This can take a few minutes</p>
+            </div>
+        </div>
+    </div>
+</div>
 
 @section Scripts {
     <script nonce="@Context.Items["Nonce"]">
+        (function() {
+            var pageSize = 10;
+            
+            // ========================================
+            // Pagination for Your Projects
+            // ========================================
+            var userProjectsCurrentPage = 1;
+            var userProjectsAllRows = [];
+            var userProjectsCount = @Model.UserProjects.Count;
+            
+            function initUserProjectsPagination() {
+                var table = document.getElementById('user-projects-table');
+                if (!table) return;
+                
+                var tbody = table.querySelector('tbody');
+                if (!tbody) return;
+                
+                userProjectsAllRows = Array.from(tbody.querySelectorAll('tr'));
+                
+                if (userProjectsCount > 10) {
+                    paginateUserProjects();
+                } else {
+                    userProjectsAllRows.forEach(function(row) {
+                        row.style.display = '';
+                    });
+                }
+            }
+            
+            function paginateUserProjects() {
+                var totalProjects = userProjectsAllRows.length;
+                var totalPages = Math.ceil(totalProjects / pageSize);
+                
+                if (userProjectsCurrentPage > totalPages && totalPages > 0) {
+                    userProjectsCurrentPage = 1;
+                }
+                
+                userProjectsAllRows.forEach(function(row) {
+                    row.style.display = 'none';
+                });
+                
+                var startIndex = (userProjectsCurrentPage - 1) * pageSize;
+                var endIndex = Math.min(startIndex + pageSize, totalProjects);
+                
+                for (var i = startIndex; i < endIndex; i++) {
+                    userProjectsAllRows[i].style.display = '';
+                }
+                
+                var showingStart = document.getElementById('userProjectsShowingStart');
+                var showingEnd = document.getElementById('userProjectsShowingEnd');
+                if (showingStart) showingStart.textContent = totalProjects > 0 ? startIndex + 1 : 0;
+                if (showingEnd) showingEnd.textContent = endIndex;
+                
+                if (totalProjects > 10) {
+                    generateUserProjectsPagination(totalPages, totalProjects);
+                }
+            }
+            
+            function generateUserProjectsPagination(totalPages, totalProjects) {
+                var paginationControls = document.getElementById('userProjectsPaginationControls');
+                if (!paginationControls || totalPages <= 1) {
+                    if (paginationControls) paginationControls.innerHTML = '';
+                    return;
+                }
+                
+                var paginationHtml = '';
+                paginationHtml += '<li class="page-item ' + (userProjectsCurrentPage === 1 ? 'disabled' : '') + '">';
+                paginationHtml += '<a class="page-link" href="#" data-page="' + (userProjectsCurrentPage - 1) + '">Previous</a>';
+                paginationHtml += '</li>';
+                
+                var startPage = Math.max(1, userProjectsCurrentPage - 2);
+                var endPage = Math.min(totalPages, userProjectsCurrentPage + 2);
+                
+                if (startPage > 1) {
+                    paginationHtml += '<li class="page-item"><a class="page-link" href="#" data-page="1">1</a></li>';
+                    if (startPage > 2) {
+                        paginationHtml += '<li class="page-item disabled"><span class="page-link">...</span></li>';
+                    }
+                }
+                
+                for (var i = startPage; i <= endPage; i++) {
+                    paginationHtml += '<li class="page-item ' + (i === userProjectsCurrentPage ? 'active' : '') + '">';
+                    paginationHtml += '<a class="page-link" href="#" data-page="' + i + '">' + i + '</a>';
+                    paginationHtml += '</li>';
+                }
+                
+                if (endPage < totalPages) {
+                    if (endPage < totalPages - 1) {
+                        paginationHtml += '<li class="page-item disabled"><span class="page-link">...</span></li>';
+                    }
+                    paginationHtml += '<li class="page-item"><a class="page-link" href="#" data-page="' + totalPages + '">' + totalPages + '</a></li>';
+                }
+                
+                paginationHtml += '<li class="page-item ' + (userProjectsCurrentPage === totalPages ? 'disabled' : '') + '">';
+                paginationHtml += '<a class="page-link" href="#" data-page="' + (userProjectsCurrentPage + 1) + '">Next</a>';
+                paginationHtml += '</li>';
+                
+                paginationControls.innerHTML = paginationHtml;
+                
+                var oldHandler = paginationControls._paginationHandler;
+                if (oldHandler) {
+                    paginationControls.removeEventListener('click', oldHandler);
+                }
+                
+                var clickHandler = function(e) {
+                    var link = e.target.closest('.page-link');
+                    if (link && !link.closest('.disabled')) {
+                        e.preventDefault();
+                        var page = parseInt(link.getAttribute('data-page'));
+                        if (!isNaN(page) && page > 0 && page <= totalPages) {
+                            userProjectsCurrentPage = page;
+                            paginateUserProjects();
+                        }
+                    }
+                };
+                
+                paginationControls._paginationHandler = clickHandler;
+                paginationControls.addEventListener('click', clickHandler);
+            }
+            
+            // ========================================
+            // Pagination for Watched Projects
+            // ========================================
+            var watchedProjectsCurrentPage = 1;
+            var watchedProjectsAllRows = [];
+            var watchedProjectsCount = @Model.WatchedProjects.Count;
+            
+            function initWatchedProjectsPagination() {
+                var table = document.getElementById('watched-projects-table');
+                if (!table) return;
+                
+                var tbody = table.querySelector('tbody');
+                if (!tbody) return;
+                
+                watchedProjectsAllRows = Array.from(tbody.querySelectorAll('tr'));
+                
+                if (watchedProjectsCount > 10) {
+                    paginateWatchedProjects();
+                } else {
+                    watchedProjectsAllRows.forEach(function(row) {
+                        row.style.display = '';
+                    });
+                }
+            }
+            
+            function paginateWatchedProjects() {
+                var totalProjects = watchedProjectsAllRows.length;
+                var totalPages = Math.ceil(totalProjects / pageSize);
+                
+                if (watchedProjectsCurrentPage > totalPages && totalPages > 0) {
+                    watchedProjectsCurrentPage = 1;
+                }
+                
+                watchedProjectsAllRows.forEach(function(row) {
+                    row.style.display = 'none';
+                });
+                
+                var startIndex = (watchedProjectsCurrentPage - 1) * pageSize;
+                var endIndex = Math.min(startIndex + pageSize, totalProjects);
+                
+                for (var i = startIndex; i < endIndex; i++) {
+                    watchedProjectsAllRows[i].style.display = '';
+                }
+                
+                var showingStart = document.getElementById('watchedProjectsShowingStart');
+                var showingEnd = document.getElementById('watchedProjectsShowingEnd');
+                if (showingStart) showingStart.textContent = totalProjects > 0 ? startIndex + 1 : 0;
+                if (showingEnd) showingEnd.textContent = endIndex;
+                
+                if (totalProjects > 10) {
+                    generateWatchedProjectsPagination(totalPages, totalProjects);
+                }
+            }
+            
+            function generateWatchedProjectsPagination(totalPages, totalProjects) {
+                var paginationControls = document.getElementById('watchedProjectsPaginationControls');
+                if (!paginationControls || totalPages <= 1) {
+                    if (paginationControls) paginationControls.innerHTML = '';
+                    return;
+                }
+                
+                var paginationHtml = '';
+                paginationHtml += '<li class="page-item ' + (watchedProjectsCurrentPage === 1 ? 'disabled' : '') + '">';
+                paginationHtml += '<a class="page-link" href="#" data-page="' + (watchedProjectsCurrentPage - 1) + '">Previous</a>';
+                paginationHtml += '</li>';
+                
+                var startPage = Math.max(1, watchedProjectsCurrentPage - 2);
+                var endPage = Math.min(totalPages, watchedProjectsCurrentPage + 2);
+                
+                if (startPage > 1) {
+                    paginationHtml += '<li class="page-item"><a class="page-link" href="#" data-page="1">1</a></li>';
+                    if (startPage > 2) {
+                        paginationHtml += '<li class="page-item disabled"><span class="page-link">...</span></li>';
+                    }
+                }
+                
+                for (var i = startPage; i <= endPage; i++) {
+                    paginationHtml += '<li class="page-item ' + (i === watchedProjectsCurrentPage ? 'active' : '') + '">';
+                    paginationHtml += '<a class="page-link" href="#" data-page="' + i + '">' + i + '</a>';
+                    paginationHtml += '</li>';
+                }
+                
+                if (endPage < totalPages) {
+                    if (endPage < totalPages - 1) {
+                        paginationHtml += '<li class="page-item disabled"><span class="page-link">...</span></li>';
+                    }
+                    paginationHtml += '<li class="page-item"><a class="page-link" href="#" data-page="' + totalPages + '">' + totalPages + '</a></li>';
+                }
+                
+                paginationHtml += '<li class="page-item ' + (watchedProjectsCurrentPage === totalPages ? 'disabled' : '') + '">';
+                paginationHtml += '<a class="page-link" href="#" data-page="' + (watchedProjectsCurrentPage + 1) + '">Next</a>';
+                paginationHtml += '</li>';
+                
+                paginationControls.innerHTML = paginationHtml;
+                
+                var oldHandler = paginationControls._paginationHandler;
+                if (oldHandler) {
+                    paginationControls.removeEventListener('click', oldHandler);
+                }
+                
+                var clickHandler = function(e) {
+                    var link = e.target.closest('.page-link');
+                    if (link && !link.closest('.disabled')) {
+                        e.preventDefault();
+                        var page = parseInt(link.getAttribute('data-page'));
+                        if (!isNaN(page) && page > 0 && page <= totalPages) {
+                            watchedProjectsCurrentPage = page;
+                            paginateWatchedProjects();
+                        }
+                    }
+                };
+                
+                paginationControls._paginationHandler = clickHandler;
+                paginationControls.addEventListener('click', clickHandler);
+            }
+            
+            // ========================================
+            // Sorting (updated to work with pagination)
+            // ========================================
         $(document).ready(function() {
             // Initialize sortable tables
             $('.sortable-table').each(function() {
                 initializeSortableTable($(this));
             });
+                
+                // Initialize pagination
+                if (userProjectsCount > 0) {
+                    initUserProjectsPagination();
+                }
+                if (watchedProjectsCount > 0) {
+                    initWatchedProjectsPagination();
+                }
         });
 
         function initializeSortableTable(table) {
             var currentSort = { column: null, direction: 'asc' };
+                var tableId = table.attr('id');
 
             table.find('.sortable').on('click keypress', function(e) {
                 if (e.type === 'keypress' && e.which !== 13 && e.which !== 32) {
@@ -601,11 +934,11 @@
                     direction = 'desc';
                 }
                 
-                sortTable(table, column, direction);
+                    sortTable(table, column, direction, tableId);
                 currentSort = { column: column, direction: direction };
             });
 
-            function sortTable(table, column, direction) {
+                function sortTable(table, column, direction, tableId) {
                 var tbody = table.find('tbody');
                 var rows = tbody.find('tr').toArray();
                 
@@ -613,14 +946,33 @@
                     var aVal, bVal;
                     var colIndex = table.find('thead th[data-column="' + column + '"]').index();
                     
-                    if (column === 'TargetDate') {
-                        var aDate = $(a).find('td').eq(colIndex).text().trim();
-                        var bDate = $(b).find('td').eq(colIndex).text().trim();
-                        aVal = new Date(aDate);
-                        bVal = new Date(bDate);
-                    } else if (column === 'Flagship') {
+                    if (column === 'Flagship') {
                         aVal = $(a).find('td').eq(colIndex).text().trim() === 'Yes' ? 1 : 0;
                         bVal = $(b).find('td').eq(colIndex).text().trim() === 'Yes' ? 1 : 0;
+                    } else if (column === 'Status') {
+                        // Sort by status priority: Active (1) < Paused (2) < Completed (3) < Cancelled (4)
+                        var statusOrder = {
+                            'active': 1,
+                            'paused': 2,
+                            'completed': 3,
+                            'cancelled': 4
+                        };
+                        var aStatus = $(a).find('td').eq(colIndex).text().trim().toLowerCase();
+                        var bStatus = $(b).find('td').eq(colIndex).text().trim().toLowerCase();
+                        aVal = statusOrder[aStatus] || 0;
+                        bVal = statusOrder[bStatus] || 0;
+                    } else if (column === 'MonthlyUpdateStatus') {
+                        // Sort by status priority: Not started (1) < In progress (2) < Late (3) < Submitted (4)
+                        var statusOrder = {
+                            'not started': 1,
+                            'in progress': 2,
+                            'late': 3,
+                            'submitted': 4
+                        };
+                        var aStatus = $(a).find('td').eq(colIndex).text().trim().toLowerCase();
+                        var bStatus = $(b).find('td').eq(colIndex).text().trim().toLowerCase();
+                        aVal = statusOrder[aStatus] || 0;
+                        bVal = statusOrder[bStatus] || 0;
                     } else {
                         aVal = $(a).find('td').eq(colIndex).text().trim().toLowerCase();
                         bVal = $(b).find('td').eq(colIndex).text().trim().toLowerCase();
@@ -639,6 +991,17 @@
                 });
                 
                 updateSortIcons(table, column, direction);
+                    
+                    // Re-initialize pagination after sorting
+                    if (tableId === 'user-projects-table' && userProjectsCount > 10) {
+                        userProjectsAllRows = Array.from(tbody.find('tr'));
+                        userProjectsCurrentPage = 1;
+                        paginateUserProjects();
+                    } else if (tableId === 'watched-projects-table' && watchedProjectsCount > 10) {
+                        watchedProjectsAllRows = Array.from(tbody.find('tr'));
+                        watchedProjectsCurrentPage = 1;
+                        paginateWatchedProjects();
+                    }
             }
 
             function updateSortIcons(table, column, direction) {
@@ -648,5 +1011,106 @@
                 header.find('i').removeClass('fa-sort').addClass(iconClass);
             }
         }
+        
+        })();
+
+        // Export link handler
+        $(document).ready(function() {
+            $('.export-link').on('click', function(e) {
+                e.preventDefault();
+                
+                var $link = $(this);
+                var action = $link.data('export-action');
+                
+                // Build query parameters
+                var params = [];
+                var search = $link.data('export-search');
+                var ragStatus = $link.data('export-ragStatus');
+                var businessArea = $link.data('export-businessArea');
+                var phase = $link.data('export-phase');
+                var flagship = $link.data('export-flagship');
+                var priority = $link.data('export-priority');
+                var primaryContactId = $link.data('export-primarycontactid');
+                var status = $link.data('export-status');
+                
+                if (search) params.push('search=' + encodeURIComponent(search));
+                if (ragStatus) params.push('ragStatus=' + encodeURIComponent(ragStatus));
+                if (businessArea) params.push('businessArea=' + encodeURIComponent(businessArea));
+                if (phase) params.push('phase=' + encodeURIComponent(phase));
+                if (flagship) params.push('flagship=' + encodeURIComponent(flagship));
+                if (priority) params.push('priority=' + encodeURIComponent(priority));
+                if (primaryContactId) params.push('primaryContactId=' + encodeURIComponent(primaryContactId));
+                if (status) params.push('status=' + encodeURIComponent(status));
+                
+                // Build URL
+                var url = '/Project/' + action;
+                if (params.length > 0) {
+                    url += '?' + params.join('&');
+                }
+                
+                // Show loading modal
+                $('#exportLoadingModal').modal('show');
+                
+                // Use fetch to download the file
+                fetch(url, {
+                    method: 'GET',
+                    credentials: 'same-origin'
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Export failed');
+                    }
+                    
+                    // Get filename from response headers or use default
+                    var contentDisposition = response.headers.get('content-disposition');
+                    var filename = 'export.xlsx';
+                    if (contentDisposition) {
+                        var filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+                        if (filenameMatch && filenameMatch[1]) {
+                            filename = filenameMatch[1].replace(/['"]/g, '');
+                        }
+                    }
+                    
+                    return response.blob().then(blob => ({ blob, filename }));
+                })
+                .then(({ blob, filename }) => {
+                    // Create download link
+                    var downloadUrl = window.URL.createObjectURL(blob);
+                    var a = document.createElement('a');
+                    a.href = downloadUrl;
+                    a.download = filename;
+                    
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    window.URL.revokeObjectURL(downloadUrl);
+                    
+                    // Close modal
+                    $('#exportLoadingModal').modal('hide');
+                })
+                .catch(error => {
+                    console.error('Export error:', error);
+                    $('#exportLoadingModal').modal('hide');
+                    alert('An error occurred while generating the export. Please try again.');
+                });
+            });
+
+            // Real-time search filtering - submit to server to search across all paginated items
+            var searchTimeout;
+            $('#searchInput').on('input', function() {
+                var searchValue = $(this).val();
+                var $form = $('#filterForm');
+                
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(function() {
+                    // Update the search input value in the form
+                    $form.find('input[name="search"]').val(searchValue);
+                    // Reset to page 1 when searching
+                    $form.find('input[name="page"]').remove();
+                    // Submit the form to search across all items
+                    $form.submit();
+                }, 500); // Debounce for 500ms
+            });
+        });
     </script>
 }

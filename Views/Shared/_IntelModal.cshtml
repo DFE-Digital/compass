@@ -1,0 +1,264 @@
+@*
+ * Intel Modal – auto-generated narrative for Reports dashboards
+ * Triggered by the "Intel" button in the reports navbar
+ * Generates contextual narrative based on data passed via ViewData
+ *@
+@{
+    var context = ViewData["Context"] as string ?? "overview";
+
+    // Overview context
+    var totalProjects = ViewData["TotalProjects"] as int? ?? 0;
+    var activeProjects = ViewData["ActiveProjects"] as int? ?? 0;
+    var atRiskCount = ViewData["AtRiskCount"] as int? ?? 0;
+    var redCount = ViewData["RedCount"] as int? ?? 0;
+    var reportingPct = ViewData["ReportingPct"] as int? ?? 0;
+    var submittedThisMonth = ViewData["SubmittedThisMonth"] as int? ?? 0;
+    var totalActiveProjects = ViewData["TotalActiveProjects"] as int? ?? 0;
+    var monthName = ViewData["MonthName"] as string ?? "";
+    var totalOpenAccessibilityIssues = ViewData["TotalOpenAccessibilityIssues"] as int? ?? 0;
+    var criticalAccessibilityIssues = ViewData["CriticalAccessibilityIssues"] as int? ?? 0;
+    var flagshipCount = ViewData["FlagshipCount"] as int? ?? 0;
+    var multiDeptCount = ViewData["MultiDeptCount"] as int? ?? 0;
+    var highRiskProjects = ViewData["HighRiskProjects"] as int? ?? 0;
+    var highIssueProjects = ViewData["HighIssueProjects"] as int? ?? 0;
+    var passedAssessments = ViewData["PassedAssessments"] as int? ?? 0;
+    var failedAssessments = ViewData["FailedAssessments"] as int? ?? 0;
+    var totalAssessments = ViewData["TotalAssessments"] as int? ?? 0;
+
+    // Division / BA context
+    var divisionName = ViewData["DivisionName"] as string ?? "";
+    var businessAreaName = ViewData["BusinessAreaName"] as string ?? "";
+    var openAccessibilityIssues = ViewData["OpenAccessibilityIssues"] as int? ?? totalOpenAccessibilityIssues;
+    var highRiskCount = ViewData["HighRiskCount"] as int? ?? highRiskProjects;
+    var highIssueCount = ViewData["HighIssueCount"] as int? ?? highIssueProjects;
+    var leadershipCount = ViewData["LeadershipCount"] as int? ?? 0;
+
+    // Priority context
+    var totalFlagship = ViewData["TotalFlagship"] as int? ?? flagshipCount;
+    var totalMultiDept = ViewData["TotalMultiDept"] as int? ?? multiDeptCount;
+    var totalAi = ViewData["TotalAi"] as int? ?? 0;
+    var totalPriority = ViewData["TotalPriority"] as int? ?? 0;
+    var flagshipRedCount = ViewData["FlagshipRedCount"] as int? ?? 0;
+
+    // Scope label
+    var scopeLabel = context switch
+    {
+        "division" => divisionName,
+        "businessarea" => businessAreaName,
+        "priority" => "priority outcomes",
+        _ => "the portfolio"
+    };
+
+    // Build narrative items
+    var positives = new List<string>();
+    var risks = new List<string>();
+    var watchItems = new List<string>();
+
+    if (context == "overview" || context == "division" || context == "businessarea")
+    {
+        var projectsInScope = context == "overview" ? totalProjects : (ViewData["TotalProjects"] as int? ?? 0);
+        var atRisk = context == "overview" ? atRiskCount : (ViewData["AtRiskCount"] as int? ?? 0);
+        var red = context == "overview" ? redCount : (ViewData["RedCount"] as int? ?? 0);
+        var rptPct = context == "overview" ? reportingPct : (ViewData["ReportingPct"] as int? ?? 0);
+        var submitted = context == "overview" ? submittedThisMonth : (ViewData["SubmittedThisMonth"] as int? ?? 0);
+        var total = context == "overview" ? totalActiveProjects : projectsInScope;
+        var accIssues = context == "overview" ? totalOpenAccessibilityIssues : openAccessibilityIssues;
+        var critAcc = context == "overview" ? criticalAccessibilityIssues : 0;
+        var hrisk = context == "overview" ? highRiskProjects : highRiskCount;
+        var hissue = context == "overview" ? highIssueProjects : highIssueCount;
+
+        if (atRisk == 0 && projectsInScope > 0)
+        {
+            positives.Add($"All {projectsInScope} project{(projectsInScope == 1 ? "" : "s")} in {scopeLabel} are currently on track with no Red or Amber-Red RAG status.");
+        }
+        else if (atRisk > 0)
+        {
+            risks.Add($"{atRisk} project{(atRisk == 1 ? " is" : "s are")} at risk (Red or Amber-Red) in {scopeLabel}. {(red > 0 ? $"{red} {(red == 1 ? "is" : "are")} Red – these require immediate attention." : "")}");
+        }
+
+        if (rptPct >= 80)
+        {
+            positives.Add($"Monthly reporting for {monthName} is strong at {rptPct}% ({submitted} of {total} projects submitted).");
+        }
+        else if (rptPct >= 50)
+        {
+            watchItems.Add($"Monthly reporting for {monthName} is at {rptPct}% ({submitted} of {total} submitted). There is still time to improve this before the deadline.");
+        }
+        else if (total > 0)
+        {
+            risks.Add($"Monthly reporting for {monthName} is low at {rptPct}% ({submitted} of {total} submitted). Action is needed to ensure compliance.");
+        }
+
+        if (accIssues == 0)
+        {
+            positives.Add("There are no open accessibility issues in scope – excellent accessibility posture.");
+        }
+        else if (critAcc > 0)
+        {
+            risks.Add($"There are {accIssues} open accessibility issues, including {critAcc} critical or high severity. These should be prioritised for resolution.");
+        }
+        else
+        {
+            watchItems.Add($"There are {accIssues} open accessibility issues in scope. None are critical, but these should be monitored.");
+        }
+
+        if (hrisk > 0)
+        {
+            risks.Add($"{hrisk} project{(hrisk == 1 ? "" : "s")} have high-severity risks that may need escalation.");
+        }
+        if (hissue > 0)
+        {
+            watchItems.Add($"{hissue} project{(hissue == 1 ? "" : "s")} have high-priority issues currently open.");
+        }
+
+        if (totalAssessments > 0 && failedAssessments > 0)
+        {
+            risks.Add($"{failedAssessments} service assessment{(failedAssessments == 1 ? "" : "s")} have failed. Review the Standards (SHCA) report for details.");
+        }
+        else if (totalAssessments > 0 && passedAssessments == totalAssessments)
+        {
+            positives.Add($"All {totalAssessments} service assessment{(totalAssessments == 1 ? "" : "s")} have passed.");
+        }
+    }
+    else if (context == "priority")
+    {
+        if (totalFlagship > 0)
+        {
+            watchItems.Add($"There are {totalFlagship} flagship project{(totalFlagship == 1 ? "" : "s")} in the portfolio. These are the highest priority and should receive regular senior attention.");
+        }
+        if (flagshipRedCount > 0)
+        {
+            risks.Add($"{flagshipRedCount} flagship project{(flagshipRedCount == 1 ? " is" : "s are")} currently Red or Amber-Red. This is a significant concern given their priority status.");
+        }
+        if (totalMultiDept > 0)
+        {
+            watchItems.Add($"{totalMultiDept} project{(totalMultiDept == 1 ? "" : "s")} involve multi-department cooperation. Ensure governance and communication channels are in place.");
+        }
+        if (totalAi > 0)
+        {
+            positives.Add($"There are {totalAi} AI initiative{(totalAi == 1 ? "" : "s")} in the portfolio, demonstrating commitment to digital innovation.");
+        }
+        if (totalPriority > 0)
+        {
+            positives.Add($"{totalPriority} project{(totalPriority == 1 ? " has" : "s have")} a delivery priority assigned, enabling better portfolio prioritisation.");
+        }
+    }
+
+    // Summary sentence
+    var overallStatus = risks.Count == 0 && watchItems.Count == 0 ? "healthy" :
+                        risks.Count > 0 ? "requires attention" : "broadly on track";
+}
+
+<div class="modal fade" id="intelModal" tabindex="-1" role="dialog" aria-labelledby="intelModalLabel" aria-modal="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
+        <div class="modal-content intel-modal-content">
+            <div class="modal-header intel-modal-header">
+                <div class="d-flex align-items-center">
+                    <div class="intel-icon mr-3">
+                        <i class="fas fa-brain" aria-hidden="true"></i>
+                    </div>
+                    <div>
+                        <h5 class="modal-title mb-0" id="intelModalLabel">Intel – portfolio intelligence</h5>
+                        <small class="text-white-50">Auto-generated narrative based on current data</small>
+                    </div>
+                </div>
+                <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body intel-modal-body">
+
+                <!-- Overall status banner -->
+                <div class="intel-status-banner intel-status-@(risks.Count > 0 ? "risk" : watchItems.Count > 0 ? "watch" : "good") mb-4">
+                    <div class="d-flex align-items-center">
+                        <i class="fas @(risks.Count > 0 ? "fa-exclamation-circle" : watchItems.Count > 0 ? "fa-eye" : "fa-check-circle") mr-2 fa-lg" aria-hidden="true"></i>
+                        <div>
+                            <strong>Overall status: @overallStatus</strong>
+                            <div class="small mt-1">
+                                @if (context == "overview" || context == "division" || context == "businessarea")
+                                {
+                                    @:Scope: @scopeLabel — @(context == "overview" ? totalProjects : (ViewData["TotalProjects"] as int? ?? 0)) projects in view
+                                }
+                                else
+                                {
+                                    @:Scope: priority outcomes — @totalFlagship flagship, @totalMultiDept multi-department, @totalAi AI initiatives
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- What's working well -->
+                @if (positives.Any())
+                {
+                    <div class="intel-section mb-4">
+                        <h6 class="intel-section-title intel-positive">
+                            <i class="fas fa-thumbs-up mr-2" aria-hidden="true"></i>What's working well
+                        </h6>
+                        <ul class="intel-list">
+                            @foreach (var item in positives)
+                            {
+                                <li class="intel-list-item intel-list-positive">
+                                    <i class="fas fa-check-circle mr-2 text-success" aria-hidden="true"></i>@item
+                                </li>
+                            }
+                        </ul>
+                    </div>
+                }
+
+                <!-- Watch items -->
+                @if (watchItems.Any())
+                {
+                    <div class="intel-section mb-4">
+                        <h6 class="intel-section-title intel-watch">
+                            <i class="fas fa-eye mr-2" aria-hidden="true"></i>Worth watching
+                        </h6>
+                        <ul class="intel-list">
+                            @foreach (var item in watchItems)
+                            {
+                                <li class="intel-list-item intel-list-watch">
+                                    <i class="fas fa-exclamation-circle mr-2 text-warning" aria-hidden="true"></i>@item
+                                </li>
+                            }
+                        </ul>
+                    </div>
+                }
+
+                <!-- Risks and concerns -->
+                @if (risks.Any())
+                {
+                    <div class="intel-section mb-4">
+                        <h6 class="intel-section-title intel-risk">
+                            <i class="fas fa-exclamation-triangle mr-2" aria-hidden="true"></i>Potential risks and concerns
+                        </h6>
+                        <ul class="intel-list">
+                            @foreach (var item in risks)
+                            {
+                                <li class="intel-list-item intel-list-risk">
+                                    <i class="fas fa-times-circle mr-2 text-danger" aria-hidden="true"></i>@item
+                                </li>
+                            }
+                        </ul>
+                    </div>
+                }
+
+                @if (!positives.Any() && !watchItems.Any() && !risks.Any())
+                {
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle mr-2" aria-hidden="true"></i>
+                        No data is available to generate an intelligence summary for this view.
+                    </div>
+                }
+
+                <div class="intel-disclaimer mt-3">
+                    <i class="fas fa-info-circle mr-1" aria-hidden="true"></i>
+                    This narrative is automatically generated from the data currently in view. It is a starting point for discussion, not a definitive assessment.
+                </div>
+
+            </div>
+            <div class="modal-footer intel-modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>

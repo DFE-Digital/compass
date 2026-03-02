@@ -22,13 +22,17 @@
         return textInfo.ToTitleCase(value.Replace("_", " "));
     }
 
-    string ResolveSeverityClass(string? severity) => severity switch
+    string ResolveSeverityClass(string? severity)
     {
-        "critical" => "badge-danger",
-        "high" => "badge-warning",
-        "medium" => "badge-info",
-        _ => "badge-secondary"
-    };
+        var severityKey = severity?.ToLowerInvariant() ?? "low";
+        return severityKey switch
+        {
+            "critical" => "badge priority-badge priority-badge--critical",
+            "high" => "badge priority-badge priority-badge--high",
+            "medium" => "badge priority-badge priority-badge--medium",
+            _ => "badge priority-badge priority-badge--low"
+        };
+    }
 
     string ResolveStatusClass(string status) => status switch
     {
@@ -42,6 +46,51 @@
     {
         var key = PriorityStyleHelper.GetPriorityKey(priority);
         return $"priority-badge priority-badge--{key}";
+    }
+
+    string ResolveCellBackgroundClass(string? severity, string? priority)
+    {
+        var severityKey = severity?.ToLowerInvariant() ?? "low";
+        var priorityKey = priority?.ToLowerInvariant() ?? "not_set";
+        
+        // Critical severity - combination determines risk level
+        if (severityKey == "critical")
+        {
+            return priorityKey switch
+            {
+                "high" => "priority-matrix-bg--critical",        // Critical risk (muted red)
+                "medium" => "priority-matrix-bg--critical",      // Critical risk (muted red)
+                "low" => "priority-matrix-bg--medium",           // High risk (muted orange)
+                _ => "priority-matrix-bg--medium"                // High risk (muted orange)
+            };
+        }
+        
+        // High severity
+        if (severityKey == "high")
+        {
+            return priorityKey switch
+            {
+                "high" => "priority-matrix-bg--critical",        // Critical risk (muted red)
+                "medium" => "priority-matrix-bg--medium",        // High risk (muted orange)
+                "low" => "priority-matrix-bg--medium",            // High risk (muted orange)
+                _ => "priority-matrix-bg--medium"               // High risk (muted orange)
+            };
+        }
+        
+        // Medium severity
+        if (severityKey == "medium")
+        {
+            return priorityKey switch
+            {
+                "high" => "priority-matrix-bg--medium",          // High risk (muted orange)
+                "medium" => "priority-matrix-bg--low",            // Moderate risk (muted green)
+                "low" => "priority-matrix-bg--low",              // Moderate risk (muted green)
+                _ => "priority-matrix-bg--low"                   // Moderate risk (muted green)
+            };
+        }
+        
+        // Low severity - always low risk (muted grey)
+        return "priority-matrix-bg--default";
     }
 
     var severityValues = severityOrder.ToList();
@@ -65,9 +114,22 @@
 
 <div class="card" id="issues">
     <div class="card-header">
-        <h3 class="card-title mb-0">Project issues</h3>
+        <h3 class="card-title mb-0">Work issues</h3>
         <div class="card-tools">
-            <a class="card-link mr-3 mb-2"
+            @if (issuesView == "table" && issues.Any())
+            {
+                <button class="card-link mr-3 issues-filter-toggle" 
+                        type="button" 
+                        data-toggle="collapse" 
+                        data-target="#issuesFilterCollapse" 
+                        aria-expanded="false" 
+                        aria-controls="issuesFilterCollapse">
+                    <i class="fas fa-filter mr-1"></i>
+                    Filters
+                    <i class="fas fa-chevron-down ml-1 filter-chevron"></i>
+                </button>
+            }
+            <a class="card-link mr-3"
                asp-controller="Project"
                asp-action="CreateIssue"
                asp-route-projectId="@Model.Id">
@@ -75,7 +137,7 @@
             </a>
             @if (issuesView == "priority")
             {
-                <a class="card-link mb-2"
+                <a class="card-link"
                    asp-action="Details"
                    asp-route-id="@Model.Id"
                    asp-route-tab="issues"
@@ -85,7 +147,7 @@
             }
             else
             {
-                <a class="card-link mb-2"
+                <a class="card-link"
                    asp-action="Details"
                    asp-route-id="@Model.Id"
                    asp-route-tab="issues"
@@ -97,9 +159,11 @@
     </div>
     @if (!issues.Any())
     {
-        <div class="card-body">
-            <p class="text-muted mb-2">No issues recorded.</p>
-            <a asp-controller="Project" asp-action="CreateIssue" asp-route-projectId="@Model.Id">Add issue</a>
+        <div class="card-body p-0">
+            <div class="p-3">
+                <p class="text-muted mb-2">No issues recorded.</p>
+                <a asp-controller="Project" asp-action="CreateIssue" asp-route-projectId="@Model.Id">Add issue</a>
+            </div>
         </div>
     }
     else if (issuesView == "priority")
@@ -109,14 +173,14 @@
                 Use the grid to see how issues are distributed across severity and priority. Select a cell to drill into the related issues.
             </p>
             <div class="table-responsive">
-                <table class="table table-bordered priority-matrix mb-0">
+                <table class="table priority-matrix mb-0" style="border-collapse: separate; border-spacing: 0;">
                     <thead>
                         <tr>
                             <th scope="col" class="align-middle">Severity \ Priority</th>
                             @foreach (var priority in priorityValues)
                             {
                                 <th scope="col" class="text-center align-middle">
-                                    <span class="@ResolvePriorityBadgeClass(priority == "not_set" ? null : priority)">
+                                    <span class="badge @ResolvePriorityBadgeClass(priority == "not_set" ? null : priority)">
                                         @FormatLabel(priority == "not_set" ? null : priority)
                                     </span>
                                 </th>
@@ -141,41 +205,12 @@
                                         .OrderByDescending(i => i.TargetResolutionDate ?? DateTime.MaxValue)
                                         .ThenByDescending(i => i.DetectedDate)
                                         .ToList();
-                                    <td>
+                                    var cellBgClass = ResolveCellBackgroundClass(severity, priority == "not_set" ? null : priority);
+                                    <td class="@cellBgClass">
                                         <div class="priority-matrix-cell">
-                                            <div class="d-flex justify-content-between align-items-center mb-2">
-                                                <span class="text-muted small">Count</span>
-                                                <span class="badge badge-light">@cellIssues.Count</span>
+                                            <div class="d-flex justify-content-center align-items-center" style="min-height: 80px;">
+                                                <span class="badge badge-light font-weight-bold priority-matrix-count">@cellIssues.Count</span>
                                             </div>
-                                            @if (cellIssues.Any())
-                                            {
-                                                <ul class="list-unstyled mb-0">
-                                                    @foreach (var issue in cellIssues)
-                                                    {
-                                                        var overdue = issue.TargetResolutionDate.HasValue && issue.TargetResolutionDate.Value.Date < DateTime.Today;
-                                                        <li class="issue-chip">
-                                                            <a asp-controller="Issue" asp-action="Details" asp-route-id="@issue.Id">@issue.Title</a>
-                                                            <div class="small text-muted">
-                                                                Target:
-                                                                @if (issue.TargetResolutionDate.HasValue)
-                                                                {
-                                                                    <span class="@(overdue ? "text-danger" : string.Empty)">
-                                                                        @issue.TargetResolutionDate.Value.ToString("d MMM yyyy")
-                                                                    </span>
-                                                                }
-                                                                else
-                                                                {
-                                                                    <span>Not set</span>
-                                                                }
-                                                            </div>
-                                                        </li>
-                                                    }
-                                                </ul>
-                                            }
-                                            else
-                                            {
-                                                <p class="text-muted small mb-0">No issues</p>
-                                            }
                                         </div>
                                     </td>
                                 }
@@ -188,8 +223,93 @@
     }
     else
     {
+        @if (issues.Any())
+        {
+            <div id="issuesFilterCollapse" class="collapse" aria-labelledby="issuesFilterHeading">
+                <div class="card-body border-bottom">
+                    <form id="issuesFilterForm" class="row">
+                        <div class="col-md-12 mb-4">
+                            <label for="filterSearch" class="font-weight-bold">Search keyword</label>
+                            <input type="text" 
+                                   id="filterSearch" 
+                                   class="form-control" 
+                                   placeholder="Search in title or description..." 
+                                   autocomplete="off" />
+                        </div>
+                        
+                        <div class="col-md-6 mb-4">
+                            <label class="font-weight-bold d-block mb-3">Severity</label>
+                            <div class="row">
+                                <div class="col-6 mb-2">
+                                    <div class="form-check">
+                                        <input class="form-check-input severity-filter" type="checkbox" value="critical" id="severityCritical" checked>
+                                        <label class="form-check-label" for="severityCritical">
+                                            <span class="badge priority-badge priority-badge--critical">Critical</span>
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="col-6 mb-2">
+                                    <div class="form-check">
+                                        <input class="form-check-input severity-filter" type="checkbox" value="high" id="severityHigh" checked>
+                                        <label class="form-check-label" for="severityHigh">
+                                            <span class="badge priority-badge priority-badge--high">High</span>
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="col-6 mb-2">
+                                    <div class="form-check">
+                                        <input class="form-check-input severity-filter" type="checkbox" value="medium" id="severityMedium" checked>
+                                        <label class="form-check-label" for="severityMedium">
+                                            <span class="badge priority-badge priority-badge--medium">Medium</span>
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="col-6 mb-2">
+                                    <div class="form-check">
+                                        <input class="form-check-input severity-filter" type="checkbox" value="low" id="severityLow" checked>
+                                        <label class="form-check-label" for="severityLow">
+                                            <span class="badge priority-badge priority-badge--low">Low</span>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-3 mb-4">
+                            <label for="filterPriority" class="font-weight-bold">Priority</label>
+                            <select id="filterPriority" class="form-control">
+                                <option value="">All priorities</option>
+                                @foreach (var priority in priorityOrder.Where(p => p != "not_set"))
+                                {
+                                    <option value="@priority">@FormatLabel(priority)</option>
+                                }
+                                <option value="not_set">Not set</option>
+                            </select>
+                        </div>
+                        
+                        <div class="col-md-3 mb-4">
+                            <label for="filterStatus" class="font-weight-bold">Status</label>
+                            <select id="filterStatus" class="form-control">
+                                <option value="">All statuses</option>
+                                <option value="not_started">Not Started</option>
+                                <option value="open">Open</option>
+                                <option value="in_progress">In Progress</option>
+                                <option value="blocked">Blocked</option>
+                                <option value="resolved">Resolved</option>
+                                <option value="closed">Closed</option>
+                            </select>
+                        </div>
+                        
+                        <div class="col-md-12">
+                            <button type="button" id="clearFilters" class="btn btn-outline-secondary btn-sm">Clear filters</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        }
+        
         <div class="card-body table-responsive p-0">
-            <table class="table table-hover text-nowrap sortable-table issues-table mb-0">
+            <table class="table table-hover text-nowrap sortable-table issues-table mb-0" id="issuesTable">
                 <thead>
                     <tr>
                         <th class="col-title sortable" data-column="Title" tabindex="0" role="button" aria-label="Sort by Title">
@@ -224,7 +344,11 @@
                         var detectedSort = issue.DetectedDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
                         var targetSort = issue.TargetResolutionDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
                         var isTargetOverdue = issue.TargetResolutionDate.HasValue && issue.TargetResolutionDate.Value.Date < DateTime.Today;
-                        <tr>
+                        <tr data-severity="@(issue.Severity?.ToLowerInvariant() ?? "low")" 
+                            data-priority="@(string.IsNullOrWhiteSpace(issue.Priority) ? "not_set" : issue.Priority.ToLowerInvariant())" 
+                            data-status="@issue.Status.ToLowerInvariant()"
+                            data-title="@issue.Title"
+                            data-description="@(issue.Description ?? "")">
                             <td>
                                 <a asp-controller="Issue" asp-action="Details" asp-route-id="@issue.Id">@issue.Title</a>
                             </td>
@@ -234,10 +358,8 @@
                                 </span>
                             </td>
                             <td>
-                                <span class="badge badge-light text-dark border">
-                                    <span class="@ResolvePriorityBadgeClass(issue.Priority)">
-                                        @FormatLabel(issue.Priority)
-                                    </span>
+                                <span class="badge @ResolvePriorityBadgeClass(issue.Priority)">
+                                    @FormatLabel(issue.Priority)
                                 </span>
                             </td>
                             <td>
@@ -247,25 +369,16 @@
                             </td>
                             <td data-sort-value="@detectedSort">@issue.DetectedDate.ToString("d MMMM yyyy")</td>
                             <td data-sort-value="@(targetSort ?? string.Empty)">
-                                <div class="d-flex align-items-center justify-content-between">
-                                    @if (issue.TargetResolutionDate.HasValue)
-                                    {
-                                        <span class="@(isTargetOverdue ? "text-danger font-weight-semibold" : string.Empty)">
-                                            @issue.TargetResolutionDate.Value.ToString("d MMMM yyyy")
-                                        </span>
-                                    }
-                                    else
-                                    {
-                                        <span class="text-muted">Not set</span>
-                                    }
-                                    <button type="button"
-                                            class="btn btn-link btn-sm issue-target-edit"
-                                            data-issue-id="@issue.Id"
-                                            data-issue-title="@issue.Title"
-                                            data-target-date="@targetSort">
-                                        Edit
-                                    </button>
-                                </div>
+                                @if (issue.TargetResolutionDate.HasValue)
+                                {
+                                    <span class="@(isTargetOverdue ? "text-danger font-weight-semibold" : string.Empty)">
+                                        @issue.TargetResolutionDate.Value.ToString("d MMMM yyyy")
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">Not set</span>
+                                }
                             </td>
                         </tr>
                     }
@@ -275,57 +388,185 @@
     }
 </div>
 
-<div class="modal fade" id="editIssueTargetModal" tabindex="-1" role="dialog" aria-labelledby="editIssueTargetModalLabel" aria-hidden="true">
-    <div class="modal-dialog" role="document">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="editIssueTargetModalLabel">Update target resolution date</h5>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                    <span aria-hidden="true">&times;</span>
-                </button>
-            </div>
-            <form asp-action="UpdateIssueTargetDate" asp-controller="Project" method="post">
-                @Html.AntiForgeryToken()
-                <input type="hidden" name="projectId" value="@Model.Id" />
-                <input type="hidden" name="issueId" id="editIssueTargetIssueId" />
-                <input type="hidden" name="tab" value="issues" />
-                <input type="hidden" name="issuesView" value="@issuesView" />
-                <div class="modal-body">
-                    <p class="text-muted mb-2" id="editIssueTargetIssueTitle"></p>
-                    <div class="form-group">
-                        <label for="editIssueTargetDate">Target resolution date</label>
-                        <input type="date" class="form-control" id="editIssueTargetDate" name="targetResolutionDate" />
-                        <small class="form-text text-muted">Leave blank to clear the target resolution date.</small>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-outline-secondary" data-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Save changes</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
+<style>
+    /* Background colors for priority matrix cells - matching priority badge colors but more vibrant */
+    .priority-matrix-bg--critical {
+        background-color: #f4d2d2 !important; /* Red - matches priority badge #d4351c */
+        border: none !important;
+    }
+    
+    .priority-matrix-bg--medium {
+        background-color: #fde4d1 !important; /* Orange - matches priority badge #f47738 */
+        border: none !important;
+    }
+    
+    .priority-matrix-bg--low {
+        background-color: #d4e8dd !important; /* Green - matches priority badge #00703c */
+        border: none !important;
+    }
+    
+    .priority-matrix-bg--default {
+        background-color: #e5e5e5 !important; /* Grey - matches priority badge #6f777b */
+        border: none !important;
+    }
+    
+    /* Remove ALL borders from priority matrix table */
+    .priority-matrix {
+        border: none !important;
+    }
+    
+    .priority-matrix th,
+    .priority-matrix td {
+        border: none !important;
+    }
+    
+    .priority-matrix thead th {
+        border: none !important;
+    }
+    
+    .priority-matrix tbody th {
+        border: none !important;
+    }
+    
+    /* Make count badges bigger and centered */
+    .priority-matrix-count {
+        font-size: 2rem !important;
+        padding: 0.5rem 1rem !important;
+        min-width: 60px;
+    }
+    
+    .priority-matrix-cell {
+        padding: 1rem !important;
+    }
+    
+    /* Filter section styling */
+    .issues-filter-toggle {
+        border: none;
+        background: none;
+        padding: 0;
+        cursor: pointer;
+    }
+    
+    .filter-chevron {
+        transition: transform 0.3s ease;
+        font-size: 0.75rem;
+    }
+    
+    .issues-filter-toggle[aria-expanded="true"] .filter-chevron {
+        transform: rotate(180deg);
+    }
+    
+    /* Ensure checkboxes use default styling */
+    .severity-filter {
+        accent-color: #005ea5;
+    }
+</style>
 
-<script nonce="@Context.Items["Nonce"]">
-    (function () {
-        var modal = $('#editIssueTargetModal');
-        var issueIdInput = $('#editIssueTargetIssueId');
-        var issueTitle = $('#editIssueTargetIssueTitle');
-        var dateInput = $('#editIssueTargetDate');
+@if (issuesView == "table" && issues.Any())
+{
+    <script nonce="@Context.Items["Nonce"]">
+        (function() {
+            var filterSearch = document.getElementById('filterSearch');
+            var severityFilters = document.querySelectorAll('.severity-filter');
+            var filterPriority = document.getElementById('filterPriority');
+            var filterStatus = document.getElementById('filterStatus');
+            var clearFiltersBtn = document.getElementById('clearFilters');
+            var issuesTable = document.getElementById('issuesTable');
+            var tableRows = issuesTable ? issuesTable.querySelectorAll('tbody tr') : [];
 
-        $('.issue-target-edit').on('click', function () {
-            var $btn = $(this);
-            issueIdInput.val($btn.data('issue-id'));
-            issueTitle.text($btn.data('issue-title'));
-            dateInput.val($btn.data('target-date') || '');
-            modal.modal('show');
-        });
+            function applyFilters() {
+                var searchTerm = (filterSearch.value || '').toLowerCase();
+                var selectedSeverities = Array.from(severityFilters)
+                    .filter(cb => cb.checked)
+                    .map(cb => cb.value.toLowerCase());
+                var priorityFilter = (filterPriority.value || '').toLowerCase();
+                var statusFilter = (filterStatus.value || '').toLowerCase();
 
-        modal.on('hidden.bs.modal', function () {
-            issueIdInput.val('');
-            issueTitle.text('');
-            dateInput.val('');
-        });
-    })();
-</script>
+                var visibleCount = 0;
+
+                tableRows.forEach(function(row) {
+                    var severity = (row.getAttribute('data-severity') || 'low').toLowerCase();
+                    var priority = (row.getAttribute('data-priority') || 'not_set').toLowerCase();
+                    var status = (row.getAttribute('data-status') || '').toLowerCase();
+                    var title = (row.getAttribute('data-title') || '').toLowerCase();
+                    var description = (row.getAttribute('data-description') || '').toLowerCase();
+
+                    // Check severity filter
+                    var severityMatch = selectedSeverities.length === 0 || selectedSeverities.includes(severity);
+
+                    // Check priority filter
+                    var priorityMatch = !priorityFilter || priority === priorityFilter;
+
+                    // Check status filter
+                    var statusMatch = !statusFilter || status === statusFilter;
+
+                    // Check search filter
+                    var searchMatch = !searchTerm || 
+                        title.includes(searchTerm) || 
+                        description.includes(searchTerm);
+
+                    if (severityMatch && priorityMatch && statusMatch && searchMatch) {
+                        row.style.display = '';
+                        visibleCount++;
+                    } else {
+                        row.style.display = 'none';
+                    }
+                });
+
+                // Show/hide "no results" message if needed
+                var tbody = issuesTable.querySelector('tbody');
+                var noResultsRow = tbody.querySelector('tr[data-no-results]');
+                if (visibleCount === 0) {
+                    if (!noResultsRow) {
+                        noResultsRow = document.createElement('tr');
+                        noResultsRow.setAttribute('data-no-results', 'true');
+                        noResultsRow.innerHTML = '<td colspan="6" class="text-center text-muted py-4">No issues match the current filters.</td>';
+                        tbody.appendChild(noResultsRow);
+                    }
+                    noResultsRow.style.display = '';
+                } else if (noResultsRow) {
+                    noResultsRow.style.display = 'none';
+                }
+            }
+
+            // Attach event listeners
+            if (filterSearch) {
+                filterSearch.addEventListener('input', applyFilters);
+            }
+
+            severityFilters.forEach(function(checkbox) {
+                checkbox.addEventListener('change', applyFilters);
+            });
+
+            if (filterPriority) {
+                filterPriority.addEventListener('change', applyFilters);
+            }
+
+            if (filterStatus) {
+                filterStatus.addEventListener('change', applyFilters);
+            }
+
+            if (clearFiltersBtn) {
+                clearFiltersBtn.addEventListener('click', function() {
+                    if (filterSearch) filterSearch.value = '';
+                    severityFilters.forEach(function(cb) { cb.checked = true; });
+                    if (filterPriority) filterPriority.value = '';
+                    if (filterStatus) filterStatus.value = '';
+                    applyFilters();
+                });
+            }
+
+            // Update aria-expanded attribute for chevron rotation
+            var filterCollapse = document.getElementById('issuesFilterCollapse');
+            var filterButton = document.querySelector('[data-target="#issuesFilterCollapse"]');
+            if (filterCollapse && filterButton) {
+                filterCollapse.addEventListener('show.bs.collapse', function() {
+                    filterButton.setAttribute('aria-expanded', 'true');
+                });
+                filterCollapse.addEventListener('hide.bs.collapse', function() {
+                    filterButton.setAttribute('aria-expanded', 'false');
+                });
+            }
+        })();
+    </script>
+}

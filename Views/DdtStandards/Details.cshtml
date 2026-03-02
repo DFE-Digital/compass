@@ -1,0 +1,1387 @@
+@model Compass.Models.DdtStandard
+@using System.Text.Json
+@using Compass.Models
+@inject Compass.Services.IPermissionService PermissionService
+
+@{
+    ViewData["Title"] = Model.Title;
+    
+    // Parse criteria if available
+    var criteriaList = new List<string>();
+    if (!string.IsNullOrWhiteSpace(Model.Criteria))
+    {
+        try
+        {
+            criteriaList = JsonSerializer.Deserialize<List<string>>(Model.Criteria) ?? new List<string>();
+        }
+        catch
+        {
+            // If parsing fails, ignore
+        }
+    }
+    
+    // Get approved and tolerated products
+    var approvedProducts = Model.Products?.Where(p => p.ProductType == "Approved" && p.StandardProduct != null).Select(p => p.StandardProduct).ToList() ?? new List<StandardProduct>();
+    var toleratedProducts = Model.Products?.Where(p => p.ProductType == "Tolerated" && p.StandardProduct != null).Select(p => p.StandardProduct).ToList() ?? new List<StandardProduct>();
+    
+    // Get changes for comparison (when viewing a previous version)
+    var changes = ViewBag.Changes as Dictionary<string, object> ?? new Dictionary<string, object>();
+    var publishedStandardForComparison = ViewBag.PublishedStandardForComparison as DdtStandard;
+    var isViewingPreviousVersion = publishedStandardForComparison != null && Model.Id != publishedStandardForComparison.Id;
+    
+    // Helper function to check if a field has changed
+    Func<string, bool> HasChanged = (fieldName) => changes.ContainsKey(fieldName);
+    
+    // Check if user can perform actions (owner, contact, or Standards Manager)
+    bool canPerformActions = false;
+    try
+    {
+        var userEmail = User.Identity?.Name 
+            ?? User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value
+            ?? string.Empty;
+        if (!string.IsNullOrEmpty(userEmail))
+        {
+            var isStandardsManager = await PermissionService.IsInGroupAsync(userEmail, "Standards Managers");
+            var currentUserId = ViewBag.CurrentUserId as int?;
+            var isOwner = currentUserId.HasValue && Model.Owners.Any(o => o.UserId == currentUserId.Value);
+            var isContact = currentUserId.HasValue && Model.Contacts.Any(c => c.UserId == currentUserId.Value);
+            canPerformActions = isStandardsManager || isOwner || isContact;
+        }
+    }
+    catch
+    {
+        // Non-blocking: actions will not be shown
+    }
+}
+
+
+@section Breadcrumbs {
+    <style>
+        .breadcrumb a:hover {
+            color: #003078 !important;
+            text-decoration: underline !important;
+        }
+    </style>
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4 breadcrumb-standard">
+            <li class="breadcrumb-item">
+                <a href="@Url.Action("Index", "Home")" class="breadcrumb-link-standard">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a href="@Url.Action("Index", "DdtStandards")" class="breadcrumb-link-standard">Manage Standards</a>
+            </li>
+            @if (Model.Stage == "Draft")
+            {
+                <li class="breadcrumb-item">
+                    <a href="@Url.Action("Index", "DdtStandards", new { view = "drafts" })" class="breadcrumb-link-standard">Drafts</a>
+                </li>
+            }
+            else if (Model.Stage == "For Approval")
+            {
+                <li class="breadcrumb-item">
+                    <a href="@Url.Action("Index", "DdtStandards", new { view = "in-review" })" class="breadcrumb-link-standard">For Approval</a>
+                </li>
+            }
+            else if (Model.Stage == "Awaiting Publication")
+            {
+                <li class="breadcrumb-item">
+                    <a href="@Url.Action("Index", "DdtStandards", new { view = "for-approval" })" class="breadcrumb-link-standard">Awaiting Publication</a>
+                </li>
+            }
+            else if (Model.Stage == "Published")
+            {
+                <li class="breadcrumb-item">
+                    <a href="/api/DdtStandards?view=published" class="breadcrumb-link-standard">Published Standards</a>
+                </li>
+            }
+            else if (Model.Stage == "Unpublished")
+            {
+                <li class="breadcrumb-item">
+                    <a href="@Url.Action("Index", "DdtStandards", new { view = "unpublished" })" class="breadcrumb-link-standard">Unpublished Standards</a>
+                </li>
+            }
+            <li class="breadcrumb-item active breadcrumb-active-standard" aria-current="page">@Model.Title</li>
+        </ol>
+    </nav>
+}
+
+<section class="content">
+    <div class="container-fluid">
+        @if (Model.Stage == "Draft")
+        {
+            var rejectionComments = ViewBag.RejectionComments as List<DdtStandardComment> ?? new List<DdtStandardComment>();
+            var hasRejection = rejectionComments.Any();
+            
+            <div class="alert alert-@(hasRejection ? "warning" : "danger") mb-3 @(hasRejection ? "alert-warning-custom" : "alert-danger-custom")" role="alert">
+                <div class="d-flex align-items-center">
+                    <i class="fas fa-@(hasRejection ? "exclamation-circle" : "exclamation-triangle") fa-2x mr-3"></i>
+                    <div>
+                        <h4 class="alert-heading mb-1">This is a draft standard</h4>
+                        @if (hasRejection)
+                        {
+                            <p class="mb-2"><strong>This standard was rejected and returned for revision.</strong></p>
+                            <div class="mb-2">
+                                <strong>Rejection reason:</strong>
+                                <div class="mt-2 p-2 bg-white rounded border">
+                                    @foreach (var comment in rejectionComments.OrderByDescending(c => c.CreatedAt).Take(1))
+                                    {
+                                        <p class="mb-0">@comment.Comments</p>
+                                        <small class="text-muted">Rejected by @comment.User.Name on @comment.CreatedAt.ToString("dd MMM yyyy HH:mm")</small>
+                                    }
+                                </div>
+                            </div>
+                            <p class="mb-0">Please revise the standard based on the feedback above and resubmit for approval.</p>
+                        }
+                        else
+                        {
+                            <p class="mb-0">This standard has not been published and is still in draft status.</p>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+        
+        @if (Model.Stage == "For Approval")
+        {
+            // Check if there's a newer published version (for Standards Managers only)
+            var allVersionsForApproval = ViewBag.PreviousVersions as List<DdtStandard> ?? new List<DdtStandard>();
+            var publishedStandardsForApproval = allVersionsForApproval.Where(s => s.Stage == "Published" && s.IsPublished && s.Id != Model.Id && s.Title == Model.Title).ToList();
+            var hasNewerPublished = false;
+            DdtStandard? newerPublished = null;
+            if (publishedStandardsForApproval.Any() && (ViewBag.IsStandardsManager as bool? ?? false))
+            {
+                // Simple check: if any published standard has a different (likely newer) version
+                newerPublished = publishedStandardsForApproval.OrderByDescending(s => s.UpdatedAt).FirstOrDefault();
+                hasNewerPublished = newerPublished != null;
+            }
+            <div class="alert alert-info mb-3 alert-info-custom" role="alert">
+                <div class="d-flex align-items-start">
+                    <i class="fas fa-clock fa-2x mr-3 icon-primary"></i>
+                    <div class="flex-1">
+                        <h4 class="alert-heading mb-2">Awaiting Approval</h4>
+                        <p class="mb-0">This standard is awaiting review and approval by Standards Managers.</p>
+                        @if (hasNewerPublished && newerPublished != null)
+                        {
+                            <div class="mt-2 pt-2 border-top">
+                                <p class="mb-2 alert-text-danger">
+                                    <i class="fas fa-exclamation-triangle mr-1"></i>
+                                    Warning: A published version (v@newerPublished.Version) exists. This version may be orphaned.
+                                </p>
+                                <form asp-action="CleanupOrphanedStandard" asp-route-id="@Model.Id" method="post" class="d-inline" onsubmit="return confirm('This will remove this orphaned standard (v@Model.Version) since a published version (v@newerPublished.Version) exists. Are you sure?');">
+                                    @Html.AntiForgeryToken()
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">
+                                        <i class="fas fa-trash-alt mr-1"></i>Clean Up Orphaned Standard
+                                    </button>
+                                </form>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+        
+        @if (Model.Stage == "Awaiting Publication")
+        {
+            // Check if there's a newer published version (for Standards Managers only)
+            var allVersionsAwaiting = ViewBag.PreviousVersions as List<DdtStandard> ?? new List<DdtStandard>();
+            var publishedStandardsAwaiting = allVersionsAwaiting.Where(s => s.Stage == "Published" && s.IsPublished && s.Id != Model.Id && s.Title == Model.Title).ToList();
+            var hasNewerPublishedAwaiting = false;
+            DdtStandard? newerPublishedAwaiting = null;
+            if (publishedStandardsAwaiting.Any() && (ViewBag.IsStandardsManager as bool? ?? false))
+            {
+                newerPublishedAwaiting = publishedStandardsAwaiting.OrderByDescending(s => s.UpdatedAt).FirstOrDefault();
+                hasNewerPublishedAwaiting = newerPublishedAwaiting != null;
+            }
+            <div class="alert alert-info mb-3 alert-info-custom" role="alert">
+                <div class="d-flex align-items-start">
+                    <i class="fas fa-check-circle fa-2x mr-3 icon-primary"></i>
+                    <div class="flex-1">
+                        <h4 class="alert-heading mb-2">Approved - Awaiting Publication</h4>
+                        <p class="mb-0 alert-text">This standard has been approved and is ready to be published.</p>
+                        @if (hasNewerPublishedAwaiting && newerPublishedAwaiting != null)
+                        {
+                            <div class="mt-2 pt-2 border-top">
+                                <p class="mb-2 alert-text-danger">
+                                    <i class="fas fa-exclamation-triangle mr-1"></i>
+                                    Warning: A published version (v@newerPublishedAwaiting.Version) exists. This version may be orphaned.
+                                </p>
+                                <form asp-action="CleanupOrphanedStandard" asp-route-id="@Model.Id" method="post" class="d-inline" onsubmit="return confirm('This will remove this orphaned standard (v@Model.Version) since a published version (v@newerPublishedAwaiting.Version) exists. Are you sure?');">
+                                    @Html.AntiForgeryToken()
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">
+                                        <i class="fas fa-trash-alt mr-1"></i>Clean Up Orphaned Standard
+                                    </button>
+                                </form>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+        
+        @if (Model.Stage == "Unpublished")
+        {
+            <div class="alert alert-warning mb-3 alert-warning-custom" role="alert">
+                <div class="d-flex align-items-center">
+                    <i class="fas fa-ban fa-2x mr-3"></i>
+                    <div>
+                        <h4 class="alert-heading mb-1">Unpublished Standard</h4>
+                        <p class="mb-0">This standard has been unpublished and is no longer visible to the public. You can edit it to create a new draft version.</p>
+                    </div>
+                </div>
+            </div>
+        }
+        
+        @if (isViewingPreviousVersion && publishedStandardForComparison != null)
+        {
+            <div class="alert alert-info mb-3 alert-info-custom" role="alert">
+                <div class="d-flex align-items-start">
+                    <i class="fas fa-history fa-2x mr-3 icon-primary"></i>
+                    <div class="flex-1">
+                        <h4 class="alert-heading mb-2">Viewing Previous Version</h4>
+                        <p class="mb-2 alert-text">
+                            You are viewing <strong>Version @Model.Version</strong> of this standard. 
+                            The current published version is <strong>Version @publishedStandardForComparison.Version</strong>.
+                        </p>
+                        <p class="mb-0">
+                            <a href="@Url.Action("Details", "DdtStandards", new { id = publishedStandardForComparison.Id })" class="btn btn-sm btn-primary">
+                                <i class="fas fa-arrow-right mr-1"></i>View Published Version
+                            </a>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        }
+        
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h1 class="mb-0">@Model.Title</h1>
+                    @if (Model.Stage == "For Approval" && (ViewBag.IsStandardsManager as bool? ?? false))
+                    {
+                        <div class="d-flex">
+                            <button type="button" class="btn btn-success mr-2" data-toggle="modal" data-target="#approveModal">
+                                <i class="fas fa-check-circle mr-2"></i>Approve
+                            </button>
+                            <button type="button" class="btn btn-danger" data-toggle="modal" data-target="#rejectModal">
+                                <i class="fas fa-times-circle mr-2"></i>Reject
+                            </button>
+                        </div>
+                    }
+                    @if (Model.Stage == "Awaiting Publication" && canPerformActions && (ViewBag.IsStandardsManager as bool? ?? false))
+                    {
+                        <div class="d-flex">
+                            <form asp-action="Publish" asp-route-id="@Model.Id" method="post" class="d-inline" onsubmit="return confirm('Are you sure you want to publish this standard? This will make it visible to all users.');">
+                                @Html.AntiForgeryToken()
+                                <button type="submit" class="btn btn-success">
+                                    <i class="fas fa-globe mr-2"></i>Publish
+                                </button>
+                            </form>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Left Column: Contents Navigation -->
+            <div class="col-lg-2 col-md-3 col-12">
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <h3 class="card-title mb-0">Contents</h3>
+                    </div>
+                    <div class="card-body p-0">
+                        <ul class="nav nav-pills flex-column">
+                        @if (!string.IsNullOrWhiteSpace(Model.Summary))
+                        {
+                                <li class="nav-item">
+                                    <a class="nav-link" href="#summary">Summary</a>
+                                </li>
+                            }
+                            @if (Model.Categories.Any())
+                            {
+                                <li class="nav-item">
+                                    <a class="nav-link" href="#categories">Categories</a>
+                                </li>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(Model.Purpose))
+                        {
+                                <li class="nav-item">
+                                    <a class="nav-link" href="#purpose">Purpose</a>
+                                </li>
+                        }
+                        @if (criteriaList.Any())
+                        {
+                                <li class="nav-item">
+                                    <a class="nav-link" href="#criteria">Criteria</a>
+                                </li>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(Model.HowToMeet))
+                        {
+                                <li class="nav-item">
+                                    <a class="nav-link" href="#how-to-meet">How to meet this standard</a>
+                                </li>
+                        }
+                            <li class="nav-item">
+                                <a class="nav-link" href="#declaring-conformance">Declaring conformance</a>
+                            </li>
+                        @if (!string.IsNullOrWhiteSpace(Model.Governance))
+                        {
+                                <li class="nav-item">
+                                    <a class="nav-link" href="#governance">Governance</a>
+                                </li>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(Model.LegalBasis))
+                            {
+                                <li class="nav-item">
+                                    <a class="nav-link" href="#legal-basis">Legal basis</a>
+                                </li>
+                        }
+                            @if (!string.IsNullOrWhiteSpace(Model.RelatedGuidance))
+                        {
+                                <li class="nav-item">
+                                    <a class="nav-link" href="#related-guidance">Related guidance</a>
+                                </li>
+                            }
+                            @if (Model.Phases.Any())
+                            {
+                                <li class="nav-item">
+                                    <a class="nav-link" href="#phases">Phases</a>
+                                </li>
+                            }
+                            @if (approvedProducts.Any())
+                            {
+                                <li class="nav-item">
+                                    <a class="nav-link" href="#approved-products">Approved products</a>
+                                </li>
+                            }
+                            @if (toleratedProducts.Any())
+                            {
+                                <li class="nav-item">
+                                    <a class="nav-link" href="#tolerated-products">Tolerated products</a>
+                                </li>
+                            }
+                            @if (Model.Owners.Any())
+                        {
+                                <li class="nav-item">
+                                    <a class="nav-link" href="#owners-contacts">Standard owners</a>
+                                </li>
+                            }
+                            @if (Model.Contacts.Any())
+                            {
+                                <li class="nav-item">
+                                    <a class="nav-link" href="#contacts">Standard contacts</a>
+                                </li>
+                        }
+                        </ul>
+                    </div>
+            </div>
+                
+                @if (Model.Stage == "Awaiting Publication" && ((ViewBag.IsAdmin as bool? ?? false) || (canPerformActions && (ViewBag.IsStandardsManager as bool? ?? false))))
+                {
+                    <!-- Actions Card for Awaiting Publication -->
+                    <div class="card mb-3">
+                        <div class="card-header bg-success text-white">
+                            <h3 class="card-title mb-0">Publication Actions</h3>
+                        </div>
+                        <div class="card-body p-0">
+                            <ul class="nav nav-pills flex-column">
+                                <li class="nav-item">
+                                    <form asp-action="Publish" asp-route-id="@Model.Id" method="post" class="mb-0" id="publishForm-@Model.Id">
+                                        @Html.AntiForgeryToken()
+                                        <a href="#" class="nav-link text-left w-100 text-success nav-link-padding" onclick="if(confirm('Are you sure you want to publish this standard? This will make it visible to all users.')) { event.preventDefault(); document.getElementById('publishForm-@Model.Id').submit(); } else { event.preventDefault(); }">
+                                            <i class="fas fa-globe mr-2"></i>Publish Standard
+                                        </a>
+                                    </form>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                }
+                
+                @{
+                    var previousVersions = ViewBag.PreviousVersions as List<DdtStandard> ?? new List<DdtStandard>();
+                    var publishedStandardForList = ViewBag.PublishedStandard as DdtStandard;
+                    var showAllVersions = ViewBag.ShowAllVersions as bool? ?? false;
+                    var versionsToShow = showAllVersions ? previousVersions : previousVersions.Take(3).ToList();
+                    var hasMoreVersions = previousVersions.Count > 3;
+                }
+                @if (previousVersions.Any())
+                {
+                    <!-- Previous Versions Card -->
+                    <div class="card mb-3">
+                        <div class="card-header">
+                            <h3 class="card-title mb-0">Previous Versions</h3>
+                        </div>
+                        <div class="card-body p-0">
+                            <ul class="list-group list-group-flush">
+                                @foreach (var prevVersion in versionsToShow)
+                                {
+                                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <strong>Version @prevVersion.Version</strong>
+                                            @if (prevVersion.Stage == "Published")
+                                            {
+                                                <span class="badge badge-success ml-2">Published</span>
+                                            }
+                                            else if (prevVersion.Stage == "Unpublished")
+                                            {
+                                                <span class="badge badge-secondary ml-2">Unpublished</span>
+                                            }
+                                            <br />
+                                            <small class="text-muted">
+                                                @if (prevVersion.PublishedAt.HasValue)
+                                                {
+                                                    <text>Published: @prevVersion.PublishedAt.Value.ToString("dd MMM yyyy")</text>
+                                                }
+                                                else
+                                                {
+                                                    <text>Updated: @prevVersion.UpdatedAt.ToString("dd MMM yyyy")</text>
+                                                }
+                                            </small>
+                                        </div>
+                                        <a href="@Url.Action("Details", "DdtStandards", new { id = prevVersion.Id })" class="btn btn-sm btn-outline-primary">
+                                            <i class="fas fa-eye mr-1"></i>View
+                                        </a>
+                                    </li>
+                                }
+                                @if (hasMoreVersions && !showAllVersions)
+                                {
+                                    <li class="list-group-item text-center">
+                                        <a href="@Url.Action("Details", "DdtStandards", new { id = Model.Id, showAllVersions = true })" class="btn btn-sm btn-link">
+                                            <i class="fas fa-chevron-down mr-1"></i>View @(previousVersions.Count - 3) more version@(previousVersions.Count - 3 > 1 ? "s" : "")
+                                        </a>
+                                    </li>
+                                }
+                                @if (showAllVersions && hasMoreVersions)
+                                {
+                                    <li class="list-group-item text-center">
+                                        <a href="@Url.Action("Details", "DdtStandards", new { id = Model.Id })" class="btn btn-sm btn-link">
+                                            <i class="fas fa-chevron-up mr-1"></i>Show less
+                                        </a>
+                                    </li>
+                                }
+                            </ul>
+                        </div>
+                    </div>
+                }
+                
+                @if (canPerformActions && Model.Stage == "Published")
+                {
+                    <!-- Actions Card -->
+                    <div class="card mb-3">
+                        <div class="card-header">
+                            <h3 class="card-title mb-0">Actions</h3>
+                        </div>
+                        <div class="card-body p-0">
+                            <ul class="nav nav-pills flex-column">
+                                <li class="nav-item">
+                                    <form asp-action="MakeChange" asp-controller="DdtStandardsManagement" asp-route-id="@Model.Id" method="post" class="mb-0" id="makeChangeForm-@Model.Id">
+                                        @Html.AntiForgeryToken()
+                                        <button type="submit" class="nav-link text-left w-100 nav-link-padding border-0 bg-transparent p-0" style="cursor: pointer;">
+                                            <i class="fas fa-edit mr-2"></i>Make a change
+                                        </button>
+                                    </form>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link text-danger" href="@Url.Action("Unpublish", "DdtStandards", new { id = Model.Id })">
+                                        <i class="fas fa-ban mr-2"></i>Unpublish this standard
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                }
+                
+                @if (canPerformActions && Model.Stage == "Unpublished")
+                {
+                    <!-- Actions Card for Unpublished -->
+                    <div class="card mb-3">
+                        <div class="card-header">
+                            <h3 class="card-title mb-0">Actions</h3>
+                        </div>
+                        <div class="card-body p-0">
+                            <ul class="nav nav-pills flex-column">
+                                <li class="nav-item">
+                                    <a class="nav-link" href="@Url.Action("Create", "DdtStandards", new { id = Model.Id })">
+                                        <i class="fas fa-edit mr-2"></i>Edit standard
+                                    </a>
+                                    <small class="text-muted d-block px-3 pb-2">Editing will change the stage to Draft</small>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                }
+            </div>
+            
+            <!-- Middle Column: Main Content -->
+            <div class="col-lg-7 col-md-6 col-12">
+
+                @if (Model.LegalStandard == true)
+                {
+                    <div class="alert alert-danger @(HasChanged("LegalStandard") && isViewingPreviousVersion ? "border-warning" : "")" style="@(HasChanged("LegalStandard") && isViewingPreviousVersion ? "border-left: 4px solid #ffc107;" : "")">
+                        @if (HasChanged("LegalStandard") && isViewingPreviousVersion)
+                        {
+                            <div class="d-flex align-items-center mb-2">
+                                <span class="badge badge-warning mr-2">
+                                    <i class="fas fa-exclamation-triangle"></i> Legal Status Changed
+                                </span>
+                            </div>
+                        }
+                        <i class="fas fa-exclamation-triangle"></i> <strong>Warning</strong> You are breaking the law if you do not meet this standard.
+                    </div>
+                }
+
+                <!-- Standard Summary -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h3 class="card-title">Standard Summary</h3>
+                    </div>
+                    <div class="card-body p-0">
+                        <table class="table table-borderless mb-0 project-overview-summary">
+                            <tbody>
+                                <tr>
+                                    <td class="summary-label"><strong>Reference</strong></td>
+                                    <td class="summary-value">
+                                        DDT-@Model.Id
+                                        @if (!string.IsNullOrWhiteSpace(Model.LegacyReference))
+                            {
+                                            <span class="text-muted">(@Model.LegacyReference)</span>
+                                        }
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="summary-label"><strong>Version</strong></td>
+                                    <td class="summary-value">v.@Model.Version</td>
+                                </tr>
+                                <tr>
+                                    <td class="summary-label"><strong>Published</strong></td>
+                                    <td class="summary-value">@(Model.FirstPublished?.ToString("dd MMM yyyy") ?? Model.PublishedAt?.ToString("dd MMM yyyy") ?? "Not published")</td>
+                                </tr>
+                                <tr>
+                                    <td class="summary-label"><strong>Updated</strong></td>
+                                    <td class="summary-value">@(Model.LastUpdated?.ToString("dd MMM yyyy") ?? Model.UpdatedAt.ToString("dd MMM yyyy"))</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Summary -->
+                @if (!string.IsNullOrWhiteSpace(Model.Summary))
+                {
+                    <div class="card mb-3 @(HasChanged("Summary") ? "border-warning" : "")" id="summary" style="@(HasChanged("Summary") ? "border-left: 4px solid #ffc107;" : "")">
+                        <div class="card-header @(HasChanged("Summary") ? "bg-warning" : "")">
+                            <h3 class="card-title mb-0">
+                                Summary
+                                @if (HasChanged("Summary"))
+                                {
+                                    <span class="badge badge-warning ml-2" title="This field has changed from the published version">
+                                        <i class="fas fa-exclamation-triangle"></i> Changed
+                                    </span>
+                                }
+                            </h3>
+                        </div>
+                        <div class="card-body">
+                            @if (HasChanged("Summary") && isViewingPreviousVersion && publishedStandardForComparison != null)
+                            {
+                                var change = changes["Summary"] as dynamic;
+                                <div class="alert alert-info mb-3">
+                                    <strong>Published version:</strong>
+                                    <div class="mt-2 p-2 bg-light rounded">@(change?.Old ?? "")</div>
+                                </div>
+                                <div class="alert alert-warning mb-0">
+                                    <strong>This version:</strong>
+                                    <div class="mt-2 p-2 bg-light rounded">@Model.Summary</div>
+                                </div>
+                            }
+                            else
+                            {
+                                <p>@Model.Summary</p>
+                            }
+                        </div>
+                    </div>
+                }
+
+                <!-- Categories -->
+                @if (Model.Categories.Any())
+                {
+                    <div class="card mb-3" id="categories">
+                        <div class="card-header">
+                            <h3 class="card-title mb-0">Categories</h3>
+                        </div>
+                        <div class="card-body">
+                            @foreach (var category in Model.Categories.OrderBy(c => c.Category.Name))
+                            {
+                                <div class="mb-4 @(category != Model.Categories.Last() ? "border-bottom pb-4" : "")">
+                                    <h5 class="mb-3">
+                                        <strong>@category.Category.Name</strong>
+                                        @if (!string.IsNullOrEmpty(category.Category.Description))
+                                        {
+                                            <small class="text-muted d-block mt-1">@category.Category.Description</small>
+                }
+                                    </h5>
+                                    
+                                    @if (Model.SubCategories.Any())
+                                    {
+                                        var categorySubCategories = Model.SubCategories
+                                            .Where(sc => sc.SubCategory != null && sc.SubCategory.CategoryId == category.Category.Id)
+                                            .OrderBy(sc => sc.SubCategory.Name)
+                                            .ToList();
+                                        
+                                        @if (categorySubCategories.Any())
+                                        {
+                                            <ul class="list-unstyled mb-0">
+                                                @foreach (var subCategory in categorySubCategories)
+                                                {
+                                                    <li>@subCategory.SubCategory.Name</li>
+                                                }
+                                            </ul>
+                                        }
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+
+                <!-- Purpose -->
+                @if (!string.IsNullOrWhiteSpace(Model.Purpose))
+                {
+                    <div class="card mb-3 @(HasChanged("Purpose") ? "border-warning" : "")" id="purpose" style="@(HasChanged("Purpose") ? "border-left: 4px solid #ffc107;" : "")">
+                        <div class="card-header @(HasChanged("Purpose") ? "bg-warning" : "")">
+                            <h3 class="card-title mb-0">
+                                Purpose
+                                @if (HasChanged("Purpose"))
+                                {
+                                    <span class="badge badge-warning ml-2" title="This field has changed from the published version">
+                                        <i class="fas fa-exclamation-triangle"></i> Changed
+                                    </span>
+                                }
+                            </h3>
+                        </div>
+                        <div class="card-body">
+                            @if (HasChanged("Purpose") && isViewingPreviousVersion)
+                            {
+                                var change = changes["Purpose"] as dynamic;
+                                <div class="alert alert-info mb-3">
+                                    <strong>Published version:</strong>
+                                    <div class="mt-2 p-2 bg-light rounded rich-text-content">@Html.Raw(MarkdownHelper.ToHtml(change?.Old?.ToString() ?? ""))</div>
+                                </div>
+                                <div class="alert alert-warning mb-0">
+                                    <strong>This version:</strong>
+                                    <div class="mt-2 p-2 bg-light rounded rich-text-content">@Html.Raw(MarkdownHelper.ToHtml(Model.Purpose))</div>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="rich-text-content">
+                                    @Html.Raw(MarkdownHelper.ToHtml(Model.Purpose))
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+
+                <!-- Criteria -->
+                @if (criteriaList.Any())
+                {
+                    <div class="card mb-3 @(HasChanged("Criteria") ? "border-warning" : "")" id="criteria" style="@(HasChanged("Criteria") ? "border-left: 4px solid #ffc107;" : "")">
+                        <div class="card-header @(HasChanged("Criteria") ? "bg-warning" : "")">
+                            <h3 class="card-title mb-0">
+                                Criteria
+                                @if (HasChanged("Criteria"))
+                                {
+                                    <span class="badge badge-warning ml-2" title="This field has changed from the published version">
+                                        <i class="fas fa-exclamation-triangle"></i> Changed
+                                    </span>
+                                }
+                            </h3>
+                        </div>
+                        <div class="card-body">
+                            @if (HasChanged("Criteria") && isViewingPreviousVersion)
+                            {
+                                var change = changes["Criteria"] as dynamic;
+                                var publishedCriteria = new List<string>();
+                                if (change?.Old != null)
+                                {
+                                    try
+                                    {
+                                        publishedCriteria = JsonSerializer.Deserialize<List<string>>(change.Old.ToString()) ?? new List<string>();
+                                    }
+                                    catch { }
+                                }
+                                <div class="alert alert-info mb-3">
+                                    <strong>Published version:</strong>
+                                    <ul class="mt-2">
+                                        @foreach (var criterion in publishedCriteria)
+                                        {
+                                            <li>@criterion</li>
+                                        }
+                                    </ul>
+                                </div>
+                                <div class="alert alert-warning mb-0">
+                                    <strong>This version:</strong>
+                                    <ul class="mt-2">
+                                        @foreach (var criterion in criteriaList)
+                                        {
+                                            <li>@criterion</li>
+                                        }
+                                    </ul>
+                                </div>
+                            }
+                            else
+                            {
+                                <p class="lead">You meet this standard when all the following are achieved:</p>
+                                <ul>
+                                    @foreach (var criterion in criteriaList)
+                                    {
+                                        <li>@criterion</li>
+                                    }
+                                </ul>
+                            }
+                        </div>
+                    </div>
+                }
+
+                <!-- How to Meet -->
+                @if (!string.IsNullOrWhiteSpace(Model.HowToMeet))
+                {
+                    <div class="card mb-3 @(HasChanged("HowToMeet") ? "border-warning" : "")" id="how-to-meet" style="@(HasChanged("HowToMeet") ? "border-left: 4px solid #ffc107;" : "")">
+                        <div class="card-header @(HasChanged("HowToMeet") ? "bg-warning" : "")">
+                            <h3 class="card-title mb-0">
+                                How to meet this standard
+                                @if (HasChanged("HowToMeet"))
+                                {
+                                    <span class="badge badge-warning ml-2" title="This field has changed from the published version">
+                                        <i class="fas fa-exclamation-triangle"></i> Changed
+                                    </span>
+                                }
+                            </h3>
+                        </div>
+                        <div class="card-body">
+                            @if (HasChanged("HowToMeet") && isViewingPreviousVersion)
+                            {
+                                var change = changes["HowToMeet"] as dynamic;
+                                <div class="alert alert-info mb-3">
+                                    <strong>Published version:</strong>
+                                    <div class="mt-2 p-2 bg-light rounded rich-text-content">@Html.Raw(MarkdownHelper.ToHtml(change?.Old?.ToString() ?? ""))</div>
+                                </div>
+                                <div class="alert alert-warning mb-0">
+                                    <strong>This version:</strong>
+                                    <div class="mt-2 p-2 bg-light rounded rich-text-content">@Html.Raw(MarkdownHelper.ToHtml(Model.HowToMeet))</div>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="rich-text-content">
+                                    @Html.Raw(MarkdownHelper.ToHtml(Model.HowToMeet))
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+
+                <!-- Declaring Conformance -->
+                <div class="card mb-3" id="declaring-conformance">
+                    <div class="card-header">
+                        <h3 class="card-title mb-0">Declaring conformance with this standard</h3>
+                    </div>
+                    <div class="card-body">
+                        @if (Model.ValidityPeriod.HasValue)
+                        {
+                            <p>Conformance with the standard must be recorded every @Model.ValidityPeriod.Value @(Model.ValidityPeriod.Value == 1 ? "year" : "years").</p>
+                }
+                        else
+                        {
+                            <p>Conformance with the standard must be recorded every 12 months.</p>
+                        }
+                    </div>
+                </div>
+
+                <!-- Governance -->
+                @if (!string.IsNullOrWhiteSpace(Model.Governance))
+                {
+                    <div class="card mb-3 @(HasChanged("Governance") ? "border-warning" : "")" id="governance" style="@(HasChanged("Governance") ? "border-left: 4px solid #ffc107;" : "")">
+                        <div class="card-header @(HasChanged("Governance") ? "bg-warning" : "")">
+                            <h3 class="card-title mb-0">
+                                Governance
+                                @if (HasChanged("Governance"))
+                                {
+                                    <span class="badge badge-warning ml-2" title="This field has changed from the published version">
+                                        <i class="fas fa-exclamation-triangle"></i> Changed
+                                    </span>
+                                }
+                            </h3>
+                        </div>
+                        <div class="card-body">
+                            @if (HasChanged("Governance") && isViewingPreviousVersion)
+                            {
+                                var change = changes["Governance"] as dynamic;
+                                <div class="alert alert-info mb-3">
+                                    <strong>Published version:</strong>
+                                    <div class="mt-2 p-2 bg-light rounded rich-text-content">@Html.Raw(MarkdownHelper.ToHtml(change?.Old?.ToString() ?? ""))</div>
+                                </div>
+                                <div class="alert alert-warning mb-0">
+                                    <strong>This version:</strong>
+                                    <div class="mt-2 p-2 bg-light rounded rich-text-content">@Html.Raw(MarkdownHelper.ToHtml(Model.Governance))</div>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="rich-text-content">
+                                    @Html.Raw(MarkdownHelper.ToHtml(Model.Governance))
+                                </div>
+                            }
+                            @if (Model.GovernanceApproval)
+                            {
+                                <div class="mt-3">
+                                    <span class="badge badge-success">
+                                        <i class="fas fa-check"></i> Governance Approved
+                                    </span>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+
+                <!-- Legal Basis -->
+                @if (!string.IsNullOrWhiteSpace(Model.LegalBasis))
+                {
+                    <div class="card mb-3 @(HasChanged("LegalBasis") ? "border-warning" : "")" id="legal-basis" style="@(HasChanged("LegalBasis") ? "border-left: 4px solid #ffc107;" : "")">
+                        <div class="card-header @(HasChanged("LegalBasis") ? "bg-warning" : "")">
+                            <h3 class="card-title mb-0">
+                                Legal Basis
+                                @if (HasChanged("LegalBasis"))
+                                {
+                                    <span class="badge badge-warning ml-2" title="This field has changed from the published version">
+                                        <i class="fas fa-exclamation-triangle"></i> Changed
+                                    </span>
+                                }
+                            </h3>
+                        </div>
+                        <div class="card-body">
+                            @if (HasChanged("LegalBasis") && isViewingPreviousVersion)
+                            {
+                                var change = changes["LegalBasis"] as dynamic;
+                                <div class="alert alert-info mb-3">
+                                    <strong>Published version:</strong>
+                                    <div class="mt-2 p-2 bg-light rounded">@(change?.Old ?? "")</div>
+                                </div>
+                                <div class="alert alert-warning mb-0">
+                                    <strong>This version:</strong>
+                                    <div class="mt-2 p-2 bg-light rounded">@Model.LegalBasis</div>
+                                </div>
+                            }
+                            else
+                            {
+                                <p>@Model.LegalBasis</p>
+                            }
+                        </div>
+                    </div>
+                }
+
+                <!-- Related Guidance -->
+                @if (!string.IsNullOrWhiteSpace(Model.RelatedGuidance))
+                {
+                    <div class="card mb-3 @(HasChanged("RelatedGuidance") ? "border-warning" : "")" id="related-guidance" style="@(HasChanged("RelatedGuidance") ? "border-left: 4px solid #ffc107;" : "")">
+                        <div class="card-header @(HasChanged("RelatedGuidance") ? "bg-warning" : "")">
+                            <h3 class="card-title mb-0">
+                                Related Guidance
+                                @if (HasChanged("RelatedGuidance"))
+                                {
+                                    <span class="badge badge-warning ml-2" title="This field has changed from the published version">
+                                        <i class="fas fa-exclamation-triangle"></i> Changed
+                                    </span>
+                                }
+                            </h3>
+                        </div>
+                        <div class="card-body">
+                            @if (HasChanged("RelatedGuidance") && isViewingPreviousVersion)
+                            {
+                                var change = changes["RelatedGuidance"] as dynamic;
+                                <div class="alert alert-info mb-3">
+                                    <strong>Published version:</strong>
+                                    <div class="mt-2 p-2 bg-light rounded rich-text-content">@Html.Raw(MarkdownHelper.ToHtml(change?.Old?.ToString() ?? ""))</div>
+                                </div>
+                                <div class="alert alert-warning mb-0">
+                                    <strong>This version:</strong>
+                                    <div class="mt-2 p-2 bg-light rounded rich-text-content">@Html.Raw(MarkdownHelper.ToHtml(Model.RelatedGuidance))</div>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="rich-text-content">
+                                    @Html.Raw(MarkdownHelper.ToHtml(Model.RelatedGuidance))
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+
+                <!-- Phases -->
+                @if (Model.Phases.Any())
+                {
+                    <div class="card mb-3" id="phases">
+                        <div class="card-header">
+                            <h3 class="card-title mb-0">Phases</h3>
+                        </div>
+                        <div class="card-body">
+                            <ul>
+                                @foreach (var phase in Model.Phases.Where(p => p.Enabled).OrderBy(p => p.PhaseLookup.Name))
+                                {
+                                    <li>@phase.PhaseLookup.Name</li>
+                                }
+                            </ul>
+                        </div>
+                    </div>
+                }
+
+                <!-- Approved Products -->
+                @if (approvedProducts.Any() || (HasChanged("Products") && isViewingPreviousVersion))
+                {
+                    <div class="card mb-3 @(HasChanged("Products") ? "border-warning" : "")" id="approved-products" style="@(HasChanged("Products") ? "border-left: 4px solid #ffc107;" : "")">
+                        <div class="card-header @(HasChanged("Products") ? "bg-warning" : "")">
+                            <h3 class="card-title mb-0">
+                                Approved products
+                                @if (HasChanged("Products"))
+                                {
+                                    <span class="badge badge-warning ml-2" title="Products have changed from the published version">
+                                        <i class="fas fa-exclamation-triangle"></i> Changed
+                                    </span>
+                                }
+                            </h3>
+                        </div>
+                        <div class="card-body p-0">
+                            @if (HasChanged("Products") && isViewingPreviousVersion)
+                            {
+                                var productsChange = changes["Products"] as dynamic;
+                                var addedProductIds = productsChange?.Added as List<int> ?? new List<int>();
+                                var removedProductIds = productsChange?.Removed as List<int> ?? new List<int>();
+                                
+                                var publishedApprovedProducts = publishedStandardForComparison?.Products?
+                                    .Where(p => p.ProductType == "Approved" && p.StandardProduct != null)
+                                    .Select(p => p.StandardProduct)
+                                    .ToList() ?? new List<StandardProduct>();
+                                
+                                @if (removedProductIds.Any() && publishedApprovedProducts.Any())
+                                {
+                                    <div class="alert alert-danger m-3 mb-0">
+                                        <strong><i class="fas fa-minus-circle"></i> Removed products (Published version):</strong>
+                                        <ul class="mt-2 mb-0">
+                                            @foreach (var product in publishedApprovedProducts.Where(p => removedProductIds.Contains(p.Id)))
+                                            {
+                                                <li><strong>@product.Name</strong>@(!string.IsNullOrEmpty(product.Provider) ? $" - {product.Provider}" : "")</li>
+                                            }
+                                        </ul>
+                                    </div>
+                                }
+                                
+                                @if (addedProductIds.Any() && approvedProducts.Any())
+                                {
+                                    <div class="alert alert-success m-3 mb-0">
+                                        <strong><i class="fas fa-plus-circle"></i> Added products (This version):</strong>
+                                        <ul class="mt-2 mb-0">
+                                            @foreach (var product in approvedProducts.Where(p => addedProductIds.Contains(p.Id)))
+                                            {
+                                                <li><strong>@product.Name</strong>@(!string.IsNullOrEmpty(product.Provider) ? $" - {product.Provider}" : "")</li>
+                                            }
+                                        </ul>
+                                    </div>
+                                }
+                                
+                                @if (approvedProducts.Any())
+                                {
+                                    <div class="m-3">
+                                        <strong>Current approved products:</strong>
+                                    </div>
+                                }
+                            }
+                            
+                            @if (approvedProducts.Any())
+                            {
+                                <table id="approvedProductsTable" class="table table-hover sortable-table">
+                                    <thead>
+                                        <tr>
+                                            <th class="sortable" data-column="Product" tabindex="0" role="button" aria-label="Sort by Product">Product <i class="fas fa-sort sort-icon"></i></th>
+                                            <th class="sortable" data-column="Provider" tabindex="0" role="button" aria-label="Sort by Provider">Provider <i class="fas fa-sort sort-icon"></i></th>
+                                            <th class="sortable" data-column="Version" tabindex="0" role="button" aria-label="Sort by Version">Version <i class="fas fa-sort sort-icon"></i></th>
+                                            <th class="sortable" data-column="Description" tabindex="0" role="button" aria-label="Sort by Description">Description <i class="fas fa-sort sort-icon"></i></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var product in approvedProducts)
+                                        {
+                                            var productsChange = HasChanged("Products") ? changes["Products"] as dynamic : null;
+                                            var addedProductIds = productsChange?.Added as List<int> ?? new List<int>();
+                                            var isNewProduct = addedProductIds.Contains(product.Id);
+                                            <tr class="@(isNewProduct && isViewingPreviousVersion ? "table-success" : "")">
+                                                <td>
+                                                    <strong>@product.Name</strong>
+                                                    @if (isNewProduct && isViewingPreviousVersion)
+                                                    {
+                                                        <span class="badge badge-success ml-2">New</span>
+                                                    }
+                                                </td>
+                                                <td>@(product.Provider ?? "-")</td>
+                                                <td>@(product.Version ?? "-")</td>
+                                                <td>@(product.Description ?? "-")</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            }
+                            else if (!HasChanged("Products"))
+                            {
+                                <div class="p-3 text-muted">No approved products</div>
+                            }
+                        </div>
+                    </div>
+                }
+
+                <!-- Tolerated Products -->
+                @if (toleratedProducts.Any() || (HasChanged("Products") && isViewingPreviousVersion))
+                {
+                    <div class="card mb-3 @(HasChanged("Products") ? "border-warning" : "")" id="tolerated-products" style="@(HasChanged("Products") ? "border-left: 4px solid #ffc107;" : "")">
+                        <div class="card-header @(HasChanged("Products") ? "bg-warning" : "")">
+                            <h3 class="card-title mb-0">
+                                Tolerated products
+                                @if (HasChanged("Products"))
+                                {
+                                    <span class="badge badge-warning ml-2" title="Products have changed from the published version">
+                                        <i class="fas fa-exclamation-triangle"></i> Changed
+                                    </span>
+                                }
+                            </h3>
+                        </div>
+                        <div class="card-body p-0">
+                            @if (toleratedProducts.Any())
+                            {
+                                <table id="toleratedProductsTable" class="table table-hover sortable-table">
+                                    <thead>
+                                        <tr>
+                                            <th class="sortable" data-column="Product" tabindex="0" role="button" aria-label="Sort by Product">Product <i class="fas fa-sort sort-icon"></i></th>
+                                            <th class="sortable" data-column="Provider" tabindex="0" role="button" aria-label="Sort by Provider">Provider <i class="fas fa-sort sort-icon"></i></th>
+                                            <th class="sortable" data-column="Version" tabindex="0" role="button" aria-label="Sort by Version">Version <i class="fas fa-sort sort-icon"></i></th>
+                                            <th class="sortable" data-column="Description" tabindex="0" role="button" aria-label="Sort by Description">Description <i class="fas fa-sort sort-icon"></i></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var product in toleratedProducts)
+                                        {
+                                            var productsChange = HasChanged("Products") ? changes["Products"] as dynamic : null;
+                                            var addedProductIds = productsChange?.Added as List<int> ?? new List<int>();
+                                            var isNewProduct = addedProductIds.Contains(product.Id);
+                                            <tr class="@(isNewProduct && isViewingPreviousVersion ? "table-success" : "")">
+                                                <td>
+                                                    <strong>@product.Name</strong>
+                                                    @if (isNewProduct && isViewingPreviousVersion)
+                                                    {
+                                                        <span class="badge badge-success ml-2">New</span>
+                                                    }
+                                                </td>
+                                                <td>@(product.Provider ?? "-")</td>
+                                                <td>@(product.Version ?? "-")</td>
+                                                <td>@(product.Description ?? "-")</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            }
+                            else if (!HasChanged("Products"))
+                            {
+                                <div class="p-3 text-muted">No tolerated products</div>
+                            }
+                        </div>
+                    </div>
+                }
+
+                <!-- Standard Owners -->
+                @if (Model.Owners.Any())
+                        {
+                    <div class="card mb-3" id="owners-contacts">
+                        <div class="card-header">
+                            <h3 class="card-title mb-0">Standard owners</h3>
+                        </div>
+                        <div class="card-body p-0">
+                            <table id="ownersTable" class="table table-hover sortable-table">
+                                <thead>
+                                    <tr>
+                                        <th class="sortable" data-column="Name" tabindex="0" role="button" aria-label="Sort by Name">Name <i class="fas fa-sort sort-icon"></i></th>
+                                        <th class="sortable" data-column="Email" tabindex="0" role="button" aria-label="Sort by Email">Email <i class="fas fa-sort sort-icon"></i></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var owner in Model.Owners)
+                        {
+                                        <tr>
+                                            <td><strong>@owner.User.Name</strong></td>
+                                            <td>
+                                                @if (!string.IsNullOrEmpty(owner.User.Email))
+                                                {
+                                                    <a href="mailto:@owner.User.Email">@owner.User.Email</a>
+                                                }
+                                                else
+                                {
+                                                    <span class="text-muted">-</span>
+                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                        }
+
+                <!-- Standard Contacts -->
+                @if (Model.Contacts.Any())
+                        {
+                    <div class="card mb-3" id="contacts">
+                        <div class="card-header">
+                            <h3 class="card-title mb-0">Standard contacts</h3>
+                        </div>
+                        <div class="card-body p-0">
+                            <table id="contactsTable" class="table table-hover sortable-table">
+                                <thead>
+                                    <tr>
+                                        <th class="sortable" data-column="Name" tabindex="0" role="button" aria-label="Sort by Name">Name <i class="fas fa-sort sort-icon"></i></th>
+                                        <th class="sortable" data-column="Email" tabindex="0" role="button" aria-label="Sort by Email">Email <i class="fas fa-sort sort-icon"></i></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var contact in Model.Contacts)
+                                {
+                                        <tr>
+                                            <td><strong>@contact.User.Name</strong></td>
+                                            <td>
+                                                @if (!string.IsNullOrEmpty(contact.User.Email))
+                                                {
+                                                    <a href="mailto:@contact.User.Email">@contact.User.Email</a>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                        }
+
+                <!-- Owners and Contacts Combined (fallback if needed) -->
+                @if (!Model.Owners.Any() && !Model.Contacts.Any())
+                {
+                    <div class="card mb-3" id="owners-contacts">
+                        <div class="card-header">
+                            <h3 class="card-title mb-0">Owner and contacts</h3>
+                        </div>
+                        <div class="card-body">
+                            <p class="text-muted mb-0">Owner and contact information not available</p>
+                        </div>
+                    </div>
+                }
+
+                <!-- Back Button -->
+                <div class="mb-3">
+                    <a href="/api/DdtStandards?view=published" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left"></i> Back to Published Standards
+                    </a>
+                </div>
+            </div>
+            
+            <!-- Right Column: Related Standards -->
+            <div class="col-lg-3 col-md-3 col-12">
+                @{
+                    var relatedStandards = ViewBag.RelatedStandards as List<Compass.Models.DdtStandard> ?? new List<Compass.Models.DdtStandard>();
+                }
+                
+                @if (relatedStandards.Any())
+                {
+                    <div class="card mb-3">
+                        <div class="card-header">
+                            <h3 class="card-title mb-0">Related standards</h3>
+                        </div>
+                        <div class="card-body p-0">
+                            <ul class="list-group list-group-flush">
+                                @foreach (var relatedStandard in relatedStandards)
+                                {
+                                    <li class="list-group-item">
+                                        <a href="@Url.Action("Details", "DdtStandards", new { id = relatedStandard.Id })" class="text-primary" style="text-decoration: none;">
+                                            <strong>@relatedStandard.Title</strong>
+                                        </a>
+                                        @if (!string.IsNullOrWhiteSpace(relatedStandard.Summary))
+                        {
+                                            <br />
+                                            <small class="text-muted">@(relatedStandard.Summary.Length > 80 ? relatedStandard.Summary.Substring(0, 80) + "..." : relatedStandard.Summary)</small>
+                                        }
+                                        <div class="mt-2">
+                                            <small class="text-muted">DDT-@relatedStandard.Id</small>
+                                            @if (!string.IsNullOrWhiteSpace(relatedStandard.LegacyReference))
+                                            {
+                                                <small class="text-muted"> · @relatedStandard.LegacyReference</small>
+                                            }
+                                        </div>
+                                    </li>
+                                }
+                            </ul>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Approve Modal -->
+@if (Model.Stage == "For Approval" && (ViewBag.IsStandardsManager as bool? ?? false))
+{
+    <div class="modal fade" id="approveModal" tabindex="-1" role="dialog" aria-labelledby="approveModalLabel" aria-hidden="true">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title" id="approveModalLabel">
+                        <i class="fas fa-check-circle mr-2"></i>Approve Standard
+                    </h5>
+                    <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <form asp-action="Approve" asp-route-id="@Model.Id" method="post">
+                    @Html.AntiForgeryToken()
+                    <div class="modal-body">
+                        <p>Are you sure you want to approve this standard?</p>
+                        <p class="mb-3">Once approved, the standard will move to <strong>"Awaiting Publication"</strong> status and can be published by an Administrator.</p>
+                        <div class="form-group">
+                            <label for="approveComment">Approval Comment (optional):</label>
+                            <textarea class="form-control" id="approveComment" name="comment" rows="3" placeholder="Add any comments about this approval..."></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-success">
+                            <i class="fas fa-check-circle mr-2"></i>Approve Standard
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Reject Modal -->
+@if (Model.Stage == "For Approval" && (ViewBag.IsStandardsManager as bool? ?? false))
+{
+    <div class="modal fade" id="rejectModal" tabindex="-1" role="dialog" aria-labelledby="rejectModalLabel" aria-hidden="true">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title" id="rejectModalLabel">
+                        <i class="fas fa-times-circle mr-2"></i>Reject Standard
+                    </h5>
+                    <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <form asp-action="Reject" asp-route-id="@Model.Id" method="post">
+                    @Html.AntiForgeryToken()
+                    <div class="modal-body">
+                        <p>Are you sure you want to reject this standard?</p>
+                        <p class="mb-3">Once rejected, the standard will be returned to <strong>"Draft"</strong> status with your rejection reason, allowing the owner to revise and resubmit.</p>
+                        <div class="form-group">
+                            <label for="rejectReason">Rejection Reason <span class="text-danger">*</span>:</label>
+                            <textarea class="form-control" id="rejectReason" name="reason" rows="4" placeholder="Please provide a clear reason for rejection..." required></textarea>
+                            <small class="form-text text-muted">This reason will be shown to the standard owner and will help them understand what needs to be changed.</small>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-danger">
+                            <i class="fas fa-times-circle mr-2"></i>Reject Standard
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+}
+
+
+@section Scripts {
+    <script nonce="@Context.Items["Nonce"]">
+        $(document).ready(function() {
+            // Initialize sortable tables
+            $('.sortable-table').each(function() {
+                initializeSortableTable($(this));
+            });
+            
+            function initializeSortableTable(table) {
+                var currentSort = { column: null, direction: 'asc' };
+                var tableId = table.attr('id');
+
+                table.find('.sortable').on('click keypress', function(e) {
+                    if (e.type === 'keypress' && e.which !== 13 && e.which !== 32) {
+                        return;
+                    }
+                    
+                    var column = $(this).data('column');
+                    var direction = 'asc';
+                    
+                    if (currentSort.column === column && currentSort.direction === 'asc') {
+                        direction = 'desc';
+                    }
+                    
+                    sortTable(table, column, direction, tableId);
+                    currentSort = { column: column, direction: direction };
+                });
+
+                function sortTable(table, column, direction, tableId) {
+                    var tbody = table.find('tbody');
+                    var rows = tbody.find('tr').toArray();
+                    
+                    rows.sort(function(a, b) {
+                        var aVal, bVal;
+                        var colIndex = table.find('thead th[data-column="' + column + '"]').index();
+                        
+                        // Get text value, handling nested elements
+                        var aText = $(a).find('td').eq(colIndex).text().trim().toLowerCase();
+                        var bText = $(b).find('td').eq(colIndex).text().trim().toLowerCase();
+                        
+                        // For email column, extract email from link
+                        if (column === 'Email') {
+                            var aEmail = $(a).find('td').eq(colIndex).find('a').attr('href') || aText;
+                            var bEmail = $(b).find('td').eq(colIndex).find('a').attr('href') || bText;
+                            aVal = aEmail.replace('mailto:', '').toLowerCase();
+                            bVal = bEmail.replace('mailto:', '').toLowerCase();
+                        } else {
+                            aVal = aText;
+                            bVal = bText;
+                        }
+                        
+                        if (direction === 'asc') {
+                            return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+                        } else {
+                            return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
+                        }
+                    });
+                    
+                    tbody.empty();
+                    rows.forEach(function(row) {
+                        tbody.append(row);
+                    });
+                    
+                    updateSortIcons(table, column, direction);
+                }
+
+                function updateSortIcons(table, column, direction) {
+                    table.find('.sortable .fa-sort-up, .sortable .fa-sort-down').removeClass('fa-sort-up fa-sort-down').addClass('fa-sort');
+                    var header = table.find('.sortable[data-column="' + column + '"]');
+                    var iconClass = direction === 'asc' ? 'fa-sort-up' : 'fa-sort-down';
+                    header.find('i').removeClass('fa-sort').addClass(iconClass);
+                }
+            }
+        });
+    </script>
+}

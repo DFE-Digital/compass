@@ -1,0 +1,124 @@
+@{
+    ViewData["Title"] = "Validated Accessibility Statements - Oversight";
+    
+    var validatedStatements = ViewBag.ValidatedStatements as List<Compass.Models.ProductAccessibility> ?? new List<Compass.Models.ProductAccessibility>();
+    var validatedStatementsCount = ViewBag.ValidatedStatementsCount as int? ?? 0;
+}
+
+@await Html.PartialAsync("_DashboardStyles")
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem;">
+            <li class="breadcrumb-item">
+                <a href="@Url.Action("Index", "Home")" style="color: #005ea5; text-decoration: none;">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a href="@Url.Action("Dashboard", "DesignOps")" style="color: #005ea5; text-decoration: none;">Design Operations</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a href="@Url.Action("AccessibilityOversight", "DesignOps")" style="color: #005ea5; text-decoration: none;">Accessibility Issues and Statements</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page">Validated Statements</li>
+        </ol>
+    </nav>
+}
+
+<div class="dashboard-header">
+    <h1>Validated Accessibility Statements</h1>
+    <p>Products with validated accessibility statements</p>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["SuccessMessage"]
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        <div class="dashboard-section mb-4">
+            <div class="dashboard-section-header">
+                <h2><i class="fas fa-check-circle"></i> Validated Statements</h2>
+                <p class="dashboard-section-description">Total: @validatedStatementsCount products with validated statements</p>
+            </div>
+            @if (validatedStatements.Any())
+            {
+                <div class="card">
+                    <div class="card-body table-responsive p-0">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Product Name</th>
+                                    <th>FIPS ID</th>
+                                    <th>Statement URL</th>
+                                    <th>Verified By</th>
+                                    <th>Verified At</th>
+                                    <th>Verification Method</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var product in validatedStatements)
+                                {
+                                    <tr>
+                                        <td><strong>@product.ProductName</strong></td>
+                                        <td><code>@product.FipsId</code></td>
+                                        <td>
+                                            @if (!string.IsNullOrEmpty(product.StatementUrl))
+                                            {
+                                                <a href="@product.StatementUrl" target="_blank" rel="noopener noreferrer">
+                                                    @product.StatementUrl
+                                                    <i class="fas fa-external-link-alt"></i>
+                                                </a>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">-</span>
+                                            }
+                                        </td>
+                                        <td>@product.VerifiedBy</td>
+                                        <td>@(product.VerifiedAt?.ToString("dd MMM yyyy") ?? "-")</td>
+                                        <td>
+                                            @if (!string.IsNullOrEmpty(product.StatementVerificationMethod))
+                                            {
+                                                <span class="badge badge-info">@product.StatementVerificationMethod</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">-</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            <a href="@Url.Action("Details", "Accessibility", new { fipsId = product.FipsId, tab = "statement" })" class="btn btn-sm btn-primary">
+                                                <i class="fas fa-eye"></i> View
+                                            </a>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="card">
+                    <div class="card-body">
+                        <p class="text-muted mb-0">No validated statements.</p>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</section>
+

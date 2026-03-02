@@ -1,0 +1,553 @@
+@{
+    ViewData["Title"] = "Service Standards Analysis";
+}
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <li class="breadcrumb-item">
+                <a href="@Url.Action("Index", "Home")" style="color: #005ea5; text-decoration: none; font-weight: 500;">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a href="@Url.Action("Index", "Analysis")" style="color: #005ea5; text-decoration: none; font-weight: 500;">Analysis</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page" style="color: #0b0c0c; font-weight: 600;">Service Standards Analysis</li>
+        </ol>
+    </nav>
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1 class="m-0">Service Standards Analysis</h1>
+                <p class="text-muted mb-0">Analyse service assessment trends, repeated issues, and identify the most issue-prone standards</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                @TempData["ErrorMessage"]
+                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+        }
+
+        @if (ViewBag.ErrorMessage != null)
+        {
+            <div class="alert alert-warning alert-dismissible fade show" role="alert">
+                @ViewBag.ErrorMessage
+                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+        }
+
+        <!-- Summary Cards -->
+        <div class="row mb-4">
+            <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
+                <div class="card summary-card">
+                    <div class="card-body">
+                        <div class="summary-label">Total Assessments</div>
+                        <div class="summary-value">@(ViewBag.TotalAssessments ?? 0)</div>
+                        <div class="summary-subtext">Service assessments</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
+                <div class="card summary-card">
+                    <div class="card-body">
+                        <div class="summary-label">Total Actions</div>
+                        <div class="summary-value">@(ViewBag.TotalActions ?? 0)</div>
+                        <div class="summary-subtext">All action items</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
+                <div class="card summary-card">
+                    <div class="card-body">
+                        <div class="summary-label">Overdue Actions</div>
+                        <div class="summary-value text-danger">@(ViewBag.OverdueActionsCount ?? 0)</div>
+                        <div class="summary-subtext">Past due date</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
+                <div class="card summary-card">
+                    <div class="card-body">
+                        <div class="summary-label">Most Issue-Prone</div>
+                        <div class="summary-value">@ViewBag.MostIssueProne.Count</div>
+                        <div class="summary-subtext">Top standards</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <style>
+            .summary-card {
+                border: 1px solid #edf2f7;
+            }
+
+            .summary-card .card-body {
+                padding: 1.25rem;
+            }
+
+            .summary-label {
+                font-size: 0.9rem;
+                color: #475467;
+                text-transform: uppercase;
+                letter-spacing: .08em;
+                margin-bottom: .25rem;
+            }
+
+            .summary-value {
+                font-size: 2rem;
+                font-weight: 600;
+                color: #0c1d3e;
+                line-height: 1.1;
+            }
+
+            .summary-subtext {
+                margin-top: .25rem;
+                color: #98a2b3;
+                font-size: 0.85rem;
+            }
+        </style>
+
+        <!-- Most Issue-Prone Standards -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Most Issue-Prone Standards</h3>
+                    </div>
+                    <div class="card-body p-0">
+                        @if (ViewBag.MostIssueProne != null && ViewBag.MostIssueProne.Count > 0)
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-bordered table-striped table-hover mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Standard</th>
+                                            <th>Total Actions</th>
+                                            <th>Recent Actions (3 months)</th>
+                                            <th>Older Actions</th>
+                                            <th>Trend</th>
+                                            <th>Status Breakdown</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (dynamic standard in ViewBag.MostIssueProne)
+                                        {
+                                            <tr>
+                                                <td>
+                                                    <strong>Standard @standard.StandardNumber</strong><br>
+                                                    <small class="text-muted">@standard.StandardName</small>
+                                                </td>
+                                                <td>
+                                                    <span class="badge badge-@(standard.TotalActions > 20 ? "danger" : standard.TotalActions > 10 ? "warning" : "info")">@standard.TotalActions</span>
+                                                </td>
+                                                <td>@standard.RecentActions</td>
+                                                <td>@standard.OlderActions</td>
+                                                <td>
+                                                    @if (standard.Trend == "Increasing")
+                                                    {
+                                                        <span class="badge badge-danger"><i class="fas fa-arrow-up mr-1"></i> Increasing</span>
+                                                    }
+                                                    else if (standard.Trend == "Decreasing")
+                                                    {
+                                                        <span class="badge badge-success"><i class="fas fa-arrow-down mr-1"></i> Decreasing</span>
+                                                    }
+                                                    else if (standard.Trend == "Stable")
+                                                    {
+                                                        <span class="badge badge-info"><i class="fas fa-minus mr-1"></i> Stable</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge badge-secondary">@standard.Trend</span>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    @if (standard.ByStatus != null)
+                                                    {
+                                                        <div>
+                                                            @foreach (var status in standard.ByStatus)
+                                                            {
+                                                                <span class="badge badge-secondary mr-1">@status.Key: @status.Value</span>
+                                                            }
+                                                        </div>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">No data</span>
+                                                    }
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                        else
+                        {
+                            <p class="text-muted">No data available for most issue-prone standards.</p>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Assessment Overview -->
+        <div class="row mb-4">
+            <div class="col-lg-6 mb-3">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Assessments by Outcome</h3>
+                    </div>
+                    <div class="card-body p-0">
+                        @if (ViewBag.ByOutcome != null)
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-bordered table-striped table-hover mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Outcome</th>
+                                            <th>Count</th>
+                                            <th>Total Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (dynamic outcome in ViewBag.ByOutcome)
+                                        {
+                                            <tr>
+                                                <td>
+                                                    @if (outcome.Outcome == "Red")
+                                                    {
+                                                        <span class="badge badge-danger">@outcome.Outcome</span>
+                                                    }
+                                                    else if (outcome.Outcome == "Amber")
+                                                    {
+                                                        <span class="badge badge-warning">@outcome.Outcome</span>
+                                                    }
+                                                    else if (outcome.Outcome == "Green")
+                                                    {
+                                                        <span class="badge badge-success">@outcome.Outcome</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge badge-secondary">@outcome.Outcome</span>
+                                                    }
+                                                </td>
+                                                <td>@outcome.Count</td>
+                                                <td>@outcome.TotalActions</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6 mb-3">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Assessments by Phase</h3>
+                    </div>
+                    <div class="card-body p-0">
+                        @if (ViewBag.ByPhase != null)
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-bordered table-striped table-hover mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Phase</th>
+                                            <th>Count</th>
+                                            <th>Total Actions</th>
+                                            <th>Avg Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (dynamic phase in ViewBag.ByPhase)
+                                        {
+                                            <tr>
+                                                <td><strong>@phase.Phase</strong></td>
+                                                <td>@phase.Count</td>
+                                                <td>@phase.TotalActions</td>
+                                                <td>@Math.Round(phase.AvgActionsPerAssessment, 1)</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Service Assessments -->
+        @if (ViewBag.OverdueActionsByAssessment != null && ViewBag.OverdueActionsCount > 0)
+        {
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header bg-danger text-white">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <h3 class="card-title mb-0">Service Assessments (@ViewBag.OverdueActionsCount overdue actions)</h3>
+                                <a href="@Url.Action("ExportServiceStandards", "Analysis")" class="btn btn-sm btn-light" title="Export all assessments and actions to Excel">
+                                    <i class="fas fa-download mr-1"></i> Export All
+                                </a>
+                            </div>
+                        </div>
+                        <div class="card-body p-0" id="overdueActionsAccordion">
+                            @{
+                                int overdueIndex = 0;
+                            }
+                            @foreach (dynamic assessment in ViewBag.OverdueActionsByAssessment)
+                            {
+                                var overdueCollapseId = $"overdueCollapse_{overdueIndex}";
+                                var overdueHeadingId = $"overdueHeading_{overdueIndex}";
+                                
+                                <div class="card mb-2 border-0 border-bottom">
+                                    <div class="card-header p-0 border-0 bg-white" id="@overdueHeadingId">
+                                        <button class="btn btn-block text-left p-3" 
+                                                type="button" 
+                                                data-toggle="collapse" 
+                                                data-target="#@overdueCollapseId" 
+                                                aria-expanded="false" 
+                                                aria-controls="@overdueCollapseId">
+                                            <div class="d-flex align-items-center justify-content-between w-100">
+                                                <div class="d-flex align-items-center">
+                                                    <i class="fas fa-plus-circle collapse-icon mr-3" style="width: 16px; font-size: 1.2rem;"></i>
+                                                    <strong>@assessment.AssessmentName</strong>
+                                                </div>
+                                                <div>
+                                                    <span class="badge badge-secondary ml-2">@assessment.AssessmentPhase</span>
+                                                    <span class="badge badge-danger ml-2">@assessment.TotalOverdueActions overdue action@(assessment.TotalOverdueActions != 1 ? "s" : "")</span>
+                                                </div>
+                                            </div>
+                                        </button>
+                                    </div>
+                                    <div id="@overdueCollapseId" 
+                                         class="collapse" 
+                                         aria-labelledby="@overdueHeadingId">
+                                        <div class="card-body p-3">
+                                            @{
+                                                int standardIndex = 0;
+                                            }
+                                            @foreach (dynamic standard in assessment.Standards)
+                                            {
+                                                var standardCollapseId = $"standardCollapse_{overdueIndex}_{standardIndex}";
+                                                var standardHeadingId = $"standardHeading_{overdueIndex}_{standardIndex}";
+                                                
+                                                <div class="card mb-2 border-0 border-bottom">
+                                                    <div class="card-header p-0 border-0 bg-light" id="@standardHeadingId">
+                                                        <button class="btn btn-block text-left p-2" 
+                                                                type="button" 
+                                                                data-toggle="collapse" 
+                                                                data-target="#@standardCollapseId" 
+                                                                aria-expanded="false" 
+                                                                aria-controls="@standardCollapseId">
+                                                            <div class="d-flex align-items-center justify-content-between w-100">
+                                                                <div class="d-flex align-items-center">
+                                                                    <i class="fas fa-plus-circle collapse-icon mr-2" style="width: 14px; font-size: 1rem;"></i>
+                                                                    <span class="badge badge-info">Standard @standard.Standard</span>
+                                                                    <span class="ml-2">@standard.StandardTitle</span>
+                                                                </div>
+                                                                <div>
+                                                                    <span class="badge badge-warning ml-2">@standard.ActionCount action@(standard.ActionCount != 1 ? "s" : "")</span>
+                                                                </div>
+                                                            </div>
+                                                        </button>
+                                                    </div>
+                                                    <div id="@standardCollapseId" 
+                                                         class="collapse" 
+                                                         aria-labelledby="@standardHeadingId">
+                                                        <div class="card-body p-2">
+                                                            <div class="table-responsive">
+                                                                <table class="table table-sm table-bordered mb-0">
+                                                                    <thead class="thead-light">
+                                                                        <tr>
+                                                                            <th style="width: 15%;">Days Overdue</th>
+                                                                            <th style="width: 15%;">Due Date</th>
+                                                                            <th>Action</th>
+                                                                        </tr>
+                                                                    </thead>
+                                                                    <tbody>
+                                                                        @foreach (dynamic action in standard.Actions)
+                                                                        {
+                                                                            <tr>
+                                                                                <td>
+                                                                                    <span class="badge badge-danger">@action.DaysOverdue days</span>
+                                                                                </td>
+                                                                                <td>
+                                                                                    @if (action.EstimatedResolutionDate != null)
+                                                                                    {
+                                                                                        DateTime dueDate;
+                                                                                        if (action.EstimatedResolutionDate is DateTime dt)
+                                                                                        {
+                                                                                            dueDate = dt;
+                                                                                        }
+                                                                                        else
+                                                                                        {
+                                                                                            var nullableDt = action.EstimatedResolutionDate as DateTime?;
+                                                                                            dueDate = nullableDt.GetValueOrDefault();
+                                                                                        }
+                                                                                        if (dueDate != default(DateTime))
+                                                                                        {
+                                                                                            @dueDate.ToString("dd MMM yyyy")
+                                                                                        }
+                                                                                    }
+                                                                                </td>
+                                                                                <td>
+                                                                                    @if (action.Comments != null)
+                                                                                    {
+                                                                                        var comment = action.Comments.ToString();
+                                                                                        @comment
+                                                                                    }
+                                                                                    else
+                                                                                    {
+                                                                                        <span class="text-muted">No description</span>
+                                                                                    }
+                                                                                </td>
+                                                                            </tr>
+                                                                        }
+                                                                    </tbody>
+                                                                </table>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                standardIndex++;
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+                                overdueIndex++;
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+
+
+        <!-- All Standards Overview -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">All Standards Overview (1-14)</h3>
+                    </div>
+                    <div class="card-body p-0">
+                        @if (ViewBag.StandardAnalysis != null)
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-bordered table-striped table-hover mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Standard</th>
+                                            <th>Total Actions</th>
+                                            <th>Recent (3 months)</th>
+                                            <th>Older</th>
+                                            <th>Trend</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (dynamic standard in ViewBag.StandardAnalysis)
+                                        {
+                                            <tr>
+                                                <td>
+                                                    <strong>Standard @standard.StandardNumber</strong><br>
+                                                    <small class="text-muted">@standard.StandardName</small>
+                                                </td>
+                                                <td>
+                                                    @if (standard.TotalActions > 0)
+                                                    {
+                                                        <span class="badge badge-@(standard.TotalActions > 20 ? "danger" : standard.TotalActions > 10 ? "warning" : "info")">@standard.TotalActions</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">0</span>
+                                                    }
+                                                </td>
+                                                <td>@standard.RecentActions</td>
+                                                <td>@standard.OlderActions</td>
+                                                <td>
+                                                    @if (standard.Trend == "Increasing")
+                                                    {
+                                                        <span class="badge badge-danger"><i class="fas fa-arrow-up mr-1"></i> Increasing</span>
+                                                    }
+                                                    else if (standard.Trend == "Decreasing")
+                                                    {
+                                                        <span class="badge badge-success"><i class="fas fa-arrow-down mr-1"></i> Decreasing</span>
+                                                    }
+                                                    else if (standard.Trend == "Stable")
+                                                    {
+                                                        <span class="badge badge-info"><i class="fas fa-minus mr-1"></i> Stable</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge badge-secondary">@standard.Trend</span>
+                                                    }
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                        else
+                        {
+                            <p class="text-muted">No standards data available.</p>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</section>
+
+@section Scripts {
+    <script nonce="@Context.Items["Nonce"]">
+        $(document).ready(function() {
+            // Handle icon toggle for service assessments collapse panels (assessment level)
+            $('[id^="overdueCollapse_"]').on('show.bs.collapse', function() {
+                var targetId = $(this).attr('id');
+                var button = $('button[data-target="#' + targetId + '"]');
+                var icon = button.find('.collapse-icon');
+                icon.removeClass('fa-plus-circle').addClass('fa-minus-circle');
+            });
+
+            $('[id^="overdueCollapse_"]').on('hide.bs.collapse', function() {
+                var targetId = $(this).attr('id');
+                var button = $('button[data-target="#' + targetId + '"]');
+                var icon = button.find('.collapse-icon');
+                icon.removeClass('fa-minus-circle').addClass('fa-plus-circle');
+            });
+
+            // Handle icon toggle for standard collapse panels within service assessments
+            $('[id^="standardCollapse_"]').on('show.bs.collapse', function() {
+                var targetId = $(this).attr('id');
+                var button = $('[data-target="#' + targetId + '"]');
+                var icon = button.find('.collapse-icon');
+                icon.removeClass('fa-plus-circle').addClass('fa-minus-circle');
+            });
+
+            $('[id^="standardCollapse_"]').on('hide.bs.collapse', function() {
+                var targetId = $(this).attr('id');
+                var button = $('[data-target="#' + targetId + '"]');
+                var icon = button.find('.collapse-icon');
+                icon.removeClass('fa-minus-circle').addClass('fa-plus-circle');
+            });
+        });
+    </script>
+}

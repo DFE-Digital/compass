@@ -21,6 +21,8 @@ public class ProjectIssueFormViewModel
 
     public IEnumerable<SelectListItem> ActionOptions { get; set; } = Enumerable.Empty<SelectListItem>();
 
+    public IEnumerable<SelectListItem> DecisionOptions { get; set; } = Enumerable.Empty<SelectListItem>();
+
     public IEnumerable<SelectListItem> BusinessAreaOptions { get; set; } = Enumerable.Empty<SelectListItem>();
 
     public bool ShowDeleteButton { get; set; }

@@ -11,6 +11,9 @@
  * CREATED: 2025-01-31
  *@
 
+@using System
+@inject IWebHostEnvironment env
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -34,7 +37,17 @@
     <link href="~/css/compass-theme.css" rel="stylesheet" nonce="@Context.Items["Nonce"]" />
     <!-- Custom styles -->
     <link href="~/css/custom.css" rel="stylesheet" nonce="@Context.Items["Nonce"]" />
-    
+    @if (env.IsProduction())
+    {
+        <script type="text/javascript" nonce="@Context.Items["Nonce"]">
+        (function(c,l,a,r,i,t,y){
+            c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+            t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
+            t.setAttribute("nonce", "@Context.Items["Nonce"]");
+            y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+        })(window, document, "clarity", "script", "ug8dgpkuqz");
+        </script>
+    }
     @await RenderSectionAsync("Styles", required: false)
 </head>
 <body class="hold-transition sidebar-mini layout-fixed compass-theme">
@@ -42,72 +55,71 @@
     <a href="#main-content" class="skip-link">Skip to main content</a>
     <div class="wrapper">
 
-        <!-- Preloader -->
-        <div class="preloader flex-column justify-content-center align-items-center">
-            <img class="animation__shake" src="~/images/govuk-crown.svg" alt="GOV.UK Crown" height="60" width="60">
-        </div>
+        @{
+            // Sidebar active state helpers
+            var controller = ViewContext.RouteData.Values["Controller"]?.ToString() ?? "";
+            var action = ViewContext.RouteData.Values["Action"]?.ToString() ?? "";
+            var path = Context.Request.Path.Value ?? "";
+            
+            // User management
+            var isUserManagement = controller == "Admin" && (action.Contains("User") || action == "Users" || path.Contains("/Admin/User"));
+            
+            // Reporting
+            var isPerformanceMetric = controller == "PerformanceMetric";
+            var isEnterpriseMetric = controller == "EnterpriseMetric";
+            var isReporting = isPerformanceMetric || isEnterpriseMetric;
+            
+            // Configuration
+            var isFunctionalStandard = controller == "FunctionalStandard";
+            var isObjective = action.StartsWith("Objective", StringComparison.OrdinalIgnoreCase);
+            var isMission = action.StartsWith("Mission", StringComparison.OrdinalIgnoreCase);
+            var isFundingSource = action.StartsWith("FundingSource", StringComparison.OrdinalIgnoreCase);
+            var isGovernmentDepartment = controller == "GovernmentDepartment";
+            var isOrganizational = controller == "Organizational";
+            
+            // Settings
+            var isSettings = action == "Settings" || action == "Index" && controller == "Admin" && path.Contains("/Admin/Settings");
+            var isRiskType = action.Contains("RiskType");
+            var isRiskTier = action.Contains("RiskTier");
+            var isActionSource = action.Contains("ActionSource");
+            var isWcag = action.Contains("Wcag");
+            var isBusinessArea = action.Contains("BusinessArea") && !action.Contains("Phase");
+            var isPhase = action.Contains("Phase") && !action.Contains("PhaseLookup");
+            var isGddRole = action.Contains("GddRole");
+            var isSkill = action.Contains("Skill");
+            var isKpiCategory = action.Contains("KpiCategor");
+            var isDeliveryPriority = action.Contains("DeliveryPriorit");
+            var isSettingsSection = isSettings || isRiskType || isRiskTier || isActionSource || isWcag || isBusinessArea || isPhase || isGddRole || isSkill || isKpiCategory || isDeliveryPriority;
+            
+            // Learning & Development
+            var isTrainingCourse = controller == "TrainingCourse" || path.Contains("/Admin/TrainingCourse");
+            
+            // RAID
+            var isRaidSettings = action == "RaidSettings";
+            
+            // Apps
+            var isAccessibilityService = controller == "AccessibilityService" || path.Contains("/Admin/AccessibilityService");
+            var isUserSatisfaction = action.StartsWith("UserSatisfaction", StringComparison.OrdinalIgnoreCase);
+            var isApiToken = action.StartsWith("ApiToken") || action.StartsWith("CreateApiToken") || action.StartsWith("ConfigurePermissions") || action.StartsWith("SavePermissions");
+            
+            // Performance Reporting Management
+            var isPerformanceReportingManagement = controller == "PerformanceReportingManagement" || path.Contains("/Admin/PerformanceReportingManagement");
+            
+            // Monthly Update Deadline Config
+            var isMonthlyUpdateDeadlineConfig = controller == "MonthlyUpdateDeadlineConfig" || path.Contains("/Admin/MonthlyUpdateDeadlineConfig");
+            
+            // Group Management
+            var isGroupManagement = controller == "GroupManagement" || path.Contains("/Admin/GroupManagement");
+        }
 
-        <!-- Navbar -->
-        <nav class="main-header navbar navbar-expand navbar-white navbar-light navbar-gov">
-            <div class="container-fluid">
-                <!-- Left navbar links -->
-                <ul class="navbar-nav">
-                    <li class="nav-item">
-                        <a class="nav-link" data-widget="pushmenu" href="#" role="button" aria-label="Toggle sidebar menu"><i class="fas fa-bars" aria-hidden="true"></i></a>
-                    </li>
-                    <li class="nav-item d-none d-sm-inline-block">
-                        <a href="@Url.Action("Index", "Home")" class="nav-link">Home</a>
-                    </li>
-                    <li class="nav-item dropdown d-none d-sm-inline-block">
-                        <a class="nav-link dropdown-toggle" href="#" id="appsDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                            Apps
-                        </a>
-                        <div class="dropdown-menu" aria-labelledby="appsDropdown">
-                            <a class="dropdown-item" href="@Url.Action("Index", "Apps")">
-                                <i class="fas fa-th mr-2" aria-hidden="true"></i>
-                                All Apps
-                            </a>
-                            <div class="dropdown-divider"></div>
-                            <a class="dropdown-item" href="https://find-products-services.education.gov.uk" target="_blank" rel="noopener noreferrer">
-                                <i class="fas fa-search mr-2" aria-hidden="true"></i>
-                                Find information about Products and Services
-                            </a>
-                            <a class="dropdown-item" href="@Url.Action("Index", "Accessibility")">
-                                <i class="fas fa-universal-access mr-2" aria-hidden="true"></i>
-                                Accessibility issues and statements
-                            </a>
-                        </div>
-                    </li>
-                </ul>
-
-                <!-- Right navbar links -->
-                <ul class="navbar-nav ml-auto">
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" aria-label="User menu">
-                            <i class="fas fa-user" aria-hidden="true"></i>
-                        </a>
-                        <div class="dropdown-menu dropdown-menu-right" aria-labelledby="userDropdown">
-                            <h6 class="dropdown-header">@User.Identity?.Name</h6>
-                            <div class="dropdown-divider"></div>
-                            <a class="dropdown-item" href="~/User/MySettings">
-                                <i class="fas fa-cog" aria-hidden="true"></i> My settings
-                            </a>
-                            <div class="dropdown-divider"></div>
-                            <a class="dropdown-item" href="~/MicrosoftIdentity/Account/SignOut">
-                                <i class="fas fa-sign-out-alt" aria-hidden="true"></i> Sign out
-                            </a>
-                        </div>
-                    </li>
-                </ul>
-            </div>
-        </nav>
+        @await Html.PartialAsync("_TopNav")
 
         <!-- Main Sidebar Container -->
         <aside class="main-sidebar sidebar-dark-primary elevation-4">
             <!-- Brand Logo -->
             <a href="@Url.Action("Index", "Home")" class="brand-link">
                 <img src="~/images/govuk-crown.svg" alt="GOV.UK Crown" class="brand-image">
-                <span class="brand-text ml-2">COMPASS <strong>ADMIN</strong></span>
+                <span class="brand-text ml-2">COMPASS <strong style="color: #ff6b35;">ADMIN</strong></span>
             </a>
 
             <!-- Sidebar -->
@@ -115,151 +127,250 @@
                 <!-- Sidebar Menu -->
                 <nav class="mt-2">
                     <ul class="nav nav-pills nav-sidebar flex-column" data-widget="treeview" role="menubar" data-accordion="false">
-                        <!-- Users Group -->
-                        <li class="nav-header">Users</li>
+                        <!-- Dashboard -->
                         <li class="nav-item">
-                            <a href="/Admin/UserManagement" class="nav-link @(ViewContext.RouteData.Values["Controller"]?.ToString() == "Admin" && ViewContext.RouteData.Values["Action"]?.ToString()?.Contains("UserManagement") == true ? "active" : "")" role="menuitem">
-                                <i class="nav-icon fas fa-users" aria-hidden="true"></i>
-                                <p>User management</p>
+                            <a href="@Url.Action("Index", "Admin")" class="nav-link @(controller == "Admin" && action == "Index" ? "active" : "")" role="menuitem">
+                                <i class="nav-icon fas fa-tachometer-alt" aria-hidden="true"></i>
+                                <p>Dashboard</p>
                             </a>
                         </li>
 
-                        <!-- Reporting Group -->
+                        <!-- User Management -->
+                        <li class="nav-header">User Management</li>
+                        <li class="nav-item">
+                            <a href="@Url.Action("Users", "Admin")" class="nav-link @(isUserManagement ? "active" : "")" role="menuitem">
+                                <i class="nav-icon fas fa-users" aria-hidden="true"></i>
+                                <p>Users</p>
+                            </a>
+                        </li>
+                        @if (isGroupManagement)
+                        {
+                            <li class="nav-item">
+                                <a href="@Url.Action("Index", "GroupManagement")" class="nav-link active" role="menuitem">
+                                    <i class="nav-icon fas fa-user-friends" aria-hidden="true"></i>
+                                    <p>Groups</p>
+                                </a>
+                            </li>
+                        }
+
+                        <!-- Reporting -->
                         <li class="nav-header">Reporting</li>
                         <li class="nav-item">
-                            <a href="@Url.Action("Index", "PerformanceMetric")" class="nav-link @(ViewContext.RouteData.Values["Controller"]?.ToString() == "PerformanceMetric" ? "active" : "")" role="menuitem">
+                            <a href="@Url.Action("Index", "PerformanceMetric")" class="nav-link @(isPerformanceMetric ? "active" : "")" role="menuitem">
                                 <i class="nav-icon fas fa-chart-line" aria-hidden="true"></i>
                                 <p>Operational reports</p>
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a href="@Url.Action("Index", "EnterpriseMetric")" class="nav-link @(ViewContext.RouteData.Values["Controller"]?.ToString() == "EnterpriseMetric" ? "active" : "")" role="menuitem">
+                            <a href="@Url.Action("Index", "EnterpriseMetric")" class="nav-link @(isEnterpriseMetric ? "active" : "")" role="menuitem">
                                 <i class="nav-icon fas fa-chart-bar" aria-hidden="true"></i>
                                 <p>Enterprise metrics</p>
                             </a>
                         </li>
+                        @if (isPerformanceReportingManagement)
+                        {
+                            <li class="nav-item">
+                                <a href="@Url.Action("Index", "PerformanceReportingManagement")" class="nav-link active" role="menuitem">
+                                    <i class="nav-icon fas fa-cog" aria-hidden="true"></i>
+                                    <p>Performance reporting</p>
+                                </a>
+                            </li>
+                        }
+                        @if (isMonthlyUpdateDeadlineConfig)
+                        {
+                            <li class="nav-item">
+                                <a href="@Url.Action("Index", "MonthlyUpdateDeadlineConfig")" class="nav-link active" role="menuitem">
+                                    <i class="nav-icon fas fa-calendar-check" aria-hidden="true"></i>
+                                    <p>Monthly update deadlines</p>
+                                </a>
+                            </li>
+                        }
 
-                        <!-- Configuration Group -->
+                        <!-- Configuration -->
                         <li class="nav-header">Configuration</li>
                         <li class="nav-item">
-                            <a href="@Url.Action("Index", "FunctionalStandard")" class="nav-link @(ViewContext.RouteData.Values["Controller"]?.ToString() == "FunctionalStandard" ? "active" : "")" role="menuitem">
+                            <a href="@Url.Action("Index", "FunctionalStandard")" class="nav-link @(isFunctionalStandard ? "active" : "")" role="menuitem">
                                 <i class="nav-icon fas fa-book" aria-hidden="true"></i>
                                 <p>Functional standards</p>
                             </a>
                         </li>
-                        <li class="nav-item">
-                            <a href="@Url.Action("Objectives", "Admin")" class="nav-link @(ViewContext.RouteData.Values["Action"]?.ToString()?.StartsWith("Objective") == true ? "active" : "")" role="menuitem">
-                                <i class="nav-icon fas fa-bullseye" aria-hidden="true"></i>
-                                <p>Priority outcomes</p>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a href="@Url.Action("Missions", "Admin")" class="nav-link @(ViewContext.RouteData.Values["Action"]?.ToString()?.StartsWith("Mission") == true ? "active" : "")" role="menuitem">
-                                <i class="nav-icon fas fa-rocket" aria-hidden="true"></i>
-                                <p>Missions</p>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a href="@Url.Action("FundingSources", "Admin")" class="nav-link @(ViewContext.RouteData.Values["Action"]?.ToString()?.StartsWith("FundingSource") == true ? "active" : "")" role="menuitem">
-                                <i class="nav-icon fas fa-pound-sign" aria-hidden="true"></i>
-                                <p>Funding sources</p>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a href="@Url.Action("Index", "GovernmentDepartment")" class="nav-link @(ViewContext.RouteData.Values["Controller"]?.ToString() == "GovernmentDepartment" ? "active" : "")" role="menuitem">
-                                <i class="nav-icon fas fa-building" aria-hidden="true"></i>
-                                <p>Government departments</p>
-                            </a>
-                        </li>
-                        <li class="nav-item @(ViewContext.RouteData.Values["Action"]?.ToString()?.StartsWith("Settings") == true || ViewContext.RouteData.Values["Action"]?.ToString()?.Contains("Risk") == true || ViewContext.RouteData.Values["Action"]?.ToString()?.Contains("ActionSource") == true || ViewContext.RouteData.Values["Action"]?.ToString()?.Contains("Wcag") == true || ViewContext.RouteData.Values["Action"]?.ToString()?.Contains("BusinessArea") == true || ViewContext.RouteData.Values["Action"]?.ToString()?.Contains("Phase") == true || ViewContext.RouteData.Values["Action"]?.ToString()?.Contains("GddRole") == true || ViewContext.RouteData.Values["Action"]?.ToString()?.Contains("Skill") == true ? "menu-open" : "")">
-                            <a href="#" class="nav-link @(ViewContext.RouteData.Values["Action"]?.ToString()?.StartsWith("Settings") == true || ViewContext.RouteData.Values["Action"]?.ToString()?.Contains("Risk") == true || ViewContext.RouteData.Values["Action"]?.ToString()?.Contains("ActionSource") == true || ViewContext.RouteData.Values["Action"]?.ToString()?.Contains("Wcag") == true || ViewContext.RouteData.Values["Action"]?.ToString()?.Contains("BusinessArea") == true || ViewContext.RouteData.Values["Action"]?.ToString()?.Contains("Phase") == true || ViewContext.RouteData.Values["Action"]?.ToString()?.Contains("GddRole") == true || ViewContext.RouteData.Values["Action"]?.ToString()?.Contains("Skill") == true ? "active" : "")" role="menuitem" aria-haspopup="true" aria-expanded="@(ViewContext.RouteData.Values["Action"]?.ToString()?.StartsWith("Settings") == true || ViewContext.RouteData.Values["Action"]?.ToString()?.Contains("Risk") == true || ViewContext.RouteData.Values["Action"]?.ToString()?.Contains("ActionSource") == true || ViewContext.RouteData.Values["Action"]?.ToString()?.Contains("Wcag") == true || ViewContext.RouteData.Values["Action"]?.ToString()?.Contains("BusinessArea") == true || ViewContext.RouteData.Values["Action"]?.ToString()?.Contains("Phase") == true || ViewContext.RouteData.Values["Action"]?.ToString()?.Contains("GddRole") == true || ViewContext.RouteData.Values["Action"]?.ToString()?.Contains("Skill") == true ? "true" : "false")">
-                                <i class="nav-icon fas fa-sliders-h" aria-hidden="true"></i>
+                        @{
+                            var isStandardsConfig = controller == "StandardsConfig";
+                            var isStandardProducts = controller == "StandardProducts";
+                            var isStandardsManagement = isStandardsConfig || isStandardProducts;
+                        }
+                        <li class="nav-item @(isStandardsManagement ? "menu-open" : "")">
+                            <a href="#" class="nav-link @(isStandardsManagement ? "active" : "")" role="menuitem" aria-haspopup="true" aria-expanded="@(isStandardsManagement ? "true" : "false")">
+                                <i class="nav-icon fas fa-compass" aria-hidden="true"></i>
                                 <p>
-                                    Settings
+                                    Standards management
                                     <i class="right fas fa-angle-left"></i>
                                 </p>
                             </a>
                             <ul class="nav nav-treeview" role="menu">
                                 <li class="nav-item">
-                                    <a href="@Url.Action("RiskTypes", "Admin")" class="nav-link @(ViewContext.RouteData.Values["Action"]?.ToString()?.Contains("RiskType") == true ? "active" : "")" role="menuitem">
-                                        <i class="nav-icon fas fa-exclamation-triangle" aria-hidden="true"></i>
+                                    <a href="@Url.Action("Index", "StandardsConfig", new { area = "Admin" })" class="nav-link @(isStandardsConfig ? "active" : "")" role="menuitem">
+                                        <i class="far fa-circle nav-icon" aria-hidden="true"></i>
+                                        <p>Standards config</p>
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a href="@Url.Action("Index", "StandardProducts", new { area = "Admin" })" class="nav-link @(isStandardProducts ? "active" : "")" role="menuitem">
+                                        <i class="far fa-circle nav-icon" aria-hidden="true"></i>
+                                        <p>Standard products</p>
+                                    </a>
+                                </li>
+                            </ul>
+                        </li>
+                        <li class="nav-item">
+                            <a href="@Url.Action("Objectives", "Admin")" class="nav-link @(isObjective ? "active" : "")" role="menuitem">
+                                <i class="nav-icon fas fa-bullseye" aria-hidden="true"></i>
+                                <p>Priority outcomes</p>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="@Url.Action("Missions", "Admin")" class="nav-link @(isMission ? "active" : "")" role="menuitem">
+                                <i class="nav-icon fas fa-rocket" aria-hidden="true"></i>
+                                <p>Missions</p>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="@Url.Action("FundingSources", "Admin")" class="nav-link @(isFundingSource ? "active" : "")" role="menuitem">
+                                <i class="nav-icon fas fa-pound-sign" aria-hidden="true"></i>
+                                <p>Funding sources</p>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="@Url.Action("Index", "GovernmentDepartment")" class="nav-link @(isGovernmentDepartment ? "active" : "")" role="menuitem">
+                                <i class="nav-icon fas fa-building" aria-hidden="true"></i>
+                                <p>Government departments</p>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="@Url.Action("Index", "Organizational")" class="nav-link @(isOrganizational ? "active" : "")" role="menuitem">
+                                <i class="nav-icon fas fa-sitemap" aria-hidden="true"></i>
+                                <p>Organizational structure</p>
+                            </a>
+                        </li>
+
+                        <!-- Settings -->
+                        <li class="nav-header">Settings</li>
+                        <li class="nav-item @(isSettingsSection ? "menu-open" : "")">
+                            <a href="#" class="nav-link @(isSettingsSection ? "active" : "")" role="menuitem" aria-haspopup="true" aria-expanded="@(isSettingsSection ? "true" : "false")">
+                                <i class="nav-icon fas fa-sliders-h" aria-hidden="true"></i>
+                                <p>
+                                    System settings
+                                    <i class="right fas fa-angle-left"></i>
+                                </p>
+                            </a>
+                            <ul class="nav nav-treeview" role="menu">
+                                <li class="nav-item">
+                                    <a href="@Url.Action("Settings", "Admin")" class="nav-link @(isSettings && !isSettingsSection ? "active" : "")" role="menuitem">
+                                        <i class="far fa-circle nav-icon" aria-hidden="true"></i>
+                                        <p>Settings overview</p>
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a href="@Url.Action("RiskTypes", "Admin")" class="nav-link @(isRiskType ? "active" : "")" role="menuitem">
+                                        <i class="far fa-circle nav-icon" aria-hidden="true"></i>
                                         <p>Risk types</p>
                                     </a>
                                 </li>
                                 <li class="nav-item">
-                                    <a href="@Url.Action("RiskTiers", "Admin")" class="nav-link @(ViewContext.RouteData.Values["Action"]?.ToString()?.Contains("RiskTier") == true ? "active" : "")" role="menuitem">
-                                        <i class="nav-icon fas fa-layer-group" aria-hidden="true"></i>
+                                    <a href="@Url.Action("RiskTiers", "Admin")" class="nav-link @(isRiskTier ? "active" : "")" role="menuitem">
+                                        <i class="far fa-circle nav-icon" aria-hidden="true"></i>
                                         <p>Risk tiers</p>
                                     </a>
                                 </li>
                                 <li class="nav-item">
-                                    <a href="@Url.Action("ActionSources", "Admin")" class="nav-link @(ViewContext.RouteData.Values["Action"]?.ToString()?.Contains("ActionSource") == true ? "active" : "")" role="menuitem">
-                                        <i class="nav-icon fas fa-list" aria-hidden="true"></i>
+                                    <a href="@Url.Action("ActionSources", "Admin")" class="nav-link @(isActionSource ? "active" : "")" role="menuitem">
+                                        <i class="far fa-circle nav-icon" aria-hidden="true"></i>
                                         <p>Action sources</p>
                                     </a>
                                 </li>
                                 <li class="nav-item">
-                                    <a href="@Url.Action("WcagCriteria", "Admin")" class="nav-link @(ViewContext.RouteData.Values["Action"]?.ToString()?.Contains("Wcag") == true ? "active" : "")" role="menuitem">
-                                        <i class="nav-icon fas fa-check-circle" aria-hidden="true"></i>
-                                        <p>WCAG Criteria</p>
+                                    <a href="@Url.Action("DeliveryPriorities", "Admin")" class="nav-link @(isDeliveryPriority ? "active" : "")" role="menuitem">
+                                        <i class="far fa-circle nav-icon" aria-hidden="true"></i>
+                                        <p>Delivery priorities</p>
                                     </a>
                                 </li>
                                 <li class="nav-item">
-                                    <a href="@Url.Action("BusinessAreas", "Admin")" class="nav-link @(ViewContext.RouteData.Values["Action"]?.ToString()?.Contains("BusinessArea") == true ? "active" : "")" role="menuitem">
-                                        <i class="nav-icon fas fa-building" aria-hidden="true"></i>
+                                    <a href="@Url.Action("WcagCriteria", "Admin")" class="nav-link @(isWcag ? "active" : "")" role="menuitem">
+                                        <i class="far fa-circle nav-icon" aria-hidden="true"></i>
+                                        <p>WCAG criteria</p>
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a href="@Url.Action("BusinessAreas", "Admin")" class="nav-link @(isBusinessArea ? "active" : "")" role="menuitem">
+                                        <i class="far fa-circle nav-icon" aria-hidden="true"></i>
                                         <p>Business areas</p>
                                     </a>
                                 </li>
                                 <li class="nav-item">
-                                    <a href="@Url.Action("Phases", "Admin")" class="nav-link @(ViewContext.RouteData.Values["Action"]?.ToString()?.Contains("Phase") == true && !ViewContext.RouteData.Values["Action"]?.ToString()?.Contains("PhaseLookup") == true ? "active" : "")" role="menuitem">
-                                        <i class="nav-icon fas fa-tasks" aria-hidden="true"></i>
+                                    <a href="@Url.Action("Phases", "Admin")" class="nav-link @(isPhase ? "active" : "")" role="menuitem">
+                                        <i class="far fa-circle nav-icon" aria-hidden="true"></i>
                                         <p>Phases</p>
                                     </a>
                                 </li>
                                 <li class="nav-item">
-                                    <a href="@Url.Action("GddRoles", "Admin")" class="nav-link @(ViewContext.RouteData.Values["Action"]?.ToString()?.Contains("GddRole") == true ? "active" : "")" role="menuitem">
-                                        <i class="nav-icon fas fa-user-tag" aria-hidden="true"></i>
-                                        <p>GDD Roles</p>
+                                    <a href="@Url.Action("GddRoles", "Admin")" class="nav-link @(isGddRole ? "active" : "")" role="menuitem">
+                                        <i class="far fa-circle nav-icon" aria-hidden="true"></i>
+                                        <p>GDD roles</p>
                                     </a>
                                 </li>
                                 <li class="nav-item">
-                                    <a href="@Url.Action("Skills", "Admin")" class="nav-link @(ViewContext.RouteData.Values["Action"]?.ToString()?.Contains("Skill") == true ? "active" : "")" role="menuitem">
-                                        <i class="nav-icon fas fa-certificate" aria-hidden="true"></i>
+                                    <a href="@Url.Action("Skills", "Admin")" class="nav-link @(isSkill ? "active" : "")" role="menuitem">
+                                        <i class="far fa-circle nav-icon" aria-hidden="true"></i>
                                         <p>Skills</p>
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a href="@Url.Action("KpiCategories", "Admin")" class="nav-link @(isKpiCategory ? "active" : "")" role="menuitem">
+                                        <i class="far fa-circle nav-icon" aria-hidden="true"></i>
+                                        <p>KPI categories</p>
                                     </a>
                                 </li>
                             </ul>
                         </li>
 
+                        <!-- Learning & Development -->
+                        <li class="nav-header">Learning & Development</li>
+                        <li class="nav-item">
+                            <a href="/Admin/TrainingCourse" class="nav-link @(isTrainingCourse ? "active" : "")" role="menuitem">
+                                <i class="nav-icon fas fa-graduation-cap" aria-hidden="true"></i>
+                                <p>Training courses</p>
+                            </a>
+                        </li>
+
+                        <!-- RAID -->
                         <li class="nav-header">RAID</li>
                         <li class="nav-item">
-                            <a href="@Url.Action("RaidSettings", "Admin")" class="nav-link @(ViewContext.RouteData.Values["Action"]?.ToString() == "RaidSettings" ? "active" : "")" role="menuitem">
+                            <a href="@Url.Action("RaidSettings", "Admin")" class="nav-link @(isRaidSettings ? "active" : "")" role="menuitem">
                                 <i class="nav-icon fas fa-database" aria-hidden="true"></i>
                                 <p>RAID settings</p>
                             </a>
                         </li>
 
-                        <!-- Apps Group -->
-                        <li class="nav-header">Apps</li>
+                        <!-- Apps & Services -->
+                        <li class="nav-header">Apps & Services</li>
                         <li class="nav-item">
-                            <a href="/Admin/AccessibilityService" class="nav-link @(ViewContext.RouteData.Values["Controller"]?.ToString() == "AccessibilityService" || Context.Request.Path.Value?.Contains("/Admin/AccessibilityService") == true ? "active" : "")" role="menuitem">
+                            <a href="/Admin/AccessibilityService" class="nav-link @(isAccessibilityService ? "active" : "")" role="menuitem">
                                 <i class="nav-icon fas fa-universal-access" aria-hidden="true"></i>
-                                <p>Accessibility Service</p>
+                                <p>Accessibility service</p>
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a href="@Url.Action("UserSatisfaction", "Admin")" class="nav-link @(ViewContext.RouteData.Values["Action"]?.ToString()?.StartsWith("UserSatisfaction") == true ? "active" : "")" role="menuitem">
+                            <a href="@Url.Action("UserSatisfaction", "Admin")" class="nav-link @(isUserSatisfaction ? "active" : "")" role="menuitem">
                                 <i class="nav-icon fas fa-poll" aria-hidden="true"></i>
-                                <p>User Satisfaction</p>
+                                <p>User satisfaction</p>
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a href="@Url.Action("ApiTokens", "Admin")" class="nav-link @(ViewContext.RouteData.Values["Action"]?.ToString()?.StartsWith("ApiToken") == true || ViewContext.RouteData.Values["Action"]?.ToString()?.StartsWith("CreateApiToken") == true || ViewContext.RouteData.Values["Action"]?.ToString()?.StartsWith("ConfigurePermissions") == true || ViewContext.RouteData.Values["Action"]?.ToString()?.StartsWith("SavePermissions") == true ? "active" : "")" role="menuitem">
+                            <a href="@Url.Action("ApiTokens", "Admin")" class="nav-link @(isApiToken ? "active" : "")" role="menuitem">
                                 <i class="nav-icon fas fa-key" aria-hidden="true"></i>
-                                <p>API Tokens</p>
+                                <p>API tokens</p>
                             </a>
                         </li>
-
                     </ul>
                 </nav>
                 <!-- /.sidebar-menu -->
@@ -312,7 +423,6 @@
         <footer class="main-footer">
             <a href="#" class="footer-link">Cookies</a>
             <a href="@Url.Action("Accessibility", "Home")" class="footer-link">Accessibility</a>
-            <a href="@Url.Action("Roadmap", "Home")" class="footer-link">Roadmap</a>
             <a href="#" class="footer-link">Support</a>
             <a href="#" class="footer-link">Feedback</a>
             <a href="@Url.Action("UserInfo", "Profile")" class="footer-link">User</a>

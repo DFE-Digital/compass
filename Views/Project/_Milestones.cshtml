@@ -13,23 +13,38 @@
 
 <div class="card" id="milestones">
     <div class="card-header">
-        <h3 class="card-title">Project milestones</h3>
+        <h3 class="card-title">Work milestones</h3>
         <div class="card-tools">
             <a asp-controller="Project" asp-action="CreateMilestone" asp-route-projectId="@Model.Id">Add milestone</a>
         </div>
     </div>
-    <div class="card-body table-responsive p-0">
+    <div class="card-body p-0">
         @if (milestones.Any())
         {
            
             <table class="table table-hover text-nowrap sortable-table milestones-table">
                 <thead>
                     <tr>
-                        <th class="col-name sortable" data-column="Name" tabindex="0" role="button" aria-label="Sort by Name">Name</th>
-                        <th class="col-status sortable" data-column="Status" tabindex="0" role="button" aria-label="Sort by Status">Status</th>
-                        <th class="col-due sortable" data-column="DueDate" tabindex="0" role="button" aria-label="Sort by Due Date">Due date</th>
-                        <th class="col-actual sortable" data-column="ActualDate" tabindex="0" role="button" aria-label="Sort by Actual Date">Actual date</th>
-                        <th class="col-progress sortable" data-column="Progress" tabindex="0" role="button" aria-label="Sort by Progress">Progress</th>
+                        <th class="col-name sortable" data-column="Name" tabindex="0" role="button" aria-label="Sort by Name">
+                            Name
+                            <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                        </th>
+                        <th class="col-status sortable" data-column="Status" tabindex="0" role="button" aria-label="Sort by Status">
+                            Status
+                            <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                        </th>
+                        <th class="col-due sortable" data-column="DueDate" tabindex="0" role="button" aria-label="Sort by Due Date">
+                            Due date
+                            <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                        </th>
+                        <th class="col-actual sortable" data-column="ActualDate" tabindex="0" role="button" aria-label="Sort by Actual Date">
+                            Actual date
+                            <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                        </th>
+                        <th class="col-progress sortable" data-column="Progress" tabindex="0" role="button" aria-label="Sort by Progress">
+                            Progress
+                            <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                        </th>
                     </tr>
                 </thead>
                 <tbody>
@@ -84,10 +99,129 @@
         }
         else
         {
-            <div class="p-4">
+            <div class="p-3">
                 <p class="text-muted mb-2">No milestones recorded.</p>
-                <a asp-controller="Project" asp-action="CreateMilestone" asp-route-projectId="@Model.Id" class="text-block-link">Add the first milestone</a>
             </div>
         }
     </div>
 </div>
+
+<script nonce="@Context.Items["Nonce"]">
+    (function() {
+        function initSorting(table) {
+            var sortableHeaders = table.querySelectorAll('.sortable');
+            var currentSort = { column: null, direction: 'asc' };
+            
+            sortableHeaders.forEach(function(header) {
+                header.style.cursor = 'pointer';
+                
+                header.addEventListener('click', function(e) {
+                    handleSort(e, header);
+                });
+                
+                header.addEventListener('keypress', function(e) {
+                    if (e.which === 13 || e.which === 32) {
+                        e.preventDefault();
+                        handleSort(e, header);
+                    }
+                });
+            });
+            
+            function handleSort(e, header) {
+                var column = header.getAttribute('data-column');
+                var direction = 'asc';
+                
+                if (currentSort.column === column && currentSort.direction === 'asc') {
+                    direction = 'desc';
+                }
+                
+                sortTable(column, direction);
+                currentSort = { column: column, direction: direction };
+            }
+            
+            function sortTable(column, direction) {
+                var tbody = table.querySelector('tbody');
+                var rows = Array.from(tbody.querySelectorAll('tr'));
+                var colIndex = Array.from(table.querySelectorAll('thead th')).findIndex(function(th) {
+                    return th.getAttribute('data-column') === column;
+                });
+                
+                rows.sort(function(a, b) {
+                    var aVal, bVal;
+                    var aCell = a.querySelectorAll('td')[colIndex];
+                    var bCell = b.querySelectorAll('td')[colIndex];
+                    
+                    if (column === 'Status') {
+                        // Sort by badge text
+                        var aBadge = aCell.querySelector('.badge');
+                        var bBadge = bCell.querySelector('.badge');
+                        aVal = aBadge ? aBadge.textContent.trim().toLowerCase() : '';
+                        bVal = bBadge ? bBadge.textContent.trim().toLowerCase() : '';
+                    } else if (column === 'Name') {
+                        // Sort by link text
+                        var aLink = aCell.querySelector('a');
+                        var bLink = bCell.querySelector('a');
+                        aVal = aLink ? aLink.textContent.trim().toLowerCase() : aCell.textContent.trim().toLowerCase();
+                        bVal = bLink ? bLink.textContent.trim().toLowerCase() : bCell.textContent.trim().toLowerCase();
+                    } else if (column === 'DueDate' || column === 'ActualDate') {
+                        // Sort by date
+                        var aDate = Date.parse(aCell.textContent.trim());
+                        var bDate = Date.parse(bCell.textContent.trim());
+                        aVal = isNaN(aDate) ? 0 : aDate;
+                        bVal = isNaN(bDate) ? 0 : bDate;
+                    } else if (column === 'Progress') {
+                        // Sort by percentage number
+                        var aText = aCell.textContent.trim();
+                        var bText = bCell.textContent.trim();
+                        var aMatch = aText.match(/(\d+)%/);
+                        var bMatch = bText.match(/(\d+)%/);
+                        aVal = aMatch ? parseInt(aMatch[1]) : 0;
+                        bVal = bMatch ? parseInt(bMatch[1]) : 0;
+                    } else {
+                        aVal = aCell.textContent.trim().toLowerCase();
+                        bVal = bCell.textContent.trim().toLowerCase();
+                    }
+                    
+                    if (direction === 'asc') {
+                        return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+                    } else {
+                        return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
+                    }
+                });
+                
+                tbody.innerHTML = '';
+                rows.forEach(function(row) {
+                    tbody.appendChild(row);
+                });
+                
+                updateSortIcons(column, direction);
+            }
+            
+            function updateSortIcons(column, direction) {
+                var allHeaders = table.querySelectorAll('.sortable i');
+                allHeaders.forEach(function(icon) {
+                    icon.className = 'fas fa-sort float-right';
+                    icon.style.opacity = '0.3';
+                });
+                
+                var activeHeader = table.querySelector('.sortable[data-column="' + column + '"]');
+                if (activeHeader) {
+                    var icon = activeHeader.querySelector('i');
+                    if (icon) {
+                        icon.className = direction === 'asc' ? 'fas fa-sort-up float-right' : 'fas fa-sort-down float-right';
+                        icon.style.opacity = '1';
+                    }
+                }
+            }
+        }
+        
+        var table = document.querySelector('.milestones-table');
+        if (table) {
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', function() { initSorting(table); });
+            } else {
+                initSorting(table);
+            }
+        }
+    })();
+</script>

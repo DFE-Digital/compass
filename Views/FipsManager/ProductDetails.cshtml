@@ -1,0 +1,349 @@
+@model Compass.Controllers.FipsManagerProductDetailsViewModel
+@{
+    ViewData["Title"] = $"FIPS Manager - {Model.Product.Title}";
+    var product = Model.Product;
+    var completion = Model.CompletionItem;
+}
+
+@section Breadcrumbs {
+    <style>
+        .breadcrumb a:hover {
+            color: #003078 !important;
+            text-decoration: underline !important;
+        }
+    </style>
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <li class="breadcrumb-item">
+                <a href="/" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a href="@Url.Action("Index")" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">FIPS Manager</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page" style="color: #0b0c0c; font-weight: 600;">@product.Title</li>
+        </ol>
+    </nav>
+}
+
+@{
+    
+    // Single-user roles
+    var singleUserRoles = new[] { "service_owner", "Information_asset_owner", "senior_responsible_officer" };
+    
+    // Multiple-user roles
+    var multipleUserRoles = new[] { "delivery_manager", "product_manager", "reporting_user", "service_designs", "user_researchers" };
+    
+    string FormatUsers(List<Compass.Models.EntraUserDto>? users)
+    {
+        if (users == null || !users.Any())
+        {
+            return "Not set";
+        }
+        var labels = users
+            .Select(u => !string.IsNullOrWhiteSpace(u.DisplayName) ? u.DisplayName : u.EmailAddress)
+            .Where(u => !string.IsNullOrWhiteSpace(u))
+            .Select(u => u!)
+            .ToList();
+        return labels.Any() ? string.Join(", ", labels) : "Not set";
+    }
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-12">
+                <a href="@Url.Action("Index")" class="btn btn-secondary btn-sm mb-2">
+                    <i class="fas fa-arrow-left"></i> Back to Products
+                </a>
+                <h1 class="m-0">@product.Title</h1>
+                <p class="text-muted mb-0">
+                    <small>FIPS ID: @product.FipsId</small>
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @Html.Raw(TempData["SuccessMessage"])
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+        @if (TempData["InfoMessage"] != null)
+        {
+            <div class="alert alert-info alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["InfoMessage"]
+            </div>
+        }
+
+        <!-- Completion Summary -->
+        <div class="row mb-3">
+            <div class="col-lg-12">
+                <div class="card @(completion.CompletionPercentage >= 80 ? "card-success" : completion.CompletionPercentage >= 60 ? "card-warning" : "card-danger")">
+                    <div class="card-header">
+                        <h3 class="card-title">Completion Status</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-3 text-center">
+                                <h2 class="mb-0" style="font-size: 2.5rem; font-weight: bold;">@completion.CompletionPercentage.ToString("F1")%</h2>
+                                <p class="text-muted mb-0">Overall Completion</p>
+                            </div>
+                            <div class="col-md-9">
+                                <div class="mt-2">
+                                    <small>
+                                        <span class="badge @(completion.HasPhase ? "badge-success" : "badge-secondary")">Phase: @(completion.HasPhase ? "✓" : "✗")</span>
+                                        <span class="badge @(completion.HasBusinessArea ? "badge-success" : "badge-secondary")">Business Area: @(completion.HasBusinessArea ? "✓" : "✗")</span>
+                                        <span class="badge @(completion.ContactsCount > 0 ? "badge-success" : "badge-secondary")">Contacts: @(completion.ContactsCount > 0 ? "✓" : "✗")</span>
+                                        <span class="badge @(completion.HasProductUrl ? "badge-success" : "badge-secondary")">URL: @(completion.HasProductUrl ? "✓" : "✗")</span>
+                                        <span class="badge @(completion.UserGroupsCount > 0 ? "badge-success" : "badge-secondary")">User Groups: @(completion.UserGroupsCount > 0 ? "✓" : "✗")</span>
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Left Column: Product Information -->
+            <div class="col-lg-8">
+                <!-- Product Details Form -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Product Details</h3>
+                    </div>
+                    <form asp-action="UpdateProduct" method="post">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="documentId" value="@product.DocumentId" />
+                        
+                        <div class="card-body">
+                            <div class="form-group">
+                                <label>Title</label>
+                                <input type="text" class="form-control" value="@product.Title" disabled />
+                                <small class="form-text text-muted">Title needs to be changed through Service Now</small>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="shortDescription">Short Description</label>
+                                <textarea class="form-control" id="shortDescription" name="shortDescription" rows="3">@product.ShortDescription</textarea>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="longDescription">Long Description</label>
+                                <textarea class="form-control" id="longDescription" name="longDescription" rows="5">@product.LongDescription</textarea>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="productUrl">Product URL</label>
+                                <input type="url" class="form-control" id="productUrl" name="productUrl" value="@product.ProductUrl" placeholder="https://..." />
+                            </div>
+                        </div>
+                        
+                        <div class="card-footer">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save"></i> Save Details
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Categories -->
+                <div class="card mt-3">
+                    <div class="card-header">
+                        <h3 class="card-title">Categories</h3>
+                    </div>
+                    <form asp-action="UpdateProduct" method="post" id="categoriesForm">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="documentId" value="@product.DocumentId" />
+                        <input type="hidden" name="shortDescription" value="@product.ShortDescription" />
+                        <input type="hidden" name="longDescription" value="@product.LongDescription" />
+                        <input type="hidden" name="productUrl" value="@product.ProductUrl" />
+                        
+                        <div class="card-body">
+                            @if (Model.CategoryTypes.Any())
+                            {
+                                @foreach (var categoryType in Model.CategoryTypes.OrderBy(kvp => kvp.Key))
+                                {
+                                    var typeName = categoryType.Key;
+                                    var categoryValues = categoryType.Value.OrderBy(cv => cv.Name).ToList();
+                                    var currentValues = Model.CurrentCategoryValueIds;
+
+                                    <div class="category-type-section mb-4 pb-3 border-bottom">
+                                        <h5 class="font-weight-bold mb-3">@typeName</h5>
+                                        
+                                        @if (currentValues.Any(cv => categoryValues.Any(c => c.Id == cv)))
+                                        {
+                                            <div class="alert alert-info mb-3">
+                                                <strong>Currently assigned:</strong> 
+                                                @string.Join(", ", categoryValues.Where(cv => currentValues.Contains(cv.Id)).Select(cv => cv.Name))
+                                            </div>
+                                        }
+                                        
+                                        <div class="category-values-list" style="max-height: 200px; overflow-y: auto;">
+                                            @foreach (var categoryValue in categoryValues)
+                                            {
+                                                var isChecked = currentValues.Contains(categoryValue.Id);
+                                                var checkboxId = $"cat-{typeName.Replace(" ", "-").ToLower()}-{categoryValue.Id}";
+                                                
+                                                <div class="form-check mb-2">
+                                                    <input type="checkbox" 
+                                                           class="form-check-input category-value-checkbox" 
+                                                           id="@checkboxId" 
+                                                           name="categoryValueIds" 
+                                                           value="@categoryValue.Id"
+                                                           @(isChecked ? "checked" : "") />
+                                                    <label class="form-check-label" for="@checkboxId">
+                                                        @categoryValue.Name
+                                                        @if (isChecked)
+                                                        {
+                                                            <span class="badge badge-success badge-sm ml-2">Assigned</span>
+                                                        }
+                                                    </label>
+                                                </div>
+                                            }
+                                        </div>
+                                    </div>
+                                }
+                            }
+                            else
+                            {
+                                <div class="alert alert-warning">
+                                    No category types available.
+                                </div>
+                            }
+                        </div>
+                        
+                        <div class="card-footer">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save"></i> Save Categories
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Right Column: Roles -->
+            <div class="col-lg-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Roles</h3>
+                        @if (!string.IsNullOrEmpty(product.CmdbSysId))
+                        {
+                            <div class="card-tools">
+                                <form asp-action="SyncRolesFromCmdb" method="post" style="display: inline;">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="documentId" value="@product.DocumentId" />
+                                    <button type="submit" style="background: none; border: none; color: #005ea5; text-decoration: none; cursor: pointer; padding: 0;">
+                                        <i class="fas fa-sync"></i> Sync with CMDB
+                                    </button>
+                                </form>
+                            </div>
+                        }
+                    </div>
+                    <div class="card-body">
+                        <div class="alert alert-info mb-3">
+                            <i class="fas fa-info-circle"></i> These details are synced from CMDB
+                        </div>
+                        
+                        <!-- Single User Roles -->
+                        @foreach (var roleField in singleUserRoles)
+                        {
+                            var roleDisplayName = roleField switch
+                            {
+                                "service_owner" => "Service Owner",
+                                "Information_asset_owner" => "Information Asset Owner",
+                                "senior_responsible_officer" => "Senior Responsible Officer",
+                                _ => roleField
+                            };
+                            
+                            var users = roleField switch
+                            {
+                                "service_owner" => product.ServiceOwners,
+                                "Information_asset_owner" => product.InformationAssetOwners,
+                                "senior_responsible_officer" => product.SeniorResponsibleOfficers,
+                                _ => null
+                            };
+
+                            <div class="mb-3 pb-3 border-bottom">
+                                <h6 class="font-weight-bold">@roleDisplayName</h6>
+                                @if (users != null && users.Any())
+                                {
+                                    <ul class="list-unstyled mb-0">
+                                        @foreach (var user in users)
+                                        {
+                                            <li class="small text-muted">
+                                                @(!string.IsNullOrWhiteSpace(user.DisplayName) ? user.DisplayName : user.EmailAddress)
+                                            </li>
+                                        }
+                                    </ul>
+                                }
+                                else
+                                {
+                                    <p class="small text-muted mb-0">Not set</p>
+                                }
+                            </div>
+                        }
+
+                        <!-- Multiple User Roles -->
+                        @foreach (var roleField in multipleUserRoles)
+                        {
+                            var roleDisplayName = roleField switch
+                            {
+                                "delivery_manager" => "Delivery Manager",
+                                "product_manager" => "Product Manager",
+                                "reporting_user" => "Reporting User",
+                                "service_designs" => "Service Designs",
+                                "user_researchers" => "User Researchers",
+                                _ => roleField
+                            };
+                            
+                            var users = roleField switch
+                            {
+                                "delivery_manager" => product.DeliveryManagers,
+                                "product_manager" => product.ProductManagers,
+                                "reporting_user" => product.ReportingUsers,
+                                "service_designs" => product.ServiceDesigns,
+                                "user_researchers" => product.UserResearchers,
+                                _ => null
+                            };
+
+                            <div class="mb-3 pb-3 border-bottom">
+                                <h6 class="font-weight-bold">@roleDisplayName</h6>
+                                @if (users != null && users.Any())
+                                {
+                                    <ul class="list-unstyled mb-0">
+                                        @foreach (var user in users)
+                                        {
+                                            <li class="small text-muted">
+                                                @(!string.IsNullOrWhiteSpace(user.DisplayName) ? user.DisplayName : user.EmailAddress)
+                                            </li>
+                                        }
+                                    </ul>
+                                }
+                                else
+                                {
+                                    <p class="small text-muted mb-0">Not set</p>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+

@@ -1,0 +1,264 @@
+@model List<Compass.Models.DirectorateLookup>
+@{
+    ViewData["Title"] = "Directorates";
+    var currentAction = ViewContext.RouteData.Values["Action"]?.ToString() ?? "";
+    var currentController = ViewContext.RouteData.Values["Controller"]?.ToString() ?? "";
+}
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4 breadcrumb-standard">
+            <li class="breadcrumb-item">
+                <a href="@Url.Action("Index", "Home")" class="breadcrumb-link-standard">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a href="@Url.Action("Settings", "Admin")" class="breadcrumb-link-standard">Settings</a>
+            </li>
+            <li class="breadcrumb-item active breadcrumb-active-standard" aria-current="page">Directorates</li>
+        </ol>
+    </nav>
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1 class="m-0">Directorates</h1>
+            </div>
+            <div class="col-sm-6">
+                <div class="float-right">
+                    <button type="button" class="btn btn-primary" data-toggle="modal" data-target="#createDirectorateModal">
+                        Create new
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["SuccessMessage"]
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        <div class="row">
+            <div class="col-xxl-2 col-xl-2 col-lg-2 col-md-2 col-sm-12 col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Administration</h3>
+                    </div>
+                    <div class="card-body p-2">
+                        <div class="nav flex-column nav-pills">
+                            <a href="@Url.Action("Settings", "Admin")" class="nav-link @(currentAction == "Settings" ? "active" : "")">
+                                Settings
+                            </a>
+                            <a href="@Url.Action("ActivityTypes", "Admin")" class="nav-link @(currentAction.Contains("ActivityType") ? "active" : "")">
+                                Activity types
+                            </a>
+                            <a href="@Url.Action("Directorates", "Admin")" class="nav-link @(currentAction.Contains("Directorate") ? "active" : "")">
+                                Directorates
+                            </a>
+                            <a href="@Url.Action("RiskAppetites", "Admin")" class="nav-link @(currentAction.Contains("RiskAppetite") ? "active" : "")">
+                                Risk appetites
+                            </a>
+                            <a href="@Url.Action("Phases", "Admin")" class="nav-link @(currentAction.Contains("Phase") ? "active" : "")">
+                                Phases
+                            </a>
+                            <a href="@Url.Action("RagStatuses", "Admin")" class="nav-link @(currentAction.Contains("RagStatus") ? "active" : "")">
+                                RAG Statuses
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-xxl-10 col-xl-10 col-lg-10 col-md-10 col-sm-12 col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Directorates</h3>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted">Manage directorate options for projects. Multiple directorates can be selected per project.</p>
+
+                        <div class="table-responsive">
+                            <table class="table table-striped table-hover">
+                                <thead>
+                                    <tr>
+                                        <th class="col-width-60px">Order</th>
+                                        <th>Name</th>
+                                        <th>Description</th>
+                                        <th>Status</th>
+                                        <th class="col-actions">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @if (Model.Any())
+                                    {
+                                        @foreach (var item in Model)
+                                        {
+                                            <tr>
+                                                <td class="text-center"><span class="badge badge-secondary">@item.SortOrder</span></td>
+                                                <td><strong>@item.Name</strong></td>
+                                                <td>
+                                                    @if (!string.IsNullOrEmpty(item.Description))
+                                                    {
+                                                        <small class="text-muted">@item.Description</small>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span>-</span>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    @if (item.IsActive)
+                                                    {
+                                                        <span class="badge badge-success">Active</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge badge-secondary">Inactive</span>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    <div class="btn-group btn-group-sm" role="group">
+                                                        <button type="button" class="btn btn-outline-primary" 
+                                                                onclick="editDirectorate(@item.Id, '@Html.Raw(item.Name.Replace("'", "\\'"))', '@Html.Raw(item.Description?.Replace("'", "\\'") ?? "")', @item.SortOrder, @(item.IsActive ? "true" : "false"))" 
+                                                                title="Edit">
+                                                            Edit
+                                                        </button>
+                                                        <form asp-action="DeleteDirectorate" asp-route-id="@item.Id" method="post" class="d-inline" onsubmit="return confirm('Are you sure you want to delete this directorate?');">
+                                                            @Html.AntiForgeryToken()
+                                                            <button type="submit" class="btn btn-outline-danger" title="Delete">
+                                                                Delete
+                                                            </button>
+                                                        </form>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <tr>
+                                            <td colspan="5" class="text-center text-muted">No directorates found.</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Create Directorate Modal -->
+<div class="modal fade" id="createDirectorateModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Create Directorate</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="CreateDirectorate" method="post">
+                @Html.AntiForgeryToken()
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="dName">Name</label>
+                        <input type="text" class="form-control" id="dName" name="Name" required maxlength="100">
+                    </div>
+                    <div class="form-group">
+                        <label for="dDescription">Description</label>
+                        <textarea class="form-control" id="dDescription" name="Description" rows="3"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="dSortOrder">Sort Order</label>
+                        <input type="number" class="form-control" id="dSortOrder" name="SortOrder" value="0" min="0">
+                        <small class="form-text text-muted">Lower numbers appear first</small>
+                    </div>
+                    <div class="form-group">
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" id="dIsActive" name="IsActive" value="true" checked>
+                            <label class="form-check-label" for="dIsActive">Active</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success">Create</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Directorate Modal -->
+<div class="modal fade" id="editDirectorateModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Edit Directorate</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="EditDirectorate" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" id="editDId" name="Id">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="editDName">Name</label>
+                        <input type="text" class="form-control" id="editDName" name="Name" required maxlength="100">
+                    </div>
+                    <div class="form-group">
+                        <label for="editDDescription">Description</label>
+                        <textarea class="form-control" id="editDDescription" name="Description" rows="3"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="editDSortOrder">Sort Order</label>
+                        <input type="number" class="form-control" id="editDSortOrder" name="SortOrder" min="0">
+                    </div>
+                    <div class="form-group">
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" id="editDIsActive" name="IsActive" value="true">
+                            <label class="form-check-label" for="editDIsActive">Active</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script nonce="@Context.Items["Nonce"]">
+function editDirectorate(id, name, description, sortOrder, isActive) {
+    $('#editDId').val(id);
+    $('#editDName').val(name);
+    $('#editDDescription').val(description);
+    $('#editDSortOrder').val(sortOrder);
+    $('#editDIsActive').prop('checked', isActive);
+    $('#editDirectorateModal').modal('show');
+}
+</script>
+}
+

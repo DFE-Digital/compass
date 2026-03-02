@@ -1,0 +1,240 @@
+@model Compass.ViewModels.DemandTriage.ExploratoryReviewViewModel
+
+@{
+    ViewData["Title"] = $"Exploratory review — {Model.RequestReference}";
+}
+
+@await Html.PartialAsync("_DemandTriageStyles")
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb" class="govuk-breadcrumbs">
+        <ol class="govuk-breadcrumbs__list">
+            <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="/">Home</a></li>
+            <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" asp-action="Index" asp-controller="DemandTriage">Demand triage</a></li>
+            <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" asp-action="Detail" asp-controller="DemandTriage" asp-route-id="@Model.DemandTriageRequestId">@Model.RequestReference</a></li>
+            <li class="govuk-breadcrumbs__list-item" aria-current="page">Exploratory review</li>
+        </ol>
+    </nav>
+}
+
+<!-- ── Header ────────────────────────────────────────────────────────────── -->
+<div class="dt-header">
+    <div class="dt-header-inner">
+        <div>
+            <div class="dt-breadcrumb">
+                <a href="@Url.Action("Index","DemandTriage")">Demand triage</a>
+                <span>/</span>
+                <a href="@Url.Action("Detail","DemandTriage", new{id=Model.DemandTriageRequestId})">@Model.RequestReference</a>
+                <span>/</span> Exploratory review
+            </div>
+            <h1><i class="fas fa-search mr-2" aria-hidden="true"></i>Exploratory review</h1>
+            <p>@Model.RequestReference — @Model.RequestName</p>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid pt-3">
+
+        @if (Model.ValidationErrors.Any())
+        {
+            <div class="dt-notice dt-notice--danger mb-3">
+                <i class="fas fa-exclamation-circle"></i>
+                <div>
+                    <strong>Please fix the following:</strong>
+                    <ul class="mb-0 mt-1">
+                        @foreach (var e in Model.ValidationErrors) { <li>@e</li> }
+                    </ul>
+                </div>
+            </div>
+        }
+
+        @if (Model.IsCompleted)
+        {
+            <div class="dt-notice dt-notice--success mb-3">
+                <i class="fas fa-check-circle"></i>
+                <span>This exploratory review has been completed and the request has been advanced.</span>
+            </div>
+        }
+
+        <div class="row">
+            <div class="col-lg-8">
+
+                <form asp-action="SaveExploratoryReview" asp-controller="DemandTriage"
+                      asp-route-id="@Model.DemandTriageRequestId" method="post" novalidate>
+                    @Html.AntiForgeryToken()
+
+                    <!-- Findings -->
+                    <div class="dt-form-section">
+                        <div class="dt-form-section-header">
+                            <div class="dt-section-num">1</div>
+                            <h3>Review findings</h3>
+                        </div>
+                        <div class="dt-form-section-body">
+
+                            <div class="dt-form-group">
+                                <label asp-for="SummaryFindings" class="dt-label">
+                                    Summary findings <span class="text-danger">*</span>
+                                </label>
+                                <span class="dt-label-hint">Summarise the key findings from the exploratory review. What did you find out?</span>
+                                <textarea asp-for="SummaryFindings" class="dt-input" rows="6"
+                                          placeholder="Describe the key findings, context, and any initial assessment of feasibility"></textarea>
+                            </div>
+
+                            <div class="dt-form-group">
+                                <label asp-for="KeyRisks" class="dt-label">
+                                    Key risks <span class="text-danger">*</span>
+                                </label>
+                                <span class="dt-label-hint">What are the main risks or concerns identified during the review?</span>
+                                <textarea asp-for="KeyRisks" class="dt-input" rows="5"
+                                          placeholder="List the key risks, their likelihood, and potential impact"></textarea>
+                            </div>
+
+                            <div class="dt-form-group">
+                                <label asp-for="Dependencies" class="dt-label">Dependencies</label>
+                                <span class="dt-label-hint">Are there any dependencies on other programmes, services, or decisions?</span>
+                                <textarea asp-for="Dependencies" class="dt-input" rows="3"
+                                          placeholder="Optional — list any dependencies identified"></textarea>
+                            </div>
+
+                        </div>
+                    </div>
+
+                    <!-- Recommendation -->
+                    <div class="dt-form-section">
+                        <div class="dt-form-section-header">
+                            <div class="dt-section-num">2</div>
+                            <h3>Recommendation</h3>
+                        </div>
+                        <div class="dt-form-section-body">
+
+                            <div class="dt-form-group">
+                                <label class="dt-label">
+                                    Recommendation to proceed <span class="text-danger">*</span>
+                                </label>
+                                <span class="dt-label-hint">Based on your review, do you recommend this request proceeds to scoring?</span>
+                                <div class="dt-radio-group">
+                                    <label class="dt-radio-option @(Model.RecommendationToProceed == true ? "selected" : "")">
+                                        <input type="radio" asp-for="RecommendationToProceed" id="recYes" value="True" />
+                                        <div>
+                                            <span class="font-weight-600">Yes — recommend to proceed</span>
+                                            <div style="font-size:0.8rem;color:#6c757d;margin-top:0.1rem;">The request is ready for prioritisation scoring</div>
+                                        </div>
+                                    </label>
+                                    <label class="dt-radio-option @(Model.RecommendationToProceed == false ? "selected" : "")">
+                                        <input type="radio" asp-for="RecommendationToProceed" id="recNo" value="False" />
+                                        <div>
+                                            <span class="font-weight-600">No — do not recommend to proceed</span>
+                                            <div style="font-size:0.8rem;color:#6c757d;margin-top:0.1rem;">The request should not progress at this time</div>
+                                        </div>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="dt-form-group" id="reasonGroup"
+                                 style="@(Model.RecommendationToProceed == false ? "" : "display:none")">
+                                <label asp-for="ReasonNotProceeding" class="dt-label">
+                                    Reason for not proceeding <span class="text-danger">*</span>
+                                </label>
+                                <span class="dt-label-hint">Explain why this request should not proceed at this time</span>
+                                <textarea asp-for="ReasonNotProceeding" class="dt-input" rows="4"
+                                          placeholder="Provide a clear rationale for the recommendation not to proceed"></textarea>
+                            </div>
+
+                        </div>
+                    </div>
+
+                    <!-- Actions -->
+                    <div class="d-flex align-items-center gap-3 flex-wrap">
+                        <button type="submit" class="dt-action-btn dt-action-btn--primary" style="width:auto;padding:0.65rem 1.5rem;">
+                            <i class="fas fa-save" aria-hidden="true"></i>
+                            <span>Save review</span>
+                        </button>
+                        <a asp-action="Detail" asp-controller="DemandTriage" asp-route-id="@Model.DemandTriageRequestId"
+                           class="dt-action-btn dt-action-btn--secondary" style="width:auto;padding:0.65rem 1.25rem;">
+                            <i class="fas fa-times" aria-hidden="true"></i>
+                            <span>Cancel</span>
+                        </a>
+                    </div>
+
+                </form>
+
+                @if (!Model.IsCompleted)
+                {
+                    <div class="dt-section-card mt-3" style="border-color:#28a745;">
+                        <div class="dt-section-header" style="background:#e8f5e9;">
+                            <h3 style="color:#155724;"><i class="fas fa-check-circle" aria-hidden="true"></i> Complete the review</h3>
+                        </div>
+                        <div class="dt-section-body">
+                            <p style="font-size:0.88rem;color:#495057;margin-bottom:1rem;">
+                                Once you have saved your findings and recommendation, mark the review as complete.
+                                This will advance the request to the next stage.
+                            </p>
+                            <form asp-action="CompleteExploratoryReview" asp-controller="DemandTriage"
+                                  asp-route-id="@Model.DemandTriageRequestId" method="post">
+                                @Html.AntiForgeryToken()
+                                <button type="submit" class="dt-action-btn dt-action-btn--success" style="width:auto;padding:0.65rem 1.5rem;"
+                                        onclick="return confirm('Mark the exploratory review as complete? This will advance the request status.')">
+                                    <i class="fas fa-check-circle" aria-hidden="true"></i>
+                                    <span>Complete exploratory review</span>
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                }
+
+            </div>
+
+            <!-- Context sidebar -->
+            <div class="col-lg-4">
+                <div class="dt-action-panel">
+                    <div class="dt-action-panel-header">
+                        <i class="fas fa-info-circle mr-1" aria-hidden="true"></i> Request context
+                    </div>
+                    <div class="dt-action-panel-body" style="font-size:0.82rem;">
+                        <p class="text-muted mb-2" style="font-size:0.78rem;text-transform:uppercase;letter-spacing:0.04em;font-weight:700;">Purpose of this stage</p>
+                        <p style="font-size:0.85rem;color:#495057;">
+                            The exploratory review is a lightweight "is this real and ready?" check before the request
+                            enters prioritisation scoring.
+                        </p>
+                        <hr />
+                        <p class="text-muted mb-2" style="font-size:0.78rem;text-transform:uppercase;letter-spacing:0.04em;font-weight:700;">What to assess</p>
+                        <ul style="font-size:0.85rem;color:#495057;padding-left:1.25rem;margin:0;">
+                            <li class="mb-1">Is the problem clearly defined?</li>
+                            <li class="mb-1">Is there a clear business owner and SRO?</li>
+                            <li class="mb-1">Is there evidence of user need?</li>
+                            <li class="mb-1">Are there any obvious blockers or dependencies?</li>
+                            <li class="mb-1">Is the request within DDT scope?</li>
+                        </ul>
+                        <hr />
+                        <a asp-action="Detail" asp-controller="DemandTriage" asp-route-id="@Model.DemandTriageRequestId"
+                           class="dt-action-btn dt-action-btn--secondary" style="font-size:0.82rem;">
+                            <i class="fas fa-arrow-left" aria-hidden="true"></i>
+                            <span>Back to request</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</section>
+
+@section Scripts {
+    <script>
+        document.querySelectorAll('input[name="RecommendationToProceed"]').forEach(function(radio) {
+            radio.addEventListener('change', function() {
+                document.getElementById('reasonGroup').style.display =
+                    this.value === 'False' ? '' : 'none';
+            });
+        });
+        document.querySelectorAll('.dt-radio-option input[type="radio"]').forEach(function(radio) {
+            radio.addEventListener('change', function() {
+                var name = this.name;
+                document.querySelectorAll('.dt-radio-option input[name="' + name + '"]').forEach(function(r) {
+                    r.closest('.dt-radio-option').classList.toggle('selected', r.checked);
+                });
+            });
+        });
+    </script>
+}

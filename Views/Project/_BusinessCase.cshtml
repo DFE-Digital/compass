@@ -1,0 +1,264 @@
+@model Compass.Models.Project
+@using Compass.Models
+@using System.Linq
+
+@{
+    var businessCaseProjects = ViewBag.BusinessCaseProjects as List<BusinessCaseProject> ?? new List<BusinessCaseProject>();
+    var allBusinessCases = ViewBag.AllBusinessCases as List<dynamic> ?? new List<dynamic>();
+}
+
+<div class="card mb-4">
+    <div class="card-header">
+        <h3 class="card-title">Linked business cases</h3>
+        <div class="card-tools">
+            @if (businessCaseProjects.Count == 0)
+            {
+                <a href="#" data-toggle="modal" data-target="#linkBusinessCaseModal">Link business case</a>
+            }
+        </div>
+    </div>
+    <div class="card-body p-0" style="overflow-x: auto; max-width: 100%;">
+        @if (businessCaseProjects.Any())
+        {
+            <div class="table-responsive" style="max-width: 100%;">
+                <table class="table table-hover text-nowrap mb-0" style="width: 100%; margin-bottom: 0;">
+                    <thead>
+                        <tr>
+                            <th style="width: 20%; min-width: 150px;">Business case ID</th>
+                            <th style="width: 40%; min-width: 300px;">Title</th>
+                            <th style="width: 20%; min-width: 150px;">Business area</th>
+                            <th style="width: 15%; min-width: 120px;">Status</th>
+                            <th style="width: 15%; min-width: 150px;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var businessCaseProject in businessCaseProjects.OrderByDescending(bcp => bcp.CreatedAt))
+                        {
+                            var businessCase = businessCaseProject.BusinessCase;
+                            <tr>
+                                <td data-label="Business case ID">
+                                    @if (businessCase != null)
+                                    {
+                                        <span class="text-monospace">@businessCase.BusinessCaseId</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">N/A</span>
+                                    }
+                                </td>
+                                <td data-label="Title">
+                                    @if (businessCase != null)
+                                    {
+                                        <a asp-controller="DemandManagement" asp-action="BusinessCaseDetails" asp-route-id="@businessCase.Id">
+                                            @businessCase.Title
+                                        </a>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">N/A</span>
+                                    }
+                                </td>
+                                <td data-label="Business area">@(businessCase?.BusinessArea ?? "Not set")</td>
+                                <td data-label="Status">
+                                    @if (businessCase != null)
+                                    {
+                                        var statusName = businessCase.StatusLookup?.Name ?? businessCase.Status;
+                                        var statusCssClass = businessCase.StatusLookup?.CssClass;
+                                        if (!string.IsNullOrWhiteSpace(statusName))
+                                        {
+                                            <span class="badge @(statusCssClass ?? "badge-secondary")">@statusName</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">Not set</span>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">Not set</span>
+                                    }
+                                </td>
+                                <td data-label="Actions">
+                                    @if (businessCase != null)
+                                    {
+                                        <a asp-controller="DemandManagement" asp-action="BusinessCaseDetails" asp-route-id="@businessCase.Id" class="btn btn-sm btn-info">
+                                            <i class="fas fa-eye"></i> View
+                                        </a>
+                                        <button type="button" class="btn btn-sm btn-danger unlink-business-case-btn" 
+                                                data-business-case-id="@businessCase.Id"
+                                                data-business-case-title="@(businessCase.Title ?? "Unknown")"
+                                                data-business-case-code="@(businessCase.BusinessCaseId ?? "")"
+                                                data-project-id="@Model.Id"
+                                                data-business-case-project-id="@businessCaseProject.Id">
+                                            <i class="fas fa-unlink"></i> Unlink
+                                        </button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <div class="card-footer">
+                <a href="#" data-toggle="modal" data-target="#linkBusinessCaseModal" class="btn btn-sm btn-success">
+                    <i class="fas fa-link"></i> Link another business case
+                </a>
+            </div>
+        }
+        else
+        {
+            <div class="alert alert-info m-3">
+                <i class="fas fa-info-circle mr-2"></i>No business cases are linked to this work item. You can link a business case to associate this work item with planning and demand management.
+            </div>
+        }
+    </div>
+</div>
+
+<!-- Link Business Case Modal -->
+<div class="modal fade" id="linkBusinessCaseModal" tabindex="-1" role="dialog" aria-labelledby="linkBusinessCaseModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="linkBusinessCaseModalLabel">Link business case</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-controller="Project" asp-action="LinkBusinessCase" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="projectId" value="@Model.Id" />
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="businessCaseId">Select business case <span class="text-danger">*</span></label>
+                        <select class="form-control" id="businessCaseId" name="businessCaseId" required>
+                            <option value="">-- Select a business case --</option>
+                            @foreach (var bc in allBusinessCases)
+                            {
+                                var isAlreadyLinked = businessCaseProjects.Any(bcp => bcp.BusinessCaseId == bc.Id);
+                                if (!isAlreadyLinked)
+                                {
+                                    <option value="@bc.Id">@bc.BusinessCaseId - @bc.Title</option>
+                                }
+                            }
+                        </select>
+                        <small class="form-text text-muted">Select a business case to link to this work item.</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success">Link business case</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Unlink Business Case Confirmation Modal -->
+<div class="modal fade" id="unlinkBusinessCaseModal" tabindex="-1" role="dialog" aria-labelledby="unlinkBusinessCaseModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="unlinkBusinessCaseModalLabel">Confirm unlink business case</h5>
+                <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-controller="Project" asp-action="UnlinkBusinessCase" method="post" id="unlinkBusinessCaseForm">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="projectId" id="unlinkProjectId" value="@Model.Id" />
+                <input type="hidden" name="businessCaseProjectId" id="unlinkBusinessCaseProjectId" />
+                <div class="modal-body">
+                    <p>Are you sure you want to unlink the business case <strong id="unlinkBusinessCaseTitle"></strong> from this work item?</p>
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle mr-2"></i>
+                        <strong>Note:</strong> This will remove the link between the work item and the business case, but the business case itself will not be deleted.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-danger">
+                        <i class="fas fa-unlink mr-2"></i>Unlink business case
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script nonce="@Context.Items["Nonce"]">
+    (function() {
+        var defaultProjectId = @Model.Id;
+        
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Setup unlink confirmation modal
+        function setupUnlinkModal() {
+            // Use click handler on buttons
+            document.addEventListener('click', function(e) {
+                const unlinkBtn = e.target.closest('.unlink-business-case-btn');
+                if (unlinkBtn) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    const businessCaseTitle = unlinkBtn.getAttribute('data-business-case-title') || 'Unknown';
+                    const businessCaseCode = unlinkBtn.getAttribute('data-business-case-code') || '';
+                    const projectId = unlinkBtn.getAttribute('data-project-id');
+                    const businessCaseProjectId = unlinkBtn.getAttribute('data-business-case-project-id');
+                    
+                    console.log('Unlink button clicked:', { projectId, businessCaseProjectId, businessCaseTitle, businessCaseCode, defaultProjectId });
+                    
+                    // Update modal content
+                    const titleElement = document.getElementById('unlinkBusinessCaseTitle');
+                    if (titleElement) {
+                        const displayText = businessCaseCode 
+                            ? `${escapeHtml(businessCaseTitle)} (${escapeHtml(businessCaseCode)})`
+                            : escapeHtml(businessCaseTitle);
+                        titleElement.textContent = displayText;
+                    }
+                    
+                    // Update form hidden inputs - use defaultProjectId as fallback
+                    const projectIdInput = document.getElementById('unlinkProjectId');
+                    const businessCaseProjectIdInput = document.getElementById('unlinkBusinessCaseProjectId');
+                    if (projectIdInput) {
+                        projectIdInput.value = projectId || defaultProjectId.toString();
+                        console.log('Setting projectId to:', projectIdInput.value);
+                    }
+                    if (businessCaseProjectIdInput) {
+                        businessCaseProjectIdInput.value = businessCaseProjectId || '';
+                        console.log('Setting businessCaseProjectId to:', businessCaseProjectIdInput.value);
+                    }
+                    
+                    // Show modal using jQuery if available, otherwise Bootstrap
+                    if (typeof jQuery !== 'undefined') {
+                        jQuery('#unlinkBusinessCaseModal').modal('show');
+                    } else {
+                        const modal = document.getElementById('unlinkBusinessCaseModal');
+                        if (modal) {
+                            // Try Bootstrap 5 first, then Bootstrap 4
+                            if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+                                const bsModal = new bootstrap.Modal(modal);
+                                bsModal.show();
+                            } else {
+                                modal.style.display = 'block';
+                                modal.classList.add('show');
+                                document.body.classList.add('modal-open');
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Initialize when DOM is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', setupUnlinkModal);
+        } else {
+            setupUnlinkModal();
+        }
+    })();
+</script>

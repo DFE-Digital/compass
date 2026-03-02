@@ -3,34 +3,51 @@
 @{
     ViewData["Title"] = "Performance metric returns";
     var product = ViewBag.Product as Compass.Models.ProductDto;
+    // Use product's DocumentId as the primary identifier for all links
+    var productDocumentId = product?.DocumentId ?? product?.FipsId ?? "";
+}
+
+@{
+    ViewBag.BrandText = "Performance reporting";
+    ViewBag.NavLinks = new[]
+    {
+        new { Text = "Your products", Action = "PerformanceMetrics", Controller = "ProductReporting", Url = Url.Action("PerformanceMetrics", "ProductReporting", new { view = "mine" }), IsButton = false, IsActive = false },
+        new { Text = "Watched", Action = "PerformanceMetrics", Controller = "ProductReporting", Url = Url.Action("PerformanceMetrics", "ProductReporting", new { view = "watched" }), IsButton = false, IsActive = false },
+        new { Text = "All products", Action = "PerformanceMetrics", Controller = "ProductReporting", Url = Url.Action("PerformanceMetrics", "ProductReporting", new { view = "all" }), IsButton = false, IsActive = false },
+        new { Text = "Guidance", Action = "Guidance", Controller = "ProductReporting", Url = (string)null, IsButton = false, IsActive = false }
+    };
+}
+
+@section Breadcrumbs {
+    <style>
+        .breadcrumb a:hover {
+            color: #003078 !important;
+            text-decoration: underline !important;
+        }
+    </style>
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <li class="breadcrumb-item">
+                <a href="/" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a asp-controller="ProductReporting" asp-action="PerformanceMetrics" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Product performance metrics</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page" style="color: #0b0c0c; font-weight: 600;">@product.Title</li>
+        </ol>
+    </nav>
 }
 
 
-<div class="content-header">
-    <div class="container-fluid">
-        <div class="row mb-2">
-            <div class="col-sm-6">
-             <ol class="breadcrumb">
-                    <li class="breadcrumb-item"><a href="/">Home</a></li>
-                    <li class="breadcrumb-item"><a asp-action="PerformanceMetrics">Products</a></li>
-                    <li class="breadcrumb-item active">@product.Title</li>
-                </ol>
-                <h1 class="m-0">Performance metric returns</h1>
-            </div>
-            <div class="col-sm-6">
-               
-            </div>
-        </div>
-    </div>
-</div>
 
 <section class="content">
     <div class="container-fluid">
+        @await Html.PartialAsync("_ModuleNavbar")
         <div class="row">
-            <aside class="col-xl-3 col-lg-4 mb-4">
+            <aside class="col-xxl-2 col-xl-2 col-lg-3 col-md-4 col-sm-12 col-12 mb-4">
                 <partial name="_ProductSummarySidebar" model="product" />
             </aside>
-            <div class="col-xl-9 col-lg-8">
+            <div class="col-xxl-10 col-xl-10 col-lg-9 col-md-8 col-sm-12 col-12">
                 @{
                     var currentReturns = Model?.Where(r => r.Status == Compass.Models.ReturnStatus.Due || r.Status == Compass.Models.ReturnStatus.Late).ToList() ?? new List<Compass.Models.ProductReturn>();
                     var upcomingReturns = Model?.Where(r => r.Status == Compass.Models.ReturnStatus.Upcoming).ToList() ?? new List<Compass.Models.ProductReturn>();
@@ -45,13 +62,12 @@
                             <h3 class="card-title">Current returns</h3>
                         </div>
                         <div class="card-body table-responsive p-0">
-                            <table class="table table-hover text-nowrap">
+                            <table class="table table-hover text-nowrap sortable-table mb-0">
                                 <thead>
                                     <tr>
-                                        <th class="col-period" style="width: 30%;">Period</th>
-                                        <th class="col-date" style="width: 25%;">Due date</th>
-                                        <th class="col-status" style="width: 20%;">Status</th>
-                                        <th class="col-actions text-right" style="width: 25%;">Actions</th>
+                                        <th class="col-period" style="width: 40%;">Period</th>
+                                        <th class="col-date" style="width: 30%;">Due date</th>
+                                        <th class="col-status" style="width: 30%;">Status</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -65,12 +81,12 @@
 
                                         <tr>
                                             <td>
-                                                <a asp-action="SubmitMetrics" asp-route-fipsId="@return_item.FipsId" asp-route-year="@return_item.Year" asp-route-month="@return_item.Month" class="font-weight-bold">
+                                                <a asp-controller="ProductReporting" asp-action="SubmitMetrics" asp-route-documentId="@productDocumentId" asp-route-year="@return_item.Year" asp-route-month="@return_item.Month" class="font-weight-bold">
                                                     @(new DateTime(return_item.Year, return_item.Month, 1).ToString("MMMM yyyy"))
                                                 </a>
                                             </td>
                                             <td>
-                                                @dueDate.ToString("d MMMM yyyy")
+                                                @dueDate.ToString("d MMM yyyy")
                                             </td>
                                             <td>
                                                 @switch (return_item.Status)
@@ -80,17 +96,6 @@
                                                         break;
                                                     case Compass.Models.ReturnStatus.Late:
                                                         <span class="badge badge-danger">Late</span>
-                                                        break;
-                                                }
-                                            </td>
-                                            <td class="text-right">
-                                                @switch (return_item.Status)
-                                                {
-                                                    case Compass.Models.ReturnStatus.Due:
-                                                    case Compass.Models.ReturnStatus.Late:
-                                                        <a asp-action="SubmitMetrics" asp-route-fipsId="@return_item.FipsId" asp-route-year="@return_item.Year" asp-route-month="@return_item.Month" class="btn btn-sm btn-primary">
-                                                            Complete return
-                                                        </a>
                                                         break;
                                                 }
                                             </td>
@@ -110,13 +115,12 @@
                             <h3 class="card-title">Upcoming returns</h3>
                         </div>
                         <div class="card-body table-responsive p-0">
-                            <table class="table table-hover text-nowrap">
+                            <table class="table table-hover text-nowrap sortable-table mb-0">
                                 <thead>
                                     <tr>
-                                        <th class="col-period" style="width: 30%;">Period</th>
-                                        <th class="col-date" style="width: 25%;">Due date</th>
-                                        <th class="col-status" style="width: 20%;">Status</th>
-                                        <th class="col-actions text-right" style="width: 25%;">Actions</th>
+                                        <th class="col-period" style="width: 40%;">Period</th>
+                                        <th class="col-date" style="width: 30%;">Due date</th>
+                                        <th class="col-status" style="width: 30%;">Status</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -127,20 +131,15 @@
 
                                         <tr>
                                             <td>
-                                                <a asp-action="SubmitMetrics" asp-route-fipsId="@return_item.FipsId" asp-route-year="@return_item.Year" asp-route-month="@return_item.Month" class="font-weight-bold">
+                                                <a asp-controller="ProductReporting" asp-action="SubmitMetrics" asp-route-documentId="@productDocumentId" asp-route-year="@return_item.Year" asp-route-month="@return_item.Month" class="font-weight-bold">
                                                     @(new DateTime(return_item.Year, return_item.Month, 1).ToString("MMMM yyyy"))
                                                 </a>
                                             </td>
                                             <td>
-                                                @dueDate.ToString("d MMMM yyyy")
+                                                @dueDate.ToString("d MMM yyyy")
                                             </td>
                                             <td>
                                                 <span class="badge badge-secondary">Upcoming</span>
-                                            </td>
-                                            <td class="text-right">
-                                                <a asp-action="SubmitMetrics" asp-route-fipsId="@return_item.FipsId" asp-route-year="@return_item.Year" asp-route-month="@return_item.Month" class="btn btn-sm btn-outline-primary">
-                                                    View
-                                                </a>
                                             </td>
                                         </tr>
                                     }
@@ -158,13 +157,12 @@
                             <h3 class="card-title">Submitted returns</h3>
                         </div>
                         <div class="card-body table-responsive p-0">
-                            <table class="table table-hover text-nowrap">
+                            <table class="table table-hover text-nowrap sortable-table mb-0">
                                 <thead>
                                     <tr>
-                                        <th class="col-period" style="width: 30%;">Period</th>
-                                        <th class="col-date" style="width: 25%;">Submitted</th>
-                                        <th class="col-status" style="width: 20%;">Status</th>
-                                        <th class="col-actions text-right" style="width: 25%;">Actions</th>
+                                        <th class="col-period" style="width: 40%;">Period</th>
+                                        <th class="col-date" style="width: 30%;">Submitted</th>
+                                        <th class="col-status" style="width: 30%;">Status</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -183,9 +181,7 @@
                                             </td>
                                             <td>
                                                 <span class="badge badge-success">Submitted</span>
-                                            </td>
-                                            <td class="text-right">
-                                                <button type="button" class="btn btn-sm btn-warning" data-toggle="modal" data-target="#unsubmitModal_@return_item.Id">
+                                                <button type="button" class="btn btn-sm btn-warning ml-2" data-toggle="modal" data-target="#unsubmitModal_@return_item.Id">
                                                     Unsubmit
                                                 </button>
                                             </td>

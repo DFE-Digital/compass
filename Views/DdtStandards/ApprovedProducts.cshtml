@@ -1,0 +1,447 @@
+@model Compass.ViewModels.DdtStandardsManageViewModel
+@inject Compass.Services.IPermissionService PermissionService
+@{
+    ViewData["Title"] = "Manage Approved Products";
+    var standardProducts = ViewBag.StandardProducts as List<Compass.Models.StandardProduct> ?? new List<Compass.Models.StandardProduct>();
+    var ddtStandardProducts = ViewBag.DdtStandardProducts as List<Compass.Models.DdtStandardProduct> ?? new List<Compass.Models.DdtStandardProduct>();
+    var standards = ViewBag.Standards as List<Compass.Models.DdtStandard> ?? new List<Compass.Models.DdtStandard>();
+    
+    // Check if user is in Standards Managers group
+    bool isStandardsManager = false;
+    try
+    {
+        var userEmail = User.Identity?.Name 
+            ?? User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value
+            ?? string.Empty;
+        if (!string.IsNullOrEmpty(userEmail))
+        {
+            isStandardsManager = await PermissionService.IsInGroupAsync(userEmail, "Standards Managers");
+        }
+    }
+    catch
+    {
+        // Non-blocking: section will not be shown
+    }
+}
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem;">
+            <li class="breadcrumb-item">
+                <a href="@Url.Action("Index", "Home")" style="color: #005ea5; text-decoration: none;">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a href="@Url.Action("Index", "DdtStandards")" style="color: #005ea5; text-decoration: none;">Manage Standards</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page">Approved Products</li>
+        </ol>
+    </nav>
+}
+
+<style>
+    .sortable-header {
+        transition: color 0.2s ease;
+    }
+    .sortable-header:hover {
+        color: #005ea5 !important;
+        text-decoration: underline !important;
+    }
+</style>
+
+@{
+    ViewBag.BrandText = "Standards management";
+    ViewBag.NavLinks = new object[0];
+}
+
+<section class="content">
+    <div class="container-fluid">
+        @await Html.PartialAsync("_ModuleNavbar")
+        
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["SuccessMessage"]
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        <div class="row">
+            <!-- Right Column: Products List -->
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Products</h3>
+                        <div class="card-tools">
+                            <a href="#" data-toggle="modal" data-target="#createProductModal" style="color: #005ea5; text-decoration: none;">
+                                Add product
+                            </a>
+                        </div>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table id="productsTable" class="table table-hover text-nowrap sortable-table mb-0">
+                                <thead>
+                                    <tr>
+                                        <th class="sortable" data-column="Name" tabindex="0" role="button" aria-label="Sort by Name">Name <i class="fas fa-sort sort-icon"></i></th>
+                                        <th class="sortable" data-column="Provider" tabindex="0" role="button" aria-label="Sort by Provider">Provider <i class="fas fa-sort sort-icon"></i></th>
+                                        <th class="sortable" data-column="Version" tabindex="0" role="button" aria-label="Sort by Version">Version <i class="fas fa-sort sort-icon"></i></th>
+                                        <th class="sortable" data-column="Status" tabindex="0" role="button" aria-label="Sort by Approval Status">Approval Status <i class="fas fa-sort sort-icon"></i></th>
+                                        <th>Standards</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var product in standardProducts)
+                                    {
+                                        var productStandards = ddtStandardProducts.Where(dsp => dsp.StandardProductId == product.Id).ToList();
+                                        <tr>
+                                            <td>
+                                                <a href="#" class="text-primary" style="text-decoration: none; font-weight: bold;" 
+                                                   data-toggle="modal" 
+                                                   data-target="#editProductModal"
+                                                   data-id="@product.Id"
+                                                   data-name="@(product.Name?.Replace("\"", "&quot;") ?? "")"
+                                                   data-description="@((product.Description ?? "").Replace("\"", "&quot;"))"
+                                                   data-provider="@((product.Provider ?? "").Replace("\"", "&quot;"))"
+                                                   data-version="@((product.Version ?? "").Replace("\"", "&quot;"))"
+                                                   data-status="@product.ApprovalStatus">
+                                                    @product.Name
+                                                </a>
+                                                @if (!string.IsNullOrWhiteSpace(product.Description))
+                                                {
+                                                    <br />
+                                                    <small class="text-muted">@(product.Description.Length > 100 ? product.Description.Substring(0, 100) + "..." : product.Description)</small>
+                                                }
+                                            </td>
+                                            <td>@(product.Provider ?? "-")</td>
+                                            <td>@(product.Version ?? "-")</td>
+                                            <td>
+                                                @if (product.ApprovalStatus == "Approved")
+                                                {
+                                                    <span class="badge badge-success">Approved</span>
+                                                }
+                                                else if (product.ApprovalStatus == "Rejected")
+                                                {
+                                                    <span class="badge badge-danger">Rejected</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge badge-warning">Pending</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @{
+                                                    var approvedStandards = productStandards.Where(ps => ps.ProductType == "Approved").Select(ps => ps.DdtStandard.Title).OrderBy(t => t).ToList();
+                                                    var toleratedStandards = productStandards.Where(ps => ps.ProductType == "Tolerated").Select(ps => ps.DdtStandard.Title).OrderBy(t => t).ToList();
+                                                }
+                                                @if (approvedStandards.Any() || toleratedStandards.Any())
+                                                {
+                                                    @if (approvedStandards.Any())
+                                                    {
+                                                        <div class="mb-2">
+                                                            <strong>Approved for standards:</strong>
+                                                            <ul class="mb-0 pl-3" style="list-style-type: disc;">
+                                                                @foreach (var standardTitle in approvedStandards)
+                                                                {
+                                                                    <li>@standardTitle</li>
+                                                                }
+                                                            </ul>
+                                                        </div>
+                                                    }
+                                                    @if (toleratedStandards.Any())
+                                                    {
+                                                        <div>
+                                                            <strong>Tolerated for standards:</strong>
+                                                            <ul class="mb-0 pl-3" style="list-style-type: disc;">
+                                                                @foreach (var standardTitle in toleratedStandards)
+                                                                {
+                                                                    <li>@standardTitle</li>
+                                                                }
+                                                            </ul>
+                                                        </div>
+                                                    }
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Create Product Modal -->
+<div class="modal fade" id="createProductModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form asp-action="CreateProduct" method="post">
+                @Html.AntiForgeryToken()
+                <div class="modal-header">
+                    <h5 class="modal-title">Create Product</h5>
+                    <button type="button" class="close" data-dismiss="modal">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="productName">Name <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="productName" name="name" required maxlength="200" />
+                    </div>
+                    <div class="form-group">
+                        <label for="productDescription">Description</label>
+                        <textarea class="form-control" id="productDescription" name="description" rows="3" maxlength="2000"></textarea>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="productProvider">Provider</label>
+                                <input type="text" class="form-control" id="productProvider" name="provider" maxlength="200" />
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="productVersion">Version</label>
+                                <input type="text" class="form-control" id="productVersion" name="version" maxlength="100" />
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="productApprovalStatus">Approval Status</label>
+                        <select class="form-control" id="productApprovalStatus" name="approvalStatus">
+                            <option value="Pending">Pending</option>
+                            <option value="Approved">Approved</option>
+                            <option value="Rejected">Rejected</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success">Create</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Product Modal -->
+<div class="modal fade" id="editProductModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form asp-action="UpdateProduct" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="id" id="editProductId" />
+                <div class="modal-header">
+                    <h5 class="modal-title">Edit Product</h5>
+                    <button type="button" class="close" data-dismiss="modal">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="editProductName">Name <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="editProductName" name="name" required maxlength="200" />
+                    </div>
+                    <div class="form-group">
+                        <label for="editProductDescription">Description</label>
+                        <textarea class="form-control" id="editProductDescription" name="description" rows="3" maxlength="2000"></textarea>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="editProductProvider">Provider</label>
+                                <input type="text" class="form-control" id="editProductProvider" name="provider" maxlength="200" />
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="editProductVersion">Version</label>
+                                <input type="text" class="form-control" id="editProductVersion" name="version" maxlength="100" />
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="editProductApprovalStatus">Approval Status</label>
+                        <select class="form-control" id="editProductApprovalStatus" name="approvalStatus">
+                            <option value="Pending">Pending</option>
+                            <option value="Approved">Approved</option>
+                            <option value="Rejected">Rejected</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success">Update</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Assign to Standard Modal -->
+<div class="modal fade" id="assignStandardModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form asp-action="AssignProductToStandard" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="productId" id="assignProductId" />
+                <div class="modal-header">
+                    <h5 class="modal-title">Assign Product to Standard</h5>
+                    <button type="button" class="close" data-dismiss="modal">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>Product</label>
+                        <input type="text" class="form-control" id="assignProductName" readonly />
+                    </div>
+                    <div class="form-group">
+                        <label for="assignStandardId">Standard <span class="text-danger">*</span></label>
+                        <select class="form-control" id="assignStandardId" name="standardId" required>
+                            <option value="">Select a standard...</option>
+                            @foreach (var standard in standards)
+                            {
+                                <option value="@standard.Id">@standard.Title</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="assignProductType">Product Type <span class="text-danger">*</span></label>
+                        <select class="form-control" id="assignProductType" name="productType" required>
+                            <option value="Approved">Approved</option>
+                            <option value="Tolerated">Tolerated</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="assignNotes">Notes</label>
+                        <textarea class="form-control" id="assignNotes" name="notes" rows="3" maxlength="1000"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success">Assign</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script nonce="@Context.Items["Nonce"]">
+        $(document).ready(function() {
+            // Initialize sortable table
+            var productsTable = $('#productsTable');
+            if (productsTable.length) {
+                initializeSortableTable(productsTable);
+            }
+            
+            function initializeSortableTable(table) {
+                var currentSort = { column: null, direction: 'asc' };
+                var tableId = table.attr('id');
+
+                table.find('.sortable').on('click keypress', function(e) {
+                    if (e.type === 'keypress' && e.which !== 13 && e.which !== 32) {
+                        return;
+                    }
+                    
+                    var column = $(this).data('column');
+                    var direction = 'asc';
+                    
+                    if (currentSort.column === column && currentSort.direction === 'asc') {
+                        direction = 'desc';
+                    }
+                    
+                    sortTable(table, column, direction, tableId);
+                    currentSort = { column: column, direction: direction };
+                });
+
+                function sortTable(table, column, direction, tableId) {
+                    var tbody = table.find('tbody');
+                    var rows = tbody.find('tr').toArray();
+                    
+                    rows.sort(function(a, b) {
+                        var aVal, bVal;
+                        var colIndex = table.find('thead th[data-column="' + column + '"]').index();
+                        
+                        if (column === 'Status') {
+                            // Sort by status badge text
+                            aVal = $(a).find('td').eq(colIndex).find('.badge').text().trim().toLowerCase();
+                            bVal = $(b).find('td').eq(colIndex).find('.badge').text().trim().toLowerCase();
+                        } else {
+                            aVal = $(a).find('td').eq(colIndex).text().trim().toLowerCase();
+                            bVal = $(b).find('td').eq(colIndex).text().trim().toLowerCase();
+                        }
+                        
+                        if (direction === 'asc') {
+                            return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+                        } else {
+                            return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
+                        }
+                    });
+                    
+                    tbody.empty();
+                    rows.forEach(function(row) {
+                        tbody.append(row);
+                    });
+                    
+                    updateSortIcons(table, column, direction);
+                }
+
+                function updateSortIcons(table, column, direction) {
+                    table.find('.sortable .fa-sort-up, .sortable .fa-sort-down').removeClass('fa-sort-up fa-sort-down').addClass('fa-sort');
+                    var header = table.find('.sortable[data-column="' + column + '"]');
+                    var iconClass = direction === 'asc' ? 'fa-sort-up' : 'fa-sort-down';
+                    header.find('i').removeClass('fa-sort').addClass(iconClass);
+                }
+            }
+            
+            $('#editProductModal').on('show.bs.modal', function (event) {
+                var button = $(event.relatedTarget);
+                var id = button.attr('data-id');
+                var name = button.attr('data-name') || '';
+                var description = button.attr('data-description') || '';
+                var provider = button.attr('data-provider') || '';
+                var version = button.attr('data-version') || '';
+                var status = button.attr('data-status') || 'Pending';
+                
+                // Decode HTML entities
+                name = $('<textarea/>').html(name).text();
+                description = $('<textarea/>').html(description).text();
+                provider = $('<textarea/>').html(provider).text();
+                version = $('<textarea/>').html(version).text();
+                
+                $('#editProductId').val(id);
+                $('#editProductName').val(name);
+                $('#editProductDescription').val(description);
+                $('#editProductProvider').val(provider);
+                $('#editProductVersion').val(version);
+                $('#editProductApprovalStatus').val(status);
+            });
+
+            $('#assignStandardModal').on('show.bs.modal', function (event) {
+                var button = $(event.relatedTarget);
+                var productId = button.attr('data-productid');
+                var productName = button.attr('data-productname') || '';
+                
+                // Decode HTML entities
+                productName = $('<textarea/>').html(productName).text();
+                
+                $('#assignProductId').val(productId);
+                $('#assignProductName').val(productName);
+                // Reset the form
+                $('#assignStandardId').val('');
+                $('#assignProductType').val('Approved');
+                $('#assignNotes').val('');
+            });
+        });
+    </script>
+}
+

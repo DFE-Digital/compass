@@ -1,0 +1,321 @@
+@model Compass.Models.Project
+
+@{
+    var statusUpdates = Model.StatusUpdates?
+        .OrderByDescending(su => su.CreatedAt)
+        .ToList() ?? new List<Compass.Models.ProjectStatusUpdate>();
+    var successes = Model.Successes
+        .OrderByDescending(s => s.RecordedAt)
+        .ToList();
+    var isAdmin = User.IsInRole("Admin") || User.IsInRole("SuperAdmin");
+}
+
+<!-- Status Updates Card -->
+<div class="card mb-4" id="statusupdates">
+    <div class="card-header">
+        <h3 class="card-title">Status updates</h3>
+        <div class="card-tools">
+            <a asp-controller="Project" asp-action="CreateStatusUpdate" asp-route-projectId="@Model.Id">Add status update</a>
+        </div>
+    </div>
+    <div class="card-body table-responsive p-0">
+        @if (statusUpdates.Any())
+        {
+            <table class="table table-hover text-nowrap sortable-table mb-0 status-updates-table">
+                <thead>
+                    <tr>
+                        <th class="col-width-60 sortable" data-column="Narrative" tabindex="0" role="button" aria-label="Sort by Update">
+                            Update
+                            <i class="fas fa-sort float-right sort-icon-default"></i>
+                        </th>
+                        <th class="col-width-20 sortable" data-column="CreatedAt" tabindex="0" role="button" aria-label="Sort by Created Date">
+                            Created
+                            <i class="fas fa-sort float-right sort-icon-default"></i>
+                        </th>
+                        <th class="col-width-20 sortable" data-column="UpdatedAt" tabindex="0" role="button" aria-label="Sort by Last Edited">
+                            Last edited
+                            <i class="fas fa-sort float-right sort-icon-default"></i>
+                        </th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var update in statusUpdates)
+                    {
+                        <tr>
+                            <td>
+                                <a asp-controller="Project" asp-action="StatusUpdateDetails" asp-route-projectId="@Model.Id" asp-route-statusUpdateId="@update.Id">
+                                    @{
+                                        var truncatedNarrative = TruncateStatusUpdate(update.Narrative);
+                                    }
+                                    @Html.Raw(truncatedNarrative)
+                                </a>
+                            </td>
+                            <td>
+                                @if (update.IsBulkImport)
+                                {
+                                    <strong>Bulk import</strong>
+                                }
+                                else
+                                {
+                                    <strong>@update.CreatedAt.ToString("dd MMM yyyy")</strong><br />
+                                    @if (!string.IsNullOrWhiteSpace(update.CreatedByName))
+                                    {
+                                        <small class="text-muted">@update.CreatedByName</small>
+                                    }
+                                    else if (!string.IsNullOrWhiteSpace(update.CreatedByEmail))
+                                    {
+                                        <small class="text-muted">@update.CreatedByEmail</small>
+                                    }
+                                    else if (update.CreatedByUser != null)
+                                    {
+                                        <small class="text-muted">@update.CreatedByUser.Name</small>
+                                    }
+                                    else
+                                    {
+                                        <small class="text-muted">Unknown</small>
+                                    }
+                                }
+                            </td>
+                            <td>
+                                @if (update.UpdatedAt.HasValue && update.UpdatedByUser != null)
+                                {
+                                    <small class="text-muted">
+                                        @update.UpdatedAt.Value.ToString("dd MMM yyyy")<br />
+                                        by @update.UpdatedByUser.Name
+                                    </small>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">-</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+        else
+        {
+            <div class="p-3">
+                <p class="text-muted mb-2">No status updates recorded yet.</p>
+                <a asp-controller="Project" asp-action="CreateStatusUpdate" asp-route-projectId="@Model.Id" class="text-block-link">Add an update</a>
+            </div>
+        }
+    </div>
+</div>
+
+<!-- Work Successes Card -->
+<div class="card mt-3">
+    <div class="card-header">
+        <h3 class="card-title">Work successes</h3>
+        <div class="card-tools">
+            <a asp-controller="Project" asp-action="CreateSuccess" asp-route-projectId="@Model.Id">Add success</a>
+        </div>
+    </div>
+    <div class="card-body p-0">
+        @if (successes.Any())
+        {
+                <table class="table table-hover text-nowrap sortable-table mb-0 successes-table">
+                    <thead>
+                        <tr>
+                            <th class="col-description sortable" data-column="Description" tabindex="0" role="button" aria-label="Sort by Description">Success</th>
+                            <th class="col-recorded-by sortable" data-column="RecordedBy" tabindex="0" role="button" aria-label="Sort by Recorded By">Recorded by</th>
+                            <th class="col-recorded-at sortable" data-column="RecordedAt" tabindex="0" role="button" aria-label="Sort by Recorded Date">Recorded date</th>
+                            <th class="col-slt-flag sortable" data-column="IsReportedToSlt" tabindex="0" role="button" aria-label="Sort by DDT Report">DDT report</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var success in successes)
+                        {
+                            var displayName = !string.IsNullOrWhiteSpace(success.RecordedByName)
+                                ? success.RecordedByName
+                                : success.RecordedByEmail;
+                            var truncatedDescription = success.SuccessDescription?.Length > 175
+                                ? $"{success.SuccessDescription.Substring(0, 175).TrimEnd()}…"
+                                : success.SuccessDescription;
+                            <tr>
+                                <td>
+                                    <a asp-controller="Project" asp-action="SuccessDetails" asp-route-projectId="@Model.Id" asp-route-successId="@success.Id" title="@success.SuccessDescription">
+                                        @truncatedDescription
+                                    </a>
+                                </td>
+                                <td>
+                                    <span>@displayName</span>
+                                    <br />
+                                    <small class="text-muted">@success.RecordedByEmail</small>
+                                </td>
+                                <td>@success.RecordedAt.ToString("d MMMM yyyy")</td>
+                                <td>
+                                    @if (success.IsReportedToSlt)
+                                    {
+                                        <span class="badge badge-success">Yes</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge badge-secondary">No</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+      
+        }
+        else
+        {
+            <div class="p-3">
+                <p class="text-muted mb-2">No successes recorded yet.</p>
+                <a asp-controller="Project" asp-action="CreateSuccess" asp-route-projectId="@Model.Id" class="text-block-link">Add a success</a>
+            </div>
+        }
+    </div>
+</div>
+
+@functions {
+    string TruncateStatusUpdate(string? narrative)
+    {
+        if (string.IsNullOrWhiteSpace(narrative))
+        {
+            return string.Empty;
+        }
+
+        // Count lines first (before encoding)
+        var lines = narrative.Split('\n');
+        var lineCount = lines.Length;
+        
+        // Check if we need to truncate by lines (4 lines max)
+        if (lineCount > 4)
+        {
+            var truncatedLines = lines.Take(4).ToArray();
+            var truncated = string.Join("\n", truncatedLines);
+            var encoded = Html.Encode(truncated);
+            return encoded.Replace("\n", "<br />") + "…";
+        }
+        
+        // Check if we need to truncate by characters (300 chars max)
+        // Check the original text length before encoding
+        if (narrative.Length > 300)
+        {
+            // Truncate at 300 characters, but try to break at a word boundary
+            var truncated = narrative.Substring(0, 300);
+            var lastSpace = truncated.LastIndexOf(' ');
+            if (lastSpace > 250) // Only break at word if we're close to 300
+            {
+                truncated = truncated.Substring(0, lastSpace);
+            }
+            var encoded = Html.Encode(truncated);
+            return encoded.Replace("\n", "<br />") + "…";
+        }
+        
+        // No truncation needed - encode and replace newlines
+        var encodedFull = Html.Encode(narrative);
+        return encodedFull.Replace("\n", "<br />");
+    }
+}
+
+@if (statusUpdates.Any())
+{
+    <script nonce="@Context.Items["Nonce"]">
+        (function() {
+            function initSorting(table) {
+                var sortableHeaders = table.querySelectorAll('.sortable');
+                // Set initial sort to CreatedAt descending (newest first)
+                var currentSort = { column: 'CreatedAt', direction: 'desc' };
+                
+                function updateSortIcons(column, direction) {
+                    var allHeaders = table.querySelectorAll('.sortable i');
+                    
+                    allHeaders.forEach(function(icon) {
+                        icon.className = 'fas fa-sort float-right';
+                        icon.style.opacity = '0.3';
+                    });
+                    
+                    var activeHeader = table.querySelector('.sortable[data-column="' + column + '"]');
+                    if (activeHeader) {
+                        var icon = activeHeader.querySelector('i');
+                        if (icon) {
+                            icon.className = direction === 'asc' ? 'fas fa-sort-up float-right' : 'fas fa-sort-down float-right';
+                            icon.style.opacity = '1';
+                        }
+                    }
+                }
+                
+                function sortTable(column, direction) {
+                    var tbody = table.querySelector('tbody');
+                    var rows = Array.from(tbody.querySelectorAll('tr'));
+                    var colIndex = Array.from(table.querySelectorAll('thead th')).findIndex(function(th) {
+                        return th.getAttribute('data-column') === column;
+                    });
+                    
+                    rows.sort(function(a, b) {
+                        var aVal, bVal;
+                        var aCell = a.querySelectorAll('td')[colIndex];
+                        var bCell = b.querySelectorAll('td')[colIndex];
+                        
+                        if (column === 'CreatedAt' || column === 'UpdatedAt') {
+                            var aText = aCell.textContent.trim();
+                            var bText = bCell.textContent.trim();
+                            var aDate = new Date(aText.split('\n')[0]);
+                            var bDate = new Date(bText.split('\n')[0]);
+                            aVal = aDate;
+                            bVal = bDate;
+                        } else {
+                            var aLink = aCell.querySelector('a');
+                            var bLink = bCell.querySelector('a');
+                            aVal = aLink ? aLink.textContent.trim().toLowerCase() : aCell.textContent.trim().toLowerCase();
+                            bVal = bLink ? bLink.textContent.trim().toLowerCase() : bCell.textContent.trim().toLowerCase();
+                        }
+                        
+                        if (direction === 'asc') {
+                            return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+                        } else {
+                            return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
+                        }
+                    });
+                    
+                    tbody.innerHTML = '';
+                    rows.forEach(function(row) {
+                        tbody.appendChild(row);
+                    });
+                    
+                    updateSortIcons(column, direction);
+                }
+                
+                // Apply initial sort (newest first)
+                sortTable('CreatedAt', 'desc');
+                
+                sortableHeaders.forEach(function(header) {
+                    header.style.cursor = 'pointer';
+                    
+                    header.addEventListener('click', function(e) {
+                        handleSort(e, header);
+                    });
+                    
+                    header.addEventListener('keypress', function(e) {
+                        if (e.which === 13 || e.which === 32) {
+                            e.preventDefault();
+                            handleSort(e, header);
+                        }
+                    });
+                });
+                
+                function handleSort(e, header) {
+                    var column = header.getAttribute('data-column');
+                    var direction = 'asc';
+                    
+                    if (currentSort.column === column && currentSort.direction === 'asc') {
+                        direction = 'desc';
+                    }
+                    
+                    sortTable(column, direction);
+                    currentSort = { column: column, direction: direction };
+                }
+            }
+            
+            var statusTable = document.querySelector('.status-updates-table');
+            if (statusTable) {
+                initSorting(statusTable);
+            }
+        })();
+    </script>
+}

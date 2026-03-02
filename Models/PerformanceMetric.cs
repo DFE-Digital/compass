@@ -22,6 +22,12 @@ public class PerformanceMetric
     [StringLength(500)]
     public string? HintText { get; set; }
 
+    /// <summary>
+    /// Explanation of why this performance metric is captured
+    /// </summary>
+    [StringLength(1000)]
+    public string? Purpose { get; set; }
+
     [Required]
     public ValueType ValueType { get; set; }
 

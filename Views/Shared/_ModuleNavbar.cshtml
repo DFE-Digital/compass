@@ -1,0 +1,87 @@
+@* Reusable module navbar partial
+   Usage: Set ViewBag.BrandText and ViewBag.NavLinks before calling this partial
+   
+   ViewBag.NavLinks should be a list of anonymous objects or a class with:
+   - Text: string
+   - Action: string (optional)
+   - Controller: string (optional)  
+   - Url: string (optional, use instead of Action/Controller)
+   - IsActive: bool (optional, auto-detected if Action/Controller provided)
+   - IsButton: bool (optional, for action buttons)
+   
+   ViewBag.NavbarActionButton should be a tuple: (Text, Controller, Action, CssClass)
+*@
+@{
+    var brandText = ViewBag.BrandText as string ?? "";
+    var navLinks = ViewBag.NavLinks as IEnumerable<object> ?? new List<object>();
+    var actionButton = ViewBag.NavbarActionButton as (string Text, string Controller, string Action, string CssClass)?;
+    var currentAction = ViewContext.RouteData.Values["action"]?.ToString() ?? "";
+    var currentController = ViewContext.RouteData.Values["controller"]?.ToString() ?? "";
+}
+
+@if (!string.IsNullOrEmpty(brandText) || navLinks.Any() || actionButton.HasValue)
+{
+    <nav class="navbar navbar-expand-lg navbar-light mb-3 navbar-module">
+        <div class="container-fluid">
+            @if (!string.IsNullOrEmpty(brandText))
+            {
+                <span class="navbar-brand mb-0 h6">@brandText</span>
+            }
+            @if (navLinks.Any() || actionButton.HasValue)
+            {
+                <div class="navbar-nav d-flex flex-row align-items-center">
+                    @foreach (var link in navLinks)
+                    {
+                        var linkType = link.GetType();
+                        var text = linkType.GetProperty("Text")?.GetValue(link) as string ?? "";
+                        var action = linkType.GetProperty("Action")?.GetValue(link) as string;
+                        var controller = linkType.GetProperty("Controller")?.GetValue(link) as string;
+                        var url = linkType.GetProperty("Url")?.GetValue(link) as string;
+                        var routeValues = linkType.GetProperty("RouteValues")?.GetValue(link);
+                        var isActive = linkType.GetProperty("IsActive")?.GetValue(link) as bool?;
+                        var isButton = linkType.GetProperty("IsButton")?.GetValue(link) as bool? ?? false;
+                        var count = linkType.GetProperty("Count")?.GetValue(link);
+                        var countValue = count != null ? Convert.ToInt32(count) : (int?)null;
+                        
+                        // Auto-detect active if action matches
+                        if (!isActive.HasValue && action != null)
+                        {
+                            var linkController = controller ?? currentController;
+                            isActive = (action == currentAction && linkController == currentController);
+                        }
+                        
+                        var href = url ?? (action != null ? Url.Action(action, controller ?? currentController, routeValues ?? new { }) : "#");
+                        
+                        if (isButton)
+                        {
+                            <div class="nav-item ml-3 d-flex align-items-center">
+                                <a class="btn btn-light btn-sm" href="@href" id="createStandardBtn" style="white-space: nowrap; color: #005ea5; font-weight: 600;">
+                                    @text
+                                </a>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="nav-item @(isActive == true ? "active" : "")">
+                                <a class="nav-link @(isActive == true ? "active" : "")" href="@href">
+                                    @text
+                                    @if (countValue.HasValue && countValue.Value > 0)
+                                    {
+                                        <span class="badge badge-light float-right ml-2">@countValue.Value</span>
+                                    }
+                                </a>
+                            </div>
+                        }
+                    }
+                    @if (actionButton.HasValue)
+                    {
+                        <a asp-controller="@actionButton.Value.Controller" asp-action="@actionButton.Value.Action" class="btn @actionButton.Value.CssClass ml-3">
+                            @actionButton.Value.Text
+                        </a>
+                    }
+                </div>
+            }
+        </div>
+    </nav>
+}
+

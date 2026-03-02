@@ -1,7 +1,9 @@
 @model Compass.Models.AccessibilityIssue
 @{
     var fipsId = ViewBag.FipsId as string ?? "";
+    var documentId = ViewBag.DocumentId as string ?? fipsId;
     var productName = ViewBag.ProductName as string ?? "";
+    var cmsProduct = ViewBag.CmsProduct as Compass.Models.ProductDto;
     
     string issueTitle = "";
     if (!string.IsNullOrEmpty(Model.IssueTitle))
@@ -24,6 +26,16 @@
     ViewData["Title"] = $"{issueTitle} - {productName}";
 }
 
+@{
+    var currentAction = ViewContext.RouteData.Values["action"]?.ToString() ?? "";
+    ViewBag.BrandText = "Accessibility";
+    ViewBag.NavLinks = new[]
+    {
+        new { Text = "Enrol", Action = "Enroll", Controller = "Accessibility", Url = (string)null, IsButton = false, IsActive = currentAction == "Enroll" }
+    };
+}
+@await Html.PartialAsync("_ModuleNavbar")
+
 @section Breadcrumbs {
     <style>
         .breadcrumb a:hover {
@@ -32,7 +44,7 @@
         }
     </style>
     <nav aria-label="Breadcrumb">
-        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f8f9fa; padding: 0.75rem 1rem; border-radius: 0.375rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
             <li class="breadcrumb-item">
                 <a href="@Url.Action("Index", "Home")" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Home</a>
             </li>
@@ -43,7 +55,7 @@
                 <a href="@Url.Action("Index", "Accessibility")" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Accessibility Issues and Statements</a>
             </li>
             <li class="breadcrumb-item">
-                <a href="@Url.Action("Details", new { fipsId = fipsId, tab = "issues" })" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">@productName</a>
+                <a href="@Url.Action("Details", new { documentId = documentId, tab = "issues" })" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">@productName</a>
             </li>
             <li class="breadcrumb-item active" aria-current="page" style="color: #0b0c0c; font-weight: 600;">Issue Details</li>
         </ol>
@@ -53,15 +65,16 @@
 <div class="content-header">
     <div class="container-fluid">
         <div class="row mb-2">
-            <div class="col-sm-6">
+            <div class="col-sm-12">
+                <a asp-action="Details"
+                   asp-route-documentId="@documentId"
+                   asp-route-tab="issues"
+                   class="btn btn-link px-0 mb-2"
+                   aria-label="Back to product">
+                    <i class="fas fa-arrow-left mr-2" aria-hidden="true"></i>Back to product
+                </a>
                 <h1 class="m-0">@issueTitle</h1>
-            </div>
-            <div class="col-sm-6">
-                <div class="float-right">
-                    <a href="@Url.Action("Details", new { fipsId = fipsId, tab = "issues" })" class="btn btn-secondary">
-                        <i class="fas fa-arrow-left"></i> Back to Issues
-                    </a>
-                </div>
+                <p class="text-muted mb-0">Issue Details</p>
             </div>
         </div>
     </div>
@@ -85,81 +98,134 @@
         }
 
         <div class="row">
-            <!-- Main Content -->
-            <div class="col-lg-8">
-                <!-- Issue Details Card -->
-                <div class="card mb-4">
+            <!-- Left Column: Product Summary -->
+            <div class="col-xxl-2 col-xl-2 col-lg-3 col-md-4 col-sm-12 col-12 mb-4">
+                @if (cmsProduct != null)
+                {
+                    <partial name="~/Views/Apps/Accessibility/_ProductSummarySidebar.cshtml" model="cmsProduct" />
+                }
+                
+                <!-- Request Retest Card -->
+                <div class="card project-summary-card mb-4">
                     <div class="card-header">
-                        <h3 class="card-title">Issue Details</h3>
+                        <h3 class="card-title mb-0">Actions</h3>
                     </div>
-                    <div class="card-body">
-                        @if (!string.IsNullOrEmpty(Model.IssueDescription))
-                        {
-                            <div class="mb-4">
-                                <div class="d-flex justify-content-between align-items-start mb-2">
-                                    <h5>Description</h5>
-                                    <a href="#" data-toggle="modal" data-target="#editDescriptionModal">Change</a>
+                    <div class="card-body p-0">
+                        <ul class="list-group list-group-flush project-summary-list">
+                            <li class="list-group-item">
+                                <button type="button" 
+                                        class="btn btn-primary btn-block" 
+                                        data-toggle="modal" 
+                                        data-target="#requestRetestModal" 
+                                        data-issue-id="@Model.Id">
+                                    <i class="fas fa-redo mr-2"></i>Request Retest
+                                </button>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Content -->
+            <div class="col-xxl-10 col-xl-10 col-lg-9 col-md-8 col-sm-12 col-12">
+
+                <!-- Issue Information Card -->
+                <div class="card project-summary-card mb-4" id="details">
+                    <div class="card-header">
+                        <h3 class="card-title">Issue Information</h3>
+                    </div>
+                    <div class="card-body p-0">
+                        <ul class="list-group list-group-flush milestone-summary">
+                            <li class="list-group-item">
+                                <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center">
+                                    <div class="flex-grow-1">
+                                        <small class="text-muted d-block">Issue Title</small>
+                                        <span>@issueTitle</span>
+                                    </div>
+                                    <div class="mt-2 mt-md-0 text-md-right">
+                                        <a href="#" class="change-link small" data-toggle="modal" data-target="#editIssueTitleModal">Change</a>
+                                    </div>
                                 </div>
-                                <p class="preserve-formatting">@Model.IssueDescription</p>
-                            </div>
-                            <hr>
-                        }
-                        <table class="table table-borderless mb-0 project-overview-summary">
-                            <tbody>
-                                <tr>
-                                    <td class="summary-label"><strong>Issue Type</strong></td>
-                                    <td class="summary-value">
-                                        @if (Model.IssueType == "Usability")
-                                        {
-                                            <text>UX</text>
-                                        }
-                                        else if (Model.IssueType == "Best Practice")
-                                        {
-                                            <text>Best Practice</text>
-                                        }
-                                        else
-                                        {
-                                            <text>WCAG</text>
-                                        }
-                                    </td>
-                                    <td class="text-right">
-                                        <a href="#" data-toggle="modal" data-target="#editIssueTypeModal">Change</a>
-                                    </td>
-                                </tr>
-                                @if (Model.IssueType == "WCAG" && Model.WcagCriteriaLinks.Any())
-                                {
-                                    <tr>
-                                        <td class="summary-label"><strong>WCAG Criteria</strong></td>
-                                        <td class="summary-value">
-                                            @string.Join(", ", Model.WcagCriteriaLinks.Select(l => $"{l.WcagCriterion.Criterion} - {l.WcagCriterion.Title} ({l.WcagCriterion.Level})"))
-                                        </td>
-                                        <td class="text-right">
-                                            <a href="#" data-toggle="modal" data-target="#editWcagCriteriaModal">Change</a>
-                                        </td>
-                                    </tr>
-                                }
-                                else if (!string.IsNullOrEmpty(Model.WcagCriteria))
-                                {
-                                    <tr>
-                                        <td class="summary-label"><strong>WCAG Criteria</strong></td>
-                                        <td class="summary-value">
-                                            @if (!string.IsNullOrEmpty(Model.WcagLevel))
+                            </li>
+                            @if (!string.IsNullOrEmpty(Model.IssueDescription))
+                            {
+                                <li class="list-group-item">
+                                    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center">
+                                        <div class="flex-grow-1">
+                                            <small class="text-muted d-block">Description</small>
+                                            <span class="preserve-formatting">@Model.IssueDescription</span>
+                                        </div>
+                                        <div class="mt-2 mt-md-0 text-md-right">
+                                            <a href="#" class="change-link small" data-toggle="modal" data-target="#editDescriptionModal">Change</a>
+                                        </div>
+                                    </div>
+                                </li>
+                            }
+                            <li class="list-group-item">
+                                <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center">
+                                    <div class="flex-grow-1">
+                                        <small class="text-muted d-block">Issue Type</small>
+                                        <span>
+                                            @if (Model.IssueType == "Usability")
                                             {
-                                                <text>@Model.WcagCriteria (@Model.WcagLevel)</text>
+                                                <text>UX</text>
+                                            }
+                                            else if (Model.IssueType == "Best Practice")
+                                            {
+                                                <text>Best Practice</text>
                                             }
                                             else
                                             {
-                                                @Model.WcagCriteria
+                                                <text>WCAG</text>
                                             }
-                                        </td>
-                                        <td class="text-right">
-                                            <a href="#" data-toggle="modal" data-target="#editWcagCriteriaModal">Change</a>
-                                        </td>
-                                    </tr>
-                                }
-                                <tr>
-                                    <td class="summary-label"><strong>Status</strong></td>
-                                    <td class="summary-value">
+                                        </span>
+                                    </div>
+                                    <div class="mt-2 mt-md-0 text-md-right">
+                                        <a href="#" class="change-link small" data-toggle="modal" data-target="#editIssueTypeModal">Change</a>
+                                    </div>
+                                </div>
+                            </li>
+                            @if (Model.IssueType == "WCAG" && Model.WcagCriteriaLinks.Any())
+                            {
+                                <li class="list-group-item">
+                                    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center">
+                                        <div class="flex-grow-1">
+                                            <small class="text-muted d-block">WCAG Criteria</small>
+                                            <span>@string.Join(", ", Model.WcagCriteriaLinks.Select(l => $"{l.WcagCriterion.Criterion} - {l.WcagCriterion.Title} ({l.WcagCriterion.Level})"))</span>
+                                        </div>
+                                        <div class="mt-2 mt-md-0 text-md-right">
+                                            <a href="#" class="change-link small" data-toggle="modal" data-target="#editWcagCriteriaModal">Change</a>
+                                        </div>
+                                    </div>
+                                </li>
+                            }
+                            else if (!string.IsNullOrEmpty(Model.WcagCriteria))
+                            {
+                                <li class="list-group-item">
+                                    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center">
+                                        <div class="flex-grow-1">
+                                            <small class="text-muted d-block">WCAG Criteria</small>
+                                            <span>
+                                                @if (!string.IsNullOrEmpty(Model.WcagLevel))
+                                                {
+                                                    <text>@Model.WcagCriteria (@Model.WcagLevel)</text>
+                                                }
+                                                else
+                                                {
+                                                    @Model.WcagCriteria
+                                                }
+                                            </span>
+                                        </div>
+                                        <div class="mt-2 mt-md-0 text-md-right">
+                                            <a href="#" class="change-link small" data-toggle="modal" data-target="#editWcagCriteriaModal">Change</a>
+                                        </div>
+                                    </div>
+                                </li>
+                            }
+                            <li class="list-group-item">
+                                <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center">
+                                    <div class="flex-grow-1">
+                                        <small class="text-muted d-block">Status</small>
                                         @{
                                             var statusBadgeClass = Model.Status == "resolved" || Model.Status == "closed" ? "success" : 
                                                                    Model.Status == "in_progress" ? "warning" : "danger";
@@ -167,215 +233,253 @@
                                             statusText = System.Globalization.CultureInfo.CurrentCulture.TextInfo.ToTitleCase(statusText);
                                         }
                                         <span class="badge badge-@statusBadgeClass">@statusText</span>
-                                    </td>
-                                    <td class="text-right">
-                                        <a href="#" data-toggle="modal" data-target="#editStatusModal">Change</a>
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td class="summary-label"><strong>Resolving</strong></td>
-                                    <td class="summary-value">@(Model.IsResolving ? "Yes" : "No")</td>
-                                    <td class="text-right">
-                                        <a href="#" data-toggle="modal" data-target="#editResolvingModal">Change</a>
-                                    </td>
-                                </tr>
-                                @if (Model.IsResolving && Model.PlannedResolutionDate.HasValue)
+                                    </div>
+                                    <div class="mt-2 mt-md-0 text-md-right">
+                                        <a href="#" class="change-link small" data-toggle="modal" data-target="#editStatusModal">Change</a>
+                                    </div>
+                                </div>
+                            </li>
+                            <li class="list-group-item">
+                                <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center">
+                                    <div class="flex-grow-1">
+                                        <small class="text-muted d-block">Resolving</small>
+                                        <span>@(Model.IsResolving ? "Yes" : "No")</span>
+                                    </div>
+                                    <div class="mt-2 mt-md-0 text-md-right">
+                                        <a href="#" class="change-link small" data-toggle="modal" data-target="#editResolvingModal">Change</a>
+                                    </div>
+                                </div>
+                            </li>
+                            @if (Model.IsResolving && Model.PlannedResolutionDate.HasValue)
+                            {
+                                <li class="list-group-item">
+                                    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center">
+                                        <div class="flex-grow-1">
+                                            <small class="text-muted d-block">Planned Resolution</small>
+                                            <span>@Model.PlannedResolutionDate.Value.ToString("dd MMMM yyyy")</span>
+                                        </div>
+                                        <div class="mt-2 mt-md-0 text-md-right">
+                                            <a href="#" class="change-link small" data-toggle="modal" data-target="#editPlannedResolutionModal">Change</a>
+                                        </div>
+                                    </div>
+                                </li>
+                            }
+                            @if (!Model.IsResolving && !string.IsNullOrEmpty(Model.NonResolutionReason))
+                            {
+                                <li class="list-group-item">
+                                    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center">
+                                        <div class="flex-grow-1">
+                                            <small class="text-muted d-block">Reason Not Resolving</small>
+                                            <span>@Model.NonResolutionReason</span>
+                                        </div>
+                                        <div class="mt-2 mt-md-0 text-md-right">
+                                            <a href="#" class="change-link small" data-toggle="modal" data-target="#editNonResolutionReasonModal">Change</a>
+                                        </div>
+                                    </div>
+                                </li>
+                            }
+                            @if (Model.Status == "closed" && Model.ActualResolutionDate.HasValue)
+                            {
+                                <li class="list-group-item">
+                                    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center">
+                                        <div class="flex-grow-1">
+                                            <small class="text-muted d-block">Date Closed</small>
+                                            <span>@Model.ActualResolutionDate.Value.ToString("dd MMMM yyyy")</span>
+                                        </div>
+                                        <div class="mt-2 mt-md-0 text-md-right">
+                                            <a href="#" class="change-link small" data-toggle="modal" data-target="#editClosureDateModal">Change</a>
+                                        </div>
+                                    </div>
+                                </li>
+                                @if (!string.IsNullOrEmpty(Model.ResolutionNotes))
                                 {
-                                    <tr>
-                                        <td class="summary-label"><strong>Planned Resolution</strong></td>
-                                        <td class="summary-value">@Model.PlannedResolutionDate.Value.ToString("dd MMM yyyy")</td>
-                                        <td class="text-right">
-                                            <a href="#" data-toggle="modal" data-target="#editPlannedResolutionModal">Change</a>
-                                        </td>
-                                    </tr>
+                                    <li class="list-group-item">
+                                        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center">
+                                            <div class="flex-grow-1">
+                                                <small class="text-muted d-block">Closure Explanation</small>
+                                                <span>@Model.ResolutionNotes</span>
+                                            </div>
+                                            <div class="mt-2 mt-md-0 text-md-right">
+                                                <a href="#" class="change-link small" data-toggle="modal" data-target="#editClosureExplanationModal">Change</a>
+                                            </div>
+                                        </div>
+                                    </li>
                                 }
-                                @if (!Model.IsResolving && !string.IsNullOrEmpty(Model.NonResolutionReason))
-                                {
-                                    <tr>
-                                        <td class="summary-label"><strong>Reason Not Resolving</strong></td>
-                                        <td class="summary-value">@Model.NonResolutionReason</td>
-                                        <td class="text-right">
-                                            <a href="#" data-toggle="modal" data-target="#editNonResolutionReasonModal">Change</a>
-                                        </td>
-                                    </tr>
-                                }
-                                @if (Model.Status == "closed" && Model.ActualResolutionDate.HasValue)
-                                {
-                                    <tr>
-                                        <td class="summary-label"><strong>Date Closed</strong></td>
-                                        <td class="summary-value">@Model.ActualResolutionDate.Value.ToString("dd MMM yyyy")</td>
-                                        <td class="text-right">
-                                            <a href="#" data-toggle="modal" data-target="#editClosureDateModal">Change</a>
-                                        </td>
-                                    </tr>
-                                    @if (!string.IsNullOrEmpty(Model.ResolutionNotes))
-                                    {
-                                        <tr>
-                                            <td class="summary-label"><strong>Closure Explanation</strong></td>
-                                            <td class="summary-value">@Model.ResolutionNotes</td>
-                                            <td class="text-right">
-                                                <a href="#" data-toggle="modal" data-target="#editClosureExplanationModal">Change</a>
-                                            </td>
-                                        </tr>
-                                    }
-                                }
-                                else if (Model.ActualResolutionDate.HasValue)
-                                {
-                                    <tr>
-                                        <td class="summary-label"><strong>Closure Date</strong></td>
-                                        <td class="summary-value">@Model.ActualResolutionDate.Value.ToString("dd MMM yyyy")</td>
-                                        <td class="text-right">
-                                            <a href="#" data-toggle="modal" data-target="#editClosureDateModal">Change</a>
-                                        </td>
-                                    </tr>
-                                }
-                                @if (Model.Status != "closed" && !string.IsNullOrEmpty(Model.ResolutionNotes))
-                                {
-                                    <tr>
-                                        <td class="summary-label"><strong>How it was resolved</strong></td>
-                                        <td class="summary-value">@Model.ResolutionNotes</td>
-                                        <td class="text-right">
-                                            <a href="#" data-toggle="modal" data-target="#editResolutionNotesModal">Change</a>
-                                        </td>
-                                    </tr>
-                                }
-                                @if (!string.IsNullOrEmpty(Model.VerificationNotes))
-                                {
-                                    <tr>
-                                        <td class="summary-label"><strong>How it was tested</strong></td>
-                                        <td class="summary-value">@Model.VerificationNotes</td>
-                                        <td class="text-right">
-                                            <a href="#" data-toggle="modal" data-target="#editVerificationNotesModal">Change</a>
-                                        </td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
+                            }
+                            else if (Model.ActualResolutionDate.HasValue)
+                            {
+                                <li class="list-group-item">
+                                    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center">
+                                        <div class="flex-grow-1">
+                                            <small class="text-muted d-block">Closure Date</small>
+                                            <span>@Model.ActualResolutionDate.Value.ToString("dd MMMM yyyy")</span>
+                                        </div>
+                                        <div class="mt-2 mt-md-0 text-md-right">
+                                            <a href="#" class="change-link small" data-toggle="modal" data-target="#editClosureDateModal">Change</a>
+                                        </div>
+                                    </div>
+                                </li>
+                            }
+                            @if (Model.Status != "closed" && !string.IsNullOrEmpty(Model.ResolutionNotes))
+                            {
+                                <li class="list-group-item">
+                                    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center">
+                                        <div class="flex-grow-1">
+                                            <small class="text-muted d-block">How it was resolved</small>
+                                            <span>@Model.ResolutionNotes</span>
+                                        </div>
+                                        <div class="mt-2 mt-md-0 text-md-right">
+                                            <a href="#" class="change-link small" data-toggle="modal" data-target="#editResolutionNotesModal">Change</a>
+                                        </div>
+                                    </div>
+                                </li>
+                            }
+                            @if (!string.IsNullOrEmpty(Model.VerificationNotes))
+                            {
+                                <li class="list-group-item">
+                                    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center">
+                                        <div class="flex-grow-1">
+                                            <small class="text-muted d-block">How it was tested</small>
+                                            <span>@Model.VerificationNotes</span>
+                                        </div>
+                                        <div class="mt-2 mt-md-0 text-md-right">
+                                            <a href="#" class="change-link small" data-toggle="modal" data-target="#editVerificationNotesModal">Change</a>
+                                        </div>
+                                    </div>
+                                </li>
+                            }
+                            <li class="list-group-item">
+                                <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center">
+                                    <div class="flex-grow-1">
+                                        <small class="text-muted d-block">Created</small>
+                                        <span>@Model.CreatedAt.ToString("dd MMMM yyyy 'at' HH:mm")</span>
+                                    </div>
+                                </div>
+                            </li>
+                            <li class="list-group-item">
+                                <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center">
+                                    <div class="flex-grow-1">
+                                        <small class="text-muted d-block">Identified</small>
+                                        <span>@Model.IdentifiedDate.ToString("dd MMMM yyyy")</span>
+                                        @if (!string.IsNullOrEmpty(Model.IdentifiedVia))
+                                        {
+                                            <br><small class="text-muted">via @Model.IdentifiedVia</small>
+                                        }
+                                    </div>
+                                </div>
+                            </li>
+                        </ul>
                     </div>
                 </div>
 
-                <!-- Comments Card -->
+                <!-- Add Comment -->
                 <div class="card mb-4">
                     <div class="card-header">
-                        <h3 class="card-title">Comments (@Model.Comments.Count)</h3>
+                        <h3 class="card-title mb-0">Add Comment</h3>
+                    </div>
+                    <div class="card-body">
+                        <form asp-action="AddComment" method="post" id="addCommentForm">
+                            <input type="hidden" name="issueId" value="@Model.Id" />
+                            <input type="hidden" name="documentId" value="@documentId" />
+                            <div class="form-group">
+                                <label for="commentText">Comment <span class="text-danger">*</span></label>
+                                <textarea class="form-control" id="commentText" name="commentText" rows="4" required placeholder="Enter your comment..."></textarea>
+                                <small class="form-text text-muted">Add a comment about this issue.</small>
+                            </div>
+                            <div class="form-group mb-0">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-plus mr-2"></i>Add Comment
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Comments List -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h3 class="card-title mb-0">Comments (@Model.Comments.Count)</h3>
                     </div>
                     <div class="card-body">
                         @if (Model.Comments.Any())
                         {
-                            <div class="mb-3">
+                            <div class="list-group">
                                 @foreach (var comment in Model.Comments.OrderByDescending(c => c.CreatedAt))
                                 {
-                                    <div class="border-bottom pb-2 mb-2 @(comment != Model.Comments.OrderByDescending(c => c.CreatedAt).Last() ? "" : "border-bottom-0")">
-                                        <p class="mb-1">@comment.CommentText</p>
-                                        <small class="text-muted">@comment.CreatedAt.ToString("dd MMM yyyy HH:mm") by @(comment.CreatedBy ?? "Unknown")</small>
+                                    <div class="list-group-item">
+                                        <div class="d-flex justify-content-between align-items-start mb-2">
+                                            <div class="flex-grow-1">
+                                                <p class="mb-1 preserve-formatting">@comment.CommentText</p>
+                                                <small class="text-muted">
+                                                    @comment.CreatedAt.ToString("dd MMMM yyyy 'at' HH:mm")
+                                                    @if (!string.IsNullOrEmpty(comment.CreatedBy))
+                                                    {
+                                                        <span> by </span>
+                                                        <strong>@comment.CreatedBy</strong>
+                                                    }
+                                                </small>
+                                            </div>
+                                        </div>
                                     </div>
                                 }
                             </div>
                         }
                         else
                         {
-                            <p class="text-muted">No comments yet</p>
+                            <p class="text-muted mb-0">No comments have been added yet. Use the form above to add the first comment.</p>
                         }
-
-                        <form asp-action="AddComment" method="post" class="mt-3" id="addCommentForm">
-                            <input type="hidden" name="issueId" value="@Model.Id" />
-                            <input type="hidden" name="fipsId" value="@fipsId" />
-                            <div class="input-group">
-                                <input type="text" class="form-control" name="commentText" id="commentText" placeholder="Add a comment..." required />
-                                <div class="input-group-append">
-                                    <button type="submit" class="btn btn-primary">Add</button>
-                                </div>
-                            </div>
-                        </form>
                     </div>
                 </div>
 
-                <!-- Change History Card -->
+                <!-- Change History -->
                 <div class="card">
                     <div class="card-header">
-                        <h3 class="card-title">Change History</h3>
+                        <h3 class="card-title mb-0">Update History</h3>
                     </div>
-                    <div class="card-body table-responsive p-0">
+                    <div class="card-body">
                         @if (Model.History.Any())
                         {
-                            <table class="table table-hover mb-0">
-                                <thead>
-                                    <tr>
-                                        <th>Date</th>
-                                        <th>Field Changed</th>
-                                        <th>From</th>
-                                        <th>To</th>
-                                        <th>Change Note</th>
-                                        <th>Changed By</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach (var history in Model.History.OrderByDescending(h => h.ChangedAt))
-                                    {
-                                        <tr>
-                                            <td>@history.ChangedAt.ToString("dd MMM yyyy HH:mm")</td>
-                                            <td><strong>@history.FieldChanged</strong></td>
-                                            <td>@(string.IsNullOrEmpty(history.OldValue) ? "—" : history.OldValue)</td>
-                                            <td><span class="text-success">@(string.IsNullOrEmpty(history.NewValue) ? "—" : history.NewValue)</span></td>
-                                            <td>@(string.IsNullOrEmpty(history.ChangeNote) ? "—" : history.ChangeNote)</td>
-                                            <td><small class="text-muted">@(history.ChangedBy ?? "Unknown")</small></td>
-                                        </tr>
-                                    }
-                                </tbody>
-                            </table>
+                            <div class="list-group">
+                                @foreach (var history in Model.History.OrderByDescending(h => h.ChangedAt))
+                                {
+                                    <div class="list-group-item">
+                                        <div class="d-flex justify-content-between align-items-start mb-2">
+                                            <div class="flex-grow-1">
+                                                <h6 class="mb-1"><strong>@history.FieldChanged</strong></h6>
+                                                <small class="text-muted">
+                                                    @history.ChangedAt.ToString("dd MMMM yyyy 'at' HH:mm")
+                                                    @if (!string.IsNullOrEmpty(history.ChangedBy))
+                                                    {
+                                                        <span> by </span>
+                                                        <strong>@history.ChangedBy</strong>
+                                                    }
+                                                </small>
+                                            </div>
+                                        </div>
+                                        <div class="mt-2">
+                                            @if (!string.IsNullOrEmpty(history.OldValue) || !string.IsNullOrEmpty(history.NewValue))
+                                            {
+                                                @if (!string.IsNullOrEmpty(history.OldValue))
+                                                {
+                                                    <span class="badge badge-secondary mr-1">@history.OldValue</span>
+                                                    <i class="fas fa-arrow-right mx-1 text-muted"></i>
+                                                }
+                                                <span class="badge badge-success">@(string.IsNullOrEmpty(history.NewValue) ? "—" : history.NewValue)</span>
+                                            }
+                                        </div>
+                                        @if (!string.IsNullOrEmpty(history.ChangeNote))
+                                        {
+                                            <div class="mt-2">
+                                                <small class="text-muted"><strong>Note:</strong> @history.ChangeNote</small>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </div>
                         }
                         else
                         {
-                            <div class="text-center p-4">
-                                <p class="text-muted">No change history</p>
-                            </div>
-                        }
-                    </div>
-                </div>
-            </div>
-
-            <!-- Sidebar -->
-            <div class="col-lg-4">
-                <!-- Issue Information Card -->
-                <div class="card mb-4">
-                    <div class="card-header">
-                        <h3 class="card-title">Issue Information</h3>
-                    </div>
-                    <div class="card-body">
-                        <dl class="mb-0">
-                            <dt>Created</dt>
-                            <dd>@Model.CreatedAt.ToString("dd MMM yyyy HH:mm")</dd>
-                            
-                            <dt>Identified</dt>
-                            <dd>@Model.IdentifiedDate.ToString("dd MMM yyyy")<br><small class="text-muted">via @Model.IdentifiedVia</small></dd>
-                            
-                            @if (Model.Status == "closed" && Model.ActualResolutionDate.HasValue)
-                            {
-                                <dt>Date Closed</dt>
-                                <dd>@Model.ActualResolutionDate.Value.ToString("dd MMM yyyy")</dd>
-                            }
-                        </dl>
-                    </div>
-                </div>
-
-                <!-- Actions Card -->
-                <div class="card">
-                    <div class="card-header">
-                        <h3 class="card-title">Actions</h3>
-                    </div>
-                    <div class="card-body">
-                        <a href="@Url.Action("Details", new { fipsId = fipsId, tab = "issues" })" 
-                           class="btn btn-primary btn-block">
-                            <i class="fas fa-arrow-left"></i> Back to Issues
-                        </a>
-                        @if (Model.Status != "closed" && Model.Status != "resolved")
-                        {
-                            <button type="button" class="btn btn-success btn-block mt-2" data-toggle="modal" data-target="#closeIssueModal" data-issue-id="@Model.Id">
-                                Close Issue
-                            </button>
-                            <button type="button" class="btn btn-warning btn-block mt-2" data-toggle="modal" data-target="#requestRetestModal" data-issue-id="@Model.Id">
-                                Request Retest
-                            </button>
+                            <p class="text-muted mb-0">No updates have been recorded yet.</p>
                         }
                     </div>
                 </div>
@@ -384,8 +488,8 @@
     </div>
 </section>
 
-<!-- Edit Modals - These will be populated by UpdateIssue functionality -->
-<!-- For now, placeholder modals that redirect to UpdateIssue or can be enhanced -->
+<!-- Include the modals -->
+@await Html.PartialAsync("~/Views/Apps/Accessibility/_IssueEditModals.cshtml", Model)
 
 <script nonce="@Context.Items["Nonce"]">
     $(document).on('show.bs.modal', '#closeIssueModal', function(event) {
@@ -400,6 +504,3 @@
         $('#requestRetestIssueId').val(issueId);
     });
 </script>
-
-<!-- Include the modals -->
-@await Html.PartialAsync("~/Views/Apps/Accessibility/_IssueEditModals.cshtml", Model)

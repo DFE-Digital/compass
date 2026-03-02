@@ -28,6 +28,11 @@ public class ProjectActionInputModel
     [MaxLength(255)]
     public string? AssignedToEmail { get; set; }
 
+    public int? AssignedToUserId { get; set; }
+
+    [MaxLength(255)]
+    public string? AssignedToName { get; set; }
+
     [MaxLength(10)]
     public string? Priority { get; set; }
 
@@ -91,6 +96,9 @@ public class ProjectActionInputModel
     [MaxLength(15)]
     public string? RagRating { get; set; }
 
+    [MaxLength(1000)]
+    public string? ClosureNotes { get; set; }
+
     [MaxLength(150)]
     public string? TeamName { get; set; }
 
@@ -103,6 +111,8 @@ public class ProjectActionInputModel
     public string? Tags { get; set; }
 
     public int? DecisionId { get; set; }
+
+    public List<int> LinkedDecisionIds { get; set; } = new();
 
     public int? ParentActionId { get; set; }
 
