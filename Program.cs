@@ -130,6 +130,30 @@ if (args.Length > 0 && args[0] == "--seed-gdd-framework")
     return;
 }
 
+// Check for migration workbook export command
+if (args.Length > 0 && args[0] == "--export-migration-workbook")
+{
+    var environment = "Development";
+    string? outputPath = null;
+
+    for (int i = 1; i < args.Length; i++)
+    {
+        if (args[i] == "--environment" && i + 1 < args.Length)
+        {
+            environment = args[i + 1];
+            i++;
+        }
+        else if (args[i] == "--output" && i + 1 < args.Length)
+        {
+            outputPath = args[i + 1];
+            i++;
+        }
+    }
+
+    await Compass.MigrationWorkbookExport.RunAsync(environment, outputPath);
+    return;
+}
+
 // Check for query GDD roles command
 if (args.Length > 0 && args[0] == "--query-gdd-roles")
 {
@@ -551,6 +575,17 @@ app.MapControllerRoute(
 app.MapControllerRoute(
     name: "api",
     pattern: "api/{controller}/{action=Index}/{id?}");
+
+// Friendly URLs for operational / commission reporting (must be before default route)
+app.MapControllerRoute(
+    name: "performanceProduct",
+    pattern: "Performance/Product/{productId}",
+    defaults: new { controller = "ProductReporting", action = "ProductCommissions" });
+
+app.MapControllerRoute(
+    name: "performanceRoot",
+    pattern: "Performance",
+    defaults: new { controller = "ProductReporting", action = "PerformanceMetrics" });
 
 // Default routes
 app.MapControllerRoute(

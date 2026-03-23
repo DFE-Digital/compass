@@ -4,7 +4,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Compass.Models;
 
 /// <summary>
-/// Monthly updates for projects - required to be completed by the 5th working day of the following month
+/// Monthly updates for projects; due date comes from <see cref="MonthlyUpdateDeadlineConfig"/> (admin-configured).
 /// </summary>
 public class ProjectMonthlyUpdate
 {

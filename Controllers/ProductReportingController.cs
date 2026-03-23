@@ -318,6 +318,136 @@ public class ProductReportingController : Controller
         return View("~/Views/ProductReporting/PerformanceMetrics/Index.cshtml", displayData);
     }
 
+    // GET: ProductReporting/ProductCommissions — also /Performance/Product/{productId}
+    public async Task<IActionResult> ProductCommissions(string productId)
+    {
+        if (string.IsNullOrWhiteSpace(productId))
+            return NotFound();
+
+        var userEmail = User.Identity?.Name;
+        if (string.IsNullOrEmpty(userEmail))
+        {
+            TempData["ErrorMessage"] = "Unable to identify user. Please ensure you are logged in.";
+            return RedirectToAction("PerformanceMetrics");
+        }
+
+        var products = await _productsApiService.GetProductsAsync();
+        var product = products?.FirstOrDefault(p =>
+            string.Equals(p.FipsId, productId, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(p.DocumentId, productId, StringComparison.OrdinalIgnoreCase));
+
+        if (product == null)
+        {
+            TempData["ErrorMessage"] = "Product not found.";
+            return RedirectToAction("PerformanceMetrics");
+        }
+
+        var productsByServiceOwner = await _productsApiService.GetProductsByServiceOwnerAsync(userEmail);
+        var productsByProductManager = await _productsApiService.GetProductsByProductManagerAsync(userEmail);
+        var productsByDeliveryManager = await _productsApiService.GetProductsByDeliveryManagerAsync(userEmail);
+        var productsByReportingUser = await _productsApiService.GetProductsByReportingUserAsync(userEmail);
+
+        var userProducts = productsByServiceOwner
+            .Concat(productsByProductManager)
+            .Concat(productsByDeliveryManager)
+            .Concat(productsByReportingUser)
+            .GroupBy(p => p.FipsId)
+            .Where(g => !string.IsNullOrEmpty(g.Key))
+            .Select(g => g.First())
+            .Where(p => string.IsNullOrEmpty(p.Phase) ||
+                        (!p.Phase.Equals("Decommissioned", StringComparison.OrdinalIgnoreCase) &&
+                         !p.Phase.Equals("Decommissioning", StringComparison.OrdinalIgnoreCase)))
+            .Where(p =>
+            {
+                var types = p.CategoryValues?
+                    .Where(cv => cv.CategoryType?.Name?.Trim().Equals("Type", StringComparison.OrdinalIgnoreCase) == true)
+                    .Select(cv => cv.Name?.Trim() ?? string.Empty)
+                    .Where(name => !string.IsNullOrWhiteSpace(name))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList() ?? new List<string>();
+                if (!types.Any())
+                    return true;
+                if (types.Count == 1 && types[0].Trim().Equals("Data", StringComparison.OrdinalIgnoreCase))
+                    return false;
+                if (types.All(t => t.Trim().Equals("Data", StringComparison.OrdinalIgnoreCase)))
+                    return false;
+                return true;
+            })
+            .ToList();
+
+        bool InList(IEnumerable<ProductDto> list) => list.Any(p =>
+            (!string.IsNullOrEmpty(product.DocumentId) && p.DocumentId == product.DocumentId) ||
+            (!string.IsNullOrEmpty(product.FipsId) && string.Equals(p.FipsId, product.FipsId, StringComparison.OrdinalIgnoreCase)));
+
+        var inMine = InList(userProducts);
+
+        var allProducts = await _productsApiService.GetAllProductsAsync();
+        var activeAll = allProducts
+            .Where(p => p.State != null &&
+                        p.State.Equals("Active", StringComparison.OrdinalIgnoreCase) &&
+                        p.PublishedAt.HasValue &&
+                        (string.IsNullOrEmpty(p.Phase) ||
+                         (!p.Phase.Equals("Decommissioned", StringComparison.OrdinalIgnoreCase) &&
+                          !p.Phase.Equals("Decommissioning", StringComparison.OrdinalIgnoreCase))))
+            .Where(p =>
+            {
+                var types = p.CategoryValues?
+                    .Where(cv => cv.CategoryType?.Name?.Trim().Equals("Type", StringComparison.OrdinalIgnoreCase) == true)
+                    .Select(cv => cv.Name?.Trim() ?? string.Empty)
+                    .Where(name => !string.IsNullOrWhiteSpace(name))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList() ?? new List<string>();
+                if (!types.Any())
+                    return true;
+                if (types.Count == 1 && types[0].Trim().Equals("Data", StringComparison.OrdinalIgnoreCase))
+                    return false;
+                if (types.All(t => t.Trim().Equals("Data", StringComparison.OrdinalIgnoreCase)))
+                    return false;
+                return true;
+            })
+            .ToList();
+
+        var inAllServicesView = InList(activeAll);
+
+        if (!inMine && !inAllServicesView)
+        {
+            TempData["ErrorMessage"] = "You do not have access to commission reporting for this product.";
+            return RedirectToAction("PerformanceMetrics");
+        }
+
+        var productDocumentId = product.DocumentId ?? product.FipsId ?? "";
+        var commissions = await _context.Commissions
+            .Where(c => c.IsActive)
+            .OrderBy(c => c.DueDate)
+            .ToListAsync();
+
+        var submissions = await _context.CommissionSubmissions
+            .Include(cs => cs.MetricValues)
+            .Where(cs => cs.ProductDocumentId == productDocumentId)
+            .ToDictionaryAsync(cs => cs.CommissionId, cs => cs);
+
+        var now = DateTime.UtcNow;
+        var rows = new List<ProductCommissionPeriodRowViewModel>();
+        foreach (var c in commissions)
+        {
+            submissions.TryGetValue(c.Id, out var submission);
+            var isOpen = now >= c.OpenDate && now <= c.DueDate.AddDays(1);
+            var isPastDue = now > c.DueDate;
+            var status = submission?.Status ?? CommissionSubmissionStatus.NotStarted;
+            rows.Add(new ProductCommissionPeriodRowViewModel
+            {
+                Commission = c,
+                Submission = submission,
+                Status = status,
+                IsOpen = isOpen,
+                IsPastDue = isPastDue
+            });
+        }
+
+        ViewBag.Product = product;
+        return View("~/Views/ProductReporting/ProductCommissions/Index.cshtml", rows);
+    }
+
     // GET: ProductReporting/Commission
     public async Task<IActionResult> Commission(
         string view = "mine", 
