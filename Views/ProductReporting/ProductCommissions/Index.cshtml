@@ -1,0 +1,139 @@
+@model List<Compass.Models.ProductCommissionPeriodRowViewModel>
+@using Compass.Models
+@{
+    ViewData["Title"] = "Commission returns by period";
+    var product = ViewBag.Product as ProductDto;
+}
+
+@await Html.PartialAsync("_DashboardStyles")
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <li class="breadcrumb-item">
+                <a href="/" style="color: #005ea5; text-decoration: none; font-weight: 500;">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a href="/Performance" style="color: #005ea5; text-decoration: none; font-weight: 500;">Monthly operational performance reporting</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page" style="color: #0b0c0c; font-weight: 600;">Commission returns</li>
+        </ol>
+    </nav>
+}
+
+@{
+    ViewBag.BrandText = "Performance reporting";
+    ViewBag.NavLinks = new object[0];
+}
+
+<section class="content">
+    <div class="container-fluid">
+        @await Html.PartialAsync("_ModuleNavbar")
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        @if (product != null)
+        {
+            <div class="mb-3">
+                <h1 class="h3 mb-1">Commission returns</h1>
+                <p class="text-muted mb-0">
+                    <strong>@product.Title</strong>
+                    @if (!string.IsNullOrEmpty(product.FipsId))
+                    {
+                        <span class="text-muted"> · FIPS ID @product.FipsId</span>
+                    }
+                </p>
+            </div>
+
+            <div class="card">
+                <div class="card-body table-responsive p-0">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th scope="col">Commission</th>
+                                <th scope="col">Period</th>
+                                <th scope="col">Due date</th>
+                                <th scope="col">Status</th>
+                                <th scope="col" class="text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var row in Model)
+                            {
+                                var c = row.Commission;
+                                var periodText = CommissionDisplay.FormatPeriod(c.StartDate, c.EndDate);
+                                var dueText = CommissionDisplay.FormatDueDate(c.DueDate);
+                                var docId = product.DocumentId ?? product.FipsId;
+                                <tr>
+                                    <td>
+                                        <strong>@c.Name</strong>
+                                        @if (!string.IsNullOrEmpty(c.Quarter))
+                                        {
+                                            <span class="badge badge-info ml-1">@c.Quarter</span>
+                                        }
+                                    </td>
+                                    <td>@periodText</td>
+                                    <td class="@(row.IsPastDue && row.Status != CommissionSubmissionStatus.Submitted ? "text-danger" : "")">@dueText</td>
+                                    <td>
+                                        @switch (row.Status)
+                                        {
+                                            case CommissionSubmissionStatus.NotStarted:
+                                                <span class="badge badge-secondary">Not started</span>
+                                                break;
+                                            case CommissionSubmissionStatus.InProgress:
+                                                <span class="badge badge-warning">In progress</span>
+                                                break;
+                                            case CommissionSubmissionStatus.Submitted:
+                                                <span class="badge badge-success">Submitted</span>
+                                                break;
+                                            case CommissionSubmissionStatus.Late:
+                                                <span class="badge badge-danger">Late</span>
+                                                break;
+                                        }
+                                    </td>
+                                    <td class="text-right">
+                                        @if (!row.IsOpen)
+                                        {
+                                            <span class="text-muted">Not yet open</span>
+                                        }
+                                        else
+                                        {
+                                            @switch (row.Status)
+                                            {
+                                                case CommissionSubmissionStatus.NotStarted:
+                                                    <a href="@Url.Action("SubmitCommission", "ProductReporting", new { documentId = docId, commissionId = c.Id })" class="btn btn-sm btn-primary">Complete return</a>
+                                                    break;
+                                                case CommissionSubmissionStatus.InProgress:
+                                                    <a href="@Url.Action("SubmitCommission", "ProductReporting", new { documentId = docId, commissionId = c.Id })" class="btn btn-sm btn-warning">Complete return</a>
+                                                    break;
+                                                case CommissionSubmissionStatus.Submitted:
+                                                case CommissionSubmissionStatus.Late:
+                                                    <a href="@Url.Action("SubmitCommission", "ProductReporting", new { documentId = docId, commissionId = c.Id })" class="btn btn-sm btn-outline-primary">View return</a>
+                                                    break;
+                                            }
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                @if (!Model.Any())
+                {
+                    <div class="card-body">
+                        <p class="text-muted mb-0">No active commissions.</p>
+                    </div>
+                }
+            </div>
+
+            <p class="mt-3">
+                <a href="@Url.Action("Commission", "ProductReporting")" class="btn btn-link pl-0">Back to performance reporting</a>
+            </p>
+        }
+    </div>
+</section>

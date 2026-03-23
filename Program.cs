@@ -130,6 +130,30 @@ if (args.Length > 0 && args[0] == "--seed-gdd-framework")
     return;
 }
 
+// Check for migration workbook export command
+if (args.Length > 0 && args[0] == "--export-migration-workbook")
+{
+    var environment = "Development";
+    string? outputPath = null;
+
+    for (int i = 1; i < args.Length; i++)
+    {
+        if (args[i] == "--environment" && i + 1 < args.Length)
+        {
+            environment = args[i + 1];
+            i++;
+        }
+        else if (args[i] == "--output" && i + 1 < args.Length)
+        {
+            outputPath = args[i + 1];
+            i++;
+        }
+    }
+
+    await Compass.MigrationWorkbookExport.RunAsync(environment, outputPath);
+    return;
+}
+
 // Check for query GDD roles command
 if (args.Length > 0 && args[0] == "--query-gdd-roles")
 {
@@ -274,23 +298,20 @@ builder.Services.AddSingleton(sp =>
 // Configure database - Use Azure SQL for all environments
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 
-// Diagnostic logging to help debug connection string issues
-var currentEnvironment = builder.Environment.EnvironmentName;
-Console.WriteLine($"\n[CONFIG DEBUG] ASPNETCORE_ENVIRONMENT = {currentEnvironment}");
-Console.WriteLine($"[CONFIG DEBUG] Expected files: appsettings.json, appsettings.{currentEnvironment}.json");
-
-// Show which connection string values exist in each source (for debugging)
-var baseConnection = builder.Configuration["ConnectionStrings:DefaultConnection"];
-Console.WriteLine($"[CONFIG DEBUG] Resolved ConnectionStrings:DefaultConnection exists: {!string.IsNullOrEmpty(baseConnection)}");
-
-if (connectionString != null)
+// Diagnostic logging (non-sensitive only - never log connection string or credentials)
+if (builder.Environment.IsDevelopment())
 {
-    var catalogMatch = System.Text.RegularExpressions.Regex.Match(connectionString, @"Initial Catalog=([^;]+)");
-    if (catalogMatch.Success)
+    var currentEnvironment = builder.Environment.EnvironmentName;
+    Console.WriteLine($"\n[CONFIG] ASPNETCORE_ENVIRONMENT = {currentEnvironment}");
+    var hasConnectionString = !string.IsNullOrEmpty(connectionString);
+    Console.WriteLine($"[CONFIG] ConnectionStrings:DefaultConnection configured: {hasConnectionString}");
+    if (connectionString != null)
     {
-        Console.WriteLine($"[CONFIG DEBUG] ✓ Database catalog: {catalogMatch.Groups[1].Value}");
+        var catalogMatch = System.Text.RegularExpressions.Regex.Match(connectionString, @"Initial Catalog=([^;]+)");
+        if (catalogMatch.Success)
+            Console.WriteLine($"[CONFIG] Database catalog: {catalogMatch.Groups[1].Value}");
+        Console.WriteLine();
     }
-    Console.WriteLine($"[CONFIG DEBUG] Connection string preview: {connectionString.Substring(0, Math.Min(80, connectionString.Length))}...\n");
 }
 
 if (string.IsNullOrEmpty(connectionString))
@@ -555,6 +576,17 @@ app.MapControllerRoute(
     name: "api",
     pattern: "api/{controller}/{action=Index}/{id?}");
 
+// Friendly URLs for operational / commission reporting (must be before default route)
+app.MapControllerRoute(
+    name: "performanceProduct",
+    pattern: "Performance/Product/{productId}",
+    defaults: new { controller = "ProductReporting", action = "ProductCommissions" });
+
+app.MapControllerRoute(
+    name: "performanceRoot",
+    pattern: "Performance",
+    defaults: new { controller = "ProductReporting", action = "PerformanceMetrics" });
+
 // Default routes
 app.MapControllerRoute(
     name: "default",
@@ -567,7 +599,9 @@ using (var scope = app.Services.CreateScope())
 {
     var context = scope.ServiceProvider.GetRequiredService<CompassDbContext>();
     var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-    
+    var config = scope.ServiceProvider.GetRequiredService<IConfiguration>();
+    var superAdminEmail = config["Authentication:SuperAdminEmail"];
+
     try
     {
         logger.LogInformation("Starting database initialization...");
@@ -589,8 +623,8 @@ using (var scope = app.Services.CreateScope())
         // Seed statement templates if they don't exist
         await SeedStatementTemplatesAsync(context);
         
-        // Seed RBAC initial data (groups, features, super admin)
-        await SeedRbacInitialDataAsync(context);
+        // Seed RBAC initial data (groups, features, super admin) - super admin email from config only
+        await SeedRbacInitialDataAsync(context, superAdminEmail);
         
         // Seed Service Standards (GOV.UK Service Standards 1-14)
         await SeedServiceStandardsAsync(context);
@@ -622,9 +656,8 @@ using (var scope = app.Services.CreateScope())
 
 app.Run();
 
-static async Task SeedRbacInitialDataAsync(Compass.Data.CompassDbContext context)
+static async Task SeedRbacInitialDataAsync(Compass.Data.CompassDbContext context, string? superAdminEmail)
 {
-    const string superAdminEmail = "andy.jones@education.gov.uk";
     const string superAdminGroupName = "Super admin";
     const string centralOpsAdminGroupName = "Central Operations Admin";
 
@@ -643,23 +676,30 @@ static async Task SeedRbacInitialDataAsync(Compass.Data.CompassDbContext context
         Console.WriteLine("Checking for additional RBAC groups...");
     }
 
-    // Get or create super admin user
-    var superAdmin = await context.Users
-        .FirstOrDefaultAsync(u => u.Email.ToLower() == superAdminEmail.ToLower());
-
-    if (superAdmin == null)
+    Compass.Models.User? superAdmin = null;
+    if (!string.IsNullOrWhiteSpace(superAdminEmail))
     {
-        superAdmin = new Compass.Models.User
+        superAdmin = await context.Users
+            .FirstOrDefaultAsync(u => u.Email.ToLower() == superAdminEmail.ToLower());
+
+        if (superAdmin == null)
         {
-            Email = superAdminEmail,
-            Name = "Andy Jones",
-            Role = Compass.Models.UserRole.Visitor,
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
-        };
+            superAdmin = new Compass.Models.User
+            {
+                Email = superAdminEmail.Trim(),
+                Name = "Super Admin",
+                Role = Compass.Models.UserRole.Visitor,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
         context.Users.Add(superAdmin);
         await context.SaveChangesAsync();
-        Console.WriteLine($"✓ Created super admin user: {superAdminEmail}");
+        Console.WriteLine($"✓ Created super admin user");
+    }
+    }
+    else
+    {
+        Console.WriteLine("Skipping super admin user creation: Authentication:SuperAdminEmail not configured.");
     }
 
     // Create Super admin group (if it doesn't exist)
@@ -681,22 +721,25 @@ static async Task SeedRbacInitialDataAsync(Compass.Data.CompassDbContext context
         Console.WriteLine($"✓ Created group: {superAdminGroupName}");
     }
 
-    // Assign super admin user to Super admin group
-    var superAdminUserGroup = await context.UserGroups
-        .FirstOrDefaultAsync(ug => ug.UserId == superAdmin.Id && ug.GroupId == superAdminGroup.Id);
-    
-    if (superAdminUserGroup == null)
+    // Assign super admin user to Super admin group (only if super admin email is configured)
+    if (superAdmin != null)
     {
-        superAdminUserGroup = new Compass.Models.UserGroup
+        var superAdminUserGroup = await context.UserGroups
+            .FirstOrDefaultAsync(ug => ug.UserId == superAdmin.Id && ug.GroupId == superAdminGroup.Id);
+        
+        if (superAdminUserGroup == null)
         {
-            UserId = superAdmin.Id,
-            GroupId = superAdminGroup.Id,
-            AssignedAt = DateTime.UtcNow,
-            AssignedBy = "System"
-        };
-        context.UserGroups.Add(superAdminUserGroup);
-        await context.SaveChangesAsync();
-        Console.WriteLine($"✓ Assigned super admin to {superAdminGroupName} group");
+            superAdminUserGroup = new Compass.Models.UserGroup
+            {
+                UserId = superAdmin.Id,
+                GroupId = superAdminGroup.Id,
+                AssignedAt = DateTime.UtcNow,
+                AssignedBy = "System"
+            };
+            context.UserGroups.Add(superAdminUserGroup);
+            await context.SaveChangesAsync();
+            Console.WriteLine($"✓ Assigned super admin to {superAdminGroupName} group");
+        }
     }
 
     // Create Central Operations Admin group (if it doesn't exist)
@@ -784,21 +827,24 @@ static async Task SeedRbacInitialDataAsync(Compass.Data.CompassDbContext context
     await context.SaveChangesAsync();
 
     // Assign super admin to Central Operations Admin group (if not already assigned)
-    var existingUserGroup = await context.UserGroups
-        .FirstOrDefaultAsync(ug => ug.UserId == superAdmin.Id && ug.GroupId == centralOpsGroup.Id);
-    
-    if (existingUserGroup == null)
+    if (superAdmin != null)
     {
-        var userGroup = new Compass.Models.UserGroup
+        var existingUserGroup = await context.UserGroups
+            .FirstOrDefaultAsync(ug => ug.UserId == superAdmin.Id && ug.GroupId == centralOpsGroup.Id);
+        
+        if (existingUserGroup == null)
         {
-            UserId = superAdmin.Id,
-            GroupId = centralOpsGroup.Id,
-            AssignedAt = DateTime.UtcNow,
-            AssignedBy = "System"
-        };
-        context.UserGroups.Add(userGroup);
-        await context.SaveChangesAsync();
-        Console.WriteLine($"✓ Assigned super admin to {centralOpsAdminGroupName} group");
+            var userGroup = new Compass.Models.UserGroup
+            {
+                UserId = superAdmin.Id,
+                GroupId = centralOpsGroup.Id,
+                AssignedAt = DateTime.UtcNow,
+                AssignedBy = "System"
+            };
+            context.UserGroups.Add(userGroup);
+            await context.SaveChangesAsync();
+            Console.WriteLine($"✓ Assigned super admin to {centralOpsAdminGroupName} group");
+        }
     }
 
     // Create Standards feature

@@ -45,6 +45,15 @@ namespace Compass.Controllers.Admin
                    await _permissionService.IsInGroupAsync(userEmail, "Central Operations Admin");
         }
 
+        /// <summary>
+        /// Keeps legacy SQL columns populated so inserts/updates succeed on databases that still have WorkingDayDeadline and DueDayRule.
+        /// </summary>
+        private static void SyncLegacyDeadlineColumns(MonthlyUpdateDeadlineConfig model)
+        {
+            model.WorkingDayDeadline = model.DueCalendarDay;
+            model.DueDayRule = 0;
+        }
+
         // ========================================
         // INDEX - List all configurations
         // ========================================
@@ -112,11 +121,13 @@ namespace Compass.Controllers.Admin
                 model.CreatedAt = DateTime.UtcNow;
                 model.UpdatedAt = DateTime.UtcNow;
 
+                SyncLegacyDeadlineColumns(model);
+
                 _context.MonthlyUpdateDeadlineConfigs.Add(model);
                 await _context.SaveChangesAsync();
 
-                _logger.LogInformation("Created MonthlyUpdateDeadlineConfig {Id} (WorkingDayDeadline: {Day}, CommissionDays: {CommissionDays}, EffectiveFrom: {From}) by {User}", 
-                    model.Id, model.WorkingDayDeadline, model.CommissionDaysBeforeMonthEnd, model.EffectiveFrom, GetUserEmail());
+                _logger.LogInformation("Created MonthlyUpdateDeadlineConfig {Id} (DueMonthOffset: {Offset}, DueCalendarDay: {CalDay}, CommissionDays: {CommissionDays}, EffectiveFrom: {From}) by {User}", 
+                    model.Id, model.DueMonthOffset, model.DueCalendarDay, model.CommissionDaysBeforeMonthEnd, model.EffectiveFrom, GetUserEmail());
 
                 TempData["SuccessMessage"] = $"Successfully created monthly update deadline configuration '{model.Name}'.";
                 return RedirectToAction(nameof(Index));
@@ -187,7 +198,8 @@ namespace Compass.Controllers.Admin
                     }
 
                     existing.Name = model.Name;
-                    existing.WorkingDayDeadline = model.WorkingDayDeadline;
+                    existing.DueMonthOffset = model.DueMonthOffset;
+                    existing.DueCalendarDay = model.DueCalendarDay;
                     existing.CommissionDaysBeforeMonthEnd = model.CommissionDaysBeforeMonthEnd;
                     existing.EffectiveFrom = model.EffectiveFrom;
                     existing.EffectiveUntil = model.EffectiveUntil;
@@ -196,6 +208,8 @@ namespace Compass.Controllers.Admin
                     existing.Notes = model.Notes;
                     existing.UpdatedBy = GetUserEmail();
                     existing.UpdatedAt = DateTime.UtcNow;
+
+                    SyncLegacyDeadlineColumns(existing);
 
                     await _context.SaveChangesAsync();
 

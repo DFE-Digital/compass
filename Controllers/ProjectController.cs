@@ -60,6 +60,12 @@ namespace Compass.Controllers
             "cancelled"
         };
 
+        /// <summary>Sentinel value for phase filter meaning "show only work with no phase set".</summary>
+        private const string PhaseFilterNone = "__none__";
+
+        /// <summary>Sentinel value for priority filter meaning "show only work with priority not set".</summary>
+        private const int PriorityFilterNotSet = -1;
+
         private static readonly string[] ActionPriorityValues =
         {
             "low",
@@ -455,7 +461,10 @@ namespace Compass.Controllers
             }
             if (!string.IsNullOrEmpty(phase))
             {
-                userProjectsQuery = userProjectsQuery.Where(p => p.PhaseLookup != null && p.PhaseLookup.Name == phase);
+                if (phase == PhaseFilterNone)
+                    userProjectsQuery = userProjectsQuery.Where(p => p.PhaseId == null);
+                else
+                    userProjectsQuery = userProjectsQuery.Where(p => p.PhaseLookup != null && p.PhaseLookup.Name == phase);
             }
             if (!string.IsNullOrEmpty(flagship))
             {
@@ -464,7 +473,10 @@ namespace Compass.Controllers
             }
             if (priority.HasValue)
             {
-                userProjectsQuery = userProjectsQuery.Where(p => p.DeliveryPriorityId == priority.Value);
+                if (priority.Value == PriorityFilterNotSet)
+                    userProjectsQuery = userProjectsQuery.Where(p => p.DeliveryPriorityId == null);
+                else
+                    userProjectsQuery = userProjectsQuery.Where(p => p.DeliveryPriorityId == priority.Value);
             }
             
             // For "Your work" view, default to Active status if no status filter is specified
@@ -539,7 +551,10 @@ namespace Compass.Controllers
             }
             if (!string.IsNullOrEmpty(phase))
             {
-                watchedProjectsQuery = watchedProjectsQuery.Where(p => p.PhaseLookup != null && p.PhaseLookup.Name == phase);
+                if (phase == PhaseFilterNone)
+                    watchedProjectsQuery = watchedProjectsQuery.Where(p => p.PhaseId == null);
+                else
+                    watchedProjectsQuery = watchedProjectsQuery.Where(p => p.PhaseLookup != null && p.PhaseLookup.Name == phase);
             }
             if (!string.IsNullOrEmpty(flagship))
             {
@@ -548,7 +563,10 @@ namespace Compass.Controllers
             }
             if (priority.HasValue)
             {
-                watchedProjectsQuery = watchedProjectsQuery.Where(p => p.DeliveryPriorityId == priority.Value);
+                if (priority.Value == PriorityFilterNotSet)
+                    watchedProjectsQuery = watchedProjectsQuery.Where(p => p.DeliveryPriorityId == null);
+                else
+                    watchedProjectsQuery = watchedProjectsQuery.Where(p => p.DeliveryPriorityId == priority.Value);
             }
             if (!string.IsNullOrEmpty(status))
             {
@@ -610,7 +628,10 @@ namespace Compass.Controllers
             // Apply Phase filter
             if (!string.IsNullOrEmpty(phase))
             {
-                query = query.Where(p => p.PhaseLookup != null && p.PhaseLookup.Name == phase);
+                if (phase == PhaseFilterNone)
+                    query = query.Where(p => p.PhaseId == null);
+                else
+                    query = query.Where(p => p.PhaseLookup != null && p.PhaseLookup.Name == phase);
             }
 
             // Apply Flagship filter
@@ -622,7 +643,10 @@ namespace Compass.Controllers
 
             if (priority.HasValue)
             {
-                query = query.Where(p => p.DeliveryPriorityId == priority.Value);
+                if (priority.Value == PriorityFilterNotSet)
+                    query = query.Where(p => p.DeliveryPriorityId == null);
+                else
+                    query = query.Where(p => p.DeliveryPriorityId == priority.Value);
             }
 
             // Apply Primary Contact filter
@@ -767,6 +791,7 @@ namespace Compass.Controllers
             ViewBag.CurrentReportingYear = currentYear;
             ViewBag.CurrentReportingMonth = currentMonth;
             ViewBag.CurrentReportingMonthName = new DateTime(currentYear, currentMonth, 1).ToString("MMMM yyyy");
+            ViewBag.MonthlyUpdateDueRuleDescription = _monthlyUpdateService.GetMonthlyUpdateDueRuleDescription(currentYear, currentMonth);
             ViewBag.CurrentView = viewType;
 
             // Calculate status counts based on the current view
@@ -814,7 +839,10 @@ namespace Compass.Controllers
             }
             if (!string.IsNullOrEmpty(phase))
             {
-                statusCountQuery = statusCountQuery.Where(p => p.PhaseLookup != null && p.PhaseLookup.Name == phase);
+                if (phase == PhaseFilterNone)
+                    statusCountQuery = statusCountQuery.Where(p => p.PhaseId == null);
+                else
+                    statusCountQuery = statusCountQuery.Where(p => p.PhaseLookup != null && p.PhaseLookup.Name == phase);
             }
             if (!string.IsNullOrEmpty(flagship))
             {
@@ -823,7 +851,10 @@ namespace Compass.Controllers
             }
             if (priority.HasValue)
             {
-                statusCountQuery = statusCountQuery.Where(p => p.DeliveryPriorityId == priority.Value);
+                if (priority.Value == PriorityFilterNotSet)
+                    statusCountQuery = statusCountQuery.Where(p => p.DeliveryPriorityId == null);
+                else
+                    statusCountQuery = statusCountQuery.Where(p => p.DeliveryPriorityId == priority.Value);
             }
             if (primaryContactId.HasValue)
             {
@@ -922,7 +953,10 @@ namespace Compass.Controllers
                 }
                 if (!string.IsNullOrEmpty(phase))
                 {
-                    userProjectsQuery = userProjectsQuery.Where(p => p.PhaseLookup != null && p.PhaseLookup.Name == phase);
+                    if (phase == PhaseFilterNone)
+                        userProjectsQuery = userProjectsQuery.Where(p => p.PhaseId == null);
+                    else
+                        userProjectsQuery = userProjectsQuery.Where(p => p.PhaseLookup != null && p.PhaseLookup.Name == phase);
                 }
                 if (!string.IsNullOrEmpty(flagship))
                 {
@@ -939,7 +973,10 @@ namespace Compass.Controllers
                 
                 if (priority.HasValue)
                 {
-                    userProjectsQuery = userProjectsQuery.Where(p => p.DeliveryPriorityId == priority.Value);
+                    if (priority.Value == PriorityFilterNotSet)
+                        userProjectsQuery = userProjectsQuery.Where(p => p.DeliveryPriorityId == null);
+                    else
+                        userProjectsQuery = userProjectsQuery.Where(p => p.DeliveryPriorityId == priority.Value);
                 }
                 if (primaryContactId.HasValue)
                 {
