@@ -2794,9 +2794,9 @@ public class AdminController : Controller
         return RedirectToAction(nameof(BusinessAreas));
     }
 
-    // GET: api/Admin/BusinessAreas
+    // GET: api/Admin/BusinessAreas/list — JSON list (do not use api/Admin/BusinessAreas; that URL is served by BusinessAreas() for the HTML admin page)
     [HttpGet]
-    [Route("api/Admin/BusinessAreas")]
+    [Route("api/Admin/BusinessAreas/list")]
     public async Task<IActionResult> GetBusinessAreasApi()
     {
         try
