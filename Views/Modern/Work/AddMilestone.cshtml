@@ -1,0 +1,102 @@
+@model Compass.Models.Milestone
+@{
+    var work = ViewBag.WorkItem as Compass.Models.Modern.Work.WorkItem;
+    var projectId = Model.ProjectId ?? work?.Id ?? 0;
+    ViewData["Title"] = "Add milestone";
+}
+@section Breadcrumbs {
+    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="/">Home</a></li>
+    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="@Url.Action("Index", "ModernWork")">Work</a></li>
+    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="@Url.Action("Detail", "ModernWork", new { id = projectId })">@(work?.Title ?? "Work")</a></li>
+    <li class="dfe-c-breadcrumb__item" aria-current="page">Add milestone</li>
+}
+
+<div class="dfe-c-form-layout">
+  <div class="dfe-c-form-layout__main">
+  @await Html.PartialAsync("_WorkItemChrome", work)
+  <h2 class="dfe-c-heading-m dfe-c-mt-0">Add milestone</h2>
+  <p class="dfe-c-body muted dfe-c-mb-3">Add a milestone with a due date and status.</p>
+
+  <div class="dfe-c-grid-row">
+    <div class="dfe-c-grid-col dfe-c-grid-col--two-thirds">
+  <form asp-controller="Project" asp-action="AddMilestone" asp-route-projectId="@projectId" method="post" class="dfe-c-mb-4">
+    @Html.AntiForgeryToken()
+
+    @if (!ViewData.ModelState.IsValid)
+    {
+      <div class="dfe-c-error-summary" aria-labelledby="error-summary-title" role="alert" data-module="dfe-c-error-summary">
+        <h2 class="dfe-c-error-summary__title" id="error-summary-title">There is a problem</h2>
+        <div class="dfe-c-error-summary__body">
+          <ul class="dfe-c-list dfe-c-error-summary__list">
+            @foreach (var kv in ViewData.ModelState)
+            {
+              @if (kv.Value?.Errors?.Count > 0)
+              {
+                var fieldId = string.IsNullOrEmpty(kv.Key) ? "name" : kv.Key;
+                @foreach (var err in kv.Value.Errors)
+                {
+                  <li><a href="#@fieldId">@err.ErrorMessage</a></li>
+                }
+              }
+            }
+          </ul>
+        </div>
+      </div>
+    }
+
+    <div class="dfe-c-form__group @(ViewData.ModelState["name"]?.Errors?.Any() == true ? "dfe-c-form__group--error" : "")">
+      <label class="dfe-c-form__label" for="name">Title *</label>
+      @if (ViewData.ModelState["name"]?.Errors?.Any() == true)
+      {
+        <span class="dfe-c-form__error">@ViewData.ModelState["name"]?.Errors?.FirstOrDefault()?.ErrorMessage</span>
+      }
+      <input class="dfe-c-width-full" id="name" name="name" type="text" value="@Model?.Name" maxlength="200" required />
+    </div>
+
+    <div class="dfe-c-form__group">
+      <label class="dfe-c-form__label" for="description">Description</label>
+      <textarea class="dfe-c-width-full" id="description" name="description" rows="3">@Model?.Description</textarea>
+    </div>
+
+    <div class="dfe-c-form__group">
+      <label class="dfe-c-form__label" for="dueDate">Due date *</label>
+      <input class="dfe-c-width-full" id="dueDate" name="dueDate" type="date" value="@Model.DueDate.ToString("yyyy-MM-dd")" required />
+    </div>
+
+    <div class="dfe-c-form__group">
+      <label class="dfe-c-form__label" for="status">Status</label>
+      @* Opt out of option Tag Helpers so value="@..." is valid (RZ1031). *@
+      <!select class="dfe-c-width-full" id="status" name="status">
+        @{
+          var statusOpts = new (string Value, string Label)[]
+          {
+            ("not_started", "Not started"),
+            ("in_progress", "In progress"),
+            ("on_track", "On track"),
+            ("at_risk", "At risk"),
+            ("delayed", "Delayed"),
+            ("complete", "Complete"),
+            ("cancelled", "Cancelled")
+          };
+        }
+        @foreach (var o in statusOpts)
+        {
+          if (string.Equals(Model.Status, o.Value, StringComparison.OrdinalIgnoreCase))
+          {
+            <option value="@o.Value" selected>@o.Label</option>
+          }
+          else
+          {
+            <option value="@o.Value">@o.Label</option>
+          }
+        }
+      </select>
+    </div>
+
+    <button type="submit" class="dfe-c-button dfe-c-button--primary">Add milestone</button>
+    <a href="@Url.Action("Detail", "ModernWork", new { id = projectId, tab = "milestones" })" class="dfe-c-button dfe-c-button--secondary dfe-c-ms-2">Cancel</a>
+  </form>
+    </div>
+  </div>
+  </div>
+</div>

@@ -29,6 +29,9 @@ namespace Compass.Controllers
         private readonly IPermissionService _permissionService;
         private const string OtherOptionValue = "__other__";
 
+        /// <summary>Stored in <see cref="ProjectContact.TeamStatus"/> for additional governance contacts (not project team members).</summary>
+        private const string GovernanceContactTeamStatus = "governance";
+
         private static readonly (string Value, string Label)[] MilestoneStatuses = new[]
         {
             ("not_started", "Not started"),
@@ -1983,6 +1986,7 @@ namespace Compass.Controllers
                 .Include(p => p.ProblemStatements)
                     .ThenInclude(ps => ps.History)
                 .Include(p => p.ProjectContacts)
+                    .ThenInclude(pc => pc.User)
                 .Include(p => p.Successes)
                 .Include(p => p.ProjectProducts)
                 .Include(p => p.Milestones)
@@ -3082,6 +3086,11 @@ namespace Compass.Controllers
                 return NotFound();
             }
 
+            if (string.Equals(contact.TeamStatus, GovernanceContactTeamStatus, StringComparison.OrdinalIgnoreCase))
+            {
+                return NotFound();
+            }
+
             await EnsureContactUserAsync(contact);
             var summary = CreateProjectSummary(contact.Project);
             var viewModel = BuildTeamMemberFormViewModel(summary, contact);
@@ -3128,6 +3137,11 @@ namespace Compass.Controllers
                 .FirstOrDefaultAsync(pc => pc.Id == input.TeamMemberId.Value && pc.ProjectId == input.ProjectId);
 
             if (contact == null || contact.Project.IsDeleted)
+            {
+                return NotFound();
+            }
+
+            if (string.Equals(contact.TeamStatus, GovernanceContactTeamStatus, StringComparison.OrdinalIgnoreCase))
             {
                 return NotFound();
             }
@@ -3196,6 +3210,11 @@ namespace Compass.Controllers
                 return NotFound();
             }
 
+            if (string.Equals(contact.TeamStatus, GovernanceContactTeamStatus, StringComparison.OrdinalIgnoreCase))
+            {
+                return NotFound();
+            }
+
             var viewModel = new ProjectTeamMemberDetailsViewModel
             {
                 ProjectId = contact.ProjectId,
@@ -3231,6 +3250,11 @@ namespace Compass.Controllers
                 .FirstOrDefaultAsync(pc => pc.Id == input.TeamMemberId && pc.ProjectId == input.ProjectId);
 
             if (contact == null)
+            {
+                return NotFound();
+            }
+
+            if (string.Equals(contact.TeamStatus, GovernanceContactTeamStatus, StringComparison.OrdinalIgnoreCase))
             {
                 return NotFound();
             }
@@ -7157,6 +7181,125 @@ namespace Compass.Controllers
             }
 
             return RedirectToAction(nameof(Details), new { id = id, tab = "contactsandgovernance" });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> AddGovernanceContact(int id, int? governanceContactUserId, string? role)
+        {
+            try
+            {
+                var roleTrim = role?.Trim() ?? string.Empty;
+                if (string.IsNullOrEmpty(roleTrim))
+                {
+                    TempData["ErrorMessage"] = "Enter a role for this contact.";
+                    return RedirectToAction(nameof(Details), new { id, tab = "contactsandgovernance" });
+                }
+
+                if (roleTrim.Length > 100)
+                {
+                    roleTrim = roleTrim.Substring(0, 100);
+                }
+
+                if (!governanceContactUserId.HasValue)
+                {
+                    TempData["ErrorMessage"] = "Select a person from the directory.";
+                    return RedirectToAction(nameof(Details), new { id, tab = "contactsandgovernance" });
+                }
+
+                var project = await _context.Projects
+                    .Include(p => p.ProjectContacts)
+                    .FirstOrDefaultAsync(p => p.Id == id && !p.IsDeleted);
+
+                if (project == null)
+                {
+                    TempData["ErrorMessage"] = "Project not found.";
+                    return RedirectToAction(nameof(Index));
+                }
+
+                var user = await _context.Users.FindAsync(governanceContactUserId.Value);
+                if (user == null || string.IsNullOrWhiteSpace(user.Email))
+                {
+                    TempData["ErrorMessage"] = "Selected person could not be found or has no email.";
+                    return RedirectToAction(nameof(Details), new { id, tab = "contactsandgovernance" });
+                }
+
+                var duplicate = project.ProjectContacts.Any(pc =>
+                    string.Equals(pc.TeamStatus, GovernanceContactTeamStatus, StringComparison.OrdinalIgnoreCase) &&
+                    pc.UserId == user.Id);
+                if (duplicate)
+                {
+                    TempData["ErrorMessage"] = "This person is already listed as an additional contact.";
+                    return RedirectToAction(nameof(Details), new { id, tab = "contactsandgovernance" });
+                }
+
+                var normalizedName = !string.IsNullOrWhiteSpace(user.Name) ? user.Name.Trim() : user.Email;
+                var maxSort = project.ProjectContacts.Count > 0
+                    ? project.ProjectContacts.Max(c => c.SortOrder)
+                    : 0;
+
+                var contact = new ProjectContact
+                {
+                    ProjectId = id,
+                    UserId = user.Id,
+                    Name = normalizedName,
+                    Email = user.Email.Trim(),
+                    Role = roleTrim,
+                    TeamStatus = GovernanceContactTeamStatus,
+                    FundingArrangement = "Admin",
+                    EmploymentType = "Permanent",
+                    SortOrder = maxSort + 1,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
+                _context.ProjectContacts.Add(contact);
+                project.UpdatedAt = DateTime.UtcNow;
+                await _context.SaveChangesAsync();
+
+                TempData["SuccessMessage"] = "Contact added.";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error adding governance contact for project {ProjectId}", id);
+                TempData["ErrorMessage"] = "An error occurred while adding the contact.";
+            }
+
+            return RedirectToAction(nameof(Details), new { id, tab = "contactsandgovernance" });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> RemoveGovernanceContact(int id, int contactId)
+        {
+            try
+            {
+                var contact = await _context.ProjectContacts
+                    .FirstOrDefaultAsync(pc => pc.Id == contactId && pc.ProjectId == id);
+
+                if (contact == null ||
+                    !string.Equals(contact.TeamStatus, GovernanceContactTeamStatus, StringComparison.OrdinalIgnoreCase))
+                {
+                    TempData["ErrorMessage"] = "Contact not found.";
+                    return RedirectToAction(nameof(Details), new { id, tab = "contactsandgovernance" });
+                }
+
+                _context.ProjectContacts.Remove(contact);
+                var project = await _context.Projects.FirstOrDefaultAsync(p => p.Id == id && !p.IsDeleted);
+                if (project != null)
+                {
+                    project.UpdatedAt = DateTime.UtcNow;
+                }
+
+                await _context.SaveChangesAsync();
+                TempData["SuccessMessage"] = "Contact removed.";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error removing governance contact {ContactId} for project {ProjectId}", contactId, id);
+                TempData["ErrorMessage"] = "An error occurred while removing the contact.";
+            }
+
+            return RedirectToAction(nameof(Details), new { id, tab = "contactsandgovernance" });
         }
 
         // POST: Project/UpdateServiceOwners

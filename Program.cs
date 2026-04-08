@@ -10,6 +10,8 @@ using Compass.Services;
 using Compass.Data;
 using Compass.Middlewares;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Mvc.Razor;
+using Compass.Infrastructure;
 using System.Threading.RateLimiting;
 using System.IO;
 using System.Linq;
@@ -274,6 +276,11 @@ builder.Services.AddAuthentication(OpenIdConnectDefaults.AuthenticationScheme)
 builder.Services.AddControllersWithViews()
     .AddMicrosoftIdentityUI();
 
+builder.Services.Configure<RazorViewEngineOptions>(options =>
+{
+    options.ViewLocationExpanders.Add(new ModernUiViewLocationExpander());
+});
+
 builder.Services.AddAuthorization();
 
 // Microsoft Graph app-to-app client using Entra configuration
@@ -388,6 +395,8 @@ builder.Services.AddScoped<INudgingService, NudgingService>();
 builder.Services.AddScoped<INotificationRuleService, NotificationRuleService>();
 builder.Services.AddScoped<IAccessibilityTrainingService, AccessibilityTrainingService>();
 builder.Services.AddScoped<Compass.Services.DemandTriage.IDemandTriageService, Compass.Services.DemandTriage.DemandTriageService>();
+builder.Services.AddScoped<Compass.Services.Dashboard.IHomeDashboardViewModelBuilder, Compass.Services.Dashboard.HomeDashboardViewModelBuilder>();
+builder.Services.AddScoped<Compass.Services.Modern.IModernWorkService, Compass.Services.Modern.ModernWorkService>();
 
 // Register HttpClientFactory for PerformanceReportingManagementController
 builder.Services.AddHttpClient();
@@ -571,11 +580,6 @@ app.MapControllerRoute(
     name: "areas",
     pattern: "{area:exists}/{controller=Home}/{action=Index}/{id?}");
 
-// API routes (conventional routing for non-attribute controllers)
-app.MapControllerRoute(
-    name: "api",
-    pattern: "api/{controller}/{action=Index}/{id?}");
-
 // Friendly URLs for operational / commission reporting (must be before default route)
 app.MapControllerRoute(
     name: "performanceProduct",
@@ -587,10 +591,16 @@ app.MapControllerRoute(
     pattern: "Performance",
     defaults: new { controller = "ProductReporting", action = "PerformanceMetrics" });
 
-// Default routes
+// Default MVC routes — register BEFORE the api/ prefix route so Url.Action / tag helpers
+// generate /Controller/Action/... instead of /api/Controller/Action/... for conventional controllers.
 app.MapControllerRoute(
     name: "default",
     pattern: "{controller=Home}/{action=Index}/{id?}");
+
+// Explicit api/ prefix for callers that need it (incoming /api/... still matches here)
+app.MapControllerRoute(
+    name: "api",
+    pattern: "api/{controller}/{action=Index}/{id?}");
 
 app.MapRazorPages();
 

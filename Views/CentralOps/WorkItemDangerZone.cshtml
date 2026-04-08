@@ -1,0 +1,91 @@
+@model Compass.Models.Project
+@{
+    ViewData["Title"] = $"Danger zone – {Model.Title}";
+    var deliveryCode = $"DFE-DDT-{Model.Id}";
+}
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem;">
+            <li class="breadcrumb-item">
+                <a href="/" style="color: #005ea5; text-decoration: none;">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a asp-controller="CentralOps" asp-action="Dashboard" style="color: #005ea5; text-decoration: none;">Central Operations</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a asp-controller="CentralOps" asp-action="ManageWork" style="color: #005ea5; text-decoration: none;">Manage Work</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a asp-controller="CentralOps" asp-action="WorkItemDetails" asp-route-id="@Model.Id" style="color: #005ea5; text-decoration: none;">@Model.Title</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page">Danger zone</li>
+        </ol>
+    </nav>
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-12 col-md-8">
+                <h1 class="m-0">Danger zone</h1>
+                <p class="text-muted mb-0">
+                    @Model.Title · @deliveryCode
+                </p>
+            </div>
+            <div class="col-sm-12 col-md-4 text-md-right">
+                <a asp-controller="CentralOps" asp-action="WorkItemDetails" asp-route-id="@Model.Id" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left"></i> Back to work item
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                @TempData["ErrorMessage"]
+                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+        }
+
+        <div class="row">
+            <div class="col-xxl-2 col-xl-2 col-lg-3 col-md-4 col-sm-12 col-12">
+                @await Html.PartialAsync("_WorkItemSideNav", new Compass.ViewModels.WorkItemSideNavViewModel
+                {
+                    ProjectId = Model.Id,
+                    IsDangerZonePage = true
+                })
+            </div>
+            <div class="col-xxl-10 col-xl-10 col-lg-9 col-md-8 col-sm-12 col-12">
+                <div class="card border-danger">
+                    <div class="card-header bg-danger text-white">
+                        <h3 class="card-title mb-0">Delete work item</h3>
+                    </div>
+                    <div class="card-body">
+                        <p class="lead">Deleting removes this work item from Manage Work, reporting, and other views in Compass.</p>
+                        <p class="text-muted">This uses a soft delete: related records are kept for audit purposes, but the item will no longer appear in normal lists. This action is intended for Central Operations use only.</p>
+                        <p><strong>Title to match:</strong> <span class="font-weight-bold">@Model.Title</span></p>
+
+                        <form asp-controller="CentralOps" asp-action="DeleteWorkItem" method="post" class="mt-4">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="id" value="@Model.Id" />
+                            <div class="form-group">
+                                <label for="confirmTitle">Type the full work item title exactly to confirm</label>
+                                <input type="text" name="confirmTitle" id="confirmTitle" class="form-control" required autocomplete="off" aria-describedby="confirmTitleHelp" />
+                                <small id="confirmTitleHelp" class="form-text text-muted">Copy the title shown above. Deletion cannot be undone from this screen.</small>
+                            </div>
+                            <button type="submit" class="btn btn-danger">Delete work item</button>
+                            <a asp-controller="CentralOps" asp-action="WorkItemDetails" asp-route-id="@Model.Id" class="btn btn-outline-secondary ml-2">Cancel</a>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>

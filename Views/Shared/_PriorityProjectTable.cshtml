@@ -1,0 +1,154 @@
+@using Compass.Models
+@model List<Project>
+
+@functions {
+    string GetRagBadgeClass(RagStatusLookup? ragStatusLookup, string? ragStatusStr = null)
+    {
+        if (ragStatusLookup != null && !string.IsNullOrEmpty(ragStatusLookup.CssClass))
+            return ragStatusLookup.CssClass;
+
+        var name = ragStatusLookup?.Name?.Trim();
+        if (string.IsNullOrEmpty(name))
+        {
+            name = ragStatusStr?.Trim()
+                .Replace(" / ", "-").Replace("/", "-").Replace(" /", "-").Replace("/ ", "-");
+        }
+        return name switch
+        {
+            "Green" => "badge badge-green",
+            "Amber-Green" => "badge badge-amber-green",
+            "Amber" => "badge badge-amber",
+            "Amber-Red" => "badge badge-amber-red",
+            "Red" => "badge badge-red",
+            _ => "badge badge-secondary"
+        };
+    }
+    string GetRagDisplayName(RagStatusLookup? ragStatusLookup, string? ragStatusStr = null)
+    {
+        if (ragStatusLookup != null && !string.IsNullOrEmpty(ragStatusLookup.Name))
+            return ragStatusLookup.Name;
+        if (!string.IsNullOrEmpty(ragStatusStr))
+            return ragStatusStr.Trim().Replace(" / ", "-").Replace("/", "-");
+        return "Not set";
+    }
+    string GetRagRowClass(RagStatusLookup? ragStatusLookup, string? ragStatusStr = null)
+    {
+        var name = ragStatusLookup?.Name?.Trim() ?? ragStatusStr?.Trim() ?? "";
+        return name switch
+        {
+            "Red" => "table-danger",
+            "Amber-Red" => "table-warning",
+            _ => ""
+        };
+    }
+    string GetStatusBadgeClass(string? status)
+    {
+        return (status ?? "") switch
+        {
+            "Active" => "badge badge-success",
+            "Paused" => "badge badge-warning",
+            "Completed" => "badge badge-primary",
+            "Cancelled" => "badge badge-danger",
+            _ => "badge badge-secondary"
+        };
+    }
+}
+
+<div class="table-responsive">
+    <table class="table table-hover reports-table mb-0">
+        <thead>
+            <tr>
+                <th>Project</th>
+                <th>Status</th>
+                <th>Business area</th>
+                <th>Phase</th>
+                <th>Delivery priority</th>
+                <th>RAG</th>
+                <th>Flags</th>
+                <th>Directorate</th>
+                <th>Concerns</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var project in Model)
+            {
+                var openRisks = project.Risks?.Count(r => !r.IsDeleted) ?? 0;
+                var openIssues = project.Issues?.Count(i => !i.IsDeleted && i.Status != "resolved" && i.Status != "closed") ?? 0;
+                var overdueMilestones = project.Milestones?.Count(m => !m.IsDeleted && m.DueDate < DateTime.Today && m.Status != "complete" && m.Status != "cancelled") ?? 0;
+                var divisions = project.Directorates?.Select(d => d.Division?.Name).Where(n => !string.IsNullOrEmpty(n)).Distinct().ToList() ?? new List<string?>();
+                var ragName = GetRagDisplayName(project.RagStatusLookup, project.RagStatus);
+                <tr class="@GetRagRowClass(project.RagStatusLookup, project.RagStatus)">
+                    <td>
+                        <a href="@Url.Action("Details", "Project", new { id = project.Id })" class="font-weight-bold text-dark">@project.Title</a>
+                        @if (!string.IsNullOrEmpty(project.ProjectCode))
+                        {
+                            <br><small class="text-muted">@project.ProjectCode</small>
+                        }
+                    </td>
+                    <td><span class="@GetStatusBadgeClass(project.Status)">@(project.Status ?? "–")</span></td>
+                    <td>
+                        @if (project.BusinessAreaLookup != null)
+                        {
+                            <a href="@Url.Action("BusinessAreaReport", "Reports", new { businessAreaId = project.BusinessAreaId })" class="text-muted"><small>@project.BusinessAreaLookup.Name</small></a>
+                        }
+                        else
+                        {
+                            <span class="text-muted">–</span>
+                        }
+                    </td>
+                    <td><small>@(project.PhaseLookup?.Name ?? "–")</small></td>
+                    <td><small>@(project.DeliveryPriority?.Name ?? "–")</small></td>
+                    <td>
+                        @if (ragName != "Not set")
+                        {
+                            <span class="@GetRagBadgeClass(project.RagStatusLookup, project.RagStatus)">@ragName</span>
+                        }
+                        else
+                        {
+                            <span class="badge badge-secondary">Not set</span>
+                        }
+                    </td>
+                    <td>
+                        @if (project.IsFlagship)
+                        {
+                            <span class="badge badge-warning mr-1" title="Flagship"><i class="fas fa-star" aria-hidden="true"></i></span>
+                        }
+                        @if (project.IsMultiDepartmentProject)
+                        {
+                            <span class="badge badge-info mr-1" title="Multi-department"><i class="fas fa-globe" aria-hidden="true"></i></span>
+                        }
+                        @if (project.IsAiInitiative)
+                        {
+                            <span class="badge badge-primary mr-1" title="AI initiative"><i class="fas fa-robot" aria-hidden="true"></i></span>
+                        }
+                        @if (!project.IsFlagship && !project.IsMultiDepartmentProject && !project.IsAiInitiative)
+                        {
+                            <span class="text-muted">–</span>
+                        }
+                    </td>
+                    <td><small class="text-muted">@(divisions.Any() ? string.Join(", ", divisions) : "–")</small></td>
+                    <td>
+                        @{
+                            var concernParts = new List<string>();
+                            if (overdueMilestones > 0) concernParts.Add($"{overdueMilestones} overdue");
+                            if (openRisks > 0) concernParts.Add($"{openRisks} risk{(openRisks == 1 ? "" : "s")}");
+                            if (openIssues > 0) concernParts.Add($"{openIssues} issue{(openIssues == 1 ? "" : "s")}");
+                        }
+                        @if (concernParts.Any())
+                        {
+                            <small class="text-muted">@string.Join(", ", concernParts)</small>
+                        }
+                        else
+                        {
+                            <small class="text-success">None</small>
+                        }
+                    </td>
+                    <td class="text-nowrap">
+                        <a href="@Url.Action("Details", "Project", new { id = project.Id })" class="btn btn-sm btn-outline-primary">View</a>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>

@@ -1,0 +1,47 @@
+@model Compass.Models.UserPickerViewModel
+@{
+    var hasError = ViewData.ModelState[Model?.FieldName ?? ""]?.Errors?.Any() == true;
+    var inputId = "user-picker-" + (Model?.FieldName ?? "user") + (!string.IsNullOrEmpty(Model?.InputIdSuffix) ? "-" + Model.InputIdSuffix : "");
+}
+<div class="dfe-c-form__group @(hasError ?"dfe-c-form__group--error" : "")">
+  <label class="dfe-c-form__label dfe-c-form__label--s" for="@inputId">@(Model?.Label ?? "Select user")</label>
+  @if (!string.IsNullOrEmpty(Model?.Hint))
+  {
+    <div class="dfe-c-form__hint">@Model.Hint</div>
+  }
+  <div class="user-picker" data-user-picker data-search-url="/api/users/search" data-select-url="/api/users/select">
+    <div style="position:relative;">
+      <input type="text"
+             class="dfe-c-width-20 js-user-picker-input"
+             id="@inputId"
+             autocomplete="off"
+             placeholder="@(Model?.Placeholder ?? "e.g. Alex Smith or alex.smith@education.gov.uk")"
+             value="@Model?.DefaultName" />
+      <span class="user-picker__spinner js-user-picker-spinner" aria-hidden="true">Searching…</span>
+      <div class="user-picker__results js-user-picker-results" role="listbox" aria-live="polite"></div>
+    </div>
+    <p class="dfe-c-body-s js-user-picker-message" style="margin-top:0.25rem;display:none;"></p>
+    <input type="hidden" name="@(Model?.FieldName ?? "UserId")" class="js-user-picker-value" value="@(Model?.DefaultUserId.HasValue == true ? Model.DefaultUserId.Value.ToString() : "")" />
+    <div class="user-picker__selected js-user-picker-summary" style="margin-top:0.5rem;" data-default-text="@(Model?.DefaultSummaryText ?? "No user selected.")">
+      @if (Model?.DefaultUserId != null && !string.IsNullOrEmpty(Model.DefaultName))
+      {
+        <div class="user-picker__selected-dfe-c-legacy-card">
+          <div class="user-picker__selected-name">@Model.DefaultName</div>
+          @if (!string.IsNullOrEmpty(Model.DefaultEmail))
+          {
+            <div class="user-picker__selected-meta">@Model.DefaultEmail</div>
+          }
+          <button type="button" class="dfe-c-link dfe-c-body-s js-user-picker-clear">Remove</button>
+        </div>
+      }
+      else
+      {
+        <span class="dfe-c-form__hint">@(Model?.DefaultSummaryText ?? "No user selected.")</span>
+      }
+    </div>
+  </div>
+  @if (hasError && Model != null)
+  {
+    <span class="dfe-c-form__error">@ViewData.ModelState[Model.FieldName]?.Errors?.FirstOrDefault()?.ErrorMessage</span>
+  }
+</div>

@@ -1,0 +1,515 @@
+@model Compass.Models.Modern.Work.WorkRegisterViewModel
+@using Compass.Models.Modern.Work
+@{
+    ViewData["Title"] = "All work";
+    var activeTab = ViewBag.ActiveTab as string ?? "active";
+    var searchAndFilter = ViewBag.SearchAndFilter as SearchAndFilterViewModel;
+    var activePausedCount = Model.ActivePaused.Count;
+    var totalRegisterCount = Model.ActiveCount + Model.PausedCount + Model.CompletedCount + Model.CancelledCount;
+    var portfolioCount = Model.Portfolios?.Count ?? 0;
+    var allFilteredCount = Model.ActivePaused.Count + Model.Completed.Count + Model.Cancelled.Count;
+
+    object AllWorkTabQuery(string tab) => new {
+        tab,
+        search = Model.FilterSearch,
+        portfolioId = Model.FilterPortfolioId,
+        directorateId = Model.FilterDirectorateId,
+        phaseId = Model.FilterPhaseId,
+        ragId = Model.FilterRagId,
+        priorityId = Model.FilterPriorityId,
+        monthlyUpdate = Model.FilterMonthlyUpdate
+    };
+
+    string PhaseDfeClass(string? name) {
+        if (string.IsNullOrWhiteSpace(name) || name == "—") return "";
+        var n = name.Trim().ToLowerInvariant().Replace(" ", "-");
+        if (n.Contains("public") && n.Contains("beta")) return "dfe-c-phase--public-beta";
+        if (n.Contains("private") && n.Contains("beta")) return "dfe-c-phase--private-beta";
+        if (n.Contains("alpha")) return "dfe-c-phase--alpha";
+        if (n.Contains("live")) return "dfe-c-phase--live";
+        if (n.Contains("retired")) return "dfe-c-phase--retired";
+        if (n.Contains("discovery")) return "dfe-c-phase--discovery";
+        if (n.Contains("explore")) return "dfe-c-phase--explore";
+        return "";
+    }
+    string RagDfeClass(string? name) {
+        if (string.IsNullOrEmpty(name)) return "dfe-c-rag--tbc";
+        var n = name.ToLowerInvariant();
+        if (n.Contains("green")) return "dfe-c-rag--green";
+        if (n.Contains("amber") && n.Contains("red")) return "dfe-c-rag--amber";
+        if (n.Contains("red")) return "dfe-c-rag--red";
+        if (n.Contains("amber")) return "dfe-c-rag--amber";
+        return "dfe-c-rag--tbc";
+    }
+    string PriorityTagClass(string? name) {
+        if (string.IsNullOrEmpty(name)) return "dfe-c-tag dfe-c-tag--grey";
+        var s = name.ToLowerInvariant();
+        if (s.Contains("high") || s.Contains("critical")) return "dfe-c-tag dfe-c-tag--red";
+        if (s.Contains("medium")) return "dfe-c-tag dfe-c-tag--amber";
+        if (s.Contains("low")) return "dfe-c-tag dfe-c-tag--green";
+        return "dfe-c-tag dfe-c-tag--grey";
+    }
+    string MonthlyTagClass(string? text) {
+        if (string.IsNullOrEmpty(text)) return "dfe-c-tag dfe-c-tag--grey";
+        var t = text.ToLowerInvariant();
+        if (t.Contains("late")) return "dfe-c-tag dfe-c-tag--red";
+        if (t.Contains("submitted")) return "dfe-c-tag dfe-c-tag--grey";
+        if (t.Contains("due")) return "dfe-c-tag dfe-c-tag--amber";
+        return "dfe-c-tag dfe-c-tag--grey";
+    }
+
+}
+@section Breadcrumbs {
+    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="@Url.Action("Dashboard", "ModernWork")">Work</a></li>
+    <li class="dfe-c-breadcrumb__item" aria-current="page">All work</li>
+}
+
+<div class="modern-work-page">
+<div class="dfe-c-flex--between dfe-c-mb-3" style="flex-wrap:wrap;gap:1rem;">
+  <div class="dfe-c-page-title" style="margin:0">
+    <div class="dfe-c-page-title__caption">Work</div>
+    <h1 class="dfe-c-page-title__heading">All work</h1>
+    <p class="dfe-c-page-title__lede" id="work-reg-count">@(Model.ActiveCount + Model.PausedCount) work items across @(portfolioCount) portfolios</p>
+  </div>
+  <div class="dfe-c-flex" style="gap:0.5rem;flex-wrap:wrap;align-items:center;">
+    @if (searchAndFilter?.SecondaryActionUrl != null)
+    {
+      <a href="@searchAndFilter.SecondaryActionUrl" class="govuk-button govuk-button--outline-blue">Export</a>
+    }
+    <a href="@Url.Action("Create", "ModernWork")" class="govuk-button">Create work item</a>
+  </div>
+</div>
+
+<form method="get" action="@Url.Action("AllWork", "ModernWork")" id="allwork-register-form" class="dfe-c-mb-3">
+  <input type="hidden" name="tab" value="@activeTab" />
+  <div id="search-and-filter">
+  <div class="filter-toolbar">
+    <div class="filter-toolbar__search-wrap">
+      <input type="search" name="search" id="allwork-register-search" value="@Model.FilterSearch" placeholder="Search work items…" class="filter-search" autocomplete="off" aria-label="Search work items" />
+      <button type="submit" class="govuk-button govuk-button--secondary filter-toolbar__search-submit" id="allwork-search-submit">Search</button>
+    </div>
+    <button type="button" class="filter-toggle-btn" id="allwork-filter-btn" aria-expanded="false" aria-controls="allwork-filter-panel">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="flex-shrink:0;" aria-hidden="true"><path d="M1 3h14v1.5l-5 5V14l-4-2V9.5L1 4.5V3z"></path></svg>
+      <span class="filter-toggle-label">Filter</span>
+    </button>
+  </div>
+  <div class="filter-panel filter-panel--allwork" id="allwork-filter-panel">
+    <div class="filter-panel__grid">
+      <div>
+        <label for="allwork-filter-rag">RAG</label>
+        <select name="ragId" id="allwork-filter-rag" class="govuk-select">
+          <option value="">All</option>
+          @foreach (var r in Model.RagOptions)
+          {
+            if (Model.FilterRagId == r.Id)
+            {
+              <option value="@r.Id" selected>@r.Name</option>
+            }
+            else
+            {
+              <option value="@r.Id">@r.Name</option>
+            }
+          }
+        </select>
+      </div>
+      <div>
+        <label for="allwork-filter-phase">Phase</label>
+        <select name="phaseId" id="allwork-filter-phase" class="govuk-select">
+          <option value="">All</option>
+          @foreach (var o in Model.DeliveryPhaseOptions)
+          {
+            if (Model.FilterPhaseId == o.Id)
+            {
+              <option value="@o.Id" selected>@(o.Name ?? o.Value)</option>
+            }
+            else
+            {
+              <option value="@o.Id">@(o.Name ?? o.Value)</option>
+            }
+          }
+        </select>
+      </div>
+      <div>
+        <label for="allwork-filter-portfolio">Portfolio</label>
+        <select name="portfolioId" id="allwork-filter-portfolio" class="govuk-select">
+          <option value="">All (@portfolioCount)</option>
+          @foreach (var p in Model.Portfolios)
+          {
+            if (Model.FilterPortfolioId == p.Id)
+            {
+              <option value="@p.Id" selected>@p.Name</option>
+            }
+            else
+            {
+              <option value="@p.Id">@p.Name</option>
+            }
+          }
+        </select>
+      </div>
+      <div>
+        <label for="allwork-filter-directorate">Directorate</label>
+        <select name="directorateId" id="allwork-filter-directorate" class="govuk-select">
+          <option value="">All</option>
+          @foreach (var d in Model.Directorates)
+          {
+            if (Model.FilterDirectorateId == d.Id)
+            {
+              <option value="@d.Id" selected>@d.Name</option>
+            }
+            else
+            {
+              <option value="@d.Id">@d.Name</option>
+            }
+          }
+        </select>
+      </div>
+      <div>
+        <label for="allwork-filter-priority">Priority</label>
+        <select name="priorityId" id="allwork-filter-priority" class="govuk-select">
+          <option value="">All</option>
+          @foreach (var o in Model.PriorityOptions)
+          {
+            if (Model.FilterPriorityId == o.Id)
+            {
+              <option value="@o.Id" selected>@(o.Name ?? o.Value)</option>
+            }
+            else
+            {
+              <option value="@o.Id">@(o.Name ?? o.Value)</option>
+            }
+          }
+        </select>
+      </div>
+      <div>
+        <label for="allwork-filter-monthly">Monthly update</label>
+        <select name="monthlyUpdate" id="allwork-filter-monthly" class="govuk-select">
+          @if (string.IsNullOrEmpty(Model.FilterMonthlyUpdate))
+          {
+            <option value="" selected>All</option>
+          }
+          else
+          {
+            <option value="">All</option>
+          }
+          @if (string.Equals(Model.FilterMonthlyUpdate, "overdue", StringComparison.OrdinalIgnoreCase))
+          {
+            <option value="overdue" selected>Overdue</option>
+          }
+          else
+          {
+            <option value="overdue">Overdue</option>
+          }
+          @if (string.Equals(Model.FilterMonthlyUpdate, "due-today", StringComparison.OrdinalIgnoreCase))
+          {
+            <option value="due-today" selected>Due today</option>
+          }
+          else
+          {
+            <option value="due-today">Due today</option>
+          }
+          @if (string.Equals(Model.FilterMonthlyUpdate, "submitted", StringComparison.OrdinalIgnoreCase))
+          {
+            <option value="submitted" selected>Submitted</option>
+          }
+          else
+          {
+            <option value="submitted">Submitted</option>
+          }
+          @if (string.Equals(Model.FilterMonthlyUpdate, "not-required", StringComparison.OrdinalIgnoreCase))
+          {
+            <option value="not-required" selected>Not required</option>
+          }
+          else
+          {
+            <option value="not-required">Not required</option>
+          }
+        </select>
+      </div>
+    </div>
+    <div class="filter-panel__actions">
+      <button type="submit" class="govuk-button">Apply filters</button>
+      <a href="@Url.Action("AllWork", "ModernWork", new { tab = activeTab })" class="govuk-link">Clear filters</a>
+    </div>
+  </div>
+  </div>
+</form>
+
+<div class="tabs" role="tablist" aria-label="Work status sections">
+  <a href="@Url.Action("AllWork", "ModernWork", AllWorkTabQuery("active"))"
+     class="tab @(activeTab == "active" ? "on" : "")"
+     role="tab"
+     aria-selected="@(activeTab == "active")"
+     aria-controls="d-active"
+     id="tab-active">Active &amp; Paused <span class="dfe-c-fw-regular">(@(Model.ActivePausedCountBeforeMonthlyFilter))</span></a>
+  <a href="@Url.Action("AllWork", "ModernWork", AllWorkTabQuery("completed"))"
+     class="tab @(activeTab == "completed" ? "on" : "")"
+     role="tab"
+     aria-selected="@(activeTab == "completed")"
+     aria-controls="d-completed"
+     id="tab-completed">Completed <span class="dfe-c-fw-regular">(@Model.CompletedCount)</span></a>
+  <a href="@Url.Action("AllWork", "ModernWork", AllWorkTabQuery("cancelled"))"
+     class="tab @(activeTab == "cancelled" ? "on" : "")"
+     role="tab"
+     aria-selected="@(activeTab == "cancelled")"
+     aria-controls="d-cancelled"
+     id="tab-cancelled">Cancelled <span class="dfe-c-fw-regular">(@Model.CancelledCount)</span></a>
+  <a href="@Url.Action("AllWork", "ModernWork", AllWorkTabQuery("all"))"
+     class="tab @(activeTab == "all" ? "on" : "")"
+     role="tab"
+     aria-selected="@(activeTab == "all")"
+     aria-controls="d-all"
+     id="tab-all">All items <span class="dfe-c-fw-regular">(@allFilteredCount)</span></a>
+</div>
+
+<div id="d-active" class="tab-pane @(activeTab == "active" ? "on" : "")" role="tabpanel">
+  <div class="dfe-c-table-wrap">
+    <table id="work-table">
+      <thead>
+        <tr>
+          <th>Work item</th>
+          <th>Portfolio</th>
+          <th>Directorate</th>
+          <th>Phase</th>
+          <th>Priority</th>
+          <th>SRO</th>
+          <th>RAG</th>
+          <th>Monthly update</th>
+          <th>Risks</th>
+        </tr>
+      </thead>
+      <tbody>
+        @foreach (var r in Model.ActivePaused)
+        {
+          var phaseClass = PhaseDfeClass(r.PhaseName);
+          var phaseDisplay = phaseClass != "" ? (r.PhaseName ?? "").ToUpperInvariant() : (r.PhaseName ?? "—");
+          <tr>
+            <td>
+              <a href="@Url.Action("Detail", "ModernWork", new { id = r.Id })">@r.Title</a>
+              <span class="dfe-c-table-ref">WI-@r.Id.ToString("D8")</span>
+            </td>
+            <td>@(r.PortfolioName ?? "—")</td>
+            <td>@(r.DirectorateSummary ?? "—")</td>
+            <td>
+              @if (!string.IsNullOrEmpty(phaseClass))
+              {
+                <span class="dfe-c-phase @phaseClass">@phaseDisplay</span>
+              }
+              else
+              {
+                <span>@(r.PhaseName ?? "—")</span>
+              }
+            </td>
+            <td><span class="@PriorityTagClass(r.PriorityName)">@((r.PriorityName ?? "—").ToUpperInvariant())</span></td>
+            <td>@(r.SroDisplayName ?? "—")</td>
+            <td>
+              @if (!string.IsNullOrEmpty(r.RagBackgroundColourKey) || !string.IsNullOrEmpty(r.RagTextColourKey))
+              {
+                <span class="rag-badge" style="@(string.IsNullOrEmpty(r.RagBackgroundColourKey) ? "" : "background-color: var(--govuk-colour-" + r.RagBackgroundColourKey + ");")@(string.IsNullOrEmpty(r.RagTextColourKey) ? "" : " color: var(--govuk-colour-" + r.RagTextColourKey + ");")">@((r.RagName ?? "—").ToUpperInvariant())</span>
+              }
+              else
+              {
+                <span class="dfe-c-rag @RagDfeClass(r.RagName)">@((r.RagName ?? "—").ToUpperInvariant())</span>
+              }
+            </td>
+            <td>
+              @{
+                var monthlyText = r.MonthlyUpdateStatus ?? "—";
+              }
+              @if (r.MonthlyUpdateStatusLink == "wd-updates")
+              { <a href="@Url.Action("Detail", "ModernWork", new { id = r.Id })#wd-updates" class="dfe-c-link"><span class="@MonthlyTagClass(monthlyText)">@monthlyText.ToUpperInvariant()</span></a> }
+              else if (r.MonthlyUpdateStatusLink == "add")
+              { <a href="@Url.Action("AddMonthlyUpdate", "ModernWork", new { id = r.Id })" class="dfe-c-link"><span class="@MonthlyTagClass(monthlyText)">@monthlyText.ToUpperInvariant()</span></a> }
+              else
+              { <span class="@MonthlyTagClass(monthlyText)">@monthlyText.ToUpperInvariant()</span> }
+            </td>
+            <td>
+              @if (r.FirstRiskOrIssueId.HasValue && !string.IsNullOrEmpty(r.FirstRiskReference))
+              {
+                <a href="@Url.Action("RiskDetail", "ModernWork", new { workId = r.Id, id = r.FirstRiskOrIssueId.Value })">@r.FirstRiskReference</a>
+              }
+              else
+              {
+                <span class="dfe-c-text-muted">—</span>
+              }
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+  @if (!Model.ActivePaused.Any())
+  {
+    <p class="dfe-c-body muted">No active or paused work items.</p>
+  }
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-top:0.875rem;flex-wrap:wrap;gap:0.5rem;">
+    <p class="dfe-c-text-muted" style="margin:0;" id="work-showing-count">Showing @activePausedCount of @Model.ActivePausedCountBeforeMonthlyFilter work items</p>
+  </div>
+</div>
+
+<div id="d-completed" class="tab-pane @(activeTab == "completed" ? "on" : "")" role="tabpanel">
+  <div class="dfe-c-table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Work item</th>
+          <th>Primary contact</th>
+          <th>Portfolio</th>
+          <th>Phase</th>
+          <th>Priority</th>
+          <th>Milestones</th>
+          <th>Completed</th>
+        </tr>
+      </thead>
+      <tbody>
+        @foreach (var r in Model.Completed)
+        {
+          <tr class="wreg-row" data-searchable="@(r.Title ?? "") @(r.PrimaryContactName ?? "") @(r.PortfolioName ?? "") @(r.PhaseName ?? "") @(r.PriorityName ?? "") @(r.Id.ToString("D8"))">
+            <td>
+              <a href="@Url.Action("Detail", "ModernWork", new { id = r.Id })">@r.Title</a>
+              <div style="font-size:12px;color:#505a5f;margin-top:2px;">WI-@r.Id.ToString("D8")</div>
+            </td>
+            <td>@(r.PrimaryContactName ?? "—")</td>
+            <td>@(r.PortfolioName ?? "—")</td>
+            <td><span class="wreg-phase" style="background:#f3f2f1;color:#505a5f;border-color:#dee0e2;">@(r.PhaseName ?? "—")</span></td>
+            <td><span class="@PriorityTagClass(r.PriorityName)">@(r.PriorityName ?? "—")</span></td>
+            <td><span class="wreg-milestone-count">@r.MilestoneCount</span></td>
+            <td style="font-size:13px;color:#505a5f;">@(r.CompletedAt ?? "—")</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+  @if (!Model.Completed.Any())
+  {
+    <p class="dfe-c-body muted">No completed work items.</p>
+  }
+</div>
+
+<div id="d-cancelled" class="tab-pane @(activeTab == "cancelled" ? "on" : "")" role="tabpanel">
+  <div class="dfe-c-table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Work item</th>
+          <th>Primary contact</th>
+          <th>Portfolio</th>
+          <th>Priority</th>
+          <th>Milestones</th>
+          <th>Cancelled</th>
+          <th>Reason</th>
+        </tr>
+      </thead>
+      <tbody>
+        @foreach (var r in Model.Cancelled)
+        {
+          <tr class="wreg-row" data-searchable="@(r.Title ?? "") @(r.PrimaryContactName ?? "") @(r.PortfolioName ?? "") @(r.PriorityName ?? "") @(r.CancelledReason ?? "") @(r.Id.ToString("D8"))">
+            <td>
+              <a href="@Url.Action("Detail", "ModernWork", new { id = r.Id })">@r.Title</a>
+              <div style="font-size:12px;color:#505a5f;margin-top:2px;">WI-@r.Id.ToString("D8")</div>
+            </td>
+            <td>@(r.PrimaryContactName ?? "—")</td>
+            <td>@(r.PortfolioName ?? "—")</td>
+            <td><span class="@PriorityTagClass(r.PriorityName)">@(r.PriorityName ?? "—")</span></td>
+            <td><span class="wreg-milestone-count">@r.MilestoneCount</span></td>
+            <td style="font-size:13px;color:#505a5f;">@(r.CompletedAt ?? "—")</td>
+            <td style="font-size:13px;color:#505a5f;">@(r.CancelledReason ?? "—")</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+  @if (!Model.Cancelled.Any())
+  {
+    <p class="dfe-c-body muted">No cancelled work items.</p>
+  }
+</div>
+
+<div id="d-all" class="tab-pane @(activeTab == "all" ? "on" : "")" role="tabpanel">
+  <div class="dfe-c-table-wrap">
+    <table id="work-table-all">
+      <thead>
+        <tr>
+          <th>Work item</th>
+          <th>Status</th>
+          <th>Portfolio</th>
+          <th>Directorate</th>
+          <th>Phase</th>
+          <th>Priority</th>
+          <th>SRO</th>
+          <th>RAG</th>
+          <th>Monthly update</th>
+          <th>Risks</th>
+        </tr>
+      </thead>
+      <tbody>
+        @foreach (var r in Model.ActivePaused.Concat(Model.Completed).Concat(Model.Cancelled))
+        {
+          var phaseClass = PhaseDfeClass(r.PhaseName);
+          var phaseDisplay = phaseClass != "" ? (r.PhaseName ?? "").ToUpperInvariant() : (r.PhaseName ?? "—");
+          <tr>
+            <td>
+              <a href="@Url.Action("Detail", "ModernWork", new { id = r.Id })">@r.Title</a>
+              <span class="dfe-c-table-ref">WI-@r.Id.ToString("D8")</span>
+            </td>
+            <td><span class="work-item-badge work-item-badge--status">@(r.Status ?? "—")</span></td>
+            <td>@(r.PortfolioName ?? "—")</td>
+            <td>@(r.DirectorateSummary ?? "—")</td>
+            <td>
+              @if (!string.IsNullOrEmpty(phaseClass))
+              {
+                <span class="dfe-c-phase @phaseClass">@phaseDisplay</span>
+              }
+              else
+              {
+                <span>@(r.PhaseName ?? "—")</span>
+              }
+            </td>
+            <td><span class="@PriorityTagClass(r.PriorityName)">@((r.PriorityName ?? "—").ToUpperInvariant())</span></td>
+            <td>@(r.SroDisplayName ?? "—")</td>
+            <td>
+              @if (!string.IsNullOrEmpty(r.RagBackgroundColourKey) || !string.IsNullOrEmpty(r.RagTextColourKey))
+              {
+                <span class="rag-badge" style="@(string.IsNullOrEmpty(r.RagBackgroundColourKey) ? "" : "background-color: var(--govuk-colour-" + r.RagBackgroundColourKey + ");")@(string.IsNullOrEmpty(r.RagTextColourKey) ? "" : " color: var(--govuk-colour-" + r.RagTextColourKey + ");")">@((r.RagName ?? "—").ToUpperInvariant())</span>
+              }
+              else
+              {
+                <span class="dfe-c-rag @RagDfeClass(r.RagName)">@((r.RagName ?? "—").ToUpperInvariant())</span>
+              }
+            </td>
+            <td>
+              @{
+                var monthlyTextAll = r.MonthlyUpdateStatus ?? "—";
+              }
+              @if (r.MonthlyUpdateStatusLink == "wd-updates")
+              { <a href="@Url.Action("Detail", "ModernWork", new { id = r.Id })#wd-updates" class="dfe-c-link"><span class="@MonthlyTagClass(monthlyTextAll)">@monthlyTextAll.ToUpperInvariant()</span></a> }
+              else if (r.MonthlyUpdateStatusLink == "add")
+              { <a href="@Url.Action("AddMonthlyUpdate", "ModernWork", new { id = r.Id })" class="dfe-c-link"><span class="@MonthlyTagClass(monthlyTextAll)">@monthlyTextAll.ToUpperInvariant()</span></a> }
+              else
+              { <span class="@MonthlyTagClass(monthlyTextAll)">@monthlyTextAll.ToUpperInvariant()</span> }
+            </td>
+            <td>
+              @if (r.FirstRiskOrIssueId.HasValue && !string.IsNullOrEmpty(r.FirstRiskReference))
+              {
+                <a href="@Url.Action("RiskDetail", "ModernWork", new { workId = r.Id, id = r.FirstRiskOrIssueId.Value })">@r.FirstRiskReference</a>
+              }
+              else
+              {
+                <span class="dfe-c-text-muted">—</span>
+              }
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+  @if (allFilteredCount == 0)
+  {
+    <p class="dfe-c-body muted">No work items match these filters.</p>
+  }
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-top:0.875rem;flex-wrap:wrap;gap:0.5rem;">
+    <p class="dfe-c-text-muted" style="margin:0;">Showing @allFilteredCount work items</p>
+  </div>
+</div>
+
+</div>

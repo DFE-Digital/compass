@@ -1,4 +1,5 @@
 @model Compass.ViewModels.DemandTriage.DemandCaptureFormViewModel
+@using Compass.Models
 @using Compass.Models.DemandTriage
 
 @{
@@ -130,10 +131,21 @@
                             <div class="row">
                                 <div class="col-md-6">
                                     <div class="dt-form-group">
-                                        <label asp-for="RequesterFullName" class="dt-label">
+                                        <label class="dt-label" for="dtRequesterName">
                                             Your full name <span class="text-danger">*</span>
                                         </label>
-                                        <input asp-for="RequesterFullName" class="dt-input" />
+                                        <span class="dt-label-hint">Search Entra ID for a person, or type a name</span>
+                                        <div class="user-picker" data-user-picker data-search-url="/api/users/search" data-select-url="/api/users/select">
+                                            <div class="position-relative">
+                                                <input type="text" name="RequesterFullName" id="dtRequesterName"
+                                                       class="dt-input js-user-picker-input" autocomplete="off"
+                                                       placeholder="e.g. Alex Smith or alex.smith@education.gov.uk"
+                                                       value="@Model.RequesterFullName" />
+                                                <span class="user-picker__spinner js-user-picker-spinner" aria-hidden="true">Searching…</span>
+                                                <div class="user-picker__results js-user-picker-results" role="listbox" aria-live="polite"></div>
+                                            </div>
+                                            <p class="dt-label-hint js-user-picker-message" style="margin-top:0.35rem;"></p>
+                                        </div>
                                         <span asp-validation-for="RequesterFullName" class="dt-field-error"></span>
                                     </div>
                                 </div>
@@ -142,8 +154,17 @@
                                         <label asp-for="DepartmentGroup" class="dt-label">
                                             Department group <span class="text-danger">*</span>
                                         </label>
-                                        <input asp-for="DepartmentGroup" class="dt-input"
-                                               placeholder="e.g. Children's Services Group" />
+                                        <span class="dt-label-hint">Choose from the business area list</span>
+                                        <select asp-for="DepartmentGroup" class="dt-input" id="dtDepartmentGroup">
+                                            <option value="">Select department group</option>
+                                            @if (ViewBag.BusinessAreas != null)
+                                            {
+                                                foreach (var area in ViewBag.BusinessAreas)
+                                                {
+                                                    <option value="@area">@area</option>
+                                                }
+                                            }
+                                        </select>
                                         <span asp-validation-for="DepartmentGroup" class="dt-field-error"></span>
                                     </div>
                                 </div>
@@ -152,19 +173,38 @@
                             <div class="row">
                                 <div class="col-md-6">
                                     <div class="dt-form-group">
-                                        <label asp-for="SroName" class="dt-label">
+                                        <label class="dt-label" for="dtSroName">
                                             Senior responsible officer <span class="text-danger">*</span>
                                         </label>
-                                        <span class="dt-label-hint">Must be G6 or above</span>
-                                        <input asp-for="SroName" class="dt-input" />
+                                        <span class="dt-label-hint">Must be G6 or above — search Entra ID, or type a name</span>
+                                        <div class="user-picker" data-user-picker data-search-url="/api/users/search" data-select-url="/api/users/select">
+                                            <div class="position-relative">
+                                                <input type="text" name="SroName" id="dtSroName"
+                                                       class="dt-input js-user-picker-input" autocomplete="off"
+                                                       placeholder="e.g. Alex Smith or alex.smith@education.gov.uk"
+                                                       value="@Model.SroName" />
+                                                <span class="user-picker__spinner js-user-picker-spinner" aria-hidden="true">Searching…</span>
+                                                <div class="user-picker__results js-user-picker-results" role="listbox" aria-live="polite"></div>
+                                            </div>
+                                            <p class="dt-label-hint js-user-picker-message" style="margin-top:0.35rem;"></p>
+                                        </div>
                                         <span asp-validation-for="SroName" class="dt-field-error"></span>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
                                     <div class="dt-form-group">
                                         <label asp-for="DdtPortfolioSupport" class="dt-label">DDT portfolio support</label>
-                                        <input asp-for="DdtPortfolioSupport" class="dt-input"
-                                               placeholder="Name of DDT portfolio contact (if known)" />
+                                        <span class="dt-label-hint">Choose from the business area list (if applicable)</span>
+                                        <select asp-for="DdtPortfolioSupport" class="dt-input" id="dtDdtPortfolio">
+                                            <option value="">Not specified</option>
+                                            @if (ViewBag.BusinessAreas != null)
+                                            {
+                                                foreach (var area in ViewBag.BusinessAreas)
+                                                {
+                                                    <option value="@area">@area</option>
+                                                }
+                                            }
+                                        </select>
                                     </div>
                                 </div>
                             </div>
@@ -197,15 +237,45 @@
                             </div>
 
                             <div class="dt-form-group">
-                                <label asp-for="SosOpportunityMissionPillars" class="dt-label">SoS opportunity mission pillars</label>
-                                <span class="dt-label-hint">Which Secretary of State opportunity mission pillars does this support?</span>
-                                <textarea asp-for="SosOpportunityMissionPillars" class="dt-input" rows="2"></textarea>
+                                <span class="dt-label">SoS opportunity mission pillars</span>
+                                <span class="dt-label-hint d-block">Which Secretary of State opportunity mission pillars does this support?</span>
+                                <div class="border rounded p-3 mt-2" style="background:#fafafa;max-height:280px;overflow-y:auto;">
+                                    @if (ViewBag.Missions != null)
+                                    {
+                                        foreach (var mission in ViewBag.Missions)
+                                        {
+                                            <div class="form-check mb-1">
+                                                <input type="checkbox" name="SelectedMissionIds" value="@mission.Id" class="form-check-input" id="dt-mission-@mission.Id"
+                                                       @(Model.SelectedMissionIds != null && Model.SelectedMissionIds.Contains((int)mission.Id) ? "checked" : null) />
+                                                <label class="form-check-label" for="dt-mission-@mission.Id">@mission.Title</label>
+                                            </div>
+                                        }
+                                    }
+                                </div>
                             </div>
 
                             <div class="dt-form-group">
-                                <label asp-for="DdtStrategicTheme" class="dt-label">DDT strategic framework theme</label>
-                                <span class="dt-label-hint">Which DDT strategic theme does this align to?</span>
-                                <textarea asp-for="DdtStrategicTheme" class="dt-input" rows="2"></textarea>
+                                <span class="dt-label">DDT strategic framework theme (priority outcomes)</span>
+                                <span class="dt-label-hint d-block">Which priority outcomes does this align to?</span>
+                                <div class="border rounded p-3 mt-2" style="background:#fafafa;max-height:320px;overflow-y:auto;">
+                                    @if (ViewBag.Objectives != null)
+                                    {
+                                        foreach (var themeGroup in ViewBag.Objectives)
+                                        {
+                                            <div class="mb-3">
+                                                <h6 class="mb-2" style="font-size:0.85rem;font-weight:600;">@themeGroup.Key</h6>
+                                                @foreach (ObjectiveDto objective in themeGroup.Value)
+                                                {
+                                                    <div class="form-check mb-1">
+                                                        <input type="checkbox" name="SelectedObjectiveIds" value="@objective.Id" class="form-check-input" id="dt-obj-@objective.Id"
+                                                               @(Model.SelectedObjectiveIds != null && Model.SelectedObjectiveIds.Contains(objective.Id) ? "checked" : null) />
+                                                        <label class="form-check-label" for="dt-obj-@objective.Id">@objective.Title</label>
+                                                    </div>
+                                                }
+                                            </div>
+                                        }
+                                    }
+                                </div>
                             </div>
 
                         </div>
@@ -284,7 +354,7 @@
                                 <label asp-for="TargetDeliveryDate" class="dt-label">
                                     Target delivery date <span class="text-danger">*</span>
                                 </label>
-                                <span class="dt-label-hint">When does this need to be delivered by?</span>
+                                <span class="dt-label-hint">When does this need to be delivered by? An estimate at this point is fine.</span>
                                 <input asp-for="TargetDeliveryDate" type="date" class="dt-input" style="max-width:220px;" />
                                 <span asp-validation-for="TargetDeliveryDate" class="dt-field-error"></span>
                             </div>
@@ -292,14 +362,21 @@
                             <div class="dt-form-group">
                                 <label class="dt-label">New or significantly changed digital service?</label>
                                 <span class="dt-label-hint">Will this request result in a new or significantly changed digital service?</span>
-                                <div class="dt-radio-group" style="flex-direction:row;gap:0.75rem;">
-                                    <label class="dt-radio-option" style="flex:1;">
-                                        <input type="radio" asp-for="NewOrChangedDigitalService" id="ncdYes" value="True" />
+                                <div class="dt-radio-group" style="flex-direction:row;flex-wrap:wrap;gap:0.75rem;">
+                                    <label class="dt-radio-option" style="flex:1;min-width:7rem;">
+                                        <input type="radio" name="NewOrChangedDigitalService" id="ncdYes" value="True"
+                                               @(Model.NewOrChangedDigitalService == true ? "checked" : null) />
                                         <span>Yes</span>
                                     </label>
-                                    <label class="dt-radio-option" style="flex:1;">
-                                        <input type="radio" asp-for="NewOrChangedDigitalService" id="ncdNo" value="False" />
+                                    <label class="dt-radio-option" style="flex:1;min-width:7rem;">
+                                        <input type="radio" name="NewOrChangedDigitalService" id="ncdNo" value="False"
+                                               @(Model.NewOrChangedDigitalService == false ? "checked" : null) />
                                         <span>No</span>
+                                    </label>
+                                    <label class="dt-radio-option" style="flex:1;min-width:7rem;">
+                                        <input type="radio" name="NewOrChangedDigitalService" id="ncdUnknown" value=""
+                                               @(Model.NewOrChangedDigitalService == null ? "checked" : null) />
+                                        <span>Don't know</span>
                                     </label>
                                 </div>
                             </div>
@@ -402,6 +479,7 @@
 </section>
 
 @section Scripts {
+    <script src="~/js/user-picker.js" asp-append-version="true"></script>
     <script>
         // Toggle digital service details
         document.querySelectorAll('input[name="NewOrChangedDigitalService"]').forEach(function(radio) {

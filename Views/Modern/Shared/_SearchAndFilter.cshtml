@@ -1,0 +1,53 @@
+@model Compass.Models.SearchAndFilterViewModel
+@{
+    var prefix = Model.IdPrefix;
+    var searchId = prefix + "-register-search";
+    var btnId = prefix + "-filter-btn";
+    var panelId = prefix + "-filter-panel";
+}
+<form method="@(Model.FormMethod ?? "get")" action="@Model.FormActionUrl" id="@(prefix)-register-form">
+  @foreach (var h in Model.HiddenFields)
+  {
+    <input type="hidden" name="@h.Key" value="@h.Value" />
+  }
+  <div id="search-and-filter" class="dfe-c-search-filter">
+    <div class="dfe-c-search-filter__toolbar">
+      <input type="search" name="search" id="@searchId" value="@Model.SearchValue" placeholder="@Model.SearchPlaceholder" class="dfe-c-search-filter__search filter-search" autocomplete="off" />
+      <button type="button" class="dfe-c-search-filter__toggle" id="@btnId" aria-expanded="false" aria-controls="@panelId">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="flex-shrink:0;"><path d="M1 3h14v1.5l-5 5V14l-4-2V9.5L1 4.5V3z"></path></svg>
+        <span class="filter-toggle-label">Filter</span>
+      </button>
+      @if (!string.IsNullOrWhiteSpace(Model.SecondaryActionUrl) && !string.IsNullOrWhiteSpace(Model.SecondaryActionLabel))
+      {
+        <a href="@Model.SecondaryActionUrl" class="dfe-c-button dfe-c-button--secondary">@Model.SecondaryActionLabel</a>
+      }
+    </div>
+    <div class="dfe-c-search-filter__panel" id="@panelId">
+      @foreach (var f in Model.Fields)
+      {
+        var fieldId = f.Id ?? "filter-" + f.Name;
+        <div>
+          <label for="@fieldId">@f.Label</label>
+          <select name="@f.Name" id="@fieldId">
+            @foreach (var o in f.Options)
+            {
+              var isSelected = o.Value == f.SelectedValue;
+              if (isSelected)
+              {
+                <option value="@o.Value" selected>@o.Text</option>
+              }
+              else
+              {
+                <option value="@o.Value">@o.Text</option>
+              }
+            }
+          </select>
+        </div>
+      }
+      <div class="dfe-c-search-filter__panel-actions">
+        <button type="submit" class="dfe-c-button dfe-c-button--primary">Apply</button>
+        <a href="@Model.ClearUrl" class="dfe-c-button dfe-c-button--secondary">Clear filters</a>
+      </div>
+    </div>
+  </div>
+</form>

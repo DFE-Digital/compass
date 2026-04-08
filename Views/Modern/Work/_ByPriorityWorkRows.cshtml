@@ -1,0 +1,29 @@
+@model IEnumerable<Compass.Models.Modern.Work.WorkItem>
+@using Compass.Models.Modern.Work
+@{
+    var portfolioNames = ViewBag.PortfolioNames as Dictionary<int, string> ?? new Dictionary<int, string>();
+    var priorityOptions = (List<LookupOption>)ViewBag.PriorityOptions ?? new List<LookupOption>();
+}
+@foreach (var w in Model)
+{
+    var priorityName = "—";
+    if (w.PriorityId.HasValue)
+    {
+        var po = priorityOptions.FirstOrDefault(o => o.Id == w.PriorityId.Value);
+        if (po != null) { priorityName = po.Name; }
+    }
+    var latestRag = w.RagHistory?.OrderByDescending(r => r.UpdatedAt).FirstOrDefault();
+    var ragName = latestRag?.RagStatus?.Name ?? "";
+    var rowSearchable = (w.Title ?? "") + " " + (w.PortfolioId.HasValue && portfolioNames.TryGetValue(w.PortfolioId.Value, out var pn) ? pn : "") + " " + priorityName + " " + ragName + " " + (w.Status ?? "") + " " + w.Id.ToString("D8");
+    <tr class="wreg-row bypriority-work-row" data-searchable="@rowSearchable">
+        <td>
+            <a href="@Url.Action("Detail", "ModernWork", new { id = w.Id })" class="dfe-c-link dfe-c-link--muted">@w.Title</a>
+            <p class="dfe-c-body-s demand-register__meta dfe-c-m-0 dfe-c-mt-1">@w.Id.ToString("D8")</p>
+        </td>
+        <td>@(w.PortfolioId.HasValue && portfolioNames.TryGetValue(w.PortfolioId.Value, out var pname) ? pname : "—")</td>
+        <td>@priorityName</td>
+        <td>@await Html.PartialAsync("_WorkRagBadge", latestRag)</td>
+        <td><span class="tag">@w.Status</span></td>
+        <td>@w.UpdatedAt.ToString("d MMM yyyy")</td>
+    </tr>
+}

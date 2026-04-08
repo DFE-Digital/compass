@@ -1,0 +1,105 @@
+@* Renders below sub-nav when ViewBag.ShowPortfolioScope is true (Capacity: directorate/portfolio dropdown; others: portfolio only) *@
+@{
+    var portfolios = ViewBag.Portfolios as IEnumerable<Compass.Models.Portfolio> ?? Enumerable.Empty<Compass.Models.Portfolio>();
+    var directorates = ViewBag.Directorates as IEnumerable<Compass.Models.Directorate> ?? Enumerable.Empty<Compass.Models.Directorate>();
+    var selectedPortfolioId = ViewBag.SelectedPortfolioId as int?;
+    var selectedDirectorateId = ViewBag.SelectedDirectorateId as int?;
+    var capacityUrlAll = ViewBag.CapacityScopeReturnUrlAll as string;
+    var capacityUrlDirectorate = ViewBag.CapacityScopeReturnUrlDirectorate as string;
+    var capacityUrlPortfolio = ViewBag.CapacityScopeReturnUrlPortfolio as string;
+    var useCapacityScope = capacityUrlAll != null && capacityUrlDirectorate != null && capacityUrlPortfolio != null;
+    var csPct = ViewBag.CsPct as int? ?? 0;
+    var mspRemaining = ViewBag.MspRemaining as string ?? "—";
+    var activeCount = ViewBag.ActiveCount as int? ?? 0;
+    var selectedValue = "";
+    if (useCapacityScope)
+    {
+        if (selectedDirectorateId.HasValue) { selectedValue = "d-" + selectedDirectorateId.Value; }
+        else if (selectedPortfolioId.HasValue) { selectedValue = "p-" + selectedPortfolioId.Value; }
+    }
+    else
+    {
+        if (selectedPortfolioId.HasValue) { selectedValue = selectedPortfolioId.Value.ToString(); }
+    }
+}
+<nav class="sub-nav visible" id="subnav-portfolio" aria-label="@(useCapacityScope ? "Capacity view by directorate or portfolio" : "Portfolio scope")">
+  <div class="sub-nav__inner portfolio-scope-inner" style="align-items:center;padding-top:0;padding-bottom:0;min-height:44px;">
+    <div class="portfolio-dropdown-wrap">
+      @if (useCapacityScope)
+      {
+        <label for="capacity-scope-select">View by:</label>
+        <select id="capacity-scope-select" aria-label="Select directorate or portfolio" class="capacity-scope-select">
+          @Html.Raw("<option value=\"\"" + (string.IsNullOrEmpty(selectedValue) ? " selected=\"selected\"" : "") + ">All</option>")
+          <optgroup label="Directorates">
+            @foreach (var d in directorates.Where(x => x.IsActive))
+            {
+              var dirSel = selectedValue == "d-" + d.Id ? " selected=\"selected\"" : "";
+              @Html.Raw("<option value=\"d-" + d.Id + "\"" + dirSel + ">" + System.Net.WebUtility.HtmlEncode(d.Name) + "</option>")
+            }
+          </optgroup>
+          <optgroup label="Portfolios">
+            @foreach (var p in portfolios.Where(x => x.IsActive))
+            {
+              var portSel = selectedValue == "p-" + p.Id ? " selected=\"selected\"" : "";
+              @Html.Raw("<option value=\"p-" + p.Id + "\"" + portSel + ">" + System.Net.WebUtility.HtmlEncode(p.Name) + "</option>")
+            }
+          </optgroup>
+        </select>
+      }
+      else
+      {
+        <label for="portfolio-select">Portfolio:</label>
+        <select id="portfolio-select" aria-label="Select portfolio">
+          @Html.Raw("<option value=\"\"" + (!selectedPortfolioId.HasValue ? " selected=\"selected\"" : "") + ">All portfolios</option>")
+          @foreach (var p in portfolios)
+          {
+            var pSel = selectedPortfolioId == p.Id ? " selected=\"selected\"" : "";
+            @Html.Raw("<option value=\"" + p.Id + "\"" + pSel + ">" + System.Net.WebUtility.HtmlEncode(p.Name) + "</option>")
+          }
+        </select>
+      }
+    </div>
+    <div id="port-subnav-status" class="portfolio-scope-status" style="margin-left:16px;font-size:13px;display:flex;gap:12px;align-items:center;">
+      <span id="port-subnav-cs" style="font-weight:700;color:#00703c;">@(csPct)% CS</span>
+      <span id="port-subnav-msp" style="color:#505a5f;">@mspRemaining MSP</span>
+      <span id="port-subnav-demands" style="color:#505a5f;">@activeCount active demand@(activeCount == 1 ? "" : "s")</span>
+    </div>
+  </div>
+</nav>
+@if (useCapacityScope)
+{
+<script>
+(function() {
+  var select = document.getElementById('capacity-scope-select');
+  var urlAll = @Html.Raw(capacityUrlAll != null ? "\"" + capacityUrlAll.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"" : "null");
+  var urlDirectorateTpl = @Html.Raw(capacityUrlDirectorate != null ? "\"" + capacityUrlDirectorate.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"" : "null");
+  var urlPortfolioTpl = @Html.Raw(capacityUrlPortfolio != null ? "\"" + capacityUrlPortfolio.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"" : "null");
+  if (select) {
+    select.addEventListener('change', function() {
+      var val = this.value || '';
+      var url = urlAll;
+      if (val.startsWith('d-')) { url = urlDirectorateTpl ? urlDirectorateTpl.replace(/_DID_/g, val.slice(2)) : urlAll; }
+      else if (val.startsWith('p-')) { url = urlPortfolioTpl ? urlPortfolioTpl.replace(/_PID_/g, val.slice(2)) : urlAll; }
+      if (url) window.location = url;
+    });
+  }
+})();
+</script>
+}
+else
+{
+<script>
+(function() {
+  var select = document.getElementById('portfolio-select');
+  var returnUrlTemplate = @Html.Raw(ViewBag.PortfolioScopeReturnUrl != null ? "\"" + ((string)ViewBag.PortfolioScopeReturnUrl).Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"" : "null");
+  var returnUrlAll = @Html.Raw(ViewBag.PortfolioScopeReturnUrlAll != null ? "\"" + ((string)ViewBag.PortfolioScopeReturnUrlAll).Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"" : "null");
+  if (select) {
+    select.addEventListener('change', function() {
+      var id = this.value || '';
+      var url = id ? (returnUrlTemplate ? returnUrlTemplate.replace(/_PID_/g, id) : null) : returnUrlAll;
+      if (url) window.location = url;
+    });
+  }
+})();
+</script>
+}

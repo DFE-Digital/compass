@@ -1,0 +1,357 @@
+@model IEnumerable<Compass.Models.Modern.Work.WorkItem>
+@using Compass.Models.Modern.Work
+@{
+    ViewData["Title"] = "Work by priority";
+    var items = Model?.ToList() ?? new List<WorkItem>();
+    var count = items.Count;
+    var portfolioNames = ViewBag.PortfolioNames as Dictionary<int, string> ?? new Dictionary<int, string>();
+    var priorityOptions = (List<LookupOption>)ViewBag.PriorityOptions ?? new List<LookupOption>();
+    var portfolios = (List<Compass.Models.Portfolio>)ViewBag.Portfolios ?? new List<Compass.Models.Portfolio>();
+    var directorates = (List<Compass.Models.Directorate>)ViewBag.Directorates ?? new List<Compass.Models.Directorate>();
+    var missionPillars = (List<WorkLookupOption>)ViewBag.MissionPillars ?? new List<WorkLookupOption>();
+    var priorityOutcomes = (List<WorkLookupOption>)ViewBag.PriorityOutcomes ?? new List<WorkLookupOption>();
+    var workCountByMissionPillarId = (Dictionary<int, int>)ViewBag.WorkCountByMissionPillarId ?? new Dictionary<int, int>();
+    var workCountByPriorityOutcomeId = (Dictionary<int, int>)ViewBag.WorkCountByPriorityOutcomeId ?? new Dictionary<int, int>();
+    var tab = (ViewBag.ByPriorityTab as string ?? "mission").ToLowerInvariant();
+    if (tab != "mission" && tab != "outcomes") { tab = "mission"; }
+    var hasActiveFilters = ViewBag.PriorityFilter != null || !string.IsNullOrEmpty(ViewBag.StatusFilter as string) || ViewBag.FilterPortfolioId != null || ViewBag.FilterDirectorateId != null || !string.IsNullOrEmpty(ViewBag.Search as string);
+    var filterCount = (ViewBag.FilterPortfolioId != null ? 1 : 0) + (ViewBag.FilterDirectorateId != null ? 1 : 0) + (ViewBag.PriorityFilter != null ? 1 : 0) + (!string.IsNullOrEmpty(ViewBag.StatusFilter as string) ? 1 : 0) + (!string.IsNullOrEmpty(ViewBag.Search as string) ? 1 : 0);
+
+    object BpRoute(string tabVal) => new
+    {
+        search = ViewBag.Search as string,
+        portfolioId = ViewBag.FilterPortfolioId as int?,
+        directorateId = ViewBag.FilterDirectorateId as int?,
+        priorityId = ViewBag.PriorityFilter as int?,
+        status = ViewBag.StatusFilter as string,
+        tab = tabVal
+    };
+
+    var untaggedMission = items.Where(w => w.MissionPillars == null || !w.MissionPillars.Any()).ToList();
+    var untaggedOutcomes = items.Where(w => w.PriorityOutcomes == null || !w.PriorityOutcomes.Any()).ToList();
+}
+@section Breadcrumbs {
+    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="@Url.Action("Dashboard", "ModernWork")">Work</a></li>
+    <li class="dfe-c-breadcrumb__item" aria-current="page">By priority</li>
+}
+
+<div id="sc-work-bypriority" class="modern-work-page">
+  <div class="dfe-c-flex--between dfe-c-mb-3" style="flex-wrap:wrap;gap:1rem;">
+    <div class="dfe-c-page-title" style="margin:0;">
+      <div class="dfe-c-page-title__caption">Work</div>
+      <h1 class="dfe-c-page-title__heading">By priority</h1>
+      <p class="dfe-c-page-title__lede">Browse work grouped by mission pillar or priority outcome. Use filters to narrow the list; expand each section to see work items.</p>
+    </div>
+  </div>
+
+  <form method="get" action="@Url.Action("ByPriority", "ModernWork")" id="bypriority-filter-form" class="dfe-c-mb-3">
+    <input type="hidden" name="tab" value="@tab" />
+    <div id="search-and-filter">
+      <div class="filter-toolbar">
+        <div class="filter-toolbar__search-wrap">
+          <input type="search" name="search" id="bypriority-search" value="@ViewBag.Search" placeholder="Search work items…" class="filter-search" autocomplete="off" aria-label="Search work items" />
+          <button type="submit" class="govuk-button govuk-button--secondary filter-toolbar__search-submit">Search</button>
+        </div>
+        <button type="button" class="filter-toggle-btn" id="bypriority-filter-btn" aria-expanded="false" aria-controls="bypriority-filter-panel">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="flex-shrink:0;" aria-hidden="true"><path d="M1 3h14v1.5l-5 5V14l-4-2V9.5L1 4.5V3z"></path></svg>
+          <span class="filter-toggle-label">Filter</span>
+          @if (hasActiveFilters)
+          {
+            <span class="filter-toggle-badge" aria-label="Active filters">@filterCount</span>
+          }
+        </button>
+      </div>
+      <div class="filter-panel" id="bypriority-filter-panel">
+        <div class="filter-panel__grid">
+      <div>
+        <label for="filter-portfolio">Portfolio</label>
+        <select name="portfolioId" id="filter-portfolio" class="govuk-select">
+          <option value="">All portfolios</option>
+          @foreach (var p in portfolios)
+          {
+            if (ViewBag.FilterPortfolioId as int? == p.Id)
+            {
+              <option value="@p.Id" selected>@p.Name</option>
+            }
+            else
+            {
+              <option value="@p.Id">@p.Name</option>
+            }
+          }
+        </select>
+      </div>
+      <div>
+        <label for="filter-directorate">Directorate</label>
+        <select name="directorateId" id="filter-directorate" class="govuk-select">
+          <option value="">All directorates</option>
+          @foreach (var d in directorates)
+          {
+            if (ViewBag.FilterDirectorateId as int? == d.Id)
+            {
+              <option value="@d.Id" selected>@d.Name</option>
+            }
+            else
+            {
+              <option value="@d.Id">@d.Name</option>
+            }
+          }
+        </select>
+      </div>
+      <div>
+        <label for="filter-priority">Priority</label>
+        <select name="priorityId" id="filter-priority" class="govuk-select">
+          <option value="">All priorities</option>
+          @foreach (var opt in priorityOptions)
+          {
+            if (ViewBag.PriorityFilter as int? == opt.Id)
+            {
+              <option value="@opt.Id" selected>@opt.Name</option>
+            }
+            else
+            {
+              <option value="@opt.Id">@opt.Name</option>
+            }
+          }
+        </select>
+      </div>
+      <div>
+        <label for="filter-status">Status</label>
+        <select name="status" id="filter-status" class="govuk-select">
+          <option value="">All statuses</option>
+          @foreach (var opt in ViewBag.WorkStatusOptions as List<LookupOption> ?? new List<LookupOption>())
+          {
+            if (ViewBag.StatusFilter as string == opt.Value)
+            {
+              <option value="@opt.Value" selected>@opt.Name</option>
+            }
+            else
+            {
+              <option value="@opt.Value">@opt.Name</option>
+            }
+          }
+        </select>
+      </div>
+        </div>
+        <div class="filter-panel__actions">
+          <button type="submit" class="govuk-button">Apply filters</button>
+          <a href="@Url.Action("ByPriority", "ModernWork", new { tab })" class="govuk-link">Clear filters</a>
+        </div>
+      </div>
+    </div>
+  </form>
+
+  @if (count == 0)
+  {
+    <div class="dfe-c-body muted">No work items match the filters.</div>
+  }
+  else
+  {
+    <div class="tabs" role="tablist" aria-label="Group work by">
+      <a href="@Url.Action("ByPriority", "ModernWork", BpRoute("mission"))" class="tab @(tab == "mission" ? "on" : "")" role="tab" aria-selected="@(tab == "mission")" aria-controls="d-bypriority-mission" id="tab-bypriority-mission">Mission pillars</a>
+      <a href="@Url.Action("ByPriority", "ModernWork", BpRoute("outcomes"))" class="tab @(tab == "outcomes" ? "on" : "")" role="tab" aria-selected="@(tab == "outcomes")" aria-controls="d-bypriority-outcomes" id="tab-bypriority-outcomes">Priority outcomes</a>
+    </div>
+
+    <div id="d-bypriority-mission" class="tab-pane @(tab == "mission" ? "on" : "")" role="tabpanel" aria-labelledby="tab-bypriority-mission">
+      <div class="bypriority-group-stack dfe-c-mb-3">
+        @if (missionPillars.Any())
+        {
+          foreach (var mp in missionPillars)
+          {
+            var groupItems = items.Where(w => w.MissionPillars != null && w.MissionPillars.Any(x => x.MissionPillarId == mp.Id)).ToList();
+            var gCount = workCountByMissionPillarId.TryGetValue(mp.Id, out var c) ? c : groupItems.Count;
+            <details class="dfe-c-collapsible bypriority-group">
+              <summary class="dfe-c-collapsible__trigger">
+                <span class="dfe-c-collapsible__icon" aria-hidden="true">+</span>
+                <span>@mp.Name</span>
+                <span class="dfe-c-collapsible__status"><span class="govuk-tag govuk-tag--grey">@gCount work item@(gCount == 1 ? "" : "s")</span></span>
+              </summary>
+              <div class="dfe-c-collapsible__body">
+                @if (groupItems.Any())
+                {
+                  <div class="wreg-table-wrapper dfe-c-table-wrap" style="overflow-x:auto;">
+                    <table class="data-table">
+                      <thead>
+                        <tr>
+                          <th>Work item</th>
+                          <th>Portfolio</th>
+                          <th>Priority</th>
+                          <th>RAG</th>
+                          <th>Status</th>
+                          <th>Updated</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        @await Html.PartialAsync("_ByPriorityWorkRows", groupItems)
+                      </tbody>
+                    </table>
+                  </div>
+                }
+                else
+                {
+                  <p class="dfe-c-body-s muted dfe-c-m-0">No work items in this group for the current filters.</p>
+                }
+              </div>
+            </details>
+          }
+        }
+        else
+        {
+          <p class="dfe-c-body muted">No mission pillars are configured.</p>
+        }
+
+        <details class="dfe-c-collapsible bypriority-group">
+          <summary class="dfe-c-collapsible__trigger">
+            <span class="dfe-c-collapsible__icon" aria-hidden="true">+</span>
+            <span>Not tagged with a mission pillar</span>
+            <span class="dfe-c-collapsible__status"><span class="govuk-tag govuk-tag--grey">@untaggedMission.Count work item@(untaggedMission.Count == 1 ? "" : "s")</span></span>
+          </summary>
+          <div class="dfe-c-collapsible__body">
+            @if (untaggedMission.Any())
+            {
+              <div class="wreg-table-wrapper dfe-c-table-wrap" style="overflow-x:auto;">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Work item</th>
+                      <th>Portfolio</th>
+                      <th>Priority</th>
+                      <th>RAG</th>
+                      <th>Status</th>
+                      <th>Updated</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @await Html.PartialAsync("_ByPriorityWorkRows", untaggedMission)
+                  </tbody>
+                </table>
+              </div>
+            }
+            else
+            {
+              <p class="dfe-c-body-s muted dfe-c-m-0">All matching work items are tagged with at least one mission pillar.</p>
+            }
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <div id="d-bypriority-outcomes" class="tab-pane @(tab == "outcomes" ? "on" : "")" role="tabpanel" aria-labelledby="tab-bypriority-outcomes">
+      <div class="bypriority-group-stack dfe-c-mb-3">
+        @if (priorityOutcomes.Any())
+        {
+          foreach (var po in priorityOutcomes)
+          {
+            var groupItems = items.Where(w => w.PriorityOutcomes != null && w.PriorityOutcomes.Any(x => x.PriorityOutcomeId == po.Id)).ToList();
+            var gCount = workCountByPriorityOutcomeId.TryGetValue(po.Id, out var c) ? c : groupItems.Count;
+            <details class="dfe-c-collapsible bypriority-group">
+              <summary class="dfe-c-collapsible__trigger">
+                <span class="dfe-c-collapsible__icon" aria-hidden="true">+</span>
+                <span>@po.Name</span>
+                <span class="dfe-c-collapsible__status"><span class="govuk-tag govuk-tag--grey">@gCount work item@(gCount == 1 ? "" : "s")</span></span>
+              </summary>
+              <div class="dfe-c-collapsible__body">
+                @if (groupItems.Any())
+                {
+                  <div class="wreg-table-wrapper dfe-c-table-wrap" style="overflow-x:auto;">
+                    <table class="data-table">
+                      <thead>
+                        <tr>
+                          <th>Work item</th>
+                          <th>Portfolio</th>
+                          <th>Priority</th>
+                          <th>RAG</th>
+                          <th>Status</th>
+                          <th>Updated</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        @await Html.PartialAsync("_ByPriorityWorkRows", groupItems)
+                      </tbody>
+                    </table>
+                  </div>
+                }
+                else
+                {
+                  <p class="dfe-c-body-s muted dfe-c-m-0">No work items in this group for the current filters.</p>
+                }
+              </div>
+            </details>
+          }
+        }
+        else
+        {
+          <p class="dfe-c-body muted">No priority outcomes are configured.</p>
+        }
+
+        <details class="dfe-c-collapsible bypriority-group">
+          <summary class="dfe-c-collapsible__trigger">
+            <span class="dfe-c-collapsible__icon" aria-hidden="true">+</span>
+            <span>Not tagged with a priority outcome</span>
+            <span class="dfe-c-collapsible__status"><span class="govuk-tag govuk-tag--grey">@untaggedOutcomes.Count work item@(untaggedOutcomes.Count == 1 ? "" : "s")</span></span>
+          </summary>
+          <div class="dfe-c-collapsible__body">
+            @if (untaggedOutcomes.Any())
+            {
+              <div class="wreg-table-wrapper dfe-c-table-wrap" style="overflow-x:auto;">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Work item</th>
+                      <th>Portfolio</th>
+                      <th>Priority</th>
+                      <th>RAG</th>
+                      <th>Status</th>
+                      <th>Updated</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @await Html.PartialAsync("_ByPriorityWorkRows", untaggedOutcomes)
+                  </tbody>
+                </table>
+              </div>
+            }
+            else
+            {
+              <p class="dfe-c-body-s muted dfe-c-m-0">All matching work items are tagged with at least one priority outcome.</p>
+            }
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <p class="dfe-c-body-s muted dfe-c-mt-2">Showing @count work item@(count == 1 ? "" : "s") for the current filters.</p>
+  }
+</div>
+
+@section Styles {
+<style>
+  .bypriority-group-stack .bypriority-group { margin-bottom: 0.75rem; }
+  .bypriority-group-stack .dfe-c-collapsible__trigger { align-items: center; justify-content: flex-start; gap: 0.5rem; flex-wrap: wrap; }
+</style>
+}
+
+@section Scripts {
+<script>
+(function() {
+  function filterTable() {
+    var search = (document.getElementById('bypriority-search') && document.getElementById('bypriority-search').value) || '';
+    var term = (search || '').toLowerCase().trim();
+    document.querySelectorAll('#sc-work-bypriority .bypriority-work-row').forEach(function(tr) {
+      var text = (tr.getAttribute('data-searchable') || '').toLowerCase();
+      tr.style.display = (!term || text.indexOf(term) !== -1) ? '' : 'none';
+    });
+  }
+  document.addEventListener('DOMContentLoaded', function() {
+    var el = document.getElementById('bypriority-search');
+    if (el) { el.addEventListener('input', filterTable); el.addEventListener('keyup', filterTable); if ((el.value || '').trim()) filterTable(); }
+    document.querySelectorAll('#sc-work-bypriority .bypriority-group').forEach(function(d) {
+      d.addEventListener('toggle', function() {
+        var icon = d.querySelector('.dfe-c-collapsible__icon');
+        if (icon) icon.textContent = d.open ? '\u2212' : '+';
+      });
+    });
+  });
+})();
+</script>
+}

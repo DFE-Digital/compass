@@ -1,0 +1,491 @@
+@using Compass.Models.Modern.Work
+@using Compass.ViewModels.Dashboard
+@{
+  ViewData["Title"] = "Work dashboard";
+  string PhaseCss(string? phaseName)
+  {
+    if (string.IsNullOrWhiteSpace(phaseName)) return "";
+    var s = phaseName.Trim().ToLowerInvariant();
+    if (s.Contains("public") && s.Contains("beta")) return "public-beta";
+    if (s.Contains("private") && s.Contains("beta")) return "private-beta";
+    if (s.Contains("live")) return "live";
+    if (s.Contains("discovery")) return "discovery";
+    if (s.Contains("alpha")) return "alpha";
+    if (s.Contains("retired")) return "retired";
+    if (s.Contains("explore")) return "explore";
+    return "";
+  }
+  string PriorityTagClass(string? priorityName)
+  {
+    if (string.IsNullOrWhiteSpace(priorityName)) return "dfe-c-tag dfe-c-tag--grey";
+    var s = priorityName.ToLowerInvariant();
+    if (s.Contains("high") || s.Contains("critical")) return "dfe-c-tag dfe-c-tag--red";
+    if (s.Contains("medium")) return "dfe-c-tag dfe-c-tag--amber";
+    if (s.Contains("low")) return "dfe-c-tag dfe-c-tag--green";
+    return "dfe-c-tag dfe-c-tag--grey";
+  }
+
+  var assignedWork = ViewBag.AssignedWork as List<WorkItem> ?? new List<WorkItem>();
+  var assignedCompletedWork = ViewBag.AssignedCompletedWork as List<WorkItem> ?? new List<WorkItem>();
+  var assignedCancelledWork = ViewBag.AssignedCancelledWork as List<WorkItem> ?? new List<WorkItem>();
+  var watchedItems = ViewBag.WatchedItems as List<WorkItem> ?? new List<WorkItem>();
+  var ragIssuesAssigned = ViewBag.RagIssuesAssigned as List<WorkItem> ?? new List<WorkItem>();
+  var milestonesUpcoming = ViewBag.MilestonesUpcoming as List<WorkMilestoneRow> ?? new List<WorkMilestoneRow>();
+  var milestonesLate = ViewBag.MilestonesLate as List<WorkMilestoneRow> ?? new List<WorkMilestoneRow>();
+  var portfolioNames = ViewBag.PortfolioNames as Dictionary<int, string> ?? new Dictionary<int, string>();
+  var deliveryPhaseNames = ViewBag.WorkDashDeliveryPhaseNames as Dictionary<int, string> ?? new Dictionary<int, string>();
+  var priorityNameById = ViewBag.WorkDashPriorityNameById as Dictionary<int, string> ?? new Dictionary<int, string>();
+  var monthlyRows = ViewBag.WdMrRows as List<HomeMonthlyUpdateRow> ?? new List<HomeMonthlyUpdateRow>();
+  var monthlyByWorkId = monthlyRows.ToDictionary(r => r.WorkItemId, r => r);
+  var ragOverviewRows = ViewBag.WorkDashRagOverviewRows as List<WorkDashboardRagOverviewRow> ?? new List<WorkDashboardRagOverviewRow>();
+
+  var tab = ViewBag.WorkDashboardTab as string ?? "assigned";
+  var assignedCount = ViewBag.AssignedCount as int? ?? 0;
+  var reportingTabCount = ViewBag.ReportingTabCount as int? ?? 0;
+  var completedAssignedCount = ViewBag.CompletedAssignedCount as int? ?? 0;
+  var cancelledAssignedCount = ViewBag.CancelledAssignedCount as int? ?? 0;
+  var ragNotGreenTabCount = ViewBag.RagNotGreenTabCount as int? ?? 0;
+  var watchingTabCount = ViewBag.WatchingTabCount as int? ?? 0;
+  var milestonesTabCount = ViewBag.MilestonesTabCount as int? ?? 0;
+
+  var showCallout = ViewBag.WorkDashShowCallout as bool? == true;
+  var calloutHeading = ViewBag.WorkDashCalloutHeading as string;
+  var calloutBody = ViewBag.WorkDashCalloutBody as string;
+  var calloutClass = ViewBag.WorkDashCalloutClass as string ?? "dfe-c-callout dfe-c-callout--warning dfe-c-mb-3";
+}
+
+@section Breadcrumbs {
+  <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="@Url.Action("Dashboard", "ModernWork")">Work</a></li>
+  <li class="dfe-c-breadcrumb__item" aria-current="page">Dashboard</li>
+}
+
+<div class="modern-work-page">
+  <div class="dfe-c-flex--between dfe-c-mb-3" style="flex-wrap:wrap;gap:1rem;">
+    <div class="dfe-c-page-title" style="margin:0;">
+      <div class="dfe-c-page-title__caption">Work</div>
+      <h1 class="dfe-c-page-title__heading">Work dashboard</h1>
+    </div>
+    <div class="dfe-c-export-group" style="margin:0;">
+      <a href="@Url.Action("MonthlyUpdateOverview", "ModernReporting")" class="govuk-button govuk-button--outline-blue">Reporting compliance</a>
+      <a href="@Url.Action("Create", "ModernWork")" class="govuk-button">Create work item</a>
+    </div>
+  </div>
+
+  @if (showCallout && (!string.IsNullOrWhiteSpace(calloutHeading) || !string.IsNullOrWhiteSpace(calloutBody)))
+  {
+    <div class="@calloutClass">
+      @if (!string.IsNullOrWhiteSpace(calloutHeading))
+      {
+        <div class="dfe-c-callout__heading">@calloutHeading</div>
+      }
+      @if (!string.IsNullOrWhiteSpace(calloutBody))
+      {
+        <p class="dfe-c-callout__body dfe-c-mb-0">@calloutBody</p>
+      }
+    </div>
+  }
+
+  <div class="tabs" role="tablist" aria-label="Work dashboard sections">
+    <a href="@Url.Action("Dashboard", "ModernWork", new { tab = "assigned" })" class="tab @(tab == "assigned" ? "on" : "")" role="tab" aria-selected="@(tab == "assigned")" aria-controls="d-assigned" id="tab-assigned">My work (@assignedCount)</a>
+    <a href="@Url.Action("Dashboard", "ModernWork", new { tab = "reporting" })" class="tab @(tab == "reporting" ? "on" : "")" role="tab" aria-selected="@(tab == "reporting")" aria-controls="d-reporting" id="tab-reporting">Reporting due (@reportingTabCount)</a>
+    <a href="@Url.Action("Dashboard", "ModernWork", new { tab = "rag" })" class="tab @(tab == "rag" ? "on" : "")" role="tab" aria-selected="@(tab == "rag")" aria-controls="d-rag" id="tab-rag">RAG overview</a>
+  </div>
+  <p class="dfe-c-body-s dfe-c-text-muted dfe-c-mt-2 dfe-c-mb-3">
+    Also show:
+    <a href="@Url.Action("Dashboard", "ModernWork", new { tab = "completed" })" class="dfe-c-link">Completed (@completedAssignedCount)</a><span class="dfe-c-text-muted"> · </span>
+    <a href="@Url.Action("Dashboard", "ModernWork", new { tab = "cancelled" })" class="dfe-c-link">Cancelled (@cancelledAssignedCount)</a><span class="dfe-c-text-muted"> · </span>
+    <a href="@Url.Action("Dashboard", "ModernWork", new { tab = "watching" })" class="dfe-c-link">Watching (@watchingTabCount)</a><span class="dfe-c-text-muted"> · </span>
+    <a href="@Url.Action("Dashboard", "ModernWork", new { tab = "milestones" })" class="dfe-c-link">Milestones (@milestonesTabCount)</a>
+    @if (ragNotGreenTabCount > 0)
+    {
+      <span class="dfe-c-text-muted"> · </span>
+      <a href="@Url.Action("Dashboard", "ModernWork", new { tab = "rag-issues" })" class="dfe-c-link">RAG not green (@ragNotGreenTabCount)</a>
+    }
+  </p>
+
+  @* Tab: My work *@
+  <div id="d-assigned" class="tab-pane @(tab == "assigned" ? "on" : "")" role="tabpanel">
+    @if (assignedWork.Count == 0)
+    {
+      <p class="dfe-c-body dfe-c-text-muted">No active or paused work items are assigned to you. Check <a href="@Url.Action("Dashboard", "ModernWork", new { tab = "completed" })" class="dfe-c-link">Completed</a> or <a href="@Url.Action("Dashboard", "ModernWork", new { tab = "cancelled" })" class="dfe-c-link">Cancelled</a>, browse <a href="@Url.Action("Index", "ModernWork")" class="dfe-c-link">the work register</a>, or see <a href="@Url.Action("Watching", "ModernWork")" class="dfe-c-link">items you watch</a>.</p>
+    }
+    else
+    {
+      <div class="dfe-c-table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Work item</th>
+              <th scope="col">Portfolio</th>
+              <th scope="col">Status</th>
+              <th scope="col">Priority</th>
+              <th scope="col">RAG</th>
+              <th scope="col">Monthly update</th>
+            </tr>
+          </thead>
+          <tbody>
+            @foreach (var w in assignedWork)
+            {
+              var latestRagAssigned = w.RagHistory?.OrderByDescending(r => r.UpdatedAt).FirstOrDefault();
+              var phaseNm = w.DeliveryPhaseId.HasValue && deliveryPhaseNames.TryGetValue(w.DeliveryPhaseId.Value, out var ph) ? ph : null;
+              var priNm = w.PriorityId.HasValue && priorityNameById.TryGetValue(w.PriorityId.Value, out var pr) ? pr : null;
+              monthlyByWorkId.TryGetValue(w.Id, out var mr);
+              <tr>
+                <td>
+                  <a href="@Url.Action("Detail", "ModernWork", new { id = w.Id })" class="dfe-c-link dfe-c-fw-bold">@w.Title</a>
+                  @if (w.LegacyProjectId.HasValue)
+                  {
+                    <span class="dfe-c-table-ref">WRK-@w.LegacyProjectId.Value.ToString("D4")</span>
+                  }
+                </td>
+                <td>@(w.PortfolioId.HasValue && portfolioNames.TryGetValue(w.PortfolioId.Value, out var pn2) ? pn2 : "—")</td>
+                <td>
+                  @if (!string.IsNullOrEmpty(phaseNm))
+                  {
+                    var sfx = PhaseCss(phaseNm);
+                    <span class="dfe-c-phase @(string.IsNullOrEmpty(sfx) ? "" : "dfe-c-phase--" + sfx)">@phaseNm.ToUpperInvariant()</span>
+                  }
+                  else
+                  {
+                    <span class="dfe-c-tag dfe-c-tag--grey">@w.Status</span>
+                  }
+                </td>
+                <td>
+                  @if (!string.IsNullOrEmpty(priNm))
+                  {
+                    <span class="@PriorityTagClass(priNm)">@priNm.ToUpperInvariant()</span>
+                  }
+                  else
+                  {
+                    <span class="dfe-c-text-muted">—</span>
+                  }
+                </td>
+                <td>@await Html.PartialAsync("_WorkRagBadge", latestRagAssigned)</td>
+                <td>
+                  @if (mr != null)
+                  {
+                    @if (mr.StatusLabel == "Submitted")
+                    {
+                      <a class="dfe-c-link" href="@mr.ActionUrl">View update</a>
+                    }
+                    else
+                    {
+                      <a class="dfe-c-button dfe-c-button--primary dfe-c-button--sm" href="@mr.ActionUrl">@(mr.StatusLabel == "Draft" || mr.StatusLabel == "Started" ? "Continue update" : "Submit update")</a>
+                    }
+                  }
+                  else
+                  {
+                    <a class="dfe-c-link" href="@Url.Action("Detail", "ModernWork", new { id = w.Id })#wd-updates">Add update</a>
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </div>
+
+  @* Tab: Reporting due *@
+  <div id="d-reporting" class="tab-pane @(tab == "reporting" ? "on" : "")" role="tabpanel">
+    @await Html.PartialAsync("_DashboardMonthlyReporting")
+  </div>
+
+  @* Tab: RAG overview (commentary from latest submitted monthly update) *@
+  <div id="d-rag" class="tab-pane @(tab == "rag" ? "on" : "")" role="tabpanel">
+    @if (ragOverviewRows.Count == 0)
+    {
+      <p class="dfe-c-body dfe-c-text-muted">No assigned work to show.</p>
+    }
+    else
+    {
+      <div class="dfe-c-table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Work item</th>
+              <th scope="col">Portfolio</th>
+              <th scope="col">Status</th>
+              <th scope="col">RAG</th>
+              <th scope="col">Commentary</th>
+            </tr>
+          </thead>
+          <tbody>
+            @foreach (var row in ragOverviewRows)
+            {
+              <tr>
+                <td>
+                  <a href="@Url.Action("Detail", "ModernWork", new { id = row.WorkItemId })" class="dfe-c-link dfe-c-fw-bold">@row.Title</a>
+                </td>
+                <td>@row.PortfolioName</td>
+                <td>
+                  @if (!string.IsNullOrEmpty(row.PhaseDisplayName) && row.PhaseDisplayName != "—")
+                  {
+                    var sfx = row.PhaseCssSuffix;
+                    <span class="dfe-c-phase @(string.IsNullOrEmpty(sfx) ? "" : "dfe-c-phase--" + sfx)">@row.PhaseDisplayName.ToUpperInvariant()</span>
+                  }
+                  else
+                  {
+                    <span class="dfe-c-text-muted">—</span>
+                  }
+                </td>
+                <td>@await Html.PartialAsync("_WorkRagBadge", row.LatestRag)</td>
+                <td class="dfe-c-body-s dfe-c-text-muted" style="max-width:22rem;">@row.Commentary</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </div>
+
+  @* Tab: RAG not green (assigned, amber/red only) *@
+  <div id="d-rag-issues" class="tab-pane @(tab == "rag-issues" ? "on" : "")" role="tabpanel">
+    <p class="dfe-c-body-s dfe-c-text-muted dfe-c-mb-2">Your assigned work with current RAG status Amber or Red.</p>
+    @if (ragIssuesAssigned.Count == 0)
+    {
+      <p class="dfe-c-body dfe-c-text-muted">No RAG issues in your assigned work.</p>
+    }
+    else
+    {
+      <div class="dfe-c-table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Work item</th>
+              <th scope="col">Portfolio</th>
+              <th scope="col">Current RAG</th>
+              <th scope="col">Updated</th>
+            </tr>
+          </thead>
+          <tbody>
+            @foreach (var w in ragIssuesAssigned.Take(15))
+            {
+              var latestRag = w.RagHistory?.OrderByDescending(r => r.UpdatedAt).FirstOrDefault();
+              <tr>
+                <td>
+                  <a href="@Url.Action("Detail", "ModernWork", new { id = w.Id })#rag-history" class="dfe-c-link dfe-c-fw-bold">@w.Title</a>
+                </td>
+                <td>@(w.PortfolioId.HasValue && portfolioNames.TryGetValue(w.PortfolioId.Value, out var pn3) ? pn3 : "—")</td>
+                <td>@await Html.PartialAsync("_WorkRagBadge", latestRag)</td>
+                <td>@(latestRag?.UpdatedAt.ToString("d MMM yyyy") ?? "—")</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      @if (ragIssuesAssigned.Count > 15)
+      {
+        <p class="dfe-c-body-s dfe-c-mt-2"><strong>@(ragIssuesAssigned.Count - 15) more</strong> — review on work item pages.</p>
+      }
+    }
+  </div>
+
+  @* Tab: Completed *@
+  <div id="d-completed" class="tab-pane @(tab == "completed" ? "on" : "")" role="tabpanel">
+    @if (assignedCompletedWork.Count == 0)
+    {
+      <p class="dfe-c-body dfe-c-text-muted">No completed work items are assigned to you.</p>
+    }
+    else
+    {
+      <div class="dfe-c-table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Work item</th>
+              <th scope="col">Portfolio</th>
+              <th scope="col">RAG</th>
+              <th scope="col">Updated</th>
+            </tr>
+          </thead>
+          <tbody>
+            @foreach (var w in assignedCompletedWork)
+            {
+              var latestRagC = w.RagHistory?.OrderByDescending(r => r.UpdatedAt).FirstOrDefault();
+              <tr>
+                <td>
+                  <a href="@Url.Action("Detail", "ModernWork", new { id = w.Id })" class="dfe-c-link dfe-c-fw-bold">@w.Title</a>
+                </td>
+                <td>@(w.PortfolioId.HasValue && portfolioNames.TryGetValue(w.PortfolioId.Value, out var pnC) ? pnC : "—")</td>
+                <td>@await Html.PartialAsync("_WorkRagBadge", latestRagC)</td>
+                <td>@w.UpdatedAt.ToString("d MMM yyyy")</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </div>
+
+  @* Tab: Cancelled *@
+  <div id="d-cancelled" class="tab-pane @(tab == "cancelled" ? "on" : "")" role="tabpanel">
+    @if (assignedCancelledWork.Count == 0)
+    {
+      <p class="dfe-c-body dfe-c-text-muted">No cancelled work items are assigned to you.</p>
+    }
+    else
+    {
+      <div class="dfe-c-table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Work item</th>
+              <th scope="col">Portfolio</th>
+              <th scope="col">RAG</th>
+              <th scope="col">Updated</th>
+            </tr>
+          </thead>
+          <tbody>
+            @foreach (var w in assignedCancelledWork)
+            {
+              var latestRagX = w.RagHistory?.OrderByDescending(r => r.UpdatedAt).FirstOrDefault();
+              <tr>
+                <td>
+                  <a href="@Url.Action("Detail", "ModernWork", new { id = w.Id })" class="dfe-c-link dfe-c-fw-bold">@w.Title</a>
+                </td>
+                <td>@(w.PortfolioId.HasValue && portfolioNames.TryGetValue(w.PortfolioId.Value, out var pnX) ? pnX : "—")</td>
+                <td>@await Html.PartialAsync("_WorkRagBadge", latestRagX)</td>
+                <td>@w.UpdatedAt.ToString("d MMM yyyy")</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </div>
+
+  @* Tab: Watching *@
+  <div id="d-watching" class="tab-pane @(tab == "watching" ? "on" : "")" role="tabpanel">
+    @if (watchedItems.Count == 0)
+    {
+      <p class="dfe-c-body dfe-c-text-muted">You are not watching any work items. <a href="@Url.Action("Index", "ModernWork")" class="dfe-c-link">Browse the work register</a> to watch items.</p>
+    }
+    else
+    {
+      <div class="dfe-c-table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Work item</th>
+              <th scope="col">Portfolio</th>
+              <th scope="col">RAG</th>
+              <th scope="col">Status</th>
+              <th scope="col">Updated</th>
+            </tr>
+          </thead>
+          <tbody>
+            @foreach (var w in watchedItems.Take(15))
+            {
+              var latestRagWatch = w.RagHistory?.OrderByDescending(r => r.UpdatedAt).FirstOrDefault();
+              <tr>
+                <td>
+                  <a href="@Url.Action("Detail", "ModernWork", new { id = w.Id })" class="dfe-c-link dfe-c-fw-bold">@w.Title</a>
+                </td>
+                <td>@(w.PortfolioId.HasValue && portfolioNames.TryGetValue(w.PortfolioId.Value, out var pn4) ? pn4 : "—")</td>
+                <td>@await Html.PartialAsync("_WorkRagBadge", latestRagWatch)</td>
+                <td><span class="dfe-c-tag dfe-c-tag--grey">@w.Status</span></td>
+                <td>@w.UpdatedAt.ToString("d MMM yyyy")</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      <p class="dfe-c-body-s dfe-c-mt-2"><a href="@Url.Action("Watching", "ModernWork")" class="dfe-c-link">View watch list</a></p>
+    }
+  </div>
+
+  @* Tab: Milestones *@
+  <div id="d-milestones" class="tab-pane @(tab == "milestones" ? "on" : "")" role="tabpanel">
+    <h3 class="dfe-c-heading-s dfe-c-mt-0 dfe-c-mb-2">Milestones coming up (next 14 days)</h3>
+    @if (milestonesUpcoming.Count == 0)
+    {
+      <p class="dfe-c-body dfe-c-text-muted dfe-c-mb-3">No milestones due in the next 14 days for your assigned work.</p>
+    }
+    else
+    {
+      <div class="dfe-c-table-wrap dfe-c-mb-3">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Milestone</th>
+              <th scope="col">Work item</th>
+              <th scope="col">RAG</th>
+              <th scope="col">Due date</th>
+            </tr>
+          </thead>
+          <tbody>
+            @foreach (var m in milestonesUpcoming.Take(10))
+            {
+              var latestRagMs = m.WorkItem?.RagHistory?.OrderByDescending(r => r.UpdatedAt).FirstOrDefault();
+              <tr>
+                <td>@m.Title</td>
+                <td>
+                  @if (m.WorkItem != null)
+                  {
+                    <a href="@Url.Action("Detail", "ModernWork", new { id = m.WorkItemId })#milestones" class="dfe-c-link dfe-c-fw-bold">@m.WorkItem.Title</a>
+                  }
+                  else
+                  {
+                    <a href="@Url.Action("Detail", "ModernWork", new { id = m.WorkItemId })#milestones" class="dfe-c-link dfe-c-fw-bold">View</a>
+                  }
+                </td>
+                <td>@await Html.PartialAsync("_WorkRagBadge", latestRagMs)</td>
+                <td>@(m.DueDate?.ToString("d MMM yyyy") ?? "—")</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+    <h3 class="dfe-c-heading-s dfe-c-mb-2">Milestones overdue</h3>
+    @if (milestonesLate.Count == 0)
+    {
+      <p class="dfe-c-body dfe-c-text-muted">No overdue milestones for your assigned work.</p>
+    }
+    else
+    {
+      <div class="dfe-c-table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Milestone</th>
+              <th scope="col">Work item</th>
+              <th scope="col">RAG</th>
+              <th scope="col">Due date</th>
+              <th scope="col">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            @foreach (var m in milestonesLate.Take(10))
+            {
+              var latestRagLate = m.WorkItem?.RagHistory?.OrderByDescending(r => r.UpdatedAt).FirstOrDefault();
+              <tr>
+                <td>@m.Title</td>
+                <td>
+                  @if (m.WorkItem != null)
+                  {
+                    <a href="@Url.Action("Detail", "ModernWork", new { id = m.WorkItemId })#milestones" class="dfe-c-link dfe-c-fw-bold">@m.WorkItem.Title</a>
+                  }
+                  else
+                  {
+                    <a href="@Url.Action("Detail", "ModernWork", new { id = m.WorkItemId })#milestones" class="dfe-c-link dfe-c-fw-bold">View</a>
+                  }
+                </td>
+                <td>@await Html.PartialAsync("_WorkRagBadge", latestRagLate)</td>
+                <td>@(m.DueDate?.ToString("d MMM yyyy") ?? "—")</td>
+                <td><span class="dfe-c-tag dfe-c-tag--grey">@m.Status</span></td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      @if (milestonesLate.Count > 10)
+      {
+        <p class="dfe-c-body-s dfe-c-mt-2"><strong>@(milestonesLate.Count - 10) more</strong> overdue.</p>
+      }
+    }
+  </div>
+
+</div>

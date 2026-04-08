@@ -1,0 +1,279 @@
+@model Compass.Models.Modern.Work.MonthlyUpdate
+@{
+    var work = ViewBag.WorkItem as Compass.Models.Modern.Work.WorkItem;
+    var ragStatuses = (List<Compass.Models.Modern.Work.RagStatusLookupOption>)ViewBag.RagStatuses ?? new List<Compass.Models.Modern.Work.RagStatusLookupOption>();
+    var previousUpdate = ViewBag.PreviousMonthlyUpdate as Compass.Models.Modern.Work.MonthlyUpdate;
+    var previousInsetRagName = ViewBag.PreviousInsetRagStatusName as string;
+    var previousInsetRagId = ViewBag.PreviousInsetRagStatusId as int?;
+    var previousInsetJustification = ViewBag.PreviousInsetJustification as string;
+    var previousInsetPathToGreen = ViewBag.PreviousInsetPathToGreen as string;
+    var reportMonthDisplay = ViewBag.ReportMonthDisplay as string ?? Model.ReportMonth.ToString("MMMM yyyy");
+    var greenRagStatusId = ViewBag.GreenRagStatusId as int?;
+    var isEdit = ViewBag.IsEditMonthlyUpdate as bool? ?? false;
+    var editingUpdateId = ViewBag.EditingUpdateId as Guid?;
+    var periodDueDate = ViewBag.PeriodDueDate as DateTime?;
+    ViewData["Title"] = isEdit ? "Continue monthly update" : (reportMonthDisplay + " monthly update");
+}
+@section Breadcrumbs {
+    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="/">Home</a></li>
+    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="@Url.Action("Index", "ModernWork")">Work</a></li>
+    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="@Url.Action("Detail", "ModernWork", new { id = Model.WorkItemId })">@(work?.Title ?? "Work")</a></li>
+    <li class="dfe-c-breadcrumb__item" aria-current="page">@(isEdit ? "Continue monthly update" : reportMonthDisplay + " monthly update")</li>
+}
+
+<div class="dfe-c-form-layout">
+  <div class="dfe-c-form-layout__main">
+  @await Html.PartialAsync("_WorkItemChrome", ViewBag.WorkItem as Compass.Models.Modern.Work.WorkItem)
+  <h2 class="dfe-c-heading-m dfe-c-mt-0">@(isEdit ? "Continue monthly update" : reportMonthDisplay + " monthly update")</h2>
+  <p class="dfe-c-body muted dfe-c-mb-3">Narrative, RAG and justification for the period being reported.</p>
+
+  @if (previousUpdate != null)
+  {
+    <div class="dfe-c-inset dfe-c-mb-3 add-monthly-update__previous" style="border-left:4px solid #003a69;">
+      <h3 class="dfe-c-heading-s dfe-c-mt-0">Previous update — @previousUpdate.ReportMonth.ToString("MMMM yyyy")</h3>
+      @if (previousInsetRagId.HasValue || !string.IsNullOrWhiteSpace(previousInsetRagName))
+      {
+        <p class="dfe-c-body dfe-c-mb-2"><strong>RAG:</strong> @(string.IsNullOrWhiteSpace(previousInsetRagName) ? ("Status #" + previousInsetRagId) : previousInsetRagName)</p>
+      }
+      @if (!string.IsNullOrWhiteSpace(previousInsetJustification))
+      {
+        <p class="dfe-c-body dfe-c-mb-1"><strong>Justification:</strong></p>
+        <p class="dfe-c-body dfe-c-mb-2 add-monthly-update__prev-justification" style="white-space:pre-wrap;">@previousInsetJustification</p>
+        <p class="dfe-c-mb-2"><button type="button" class="dfe-c-button dfe-c-button--secondary dfe-c-button--sm add-monthly-update__copy-justification" aria-label="Copy justification to form below">Copy to justification below</button></p>
+      }
+      @if (!string.IsNullOrWhiteSpace(previousInsetPathToGreen))
+      {
+        <p class="dfe-c-body dfe-c-mb-1"><strong>Path to green:</strong></p>
+        <p class="dfe-c-body dfe-c-mb-2 add-monthly-update__prev-path" style="white-space:pre-wrap;">@previousInsetPathToGreen</p>
+        <p class="dfe-c-mb-2"><button type="button" class="dfe-c-button dfe-c-button--secondary dfe-c-button--sm add-monthly-update__copy-path" aria-label="Copy path to green to form below">Copy to path to green below</button></p>
+      }
+      @if (previousInsetRagId.HasValue && ragStatuses.Any(r => r.Id == previousInsetRagId.Value))
+      {
+        <p class="dfe-c-mb-0"><button type="button" class="dfe-c-link add-monthly-update__copy-rag" data-rag-id="@previousInsetRagId.Value" aria-label="Use same RAG rating below">Copy to RAG below</button></p>
+      }
+      @if (!string.IsNullOrWhiteSpace(previousUpdate.Narrative))
+      {
+        <p class="dfe-c-body dfe-c-mt-2 dfe-c-mb-0"><strong>Narrative (reference only):</strong></p>
+        <p class="dfe-c-body dfe-c-mt-1 dfe-c-fs-14" style="white-space:pre-wrap;">@previousUpdate.Narrative</p>
+      }
+    </div>
+  }
+
+  <div class="dfe-c-grid-row">
+    <div class="dfe-c-grid-col dfe-c-grid-col--two-thirds">
+  @if (!ViewData.ModelState.IsValid)
+  {
+    <div class="dfe-c-error-summary" aria-labelledby="error-summary-title" role="alert" data-module="dfe-c-error-summary">
+      <h2 class="dfe-c-error-summary__title" id="error-summary-title">There is a problem</h2>
+      <div class="dfe-c-error-summary__body">
+        <ul class="dfe-c-list dfe-c-error-summary__list">
+          @foreach (var kv in ViewData.ModelState)
+          {
+            if (kv.Value?.Errors?.Count > 0)
+            {
+              <li><a href="#@kv.Key">@(kv.Value.Errors[0].ErrorMessage)</a></li>
+            }
+          }
+        </ul>
+      </div>
+    </div>
+  }
+  <form action="@(isEdit && editingUpdateId.HasValue ? Url.Action("EditMonthlyUpdate", "ModernWork", new { id = Model.WorkItemId, updateId = editingUpdateId.Value }) : Url.Action("AddMonthlyUpdate", "ModernWork", new { id = Model.WorkItemId }))" method="post" class="dfe-c-mb-4" id="add-monthly-update-form">
+    @Html.AntiForgeryToken()
+    <input type="hidden" name="ReportMonth" value="@Model.ReportMonth.ToString("yyyy-MM-dd")" />
+
+    <div class="dfe-c-form__group dfe-c-mb-3">
+      <span class="dfe-c-form__label">Reporting month</span>
+      <p class="dfe-c-body dfe-c-mt-1" id="report-month-display">@reportMonthDisplay</p>
+      @if (periodDueDate.HasValue)
+      {
+        <p class="dfe-c-body dfe-c-mt-1 dfe-c-fs-14 dfe-c-form__hint">Due date for this submission: @periodDueDate.Value.ToString("d MMMM yyyy")</p>
+      }
+    </div>
+
+    <div class="dfe-c-form__group dfe-c-character-count @(ViewData.ModelState["Narrative"]?.Errors?.Any() == true ? "dfe-c-form__group--error" : "")" data-module="dfe-c-character-count" data-maxlength="4000">
+      <label class="dfe-c-form__label" asp-for="Narrative">Update narrative</label>
+      <span id="Narrative-hint" class="dfe-c-form__hint">Summarise progress and key points for this period.</span>
+      @if (ViewData.ModelState["Narrative"]?.Errors?.Any() == true)
+      {
+        <span class="dfe-c-form__error">@ViewData.ModelState["Narrative"]?.Errors?.FirstOrDefault()?.ErrorMessage</span>
+      }
+      <textarea class="govuk-js-character-count dfe-c-width-full" asp-for="Narrative" rows="6" maxlength="4000" aria-describedby="Narrative-info Narrative-hint"></textarea>
+      <div id="Narrative-info" class="dfe-c-form__hint dfe-c-character-count__message" aria-live="polite">You can enter up to 4000 characters</div>
+    </div>
+
+    <div class="dfe-c-form__group @(ViewData.ModelState["RagStatusId"]?.Errors?.Any() == true ? "dfe-c-form__group--error" : "")">
+      <fieldset class="" id="RagStatusId" aria-describedby="@(ViewData.ModelState["RagStatusId"]?.Errors?.Any() == true ? "RagStatusId-error" : null)">
+        <legend class="dfe-c-form__legend--sm">RAG rating for this month</legend>
+        @if (ViewData.ModelState["RagStatusId"]?.Errors?.Any() == true)
+        {
+          <span class="dfe-c-form__error" id="RagStatusId-error">@ViewData.ModelState["RagStatusId"]?.Errors?.FirstOrDefault()?.ErrorMessage</span>
+        }
+        <div class="dfe-c-form__radio-group" data-module="dfe-c-form__radio-group">
+          @foreach (var r in ragStatuses)
+          {
+            <div class="dfe-c-radios__item">
+              <input class="dfe-c-radios__input" id="RagStatusId_@r.Id" name="RagStatusId" type="radio" value="@r.Id" @(Model.RagStatusId == r.Id ? "checked=\"checked\"" : "") />
+              <label class="dfe-c-form__label dfe-c-radios__label" for="RagStatusId_@r.Id">@r.Name</label>
+            </div>
+          }
+        </div>
+      </fieldset>
+    </div>
+
+    <div class="dfe-c-form__group dfe-c-character-count @(ViewData.ModelState["RagJustification"]?.Errors?.Any() == true ? "dfe-c-form__group--error" : "")" data-module="dfe-c-character-count" data-maxlength="2000">
+      <label class="dfe-c-form__label" asp-for="RagJustification">What is the justification for the RAG status?</label>
+      @if (ViewData.ModelState["RagJustification"]?.Errors?.Any() == true)
+      {
+        <span class="dfe-c-form__error">@ViewData.ModelState["RagJustification"]?.Errors?.FirstOrDefault()?.ErrorMessage</span>
+      }
+      <textarea class="govuk-js-character-count dfe-c-width-full @(ViewData.ModelState["RagJustification"]?.Errors?.Any() == true ? "--error" : "")" id="RagJustification" name="RagJustification" rows="3" maxlength="2000" aria-describedby="RagJustification-info" aria-invalid="@(ViewData.ModelState["RagJustification"]?.Errors?.Any() == true)">@Model.RagJustification</textarea>
+      <div id="RagJustification-info" class="dfe-c-form__hint dfe-c-character-count__message" aria-live="polite">You can enter up to 2000 characters</div>
+    </div>
+
+    @{
+      var pathToGreenError = ViewData.ModelState["PathToGreen"]?.Errors?.Any() == true;
+      var pathToGreenStyle = pathToGreenError ? "display:block;" : "";
+    }
+    <div class="dfe-c-form__group dfe-c-character-count @(pathToGreenError ?"dfe-c-form__group--error" : "")" id="path-to-green-wrap" style="display:none;@pathToGreenStyle" data-module="dfe-c-character-count" data-maxlength="2000">
+      <label class="dfe-c-form__label" asp-for="PathToGreen">What is the path to green?</label>
+      @if (pathToGreenError)
+      {
+        <span class="dfe-c-form__error">@ViewData.ModelState["PathToGreen"]?.Errors?.FirstOrDefault()?.ErrorMessage</span>
+      }
+      <textarea class="govuk-js-character-count dfe-c-width-full @(pathToGreenError ?"--error" : "")" id="PathToGreen" name="PathToGreen" rows="3" maxlength="2000" aria-describedby="PathToGreen-info" aria-invalid="@pathToGreenError">@Model.PathToGreen</textarea>
+      <div id="PathToGreen-info" class="dfe-c-form__hint dfe-c-character-count__message" aria-live="polite">You can enter up to 2000 characters</div>
+    </div>
+
+    <div class="dfe-c-mt-3">
+      <button type="submit" name="action" value="save" class="dfe-c-button dfe-c-button--primary">Save</button>
+      <button type="submit" name="action" value="submit" class="dfe-c-button dfe-c-button--primary dfe-c-ms-2">Submit monthly update</button>
+      <a href="@Url.Action("Detail", "ModernWork", new { id = Model.WorkItemId })#wd-updates" class="dfe-c-button dfe-c-button--secondary dfe-c-ms-2">Cancel</a>
+    </div>
+  </form>
+    </div>
+    <div class="dfe-c-grid-col dfe-c-grid-col--one-third">
+      <div class="add-monthly-update__rag-guidance dfe-c-mt-0">
+        <h3 class="dfe-c-heading-s dfe-c-mt-0">RAG status guidance</h3>
+        <p class="dfe-c-body dfe-c-fs-14 dfe-c-mb-2">Descriptions from system settings. The selected rating is highlighted.</p>
+        @foreach (var r in ragStatuses)
+        {
+          <div class="add-monthly-update__rag-item dfe-c-mb-2" data-rag-id="@r.Id">
+            <p class="dfe-c-body dfe-c-fw-bold dfe-c-mb-1 dfe-c-fs-14">@r.Name</p>
+            @if (!string.IsNullOrWhiteSpace(r.Description))
+            {
+              <p class="dfe-c-body dfe-c-fs-14 dfe-c-mb-0">@r.Description</p>
+            }
+            else
+            {
+              <p class="dfe-c-body dfe-c-fs-14 dfe-c-mb-0 dfe-c-text-muted">No description set.</p>
+            }
+          </div>
+        }
+      </div>
+    </div>
+  </div>
+  </div>
+</div>
+
+<style>
+.add-monthly-update__rag-guidance {
+  background: #f3f2f1;
+  padding: 1rem 1.25rem;
+  border-radius: 4px;
+  border: 1px solid #b1b4b6;
+}
+.add-monthly-update__rag-guidance .add-monthly-update__rag-item {
+  padding: 0.5rem 0.75rem;
+  margin: 0 -0.25rem 0.75rem;
+  border-radius: 4px;
+  border-left: 3px solid transparent;
+}
+.add-monthly-update__rag-guidance .add-monthly-update__rag-item:last-child { margin-bottom: 0; }
+.add-monthly-update__rag-guidance .add-monthly-update__rag-item--selected {
+  background: #fff;
+  border-left-color: #1d70b8;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
+.add-monthly-update__rag-guidance .add-monthly-update__rag-item--selected p { color: #0b0c0c; }
+</style>
+
+<script>
+(function() {
+  // Character count: update message for each dfe-c-character-count wrapper (works even if GOV.UK JS does not init)
+  document.querySelectorAll('.dfe-c-character-count[data-maxlength]').forEach(function(wrapper) {
+    var max = parseInt(wrapper.getAttribute('data-maxlength'), 10) || 0;
+    var ta = wrapper.querySelector('textarea.govuk-js-character-count');
+    var msg = wrapper.querySelector('.dfe-c-character-count__message');
+    if (!ta || !msg || max <= 0) return;
+    function update() {
+      var n = (ta.value || '').length;
+      var left = max - n;
+      msg.textContent = left < 0 ? 'You have ' + Math.abs(left) + ' characters over the limit' : 'You have ' + left + ' character' + (left !== 1 ? 's' : '') + ' remaining';
+    }
+    ta.addEventListener('input', update);
+    ta.addEventListener('change', update);
+    update();
+  });
+
+  var form = document.getElementById('add-monthly-update-form');
+  if (!form) return;
+  var pathWrap = document.getElementById('path-to-green-wrap');
+  var greenId = @(greenRagStatusId.HasValue ? greenRagStatusId.Value : -1);
+
+  function togglePathToGreen() {
+    var checked = form.querySelector('input[name="RagStatusId"]:checked');
+    if (!pathWrap) return;
+    if (pathWrap.classList.contains('dfe-c-form__group--error')) {
+      pathWrap.style.display = 'block';
+      return;
+    }
+    if (!checked) {
+      pathWrap.style.display = 'none';
+      return;
+    }
+    var val = parseInt(checked.value, 10);
+    if (val === greenId) {
+      pathWrap.style.display = 'none';
+    } else {
+      pathWrap.style.display = 'block';
+    }
+  }
+
+  function highlightRagGuidance() {
+    var checked = form.querySelector('input[name="RagStatusId"]:checked');
+    document.querySelectorAll('.add-monthly-update__rag-item').forEach(function(el) {
+      var id = parseInt(el.getAttribute('data-rag-id'), 10);
+      el.classList.toggle('add-monthly-update__rag-item--selected', checked && parseInt(checked.value, 10) === id);
+    });
+  }
+
+  form.querySelectorAll('input[name="RagStatusId"]').forEach(function(radio) {
+    radio.addEventListener('change', function() { togglePathToGreen(); highlightRagGuidance(); });
+  });
+  togglePathToGreen();
+  highlightRagGuidance();
+
+  document.querySelectorAll('.add-monthly-update__copy-justification').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var el = document.querySelector('.add-monthly-update__prev-justification');
+      var target = form.querySelector('#RagJustification') || form.querySelector('textarea[name="RagJustification"]');
+      if (el && target) target.value = el.textContent || '';
+    });
+  });
+  document.querySelectorAll('.add-monthly-update__copy-path').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var el = document.querySelector('.add-monthly-update__prev-path');
+      var target = form.querySelector('#PathToGreen') || form.querySelector('textarea[name="PathToGreen"]');
+      if (el && target) target.value = el.textContent || '';
+    });
+  });
+  document.querySelectorAll('.add-monthly-update__copy-rag').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var id = btn.getAttribute('data-rag-id');
+      var radio = form.querySelector('input[name="RagStatusId"][value="' + id + '"]');
+      if (radio) { radio.checked = true; togglePathToGreen(); highlightRagGuidance(); }
+    });
+  });
+})();
+</script>
