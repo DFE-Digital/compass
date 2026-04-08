@@ -1,0 +1,75 @@
+@using Compass.Models
+@{
+    ViewData["Title"] = "Directorates";
+    var directorates = (List<Directorate>)ViewBag.Directorates ?? new List<Directorate>();
+    var workCountByDirectorateId = (Dictionary<int, int>)ViewBag.WorkCountByDirectorateId ?? new Dictionary<int, int>();
+    var search = ViewBag.Search as string;
+}
+@section Breadcrumbs {
+    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="@Url.Action("Dashboard", "ModernWork")">Work</a></li>
+    <li class="dfe-c-breadcrumb__item" aria-current="page">Directorates</li>
+}
+
+<div id="sc-work-directorates" class="modern-work-page">
+  <div class="dfe-c-flex--between dfe-c-mb-3" style="flex-wrap:wrap;gap:1rem;">
+    <div class="dfe-c-page-title" style="margin:0;">
+      <div class="dfe-c-page-title__caption">Work</div>
+      <h1 class="dfe-c-page-title__heading">Directorates</h1>
+      <p class="dfe-c-page-title__lede">Work items can be associated with one or more directorates. View work by directorate below.</p>
+    </div>
+    <div class="dfe-c-flex" style="gap:0.75rem;flex-wrap:wrap;">
+      <a href="@Url.Action("Create", "ModernWork")" class="govuk-button">New work item</a>
+    </div>
+  </div>
+
+  <form method="get" action="@Url.Action("Directorates", "ModernWork")" id="directorates-search-form" class="dfe-c-mb-3">
+    <div id="search-and-filter">
+      <div class="filter-toolbar">
+        <div class="filter-toolbar__search-wrap">
+          <input type="search" name="search" id="directorates-search" value="@search" placeholder="Search directorates…" class="filter-search" autocomplete="off" aria-label="Search directorates" />
+          <button type="submit" class="govuk-button govuk-button--secondary filter-toolbar__search-submit">Search</button>
+        </div>
+      </div>
+    </div>
+  </form>
+
+  @if (directorates == null || !directorates.Any())
+  {
+    <div class="dfe-c-body dfe-c-text-muted">No directorates defined. Add directorates in Admin.</div>
+  }
+  else
+  {
+    <div class="dfe-c-table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Directorate</th>
+            <th scope="col" style="text-align:right;">Work items</th>
+            <th scope="col"><span class="dfe-c-sr-only">Actions</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          @foreach (var d in directorates)
+          {
+            var count = workCountByDirectorateId.TryGetValue(d.Id, out var c) ? c : 0;
+            <tr>
+              <td>
+                <strong>@d.Name</strong>
+                @if (!string.IsNullOrEmpty(d.Description))
+                {
+                  <p class="dfe-c-body-s dfe-c-text-muted dfe-c-m-0 dfe-c-mt-1">@d.Description</p>
+                }
+              </td>
+              <td style="text-align:right;">@count</td>
+              <td>
+                <a href="@Url.Action("AllWork", "ModernWork", new { directorateId = d.Id })" class="dfe-c-link">View work →</a>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+    <p class="dfe-c-body-s dfe-c-text-muted dfe-c-mt-2">@directorates.Count directorate@(directorates.Count == 1 ? "" : "s").</p>
+  }
+</div>

@@ -1,0 +1,175 @@
+using System.ComponentModel.DataAnnotations;
+using Compass.Models;
+
+namespace Compass.Models.Modern.Work;
+
+/// <summary>Modern work item shape for ported compass-2 views; backed by <see cref="Project"/> (int id).</summary>
+public class WorkItem
+{
+    public int Id { get; set; }
+    public int? LegacyProjectId { get; set; }
+    public Guid? DemandRequestId { get; set; }
+    public Guid? BusinessCaseId { get; set; }
+
+    [Required, MaxLength(500)]
+    public string Title { get; set; } = string.Empty;
+
+    public string? ProblemStatement { get; set; }
+
+    [MaxLength(4000)]
+    public string? Aim { get; set; }
+
+    public string? Description { get; set; }
+
+    [Required, MaxLength(50)]
+    public string Status { get; set; } = "Active";
+
+    public int? RagStatusId { get; set; }
+    public int? PriorityId { get; set; }
+    [MaxLength(2000)]
+    public string? PriorityChangeReason { get; set; }
+    public int? DeliveryPhaseId { get; set; }
+    public int? WorkTypeId { get; set; }
+    public int? PortfolioId { get; set; }
+    public int? PrimaryContactUserId { get; set; }
+    public int? BudgetOwnerUserId { get; set; }
+    public int? ActivityTypeId { get; set; }
+    public int? RiskAppetiteId { get; set; }
+    public bool SubjectToSpendControl { get; set; }
+    public bool FlagshipProject { get; set; }
+    public bool IsCentralRiskBucket { get; set; }
+    public DateTime? StartDate { get; set; }
+    public DateTime? TargetEndDate { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public DateTime UpdatedAt { get; set; }
+    [MaxLength(450)]
+    public string? CreatedBy { get; set; }
+    [MaxLength(450)]
+    public string? UpdatedBy { get; set; }
+    public int? PriorityOutcomeId { get; set; }
+    public int? MissionPillarId { get; set; }
+
+    public ICollection<WorkItemPriorityOutcome> PriorityOutcomes { get; set; } = new List<WorkItemPriorityOutcome>();
+    public ICollection<WorkItemMissionPillar> MissionPillars { get; set; } = new List<WorkItemMissionPillar>();
+    public ICollection<WorkItemContact> Contacts { get; set; } = new List<WorkItemContact>();
+    public ICollection<WorkItemTeamMember> TeamMembers { get; set; } = new List<WorkItemTeamMember>();
+    public ICollection<WorkItemDependency> Dependencies { get; set; } = new List<WorkItemDependency>();
+    public ICollection<WorkItemDirectorate> Directorates { get; set; } = new List<WorkItemDirectorate>();
+    public ICollection<WorkItemGovernmentDepartment> GovernmentDepartments { get; set; } = new List<WorkItemGovernmentDepartment>();
+    public ICollection<WorkItemRagHistory> RagHistory { get; set; } = new List<WorkItemRagHistory>();
+    public ICollection<Milestone> Milestones { get; set; } = new List<Milestone>();
+    public ICollection<MonthlyUpdate> MonthlyUpdates { get; set; } = new List<MonthlyUpdate>();
+    public ICollection<WorkItemRiskOrIssue> RiskOrIssues { get; set; } = new List<WorkItemRiskOrIssue>();
+}
+
+public class WorkItemPriorityOutcome
+{
+    public int Id { get; set; }
+    public int PriorityOutcomeId { get; set; }
+    public WorkLookupOption? PriorityOutcome { get; set; }
+}
+
+public class WorkItemMissionPillar
+{
+    public int Id { get; set; }
+    public int MissionPillarId { get; set; }
+    public WorkLookupOption? MissionPillar { get; set; }
+}
+
+public class ContactRoleType
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+}
+
+public class WorkItemContact
+{
+    public int Id { get; set; }
+    public int WorkItemId { get; set; }
+    public int? ContactRoleTypeId { get; set; }
+    public User? AppUser { get; set; }
+}
+
+public class WorkItemDependency
+{
+    public int Id { get; set; }
+    public int WorkItemId { get; set; }
+    public string Direction { get; set; } = string.Empty;
+    public bool IsInternal { get; set; }
+    public WorkItem? TargetWorkItem { get; set; }
+    public string? ExternalDescription { get; set; }
+}
+
+public class WorkItemDirectorate
+{
+    public int Id { get; set; }
+    public int DirectorateId { get; set; }
+    public Division? Division { get; set; }
+    public Compass.Models.Directorate? Directorate { get; set; }
+}
+public class WorkItemGovernmentDepartment
+{
+    public int Id { get; set; }
+    public int GovernmentDepartmentId { get; set; }
+    public GovernmentDepartment? GovernmentDepartment { get; set; }
+}
+
+/// <summary>RAG history entry for modern work views and Update RAG form; extends chrome snapshot for <c>_WorkRagBadge</c>.</summary>
+public class WorkItemRagHistory : ChromeRagSnapshot
+{
+    public int Id { get; set; }
+    public int WorkItemId { get; set; }
+    public int RagStatusId { get; set; }
+    public string? Justification { get; set; }
+    public string? PathToGreen { get; set; }
+    public int? UpdatedByUserId { get; set; }
+}
+
+/// <summary>Lifecycle / audit rows for work detail audit tab.</summary>
+public class LifecycleAuditEntry
+{
+    public bool Highlight { get; set; }
+    public string? LinkUrl { get; set; }
+    public string? LinkText { get; set; }
+    public string Event { get; set; } = string.Empty;
+    public DateTime When { get; set; }
+    public string Who { get; set; } = string.Empty;
+}
+
+public class AuditLog
+{
+    public string? ChangeType { get; set; }
+    public DateTime ChangedAt { get; set; }
+    public string? ChangedBy { get; set; }
+    public string? PreviousValue { get; set; }
+    public string? NewValue { get; set; }
+}
+
+/// <summary>Reporting period row for work detail monthly updates tab (stub for compass-2 shape).</summary>
+public class ReportingCyclePeriod
+{
+    public string PeriodKey { get; set; } = string.Empty;
+    public string? PeriodLabel { get; set; }
+    public DateTime DueDate { get; set; }
+}
+
+/// <summary>Monthly update block for modern work views (aligned with <see cref="ProjectMonthlyUpdate"/> fields used in UI).</summary>
+public class MonthlyUpdate
+{
+    public int Id { get; set; }
+    public int WorkItemId { get; set; }
+    public DateTime ReportMonth { get; set; }
+    public string? Narrative { get; set; }
+    public int? RagStatusId { get; set; }
+    public string? RagJustification { get; set; }
+    public string? PathToGreen { get; set; }
+    public string? SubmittedBy { get; set; }
+    public DateTime? SubmittedAt { get; set; }
+    public int? SubmittedByUserId { get; set; }
+}
+
+public class WorkAppUser
+{
+    public string? Name { get; set; }
+    public string? Email { get; set; }
+}

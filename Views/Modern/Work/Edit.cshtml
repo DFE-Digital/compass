@@ -1,0 +1,173 @@
+@model Compass.Models.Modern.Work.WorkItem
+@{
+    ViewData["Title"] = "Edit work item";
+    var portfolios = (List<Compass.Models.Portfolio>)ViewBag.Portfolios ?? new List<Compass.Models.Portfolio>();
+    var workStatusOptions = (List<Compass.Models.Modern.Work.LookupOption>)ViewBag.WorkStatusOptions ?? new List<Compass.Models.Modern.Work.LookupOption>();
+    var workPriorityOptions = (List<Compass.Models.Modern.Work.LookupOption>)ViewBag.WorkPriorityOptions ?? new List<Compass.Models.Modern.Work.LookupOption>();
+    var deliveryPhaseOptions = (List<Compass.Models.Modern.Work.LookupOption>)ViewBag.DeliveryPhaseOptions ?? new List<Compass.Models.Modern.Work.LookupOption>();
+    var activityTypeOptions = (List<Compass.Models.Modern.Work.LookupOption>)ViewBag.ActivityTypeOptions ?? new List<Compass.Models.Modern.Work.LookupOption>();
+    var riskAppetiteOptions = (List<Compass.Models.Modern.Work.LookupOption>)ViewBag.RiskAppetiteOptions ?? new List<Compass.Models.Modern.Work.LookupOption>();
+}
+@section Breadcrumbs {
+    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="/">Home</a></li>
+    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="@Url.Action("Index", "ModernWork")">Work</a></li>
+    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="@Url.Action("Detail", "ModernWork", new { id = Model.Id })">@Model.Title</a></li>
+    <li class="dfe-c-breadcrumb__item" aria-current="page">Edit</li>
+}
+
+<div id="sc-work-edit">
+  @await Html.PartialAsync("_WorkItemChrome", ViewBag.WorkItem as Compass.Models.Modern.Work.WorkItem ?? Model)
+  <h2 class="dfe-c-heading-m dfe-c-mt-0">Edit work item</h2>
+  <p class="dfe-c-body muted dfe-c-mb-3">Update title, problem statement, aim, status, priority and other details.</p>
+
+  <div class="dfe-c-grid-row">
+    <div class="dfe-c-grid-col dfe-c-grid-col--two-thirds">
+<form asp-action="Edit" asp-route-id="@Model.Id" method="post" class="dfe-c-mb-4">
+  @Html.AntiForgeryToken()
+
+  <div class="dfe-c-form__group @(ViewData.ModelState["Title"]?.Errors?.Any() == true ? "dfe-c-form__group--error" : "")">
+    <label class="dfe-c-form__label" asp-for="Title">Title *</label>
+    @if (ViewData.ModelState["Title"]?.Errors?.Any() == true)
+    {
+      <span class="dfe-c-form__error">@ViewData.ModelState["Title"]?.Errors?.FirstOrDefault()?.ErrorMessage</span>
+    }
+    <input class="dfe-c-width-full" asp-for="Title" type="text" />
+  </div>
+
+  <div class="dfe-c-form__group">
+    <label class="dfe-c-form__label" asp-for="ProblemStatement">Problem statement</label>
+    <textarea class="dfe-c-width-full" asp-for="ProblemStatement" rows="4"></textarea>
+  </div>
+
+  <div class="dfe-c-form__group">
+    <label class="dfe-c-form__label" asp-for="Aim">Aim</label>
+    <textarea class="dfe-c-width-full" asp-for="Aim" rows="3"></textarea>
+  </div>
+
+  <div class="dfe-c-form__group">
+    <label class="dfe-c-form__label" asp-for="Status">Status</label>
+    <select class="dfe-c-width-full" asp-for="Status">
+      @foreach (var opt in workStatusOptions)
+      {
+        <option value="@opt.Value" selected="@(Model.Status == opt.Value)">@opt.Name</option>
+      }
+    </select>
+  </div>
+
+  <div class="dfe-c-form__group">
+    <label class="dfe-c-form__label" asp-for="PortfolioId">Portfolio</label>
+    <select class="dfe-c-width-full" asp-for="PortfolioId">
+      <option value="">— Select —</option>
+      @foreach (var p in portfolios)
+      {
+        <option value="@p.Id" selected="@(Model.PortfolioId == p.Id)">@p.Name</option>
+      }
+    </select>
+  </div>
+
+  <div class="dfe-c-form__group">
+    <label class="dfe-c-form__label" asp-for="PriorityId">Priority</label>
+    <select class="dfe-c-width-full" asp-for="PriorityId">
+      <option value="">— Select —</option>
+      @foreach (var opt in workPriorityOptions)
+      {
+        <option value="@opt.Id" selected="@(Model.PriorityId == opt.Id)">@opt.Name</option>
+      }
+    </select>
+  </div>
+
+  <div class="dfe-c-form__group @(ViewData.ModelState["PriorityChangeReason"]?.Errors?.Any() == true ? "dfe-c-form__group--error" : "")">
+    <label class="dfe-c-form__label" for="PriorityChangeReason">Reason for priority change</label>
+    <span class="dfe-c-form__hint">Required when you change the priority above.</span>
+    @if (ViewData.ModelState["PriorityChangeReason"]?.Errors?.Any() == true)
+    {
+      <span class="dfe-c-form__error">@ViewData.ModelState["PriorityChangeReason"]?.Errors?.FirstOrDefault()?.ErrorMessage</span>
+    }
+    <textarea class="dfe-c-width-full" id="PriorityChangeReason" name="PriorityChangeReason" rows="3" maxlength="2000">@Model.PriorityChangeReason</textarea>
+  </div>
+
+  <div class="dfe-c-form__group">
+    <label class="dfe-c-form__label" asp-for="DeliveryPhaseId">Phase</label>
+    <span class="dfe-c-form__hint">From Admin → Lookups → Delivery phase.</span>
+    <select class="dfe-c-width-full" asp-for="DeliveryPhaseId">
+      <option value="">— Select phase —</option>
+      @foreach (var opt in deliveryPhaseOptions)
+      {
+        <option value="@opt.Id" selected="@(Model.DeliveryPhaseId == opt.Id)">@opt.Name</option>
+      }
+    </select>
+  </div>
+
+  <div class="dfe-c-form__group">
+    @await Html.PartialAsync("_UserPicker", new Compass.Models.UserPickerViewModel
+    {
+      FieldName = "PrimaryContactUserId",
+      Label = "Primary contact",
+      Placeholder = "Search by name or email",
+      DefaultUserId = Model.PrimaryContactUserId,
+      DefaultName = null,
+      DefaultSummaryText = "No primary contact selected."
+    })
+  </div>
+
+  <div class="dfe-c-form__group">
+    @await Html.PartialAsync("_UserPicker", new Compass.Models.UserPickerViewModel
+    {
+      FieldName = "BudgetOwnerUserId",
+      Label = "Budget owner",
+      Placeholder = "Search by name or email",
+      DefaultUserId = Model.BudgetOwnerUserId,
+      DefaultName = null,
+      DefaultSummaryText = "No budget owner selected."
+    })
+  </div>
+
+  <div class="dfe-c-form__group">
+    <label class="dfe-c-form__label" asp-for="ActivityTypeId">Activity type</label>
+    <select class="dfe-c-width-full" asp-for="ActivityTypeId">
+      <option value="">— Select —</option>
+      @foreach (var opt in activityTypeOptions)
+      {
+        <option value="@opt.Id" selected="@(Model.ActivityTypeId == opt.Id)">@opt.Name</option>
+      }
+    </select>
+  </div>
+
+  <div class="dfe-c-form__group">
+    <label class="dfe-c-form__label" asp-for="RiskAppetiteId">Risk appetite</label>
+    <select class="dfe-c-width-full" asp-for="RiskAppetiteId">
+      <option value="">— Select —</option>
+      @foreach (var opt in riskAppetiteOptions)
+      {
+        <option value="@opt.Id" selected="@(Model.RiskAppetiteId == opt.Id)">@opt.Name</option>
+      }
+    </select>
+  </div>
+
+  <div class="dfe-c-form__group">
+    <label class="dfe-c-form__label" asp-for="StartDate">Start date</label>
+    <input class="dfe-c-width-full" asp-for="StartDate" type="date" />
+  </div>
+
+  <div class="dfe-c-form__group">
+    <label class="dfe-c-form__label" asp-for="TargetEndDate">Target end date</label>
+    <input class="dfe-c-width-full" asp-for="TargetEndDate" type="date" />
+  </div>
+
+  <div class="dfe-c-form__group dfe-c-mb-3">
+    <div class="dfe-c-checkboxes__item">
+      <input class="dfe-c-checkboxes__input" asp-for="SubjectToSpendControl" type="checkbox" />
+      <label class="dfe-c-form__label dfe-c-checkboxes__label" asp-for="SubjectToSpendControl">Subject to spend control</label>
+    </div>
+    <div class="dfe-c-checkboxes__item">
+      <input class="dfe-c-checkboxes__input" asp-for="FlagshipProject" type="checkbox" />
+      <label class="dfe-c-form__label dfe-c-checkboxes__label" asp-for="FlagshipProject">Flagship project</label>
+    </div>
+  </div>
+
+  <button type="submit" class="dfe-c-button dfe-c-button--primary">Save changes</button>
+  <a href="@Url.Action("Detail", "ModernWork", new { id = Model.Id })" class="dfe-c-button dfe-c-button--secondary dfe-c-ms-2">Cancel</a>
+</form>
+    </div>
+  </div>
+</div>

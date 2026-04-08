@@ -1,0 +1,43 @@
+@model Compass.Models.Modern.Work.WorkItem
+@using Compass.Models.Modern.Work
+@{
+    var work = ViewBag.WorkItem as WorkItem ?? Model;
+    var deliveryPhaseOptions = (List<LookupOption>)ViewBag.DeliveryPhaseOptions ?? new List<LookupOption>();
+    ViewData["Title"] = "Edit phase";
+}
+@section Breadcrumbs {
+    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="/">Home</a></li>
+    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="@Url.Action("Index", "ModernWork")">Work</a></li>
+    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="@Url.Action("Detail", "ModernWork", new { id = Model.Id })">@(work?.Title ?? "Work")</a></li>
+    <li class="dfe-c-breadcrumb__item" aria-current="page">Edit phase</li>
+}
+
+<div id="sc-work-editphase">
+  @await Html.PartialAsync("_WorkItemChrome", ViewBag.WorkItem as WorkItem)
+  <h2 class="dfe-c-heading-m dfe-c-mt-0">Edit delivery phase</h2>
+  <p class="dfe-c-body muted dfe-c-mb-3">Set the delivery phase for this work item (e.g. Discovery, Alpha, Beta, Live). Options are managed in Admin → Lookups → Delivery phase.</p>
+
+  <form asp-action="EditPhase" asp-route-id="@Model.Id" method="post" class="dfe-c-mb-4">
+    @Html.AntiForgeryToken()
+    <div class="dfe-c-form__group">
+      <fieldset class="">
+        <legend class="dfe-c-form__legend--sm">Phase</legend>
+        <div class="dfe-c-form__radio-group" data-module="dfe-c-form__radio-group">
+          @foreach (var opt in deliveryPhaseOptions)
+          {
+            <div class="dfe-c-radios__item">
+              <input class="dfe-c-radios__input" id="DeliveryPhaseId_@opt.Id" name="DeliveryPhaseId" type="radio" value="@opt.Id" checked="@(Model.DeliveryPhaseId == opt.Id)" />
+              <label class="dfe-c-form__label dfe-c-radios__label" for="DeliveryPhaseId_@opt.Id">@opt.Name</label>
+            </div>
+          }
+          <div class="dfe-c-radios__item">
+            <input class="dfe-c-radios__input" id="DeliveryPhaseId_empty" name="DeliveryPhaseId" type="radio" value="" checked="@(!Model.DeliveryPhaseId.HasValue)" />
+            <label class="dfe-c-form__label dfe-c-radios__label" for="DeliveryPhaseId_empty">— No phase —</label>
+          </div>
+        </div>
+      </fieldset>
+    </div>
+    <button type="submit" class="dfe-c-button dfe-c-button--primary">Save phase</button>
+    <a href="@(Url.Action("Detail", "ModernWork", new { id = Model.Id }))#wd-overview" class="dfe-c-button dfe-c-button--secondary">Cancel</a>
+  </form>
+</div>

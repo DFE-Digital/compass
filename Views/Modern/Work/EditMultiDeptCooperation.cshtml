@@ -1,0 +1,225 @@
+@model Compass.Models.Modern.Work.WorkItem
+@{
+    var work = Model;
+    var currentDepts = work.GovernmentDepartments?.OrderBy(g => g.GovernmentDepartment?.Title).ToList() ?? new List<Compass.Models.Modern.Work.WorkItemGovernmentDepartment>();
+    ViewData["Title"] = "Edit multi-dept cooperation";
+}
+@section Breadcrumbs {
+    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="/">Home</a></li>
+    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="@Url.Action("Index", "ModernWork")">Work</a></li>
+    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="@Url.Action("Detail", "ModernWork", new { id = Model.Id })">@work.Title</a></li>
+    <li class="dfe-c-breadcrumb__item" aria-current="page">Edit multi-dept cooperation</li>
+}
+
+<div id="sc-work-editmultideptcooperation">
+  @await Html.PartialAsync("_WorkItemChrome", ViewBag.WorkItem as Compass.Models.Modern.Work.WorkItem ?? Model)
+  <h2 class="dfe-c-heading-m dfe-c-mt-0">Edit multi-dept cooperation</h2>
+  <p class="dfe-c-body muted dfe-c-mb-3">Add or remove government departments that are cooperating on this work.</p>
+
+  <form asp-action="EditMultiDeptCooperation" asp-route-id="@Model.Id" method="post" class="dfe-c-mb-4" id="multi-dept-form">
+    @Html.AntiForgeryToken()
+    <div id="GovernmentDepartmentIdsContainer">
+      @foreach (var g in currentDepts.Where(x => x.GovernmentDepartment != null))
+      {
+        <input type="hidden" name="GovernmentDepartmentIds" value="@g.GovernmentDepartmentId" data-name="@(g.GovernmentDepartment!.Title)" />
+      }
+    </div>
+
+    <div class="dfe-c-form__group">
+      <label class="dfe-c-form__label dfe-c-form__label--s" for="gov-dept-search">Add department</label>
+      <div class="dfe-c-form__hint">Type to search by name or abbreviation. Select from the list to add.</div>
+      <div class="linked-entities-autocomplete" style="position:relative;">
+        <input type="text" id="gov-dept-search" placeholder="Type to search departments…" class="dfe-c-width-30" autocomplete="off" aria-label="Search government departments" aria-autocomplete="list" aria-expanded="false" aria-controls="gov-dept-results" role="combobox" aria-haspopup="listbox" />
+        <div id="gov-dept-results" class="dfe-c-mt-0" style="display:none;position:absolute;top:100%;left:0;width:100%;max-width:30em;z-index:100;max-height:280px;overflow-y:auto;background:#fff;border:1px solid #0b0c0c;border-top:none;box-shadow:0 4px 12px rgba(0,0,0,0.15);" role="listbox" aria-label="Search results"></div>
+      </div>
+    </div>
+
+    <div class="dfe-c-form__group">
+      <label class="dfe-c-form__label dfe-c-form__label--s">Cooperating departments</label>
+      <ul id="gov-dept-list" class="dfe-c-mt-2" aria-label="Added departments">
+        @if (!currentDepts.Any())
+        {
+          <li class="dfe-c-body-s" style="color:#505a5f;">No departments added. Use the search above to add.</li>
+        }
+        else
+        {
+          @foreach (var g in currentDepts.Where(x => x.GovernmentDepartment != null))
+          {
+            <li class="dfe-c-mb-1" data-id="@g.GovernmentDepartmentId">
+              <span class="dfe-c-body">@g.GovernmentDepartment!.Title</span>
+              <button type="button" class="dfe-c-link dfe-c-ms-2 remove-dept" data-id="@g.GovernmentDepartmentId" aria-label="Remove @g.GovernmentDepartment.Title from list">Remove</button>
+            </li>
+          }
+        }
+      </ul>
+    </div>
+
+    <div class="dfe-c-button dfe-c-button--primary-group">
+      <button type="submit" class="dfe-c-button dfe-c-button--primary">Save</button>
+      <a href="@Url.Action("Detail", "ModernWork", new { id = Model.Id })#wd-overview" class="dfe-c-button dfe-c-button--secondary">Cancel</a>
+    </div>
+  </form>
+</div>
+
+@section Scripts {
+  <script>
+    (function() {
+      var container = document.getElementById('GovernmentDepartmentIdsContainer');
+      var listEl = document.getElementById('gov-dept-list');
+      var searchInput = document.getElementById('gov-dept-search');
+      var resultsEl = document.getElementById('gov-dept-results');
+      var searchTimeout = null;
+      var highlightedIdx = -1;
+      var lastOptions = [];
+
+      function getSelectedIds() {
+        return Array.from(container.querySelectorAll('input[name="GovernmentDepartmentIds"]')).map(function(inp) { return parseInt(inp.value, 10); });
+      }
+
+      function renderList() {
+        if (!listEl) return;
+        var items = Array.from(container.querySelectorAll('input[name="GovernmentDepartmentIds"]'));
+        listEl.innerHTML = '';
+        if (items.length === 0) {
+          var empty = document.createElement('li');
+          empty.className = 'dfe-c-body-s';
+          empty.style.color = '#505a5f';
+          empty.textContent = 'No departments added. Use the search above to add.';
+          listEl.appendChild(empty);
+          return;
+        }
+        items.forEach(function(inp) {
+          var id = parseInt(inp.value, 10);
+          var li = document.createElement('li');
+          li.className = 'dfe-c-mb-1';
+          li.setAttribute('data-id', id);
+          var nameEl = document.createElement('span');
+          nameEl.className = 'dfe-c-body';
+          nameEl.textContent = inp.getAttribute('data-name') || 'Department ' + id;
+          var btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'dfe-c-link dfe-c-ms-2 remove-dept';
+          btn.setAttribute('data-id', id);
+          btn.setAttribute('aria-label', 'Remove from list');
+          btn.textContent = 'Remove';
+          btn.addEventListener('click', function() { removeId(id); });
+          li.appendChild(nameEl);
+          li.appendChild(btn);
+          listEl.appendChild(li);
+        });
+      }
+
+      function addId(id, name) {
+        if (container.querySelector('input[name="GovernmentDepartmentIds"][value="' + id + '"]')) return;
+        var inp = document.createElement('input');
+        inp.type = 'hidden';
+        inp.name = 'GovernmentDepartmentIds';
+        inp.value = String(id);
+        inp.setAttribute('data-name', name || '');
+        container.appendChild(inp);
+        renderList();
+        if (searchInput) searchInput.value = '';
+        closeResults();
+      }
+
+      function removeId(id) {
+        var inp = container.querySelector('input[name="GovernmentDepartmentIds"][value="' + id + '"]');
+        if (inp) inp.remove();
+        renderList();
+      }
+
+      function closeResults() {
+        if (resultsEl) { resultsEl.style.display = 'none'; resultsEl.innerHTML = ''; highlightedIdx = -1; if (searchInput) searchInput.setAttribute('aria-expanded', 'false'); }
+      }
+
+      function showResults(data) {
+        if (!resultsEl) return;
+        resultsEl.innerHTML = '';
+        var selected = getSelectedIds();
+        var selectedSet = {};
+        selected.forEach(function(i) { selectedSet[i] = true; });
+        lastOptions = (data || []).filter(function(item) { return !selectedSet[item.id]; });
+        lastOptions.forEach(function(item, idx) {
+          var opt = document.createElement('div');
+          opt.setAttribute('role', 'option');
+          opt.setAttribute('data-index', idx);
+          opt.textContent = item.name;
+          opt.style.padding = '10px 12px';
+          opt.style.cursor = 'pointer';
+          opt.style.borderBottom = '1px solid #f3f2f1';
+          opt.addEventListener('click', function(e) { e.preventDefault(); addId(item.id, item.name); });
+          opt.addEventListener('mouseenter', function() {
+            highlightedIdx = idx;
+            resultsEl.querySelectorAll('[role="option"]').forEach(function(el, i) {
+              el.style.background = i === idx ? '#f3f2f1' : '';
+              el.setAttribute('aria-selected', i === idx);
+            });
+          });
+          resultsEl.appendChild(opt);
+        });
+        resultsEl.style.display = lastOptions.length ? 'block' : 'none';
+        if (searchInput) searchInput.setAttribute('aria-expanded', lastOptions.length > 0);
+        highlightedIdx = -1;
+      }
+
+      function doSearch() {
+        var q = (searchInput && searchInput.value || '').trim();
+        if (q.length < 2) {
+          closeResults();
+          return;
+        }
+        fetch('@Url.Action("SearchGovernmentDepartments", "ModernWork")?q=' + encodeURIComponent(q))
+          .then(function(r) { return r.json(); })
+          .then(showResults)
+          .catch(function() { closeResults(); });
+      }
+
+      if (searchInput) {
+        searchInput.addEventListener('input', function() {
+          if (searchTimeout) clearTimeout(searchTimeout);
+          searchTimeout = setTimeout(doSearch, 280);
+        });
+        searchInput.addEventListener('focus', function() {
+          var q = (searchInput.value || '').trim();
+          if (q.length >= 2) doSearch();
+        });
+        searchInput.addEventListener('keydown', function(e) {
+          if (e.key === 'Escape') { closeResults(); searchInput.blur(); return; }
+          var opts = resultsEl && resultsEl.querySelectorAll('[role="option"]');
+          if (!opts || !opts.length) return;
+          if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            highlightedIdx = highlightedIdx < opts.length - 1 ? highlightedIdx + 1 : 0;
+            opts.forEach(function(el, i) { el.style.background = i === highlightedIdx ? '#f3f2f1' : ''; el.setAttribute('aria-selected', i === highlightedIdx); });
+            opts[highlightedIdx].scrollIntoView({ block: 'nearest' });
+            return;
+          }
+          if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            highlightedIdx = highlightedIdx <= 0 ? opts.length - 1 : highlightedIdx - 1;
+            opts.forEach(function(el, i) { el.style.background = i === highlightedIdx ? '#f3f2f1' : ''; el.setAttribute('aria-selected', i === highlightedIdx); });
+            opts[highlightedIdx].scrollIntoView({ block: 'nearest' });
+            return;
+          }
+          if (e.key === 'Enter' && highlightedIdx >= 0 && lastOptions[highlightedIdx]) {
+            e.preventDefault();
+            addId(lastOptions[highlightedIdx].id, lastOptions[highlightedIdx].name);
+            return;
+          }
+        });
+      }
+      document.addEventListener('click', function(e) {
+        if (resultsEl && searchInput && !resultsEl.contains(e.target) && e.target !== searchInput) closeResults();
+      });
+
+      listEl.querySelectorAll('.remove-dept').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          var id = parseInt(btn.getAttribute('data-id'), 10);
+          removeId(id);
+        });
+      });
+
+      renderList();
+    })();
+  </script>
+}

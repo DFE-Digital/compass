@@ -52,11 +52,11 @@ public class DemandCaptureFormViewModel
     [Display(Name = "Supporting manifesto commitment or statute law")]
     public string? ManifestoOrStatute { get; set; }
 
-    [Display(Name = "Supporting SoS opportunity mission pillars")]
-    public string? SosOpportunityMissionPillars { get; set; }
+    /// <summary>Mission pillar IDs (persisted as comma-separated IDs on the request record).</summary>
+    public List<int> SelectedMissionIds { get; set; } = new();
 
-    [Display(Name = "Supporting DDT strategic framework theme")]
-    public string? DdtStrategicTheme { get; set; }
+    /// <summary>Priority outcome (objective) IDs (persisted as comma-separated IDs on the request record).</summary>
+    public List<int> SelectedObjectiveIds { get; set; } = new();
 
     [Display(Name = "Expected measurable benefits")]
     public string? ExpectedBenefits { get; set; }
@@ -188,6 +188,18 @@ public class TriageOutcomeViewModel
 public class DemandTriageDetailViewModel
 {
     public DemandTriageRequest Request { get; set; } = null!;
+
+    /// <summary>Resolved mission pillar titles when stored values are numeric IDs.</summary>
+    public List<string> MissionPillarLabels { get; set; } = new();
+
+    /// <summary>Resolved priority outcome titles when stored values are numeric IDs.</summary>
+    public List<string> PriorityOutcomeLabels { get; set; } = new();
+
+    /// <summary>Original free text when mission pillar field could not be parsed as IDs.</summary>
+    public string? MissionPillarsLegacyText { get; set; }
+
+    /// <summary>Original free text when strategic theme field could not be parsed as IDs.</summary>
+    public string? StrategicThemeLegacyText { get; set; }
     public bool IsDemandManagement { get; set; }
     public bool IsCentralOpsAdmin { get; set; }
     public bool IsOwner { get; set; }

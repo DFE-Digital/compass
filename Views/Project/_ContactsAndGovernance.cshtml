@@ -1,5 +1,12 @@
 @model Compass.Models.Project
+@using System
 @using System.Linq
+@{
+    var governanceContacts = Model.ProjectContacts?
+        .Where(pc => string.Equals(pc.TeamStatus, "governance", StringComparison.OrdinalIgnoreCase))
+        .OrderBy(pc => pc.SortOrder)
+        .ToList() ?? new List<Compass.Models.ProjectContact>();
+}
 
 <div class="row">
     <div class="col-lg-12">
@@ -7,6 +14,9 @@
         <div class="card mb-4">
             <div class="card-header">
                 <h3 class="card-title">Governance Structure</h3>
+                <div class="card-tools">
+                    <a href="#" class="card-link" data-toggle="modal" data-target="#addGovernanceContactModal">Add contact</a>
+                </div>
             </div>
             <div class="card-body p-0">
                 <div class="table-responsive">
@@ -230,6 +240,39 @@
                                     <a href="#" data-toggle="modal" data-target="#editBudgetOwnersModal">Change</a>
                                 </td>
                             </tr>
+                            @foreach (var gc in governanceContacts)
+                            {
+                                <tr>
+                                    <td class="font-weight-bold">@gc.Role</td>
+                                    <td>
+                                        @{
+                                            var gcUser = gc.User;
+                                            var displayName = gcUser?.Name ?? gc.Name;
+                                            var displayEmail = gcUser?.Email ?? gc.Email;
+                                        }
+                                        @if (!string.IsNullOrEmpty(displayEmail))
+                                        {
+                                            <div class="mb-1">
+                                                <a href="mailto:@displayEmail" class="font-weight-bold">@displayName</a>
+                                                <br />
+                                                <small class="text-muted">@displayEmail</small>
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <span class="font-weight-bold">@displayName</span>
+                                        }
+                                    </td>
+                                    <td class="text-right">
+                                        <form asp-action="RemoveGovernanceContact" method="post" class="d-inline">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="id" value="@Model.Id" />
+                                            <input type="hidden" name="contactId" value="@gc.Id" />
+                                            <button type="submit" class="btn btn-link btn-sm p-0">Remove</button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            }
                         </tbody>
                     </table>
                 </div>
@@ -263,6 +306,55 @@
                     </tbody>
                 </table>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add governance contact -->
+<div class="modal fade" id="addGovernanceContactModal" tabindex="-1" role="dialog" aria-labelledby="addGovernanceContactModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="addGovernanceContactModalLabel">Add contact</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="AddGovernanceContact" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="id" value="@Model.Id" />
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label class="control-label" for="governanceContactSearch">Person</label>
+                        <small class="form-text text-muted">Start typing a name or email address to look up someone in Entra ID.</small>
+                        <div class="user-picker" data-user-picker data-search-url="/api/users/search" data-select-url="/api/users/select">
+                            <div class="position-relative">
+                                <input type="text"
+                                       class="form-control js-user-picker-input"
+                                       id="governanceContactSearch"
+                                       autocomplete="off"
+                                       placeholder="e.g. Alex Smith or alex.smith@education.gov.uk" />
+                                <span class="user-picker__spinner js-user-picker-spinner" aria-hidden="true">Searching…</span>
+                                <div class="user-picker__results js-user-picker-results" role="listbox" aria-live="polite"></div>
+                            </div>
+                            <p class="form-text text-muted js-user-picker-message"></p>
+                            <input type="hidden" name="governanceContactUserId" class="js-user-picker-value" value="" />
+                            <div class="user-picker__selected js-user-picker-summary" data-default-text="No one selected.">
+                                <span class="text-muted">No one selected.</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="governanceContactRole">Role</label>
+                        <input type="text" class="form-control" id="governanceContactRole" name="role" maxlength="100" placeholder="e.g. Design assurance, G6 sponsor" />
+                        <small class="form-text text-muted">Describe this person’s relationship to governance (free text).</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success">Add contact</button>
+                </div>
+            </form>
         </div>
     </div>
 </div>

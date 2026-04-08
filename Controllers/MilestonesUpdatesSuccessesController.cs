@@ -206,6 +206,7 @@ public class MilestonesUpdatesSuccessesController : Controller
         ViewBag.CanEdit = canEdit;
         ViewBag.DueDate = dueDate;
         ViewBag.CanSubmit = canSubmit;
+        ViewBag.CloseDate = closeDate;
         
         return View();
     }
@@ -725,6 +726,111 @@ public class MilestonesUpdatesSuccessesController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
+    public async Task<IActionResult> SaveMonthlyFte(int? projectId, int? year, int? month, string? monthlyPermFte, string? monthlyMspFte, string returnAction = "CreateUpdate")
+    {
+        if (!projectId.HasValue || !year.HasValue || !month.HasValue)
+        {
+            return NotFound();
+        }
+
+        var project = await _context.Projects.FirstOrDefaultAsync(p => p.Id == projectId.Value && !p.IsDeleted);
+        if (project == null)
+        {
+            return NotFound();
+        }
+
+        var closeDate = _monthlyUpdateService.GetMonthlyUpdateCloseDate(year.Value, month.Value);
+        if (DateTime.UtcNow > closeDate)
+        {
+            TempData["ErrorMessage"] = "The reporting window for this period has closed. You can no longer edit headcount.";
+            return RedirectToMonthlyFteEditor(projectId.Value, year.Value, month.Value, returnAction);
+        }
+
+        if (!TryParseOptionalNonNegativeDecimal(monthlyPermFte, out var permParsed, out var permError))
+        {
+            TempData["ErrorMessage"] = permError;
+            return RedirectToMonthlyFteEditor(projectId.Value, year.Value, month.Value, returnAction);
+        }
+
+        if (!TryParseOptionalNonNegativeDecimal(monthlyMspFte, out var mspParsed, out var mspError))
+        {
+            TempData["ErrorMessage"] = mspError;
+            return RedirectToMonthlyFteEditor(projectId.Value, year.Value, month.Value, returnAction);
+        }
+
+        var monthlyUpdate = await _context.ProjectMonthlyUpdates
+            .FirstOrDefaultAsync(u => u.ProjectId == projectId.Value && u.Year == year.Value && u.Month == month.Value);
+
+        if (monthlyUpdate == null)
+        {
+            var userObjectIdClaim = User.FindFirst("http://schemas.microsoft.com/identity/claims/objectidentifier")?.Value;
+            var userEmailClaim = User.FindFirst(ClaimTypes.Email)?.Value
+                ?? User.FindFirst("preferred_username")?.Value
+                ?? User.FindFirst("email")?.Value;
+            var userNameClaim = User.FindFirst(ClaimTypes.Name)?.Value
+                ?? User.FindFirst("name")?.Value;
+
+            monthlyUpdate = new ProjectMonthlyUpdate
+            {
+                ProjectId = projectId.Value,
+                Year = year.Value,
+                Month = month.Value,
+                Narrative = string.Empty,
+                CreatedByEntraId = userObjectIdClaim,
+                CreatedByName = userNameClaim,
+                CreatedByEmail = userEmailClaim,
+                CreatedAt = DateTime.UtcNow,
+                SubmittedAt = null
+            };
+            _context.ProjectMonthlyUpdates.Add(monthlyUpdate);
+        }
+
+        monthlyUpdate.MonthlyPermFte = permParsed;
+        monthlyUpdate.MonthlyMspFte = mspParsed;
+        monthlyUpdate.UpdatedAt = DateTime.UtcNow;
+
+        await _context.SaveChangesAsync();
+        TempData["SuccessMessage"] = "Headcount (FTE) saved.";
+        return RedirectToMonthlyFteEditor(projectId.Value, year.Value, month.Value, returnAction);
+    }
+
+    private IActionResult RedirectToMonthlyFteEditor(int projectId, int year, int month, string? returnAction)
+    {
+        if (string.Equals(returnAction, "EditUpdate", StringComparison.OrdinalIgnoreCase))
+        {
+            return RedirectToAction("EditUpdate", new { projectId, year, month });
+        }
+
+        return RedirectToAction("CreateUpdate", new { projectId, year, month });
+    }
+
+    private static bool TryParseOptionalNonNegativeDecimal(string? s, out decimal? value, out string? error)
+    {
+        value = null;
+        error = null;
+        if (string.IsNullOrWhiteSpace(s))
+        {
+            return true;
+        }
+
+        if (!decimal.TryParse(s.Trim(), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var d))
+        {
+            error = "Enter a valid number for FTE.";
+            return false;
+        }
+
+        if (d < 0)
+        {
+            error = "FTE cannot be negative.";
+            return false;
+        }
+
+        value = d;
+        return true;
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
     public async Task<IActionResult> EditUpdate(int? projectId, int? year, int? month, ProjectMonthlyUpdate model)
     {
         if (!projectId.HasValue || !year.HasValue || !month.HasValue)
@@ -761,6 +867,8 @@ public class MilestonesUpdatesSuccessesController : Controller
             ?? User.FindFirst("name")?.Value;
 
         update.Narrative = model.Narrative ?? string.Empty;
+        update.MonthlyPermFte = model.MonthlyPermFte;
+        update.MonthlyMspFte = model.MonthlyMspFte;
         update.UpdatedAt = DateTime.UtcNow;
         
         // If not already submitted, mark as submitted now

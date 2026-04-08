@@ -1,0 +1,270 @@
+@using System.Text.Json
+@using Compass.ViewModels
+@model PriorityOutcomeSummaryPageViewModel
+@{
+    ViewData["Title"] = "Priority outcomes summary";
+    ViewData["BodyClass"] = "reports-page";
+    var allDivisions = ViewBag.AllDivisions as List<Compass.Models.Division> ?? new List<Compass.Models.Division>();
+    var allBusinessAreas = ViewBag.AllBusinessAreas as List<Compass.Models.BusinessAreaLookup> ?? new List<Compass.Models.BusinessAreaLookup>();
+    var jsonOptions = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+}
+
+@await Html.PartialAsync("_DashboardStyles")
+@await Html.PartialAsync("_ReportsDashboardStyles")
+
+<style>
+    .po-summary-chart-wrap {
+        position: relative;
+        height: 240px;
+        max-width: 100%;
+    }
+    .po-summary-section {
+        margin-bottom: 2rem;
+    }
+</style>
+
+<div class="reports-dashboard-header">
+    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+        <div>
+            <nav aria-label="Breadcrumb" class="reports-breadcrumb">
+                <a href="/">Home</a> <span aria-hidden="true">/</span>
+                <a href="@Url.Action("Index", "Reports")">Reports overview</a> <span aria-hidden="true">/</span>
+                Priority outcomes summary
+            </nav>
+            <h1 class="mb-1"><i class="fas fa-chart-pie mr-2" aria-hidden="true"></i>Priority outcomes summary</h1>
+            <p class="mb-0 opacity-90">Delivery priority, RAG, and milestone status for work linked to each priority outcome</p>
+        </div>
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            <a href="@Url.Action("PriorityOutcomes", "Reports")" class="btn btn-outline-light border">
+                <i class="fas fa-list mr-1" aria-hidden="true"></i> Priority outcomes list
+            </a>
+            <button class="btn btn-intel" data-toggle="modal" data-target="#intelModal" title="Portfolio intelligence summary">
+                <i class="fas fa-brain mr-1" aria-hidden="true"></i> Intel
+            </button>
+            <a href="https://app.powerbi.com/groups/me/reports/d941d6dd-6d6a-40b1-bf66-12ad51522131/ce0a78d00040090301b6?experience=power-bi" target="_blank" rel="noopener noreferrer" class="btn btn-powerbi">
+                <i class="fas fa-external-link-alt mr-1" aria-hidden="true"></i> Standards (SHCA)
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="reports-nav-bar">
+    <ul class="reports-nav-tabs" role="navigation" aria-label="Report sections">
+        <li><a href="@Url.Action("Index", "Reports")"><i class="fas fa-globe mr-1" aria-hidden="true"></i>Overview</a></li>
+        <li class="reports-nav-dropdown">
+            <button class="reports-nav-dropdown-toggle" aria-haspopup="true" aria-expanded="false">
+                <i class="fas fa-sitemap mr-1" aria-hidden="true"></i>Directorate
+                <i class="fas fa-chevron-down caret-icon ml-1" aria-hidden="true"></i>
+            </button>
+            <div class="reports-nav-dropdown-menu" role="menu">
+                <a href="@Url.Action("DivisionReport", "Reports")" role="menuitem">
+                    <i class="fas fa-th-list mr-1 text-muted" aria-hidden="true"></i>All directorates
+                </a>
+                @if (allDivisions.Any())
+                {
+                    <div class="dropdown-divider"></div>
+                    @foreach (var div in allDivisions)
+                    {
+                        <a href="@Url.Action("DivisionReport", "Reports", new { divisionId = div.Id })" role="menuitem">@div.Name</a>
+                    }
+                }
+            </div>
+            <div class="dropdown-scroll-hint" aria-hidden="true"><i class="fas fa-chevron-down"></i></div>
+        </li>
+        <li class="reports-nav-dropdown">
+            <button class="reports-nav-dropdown-toggle" aria-haspopup="true" aria-expanded="false">
+                <i class="fas fa-building mr-1" aria-hidden="true"></i>Business area
+                <i class="fas fa-chevron-down caret-icon ml-1" aria-hidden="true"></i>
+            </button>
+            <div class="reports-nav-dropdown-menu" role="menu">
+                <a href="@Url.Action("BusinessAreaReport", "Reports")" role="menuitem">
+                    <i class="fas fa-th-list mr-1 text-muted" aria-hidden="true"></i>All business areas
+                </a>
+                @if (allBusinessAreas.Any())
+                {
+                    <div class="dropdown-divider"></div>
+                    @foreach (var ba in allBusinessAreas)
+                    {
+                        <a href="@Url.Action("BusinessAreaReport", "Reports", new { businessAreaId = ba.Id })" role="menuitem">@ba.Name</a>
+                    }
+                }
+            </div>
+            <div class="dropdown-scroll-hint" aria-hidden="true"><i class="fas fa-chevron-down"></i></div>
+        </li>
+        <li><a href="@Url.Action("PriorityOutcomes", "Reports")"><i class="fas fa-star mr-1" aria-hidden="true"></i>Priority outcomes</a></li>
+        <li><a href="@Url.Action("PriorityOutcomesSummary", "Reports")" class="active" aria-current="page"><i class="fas fa-chart-pie mr-1" aria-hidden="true"></i>Priority outcomes summary</a></li>
+        <li><a href="@Url.Action("PerformanceReporting", "Reports")"><i class="fas fa-chart-line mr-1" aria-hidden="true"></i>Performance reporting</a></li>
+    </ul>
+</div>
+
+<div class="reports-body">
+    @if (!Model.Sections.Any())
+    {
+        <div class="alert alert-info mb-0">
+            <i class="fas fa-info-circle mr-2" aria-hidden="true"></i>No projects are linked to a priority outcome yet. Use <a href="@Url.Action("PriorityOutcomes", "Reports")">Priority outcomes</a> once work is assigned.
+        </div>
+    }
+    else
+    {
+        @foreach (var sec in Model.Sections)
+        {
+            <section class="dashboard-section po-summary-section" aria-labelledby="po-title-@(sec.ObjectiveId)">
+                <div class="dashboard-section-header">
+                    <h2 id="po-title-@(sec.ObjectiveId)">
+                        <i class="fas fa-bullseye mr-1" aria-hidden="true"></i>@sec.Title
+                    </h2>
+                    <span class="text-muted small">
+                        @sec.ProjectCount project@(sec.ProjectCount == 1 ? "" : "s")
+                        @if (!string.IsNullOrWhiteSpace(sec.Theme))
+                        {
+                            <span class="ml-1">· @sec.Theme</span>
+                        }
+                    </span>
+                </div>
+                <div class="row">
+                    <div class="col-lg-4 mb-4 mb-lg-0">
+                        <h3 class="h6 font-weight-bold">RAG</h3>
+                        <p class="small text-muted mb-2">Projects by RAG status</p>
+                        <div class="po-summary-chart-wrap">
+                            <canvas id="po-rag-@(sec.ObjectiveId)" aria-label="RAG chart for @sec.Title"></canvas>
+                        </div>
+                    </div>
+                    <div class="col-lg-4 mb-4 mb-lg-0">
+                        <h3 class="h6 font-weight-bold">Delivery priority</h3>
+                        <p class="small text-muted mb-2">Projects by delivery priority</p>
+                        <div class="po-summary-chart-wrap">
+                            <canvas id="po-priority-@(sec.ObjectiveId)" aria-label="Delivery priority chart for @sec.Title"></canvas>
+                        </div>
+                    </div>
+                    <div class="col-lg-4">
+                        <h3 class="h6 font-weight-bold">Milestones</h3>
+                        <p class="small text-muted mb-2">Project milestones (all projects in this outcome)</p>
+                        <div class="po-summary-chart-wrap">
+                            <canvas id="po-milestones-@(sec.ObjectiveId)" aria-label="Milestone status chart for @sec.Title"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        }
+    }
+</div>
+
+@{
+    var intelData = new ViewDataDictionary(Html.ViewData.ModelMetadata, Html.ViewData.ModelState)
+    {
+        { "Context", "priority" },
+        { "TotalFlagship", 0 },
+        { "TotalMultiDept", 0 },
+        { "TotalAi", 0 },
+        { "TotalPriority", 0 },
+        { "TotalWithPriorityOutcome", ViewBag.TotalWithPriorityOutcome as int? ?? 0 },
+        { "FlagshipRedCount", 0 }
+    };
+}
+@await Html.PartialAsync("_IntelModal", intelData)
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" nonce="@Context.Items["Nonce"]"></script>
+    <script nonce="@Context.Items["Nonce"]">
+    (function () {
+        if (typeof Chart === 'undefined') return;
+
+        function renderDonut(canvasId, slices) {
+            var canvas = document.getElementById(canvasId);
+            if (!canvas) return;
+            var wrap = canvas.closest('.po-summary-chart-wrap');
+            if (!slices || !slices.length) {
+                if (wrap) {
+                    wrap.innerHTML = '<p class="text-muted small mb-0">No data</p>';
+                }
+                return;
+            }
+            new Chart(canvas.getContext('2d'), {
+                type: 'doughnut',
+                data: {
+                    labels: slices.map(function (s) { return s.label; }),
+                    datasets: [{
+                        data: slices.map(function (s) { return s.value; }),
+                        backgroundColor: slices.map(function (s) { return s.color; }),
+                        borderWidth: 2,
+                        borderColor: '#fff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom', labels: { boxWidth: 12, padding: 10, font: { size: 11 } } },
+                        tooltip: {
+                            callbacks: {
+                                label: function (ctx) {
+                                    var v = ctx.parsed || 0;
+                                    var total = ctx.dataset.data.reduce(function (a, b) { return a + b; }, 0);
+                                    var pct = total > 0 ? ((v / total) * 100).toFixed(1) : '0';
+                                    return (ctx.label || '') + ': ' + v + ' (' + pct + '%)';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        @foreach (var sec in Model.Sections)
+        {
+            @:renderDonut('po-rag-@(sec.ObjectiveId)', @Html.Raw(JsonSerializer.Serialize(sec.RagSlices, jsonOptions)));
+            @:renderDonut('po-priority-@(sec.ObjectiveId)', @Html.Raw(JsonSerializer.Serialize(sec.DeliveryPrioritySlices, jsonOptions)));
+            @:renderDonut('po-milestones-@(sec.ObjectiveId)', @Html.Raw(JsonSerializer.Serialize(sec.MilestoneSlices, jsonOptions)));
+        }
+
+        /* Reports nav dropdowns (same as other report pages) */
+        var navBar = document.querySelector('.reports-nav-bar');
+        if (navBar) {
+            navBar.querySelectorAll('.reports-nav-dropdown-toggle').forEach(function (toggle) {
+                var menu = toggle.nextElementSibling;
+                if (!menu || !menu.classList.contains('reports-nav-dropdown-menu')) return;
+                var hint = menu.nextElementSibling;
+                var hasHint = hint && hint.classList.contains('dropdown-scroll-hint');
+                function updateScrollHint() {
+                    if (!hasHint) return;
+                    var canScroll = menu.scrollHeight > menu.clientHeight;
+                    var atBottom = menu.scrollTop + menu.clientHeight >= menu.scrollHeight - 4;
+                    hint.classList.toggle('visible', canScroll && !atBottom);
+                }
+                toggle.addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    var isOpen = menu.classList.contains('open');
+                    navBar.querySelectorAll('.reports-nav-dropdown-menu.open').forEach(function (m) {
+                        m.classList.remove('open');
+                        m.previousElementSibling.setAttribute('aria-expanded', 'false');
+                        var h = m.nextElementSibling;
+                        if (h && h.classList.contains('dropdown-scroll-hint')) h.classList.remove('visible');
+                    });
+                    if (!isOpen) {
+                        menu.classList.add('open');
+                        toggle.setAttribute('aria-expanded', 'true');
+                        updateScrollHint();
+                    }
+                });
+                if (hasHint) menu.addEventListener('scroll', updateScrollHint);
+                toggle.addEventListener('keydown', function (e) {
+                    if (e.key === 'Escape') {
+                        menu.classList.remove('open');
+                        toggle.setAttribute('aria-expanded', 'false');
+                        if (hasHint) hint.classList.remove('visible');
+                        toggle.focus();
+                    }
+                });
+            });
+            document.addEventListener('click', function () {
+                navBar.querySelectorAll('.reports-nav-dropdown-menu.open').forEach(function (m) {
+                    m.classList.remove('open');
+                    m.previousElementSibling.setAttribute('aria-expanded', 'false');
+                    var h = m.nextElementSibling;
+                    if (h && h.classList.contains('dropdown-scroll-hint')) h.classList.remove('visible');
+                });
+            });
+        }
+    }());
+    </script>
+}

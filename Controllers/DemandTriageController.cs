@@ -1,9 +1,12 @@
+using Compass.Data;
+using Compass.Models;
 using Compass.Models.DemandTriage;
 using Compass.Services;
 using Compass.Services.DemandTriage;
 using Compass.ViewModels.DemandTriage;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 
 namespace Compass.Controllers;
@@ -23,17 +26,20 @@ public class DemandTriageController : Controller
     private readonly IPermissionService _permissionService;
     private readonly IConfiguration _configuration;
     private readonly ILogger<DemandTriageController> _logger;
+    private readonly CompassDbContext _db;
 
     public DemandTriageController(
         IDemandTriageService service,
         IPermissionService permissionService,
         IConfiguration configuration,
-        ILogger<DemandTriageController> logger)
+        ILogger<DemandTriageController> logger,
+        CompassDbContext db)
     {
         _service = service;
         _permissionService = permissionService;
         _configuration = configuration;
         _logger = logger;
+        _db = db;
     }
 
     // ── Feature flag guard ───────────────────────────────────────────────────
@@ -196,6 +202,7 @@ public class DemandTriageController : Controller
             return Forbid();
 
         var vm = BuildDetailViewModel(request, isDm, isCoa);
+        await EnrichDemandTriageDetailLabelsAsync(vm);
         return View(vm);
     }
 
@@ -235,6 +242,9 @@ public class DemandTriageController : Controller
             return RedirectToAction(nameof(Detail), new { id });
 
         var vm = MapToEditViewModel(request);
+        vm.SelectedMissionIds = ParseCommaSeparatedIds(request.SosOpportunityMissionPillars).ToList();
+        vm.SelectedObjectiveIds = ParseCommaSeparatedIds(request.DdtStrategicTheme).ToList();
+        await PopulateDemandTriageEditViewDataAsync();
         return View(vm);
     }
 
@@ -263,6 +273,7 @@ public class DemandTriageController : Controller
         catch (InvalidOperationException ex)
         {
             vm.ValidationErrors.Add(ex.Message);
+            await PopulateDemandTriageEditViewDataAsync();
             return View(vm);
         }
     }
@@ -809,8 +820,6 @@ public class DemandTriageController : Controller
         RequestOverview = r.RequestOverview,
         PreviousResearch = r.PreviousResearch,
         ManifestoOrStatute = r.ManifestoOrStatute,
-        SosOpportunityMissionPillars = r.SosOpportunityMissionPillars,
-        DdtStrategicTheme = r.DdtStrategicTheme,
         ExpectedBenefits = r.ExpectedBenefits,
         RiskConsequence = r.RiskConsequence,
         FundingProvided = r.FundingProvided,
@@ -835,8 +844,8 @@ public class DemandTriageController : Controller
         RequestOverview = vm.RequestOverview,
         PreviousResearch = vm.PreviousResearch,
         ManifestoOrStatute = vm.ManifestoOrStatute,
-        SosOpportunityMissionPillars = vm.SosOpportunityMissionPillars,
-        DdtStrategicTheme = vm.DdtStrategicTheme,
+        SosOpportunityMissionPillars = JoinIds(vm.SelectedMissionIds),
+        DdtStrategicTheme = JoinIds(vm.SelectedObjectiveIds),
         ExpectedBenefits = vm.ExpectedBenefits,
         RiskConsequence = vm.RiskConsequence,
         FundingProvided = vm.FundingProvided,
@@ -848,6 +857,82 @@ public class DemandTriageController : Controller
         PublicFacingDigitalService = vm.PublicFacingDigitalService,
         BusinessCaseId = vm.BusinessCaseId
     };
+
+    private static IEnumerable<int> ParseCommaSeparatedIds(string? s)
+    {
+        if (string.IsNullOrWhiteSpace(s)) yield break;
+        foreach (var part in s.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            if (int.TryParse(part, out var id))
+                yield return id;
+    }
+
+    private static string? JoinIds(IEnumerable<int>? ids)
+    {
+        if (ids == null) return null;
+        var list = ids.Where(i => i > 0).Distinct().OrderBy(i => i).ToList();
+        return list.Count == 0 ? null : string.Join(",", list);
+    }
+
+    private async Task PopulateDemandTriageEditViewDataAsync()
+    {
+        ViewBag.Missions = await _db.Missions
+            .Where(m => !m.IsDeleted)
+            .OrderBy(m => m.Title)
+            .Select(m => new { m.Id, m.Title })
+            .ToListAsync();
+
+        ViewBag.BusinessAreas = await _db.BusinessAreaLookups
+            .Where(ba => ba.IsActive)
+            .OrderBy(ba => ba.SortOrder)
+            .ThenBy(ba => ba.Name)
+            .Select(ba => ba.Name)
+            .ToListAsync();
+
+        var objectives = await _db.Objectives
+            .Where(o => !o.IsDeleted && o.Status == "active")
+            .OrderBy(o => o.Theme)
+            .ThenBy(o => o.Title)
+            .Select(o => new ObjectiveDto { Id = o.Id, Title = o.Title, Description = o.Description, Theme = o.Theme })
+            .ToListAsync();
+
+        ViewBag.Objectives = objectives
+            .GroupBy(o => o.Theme ?? "Other")
+            .ToDictionary(g => g.Key, g => g.ToList());
+    }
+
+    private async Task EnrichDemandTriageDetailLabelsAsync(DemandTriageDetailViewModel vm)
+    {
+        var r = vm.Request;
+        var missionIds = ParseCommaSeparatedIds(r.SosOpportunityMissionPillars).ToList();
+        var objectiveIds = ParseCommaSeparatedIds(r.DdtStrategicTheme).ToList();
+
+        if (missionIds.Count > 0)
+        {
+            vm.MissionPillarLabels = await _db.Missions
+                .Where(m => missionIds.Contains(m.Id))
+                .OrderBy(m => m.Title)
+                .Select(m => m.Title)
+                .ToListAsync();
+        }
+        else if (!string.IsNullOrWhiteSpace(r.SosOpportunityMissionPillars))
+        {
+            vm.MissionPillarsLegacyText = r.SosOpportunityMissionPillars;
+        }
+
+        if (objectiveIds.Count > 0)
+        {
+            vm.PriorityOutcomeLabels = await _db.Objectives
+                .Where(o => objectiveIds.Contains(o.Id))
+                .OrderBy(o => o.Theme)
+                .ThenBy(o => o.Title)
+                .Select(o => o.Title)
+                .ToListAsync();
+        }
+        else if (!string.IsNullOrWhiteSpace(r.DdtStrategicTheme))
+        {
+            vm.StrategicThemeLegacyText = r.DdtStrategicTheme;
+        }
+    }
 
     private static List<AnswerInput> BuildAnswerInputs(ScoringWizardViewModel vm, int section)
     {

@@ -1,4 +1,6 @@
+@using System.Collections.Generic
 @using Compass.Models
+@using Compass.ViewModels
 @{
     ViewData["Title"] = "Priority outcomes and flagship projects";
     ViewData["BodyClass"] = "reports-page";
@@ -7,37 +9,22 @@
     var aiProjects        = ViewBag.AiProjects        as List<Project> ?? new List<Project>();
     var priorityProjects  = ViewBag.PriorityProjects  as List<Project> ?? new List<Project>();
     var allProjects       = ViewBag.AllProjects        as List<Project> ?? new List<Project>();
+    var projectsByObjective = ViewBag.ProjectsByObjective as List<PriorityOutcomesObjectiveGroupViewModel> ?? new List<PriorityOutcomesObjectiveGroupViewModel>();
     var totalFlagship  = ViewBag.TotalFlagship  as int? ?? 0;
     var totalMultiDept = ViewBag.TotalMultiDept as int? ?? 0;
     var totalAi        = ViewBag.TotalAi        as int? ?? 0;
     var totalPriority  = ViewBag.TotalPriority  as int? ?? 0;
+    var totalWithPriorityOutcome = ViewBag.TotalWithPriorityOutcome as int? ?? 0;
+    var activeTab = (ViewBag.ActiveTab as string ?? "objectives").Trim().ToLowerInvariant();
+    if (activeTab != "objectives" && activeTab != "flagship" && activeTab != "multidept" && activeTab != "ai" && activeTab != "priority" && activeTab != "all")
+    {
+        activeTab = "objectives";
+    }
     var isAdmin = ViewBag.IsAdmin as bool? ?? false;
     var allDivisions = ViewBag.AllDivisions as List<Division> ?? new List<Division>();
     var allBusinessAreas = ViewBag.AllBusinessAreas as List<BusinessAreaLookup> ?? new List<BusinessAreaLookup>();
-}
-
-@functions {
-    string GetRagBadgeClass(RagStatusLookup? ragStatus)
-    {
-        return (ragStatus?.Name?.Trim() ?? "") switch
-        {
-            "Green" => "badge badge-success",
-            "Amber-Green" => "badge badge-warning",
-            "Amber" => "badge badge-warning",
-            "Amber-Red" => "badge badge-danger",
-            "Red" => "badge badge-danger",
-            _ => "badge badge-secondary"
-        };
-    }
-    string GetRagRowClass(RagStatusLookup? ragStatus)
-    {
-        return (ragStatus?.Name?.Trim() ?? "") switch
-        {
-            "Red" => "table-danger",
-            "Amber-Red" => "table-warning",
-            _ => ""
-        };
-    }
+    var objectiveFilterSelectedId = ViewBag.ObjectiveFilterSelectedId as int?;
+    var objectiveFilterOptions = ViewBag.ObjectiveFilterOptions as List<KeyValuePair<int, string>> ?? new List<KeyValuePair<int, string>>();
 }
 
 @await Html.PartialAsync("_DashboardStyles")
@@ -56,6 +43,9 @@
             <p class="mb-0 opacity-90">Flagship projects, priority outcomes, multi-department cooperation, and AI initiatives</p>
         </div>
         <div class="d-flex align-items-center gap-2 flex-wrap">
+            <a href="@Url.Action("PriorityOutcomesSummary", "Reports")" class="btn btn-outline-light border">
+                <i class="fas fa-chart-pie mr-1" aria-hidden="true"></i> Summary charts
+            </a>
             <button class="btn btn-intel" data-toggle="modal" data-target="#intelModal" title="Portfolio intelligence summary">
                 <i class="fas fa-brain mr-1" aria-hidden="true"></i> Intel
             </button>
@@ -72,12 +62,12 @@
             <li><a href="@Url.Action("Index", "Reports")"><i class="fas fa-globe mr-1" aria-hidden="true"></i>Overview</a></li>
             <li class="reports-nav-dropdown">
                 <button class="reports-nav-dropdown-toggle" aria-haspopup="true" aria-expanded="false">
-                    <i class="fas fa-sitemap mr-1" aria-hidden="true"></i>Division
+                    <i class="fas fa-sitemap mr-1" aria-hidden="true"></i>Directorate
                     <i class="fas fa-chevron-down caret-icon ml-1" aria-hidden="true"></i>
                 </button>
                 <div class="reports-nav-dropdown-menu" role="menu">
                     <a href="@Url.Action("DivisionReport", "Reports")" role="menuitem">
-                        <i class="fas fa-th-list mr-1 text-muted" aria-hidden="true"></i>All divisions
+                        <i class="fas fa-th-list mr-1 text-muted" aria-hidden="true"></i>All directorates
                     </a>
                     @if (allDivisions.Any())
                     {
@@ -110,7 +100,8 @@
                 </div>
                 <div class="dropdown-scroll-hint" aria-hidden="true"><i class="fas fa-chevron-down"></i></div>
             </li>
-            <li><a href="@Url.Action("PriorityOutcomes", "Reports")" class="active" aria-current="page"><i class="fas fa-star mr-1" aria-hidden="true"></i>Priority outcomes</a></li>
+            <li><a href="@Url.Action("PriorityOutcomes", "Reports", new { objectiveId = objectiveFilterSelectedId })" class="active" aria-current="page"><i class="fas fa-star mr-1" aria-hidden="true"></i>Priority outcomes</a></li>
+            <li><a href="@Url.Action("PriorityOutcomesSummary", "Reports")"><i class="fas fa-chart-pie mr-1" aria-hidden="true"></i>Priority outcomes summary</a></li>
             <li><a href="@Url.Action("PerformanceReporting", "Reports")"><i class="fas fa-chart-line mr-1" aria-hidden="true"></i>Performance reporting</a></li>
         </ul>
 </div>
@@ -119,6 +110,12 @@
 
         <!-- Stat cards -->
         <div class="reports-stat-grid mb-4">
+            <div class="reports-stat-card reports-stat-green">
+                <div class="reports-stat-icon"><i class="fas fa-bullseye" aria-hidden="true"></i></div>
+                <div class="reports-stat-value">@totalWithPriorityOutcome</div>
+                <div class="reports-stat-label">Strategic priority outcomes</div>
+                <div class="reports-stat-sub">projects linked to an outcome</div>
+            </div>
             <div class="reports-stat-card reports-stat-gold">
                 <div class="reports-stat-icon"><i class="fas fa-star" aria-hidden="true"></i></div>
                 <div class="reports-stat-value">@totalFlagship</div>
@@ -145,37 +142,35 @@
             </div>
         </div>
 
-        <!-- Tab navigation -->
-        @{
-            // Determine which tab to show active – prefer first tab that has data, fall back to "all"
-            var firstActiveTab = totalFlagship > 0  ? "flagship"  :
-                                 totalMultiDept > 0 ? "multidept" :
-                                 totalAi > 0        ? "ai"        :
-                                 totalPriority > 0  ? "priority"  : "all";
-        }
+        <!-- Tab navigation (server-driven ?tab= — avoids Bootstrap tab JS / hash scroll hiding panels) -->
         <ul class="nav nav-tabs reports-inner-tabs mb-4" id="priorityTabs" role="tablist">
             <li class="nav-item">
-                <a class="nav-link @(firstActiveTab == "flagship" ? "active" : "")" id="flagship-tab" data-toggle="tab" href="#flagship" role="tab" aria-controls="flagship" aria-selected="@(firstActiveTab == "flagship" ? "true" : "false")">
+                <a class="nav-link @(activeTab == "objectives" ? "active" : "")" id="objectives-tab" href="@Url.Action("PriorityOutcomes", "Reports", new { tab = "objectives", objectiveId = objectiveFilterSelectedId })" role="tab" aria-controls="objectives" aria-selected="@(activeTab == "objectives" ? "true" : "false")">
+                    <i class="fas fa-bullseye mr-1" aria-hidden="true"></i>Priority outcomes <span class="badge badge-success ml-1">@totalWithPriorityOutcome</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link @(activeTab == "flagship" ? "active" : "")" id="flagship-tab" href="@Url.Action("PriorityOutcomes", "Reports", new { tab = "flagship", objectiveId = objectiveFilterSelectedId })" role="tab" aria-controls="flagship" aria-selected="@(activeTab == "flagship" ? "true" : "false")">
                     <i class="fas fa-star mr-1" aria-hidden="true"></i>Flagship <span class="badge badge-warning ml-1">@totalFlagship</span>
                 </a>
             </li>
             <li class="nav-item">
-                <a class="nav-link @(firstActiveTab == "multidept" ? "active" : "")" id="multidept-tab" data-toggle="tab" href="#multidept" role="tab" aria-controls="multidept" aria-selected="@(firstActiveTab == "multidept" ? "true" : "false")">
+                <a class="nav-link @(activeTab == "multidept" ? "active" : "")" id="multidept-tab" href="@Url.Action("PriorityOutcomes", "Reports", new { tab = "multidept", objectiveId = objectiveFilterSelectedId })" role="tab" aria-controls="multidept" aria-selected="@(activeTab == "multidept" ? "true" : "false")">
                     <i class="fas fa-globe mr-1" aria-hidden="true"></i>Multi-department <span class="badge badge-info ml-1">@totalMultiDept</span>
                 </a>
             </li>
             <li class="nav-item">
-                <a class="nav-link @(firstActiveTab == "ai" ? "active" : "")" id="ai-tab" data-toggle="tab" href="#ai" role="tab" aria-controls="ai" aria-selected="@(firstActiveTab == "ai" ? "true" : "false")">
+                <a class="nav-link @(activeTab == "ai" ? "active" : "")" id="ai-tab" href="@Url.Action("PriorityOutcomes", "Reports", new { tab = "ai", objectiveId = objectiveFilterSelectedId })" role="tab" aria-controls="ai" aria-selected="@(activeTab == "ai" ? "true" : "false")">
                     <i class="fas fa-robot mr-1" aria-hidden="true"></i>AI initiatives <span class="badge badge-primary ml-1">@totalAi</span>
                 </a>
             </li>
             <li class="nav-item">
-                <a class="nav-link @(firstActiveTab == "priority" ? "active" : "")" id="priority-tab" data-toggle="tab" href="#priority" role="tab" aria-controls="priority" aria-selected="@(firstActiveTab == "priority" ? "true" : "false")">
+                <a class="nav-link @(activeTab == "priority" ? "active" : "")" id="priority-tab" href="@Url.Action("PriorityOutcomes", "Reports", new { tab = "priority", objectiveId = objectiveFilterSelectedId })" role="tab" aria-controls="priority" aria-selected="@(activeTab == "priority" ? "true" : "false")">
                     <i class="fas fa-sort-amount-up mr-1" aria-hidden="true"></i>By priority <span class="badge badge-secondary ml-1">@totalPriority</span>
                 </a>
             </li>
             <li class="nav-item">
-                <a class="nav-link @(firstActiveTab == "all" ? "active" : "")" id="all-tab" data-toggle="tab" href="#all" role="tab" aria-controls="all" aria-selected="@(firstActiveTab == "all" ? "true" : "false")">
+                <a class="nav-link @(activeTab == "all" ? "active" : "")" id="all-tab" href="@Url.Action("PriorityOutcomes", "Reports", new { tab = "all", objectiveId = objectiveFilterSelectedId })" role="tab" aria-controls="all" aria-selected="@(activeTab == "all" ? "true" : "false")">
                     <i class="fas fa-list mr-1" aria-hidden="true"></i>All projects <span class="badge badge-light border ml-1">@allProjects.Count</span>
                 </a>
             </li>
@@ -183,8 +178,75 @@
 
         <div class="tab-content" id="priorityTabContent">
 
+            <!-- Priority outcomes (strategic objectives) tab -->
+            <div class="tab-pane fade @(activeTab == "objectives" ? "show active" : "")" id="objectives" role="tabpanel" aria-labelledby="objectives-tab">
+                <div class="dashboard-section">
+                    <div class="dashboard-section-header">
+                        <h2><i class="fas fa-bullseye" aria-hidden="true"></i>Work by priority outcome</h2>
+                    </div>
+                    @if (objectiveFilterOptions.Any())
+                    {
+                        <form method="get" class="reports-objective-filter mb-4" id="priority-outcome-filter">
+                            <input type="hidden" name="tab" value="objectives" />
+                            <div class="form-row align-items-end flex-wrap">
+                                <div class="col-auto mb-2 mb-md-0">
+                                    <label class="mb-1 d-block small font-weight-bold" for="priority-outcome-filter-select">Filter by outcome</label>
+                                    <select name="objectiveId" id="priority-outcome-filter-select" class="form-control form-control-sm" style="min-width: 16rem;" aria-describedby="priority-outcome-filter-hint">
+                                        <option value="">All outcomes</option>
+                                        @foreach (var kv in objectiveFilterOptions)
+                                        {
+                                            if (objectiveFilterSelectedId == kv.Key)
+                                            {
+                                                <option value="@kv.Key" selected="selected">@kv.Value</option>
+                                            }
+                                            else
+                                            {
+                                                <option value="@kv.Key">@kv.Value</option>
+                                            }
+                                        }
+                                    </select>
+                                    <span id="priority-outcome-filter-hint" class="sr-only">Choose one priority outcome to narrow the list, or all outcomes to show every group.</span>
+                                </div>
+                                <div class="col-auto">
+                                    <button type="submit" class="btn btn-sm btn-primary">Apply</button>
+                                </div>
+                                @if (objectiveFilterSelectedId.HasValue)
+                                {
+                                    <div class="col-auto">
+                                        <a href="@Url.Action("PriorityOutcomes", "Reports", new { tab = "objectives" })" class="btn btn-sm btn-outline-secondary">Clear filter</a>
+                                    </div>
+                                }
+                            </div>
+                        </form>
+                    }
+                    @if (projectsByObjective.Any())
+                    {
+                        @foreach (var group in projectsByObjective)
+                        {
+                            <div class="mb-4">
+                                <h3 class="priority-group-heading">
+                                    <span class="priority-badge">@group.Objective.Title</span>
+                                    @if (!string.IsNullOrWhiteSpace(group.Objective.Theme))
+                                    {
+                                        <span class="text-muted small ml-2">(@group.Objective.Theme)</span>
+                                    }
+                                    <span class="text-muted small ml-2">@group.Projects.Count project@(group.Projects.Count == 1 ? "" : "s")</span>
+                                </h3>
+                                @await Html.PartialAsync("_PriorityProjectTable", group.Projects)
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle mr-2" aria-hidden="true"></i>No projects are linked to a priority outcome yet. Assign outcomes on a project’s strategic alignment, or define outcomes in <a href="@Url.Action("Objectives", "Admin")">Admin → Priority outcomes</a>.
+                        </div>
+                    }
+                </div>
+            </div>
+
             <!-- Flagship tab -->
-            <div class="tab-pane fade @(firstActiveTab == "flagship" ? "show active" : "")" id="flagship" role="tabpanel" aria-labelledby="flagship-tab">
+            <div class="tab-pane fade @(activeTab == "flagship" ? "show active" : "")" id="flagship" role="tabpanel" aria-labelledby="flagship-tab">
                 <div class="dashboard-section">
                     <div class="dashboard-section-header">
                         <h2><i class="fas fa-star" aria-hidden="true"></i>Flagship projects</h2>
@@ -192,7 +254,7 @@
                     </div>
                     @if (flagshipProjects.Any())
                     {
-                        @await Html.PartialAsync("_PriorityProjectCards", flagshipProjects)
+                        @await Html.PartialAsync("_PriorityProjectTable", flagshipProjects)
                     }
                     else
                     {
@@ -202,7 +264,7 @@
             </div>
 
             <!-- Multi-department tab -->
-            <div class="tab-pane fade @(firstActiveTab == "multidept" ? "show active" : "")" id="multidept" role="tabpanel" aria-labelledby="multidept-tab">
+            <div class="tab-pane fade @(activeTab == "multidept" ? "show active" : "")" id="multidept" role="tabpanel" aria-labelledby="multidept-tab">
                 <div class="dashboard-section">
                     <div class="dashboard-section-header">
                         <h2><i class="fas fa-globe" aria-hidden="true"></i>Multi-department projects</h2>
@@ -210,7 +272,7 @@
                     </div>
                     @if (multiDeptProjects.Any())
                     {
-                        @await Html.PartialAsync("_PriorityProjectCards", multiDeptProjects)
+                        @await Html.PartialAsync("_PriorityProjectTable", multiDeptProjects)
                     }
                     else
                     {
@@ -220,7 +282,7 @@
             </div>
 
             <!-- AI initiatives tab -->
-            <div class="tab-pane fade @(firstActiveTab == "ai" ? "show active" : "")" id="ai" role="tabpanel" aria-labelledby="ai-tab">
+            <div class="tab-pane fade @(activeTab == "ai" ? "show active" : "")" id="ai" role="tabpanel" aria-labelledby="ai-tab">
                 <div class="dashboard-section">
                     <div class="dashboard-section-header">
                         <h2><i class="fas fa-robot" aria-hidden="true"></i>AI initiatives</h2>
@@ -228,7 +290,7 @@
                     </div>
                     @if (aiProjects.Any())
                     {
-                        @await Html.PartialAsync("_PriorityProjectCards", aiProjects)
+                        @await Html.PartialAsync("_PriorityProjectTable", aiProjects)
                     }
                     else
                     {
@@ -238,7 +300,7 @@
             </div>
 
             <!-- By priority tab -->
-            <div class="tab-pane fade @(firstActiveTab == "priority" ? "show active" : "")" id="priority" role="tabpanel" aria-labelledby="priority-tab">
+            <div class="tab-pane fade @(activeTab == "priority" ? "show active" : "")" id="priority" role="tabpanel" aria-labelledby="priority-tab">
                 <div class="dashboard-section">
                     <div class="dashboard-section-header">
                         <h2><i class="fas fa-sort-amount-up" aria-hidden="true"></i>Projects by delivery priority</h2>
@@ -256,13 +318,13 @@
                                         <span class="priority-badge">@group.Priority.Name</span>
                                         <span class="text-muted small ml-2">@group.Projects.Count project@(group.Projects.Count == 1 ? "" : "s")</span>
                                     </h3>
-                                    @await Html.PartialAsync("_PriorityProjectCards", (List<Project>)group.Projects)
+                                    @await Html.PartialAsync("_PriorityProjectTable", (List<Project>)group.Projects)
                                 </div>
                             }
                         }
                         else
                         {
-                            @await Html.PartialAsync("_PriorityProjectCards", priorityProjects)
+                            @await Html.PartialAsync("_PriorityProjectTable", priorityProjects)
                         }
                     }
                     else
@@ -273,7 +335,7 @@
             </div>
 
             <!-- All projects tab – always has data, useful fallback -->
-            <div class="tab-pane fade @(firstActiveTab == "all" ? "show active" : "")" id="all" role="tabpanel" aria-labelledby="all-tab">
+            <div class="tab-pane fade @(activeTab == "all" ? "show active" : "")" id="all" role="tabpanel" aria-labelledby="all-tab">
                 <div class="dashboard-section">
                     <div class="dashboard-section-header">
                         <h2><i class="fas fa-list" aria-hidden="true"></i>All projects</h2>
@@ -281,7 +343,7 @@
                     </div>
                     @if (allProjects.Any())
                     {
-                        @await Html.PartialAsync("_PriorityProjectCards", allProjects)
+                        @await Html.PartialAsync("_PriorityProjectTable", allProjects)
                     }
                     else
                     {
@@ -303,6 +365,7 @@
         { "TotalMultiDept", totalMultiDept },
         { "TotalAi", totalAi },
         { "TotalPriority", totalPriority },
+        { "TotalWithPriorityOutcome", totalWithPriorityOutcome },
         { "FlagshipRedCount", flagshipProjects.Count(p => p.RagStatusLookup?.Name == "Red" || p.RagStatusLookup?.Name == "Amber-Red") }
     };
 }

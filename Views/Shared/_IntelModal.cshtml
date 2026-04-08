@@ -25,7 +25,7 @@
     var failedAssessments = ViewData["FailedAssessments"] as int? ?? 0;
     var totalAssessments = ViewData["TotalAssessments"] as int? ?? 0;
 
-    // Division / BA context
+    // Directorate / BA context
     var divisionName = ViewData["DivisionName"] as string ?? "";
     var businessAreaName = ViewData["BusinessAreaName"] as string ?? "";
     var openAccessibilityIssues = ViewData["OpenAccessibilityIssues"] as int? ?? totalOpenAccessibilityIssues;
@@ -38,12 +38,13 @@
     var totalMultiDept = ViewData["TotalMultiDept"] as int? ?? multiDeptCount;
     var totalAi = ViewData["TotalAi"] as int? ?? 0;
     var totalPriority = ViewData["TotalPriority"] as int? ?? 0;
+    var totalWithPriorityOutcome = ViewData["TotalWithPriorityOutcome"] as int? ?? 0;
     var flagshipRedCount = ViewData["FlagshipRedCount"] as int? ?? 0;
 
     // Scope label
     var scopeLabel = context switch
     {
-        "division" => divisionName,
+        "directorate" => divisionName,
         "businessarea" => businessAreaName,
         "priority" => "priority outcomes",
         _ => "the portfolio"
@@ -54,7 +55,7 @@
     var risks = new List<string>();
     var watchItems = new List<string>();
 
-    if (context == "overview" || context == "division" || context == "businessarea")
+    if (context == "overview" || context == "directorate" || context == "businessarea")
     {
         var projectsInScope = context == "overview" ? totalProjects : (ViewData["TotalProjects"] as int? ?? 0);
         var atRisk = context == "overview" ? atRiskCount : (ViewData["AtRiskCount"] as int? ?? 0);
@@ -122,6 +123,10 @@
     }
     else if (context == "priority")
     {
+        if (totalWithPriorityOutcome > 0)
+        {
+            positives.Add($"{totalWithPriorityOutcome} project{(totalWithPriorityOutcome == 1 ? " is" : "s are")} linked to at least one strategic priority outcome (Admin priority outcomes).");
+        }
         if (totalFlagship > 0)
         {
             watchItems.Add($"There are {totalFlagship} flagship project{(totalFlagship == 1 ? "" : "s")} in the portfolio. These are the highest priority and should receive regular senior attention.");
@@ -175,13 +180,13 @@
                         <div>
                             <strong>Overall status: @overallStatus</strong>
                             <div class="small mt-1">
-                                @if (context == "overview" || context == "division" || context == "businessarea")
+                                @if (context == "overview" || context == "directorate" || context == "businessarea")
                                 {
                                     @:Scope: @scopeLabel — @(context == "overview" ? totalProjects : (ViewData["TotalProjects"] as int? ?? 0)) projects in view
                                 }
                                 else
                                 {
-                                    @:Scope: priority outcomes — @totalFlagship flagship, @totalMultiDept multi-department, @totalAi AI initiatives
+                                    @:Scope: priority outcomes — @totalWithPriorityOutcome with strategic outcomes, @totalFlagship flagship, @totalMultiDept multi-department, @totalAi AI initiatives
                                 }
                             </div>
                         </div>

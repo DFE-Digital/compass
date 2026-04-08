@@ -1,0 +1,45 @@
+@model Compass.Models.Modern.Work.WorkItemRiskOrIssue
+@using Compass.Models.Modern.Work
+@{
+    var work = ViewBag.WorkItem as WorkItem;
+    var workId = Model.WorkItemId;
+    var isIssue = ViewBag.IsIssue as bool? ?? false;
+    var riRef = ViewBag.RiRef as string ?? ("RI-" + Model.ReferenceNumber.ToString("D5"));
+    ViewData["Title"] = (isIssue ? "Close issue" : "Close risk") + " — " + riRef;
+}
+@section Breadcrumbs {
+    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="@Url.Action("Index", "ModernWork")">Work</a></li>
+    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="@Url.Action("Detail", "ModernWork", new { id = workId })">@(work?.Title ?? "Work")</a></li>
+    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="@(isIssue ? Url.Action("IssueDetail", "ModernWork", new { workId, id = Model.Id }) : Url.Action("RiskDetail", "ModernWork", new { workId, id = Model.Id }))">@riRef</a></li>
+    <li class="dfe-c-breadcrumb__item" aria-current="page">@(isIssue ? "Close issue" : "Close risk")</li>
+}
+
+<div id="sc-work-closeriskorissue">
+  @await Html.PartialAsync("_WorkItemChrome", work)
+
+  <div class="dfe-c-page-title">
+    <div class="dfe-c-page-title__caption">WI-@(ViewBag.WorkIdShort ?? workId.ToString("D8")) · @(work?.Title) · @riRef</div>
+    <h1>@(isIssue ? "Close issue" : "Close risk")</h1>
+  </div>
+
+  <form method="post" action="@Url.Action("CloseRiskOrIssue", "ModernWork", new { workId, id = Model.Id })" class="dfe-c-card dfe-c-card--plain" style="max-width:640px;">
+    @Html.AntiForgeryToken()
+    <fieldset>
+      <legend style="font-size:20px;border-bottom:3px solid #003a69;padding-bottom:10px;margin-bottom:20px;width:100%">@riRef — @Model.Title</legend>
+      <p class="dfe-c-body">Closing this @(isIssue ? "issue" : "risk") will set its status to <strong>Closed</strong> and record the closure outcome. This action can be reversed by updating the @(isIssue ? "issue" : "risk") and changing the status.</p>
+      <div class="fg dfe-c-mt-3">
+        <label for="ClosureOutcome">Closure outcome <span style="color:var(--red);">*</span></label>
+        <div class="form-hint">Summarise how this @(isIssue ? "issue was resolved" : "risk was closed") — e.g. mitigated, no longer relevant, or accepted.</div>
+        <textarea id="ClosureOutcome" name="ClosureOutcome" rows="4" required placeholder="Describe the closure outcome…">@Model.ClosureOutcome</textarea>
+        @if (ViewData.ModelState["ClosureOutcome"]?.Errors?.Any() == true)
+        {
+          <span class="dfe-c-form__error">@ViewData.ModelState["ClosureOutcome"]?.Errors?.FirstOrDefault()?.ErrorMessage</span>
+        }
+      </div>
+      <div class="dfe-c-button-row" style="margin-top:20px;">
+        <button type="submit" class="dfe-c-button dfe-c-button--primary">Close @(isIssue ? "issue" : "risk")</button>
+        <a href="@(isIssue ? Url.Action("IssueDetail", "ModernWork", new { workId, id = Model.Id }) : Url.Action("RiskDetail", "ModernWork", new { workId, id = Model.Id }))" class="dfe-c-button dfe-c-button--secondary">Cancel</a>
+      </div>
+    </fieldset>
+  </form>
+</div>

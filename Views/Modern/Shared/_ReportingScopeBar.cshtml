@@ -1,0 +1,68 @@
+@* Renders below sub-nav when ViewBag.ShowReportingScope is true (Reporting dashboard). Scope: DDT | Directorate | Portfolio *@
+@{
+    var directorates = ViewBag.Directorates as IEnumerable<Compass.Models.Directorate> ?? Enumerable.Empty<Compass.Models.Directorate>();
+    var portfolios = ViewBag.Portfolios as IEnumerable<Compass.Models.Portfolio> ?? Enumerable.Empty<Compass.Models.Portfolio>();
+    var selectedDirectorateId = ViewBag.SelectedDirectorateId as int?;
+    var selectedPortfolioId = ViewBag.SelectedPortfolioId as int?;
+    var returnUrlDdt = ViewBag.ReportingScopeReturnUrlDdt as string;
+    var returnUrlDirectorate = ViewBag.ReportingScopeReturnUrlDirectorate as string;
+    var returnUrlPortfolio = ViewBag.ReportingScopeReturnUrlPortfolio as string;
+    var scopeLevel = ViewBag.ScopeLevel as string ?? "DDT";
+}
+<nav class="sub-nav visible" id="subnav-reporting-scope" aria-label="Reporting scope">
+  <div class="sub-nav__inner portfolio-scope-inner" style="align-items:center;padding-top:0;padding-bottom:0;min-height:44px;flex-wrap:wrap;gap:12px;">
+    <span class="dfe-c-body-s" style="font-weight:600;color:#505a5f;">Scope:</span>
+    <a href="@returnUrlDdt" class="chip @(scopeLevel == "DDT" ? "on" : "")" style="text-decoration:none;">DDT (all)</a>
+    <span class="chip-sep">|</span>
+    <div class="portfolio-dropdown-wrap">
+      <label for="reporting-directorate-select">Directorate:</label>
+      <select id="reporting-directorate-select" aria-label="Select directorate">
+        <option value="">— Select —</option>
+        @foreach (var d in directorates)
+        {
+          <option value="@d.Id" selected="@(selectedDirectorateId == d.Id)">@d.Name</option>
+        }
+      </select>
+    </div>
+    <span class="chip-sep">|</span>
+    <div class="portfolio-dropdown-wrap">
+      <label for="reporting-portfolio-select">Portfolio:</label>
+      <select id="reporting-portfolio-select" aria-label="Select portfolio">
+        <option value="">— Select —</option>
+        @foreach (var p in portfolios)
+        {
+          <option value="@p.Id" selected="@(selectedPortfolioId == p.Id)">@p.Name</option>
+        }
+      </select>
+    </div>
+  </div>
+</nav>
+<script>
+(function() {
+  var returnUrlDdt = @(returnUrlDdt != null ? "\"" + returnUrlDdt.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"" : "null");
+  var returnUrlDirectorate = @(returnUrlDirectorate != null ? "\"" + returnUrlDirectorate.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"" : "null");
+  var returnUrlPortfolio = @(returnUrlPortfolio != null ? "\"" + returnUrlPortfolio.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"" : "null");
+  var dirSelect = document.getElementById('reporting-directorate-select');
+  var portSelect = document.getElementById('reporting-portfolio-select');
+  if (dirSelect && returnUrlDirectorate) {
+    dirSelect.addEventListener('change', function() {
+      var id = this.value || '';
+      if (id) {
+        window.location = returnUrlDirectorate.replace(/_DID_/g, id);
+      } else if (returnUrlDdt) {
+        window.location = returnUrlDdt;
+      }
+    });
+  }
+  if (portSelect && returnUrlPortfolio) {
+    portSelect.addEventListener('change', function() {
+      var id = this.value || '';
+      if (id) {
+        window.location = returnUrlPortfolio.replace(/_PID_/g, id);
+      } else if (returnUrlDdt) {
+        window.location = returnUrlDdt;
+      }
+    });
+  }
+})();
+</script>

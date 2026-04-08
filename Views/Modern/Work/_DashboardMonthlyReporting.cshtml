@@ -1,0 +1,152 @@
+@using Compass.Models.Modern.Work
+@{
+  string Trunc(string? s, int n)
+  {
+    if (string.IsNullOrEmpty(s)) return "—";
+    return s.Length <= n ? s : s[..n] + "…";
+  }
+  var periodLabel = ViewBag.WdMrPeriodLabel as string;
+  var dueDate = ViewBag.WdMrDueDate as DateTime?;
+  var daysRemaining = ViewBag.WdMrDaysRemaining as int?;
+  var submitted = ViewBag.WdMrSubmitted as int? ?? 0;
+  var draft = ViewBag.WdMrDraft as int? ?? 0;
+  var missing = ViewBag.WdMrMissing as int? ?? 0;
+  var activeAssigned = ViewBag.WdMrActiveAssignedCount as int? ?? 0;
+  var rows = ViewBag.WdMrRows as List<HomeMonthlyUpdateRow> ?? new();
+  var monthlyTotal = submitted + draft + missing;
+  var extendedTable = ViewBag.WdMrExtendedReportingTable as bool? == true;
+}
+
+<div>
+  <p class="dfe-c-body dfe-c-mb-2">
+    <strong>@(periodLabel ?? "Current period")</strong>
+    @if (dueDate.HasValue)
+    {
+      <span class="dfe-c-text-muted"> — due @dueDate.Value.ToString("d MMMM yyyy")</span>
+    }
+    @if (daysRemaining.HasValue && dueDate.HasValue)
+    {
+      var days = (dueDate!.Value.Date - DateTime.UtcNow.Date).Days;
+      if (days >= 0)
+      {
+        <span class="dfe-c-text-muted"> (@days day@(days == 1 ? "" : "s") left)</span>
+      }
+    }
+  </p>
+  @if (activeAssigned > 0 && monthlyTotal > 0)
+  {
+    var pctOk = (int)Math.Round(100.0 * submitted / monthlyTotal);
+    var pctDraft = (int)Math.Round(100.0 * draft / monthlyTotal);
+    var pctMiss = Math.Max(0, 100 - pctOk - pctDraft);
+    <div class="dfe-c-mb-2" role="img" aria-label="Submitted @submitted, in progress @draft, missing @missing out of @monthlyTotal">
+      <div style="display:flex;gap:2px;height:0.75rem;border-radius:1px;overflow:hidden;margin-bottom:0.375rem;">
+        <div style="flex:@Math.Max(pctOk, 0.0001);background:var(--rag-g);min-width:2px;"></div>
+        <div style="flex:@Math.Max(pctDraft, 0.0001);background:var(--orange);min-width:2px;"></div>
+        <div style="flex:@Math.Max(pctMiss, 0.0001);background:var(--rag-r);min-width:2px;"></div>
+      </div>
+      <p class="dfe-c-text-muted" style="font-size:0.8125rem;margin:0;">
+        <span style="color:var(--rag-g);">■</span> Submitted (@submitted)
+        <span style="margin-left:0.75rem;"><span style="color:var(--orange);">■</span> In progress (@draft)</span>
+        <span style="margin-left:0.75rem;"><span style="color:var(--rag-r);">■</span> Not started (@missing)</span>
+      </p>
+    </div>
+  }
+  else if (activeAssigned == 0)
+  {
+    <p class="dfe-c-body dfe-c-text-muted dfe-c-mb-3">No work items are assigned to you — monthly reporting tasks will show here when you are on a delivery team.</p>
+  }
+  else
+  {
+    <p class="dfe-c-body dfe-c-text-muted dfe-c-mb-3">No active assigned work in scope for this period summary.</p>
+  }
+
+  @if (activeAssigned > 0 && rows.Count > 0)
+  {
+    <div class="dfe-c-table-wrap">
+      <table>
+        <caption class="compass2-visually-hidden">Your work items for @(periodLabel ?? "this reporting period")</caption>
+        <thead>
+          <tr>
+            <th scope="col">Work item</th>
+            @if (extendedTable)
+            {
+              <th scope="col">Portfolio</th>
+              <th scope="col">RAG</th>
+              <th scope="col">Deadline</th>
+            }
+            <th scope="col">Status</th>
+            <th scope="col">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          @foreach (var row in rows)
+          {
+            var overdueRow = row.DueDate.HasValue && row.DueDate.Value.Date < DateTime.UtcNow.Date
+                             && row.StatusLabel != "Submitted";
+            <tr style="@(overdueRow ? "background:#fde8e4;" : null)">
+              <td>
+                <a class="dfe-c-link dfe-c-fw-bold" href="@row.ActionUrl">@Trunc(row.WorkTitle, 56)</a>
+              </td>
+              @if (extendedTable)
+              {
+                <td>@row.PortfolioName</td>
+                <td>
+                  @if (!string.IsNullOrEmpty(row.RagStatusName))
+                  {
+                    <span class="dfe-c-rag @(row.RagStatusName.Contains("Red", StringComparison.OrdinalIgnoreCase) ? "dfe-c-rag--red" : row.RagStatusName.Contains("Amber", StringComparison.OrdinalIgnoreCase) ? "dfe-c-rag--amber" : row.RagStatusName.Contains("Green", StringComparison.OrdinalIgnoreCase) ? "dfe-c-rag--green" : "")">@row.RagStatusName.ToUpperInvariant()</span>
+                  }
+                  else
+                  {
+                    <span class="dfe-c-text-muted">—</span>
+                  }
+                </td>
+                <td>
+                  @if (row.DueDate.HasValue)
+                  {
+                    @row.DueDate.Value.ToString("d MMM yyyy")
+                  }
+                  else
+                  {
+                    <span class="dfe-c-text-muted">—</span>
+                  }
+                </td>
+              }
+              <td>
+                @if (row.StatusLabel == "Submitted")
+                {
+                  <span class="dfe-c-tag dfe-c-tag--green">@row.StatusLabel</span>
+                }
+                else if (row.StatusLabel == "Started")
+                {
+                  <span class="dfe-c-tag dfe-c-tag--orange">@row.StatusLabel</span>
+                }
+                else if (row.StatusLabel == "Draft")
+                {
+                  <span class="dfe-c-tag dfe-c-tag--amber">@row.StatusLabel</span>
+                }
+                else
+                {
+                  <span class="dfe-c-tag dfe-c-tag--red">@row.StatusLabel</span>
+                }
+              </td>
+              <td>
+                @if (extendedTable && (row.StatusLabel == "Not started" || row.StatusLabel == "Draft" || row.StatusLabel == "Started"))
+                {
+                  <a class="dfe-c-button dfe-c-button--primary dfe-c-button--sm" href="@row.ActionUrl">@(row.StatusLabel == "Draft" || row.StatusLabel == "Started" ? "Continue" : "Submit")</a>
+                }
+                else if (extendedTable && row.StatusLabel == "Submitted")
+                {
+                  <a class="dfe-c-link" href="@row.ActionUrl">View update</a>
+                }
+                else
+                {
+                  <a class="dfe-c-link" href="@row.ActionUrl">@row.ActionLabel</a>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</div>

@@ -1,0 +1,170 @@
+@model Compass.Models.Modern.Work.WorkItemRiskOrIssue
+@using Compass.Models.Modern.Work
+@{
+    var work = ViewBag.WorkItem as WorkItem;
+    var milestones = ViewBag.Milestones as List<Milestone> ?? new List<Milestone>();
+    ViewData["Title"] = "Log risk or issue";
+}
+@section Breadcrumbs {
+    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="/">Home</a></li>
+    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="@Url.Action("Index", "ModernWork")">Work</a></li>
+    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="@Url.Action("Detail", "ModernWork", new { id = Model.WorkItemId })">@(work?.Title ?? "Work")</a></li>
+    <li class="dfe-c-breadcrumb__item" aria-current="page">Log risk or issue</li>
+}
+
+<div id="sc-work-logriskorissue">
+  @await Html.PartialAsync("_WorkItemChrome", ViewBag.WorkItem as WorkItem)
+
+  <div class="dfe-c-page-title">
+    <div class="dfe-c-page-title__caption">WI-@(ViewBag.WorkIdShort ?? Model.WorkItemId.ToString("D8")) · @(work?.Title ?? "Work")</div>
+    <h1>Log risk or issue</h1>
+  </div>
+
+  <div style="display:grid;grid-template-columns:2fr 1fr;gap:24px;align-items:start;">
+    <div>
+      <form id="log-ri-form" method="post" action="@Url.Action("LogRiskOrIssue", "ModernWork", new { id = Model.WorkItemId })" class="dfe-c-card dfe-c-card--plain dfe-c-mb-0">
+        @Html.AntiForgeryToken()
+        <fieldset>
+          <legend style="font-size:20px;border-bottom:3px solid #003a69;padding-bottom:10px;margin-bottom:20px;width:100%">New risk or issue</legend>
+
+          <div class="fg">
+            <span class="legend-sm">Type <span style="color:var(--red)">*</span></span>
+            <div class="form-hint">A <strong>risk</strong> is something that might happen. An <strong>issue</strong> is something that has already happened or is actively occurring.</div>
+            <div class="radio-group">
+              <label class="radio-item" style="border-color:#f47738;">
+                <input type="radio" name="Type" value="Risk" checked="@(string.Equals(Model.Type, "Risk", StringComparison.OrdinalIgnoreCase))" />
+                <div><strong>Risk</strong> — a potential problem that may occur</div>
+              </label>
+              <label class="radio-item" style="border-color:#d4351c;">
+                <input type="radio" name="Type" value="Issue" checked="@(string.Equals(Model.Type, "Issue", StringComparison.OrdinalIgnoreCase))" />
+                <div><strong>Issue</strong> — a problem that is actively occurring now</div>
+              </label>
+            </div>
+          </div>
+
+          <div class="fg">
+            <label for="Title">Title <span style="color:var(--red)">*</span></label>
+            <div class="form-hint">A short, clear description — e.g. "External vendor delivery delayed" or "Regulatory approval blocked"</div>
+            <input type="text" id="Title" name="Title" value="@Model.Title" placeholder="Brief title for this risk or issue" required />
+          </div>
+
+          <div class="fg">
+            <label for="Description">Description <span style="color:var(--red)">*</span></label>
+            <div class="form-hint">Describe the risk or issue in detail. What is it? Why has it arisen? What is the context?</div>
+            <textarea id="Description" name="Description" style="min-height:90px" placeholder="Describe the risk or issue…" required>@Model.Description</textarea>
+          </div>
+
+          <div class="fg">
+            <label for="ImpactOnDelivery">Impact on delivery <span style="color:var(--red)">*</span></label>
+            <div class="form-hint">What effect does this have or could it have on the work item — timeline, scope, budget, quality?</div>
+            <textarea id="ImpactOnDelivery" name="ImpactOnDelivery" style="min-height:70px" placeholder="What is the impact if this risk materialises or this issue is not resolved?" required>@Model.ImpactOnDelivery</textarea>
+          </div>
+
+          <div class="fg">
+            <span class="legend-sm">Priority <span style="color:var(--red)">*</span></span>
+            <div class="radio-group">
+              <label class="radio-item"><input type="radio" name="Priority" value="High" /><div><span style="background:#fde8e4;color:#942514;border:1px solid #f5b8b0;padding:2px 8px;font-size:12px;font-weight:700;">High</span></div></label>
+              <label class="radio-item"><input type="radio" name="Priority" value="Medium" checked="@(string.Equals(Model.Priority, "Medium", StringComparison.OrdinalIgnoreCase))" /><div><span style="background:#fff7e0;color:#6e4900;border:1px solid #f5e4a0;padding:2px 8px;font-size:12px;font-weight:700;">Medium</span></div></label>
+              <label class="radio-item"><input type="radio" name="Priority" value="Low" /><div><span style="background:#d2e2f1;color:#003078;border:1px solid #99b8d9;padding:2px 8px;font-size:12px;font-weight:700;">Low</span></div></label>
+            </div>
+          </div>
+
+          <div class="fg">
+            <label for="Tier">Tier</label>
+            <div class="form-hint">Risk or issue tier (e.g. Tier 1 = ministerial visibility).</div>
+            <select id="Tier" name="Tier" class="dfe-c-width-10">
+              <option value="">— Select tier —</option>
+              <option value="Tier 1" selected="@(string.Equals(Model.Tier, "Tier 1", StringComparison.OrdinalIgnoreCase))">Tier 1</option>
+              <option value="Tier 2" selected="@(string.Equals(Model.Tier, "Tier 2", StringComparison.OrdinalIgnoreCase))">Tier 2</option>
+              <option value="Tier 3" selected="@(string.Equals(Model.Tier, "Tier 3", StringComparison.OrdinalIgnoreCase))">Tier 3</option>
+            </select>
+          </div>
+
+          <div class="fg user-picker-wrapper user-picker-wrapper--full-width">
+            @await Html.PartialAsync("_UserPicker", new UserPickerViewModel
+            {
+              FieldName = "OwnerUserId",
+              Label = "Owner",
+              Hint = "Who is responsible for managing this? Search by name or email.",
+              DefaultSummaryText = "No user selected.",
+              DefaultUserId = Model.OwnerUserId,
+              DefaultName = ViewBag.OwnerName as string,
+              DefaultEmail = ViewBag.OwnerEmail as string
+            })
+          </div>
+
+          <div class="fg">
+            <label for="TargetResolutionDate" style="font-weight:400;font-size:14px;">Target resolution / review date</label>
+            <input type="date" id="TargetResolutionDate" name="TargetResolutionDate" value="@(Model.TargetResolutionDate?.ToString("yyyy-MM-dd"))" style="margin-top:4px;" />
+          </div>
+
+          <div class="fg">
+            <label for="MitigationOrAction">Mitigation or action plan <span style="color:var(--red)">*</span></label>
+            <div class="form-hint">What is being done to prevent this risk or resolve this issue?</div>
+            <textarea id="MitigationOrAction" name="MitigationOrAction" style="min-height:70px" placeholder="Describe the mitigation or action being taken…" required>@Model.MitigationOrAction</textarea>
+          </div>
+
+          <div class="fg" style="margin-bottom:0;">
+            <label for="LinkedMilestoneId">Linked milestone <span style="font-weight:400;font-size:14px;color:#505a5f;">(optional)</span></label>
+            <div class="form-hint">If this risk or issue directly affects a milestone, link it here.</div>
+            <select id="LinkedMilestoneId" name="LinkedMilestoneId">
+              <option value="">— None —</option>
+              @foreach (var m in milestones)
+              {
+                <option value="@m.Id" selected="@(Model.LinkedMilestoneId == m.Id)">@m.Name</option>
+              }
+            </select>
+          </div>
+        </fieldset>
+      </form>
+
+      <div class="dfe-c-button-row" style="margin-top:16px;">
+        <button type="submit" form="log-ri-form" class="dfe-c-button dfe-c-button--primary">Add risk / issue</button>
+        <a href="@(Url.Action("Detail", "ModernWork", new { id = Model.WorkItemId }))#wd-risks" class="dfe-c-button dfe-c-button--secondary">← Cancel</a>
+      </div>
+    </div>
+
+    <div class="sidebar">
+      <div class="dfe-c-card" style="border-top:3px solid #003a69;">
+        <h3>Risk vs issue</h3>
+        <div style="font-size:13px;display:flex;flex-direction:column;gap:4px;">
+          <div style="padding:10px 12px;background:#fff7e0;border-left:4px solid #f47738;">
+            <strong>Risk</strong>
+            <div style="color:#505a5f;margin-top:3px;">Something that <em>might</em> happen. You are monitoring and mitigating it before it occurs.</div>
+          </div>
+          <div style="padding:10px 12px;background:#fde8e4;border-left:4px solid #d4351c;">
+            <strong>Issue</strong>
+            <div style="color:#505a5f;margin-top:3px;">Something that <em>has happened</em> or is actively occurring. It needs resolution, not just monitoring.</div>
+          </div>
+        </div>
+        <div style="margin-top:12px;padding:10px 12px;background:#f3f2f1;border-left:3px solid #b1b4b6;font-size:13px;">A risk becomes an issue when it materialises. You can convert a risk to an issue at any time.</div>
+      </div>
+      <div class="dfe-c-card">
+        <h3>Priority guide</h3>
+        <div style="font-size:13px;display:flex;flex-direction:column;gap:4px;">
+          <div style="padding:8px 10px;background:#fde8e4;border-left:3px solid #d4351c;"><strong>High</strong> — immediate action, affects statutory deadline or programme cost</div>
+          <div style="padding:8px 10px;background:#fff7e0;border-left:3px solid #f47738;"><strong>Medium</strong> — action needed, may affect milestone or delivery quality</div>
+          <div style="padding:8px 10px;background:#d2e2f1;border-left:3px solid #1d70b8;"><strong>Low</strong> — monitor, unlikely to affect delivery if managed</div>
+        </div>
+      </div>
+      @{
+        var openRisks = ViewBag.OpenRisks as IEnumerable<dynamic> ?? new List<dynamic>();
+      }
+      @if (openRisks.Any())
+      {
+        <div class="dfe-c-card">
+          <h3>Current open risks</h3>
+          <div style="font-size:13px;display:flex;flex-direction:column;gap:4px;">
+            @foreach (var r in openRisks)
+            {
+              <div style="padding:6px 0;border-bottom:1px solid #dee0e2;display:flex;justify-content:space-between;">
+                <span>RI-@(r.ReferenceNumber.ToString("D5")) @r.Title</span>
+                <span style="background:@(r.Type == "Issue" ? "#d4351c" : "#f47738");color:#fff;padding:1px 7px;font-size:11px;font-weight:700;">@r.Type</span>
+              </div>
+            }
+          </div>
+        </div>
+      }
+    </div>
+  </div>
+</div>

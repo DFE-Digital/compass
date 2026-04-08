@@ -1,0 +1,74 @@
+@model Compass.Models.PipelineTrackerViewModel
+@{
+  var stages = Model.Stages ?? new List<Compass.Models.PipelineStage>();
+  var stageCounts = Model.StageCounts ?? Array.Empty<int>();
+  var groupSpans = Model.GroupSpans ?? new List<Compass.Models.PipelineTrackerGroupSpan>();
+  var stageCount = stages.Count;
+  var stageIndex = Model.StageIndex;
+  var stageCellCss = new[] { "background:#e8ecf1;color:#505a5f", "background:#d2e2f1;color:#003078", "background:#d4efed;color:#00695C", "background:#f3f2f1;color:#505a5f", "background:#e3f5eb;color:#00703c", "background:#d2e2f1;color:#347ca9", "background:#d4efed;color:#00695C", "background:#e3f5eb;color:#00703c", "background:#f3f2f1;color:#505a5f" };
+  var stageCellBg = new[] { "#e8ecf1", "#d2e2f1", "#d4efed", "#f3f2f1", "#e3f5eb", "#d2e2f1", "#d4efed", "#e3f5eb", "#f3f2f1" };
+  var stageCellColor = new[] { "#505a5f", "#003078", "#00695C", "#505a5f", "#00703c", "#347ca9", "#00695C", "#00703c", "#505a5f" };
+  string StageCss(int i) => i < stageCellCss.Length ? stageCellCss[i] : "background:#f3f2f1;color:#505a5f";
+  string CellBg(int i) => i < stageCellBg.Length ? stageCellBg[i] : "#f3f2f1";
+  string CellColor(int i) => i < stageCellColor.Length ? stageCellColor[i] : "#505a5f";
+  string GroupSpanClass(string? key) => string.Equals(key, "Demand", StringComparison.OrdinalIgnoreCase) ? "pipeline-group--demand" : string.Equals(key, "Work", StringComparison.OrdinalIgnoreCase) ? "pipeline-group--work" : "pipeline-group--other";
+  var storageKey = "pipeline-tracker-expanded";
+  var sectionMode = ViewBag.PipelineTrackerSectionMode as bool? == true;
+}
+@if (sectionMode)
+{
+  <div class="pipeline-view-section__body-inner">
+    <div class="pipeline-stage-grid" style="grid-template-columns: repeat(@(stageCount == 0 ? 1 : stageCount), minmax(0, 1fr));">
+      @for (var i = 0; i < stageCount; i++)
+      {
+        var isSelected = stageIndex == i;
+        var url = Url.Action("Pipeline", "Demand", new { stageIndex = isSelected ? (int?)null : (int?)i, directorateId = Model.DirectorateId, search = Model.Search, requestor = Model.Requestor, portfolioId = Model.PortfolioId, statusFilter = Model.StatusFilter, statutoryDriver = Model.StatutoryDriver, view = Model.ViewMode })!;
+        var label = stages[i].Title;
+        var count = i < stageCounts.Length ? stageCounts[i] : 0;
+        var css = StageCss(i);
+        var greyed = stageIndex.HasValue && !isSelected;
+        <a href="@url" class="pipeline-stage-cell pipeline-stage-cell--stage-@i @(isSelected ?"pipeline-stage-cell--selected" : greyed ? "pipeline-stage-cell--greyed" : "")" style="@css;--cell-bg:@CellBg(i);--cell-color:@CellColor(i)" aria-current="@(isSelected ? "true" : null)" title="@(isSelected ? "Show all" : "Filter by " + label) (@count items)">
+          @label
+          <span class="pipeline-stage-cell__num pipeline-count-badge" aria-label="@(label) count">@count</span>
+        </a>
+      }
+    </div>
+  </div>
+}
+else
+{
+<div class="pipeline-tracker pipeline-tracker--counts pipeline-tracker--collapsible" id="pipeline-tracker" data-storage-key="@storageKey">
+  <div class="pipeline-tracker__header-row" id="pipeline-tracker-header" role="button" tabindex="0" aria-expanded="true" aria-controls="pipeline-tracker-body" aria-label="Pipeline stages – click to expand or collapse">
+    @if (stageCount > 0 && groupSpans.Count > 0)
+    {
+      <div class="pipeline-tracker__group-row pipeline-tracker__group-row--header" style="grid-template-columns: repeat(@stageCount, minmax(0, 1fr));">
+        @foreach (var g in groupSpans)
+        {
+          <div class="pipeline-tracker__group-span @GroupSpanClass(g.Key)" style="grid-column: span @g.SpanCount;">
+            <span class="pipeline-tracker__group-label">@(string.IsNullOrEmpty(g.Key) ? "—" : g.Key)</span>
+            <span class="pipeline-tracker__group-badge pipeline-count-badge" aria-label="@(g.Key ?? "Group") count">@g.ItemCount</span>
+          </div>
+        }
+      </div>
+    }
+    <span class="pipeline-tracker__toggle" aria-hidden="true"></span>
+  </div>
+  <div class="pipeline-tracker__body" id="pipeline-tracker-body">
+    <div class="pipeline-stage-grid" style="grid-template-columns: repeat(@(stageCount == 0 ? 1 : stageCount), minmax(0, 1fr));">
+      @for (var i = 0; i < stageCount; i++)
+      {
+        var isSelected = stageIndex == i;
+        var url = Url.Action("Pipeline", "Demand", new { stageIndex = isSelected ? (int?)null : (int?)i, directorateId = Model.DirectorateId, search = Model.Search, requestor = Model.Requestor, portfolioId = Model.PortfolioId, statusFilter = Model.StatusFilter, statutoryDriver = Model.StatutoryDriver, view = Model.ViewMode })!;
+        var label = stages[i].Title;
+        var count = i < stageCounts.Length ? stageCounts[i] : 0;
+        var css = StageCss(i);
+        var greyed = stageIndex.HasValue && !isSelected;
+        <a href="@url" class="pipeline-stage-cell pipeline-stage-cell--stage-@i @(isSelected ?"pipeline-stage-cell--selected" : greyed ? "pipeline-stage-cell--greyed" : "")" style="@css;--cell-bg:@CellBg(i);--cell-color:@CellColor(i)" aria-current="@(isSelected ? "true" : null)" title="@(isSelected ? "Show all" : "Filter by " + label) (@count items)">
+          @label
+          <span class="pipeline-stage-cell__num pipeline-count-badge" aria-label="@(label) count">@count</span>
+        </a>
+      }
+    </div>
+  </div>
+</div>
+}

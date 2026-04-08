@@ -53,6 +53,14 @@ public class ProjectMonthlyUpdate
 
     public DateTime? SubmittedAt { get; set; }
 
+    /// <summary>Permanent FTE for this reporting month (from monthly return; headcount scale, not named individuals).</summary>
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal? MonthlyPermFte { get; set; }
+
+    /// <summary>MSP (contractor) FTE for this reporting month.</summary>
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal? MonthlyMspFte { get; set; }
+
     // Navigation property for individual narrative entries
     public ICollection<MonthlyUpdateNarrative> MonthlyUpdateNarratives { get; set; } = new List<MonthlyUpdateNarrative>();
 }

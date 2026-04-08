@@ -1,0 +1,1112 @@
+@model Compass.Models.Modern.Work.WorkItem
+@using Compass.Models.Modern.Work
+@{
+    ViewData["Title"] = Model.Title;
+    var portfolioName = ViewBag.PortfolioName as string ?? "—";
+    var priorityName = ViewBag.PriorityName as string ?? "—";
+    var deliveryPhaseName = ViewBag.DeliveryPhaseName as string ?? "—";
+    var activityTypeName = ViewBag.ActivityTypeName as string ?? "—";
+    var riskAppetiteName = ViewBag.RiskAppetiteName as string ?? "—";
+    var riskAppetiteOptions = ViewBag.RiskAppetiteOptions as List<LookupOption> ?? new List<LookupOption>();
+    var primaryContactName = ViewBag.PrimaryContactName as string ?? "—";
+    var budgetOwnerName = ViewBag.BudgetOwnerName as string ?? "—";
+    var linkedDemand = ViewBag.LinkedDemand as DemandRequest;
+    var linkedBusinessCase = ViewBag.LinkedBusinessCase as BusinessCase;
+    var latestRag = ViewBag.LatestRag as WorkItemRagHistory ?? Model.RagHistory?.OrderByDescending(r => r.UpdatedAt).FirstOrDefault();
+    var isWatching = ViewBag.IsWatching as bool? ?? false;
+    var monthlyReportDue = ViewBag.MonthlyReportDue as bool? ?? false;
+    var currentPeriodLabel = ViewBag.CurrentPeriodLabel as string;
+    var currentPeriodDueDate = ViewBag.CurrentPeriodDueDate as DateTime?;
+    var monthlyReportDaysRemaining = ViewBag.MonthlyReportDaysRemaining as int?;
+    var lastMonthlyUpdateMonth = ViewBag.LastMonthlyUpdateMonth as string;
+    var lastMonthlyUpdateBy = ViewBag.LastMonthlyUpdateBy as string;
+    var ragUpdatedByNames = ViewBag.RagUpdatedByNames as Dictionary<int, string> ?? new Dictionary<int, string>();
+    var ragStatusesDict = ViewBag.RagStatusesDict as Dictionary<int, string> ?? new Dictionary<int, string>();
+    var currentRagName = ViewBag.CurrentRagName as string ?? latestRag?.RagStatus?.Name ?? (Model.RagStatusId.HasValue && ragStatusesDict.TryGetValue(Model.RagStatusId.Value, out var rn) ? rn : null);
+    var milestoneProgressNames = ViewBag.MilestoneProgressNames as Dictionary<int, string> ?? new Dictionary<int, string>();
+    var workIdShort = Model.Id.ToString("D8");
+    var priorityOutcomesStr = Model.PriorityOutcomes?.Any() == true ? string.Join(", ", Model.PriorityOutcomes.Select(po => po.PriorityOutcome?.Name).Where(n => n != null)) : null;
+    var missionPillarsStr = Model.MissionPillars?.Any() == true ? string.Join(", ", Model.MissionPillars.Select(mp => mp.MissionPillar?.Name).Where(n => n != null)) : null;
+    var strategicAlignmentHtml = (priorityOutcomesStr != null ? "<strong>Priority Outcome:</strong> " + priorityOutcomesStr + "<br>" : "") + (missionPillarsStr != null ? "<strong>Mission Pillar:</strong> " + missionPillarsStr : "—");
+    string RagBadgeClass(string? name) {
+        if (string.IsNullOrEmpty(name)) return "rag-badge rag-none";
+        var n = name.ToLowerInvariant();
+        if (n.Contains("green")) return "rag-badge rag-green";
+        if (n.Contains("amber") && n.Contains("red")) return "rag-badge rag-amber-red";
+        if (n.Contains("red")) return "rag-badge rag-red";
+        if (n.Contains("amber")) return "rag-badge rag-amber";
+        return "rag-badge rag-none";
+    }
+    string WorkPriorityClass(string? name) {
+        if (string.IsNullOrEmpty(name)) return "wreg-priority wreg-priority--medium";
+        var n = name.ToLowerInvariant();
+        if (n.Contains("critical")) return "wreg-priority wreg-priority--critical";
+        if (n.Contains("high")) return "wreg-priority wreg-priority--high";
+        if (n.Contains("low")) return "wreg-priority wreg-priority--low";
+        return "wreg-priority wreg-priority--medium";
+    }
+    string MilestoneStatusBadgeClass(string? progressName) {
+        if (string.IsNullOrEmpty(progressName)) return "rag-badge rag-none";
+        var n = progressName.Trim().ToLowerInvariant();
+        if (n.Contains("reached") && n.Contains("late")) return "rag-badge rag-red";
+        if (n.Contains("completed")) return "rag-badge rag-blue";
+        if (n.Contains("at risk")) return "rag-badge rag-amber";
+        if (n.Contains("not started")) return "rag-badge rag-none";
+        if (n.Contains("in progress") || n.Contains("on track")) return "rag-badge rag-green";
+        return "rag-badge rag-none";
+    }
+    var compassDetailUrl = Url.Action("Detail", "ModernWork", new { id = Model.Id }, Context.Request.Scheme, Context.Request.Host.Value);
+    string KeyPersonDisplayName(AppUser? u) {
+        if (u == null) return "—";
+        var firstLast = (u.FirstName ?? "").Trim() + " " + (u.LastName ?? "").Trim();
+        return !string.IsNullOrWhiteSpace(firstLast) ? firstLast.Trim() : (u.Name ?? "—");
+    }
+    string? TeamsChatUrl(AppUser? u) {
+        if (u == null || string.IsNullOrWhiteSpace(u.Email)) return null;
+        var first = u.FirstName ?? "";
+        /* Put URL on its own line so Teams is more likely to render it as a clickable link in the sent message */
+        var msg = "HI " + first + ", can you help me with " + Model.Title + " in COMPASS please." + "\n\n" + compassDetailUrl;
+        return "https://teams.microsoft.com/l/chat/0/0?users=" + Uri.EscapeDataString(u.Email) + "&message=" + Uri.EscapeDataString(msg);
+    }
+    var primaryContactUser = ViewBag.PrimaryContactUser as AppUser;
+    var budgetOwnerUser = ViewBag.BudgetOwnerUser as AppUser;
+    var keyPeoplePanelItems = ViewBag.KeyPeoplePanelItems as List<(string Key, string Label)> ?? new List<(string Key, string Label)>();
+    int? ContactRoleTypeIdFromKey(string key) => key.StartsWith("ContactRoleType:", StringComparison.Ordinal) && int.TryParse(key.Substring(16), out var id) ? id : null;
+    var today = DateTime.UtcNow.Date;
+    string DateWithRelativeDays(DateTime? d) {
+        if (!d.HasValue) return "—";
+        var date = d.Value.Date;
+        var days = (date - today).Days;
+        var part = days > 0 ? " (in " + days + " day" + (days == 1 ? "" : "s") + ")" : days < 0 ? " (" + (-days) + " day" + (-days == 1 ? "" : "s") + " ago)" : " (today)";
+        return date.ToString("d MMMM yyyy") + part;
+    }
+    string TargetEndDateWithPastDue(DateTime? d) {
+        if (!d.HasValue) return "—";
+        var date = d.Value.Date;
+        var days = (date - today).Days;
+        var part = days > 0 ? " (in " + days + " day" + (days == 1 ? "" : "s") + ")" : days < 0 ? " (" + (-days) + " day" + (-days == 1 ? "" : "s") + " ago)" : " (today)";
+        var pastDue = (Model.Status == "Active" || Model.Status == "Paused") && date < today;
+        return date.ToString("d MMMM yyyy") + part + (pastDue ? " — Past due date" : "");
+    }
+}
+@section Breadcrumbs {
+    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="/">Home</a></li>
+    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="@Url.Action("AllWork", "ModernWork")">Work</a></li>
+    <li class="dfe-c-breadcrumb__item" aria-current="page">@Model.Title</li>
+}
+
+
+  @await Html.PartialAsync("_WorkItemChrome", Model)
+
+
+
+  <!-- OVERVIEW TAB -->
+  @{
+    var contactRoleTypesList = ViewBag.ContactRoleTypes as List<Compass.Models.Modern.Work.ContactRoleType> ?? new List<Compass.Models.Modern.Work.ContactRoleType>();
+  }
+  <div id="wd-overview" class="tab-pane on">
+    <div class="dfe-c-grid dfe-c-grid--content">
+      <div>
+        @{ var canEdit = ViewBag.CanEditWorkItem as bool? ?? false; }
+        <dl class="govuk-summary-list">
+          <div class="govuk-summary-list__row@(canEdit ? "" : " govuk-summary-list__row--no-actions")">
+            <dt class="govuk-summary-list__key">Title</dt>
+            <dd class="govuk-summary-list__value">@Model.Title</dd>
+            @if (canEdit)
+            {
+              <dd class="govuk-summary-list__actions">
+                <button type="button" class="govuk-link" onclick="window.openWorkOverviewDialog('dlg-work-title')">Change<span class="govuk-visually-hidden"> title</span></button>
+              </dd>
+            }
+          </div>
+          <div class="govuk-summary-list__row@(canEdit ? "" : " govuk-summary-list__row--no-actions")">
+            <dt class="govuk-summary-list__key">Problem statement</dt>
+            <dd class="govuk-summary-list__value">@(string.IsNullOrEmpty(Model.ProblemStatement) ? "—" : Model.ProblemStatement)</dd>
+            @if (canEdit)
+            {
+              <dd class="govuk-summary-list__actions">
+                <button type="button" class="govuk-link" onclick="window.openWorkOverviewDialog('dlg-work-problem')">Change<span class="govuk-visually-hidden"> problem statement</span></button>
+              </dd>
+            }
+          </div>
+          <div class="govuk-summary-list__row@(canEdit ? "" : " govuk-summary-list__row--no-actions")">
+            <dt class="govuk-summary-list__key">Aim</dt>
+            <dd class="govuk-summary-list__value">@(string.IsNullOrEmpty(Model.Aim) ? "—" : Model.Aim)</dd>
+            @if (canEdit)
+            {
+              <dd class="govuk-summary-list__actions">
+                <button type="button" class="govuk-link" onclick="window.openWorkOverviewDialog('dlg-work-aim')">Change<span class="govuk-visually-hidden"> aim</span></button>
+              </dd>
+            }
+          </div>
+          <div class="govuk-summary-list__row@(canEdit ? "" : " govuk-summary-list__row--no-actions")">
+            <dt class="govuk-summary-list__key">Strategic alignment</dt>
+            <dd class="govuk-summary-list__value">@Html.Raw(strategicAlignmentHtml)</dd>
+            @if (canEdit)
+            {
+              <dd class="govuk-summary-list__actions">
+                <a class="govuk-link" href="@Url.Action("EditStrategicAlignment", "ModernWork", new { id = Model.Id })">Change<span class="govuk-visually-hidden"> strategic alignment</span></a>
+              </dd>
+            }
+          </div>
+          <div class="govuk-summary-list__row@(canEdit ? "" : " govuk-summary-list__row--no-actions")">
+            <dt class="govuk-summary-list__key">Flagship project</dt>
+            <dd class="govuk-summary-list__value">@(Model.FlagshipProject ? "Yes — ministerial flagship" : "No")</dd>
+            @if (canEdit)
+            {
+              <dd class="govuk-summary-list__actions">
+                <button type="button" class="govuk-link" onclick="window.openWorkOverviewDialog('dlg-work-flagship')">Change<span class="govuk-visually-hidden"> flagship project</span></button>
+              </dd>
+            }
+          </div>
+          <div class="govuk-summary-list__row@(canEdit ? "" : " govuk-summary-list__row--no-actions")">
+            <dt class="govuk-summary-list__key">Subject to spend control</dt>
+            <dd class="govuk-summary-list__value">@(Model.SubjectToSpendControl ? "Yes — CDDO spend control applies above £750k" : "No")</dd>
+            @if (canEdit)
+            {
+              <dd class="govuk-summary-list__actions">
+                <button type="button" class="govuk-link" onclick="window.openWorkOverviewDialog('dlg-work-spend')">Change<span class="govuk-visually-hidden"> subject to spend control</span></button>
+              </dd>
+            }
+          </div>
+          <div class="govuk-summary-list__row@(canEdit ? "" : " govuk-summary-list__row--no-actions")">
+            <dt class="govuk-summary-list__key">Risk appetite</dt>
+            <dd class="govuk-summary-list__value">
+              @if (riskAppetiteOptions != null && riskAppetiteOptions.Any())
+              {
+                <span class="risk-appetite-badges">
+                @foreach (var opt in riskAppetiteOptions)
+                {
+                  var isSelected = Model.RiskAppetiteId == opt.Id;
+                  var bgKey = isSelected ? opt.BackgroundColourKey : null;
+                  var textKey = isSelected ? opt.TextColourKey : null;
+                  var style = isSelected && (!string.IsNullOrEmpty(bgKey) || !string.IsNullOrEmpty(textKey))
+                    ? (string.IsNullOrEmpty(bgKey) ? "" : "background-color: var(--govuk-colour-" + bgKey + ");") + (string.IsNullOrEmpty(textKey) ? "" : " color: var(--govuk-colour-" + textKey + ");")
+                    : "background:#f3f2f1;color:#505a5f;";
+                  <span class="risk-appetite-badge" style="@style">@(opt.Name ?? opt.Value)</span>
+                }
+                </span>
+              }
+              else
+              { @riskAppetiteName }
+            </dd>
+            @if (canEdit)
+            {
+              <dd class="govuk-summary-list__actions">
+                <button type="button" class="govuk-link" onclick="window.openWorkOverviewDialog('dlg-work-risk-appetite')">Change<span class="govuk-visually-hidden"> risk appetite</span></button>
+              </dd>
+            }
+          </div>
+          <div class="govuk-summary-list__row@(canEdit ? "" : " govuk-summary-list__row--no-actions")">
+            <dt class="govuk-summary-list__key">Multi-dept cooperation</dt>
+            <dd class="govuk-summary-list__value">@(Model.GovernmentDepartments?.Any() == true ? string.Join(", ", Model.GovernmentDepartments.Select(g => g.GovernmentDepartment?.Title).Where(n => n != null)) : "—")</dd>
+            @if (canEdit)
+            {
+              <dd class="govuk-summary-list__actions">
+                <a class="govuk-link" href="@Url.Action("EditMultiDeptCooperation", "ModernWork", new { id = Model.Id })">Change<span class="govuk-visually-hidden"> multi-dept cooperation</span></a>
+              </dd>
+            }
+          </div>
+          <div class="govuk-summary-list__row@(canEdit ? "" : " govuk-summary-list__row--no-actions")">
+            <dt class="govuk-summary-list__key">Start date</dt>
+            <dd class="govuk-summary-list__value">@DateWithRelativeDays(Model.StartDate)</dd>
+            @if (canEdit)
+            {
+              <dd class="govuk-summary-list__actions">
+                <button type="button" class="govuk-link" onclick="window.openWorkOverviewDialog('dlg-work-start-date')">Change<span class="govuk-visually-hidden"> start date</span></button>
+              </dd>
+            }
+          </div>
+          <div class="govuk-summary-list__row@(canEdit ? "" : " govuk-summary-list__row--no-actions")">
+            <dt class="govuk-summary-list__key">Target end date</dt>
+            <dd class="govuk-summary-list__value">@TargetEndDateWithPastDue(Model.TargetEndDate)</dd>
+            @if (canEdit)
+            {
+              <dd class="govuk-summary-list__actions">
+                <button type="button" class="govuk-link" onclick="window.openWorkOverviewDialog('dlg-work-target-end')">Change<span class="govuk-visually-hidden"> target end date</span></button>
+              </dd>
+            }
+          </div>
+          <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">Current RAG</dt>
+            <dd class="govuk-summary-list__value">@(currentRagName ?? "—")</dd>
+            <dd class="govuk-summary-list__actions">
+              <a class="govuk-link" href="@(Url.Action("Detail", "ModernWork", new { id = Model.Id }))#wd-updates">Updated via monthly updates</a>
+            </dd>
+          </div>
+        </dl>
+      </div>
+      <div class="dfe-c-sidebar">
+        <div class="dfe-c-scard" style="border-top:3px solid #003a69;">
+          <div class="dfe-c-scard__title">Follow this work item</div>
+          @if (isWatching)
+          {
+            <p class="dfe-c-body-s dfe-c-mb-2" style="color:var(--govuk-success-colour,#00703c);font-weight:600;">Watching</p>
+            <form method="post" action="@Url.Action("Unwatch", "ModernWork", new { id = Model.Id })">
+              @Html.AntiForgeryToken()
+              <button type="submit" class="dfe-c-button dfe-c-button--secondary dfe-c-button--sm">Remove from watchlist</button>
+            </form>
+          }
+          else
+          {
+            <form method="post" action="@Url.Action("Watch", "ModernWork", new { id = Model.Id })">
+              @Html.AntiForgeryToken()
+              <button type="submit" class="dfe-c-button dfe-c-button--primary dfe-c-button--sm">Add to watchlist</button>
+            </form>
+          }
+        </div>
+        <div class="dfe-c-scard" style="border-top:3px solid #003a69;">
+          <div class="dfe-c-scard__title">Status</div>
+          <p class="dfe-c-body dfe-c-mb-2"><span class="work-item-badge work-item-badge--status">@(ViewBag.WorkStatusDisplayName as string ?? Model.Status ?? "—")</span></p>
+          @if (ViewBag.CanChangeStatus as bool? == true)
+          {
+            <div style="margin-top:10px;"><a href="@Url.Action("ChangeStatus", "ModernWork", new { id = Model.Id })" class="dfe-c-link" style="font-size:13px;color:var(--blue);">Change status →</a></div>
+          }
+        </div>
+        <div class="dfe-c-scard" style="border-top:3px solid #003a69;">
+          <div class="dfe-c-scard__title">Key info</div>
+          <dl class="dfe-c-kv"><dt>Directorate</dt><dd>
+            @if (Model.Directorates?.Any() == true)
+            {
+              <ul class="key-people-list dfe-c-list">
+                @foreach (var d in Model.Directorates.Select(x => x.Division?.Name ?? x.Directorate?.Name).Where(n => n != null))
+                {
+                  <li>@d</li>
+                }
+              </ul>
+            }
+            else
+            { <span>—</span> }
+          </dd></dl>
+          <dl class="dfe-c-kv"><dt>Portfolio</dt><dd>@(portfolioName)</dd></dl>
+          <dl class="dfe-c-kv"><dt>Priority</dt><dd><span class="@WorkPriorityClass(priorityName)">@(priorityName)</span>@if (!string.IsNullOrWhiteSpace(Model.PriorityChangeReason)) { <span class="dfe-c-body dfe-c-d-block dfe-c-mt-2 dfe-c-form__hint" style="font-size:14px;">Reason for change: @Model.PriorityChangeReason</span> }</dd></dl>
+          <dl class="dfe-c-kv"><dt>Activity type</dt><dd>@(activityTypeName)</dd></dl>
+          <dl class="dfe-c-kv"><dt>Phase</dt><dd>@if (!string.IsNullOrEmpty(deliveryPhaseName)) { <span class="wreg-phase" style="background:#d4efed;color:#00695C;border:1px solid #9ed0cb;">@(deliveryPhaseName)</span> } else { <span>—</span> }</dd></dl>
+          @if (canEdit)
+          {
+            <div style="margin-top:10px;"><a href="@Url.Action("Edit", "ModernWork", new { id = Model.Id })" class="dfe-c-link" style="font-size:13px;color:var(--blue);">Edit key info →</a></div>
+          }
+        </div>
+        <div class="dfe-c-scard" style="border-top:3px solid #003a69;">
+          <div class="dfe-c-scard__title">Key people</div>
+          @foreach (var item in keyPeoplePanelItems)
+          {
+            if (item.Key == "PrimaryContact")
+            {
+              <dl class="dfe-c-kv"><dt>@item.Label</dt><dd>@if (primaryContactUser != null) { var pcName = KeyPersonDisplayName(primaryContactUser); var pcUrl = TeamsChatUrl(primaryContactUser); if (pcUrl != null) { <a href="@pcUrl" class="dfe-c-link" target="_blank" rel="noopener noreferrer"><strong>@pcName</strong></a> } else { <strong>@pcName</strong> } } else { <strong>—</strong> }</dd></dl>
+            }
+            else if (item.Key == "BudgetOwner")
+            {
+              <dl class="dfe-c-kv"><dt>@item.Label</dt><dd>@if (budgetOwnerUser != null) { var boName = KeyPersonDisplayName(budgetOwnerUser); var boUrl = TeamsChatUrl(budgetOwnerUser); if (boUrl != null) { <a href="@boUrl" class="dfe-c-link" target="_blank" rel="noopener noreferrer"><strong>@boName</strong></a> } else { <strong>@boName</strong> } } else { <strong>—</strong> }</dd></dl>
+            }
+            else
+            {
+              var roleId = ContactRoleTypeIdFromKey(item.Key);
+              var peopleInRole = (roleId.HasValue && Model.Contacts != null) ? Model.Contacts.Where(c => c.ContactRoleTypeId == roleId.Value).Select(c => c.AppUser).Where(u => u != null).ToList() : new List<AppUser?>();
+              <dl class="dfe-c-kv"><dt>@item.Label</dt><dd>
+              @if (peopleInRole.Any())
+              {
+                <ul class="key-people-list dfe-c-list">
+                @foreach (var u in peopleInRole)
+                {
+                  var name = KeyPersonDisplayName(u);
+                  var url = TeamsChatUrl(u);
+                  <li>
+                  @if (url != null)
+                  { <a href="@url" class="dfe-c-link" target="_blank" rel="noopener noreferrer"><strong>@name</strong></a> }
+                  else
+                  { <strong>@name</strong> }
+                  </li>
+                }
+                </ul>
+              }
+              else
+              { <strong>—</strong> }
+              </dd></dl>
+            }
+          }
+          <div style="margin-top:10px;"><a href="@Url.Action("EditPeople", "ModernWork", new { id = Model.Id })" style="font-size:13px;color:var(--blue);">Edit people →</a></div>
+        </div>
+        @if (linkedDemand != null || linkedBusinessCase != null)
+        {
+        <div class="dfe-c-scard" style="border-top:3px solid #003a69;">
+          <div class="dfe-c-scard__title">Dependencies</div>
+          @if (linkedDemand != null) { <dl class="dfe-c-kv"><dt>Demand</dt><dd><a href="@Url.Action("Detail", "Demand", new { id = linkedDemand.Id })">@linkedDemand.Reference →</a></dd></dl> }
+          @if (linkedBusinessCase != null) { <dl class="dfe-c-kv"><dt>Business case</dt><dd><a href="@Url.Action("Detail", "Horizon", new { id = linkedBusinessCase.Id })">@linkedBusinessCase.BusinessCaseId →</a></dd></dl> }
+          <div style="margin-top:10px;"><a href="@(Url.Action("Detail", "ModernWork", new { id = Model.Id }))#wd-dependencies" class="manage-links-deps-link" style="font-size:13px;color:var(--blue);">Manage links &amp; dependencies →</a></div>
+        </div>
+        }
+      </div>
+    </div>
+    @if (canEdit)
+    {
+      @await Html.PartialAsync("_WorkOverviewEditModals", Model)
+    }
+  </div>
+
+  <!-- MILESTONES TAB -->
+  <div id="wd-milestones" class="tab-pane">
+    @{
+      var milestoneTab = ViewBag.MilestoneTab as string ?? "inprogress";
+    }
+    <div class="dfe-c-flex--between mb4" style="flex-wrap:wrap;gap:12px;align-items:center;">
+      <div>
+        <h2 style="margin:0;">Milestones</h2>
+        <p class="dfe-c-body-s dfe-c-form__hint dfe-c-mt-2 dfe-c-mb-0">Add milestones below, or <strong>Edit</strong> an existing one using the Edit button on each dfe-c-legacy-card.</p>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <a href="@Url.Action("AddMilestone", "ModernWork", new { id = Model.Id })" class="dfe-c-button dfe-c-button--primary">Add milestone</a>
+      </div>
+    </div>
+    @if (Model.Milestones != null && Model.Milestones.Any())
+    {
+      var nowUtc = DateTime.UtcNow.Date;
+      var allMilestoneItems = Model.Milestones
+        .Where(m => !m.IsDeleted)
+        .Select(m =>
+        {
+            var statusLabel = string.IsNullOrEmpty(m.Status) ? "—" : m.Status.Replace("_", " ", StringComparison.OrdinalIgnoreCase);
+            var isComplete = string.Equals(m.Status, "complete", StringComparison.OrdinalIgnoreCase);
+            var isCancelled = string.Equals(m.Status, "cancelled", StringComparison.OrdinalIgnoreCase);
+            var isCompleted = isComplete || isCancelled;
+            var isOverdue = !isCompleted && m.DueDate.Date < nowUtc;
+            return new { m, progressName = statusLabel, isCompleted, isOverdue };
+        })
+        .ToList();
+      var inProgressItems = allMilestoneItems.Where(x => !x.isCompleted).OrderBy(x => x.isOverdue ? 0 : 1).ThenBy(x => x.m.DueDate).ThenBy(x => x.m.ActualDate ?? DateTime.MinValue).ToList();
+      var completedItems = allMilestoneItems.Where(x => x.isCompleted).OrderByDescending(x => x.m.ActualDate ?? x.m.DueDate).ToList();
+      <div class="tabs wd-tabs" role="tablist" aria-label="Milestones sections" style="margin-top:16px;margin-bottom:0;">
+        <a href="@(Url.Action("Detail", "ModernWork", new { id = Model.Id, milestonestab = "inprogress" }))#wd-milestones" class="tab @(milestoneTab == "inprogress" ? "on" : "")" role="tab" aria-selected="@(milestoneTab == "inprogress")" aria-controls="d-milestones-inprogress" id="tab-milestones-inprogress">In progress</a>
+        <a href="@(Url.Action("Detail", "ModernWork", new { id = Model.Id, milestonestab = "complete" }))#wd-milestones" class="tab @(milestoneTab == "complete" ? "on" : "")" role="tab" aria-selected="@(milestoneTab == "complete")" aria-controls="d-milestones-complete" id="tab-milestones-complete">Complete</a>
+      </div>
+      <div id="d-milestones-inprogress" class="tab-pane @(milestoneTab == "inprogress" ? "on" : "")" role="tabpanel" style="padding-top:16px;">
+        @if (inProgressItems.Any())
+        {
+          foreach (var item in inProgressItems)
+          {
+            var m = item.m;
+            var progressName = item.progressName;
+            var isCompleted = item.isCompleted;
+            var badgeClass = MilestoneStatusBadgeClass(progressName);
+            <div class="milestone-dfe-c-legacy-card" style="border:1px solid #dee0e2;margin-bottom:12px;overflow:hidden;">
+              <div style="display:grid;grid-template-columns:1fr auto;gap:16px;padding:14px 18px;background:#f8f9fa;align-items:center;border-bottom:1px solid #dee0e2;">
+                <div>
+                  <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">@progressName</div>
+                  <div style="font-size:17px;font-weight:700;margin-top:3px;">@m.Name</div>
+                </div>
+                <div class="milestone-dfe-c-legacy-card__status-actions">
+                  <span class="@badgeClass">@progressName</span>
+                  <a href="@Url.Action("EditMilestone", "ModernWork", new { id = Model.Id, milestoneId = m.Id })" class="dfe-c-button dfe-c-button--secondary dfe-c-button--sm">Edit</a>
+                </div>
+              </div>
+              <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0;font-size:13px;">
+                <div style="padding:10px 16px;border-right:1px solid #dee0e2;"><div style="color:#505a5f;margin-bottom:2px;">Baseline</div><strong>@(m.BaselineDueDate?.ToString("d MMM yyyy") ?? "—")</strong></div>
+                <div style="padding:10px 16px;border-right:1px solid #dee0e2;"><div style="color:#505a5f;margin-bottom:2px;">Due</div><strong>@m.DueDate.ToString("d MMM yyyy")</strong></div>
+                <div style="padding:10px 16px;border-right:1px solid #dee0e2;"><div style="color:#505a5f;margin-bottom:2px;">Actual</div><strong>@(m.ActualDate?.ToString("d MMM yyyy") ?? "—")</strong></div>
+                <div style="padding:10px 16px;"><div style="color:#505a5f;margin-bottom:2px;">Progress</div><strong>@progressName</strong></div>
+              </div>
+              @if (!string.IsNullOrEmpty(m.Description))
+              {
+                <div style="padding:10px 18px;background:#f8f9fa;font-size:13px;color:#505a5f;border-top:1px solid #dee0e2;">@m.Description</div>
+              }
+            </div>
+          }
+        }
+        else
+        {
+          <p class="dfe-c-body muted">No in progress milestones.</p>
+        }
+      </div>
+      <div id="d-milestones-complete" class="tab-pane @(milestoneTab == "complete" ? "on" : "")" role="tabpanel" style="padding-top:16px;">
+        @if (completedItems.Any())
+        {
+          foreach (var item in completedItems)
+          {
+            var m = item.m;
+            var progressName = item.progressName;
+            var badgeClass = MilestoneStatusBadgeClass(progressName);
+            <div class="milestone-dfe-c-legacy-card" style="border:1px solid #dee0e2;margin-bottom:12px;overflow:hidden;">
+              <div style="display:grid;grid-template-columns:1fr auto;gap:16px;padding:14px 18px;background:#f8f9fa;align-items:center;border-bottom:1px solid #dee0e2;">
+                <div>
+                  <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">@progressName</div>
+                  <div style="font-size:17px;font-weight:700;margin-top:3px;">@m.Name</div>
+                </div>
+                <div class="milestone-dfe-c-legacy-card__status-actions">
+                  <span class="@badgeClass">@progressName</span>
+                  <a href="@Url.Action("EditMilestone", "ModernWork", new { id = Model.Id, milestoneId = m.Id })" class="dfe-c-button dfe-c-button--secondary dfe-c-button--sm">Edit</a>
+                </div>
+              </div>
+              <details class="milestone-dates-details" style="border-top:1px solid #dee0e2;">
+                <summary style="padding:8px 16px;font-size:13px;color:#505a5f;cursor:pointer;list-style:none;display:flex;align-items:center;gap:6px;">
+                  <span class="milestone-dates-summary-icon" aria-hidden="true">▶</span>
+                  <span>Show date details</span>
+                </summary>
+                <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0;font-size:13px;">
+                  <div style="padding:10px 16px;border-right:1px solid #dee0e2;"><div style="color:#505a5f;margin-bottom:2px;">Baseline</div><strong>@(m.BaselineDueDate?.ToString("d MMM yyyy") ?? "—")</strong></div>
+                  <div style="padding:10px 16px;border-right:1px solid #dee0e2;"><div style="color:#505a5f;margin-bottom:2px;">Due</div><strong>@m.DueDate.ToString("d MMM yyyy")</strong></div>
+                  <div style="padding:10px 16px;border-right:1px solid #dee0e2;"><div style="color:#505a5f;margin-bottom:2px;">Actual</div><strong>@(m.ActualDate?.ToString("d MMM yyyy") ?? "—")</strong></div>
+                  <div style="padding:10px 16px;"><div style="color:#505a5f;margin-bottom:2px;">Progress</div><strong>@progressName</strong></div>
+                </div>
+              </details>
+              @if (!string.IsNullOrEmpty(m.Description))
+              {
+                <div style="padding:10px 18px;background:#f8f9fa;font-size:13px;color:#505a5f;border-top:1px solid #dee0e2;">@m.Description</div>
+              }
+            </div>
+          }
+        }
+        else
+        {
+          <p class="dfe-c-body muted">No completed milestones.</p>
+        }
+      </div>
+    }
+    else
+    {
+      <p class="dfe-c-body muted">No milestones yet.</p>
+    }
+  </div>
+
+  <!-- UPDATES TAB -->
+  @{
+    var updatesList = Model.MonthlyUpdates?.OrderByDescending(m => m.ReportMonth).ToList() ?? new List<MonthlyUpdate>();
+    var periodDueByKey = ViewBag.ReportingPeriodDueByKey as Dictionary<string, (DateTime DueDate, string Label)> ?? new Dictionary<string, (DateTime, string)>();
+    var monthlyUpdateSubmittedByNames = ViewBag.MonthlyUpdateSubmittedByNames as Dictionary<int, string> ?? new Dictionary<int, string>();
+    var reportingPeriodsList = ViewBag.ReportingPeriodsList as IEnumerable<Compass.Models.Modern.Work.ReportingCyclePeriod> ?? Enumerable.Empty<Compass.Models.Modern.Work.ReportingCyclePeriod>();
+    var ragBgByStatusId = ViewBag.RagBgByStatusId as Dictionary<int, string?> ?? new Dictionary<int, string?>();
+    var ragTextByStatusId = ViewBag.RagTextByStatusId as Dictionary<int, string?> ?? new Dictionary<int, string?>();
+    var fallbackRagByUpdateId = ViewBag.FallbackRagByUpdateId as Dictionary<int, int> ?? new Dictionary<int, int>();
+  }
+  <div id="wd-updates" class="tab-pane">
+    @if (TempData["Error"] is string errMsg && !string.IsNullOrEmpty(errMsg))
+    {
+      <div class="dfe-c-error-summary dfe-c-mb-3" aria-labelledby="error-summary-title" role="alert" data-module="dfe-c-error-summary">
+        <h2 class="dfe-c-error-summary__title" id="error-summary-title">There is a problem</h2>
+        <div class="dfe-c-error-summary__body">
+          <ul class="dfe-c-list dfe-c-error-summary__list">
+            <li>@errMsg</li>
+          </ul>
+        </div>
+      </div>
+    }
+    <div class="mb4">
+      <h2 style="margin:0;">Monthly updates</h2>
+      @if (!monthlyReportDue || currentPeriodLabel == null)
+      {
+        <p class="dfe-c-body-s muted dfe-c-mb-0 dfe-c-mt-2">Submit a return by choosing a period from the table below when submissions are open.</p>
+      }
+    </div>
+    @if (reportingPeriodsList.Any())
+    {
+      <div class="overflow-x-auto">
+        <table class="data-table" style="table-layout:auto;">
+          <thead>
+            <tr>
+              <th>Period</th>
+              <th>Due date</th>
+              <th>Status</th>
+              <th>RAG rating</th>
+              <th>Submitted date</th>
+              <th>Submitted by</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            @foreach (var period in reportingPeriodsList)
+            {
+              var parts = period.PeriodKey.Split('-');
+              var periodYear = parts.Length >= 1 && int.TryParse(parts[0], out var y) ? y : 0;
+              var periodMonth = parts.Length >= 2 && int.TryParse(parts[1], out var m) ? m : 0;
+              var submittedUpdate = periodYear > 0 && periodMonth > 0 ? updatesList.FirstOrDefault(u => u.ReportMonth.Year == periodYear && u.ReportMonth.Month == periodMonth) : null;
+              var isDraft = submittedUpdate != null && !submittedUpdate.SubmittedAt.HasValue;
+              var isSubmitted = submittedUpdate != null && submittedUpdate.SubmittedAt.HasValue;
+              var isUpcoming = submittedUpdate == null;
+              var periodOpenDate = periodYear > 0 && periodMonth > 0 ? new DateTime(periodYear, periodMonth, 20, 0, 0, 0, DateTimeKind.Utc).Date : (DateTime?)null;
+              var nowDate = DateTime.UtcNow.Date;
+              var canSubmit = isUpcoming && periodOpenDate.HasValue && nowDate >= periodOpenDate.Value && nowDate <= period.DueDate.Date;
+              var periodMonthName = period.PeriodLabel?.Split(' ').FirstOrDefault() ?? new DateTime(periodYear, periodMonth > 0 ? periodMonth : 1, 1).ToString("MMMM");
+              var effectiveRagId = submittedUpdate != null ? (submittedUpdate.RagStatusId ?? (fallbackRagByUpdateId.TryGetValue(submittedUpdate.Id, out var fid) ? fid : (int?)null)) : null;
+              var uRagName = effectiveRagId.HasValue && effectiveRagId.Value != 0 && ragStatusesDict.TryGetValue(effectiveRagId.Value, out var ur) ? ur : "—";
+              var submittedByDisplay = submittedUpdate != null && submittedUpdate.SubmittedByUserId.HasValue && monthlyUpdateSubmittedByNames.TryGetValue(submittedUpdate.SubmittedByUserId.Value, out var sb) ? sb : (submittedUpdate?.SubmittedBy ?? "—");
+              var uRagBg = effectiveRagId.HasValue && effectiveRagId.Value != 0 && ragBgByStatusId.TryGetValue(effectiveRagId.Value, out var ubg) ? ubg : null;
+              var uRagText = effectiveRagId.HasValue && effectiveRagId.Value != 0 && ragTextByStatusId.TryGetValue(effectiveRagId.Value, out var utx) ? utx : null;
+              <tr style="cursor:default;">
+                <td>@if (isSubmitted) { <a href="@Url.Action("ViewMonthlyUpdate", "ModernWork", new { id = Model.Id, updateId = submittedUpdate!.Id })" class="dfe-c-link dfe-c-fw-bold">@period.PeriodLabel</a> } else if (isDraft) { <a href="@Url.Action("EditMonthlyUpdate", "ModernWork", new { id = Model.Id, updateId = submittedUpdate!.Id })" class="dfe-c-link dfe-c-fw-bold">@period.PeriodLabel</a> } else if (canSubmit) { <a href="@Url.Action("AddMonthlyUpdate", "ModernWork", new { id = Model.Id, periodKey = period.PeriodKey })" class="dfe-c-link dfe-c-fw-bold">@period.PeriodLabel</a> } else { @period.PeriodLabel }</td>
+                <td>@period.DueDate.ToString("d MMM yyyy")</td>
+                <td>@if (isSubmitted) { <span>Submitted</span> } else if (isDraft) { <span class="wd-updates-badge wd-updates-badge--blue">Continue return</span> } else if (canSubmit) { <span class="wd-updates-badge wd-updates-badge--red">@(periodMonthName) not submitted</span> } else { <span>Upcoming</span> }</td>
+                <td>@if (submittedUpdate != null) { @if (!string.IsNullOrEmpty(uRagBg) || !string.IsNullOrEmpty(uRagText)) { <span class="rag-badge" style="@(string.IsNullOrEmpty(uRagBg) ? "" : "background-color: var(--govuk-colour-" + uRagBg + ");")@(string.IsNullOrEmpty(uRagText) ? "" : " color: var(--govuk-colour-" + uRagText + ");")">@uRagName</span> } else { <span class="@RagBadgeClass(uRagName)">@uRagName</span> } } else { <text>—</text> }</td>
+                <td>@(submittedUpdate?.SubmittedAt?.ToString("d MMM yyyy") ?? "—")</td>
+                <td>@submittedByDisplay</td>
+                <td>@if (canSubmit && isUpcoming) { <a href="@Url.Action("AddMonthlyUpdate", "ModernWork", new { id = Model.Id, periodKey = period.PeriodKey })" class="dfe-c-link">Submit</a> } else if (isDraft) { <a href="@Url.Action("EditMonthlyUpdate", "ModernWork", new { id = Model.Id, updateId = submittedUpdate!.Id })" class="dfe-c-link">Continue return</a> } else if (isSubmitted) { <a href="@Url.Action("ViewMonthlyUpdate", "ModernWork", new { id = Model.Id, updateId = submittedUpdate!.Id })" class="dfe-c-link">View</a> } else { <span style="color:#505a5f;">—</span> }</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+    else if (updatesList.Any())
+    {
+      <p class="dfe-c-body-s muted dfe-c-mb-2">No reporting periods are configured. Add periods in <a href="@Url.Action("WorkReporting", "Admin")" class="dfe-c-link">Admin → Work reporting</a>.</p>
+      <h3 class="dfe-c-heading-m dfe-c-mb-2">Previously submitted updates</h3>
+      <div class="overflow-x-auto">
+        <table class="data-table" style="table-layout:auto;">
+          <thead>
+            <tr>
+              <th>Report period</th>
+              <th>RAG rating</th>
+              <th>Submitted date</th>
+              <th>Submitted by</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            @foreach (var u in updatesList)
+            {
+              var effectiveRagId2 = u.RagStatusId ?? (fallbackRagByUpdateId.TryGetValue(u.Id, out var fid2) ? fid2 : (int?)null);
+              var uRagName = effectiveRagId2.HasValue && effectiveRagId2.Value != 0 && ragStatusesDict.TryGetValue(effectiveRagId2.Value, out var ur) ? ur : "—";
+              var submittedByDisplay = u.SubmittedByUserId.HasValue && monthlyUpdateSubmittedByNames.TryGetValue(u.SubmittedByUserId.Value, out var sb) ? sb : (u.SubmittedBy ?? "—");
+              var uRagBg2 = effectiveRagId2.HasValue && effectiveRagId2.Value != 0 && ragBgByStatusId.TryGetValue(effectiveRagId2.Value, out var ubg2) ? ubg2 : null;
+              var uRagText2 = effectiveRagId2.HasValue && effectiveRagId2.Value != 0 && ragTextByStatusId.TryGetValue(effectiveRagId2.Value, out var utx2) ? utx2 : null;
+              <tr>
+                <td><a href="@Url.Action("ViewMonthlyUpdate", "ModernWork", new { id = Model.Id, updateId = u.Id })" class="dfe-c-link dfe-c-fw-bold">@u.ReportMonth.ToString("MMMM yyyy")</a></td>
+                <td>@if (!string.IsNullOrEmpty(uRagBg2) || !string.IsNullOrEmpty(uRagText2)) { <span class="rag-badge" style="@(string.IsNullOrEmpty(uRagBg2) ? "" : "background-color: var(--govuk-colour-" + uRagBg2 + ");")@(string.IsNullOrEmpty(uRagText2) ? "" : " color: var(--govuk-colour-" + uRagText2 + ");")">@uRagName</span> } else { <span class="@RagBadgeClass(uRagName)">@uRagName</span> }</td>
+                <td>@(u.SubmittedAt?.ToString("d MMM yyyy") ?? "—")</td>
+                <td>@submittedByDisplay</td>
+                <td><a href="@Url.Action("ViewMonthlyUpdate", "ModernWork", new { id = Model.Id, updateId = u.Id })" class="dfe-c-link">View</a></td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+    else
+    {
+      <p class="dfe-c-body muted">No reporting periods are configured. Add periods in <a href="@Url.Action("WorkReporting", "Admin")" class="dfe-c-link">Admin → Work reporting</a>. No monthly updates have been submitted yet.</p>
+    }
+  </div>
+
+  <!-- TEAM TAB -->
+  @{
+    var teamFundingOptions = ViewBag.TeamMemberFundingOptions as List<Compass.Models.Modern.Work.LookupOption> ?? new List<Compass.Models.Modern.Work.LookupOption>();
+    var teamTypeOptions = ViewBag.TeamMemberTypeOptions as List<Compass.Models.Modern.Work.LookupOption> ?? new List<Compass.Models.Modern.Work.LookupOption>();
+  }
+  <div id="wd-team" class="tab-pane">
+    <div class="dfe-c-flex--between mb4">
+      <h2 style="margin:0;">Team members</h2>
+      <a href="@Url.Action("AddTeamMember", "ModernWork", new { id = Model.Id })" class="dfe-c-button dfe-c-button--secondary dfe-c-button--sm">Add member</a>
+    </div>
+    @if (Model.TeamMembers != null && Model.TeamMembers.Any())
+    {
+      <div style="overflow-x:auto;">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Role</th>
+              <th>Type</th>
+              <th>Funding</th>
+              <th>Allocation</th>
+              <th>Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            @foreach (var t in Model.TeamMembers)
+            {
+              var pct = t.TimeAllocationPct ?? 0;
+              var typeName = t.TypeOptionId.HasValue ? (teamTypeOptions.FirstOrDefault(o => o.Id == t.TypeOptionId.Value)?.Name ?? "—") : "—";
+              var fundingName = t.FundingOptionId.HasValue ? (teamFundingOptions.FirstOrDefault(o => o.Id == t.FundingOptionId.Value)?.Name ?? "—") : "—";
+              <tr>
+                <td><strong>@(t.AppUser?.Name ?? t.AppUser?.Email ?? "—")</strong></td>
+                <td>@(t.Role ?? "—")</td>
+                <td>@typeName</td>
+                <td>@fundingName</td>
+                <td>
+                  <div style="display:flex;align-items:center;gap:8px;">
+                    <div style="width:80px;background:#dee0e2;height:8px;border-radius:2px;"><div style="width:@(pct)%;background:#003a69;height:100%;"></div></div>
+                    <span style="font-size:13px;font-weight:700;">@(pct)%</span>
+                  </div>
+                </td>
+                <td><span class="work-item-badge @(string.Equals(t.TeamStatus,"active", StringComparison.OrdinalIgnoreCase) ? "work-item-badge--status" : "")" style="@(string.Equals(t.TeamStatus, "active", StringComparison.OrdinalIgnoreCase) ? "" : "background:#f3f2f1;color:#505a5f;")">@(t.TeamStatus ?? "—")</span></td>
+                <td><a href="@Url.Action("EditTeamMember", "ModernWork", new { id = Model.Id, teamMemberId = t.Id })" class="dfe-c-link">Edit</a></td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+    else
+    {
+      <p class="dfe-c-body muted">No team members added.</p>
+    }
+  </div>
+
+  <!-- RISKS & ISSUES TAB -->
+  @{
+    var riskOrIssues = Model.RiskOrIssues?.OrderBy(r => r.ReferenceNumber).ToList() ?? new List<WorkItemRiskOrIssue>();
+    var openIssues = riskOrIssues.Where(r => string.Equals(r.Type, "Issue", StringComparison.OrdinalIgnoreCase) && !string.Equals(r.Status, "Closed", StringComparison.OrdinalIgnoreCase)).ToList();
+    var openRisks = riskOrIssues.Where(r => string.Equals(r.Type, "Risk", StringComparison.OrdinalIgnoreCase) && !string.Equals(r.Status, "Closed", StringComparison.OrdinalIgnoreCase)).ToList();
+    var mitigating = riskOrIssues.Where(r => string.Equals(r.Status, "Mitigating", StringComparison.OrdinalIgnoreCase)).ToList();
+    var closedRi = riskOrIssues.Where(r => string.Equals(r.Status, "Closed", StringComparison.OrdinalIgnoreCase)).ToList();
+    var openTabItems = riskOrIssues.Where(r => !string.Equals(r.Status, "Closed", StringComparison.OrdinalIgnoreCase)).ToList();
+    string RiRef(WorkItemRiskOrIssue r) => "RI-" + r.ReferenceNumber.ToString("D5");
+    string RegSevClass(string? p) {
+      if (string.IsNullOrEmpty(p)) return "tag tag--sev-neutral";
+      var x = p.Trim().ToLowerInvariant();
+      if (x.Contains("critical")) return "tag tag--sev-critical";
+      if (x.Contains("high")) return "tag tag--sev-high";
+      if (x.Contains("medium")) return "tag tag--sev-medium";
+      if (x.Contains("low")) return "tag tag--sev-low";
+      return "tag tag--sev-neutral";
+    }
+    string RiTierPillClass(string? t) {
+      if (!string.IsNullOrEmpty(t) && t.Contains("2")) return "ri-tier-pill ri-tier-pill--2";
+      return "ri-tier-pill ri-tier-pill--default";
+    }
+    string WorkRiskIssueDetailHref(WorkItemRiskOrIssue r) =>
+        string.Equals(r.Type, "Issue", StringComparison.OrdinalIgnoreCase)
+            ? (Url.Action("IssueDetail", "ModernWork", new { workId = Model.Id, id = r.Id }) ?? "")
+            : (Url.Action("RiskDetail", "ModernWork", new { workId = Model.Id, id = r.Id }) ?? "");
+  }
+  @{ var closedRisks = closedRi.Where(r => string.Equals(r.Type, "Risk", StringComparison.OrdinalIgnoreCase)).ToList(); var closedIssues = closedRi.Where(r => string.Equals(r.Type, "Issue", StringComparison.OrdinalIgnoreCase)).ToList(); }
+  <div id="wd-risks" class="tab-pane">
+    <div class="dfe-c-flex--between mb4">
+      <div>
+        <h2 style="margin:0;">Risks &amp; issues</h2>
+        <p style="margin-top:4px;font-size:14px;color:#505a5f;">Track risks and active issues affecting this work item. Risks can escalate to issues when they materialise.</p>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <a href="@Url.Action("LogRisk", "ModernWork", new { id = Model.Id })" class="dfe-c-button dfe-c-button--secondary dfe-c-button--sm">Add risk</a>
+        <a href="@Url.Action("LogIssue", "ModernWork", new { id = Model.Id })" class="dfe-c-button dfe-c-button--primary dfe-c-button--sm">Add issue</a>
+      </div>
+    </div>
+
+    <h3 class="dfe-c-heading-s dfe-c-mt-3">Open risks</h3>
+    @if (openRisks.Any())
+    {
+      <table class="data-table work-ri-table dfe-c-mb-3">
+        <thead>
+          <tr>
+            <th style="width:72px;">Ref</th>
+            <th>Title &amp; description</th>
+            <th style="width:90px;">Tier</th>
+            <th style="width:80px;">Priority</th>
+            <th style="width:90px;">Status</th>
+            <th>Action / mitigation</th>
+            <th style="width:90px;">KRI status</th>
+            <th style="width:100px;">Owner</th>
+            <th style="width:80px;">Updated</th>
+          </tr>
+        </thead>
+        <tbody>
+          @foreach (var r in openRisks)
+          {
+            var ownerName = r.OwnerUser?.Name ?? r.OwnerUser?.Email ?? r.UpdatedBy ?? "—";
+            var kriSummary = r.Kris?.Any() == true ? (r.Kris.Any(k => string.Equals(k.Status, "Breached", StringComparison.OrdinalIgnoreCase)) ? "1 at risk" : r.Kris.Any(k => string.Equals(k.Status, "AtRisk", StringComparison.OrdinalIgnoreCase)) ? "1 amber" : "All green") : "—";
+            <tr onclick="window.location.href='@WorkRiskIssueDetailHref(r)';" style="cursor:pointer;">
+              <td class="work-ri-table__ref">@RiRef(r)</td>
+              <td>
+                <a href="@WorkRiskIssueDetailHref(r)" class="dfe-c-link dfe-c-fw-bold">@r.Title</a>
+                @if (!string.IsNullOrEmpty(r.Description)) { <div class="dfe-c-body-s muted dfe-c-mt-1 dfe-c-mb-0">@(r.Description.Length > 80 ? r.Description.Substring(0, 80) + "…" : r.Description)</div> }
+                @if (r.MaterialisedAsIssues?.Any() == true) { <div class="dfe-c-mt-1"><span class="tag tag--sev-critical tag--ri-meta">Issue raised → @RiRef(r.MaterialisedAsIssues.First())</span></div> }
+              </td>
+              <td><span class="@RiTierPillClass(r.Tier)">@(r.Tier ?? "Tier 3")</span></td>
+              <td><span class="@RegSevClass(r.Priority)">@(r.Priority ?? "—")</span></td>
+              <td><span class="tag t-@(string.Equals(r.Status,"Closed", StringComparison.OrdinalIgnoreCase) ? "closed" : "open")">@r.Status</span></td>
+              <td class="dfe-c-body-s">@(string.IsNullOrEmpty(r.MitigationOrAction) ? "—" : (r.MitigationOrAction.Length > 60 ? r.MitigationOrAction.Substring(0, 60) + "…" : r.MitigationOrAction))</td>
+              <td class="dfe-c-body-s">@kriSummary</td>
+              <td class="dfe-c-body-s">@ownerName</td>
+              <td class="dfe-c-body-s muted">@r.UpdatedAt.ToString("d MMM")</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+    else { <p class="dfe-c-body muted dfe-c-mb-3">No open risks.</p> }
+
+    <h3 class="dfe-c-heading-s dfe-c-mt-3">Open issues</h3>
+    @if (openIssues.Any())
+    {
+      <table class="data-table work-ri-table dfe-c-mb-3">
+        <thead>
+          <tr>
+            <th style="width:72px;">Ref</th>
+            <th>Title &amp; description</th>
+            <th style="width:90px;">Tier</th>
+            <th style="width:80px;">Priority</th>
+            <th style="width:90px;">Status</th>
+            <th>Action / mitigation</th>
+            <th style="width:90px;">KRI status</th>
+            <th style="width:100px;">Owner</th>
+            <th style="width:80px;">Updated</th>
+          </tr>
+        </thead>
+        <tbody>
+          @foreach (var r in openIssues)
+          {
+            var ownerName = r.OwnerUser?.Name ?? r.OwnerUser?.Email ?? r.UpdatedBy ?? "—";
+            var kriSummary = r.Kris?.Any() == true ? (r.Kris.Any(k => string.Equals(k.Status, "Breached", StringComparison.OrdinalIgnoreCase)) ? "1 at risk" : r.Kris.Any(k => string.Equals(k.Status, "AtRisk", StringComparison.OrdinalIgnoreCase)) ? "1 amber" : "All green") : "—";
+            <tr class="work-ri-table__row--issue" onclick="window.location.href='@WorkRiskIssueDetailHref(r)';" style="cursor:pointer;">
+              <td class="work-ri-table__ref">@RiRef(r)</td>
+              <td>
+                <a href="@WorkRiskIssueDetailHref(r)" class="dfe-c-link dfe-c-fw-bold">@r.Title</a>
+                @if (!string.IsNullOrEmpty(r.Description)) { <div class="dfe-c-body-s muted dfe-c-mt-1 dfe-c-mb-0">@(r.Description.Length > 80 ? r.Description.Substring(0, 80) + "…" : r.Description)</div> }
+                @if (r.MaterialisedFrom != null) { <div class="dfe-c-mt-1"><span class="tag tag--sev-medium tag--ri-meta">Materialised from @RiRef(r.MaterialisedFrom)</span></div> }
+              </td>
+              <td><span class="@RiTierPillClass(r.Tier)">@(r.Tier ?? "Tier 3")</span></td>
+              <td><span class="@RegSevClass(r.Priority)">@(r.Priority ?? "—")</span></td>
+              <td><span class="tag t-@(string.Equals(r.Status,"Closed", StringComparison.OrdinalIgnoreCase) ? "closed" : "open")">@r.Status</span></td>
+              <td class="dfe-c-body-s">@(string.IsNullOrEmpty(r.MitigationOrAction) ? "—" : (r.MitigationOrAction.Length > 60 ? r.MitigationOrAction.Substring(0, 60) + "…" : r.MitigationOrAction))</td>
+              <td class="dfe-c-body-s">@kriSummary</td>
+              <td class="dfe-c-body-s">@ownerName</td>
+              <td class="dfe-c-body-s muted">@r.UpdatedAt.ToString("d MMM")</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+    else { <p class="dfe-c-body muted dfe-c-mb-3">No open issues.</p> }
+
+    <h3 class="dfe-c-heading-s dfe-c-mt-3">Closed risks</h3>
+    @if (closedRisks.Any())
+    {
+      <table class="data-table work-ri-table dfe-c-mb-3">
+        <thead>
+          <tr>
+            <th style="width:72px;">Ref</th>
+            <th>Title</th>
+            <th style="width:90px;">Tier</th>
+            <th style="width:80px;">Priority</th>
+            <th style="width:80px;">Closed</th>
+            <th>Outcome</th>
+            <th style="width:100px;">Owner</th>
+          </tr>
+        </thead>
+        <tbody>
+          @foreach (var r in closedRisks)
+          {
+            var ownerName = r.OwnerUser?.Name ?? r.OwnerUser?.Email ?? r.UpdatedBy ?? "—";
+            <tr onclick="window.location.href='@WorkRiskIssueDetailHref(r)';" style="cursor:pointer;">
+              <td class="work-ri-table__ref">@RiRef(r)</td>
+              <td><a href="@WorkRiskIssueDetailHref(r)" class="dfe-c-link dfe-c-fw-bold">@r.Title</a></td>
+              <td><span class="@RiTierPillClass(r.Tier)">@(r.Tier ?? "Tier 3")</span></td>
+              <td><span class="@RegSevClass(r.Priority)">@(r.Priority ?? "—")</span></td>
+              <td class="dfe-c-body-s muted">@(r.ClosedAt?.ToString("d MMMM yyyy") ?? "—")</td>
+              <td class="dfe-c-body-s" style="color:#00703c;font-weight:700;">@(string.IsNullOrEmpty(r.ClosureOutcome) ? "—" : (r.ClosureOutcome.Length > 50 ? r.ClosureOutcome.Substring(0, 50) + "…" : r.ClosureOutcome))</td>
+              <td class="dfe-c-body-s">@ownerName</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+    else { <p class="dfe-c-body muted dfe-c-mb-3">No closed risks.</p> }
+
+    <h3 class="dfe-c-heading-s dfe-c-mt-3">Closed issues</h3>
+    @if (closedIssues.Any())
+    {
+      <table class="data-table work-ri-table dfe-c-mb-3">
+        <thead>
+          <tr>
+            <th style="width:72px;">Ref</th>
+            <th>Title</th>
+            <th style="width:90px;">Tier</th>
+            <th style="width:80px;">Priority</th>
+            <th style="width:80px;">Closed</th>
+            <th>Outcome</th>
+            <th style="width:100px;">Owner</th>
+          </tr>
+        </thead>
+        <tbody>
+          @foreach (var r in closedIssues)
+          {
+            var ownerName = r.OwnerUser?.Name ?? r.OwnerUser?.Email ?? r.UpdatedBy ?? "—";
+            <tr class="work-ri-table__row--issue" onclick="window.location.href='@WorkRiskIssueDetailHref(r)';" style="cursor:pointer;">
+              <td class="work-ri-table__ref">@RiRef(r)</td>
+              <td><a href="@WorkRiskIssueDetailHref(r)" class="dfe-c-link dfe-c-fw-bold">@r.Title</a></td>
+              <td><span class="@RiTierPillClass(r.Tier)">@(r.Tier ?? "Tier 3")</span></td>
+              <td><span class="@RegSevClass(r.Priority)">@(r.Priority ?? "—")</span></td>
+              <td class="dfe-c-body-s muted">@(r.ClosedAt?.ToString("d MMMM yyyy") ?? "—")</td>
+              <td class="dfe-c-body-s" style="color:#00703c;font-weight:700;">@(string.IsNullOrEmpty(r.ClosureOutcome) ? "—" : (r.ClosureOutcome.Length > 50 ? r.ClosureOutcome.Substring(0, 50) + "…" : r.ClosureOutcome))</td>
+              <td class="dfe-c-body-s">@ownerName</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+    else { <p class="dfe-c-body muted dfe-c-mb-3">No closed issues.</p> }
+  </div>
+
+  <!-- DEPENDENCIES TAB (More) -->
+  @{
+    var dependencyTargetPortfolioNames = ViewBag.DependencyTargetPortfolioNames as Dictionary<int, string> ?? new Dictionary<int, string>();
+  }
+  <div id="wd-dependencies" class="tab-pane">
+    <div class="dfe-c-flex--between mb4">
+      <h2 style="margin:0;">Dependencies</h2>
+      <a href="@Url.Action("AddDependency", "ModernWork", new { id = Model.Id })" class="dfe-c-button dfe-c-button--secondary dfe-c-button--sm">Add dependency</a>
+    </div>
+    @{
+      var inDeps = Model.Dependencies?.Where(d => string.Equals(d.Direction, "In", StringComparison.OrdinalIgnoreCase)).ToList() ?? new List<WorkItemDependency>();
+      var outDeps = Model.Dependencies?.Where(d => string.Equals(d.Direction, "Out", StringComparison.OrdinalIgnoreCase)).ToList() ?? new List<WorkItemDependency>();
+    }
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+      <div>
+        <h3 style="background:#003a69;color:#fff;padding:10px 14px;font-size:15px;margin-bottom:0;">⬆ In-dependencies (upstream)</h3>
+        <p style="font-size:13px;color:#505a5f;padding:8px 0 12px;">Things this work item depends on.</p>
+        @if (inDeps.Any())
+        {
+          @foreach (var d in inDeps)
+          {
+            var depTitle = d.IsInternal && d.TargetWorkItem != null ? d.TargetWorkItem.Title : (d.ExternalDescription ?? "—");
+            var depPortfolioName = d.IsInternal && d.TargetWorkItem != null && d.TargetWorkItem.PortfolioId.HasValue && dependencyTargetPortfolioNames.TryGetValue(d.TargetWorkItem.PortfolioId.Value, out var pn) ? pn : null;
+            <div style="border:1px solid #dee0e2;overflow:hidden;margin-bottom:10px;">
+              <div style="display:grid;grid-template-columns:auto 1fr auto;gap:0;align-items:stretch;">
+                <div style="background:@(d.IsInternal ? "#e3f5eb" : "#fde8e4");width:6px;"></div>
+                <div style="padding:12px 14px;">
+                  <div style="display:flex;gap:8px;align-items:center;margin-bottom:4px;">
+                    <span style="background:@(d.IsInternal ? "#d2e2f1" : "#fde8e4");color:@(d.IsInternal ? "#003078" : "#942514");padding:2px 7px;font-size:11px;font-weight:700;">@(d.IsInternal ? "INTERNAL" : "EXTERNAL")</span>
+                  </div>
+                  @if (d.IsInternal && d.TargetWorkItem != null)
+                  {
+                    <div style="font-weight:700;font-size:15px;"><a href="@Url.Action("Detail", "ModernWork", new { id = d.TargetWorkItem.Id })" class="dfe-c-link">@depTitle</a></div>
+                    @if (!string.IsNullOrEmpty(depPortfolioName))
+                    {
+                      <div style="font-size:13px;color:#505a5f;margin-top:4px;">@depPortfolioName</div>
+                    }
+                  }
+                  else
+                  {
+                    <div style="font-weight:700;font-size:15px;">@depTitle</div>
+                  }
+                </div>
+                <div style="padding:12px;display:flex;gap:10px;align-items:center;">
+                  <form method="post" action="@Url.Action("RemoveDependency", "ModernWork", new { id = Model.Id })" style="display:inline;" data-confirm-title="Remove dependency" data-confirm-message="Remove this dependency link?">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="dependencyId" value="@d.Id" />
+                    <button type="submit" class="dfe-c-link" style="background:none;border:none;padding:0;font-size:13px;color:var(--govuk-error-colour);cursor:pointer;text-decoration:underline;">Remove</button>
+                  </form>
+                </div>
+              </div>
+            </div>
+          }
+        }
+        else { <p style="font-size:13px;color:#505a5f;">None recorded.</p> }
+      </div>
+      <div>
+        <h3 style="background:#003a69;color:#fff;padding:10px 14px;font-size:15px;margin-bottom:0;">⬇ Out-dependencies (downstream)</h3>
+        <p style="font-size:13px;color:#505a5f;padding:8px 0 12px;">Work items that depend on this.</p>
+        @if (outDeps.Any())
+        {
+          @foreach (var d in outDeps)
+          {
+            var depTitle = d.IsInternal && d.TargetWorkItem != null ? d.TargetWorkItem.Title : (d.ExternalDescription ?? "—");
+            var depPortfolioName = d.IsInternal && d.TargetWorkItem != null && d.TargetWorkItem.PortfolioId.HasValue && dependencyTargetPortfolioNames.TryGetValue(d.TargetWorkItem.PortfolioId.Value, out var pn2) ? pn2 : null;
+            <div style="border:1px solid #dee0e2;overflow:hidden;margin-bottom:10px;">
+              <div style="display:grid;grid-template-columns:auto 1fr auto;gap:0;align-items:stretch;">
+                <div style="background:#fff7e0;width:6px;"></div>
+                <div style="padding:12px 14px;">
+                  <div style="display:flex;gap:8px;align-items:center;margin-bottom:4px;">
+                    <span style="background:#d2e2f1;color:#003078;padding:2px 7px;font-size:11px;font-weight:700;">@(d.IsInternal ? "INTERNAL" : "EXTERNAL")</span>
+                  </div>
+                  @if (d.IsInternal && d.TargetWorkItem != null)
+                  {
+                    <div style="font-weight:700;font-size:15px;"><a href="@Url.Action("Detail", "ModernWork", new { id = d.TargetWorkItem.Id })" class="dfe-c-link">@depTitle</a></div>
+                    @if (!string.IsNullOrEmpty(depPortfolioName))
+                    {
+                      <div style="font-size:13px;color:#505a5f;margin-top:4px;">@depPortfolioName</div>
+                    }
+                  }
+                  else
+                  {
+                    <div style="font-weight:700;font-size:15px;">@depTitle</div>
+                  }
+                </div>
+                <div style="padding:12px;display:flex;gap:10px;align-items:center;">
+                  <form method="post" action="@Url.Action("RemoveDependency", "ModernWork", new { id = Model.Id })" style="display:inline;" data-confirm-title="Remove dependency" data-confirm-message="Remove this dependency link?">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="dependencyId" value="@d.Id" />
+                    <button type="submit" class="dfe-c-link" style="background:none;border:none;padding:0;font-size:13px;color:var(--govuk-error-colour);cursor:pointer;text-decoration:underline;">Remove</button>
+                  </form>
+                </div>
+              </div>
+            </div>
+          }
+        }
+        else { <p style="font-size:13px;color:#505a5f;">None recorded.</p> }
+      </div>
+    </div>
+  </div>
+
+  <!-- LINKED RECORDS TAB (More) -->
+  <div id="wd-links" class="tab-pane">
+    <h2 style="margin-bottom:16px;">Linked records</h2>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;">
+      @if (linkedBusinessCase != null)
+      {
+        <div class="dfe-c-card" style="border-top:4px solid #00897B;">
+          <h3>Business case</h3>
+          <div class="kv"><dt>Reference</dt><dd><strong>@linkedBusinessCase.BusinessCaseId</strong></dd></div>
+          <div class="kv"><dt>Title</dt><dd>@linkedBusinessCase.Title</dd></div>
+          <div style="margin-top:12px;"><a href="@Url.Action("Detail", "Horizon", new { id = linkedBusinessCase.Id })" class="dfe-c-button dfe-c-button--secondary dfe-c-button--sm">View business case →</a></div>
+        </div>
+      }
+      @if (linkedDemand != null)
+      {
+        <div class="dfe-c-card" style="border-top:4px solid #003a69;">
+          <h3>Demand record</h3>
+          <div class="kv"><dt>Reference</dt><dd><strong>@linkedDemand.Reference</strong></dd></div>
+          <div class="kv"><dt>Title</dt><dd>@linkedDemand.Title</dd></div>
+          <div style="margin-top:12px;"><a href="@Url.Action("Detail", "Demand", new { id = linkedDemand.Id })" class="dfe-c-button dfe-c-button--secondary dfe-c-button--sm">View demand →</a></div>
+        </div>
+      }
+      <div class="dfe-c-card" style="border-top:4px solid #b1b4b6;">
+        <h3>Add retrospective link</h3>
+        <p style="font-size:13px;color:#505a5f;margin-bottom:12px;">Link this work item to an existing demand or business case.</p>
+        <a href="@(Url.Action("Detail", "ModernWork", new { id = Model.Id }))#wd-dependencies" class="dfe-c-button dfe-c-button--secondary dfe-c-button--sm">Manage links &amp; dependencies →</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- AUDIT TRAIL TAB (More) -->
+  <div id="wd-audit" class="tab-pane">
+    <h2 style="margin-bottom:16px;">Audit trail</h2>
+    @{
+      var lifecycleEntries = ViewBag.LifecycleAuditEntries as List<Compass.Models.Modern.Work.LifecycleAuditEntry> ?? new List<Compass.Models.Modern.Work.LifecycleAuditEntry>();
+      var auditEntries = ViewBag.WorkItemAuditEntries as List<Compass.Models.Modern.Work.AuditLog> ?? new List<Compass.Models.Modern.Work.AuditLog>();
+      var auditChangedByDisplay = ViewBag.AuditChangedByDisplay as Dictionary<string, string> ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+      string AuditWho(string? by) => by != null && auditChangedByDisplay.TryGetValue(by, out var name) ? name : by ?? "—";
+    }
+    <div id="wd-audit-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:300;align-items:center;justify-content:center;" role="dialog" aria-modal="true" aria-labelledby="wd-audit-modal-title">
+      <div style="background:#fff;max-width:480px;width:90%;max-height:85vh;overflow:auto;padding:24px;box-shadow:0 4px 24px rgba(0,0,0,0.2);">
+        <h3 id="wd-audit-modal-title" class="dfe-c-heading-m" style="margin-top:0;">Change details</h3>
+        <dl class="dfe-c-summary-list dfe-c-summary-list--no-border" style="margin-bottom:20px;">
+          <div class="dfe-c-summary-list__row"><dt class="dfe-c-summary-list__key">Event</dt><dd class="dfe-c-summary-list__value" id="wd-audit-modal-type">—</dd></div>
+          <div class="dfe-c-summary-list__row"><dt class="dfe-c-summary-list__key">When</dt><dd class="dfe-c-summary-list__value" id="wd-audit-modal-when">—</dd></div>
+          <div class="dfe-c-summary-list__row"><dt class="dfe-c-summary-list__key">Who</dt><dd class="dfe-c-summary-list__value" id="wd-audit-modal-who">—</dd></div>
+          <div class="dfe-c-summary-list__row" id="wd-audit-modal-previous-row" style="display:none;"><dt class="dfe-c-summary-list__key">Previous</dt><dd class="dfe-c-summary-list__value" id="wd-audit-modal-previous">—</dd></div>
+          <div class="dfe-c-summary-list__row"><dt class="dfe-c-summary-list__key">New / value</dt><dd class="dfe-c-summary-list__value" id="wd-audit-modal-new" style="white-space:pre-wrap;word-break:break-word;">—</dd></div>
+        </dl>
+        <button type="button" class="dfe-c-button dfe-c-button--primary" id="wd-audit-modal-close">Close</button>
+      </div>
+    </div>
+    <table class="" style="table-layout:fixed;width:100%;">
+      <thead class="">
+        <tr class="">
+          <th class="" style="width:40%;">Event</th>
+          <th class="" style="width:28%;">When</th>
+          <th class="" style="width:32%;min-width:0;overflow:hidden;text-overflow:ellipsis;">Who</th>
+        </tr>
+      </thead>
+      <tbody class="">
+        @if (lifecycleEntries.Any())
+        {
+          var idx = 0;
+          foreach (var e in lifecycleEntries)
+          {
+            <tr class="" style="@(e.Highlight ? "background:#e3f5eb;border-left:3px solid #00703c;" : (idx % 2 == 1 ? "background:#f8f9fa;" : ""))">
+              <td class="" style="font-size:14px;">
+                @if (!string.IsNullOrEmpty(e.LinkUrl))
+                {
+                  <a href="@e.LinkUrl" class="dfe-c-link"><strong>@e.Event</strong></a>
+                  @if (!string.IsNullOrEmpty(e.LinkText)) { <text> — </text><span style="font-size:12px;color:#505a5f;">@e.LinkText</span> }
+                }
+                else
+                {
+                  <strong>@e.Event</strong>
+                }
+              </td>
+              <td class="" style="font-size:13px;color:#505a5f;">@e.When.ToString("d MMM yyyy · HH:mm")</td>
+              <td class="--who" style="font-size:13px;max-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="@e.Who">@e.Who</td>
+            </tr>
+            idx++;
+          }
+        }
+        else if (auditEntries.Any())
+        {
+          var auditData = auditEntries.Select(a => new { type = a.ChangeType ?? "", when = a.ChangedAt.ToString("d MMM yyyy · HH:mm"), who = AuditWho(a.ChangedBy), previous = a.PreviousValue ?? "", @new = a.NewValue ?? "" }).ToList();
+          <script>window.WD_AUDIT_ENTRIES = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(auditData));</script>
+          var idx = 0;
+          foreach (var a in auditEntries)
+          {
+            var whoDisplay = AuditWho(a.ChangedBy);
+            <tr class="" style="@(idx % 2 == 1 ? "background:#f8f9fa;" : "")">
+              <td class="" style="font-size:14px;">
+                <button type="button" class="dfe-c-link wd-audit-row-btn" style="background:none;border:none;padding:0;text-align:left;cursor:pointer;text-decoration:underline;color:var(--dfe-c-link-colour);" data-audit-index="@idx"><strong>@(a.ChangeType ?? "—").</strong> @(a.NewValue ?? a.PreviousValue ?? "—")</button>
+              </td>
+              <td class="" style="font-size:13px;color:#505a5f;">@a.ChangedAt.ToString("d MMM yyyy · HH:mm")</td>
+              <td class="--who" style="font-size:13px;max-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="@whoDisplay">@whoDisplay</td>
+            </tr>
+            idx++;
+          }
+        }
+        else
+        {
+          <tr class="">
+            <td class="" style="font-size:14px;"><strong>Work item updated.</strong></td>
+            <td class="" style="font-size:13px;color:#505a5f;">@Model.UpdatedAt.ToString("d MMM yyyy · HH:mm")</td>
+            <td class="--who" style="font-size:13px;max-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="@AuditWho(Model.UpdatedBy)">@AuditWho(Model.UpdatedBy)</td>
+          </tr>
+          <tr class="" style="background:#f8f9fa;">
+            <td class="" style="font-size:14px;"><strong>Work item created.</strong> @(linkedDemand != null ? "Linked to " + linkedDemand.Reference + "." : "") @(linkedBusinessCase != null ? "Linked to " + linkedBusinessCase.BusinessCaseId + "." : "")</td>
+            <td class="" style="font-size:13px;color:#505a5f;">@Model.CreatedAt.ToString("d MMM yyyy · HH:mm")</td>
+            <td class="--who" style="font-size:13px;max-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="@AuditWho(Model.CreatedBy)">@AuditWho(Model.CreatedBy)</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+
+
+@section Scripts {
+<script>
+window.openWorkOverviewDialog = function (id) {
+  var d = document.getElementById(id);
+  if (!d || !d.showModal) return;
+  d.showModal();
+  if (window.GOVUKFrontend && typeof window.GOVUKFrontend.initAll === 'function') {
+    window.GOVUKFrontend.initAll();
+  }
+};
+(function() {
+  document.querySelectorAll('.js-work-overview-dialog-close').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var dlg = btn.closest('dialog');
+      if (dlg && typeof dlg.close === 'function') dlg.close();
+    });
+  });
+  window.switchRisksTab = function(btn, paneId) {
+    document.querySelectorAll('#risks-tabs-bar .tab').forEach(function(t){ t.classList.remove('on'); });
+    document.querySelectorAll('#wd-risks .tab-pane').forEach(function(p){ p.classList.remove('on'); });
+    if (btn) btn.classList.add('on');
+    var p = document.getElementById(paneId);
+    if (p) p.classList.add('on');
+  };
+
+  (function auditModal() {
+    var modal = document.getElementById('wd-audit-modal');
+    var closeBtn = document.getElementById('wd-audit-modal-close');
+    if (!modal || !closeBtn) return;
+    function showModal(entry) {
+      if (!entry) return;
+      document.getElementById('wd-audit-modal-type').textContent = entry.type || '—';
+      document.getElementById('wd-audit-modal-when').textContent = entry.when || '—';
+      document.getElementById('wd-audit-modal-who').textContent = entry.who || '—';
+      var prevRow = document.getElementById('wd-audit-modal-previous-row');
+      var prevEl = document.getElementById('wd-audit-modal-previous');
+      if (entry.previous) { prevRow.style.display = ''; prevEl.textContent = entry.previous; } else { prevRow.style.display = 'none'; }
+      document.getElementById('wd-audit-modal-new').textContent = (entry['new'] !== undefined && entry['new'] !== null ? entry['new'] : '—');
+      modal.style.display = 'flex';
+    }
+    function hideModal() { modal.style.display = 'none'; }
+    document.querySelectorAll('.wd-audit-row-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var idx = parseInt(btn.getAttribute('data-audit-index'), 10);
+        if (typeof window.WD_AUDIT_ENTRIES !== 'undefined' && window.WD_AUDIT_ENTRIES[idx]) showModal(window.WD_AUDIT_ENTRIES[idx]);
+      });
+    });
+    closeBtn.addEventListener('click', hideModal);
+    modal.addEventListener('click', function(e) { if (e.target === modal) hideModal(); });
+  })();
+})();
+</script>
+}

@@ -57,7 +57,40 @@
     #ragPriorityHeatmapView td[data-rag][data-priority][tabindex="0"]:hover {
         box-shadow: inset 0 0 0 2px #d2e2f1;
     }
+    
+    .table-row-action {
+        cursor: pointer;
+    }
+    .table-row-action:hover {
+        background-color: rgba(0, 86, 179, 0.06);
+    }
 </style>
+
+@functions {
+    private static string EncodeForDataAttr(string? s)
+    {
+        if (string.IsNullOrEmpty(s)) return "";
+        return s.Replace("&", "&amp;").Replace("\"", "&quot;").Replace("'", "&#39;").Replace("\r\n", "&#10;").Replace("\n", "&#10;").Replace("\r", "&#10;");
+    }
+
+    /// <summary>Most recent submitted monthly update, else latest by reporting period; narrative from child entries or legacy Narrative field.</summary>
+    private static string LatestMonthlyNarrative(Compass.Models.Project project)
+    {
+        var mus = project.MonthlyUpdates;
+        if (mus == null || mus.Count == 0) return "";
+        var latestMu = mus.Where(u => u.SubmittedAt.HasValue).OrderByDescending(u => u.SubmittedAt).FirstOrDefault()
+            ?? mus.OrderByDescending(u => u.Year).ThenByDescending(u => u.Month).ThenByDescending(u => u.SubmittedAt ?? u.CreatedAt).FirstOrDefault();
+        if (latestMu == null) return "";
+        var parts = latestMu.MonthlyUpdateNarratives?
+            .OrderBy(n => n.CreatedAt)
+            .Select(n => n.Narrative)
+            .Where(n => !string.IsNullOrWhiteSpace(n))
+            .ToList() ?? new List<string>();
+        if (parts.Count > 0) return string.Join("\n\n", parts);
+        if (!string.IsNullOrWhiteSpace(latestMu.Narrative)) return latestMu.Narrative.Trim();
+        return "";
+    }
+}
 
 @{
     var year = ViewBag.Year as int? ?? DateTime.UtcNow.Year;
@@ -105,7 +138,6 @@
     var ragData = new {
         Red = ragDistribution.ContainsKey("Red") ? ragDistribution["Red"] : 0,
         AmberRed = ragDistribution.ContainsKey("Amber-Red") ? ragDistribution["Amber-Red"] : 0,
-        Amber = ragDistribution.ContainsKey("Amber") ? ragDistribution["Amber"] : 0,
         AmberGreen = ragDistribution.ContainsKey("Amber-Green") ? ragDistribution["Amber-Green"] : 0,
         Green = ragDistribution.ContainsKey("Green") ? ragDistribution["Green"] : 0,
         NotStarted = ragDistribution.ContainsKey("Not Started") ? ragDistribution["Not Started"] : 0,
@@ -716,19 +748,14 @@
         }
 
         <!-- Resource Summary -->
-        @if (totalFte > 0 || resourceByBusinessArea.Any())
+        @if (totalFte > 0 || resourceByBusinessArea.Any() || (businessAreaId.HasValue && businessAreaActiveProjects.Any()))
         {
-            <div class="card mb-4 shadow-sm collapsed-card">
+            <div class="card mb-4 shadow-sm">
                 <div class="card-header bg-white">
                     <h3 class="card-title mb-0">Resource Summary</h3>
-                    <div class="card-tools">
-                        <button type="button" class="btn btn-tool" data-card-widget="collapse">
-                            <i class="fas fa-plus" aria-hidden="true"></i>
-                            <span class="sr-only">Toggle resource summary</span>
-                        </button>
-                    </div>
                 </div>
                 <div class="card-body">
+                    <p class="text-muted small mb-3">Permanent and MSP FTE from <strong>submitted</strong> monthly returns for @monthName.</p>
                     @if (businessAreaId.HasValue)
                     {
                         <div class="row">
@@ -751,6 +778,43 @@
                                 </div>
                             </div>
                         </div>
+                        @if (businessAreaActiveProjects.Any())
+                        {
+                            <div class="mt-4">
+                                <h4 class="h6 font-weight-bold mb-2">Work items in this business area</h4>
+                                <p class="text-muted small mb-2">FTE for this reporting month (0.0 if no submitted return for the period).</p>
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-hover mb-0">
+                                        <thead class="thead-light">
+                                            <tr>
+                                                <th scope="col">Work item</th>
+                                                <th scope="col" class="text-center">Permanent FTE</th>
+                                                <th scope="col" class="text-center">MSP FTE</th>
+                                                <th scope="col" class="text-center">Total FTE</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var project in businessAreaActiveProjects.OrderBy(p => p.Title))
+                                            {
+                                                var muBa = project.MonthlyUpdates?.FirstOrDefault(u => u.Year == year && u.Month == month && u.SubmittedAt.HasValue);
+                                                var permBa = muBa?.MonthlyPermFte ?? 0m;
+                                                var mspBa = muBa?.MonthlyMspFte ?? 0m;
+                                                var totBa = permBa + mspBa;
+                                                <tr>
+                                                    <td>
+                                                        <a href="@Url.Action("Details", "Project", new { id = project.Id })" style="color: #005ea5; font-weight: 600;">@project.Title</a>
+                                                        <br /><small class="text-muted">DFE-DDT-@project.Id</small>
+                                                    </td>
+                                                    <td class="text-center">@permBa.ToString("F1")</td>
+                                                    <td class="text-center">@mspBa.ToString("F1")</td>
+                                                    <td class="text-center"><strong>@totBa.ToString("F1")</strong></td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        }
                     }
                     else
                     {
@@ -777,49 +841,50 @@
                         
                         @if (resourceByBusinessArea.Any())
                         {
-                            <div class="mb-3">
-                                <button class="btn btn-sm btn-outline-secondary" type="button" data-toggle="collapse" data-target="#resourceByBusinessAreaTable" aria-expanded="false" aria-controls="resourceByBusinessAreaTable">
-                                    <i class="fas fa-chevron-down" id="resourceTableToggleIcon"></i> View by Business Area
+                            <h4 class="h6 font-weight-bold mt-2 mb-2">Breakdown by business area</h4>
+                            <p class="text-muted small mb-2">Select a business area to open a modal with every work item and its Permanent / MSP FTE for this month.</p>
+                            <div class="mb-2">
+                                <button class="btn btn-sm btn-outline-secondary" type="button" data-toggle="collapse" data-target="#resourceByBusinessAreaTable" aria-expanded="true" aria-controls="resourceByBusinessAreaTable">
+                                    <i class="fas fa-chevron-up" id="resourceTableToggleIcon"></i> <span id="resourceTableToggleLabel">Hide</span> table
                                 </button>
                             </div>
-                            <div class="collapse" id="resourceByBusinessAreaTable">
+                            <div class="collapse show" id="resourceByBusinessAreaTable">
                                 <div class="table-responsive">
                                     <table class="table table-hover mb-0">
-                                        <thead>
+                                        <thead class="thead-light">
                                             <tr>
-                                                <th>Business Area</th>
-                                                <th class="text-center">Projects</th>
-                                                <th class="text-center">Permanent FTE</th>
-                                                <th class="text-center">MSP FTE</th>
-                                                <th class="text-center">Total FTE</th>
+                                                <th scope="col">Business area</th>
+                                                <th scope="col" class="text-center">Work items</th>
+                                                <th scope="col" class="text-center">Permanent FTE</th>
+                                                <th scope="col" class="text-center">MSP FTE</th>
+                                                <th scope="col" class="text-center">Total FTE</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             @foreach (dynamic item in resourceByBusinessArea)
                                             {
                                                 var businessAreaProjects = item.Projects as List<Compass.Models.Project> ?? new List<Compass.Models.Project>();
-                                                <tr>
+                                                var projectsResourceJson = System.Text.Json.JsonSerializer.Serialize(
+                                                    businessAreaProjects.Select(p =>
+                                                    {
+                                                        var mu = p.MonthlyUpdates?.FirstOrDefault(u => u.Year == year && u.Month == month && u.SubmittedAt.HasValue);
+                                                        var perm = mu?.MonthlyPermFte ?? 0m;
+                                                        var msp = mu?.MonthlyMspFte ?? 0m;
+                                                        return new { Id = p.Id, Title = p.Title, ProjectCode = $"DFE-DDT-{p.Id}", TotalPermFte = perm, TotalMspFte = msp, TotalFte = perm + msp };
+                                                    }).ToList());
+                                                <tr class="business-area-resource-row table-row-action" tabindex="0" role="button" title="Open work item FTE breakdown" aria-label="Open work item FTE breakdown for this business area">
                                                     <td>
-                                                        @if (item.BusinessAreaId != null)
-                                                        {
-                                                            <a href="#" class="business-area-resource-link" 
-                                                               data-business-area-id="@item.BusinessAreaId"
-                                                               data-business-area-name="@item.BusinessAreaName"
-                                                               data-project-count="@item.ProjectCount"
-                                                               data-total-perm-fte="@item.TotalPermFte.ToString("F1")"
-                                                               data-total-msp-fte="@item.TotalMspFte.ToString("F1")"
-                                                               data-total-fte="@item.TotalFte.ToString("F1")"
-                                                               style="color: #005ea5; text-decoration: none; font-weight: 600; cursor: pointer;">
-                                                                @item.BusinessAreaName
-                                                            </a>
-                                                            <input type="hidden" class="business-area-projects-data" 
-                                                                   data-business-area-id="@item.BusinessAreaId"
-                                                                   value="@System.Text.Json.JsonSerializer.Serialize(businessAreaProjects.Select(p => new { Id = p.Id, Title = p.Title, ProjectCode = $"DFE-DDT-{p.Id}", TotalPermFte = p.TotalPermFte ?? 0, TotalMspFte = p.TotalMspFte ?? 0, TotalFte = (p.TotalPermFte ?? 0) + (p.TotalMspFte ?? 0) }).ToList())" />
-                                                        }
-                                                        else
-                                                        {
+                                                        <a href="#" class="business-area-resource-link" 
+                                                           data-business-area-id="@(item.BusinessAreaId != null ? item.BusinessAreaId.ToString() : "")"
+                                                           data-business-area-name="@item.BusinessAreaName"
+                                                           data-project-count="@item.ProjectCount"
+                                                           data-total-perm-fte="@item.TotalPermFte.ToString("F1")"
+                                                           data-total-msp-fte="@item.TotalMspFte.ToString("F1")"
+                                                           data-total-fte="@item.TotalFte.ToString("F1")"
+                                                           style="color: #005ea5; text-decoration: none; font-weight: 600;">
                                                             @item.BusinessAreaName
-                                                        }
+                                                        </a>
+                                                        <input type="hidden" class="business-area-projects-data" value="@projectsResourceJson" />
                                                     </td>
                                                     <td class="text-center">@item.ProjectCount</td>
                                                     <td class="text-center">@item.TotalPermFte.ToString("F1")</td>
@@ -873,11 +938,10 @@
                                     </thead>
                                     <tbody>
                                         @{
-                                            var ragTotal = ragData.Red + ragData.AmberRed + ragData.Amber + ragData.AmberGreen + ragData.Green + ragData.NotStarted + ragData.OnHold + ragData.NotSet;
+                                            var ragTotal = ragData.Red + ragData.AmberRed + ragData.AmberGreen + ragData.Green + ragData.NotStarted + ragData.OnHold + ragData.NotSet;
                                             var ragItems = new[] {
                                                 new { Label = "Red", Count = ragData.Red, Color = "#dc3545", Key = "Red" },
                                                 new { Label = "Amber-Red", Count = ragData.AmberRed, Color = "#fd7e14", Key = "Amber-Red" },
-                                                new { Label = "Amber", Count = ragData.Amber, Color = "#ffc107", Key = "Amber" },
                                                 new { Label = "Amber-Green", Count = ragData.AmberGreen, Color = "#ffeb3b", Key = "Amber-Green" },
                                                 new { Label = "Green", Count = ragData.Green, Color = "#28a745", Key = "Green" },
                                                 new { Label = "Not Started", Count = ragData.NotStarted, Color = "#e9ecef", Key = "Not Started" },
@@ -1682,6 +1746,8 @@
                                         var aimText = project.Aim ?? "Not provided";
                                         var aimEncoded = aimText.Replace("\"", "&quot;").Replace("'", "&#39;");
                                         var problemStatementEncoded = problemStatementText.Replace("\"", "&quot;").Replace("'", "&#39;");
+                                        var latestMonthlyNarrative = LatestMonthlyNarrative(project);
+                                        var latestMonthlyNarrativeEncoded = EncodeForDataAttr(latestMonthlyNarrative);
                                         <tr>
                                             <td>
                                                 <a href="#" class="project-detail-link" 
@@ -1695,6 +1761,7 @@
                                                    data-primary-contact="@(project.PrimaryContactUser?.Name ?? "-")"
                                                    data-aim="@aimEncoded"
                                                    data-problem-statement="@problemStatementEncoded"
+                                                   data-monthly-narrative="@latestMonthlyNarrativeEncoded"
                                                    style="color: #005ea5; text-decoration: none; font-weight: 600; cursor: pointer;">
                                                     @project.Title
                                                 </a>
@@ -1860,6 +1927,7 @@
                                 <tr>
                                     <th style="width: 30%;">Project</th>
                                     <th>Business Area</th>
+                                    <th>Priority</th>
                                     <th>Current RAG</th>
                                     <th style="width: 50%;">Path to Green</th>
                                 </tr>
@@ -1903,12 +1971,26 @@
                                         "On hold" => "background-color: #e9ecef; color: #000;",
                                         _ => ""
                                     };
+                                    var priorityName = project.DeliveryPriority?.Name ?? "Not Set";
+                                    var priorityBadgeClass = priorityName.ToLower() switch {
+                                        var p when p.Contains("critical") => "badge-danger",
+                                        var p when p.Contains("high") => "badge-warning",
+                                        var p when p.Contains("medium") => "badge-info",
+                                        var p when p.Contains("low") => "badge-success",
+                                        _ => "badge-light"
+                                    };
+                                    var priorityBadgeStyle = priorityName.ToLower() switch {
+                                        var p when p.Contains("medium") => "background-color: #ffc107; color: #000;",
+                                        _ => ""
+                                    };
                                     var latestProblemStatement = project.ProblemStatements?.OrderByDescending(ps => ps.CreatedAt).FirstOrDefault();
                                     var problemStatementText = latestProblemStatement?.ProblemStatement ?? "Not provided";
                                     var aimText = project.Aim ?? "Not provided";
                                     var aimEncoded = aimText.Replace("\"", "&quot;").Replace("'", "&#39;");
                                     var problemStatementEncoded = problemStatementText.Replace("\"", "&quot;").Replace("'", "&#39;");
                                     var pathToGreenEncoded = (project.PathToGreen ?? "").Replace("\"", "&quot;").Replace("'", "&#39;");
+                                    var latestMonthlyNarrativePtg = LatestMonthlyNarrative(project);
+                                    var latestMonthlyNarrativePtgEncoded = EncodeForDataAttr(latestMonthlyNarrativePtg);
                                     <tr class="path-to-green-row" data-current-rag="@currentRag">
                                         <td>
                                                 <a href="#" class="project-detail-link" 
@@ -1916,10 +1998,12 @@
                                                data-project-title="@project.Title" 
                                                data-project-code="DFE-DDT-@project.Id"
                                                data-business-area="@(project.BusinessAreaLookup?.Name ?? "-")"
+                                               data-priority="@priorityName"
                                                data-rag-status="@currentRag"
                                                data-path-to-green="@pathToGreenEncoded"
                                                data-aim="@aimEncoded"
                                                data-problem-statement="@problemStatementEncoded"
+                                               data-monthly-narrative="@latestMonthlyNarrativePtgEncoded"
                                                style="color: #005ea5; text-decoration: none; font-weight: 600; cursor: pointer;">
                                                 @project.Title
                                             </a>
@@ -1927,6 +2011,9 @@
                                             <small class="text-muted">DFE-DDT-@project.Id</small>
                                         </td>
                                         <td>@(project.BusinessAreaLookup?.Name ?? "-")</td>
+                                        <td>
+                                            <span class="badge @priorityBadgeClass" style="@priorityBadgeStyle">@priorityName</span>
+                                        </td>
                                         <td>
                                             <span class="badge @ragBadgeClass" style="@ragBadgeStyle">@currentRag</span>
                                         </td>
@@ -2041,6 +2128,12 @@
                         <div id="projectModalProblemStatement" style="white-space: pre-wrap; word-wrap: break-word;"></div>
                     </div>
                 </div>
+                <div class="row">
+                    <div class="col-md-12">
+                        <h6 class="font-weight-bold">Latest monthly narrative</h6>
+                        <div id="projectModalMonthlyNarrative" style="white-space: pre-wrap; word-wrap: break-word;"></div>
+                    </div>
+                </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
@@ -2051,11 +2144,11 @@
 </div>
 
 <!-- Business Area Resource Details Modal -->
-<div class="modal fade" id="businessAreaResourceModal" tabindex="-1" role="dialog">
-    <div class="modal-dialog modal-lg" role="document">
+<div class="modal fade" id="businessAreaResourceModal" tabindex="-1" role="dialog" aria-labelledby="businessAreaResourceModalTitle">
+    <div class="modal-dialog modal-xl" role="document">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="businessAreaResourceModalTitle">Business Area Resource Details</h5>
+                <h5 class="modal-title" id="businessAreaResourceModalTitle">Business area — FTE breakdown</h5>
                 <button type="button" class="close" data-dismiss="modal" aria-label="Close">
                     <span aria-hidden="true">&times;</span>
                 </button>
@@ -2063,26 +2156,26 @@
             <div class="modal-body">
                 <div class="row mb-3">
                     <div class="col-md-12">
-                        <h6 class="font-weight-bold">Resource Summary</h6>
+                        <h6 class="font-weight-bold">Totals for @monthName</h6>
                         <table class="table table-sm table-borderless mb-3">
                             <tr>
-                                <td class="text-muted" style="width: 30%;">Business Area:</td>
+                                <td class="text-muted" style="width: 30%;">Business area</td>
                                 <td id="businessAreaResourceModalName" class="font-weight-bold"></td>
                             </tr>
                             <tr>
-                                <td class="text-muted">Total Projects:</td>
+                                <td class="text-muted">Work items</td>
                                 <td id="businessAreaResourceModalProjectCount"></td>
                             </tr>
                             <tr>
-                                <td class="text-muted">Permanent FTE:</td>
+                                <td class="text-muted">Permanent FTE</td>
                                 <td id="businessAreaResourceModalPermFte"></td>
                             </tr>
                             <tr>
-                                <td class="text-muted">MSP FTE:</td>
+                                <td class="text-muted">MSP FTE</td>
                                 <td id="businessAreaResourceModalMspFte"></td>
                             </tr>
                             <tr>
-                                <td class="text-muted">Total FTE:</td>
+                                <td class="text-muted">Total FTE</td>
                                 <td id="businessAreaResourceModalTotalFte" class="font-weight-bold"></td>
                             </tr>
                         </table>
@@ -2090,15 +2183,16 @@
                 </div>
                 <div class="row">
                     <div class="col-md-12">
-                        <h6 class="font-weight-bold">Projects</h6>
-                        <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                        <h6 class="font-weight-bold mb-2">Work items</h6>
+                        <p class="text-muted small mb-2">Permanent and MSP FTE from each work item’s submitted monthly return for this period.</p>
+                        <div class="table-responsive" style="max-height: 420px; overflow-y: auto;">
                             <table class="table table-sm table-hover mb-0">
-                                <thead>
+                                <thead class="thead-light">
                                     <tr>
-                                        <th>Project</th>
-                                        <th class="text-center">Permanent FTE</th>
-                                        <th class="text-center">MSP FTE</th>
-                                        <th class="text-center">Total FTE</th>
+                                        <th scope="col">Work item</th>
+                                        <th scope="col" class="text-center">Permanent FTE</th>
+                                        <th scope="col" class="text-center">MSP FTE</th>
+                                        <th scope="col" class="text-center">Total FTE</th>
                                     </tr>
                                 </thead>
                                 <tbody id="businessAreaResourceModalProjectsList">
@@ -2110,7 +2204,7 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
-                <a id="businessAreaResourceModalLink" href="#" class="btn btn-primary">View Business Area</a>
+                <a id="businessAreaResourceModalLink" href="#" class="btn btn-primary">View this business area on dashboard</a>
             </div>
         </div>
     </div>
@@ -2204,6 +2298,7 @@
                 var aim = $link.attr('data-aim') || 'Not provided';
                 var problemStatement = $link.attr('data-problem-statement') || 'Not provided';
                 var pathToGreen = $link.attr('data-path-to-green');
+                var monthlyNarrativeRaw = $link.attr('data-monthly-narrative');
                 
                 // Decode HTML entities
                 function decodeHtml(html) {
@@ -2214,6 +2309,7 @@
                 
                 aim = decodeHtml(aim);
                 problemStatement = decodeHtml(problemStatement);
+                var monthlyNarrative = monthlyNarrativeRaw ? decodeHtml(monthlyNarrativeRaw) : '';
                 
                 // Determine RAG badge class
                 var ragBadgeClass = 'badge-light';
@@ -2246,6 +2342,13 @@
                     $('#projectModalProblemStatement').text(problemStatement);
                 } else {
                     $('#projectModalProblemStatement').html('<em class="text-muted">Not provided</em>');
+                }
+                
+                // Latest monthly narrative (Active projects / Path to green links supply data-monthly-narrative)
+                if (monthlyNarrative && monthlyNarrative.trim() !== '') {
+                    $('#projectModalMonthlyNarrative').text(monthlyNarrative);
+                } else {
+                    $('#projectModalMonthlyNarrative').html('<em class="text-muted">Not provided</em>');
                 }
                 
                 $('#projectModalLink').attr('href', '/Project/Details/' + projectId);
@@ -2468,65 +2571,102 @@
                 return text ? text.replace(/[&<>"']/g, function(m) { return map[m]; }) : '';
             }
             
-            // Business area resource link click handler
-            $(document).on('click', '.business-area-resource-link', function(e) {
-                e.preventDefault();
-                var $link = $(this);
-                var businessAreaId = $link.data('business-area-id');
+            function formatResourceFte(v) {
+                var n = parseFloat(v);
+                if (isNaN(n)) n = 0;
+                return n.toFixed(1);
+            }
+            
+            function openBusinessAreaResourceModal($link) {
                 var businessAreaName = $link.data('business-area-name');
                 var projectCount = $link.data('project-count');
                 var totalPermFte = $link.data('total-perm-fte');
                 var totalMspFte = $link.data('total-msp-fte');
                 var totalFte = $link.data('total-fte');
+                var businessAreaIdAttr = $link.attr('data-business-area-id');
                 
-                // Get projects data from hidden input
-                var $hiddenInput = $('.business-area-projects-data[data-business-area-id="' + businessAreaId + '"]');
-                var projectsJson = $hiddenInput.val();
+                var $hiddenInput = $link.closest('tr').find('.business-area-projects-data');
+                var projectsJson = $hiddenInput.length ? $hiddenInput.val() : '';
                 var projects = [];
-                
                 try {
-                    projects = JSON.parse(projectsJson);
-                } catch (e) {
-                    console.error('Error parsing projects JSON:', e);
+                    projects = projectsJson ? JSON.parse(projectsJson) : [];
+                } catch (err) {
+                    console.error('Error parsing projects JSON:', err);
                 }
                 
-                $('#businessAreaResourceModalTitle').text(businessAreaName + ' - Resource Details');
+                $('#businessAreaResourceModalTitle').text(businessAreaName + ' — FTE breakdown');
                 $('#businessAreaResourceModalName').text(businessAreaName);
                 $('#businessAreaResourceModalProjectCount').text(projectCount);
-                $('#businessAreaResourceModalPermFte').text(totalPermFte);
-                $('#businessAreaResourceModalMspFte').text(totalMspFte);
-                $('#businessAreaResourceModalTotalFte').text(totalFte);
+                $('#businessAreaResourceModalPermFte').text(formatResourceFte(totalPermFte));
+                $('#businessAreaResourceModalMspFte').text(formatResourceFte(totalMspFte));
+                $('#businessAreaResourceModalTotalFte').text(formatResourceFte(totalFte));
                 
-                // Populate projects list
                 var $projectsList = $('#businessAreaResourceModalProjectsList');
                 $projectsList.empty();
                 
+                var projectTemplate = '@Url.Action("Details", "Project", new { id = "__ID__" })';
+                
                 if (projects.length > 0) {
                     projects.forEach(function(project) {
+                        var id = project.Id !== undefined ? project.Id : project.id;
+                        var title = project.Title !== undefined ? project.Title : (project.title || '');
+                        var code = project.ProjectCode || project.projectCode || ('DFE-DDT-' + id);
+                        var perm = project.TotalPermFte !== undefined ? project.TotalPermFte : project.totalPermFte;
+                        var msp = project.TotalMspFte !== undefined ? project.TotalMspFte : project.totalMspFte;
+                        var tot = project.TotalFte !== undefined ? project.TotalFte : project.totalFte;
+                        var projectUrl = projectTemplate.replace('__ID__', id);
                         var row = '<tr>' +
-                            '<td><a href="/Project/Details/' + project.Id + '" style="color: #005ea5; text-decoration: none; font-weight: 600;">' + 
-                            project.Title + '</a><br><small class="text-muted">' + project.ProjectCode + '</small></td>' +
-                            '<td class="text-center">' + project.TotalPermFte.toFixed(1) + '</td>' +
-                            '<td class="text-center">' + project.TotalMspFte.toFixed(1) + '</td>' +
-                            '<td class="text-center"><strong>' + project.TotalFte.toFixed(1) + '</strong></td>' +
+                            '<td><a href="' + projectUrl + '" style="color: #005ea5; text-decoration: none; font-weight: 600;">' +
+                            escapeHtml(String(title)) + '</a><br><small class="text-muted">' + escapeHtml(String(code)) + '</small></td>' +
+                            '<td class="text-center">' + formatResourceFte(perm) + '</td>' +
+                            '<td class="text-center">' + formatResourceFte(msp) + '</td>' +
+                            '<td class="text-center"><strong>' + formatResourceFte(tot) + '</strong></td>' +
                             '</tr>';
                         $projectsList.append(row);
                     });
                 } else {
-                    $projectsList.append('<tr><td colspan="4" class="text-center text-muted">No projects found</td></tr>');
+                    $projectsList.append('<tr><td colspan="4" class="text-center text-muted">No work items</td></tr>');
                 }
                 
-                $('#businessAreaResourceModalLink').attr('href', '/CentralOps/MonthlySummaryV2?year=@year&month=@month&businessAreaId=' + businessAreaId);
+                var $footerBtn = $('#businessAreaResourceModalLink');
+                if (businessAreaIdAttr !== undefined && businessAreaIdAttr !== null && businessAreaIdAttr !== '') {
+                    $footerBtn.attr('href', '/CentralOps/MonthlySummaryV2?year=@year&month=@month&businessAreaId=' + encodeURIComponent(businessAreaIdAttr)).show();
+                } else {
+                    $footerBtn.hide();
+                }
                 
                 $('#businessAreaResourceModal').modal('show');
+            }
+            
+            $(document).on('click', '.business-area-resource-link', function(e) {
+                e.preventDefault();
+                openBusinessAreaResourceModal($(this));
+            });
+            
+            $(document).on('click', '.business-area-resource-row', function(e) {
+                if ($(e.target).closest('a.business-area-resource-link').length) return;
+                var $a = $(this).find('.business-area-resource-link');
+                if (!$a.length) return;
+                e.preventDefault();
+                openBusinessAreaResourceModal($a);
+            });
+            
+            $(document).on('keydown', '.business-area-resource-row', function(e) {
+                if (e.key !== 'Enter' && e.key !== ' ') return;
+                var $a = $(this).find('.business-area-resource-link');
+                if (!$a.length) return;
+                e.preventDefault();
+                openBusinessAreaResourceModal($a);
             });
             
             // Toggle icon for resource table collapse
             $('#resourceByBusinessAreaTable').on('show.bs.collapse', function() {
                 $('#resourceTableToggleIcon').removeClass('fa-chevron-down').addClass('fa-chevron-up');
+                $('#resourceTableToggleLabel').text('Hide');
             });
             $('#resourceByBusinessAreaTable').on('hide.bs.collapse', function() {
                 $('#resourceTableToggleIcon').removeClass('fa-chevron-up').addClass('fa-chevron-down');
+                $('#resourceTableToggleLabel').text('Show');
             });
             
             // Milestone link click handler
@@ -2548,19 +2688,18 @@
                 $('#milestoneModal').modal('show');
             });
             
-            // RAG Status Donut Chart
+            // RAG Status Donut Chart (standalone "Amber" RAG retired — not shown)
             var ragCtx = document.getElementById('ragStatusChart');
             if (ragCtx) {
                 new Chart(ragCtx.getContext('2d'), {
                     type: 'doughnut',
                     data: {
-                        labels: ['Red', 'Amber-Red', 'Amber', 'Amber-Green', 'Green', 'Not Started', 'On Hold', 'Not Set'],
+                        labels: ['Red', 'Amber-Red', 'Amber-Green', 'Green', 'Not Started', 'On Hold', 'Not Set'],
                         datasets: [{
-                            data: [@ragData.Red, @ragData.AmberRed, @ragData.Amber, @ragData.AmberGreen, @ragData.Green, @ragData.NotStarted, @ragData.OnHold, @ragData.NotSet],
+                            data: [@ragData.Red, @ragData.AmberRed, @ragData.AmberGreen, @ragData.Green, @ragData.NotStarted, @ragData.OnHold, @ragData.NotSet],
                             backgroundColor: [
                                 '#dc3545',
                                 '#fd7e14',
-                                '#ffc107',
                                 '#ffeb3b',
                                 '#28a745',
                                 '#e9ecef',

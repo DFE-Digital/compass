@@ -1,0 +1,85 @@
+@model Compass.Models.Modern.Work.WorkItemDependency
+@{
+    var work = ViewBag.WorkItem as Compass.Models.Modern.Work.WorkItem;
+    var workItemsSelectList = ViewBag.WorkItemsSelectList as Microsoft.AspNetCore.Mvc.Rendering.SelectList ?? new Microsoft.AspNetCore.Mvc.Rendering.SelectList(new List<object>(), "Id", "Title");
+    ViewData["Title"] = "Add dependency";
+}
+@section Breadcrumbs {
+    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="/">Home</a></li>
+    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="@Url.Action("Index", "ModernWork")">Work</a></li>
+    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="@Url.Action("Detail", "ModernWork", new { id = Model.WorkItemId })">@(work?.Title ?? "Work")</a></li>
+    <li class="dfe-c-breadcrumb__item" aria-current="page">Add dependency</li>
+}
+
+<div id="sc-work-adddependency">
+  @await Html.PartialAsync("_WorkItemChrome", ViewBag.WorkItem as Compass.Models.Modern.Work.WorkItem)
+  <h2 class="dfe-c-heading-m dfe-c-mt-0">Add dependency</h2>
+  <p class="dfe-c-body muted dfe-c-mb-3">In-dependencies (upstream) or out-dependencies (downstream); internal or external.</p>
+
+  <div class="dfe-c-grid-row">
+    <div class="dfe-c-grid-col dfe-c-grid-col--two-thirds">
+<form asp-action="AddDependency" asp-route-id="@Model.WorkItemId" method="post" class="dfe-c-mb-4" id="dep-form">
+  @Html.AntiForgeryToken()
+
+  <div class="dfe-c-form__group">
+    <label class="dfe-c-form__label" for="Direction">Direction</label>
+    <select class="dfe-c-width-full" name="Direction" id="Direction">
+      <option value="In" selected="@(Model.Direction == "In")">In (upstream – this work depends on)</option>
+      <option value="Out" selected="@(Model.Direction == "Out")">Out (downstream – others depend on this)</option>
+    </select>
+  </div>
+
+  <div class="dfe-c-form__group">
+    <div class="dfe-c-form__radio-group">
+      <div class="dfe-c-radios__item">
+        <input class="dfe-c-radios__input" id="Internal" name="IsInternal" type="radio" value="true" @(Model.IsInternal ? "checked" : null) data-dep-type="internal" />
+        <label class="dfe-c-form__label dfe-c-radios__label" for="Internal">Internal (link to another work item)</label>
+      </div>
+      <div class="dfe-c-radios__item">
+        <input class="dfe-c-radios__input" id="External" name="IsInternal" type="radio" value="false" @(!Model.IsInternal ? "checked" : null) data-dep-type="external" />
+        <label class="dfe-c-form__label dfe-c-radios__label" for="External">External (e.g. vendor, regulatory)</label>
+      </div>
+    </div>
+  </div>
+
+  <div class="dfe-c-form__group" id="target-work-group">
+    <label class="dfe-c-form__label" for="TargetWorkItemId">Work item</label>
+    <select class="dfe-c-width-full" name="TargetWorkItemId" id="TargetWorkItemId">
+      <option value="">— Select work item —</option>
+      @foreach (Microsoft.AspNetCore.Mvc.Rendering.SelectListItem item in workItemsSelectList)
+      {
+        <option value="@item.Value">@item.Text</option>
+      }
+    </select>
+  </div>
+
+  <div class="dfe-c-form__group" id="external-desc-group" style="display:none;">
+    <label class="dfe-c-form__label" for="ExternalDescription">Description</label>
+    <textarea class="dfe-c-width-full" name="ExternalDescription" id="ExternalDescription" rows="3"></textarea>
+  </div>
+
+  <button type="submit" class="dfe-c-button dfe-c-button--primary">Add dependency</button>
+  <a href="@Url.Action("Detail", "ModernWork", new { id = Model.WorkItemId })" class="dfe-c-button dfe-c-button--secondary dfe-c-ms-2">Cancel</a>
+</form>
+    </div>
+  </div>
+</div>
+
+@section Scripts {
+<script>
+(function() {
+  var internalRadio = document.getElementById('Internal');
+  var externalRadio = document.getElementById('External');
+  var targetGroup = document.getElementById('target-work-group');
+  var externalGroup = document.getElementById('external-desc-group');
+  function toggle() {
+    var isInternal = internalRadio.checked;
+    targetGroup.style.display = isInternal ? 'block' : 'none';
+    externalGroup.style.display = isInternal ? 'none' : 'block';
+  }
+  internalRadio.addEventListener('change', toggle);
+  externalRadio.addEventListener('change', toggle);
+  toggle();
+})();
+</script>
+}

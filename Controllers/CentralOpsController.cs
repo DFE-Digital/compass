@@ -323,6 +323,19 @@ public class CentralOpsController : Controller
         return string.Join("-", parts);
     }
 
+    /// <summary>
+    /// FTE from the submitted monthly return for the reporting month (not project-level TotalPermFte/TotalMspFte).
+    /// </summary>
+    private static (decimal PermFte, decimal MspFte) GetSubmittedMonthlyFteForPeriod(Compass.Models.Project project, int year, int month)
+    {
+        var mu = project.MonthlyUpdates?
+            .Where(u => u.Year == year && u.Month == month && u.SubmittedAt.HasValue)
+            .OrderByDescending(u => u.SubmittedAt)
+            .FirstOrDefault();
+        if (mu == null)
+            return (0, 0);
+        return (mu.MonthlyPermFte ?? 0, mu.MonthlyMspFte ?? 0);
+    }
 
     // GET: CentralOps/Dashboard - Redirect to Summary
     public IActionResult Dashboard()
@@ -1623,8 +1636,10 @@ public class CentralOpsController : Controller
             _logger.LogInformation("ManageWork: Database has {Total} total projects, {NonDeleted} non-deleted projects", 
                 totalProjectsInDb, nonDeletedProjects);
 
-            // Default to Active status if no status is specified
-            var effectiveStatus = string.IsNullOrEmpty(status) ? "Active" : status;
+            // Default to Active when no status is specified; "All" shows every project status
+            var effectiveStatus = string.IsNullOrEmpty(status)
+                ? "Active"
+                : (string.Equals(status, "All", StringComparison.OrdinalIgnoreCase) ? "All" : status);
 
             // Build base query for status counts (before other filters)
             var baseQuery = _context.Projects.Where(p => !p.IsDeleted);
@@ -1696,8 +1711,11 @@ public class CentralOpsController : Controller
                 query = query.Where(p => p.RagStatus == rag);
             }
 
-            // Apply status filter (defaults to Active)
-            query = query.Where(p => p.Status == effectiveStatus);
+            // Apply status filter unless "All" is selected
+            if (!string.Equals(effectiveStatus, "All", StringComparison.OrdinalIgnoreCase))
+            {
+                query = query.Where(p => p.Status == effectiveStatus);
+            }
 
             // Get all filtered results - sorted alphabetically by title by default
             var workItems = await query
@@ -1743,6 +1761,7 @@ public class CentralOpsController : Controller
             ViewBag.StatusPausedCount = statusPausedCount;
             ViewBag.StatusCompletedCount = statusCompletedCount;
             ViewBag.StatusCancelledCount = statusCancelledCount;
+            ViewBag.StatusAllCount = statusActiveCount + statusPausedCount + statusCompletedCount + statusCancelledCount;
 
             _logger.LogInformation("ManageWork: Passing {Count} projects to view. First item ID: {FirstId}", 
                 workItems.Count, workItems.FirstOrDefault()?.Id);
@@ -1790,7 +1809,12 @@ public class CentralOpsController : Controller
                 .Include(p => p.ProjectMissions)
                     .ThenInclude(pm => pm.Mission)
                 .Include(p => p.ProblemStatements)
-                .Where(p => !p.IsDeleted && p.Status != "Cancelled" && p.Status != "Completed");
+                .Where(p => !p.IsDeleted);
+
+            // Same status handling as ManageWork (default Active; "All" = no status filter)
+            var exportEffectiveStatus = string.IsNullOrEmpty(status)
+                ? "Active"
+                : (string.Equals(status, "All", StringComparison.OrdinalIgnoreCase) ? "All" : status);
 
             // Apply filters (same as ManageWork)
             if (!string.IsNullOrEmpty(search))
@@ -1816,9 +1840,9 @@ public class CentralOpsController : Controller
                 query = query.Where(p => p.RagStatus == rag);
             }
 
-            if (!string.IsNullOrEmpty(status))
+            if (!string.Equals(exportEffectiveStatus, "All", StringComparison.OrdinalIgnoreCase))
             {
-                query = query.Where(p => p.Status == status);
+                query = query.Where(p => p.Status == exportEffectiveStatus);
             }
 
             var projects = await query
@@ -2733,6 +2757,60 @@ public class CentralOpsController : Controller
         ViewBag.AuditLogs = allAuditActions;
 
         return View(project);
+    }
+
+    // GET: CentralOps/WorkItemDangerZone/5
+    public async Task<IActionResult> WorkItemDangerZone(int? id)
+    {
+        if (id == null)
+        {
+            return NotFound();
+        }
+
+        var project = await _context.Projects
+            .AsNoTracking()
+            .FirstOrDefaultAsync(p => p.Id == id.Value && !p.IsDeleted);
+
+        if (project == null)
+        {
+            return NotFound();
+        }
+
+        return View(project);
+    }
+
+    // POST: CentralOps/DeleteWorkItem
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> DeleteWorkItem(int id, string confirmTitle)
+    {
+        var project = await _context.Projects.FindAsync(id);
+        if (project == null || project.IsDeleted)
+        {
+            return NotFound();
+        }
+
+        if (!string.Equals(confirmTitle?.Trim(), project.Title.Trim(), StringComparison.Ordinal))
+        {
+            TempData["ErrorMessage"] = "The title you entered does not match. The work item was not deleted.";
+            return RedirectToAction(nameof(WorkItemDangerZone), new { id });
+        }
+
+        try
+        {
+            project.IsDeleted = true;
+            project.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = $"Work item \"{project.Title}\" has been removed.";
+            return RedirectToAction(nameof(ManageWork));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting project {ProjectId}", id);
+            TempData["ErrorMessage"] = "An error occurred while deleting the work item.";
+            return RedirectToAction(nameof(WorkItemDangerZone), new { id });
+        }
     }
 
     // POST: CentralOps/UpdatePriority
@@ -3770,6 +3848,7 @@ public class CentralOpsController : Controller
                 .Include(p => p.Risks)
                 .Include(p => p.Issues)
                 .Include(p => p.MonthlyUpdates)
+                    .ThenInclude(mu => mu.MonthlyUpdateNarratives)
                 .Include(p => p.RagStatusLookup)
                 .Include(p => p.ProblemStatements)
                 .Where(p => !p.IsDeleted && p.Status != "Cancelled" && p.Status != "Completed");
@@ -3808,12 +3887,11 @@ public class CentralOpsController : Controller
             // 2. Monthly update stats
             var monthlyUpdateStats = CalculateMonthlyUpdateStats(allProjects, reportYear, reportMonth, _monthlyUpdateService);
             
-            // 3. RAG Status distribution
+            // 3. RAG Status distribution (standalone "Amber" retired — merged into Not Set for reporting)
             var ragDistribution = new Dictionary<string, int>
             {
                 { "Red", 0 },
                 { "Amber-Red", 0 },
-                { "Amber", 0 },
                 { "Amber-Green", 0 },
                 { "Green", 0 },
                 { "Not Set", 0 }
@@ -3823,6 +3901,10 @@ public class CentralOpsController : Controller
             {
                 var ragStatus = NormalizeRagStatus(project.RagStatusLookup?.Name ?? project.RagStatus);
                 if (string.IsNullOrWhiteSpace(ragStatus))
+                {
+                    ragDistribution["Not Set"]++;
+                }
+                else if (string.Equals(ragStatus, "Amber", StringComparison.OrdinalIgnoreCase))
                 {
                     ragDistribution["Not Set"]++;
                 }
@@ -4121,7 +4203,6 @@ public class CentralOpsController : Controller
             {
                 { "Red", 0 },
                 { "Amber-Red", 0 },
-                { "Amber", 0 },
                 { "Amber-Green", 0 },
                 { "Green", 0 },
                 { "Not Set", 0 }
@@ -4142,6 +4223,10 @@ public class CentralOpsController : Controller
                 }
                 
                 if (string.IsNullOrWhiteSpace(ragStatus))
+                {
+                    prevMonthRagDistribution["Not Set"]++;
+                }
+                else if (string.Equals(ragStatus, "Amber", StringComparison.OrdinalIgnoreCase))
                 {
                     prevMonthRagDistribution["Not Set"]++;
                 }
@@ -4200,34 +4285,38 @@ public class CentralOpsController : Controller
                 .ThenBy(p => p.Title)
                 .ToList();
             
-            // Resource summary (FTE)
-            var totalPermFte = allProjects
-                .Where(p => p.TotalPermFte.HasValue)
-                .Sum(p => p.TotalPermFte.Value);
-            var totalMspFte = allProjects
-                .Where(p => p.TotalMspFte.HasValue)
-                .Sum(p => p.TotalMspFte.Value);
+            // Resource summary (FTE) — from submitted monthly returns for this reporting period
+            var totalPermFte = allProjects.Sum(p => GetSubmittedMonthlyFteForPeriod(p, reportYear, reportMonth).PermFte);
+            var totalMspFte = allProjects.Sum(p => GetSubmittedMonthlyFteForPeriod(p, reportYear, reportMonth).MspFte);
             var totalFte = totalPermFte + totalMspFte;
             
             // Resource summary by business area (if not in business area view)
             var resourceByBusinessArea = new List<object>();
             if (!businessAreaId.HasValue)
             {
+                // Include work items with no business area ("Not set"); otherwise the breakdown table is empty while totals show FTE
                 resourceByBusinessArea = allProjects
-                    .Where(p => p.BusinessAreaLookup != null)
-                    .GroupBy(p => new { p.BusinessAreaId, p.BusinessAreaLookup!.Name })
+                    .GroupBy(p => new
+                    {
+                        p.BusinessAreaId,
+                        Name = p.BusinessAreaLookup?.Name ?? "Not set"
+                    })
                     .Select(g => new
                     {
                         BusinessAreaId = g.Key.BusinessAreaId,
                         BusinessAreaName = g.Key.Name,
-                        TotalPermFte = g.Where(p => p.TotalPermFte.HasValue).Sum(p => p.TotalPermFte!.Value),
-                        TotalMspFte = g.Where(p => p.TotalMspFte.HasValue).Sum(p => p.TotalMspFte!.Value),
-                        TotalFte = g.Where(p => p.TotalPermFte.HasValue || p.TotalMspFte.HasValue)
-                            .Sum(p => (p.TotalPermFte ?? 0) + (p.TotalMspFte ?? 0)),
+                        TotalPermFte = g.Sum(p => GetSubmittedMonthlyFteForPeriod(p, reportYear, reportMonth).PermFte),
+                        TotalMspFte = g.Sum(p => GetSubmittedMonthlyFteForPeriod(p, reportYear, reportMonth).MspFte),
+                        TotalFte = g.Sum(p =>
+                        {
+                            var (perm, msp) = GetSubmittedMonthlyFteForPeriod(p, reportYear, reportMonth);
+                            return perm + msp;
+                        }),
                         ProjectCount = g.Count(),
                         Projects = g.ToList()
                     })
-                    .OrderBy(x => x.BusinessAreaName)
+                    .OrderBy(x => x.BusinessAreaName == "Not set" ? 1 : 0)
+                    .ThenBy(x => x.BusinessAreaName)
                     .ToList<object>();
             }
             
@@ -4592,12 +4681,11 @@ public class CentralOpsController : Controller
             
             var monthlyUpdateStats = CalculateMonthlyUpdateStats(allProjects, reportYear, reportMonth, _monthlyUpdateService);
             
-            // RAG Status distribution
+            // RAG Status distribution (standalone "Amber" retired — merged into Not Set for reporting)
             var ragDistribution = new Dictionary<string, int>
             {
                 { "Red", 0 },
                 { "Amber-Red", 0 },
-                { "Amber", 0 },
                 { "Amber-Green", 0 },
                 { "Green", 0 },
                 { "Not Set", 0 }
@@ -4607,6 +4695,10 @@ public class CentralOpsController : Controller
             {
                 var ragStatus = NormalizeRagStatus(project.RagStatusLookup?.Name ?? project.RagStatus);
                 if (string.IsNullOrWhiteSpace(ragStatus))
+                {
+                    ragDistribution["Not Set"]++;
+                }
+                else if (string.Equals(ragStatus, "Amber", StringComparison.OrdinalIgnoreCase))
                 {
                     ragDistribution["Not Set"]++;
                 }
@@ -4780,13 +4872,9 @@ public class CentralOpsController : Controller
                 }
             }
             
-            // Resource summary (FTE)
-            var totalPermFte = allProjects
-                .Where(p => p.TotalPermFte.HasValue)
-                .Sum(p => p.TotalPermFte.Value);
-            var totalMspFte = allProjects
-                .Where(p => p.TotalMspFte.HasValue)
-                .Sum(p => p.TotalMspFte.Value);
+            // Resource summary (FTE) — from submitted monthly returns for this reporting period
+            var totalPermFte = allProjects.Sum(p => GetSubmittedMonthlyFteForPeriod(p, reportYear, reportMonth).PermFte);
+            var totalMspFte = allProjects.Sum(p => GetSubmittedMonthlyFteForPeriod(p, reportYear, reportMonth).MspFte);
             var totalFte = totalPermFte + totalMspFte;
             
             // Generate PDF
@@ -4934,14 +5022,12 @@ public class CentralOpsController : Controller
                                     columns.RelativeColumn();
                                     columns.RelativeColumn();
                                     columns.RelativeColumn();
-                                    columns.RelativeColumn();
                                 });
                                 
                                 table.Header(header =>
                                 {
                                     header.Cell().Element(CellStyle).Text("Red").Bold();
                                     header.Cell().Element(CellStyle).Text("Amber-Red").Bold();
-                                    header.Cell().Element(CellStyle).Text("Amber").Bold();
                                     header.Cell().Element(CellStyle).Text("Amber-Green").Bold();
                                     header.Cell().Element(CellStyle).Text("Green").Bold();
                                     header.Cell().Element(CellStyle).Text("Not Set").Bold();
@@ -4949,7 +5035,6 @@ public class CentralOpsController : Controller
                                 
                                 table.Cell().Element(CellStyle).Text(ragDistribution.GetValueOrDefault("Red", 0).ToString());
                                 table.Cell().Element(CellStyle).Text(ragDistribution.GetValueOrDefault("Amber-Red", 0).ToString());
-                                table.Cell().Element(CellStyle).Text(ragDistribution.GetValueOrDefault("Amber", 0).ToString());
                                 table.Cell().Element(CellStyle).Text(ragDistribution.GetValueOrDefault("Amber-Green", 0).ToString());
                                 table.Cell().Element(CellStyle).Text(ragDistribution.GetValueOrDefault("Green", 0).ToString());
                                 table.Cell().Element(CellStyle).Text(ragDistribution.GetValueOrDefault("Not Set", 0).ToString());

@@ -1,0 +1,162 @@
+@model Compass.Models.Modern.Work.WorkItemRiskOrIssue
+@using Compass.Models.Modern.Work
+@{
+    var work = ViewBag.WorkItem as WorkItem;
+    var milestones = ViewBag.Milestones as List<Milestone> ?? new List<Milestone>();
+    var directorates = ViewBag.DirectorateOptions as List<RiskIssueNamedIntOption> ?? new List<RiskIssueNamedIntOption>();
+    ViewData["Title"] = "Log issue";
+}
+@section Breadcrumbs {
+    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="/">Home</a></li>
+    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="@Url.Action("Index", "ModernWork")">Work</a></li>
+    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="@Url.Action("Detail", "ModernWork", new { id = Model.WorkItemId })">@(work?.Title ?? "Work")</a></li>
+    <li class="dfe-c-breadcrumb__item" aria-current="page">Add issue</li>
+}
+
+<div id="sc-work-log-issue" class="dfe-c-form-layout">
+  <div class="dfe-c-form-layout__main">
+  @await Html.PartialAsync("_WorkItemChrome", ViewBag.WorkItem as WorkItem)
+  <h2 class="dfe-c-heading-m dfe-c-mt-0">Add issue</h2>
+  <p class="dfe-c-body muted dfe-c-mb-3">Log an issue that is affecting this work item. An issue is something that has happened or is actively occurring and needs resolution.</p>
+
+  <div class="dfe-c-grid-row">
+    <div class="dfe-c-grid-col dfe-c-grid-col--two-thirds">
+  <form method="post" action="@Url.Action("LogIssue", "ModernWork", new { id = Model.WorkItemId })" class="dfe-c-mb-4">
+    @Html.AntiForgeryToken()
+
+    @if (!ViewData.ModelState.IsValid)
+    {
+      <div class="dfe-c-error-summary" aria-labelledby="error-summary-title" role="alert" data-module="dfe-c-error-summary">
+        <h2 class="dfe-c-error-summary__title" id="error-summary-title">There is a problem</h2>
+        <div class="dfe-c-error-summary__body">
+          <ul class="dfe-c-list dfe-c-error-summary__list">
+            @foreach (var kv in ViewData.ModelState)
+            {
+              @if (kv.Value?.Errors?.Count > 0)
+              {
+                var fieldId = string.IsNullOrEmpty(kv.Key) ? "Title" : kv.Key;
+                @foreach (var err in kv.Value.Errors)
+                {
+                  <li><a href="#@fieldId">@err.ErrorMessage</a></li>
+                }
+              }
+            }
+          </ul>
+        </div>
+      </div>
+    }
+
+    <div class="dfe-c-form__group @(ViewData.ModelState["Title"]?.Errors?.Any() == true ? "dfe-c-form__group--error" : "")">
+      <label class="dfe-c-form__label" for="Title">Title *</label>
+      <span class="dfe-c-form__hint">A short, clear description — e.g. &quot;External vendor delivery delayed&quot;</span>
+      @if (ViewData.ModelState["Title"]?.Errors?.Any() == true)
+      {
+        <span class="dfe-c-form__error">@ViewData.ModelState["Title"]?.Errors?.FirstOrDefault()?.ErrorMessage</span>
+      }
+      <input class="dfe-c-width-full" id="Title" name="Title" type="text" value="@Model.Title" required />
+    </div>
+
+    <div class="dfe-c-form__group @(ViewData.ModelState["Description"]?.Errors?.Any() == true ? "dfe-c-form__group--error" : "")">
+      <label class="dfe-c-form__label" for="Description">Description *</label>
+      <span class="dfe-c-form__hint">What is it? Why has it arisen? What is the context?</span>
+      @if (ViewData.ModelState["Description"]?.Errors?.Any() == true)
+      {
+        <span class="dfe-c-form__error">@ViewData.ModelState["Description"]?.Errors?.FirstOrDefault()?.ErrorMessage</span>
+      }
+      <textarea class="dfe-c-width-full" id="Description" name="Description" rows="4" required>@Model.Description</textarea>
+    </div>
+
+    <div class="dfe-c-form__group @(ViewData.ModelState["ImpactOnDelivery"]?.Errors?.Any() == true ? "dfe-c-form__group--error" : "")">
+      <label class="dfe-c-form__label" for="ImpactOnDelivery">Impact on delivery *</label>
+      <span class="dfe-c-form__hint">What effect does this have on timeline, scope, budget or quality?</span>
+      @if (ViewData.ModelState["ImpactOnDelivery"]?.Errors?.Any() == true)
+      {
+        <span class="dfe-c-form__error">@ViewData.ModelState["ImpactOnDelivery"]?.Errors?.FirstOrDefault()?.ErrorMessage</span>
+      }
+      <textarea class="dfe-c-width-full" id="ImpactOnDelivery" name="ImpactOnDelivery" rows="3" required>@Model.ImpactOnDelivery</textarea>
+    </div>
+
+    <div class="dfe-c-form__group">
+      <label class="dfe-c-form__label" for="Priority">Priority *</label>
+      <select class="dfe-c-width-full" id="Priority" name="Priority" required>
+        <option value="">— Select —</option>
+        <option value="High" selected="@(string.Equals(Model.Priority, "High", StringComparison.OrdinalIgnoreCase))">High</option>
+        <option value="Medium" selected="@(string.Equals(Model.Priority, "Medium", StringComparison.OrdinalIgnoreCase))">Medium</option>
+        <option value="Low" selected="@(string.Equals(Model.Priority, "Low", StringComparison.OrdinalIgnoreCase))">Low</option>
+      </select>
+    </div>
+
+    <div class="dfe-c-form__group">
+      <label class="dfe-c-form__label" for="Tier">Tier</label>
+      <span class="dfe-c-form__hint">e.g. Tier 1 = ministerial visibility</span>
+      <select class="dfe-c-width-full" id="Tier" name="Tier">
+        <option value="">— Select tier —</option>
+        <option value="Tier 1" selected="@(string.Equals(Model.Tier, "Tier 1", StringComparison.OrdinalIgnoreCase))">Tier 1</option>
+        <option value="Tier 2" selected="@(string.Equals(Model.Tier, "Tier 2", StringComparison.OrdinalIgnoreCase))">Tier 2</option>
+        <option value="Tier 3" selected="@(string.Equals(Model.Tier, "Tier 3", StringComparison.OrdinalIgnoreCase))">Tier 3</option>
+      </select>
+    </div>
+
+    <div class="dfe-c-form__group @(ViewData.ModelState["DirectorateId"]?.Errors?.Any() == true ? "dfe-c-form__group--error" : "")">
+      <label class="dfe-c-form__label" for="DirectorateId">Directorate *</label>
+      <span class="dfe-c-form__hint">DDT directorate for reporting.</span>
+      @if (ViewData.ModelState["DirectorateId"]?.Errors?.Any() == true)
+      {
+        <span class="dfe-c-form__error">@ViewData.ModelState["DirectorateId"]?.Errors?.FirstOrDefault()?.ErrorMessage</span>
+      }
+      <select class="dfe-c-width-full" id="DirectorateId" name="DirectorateId" required>
+        <option value="">— Select directorate —</option>
+        @foreach (var d in directorates)
+        {
+          <option value="@d.Id" selected="@(Model.DirectorateId == d.Id)">@d.Name</option>
+        }
+      </select>
+    </div>
+
+    <div class="dfe-c-form__group user-picker-wrapper user-picker-wrapper--full-width">
+      @await Html.PartialAsync("_UserPicker", new UserPickerViewModel
+      {
+        FieldName = "OwnerUserId",
+        Label = "Owner",
+        Hint = "Who is responsible for resolving this issue? Search by name or email.",
+        DefaultSummaryText = "No user selected.",
+        DefaultUserId = Model.OwnerUserId,
+        DefaultName = ViewBag.OwnerName as string,
+        DefaultEmail = ViewBag.OwnerEmail as string
+      })
+    </div>
+
+    <div class="dfe-c-form__group">
+      <label class="dfe-c-form__label" for="TargetResolutionDate">Target resolution date</label>
+      <input class="dfe-c-width-full" id="TargetResolutionDate" name="TargetResolutionDate" type="date" value="@(Model.TargetResolutionDate?.ToString("yyyy-MM-dd"))" />
+    </div>
+
+    <div class="dfe-c-form__group @(ViewData.ModelState["MitigationOrAction"]?.Errors?.Any() == true ? "dfe-c-form__group--error" : "")">
+      <label class="dfe-c-form__label" for="MitigationOrAction">Action plan *</label>
+      <span class="dfe-c-form__hint">What is being done to resolve this issue?</span>
+      @if (ViewData.ModelState["MitigationOrAction"]?.Errors?.Any() == true)
+      {
+        <span class="dfe-c-form__error">@ViewData.ModelState["MitigationOrAction"]?.Errors?.FirstOrDefault()?.ErrorMessage</span>
+      }
+      <textarea class="dfe-c-width-full" id="MitigationOrAction" name="MitigationOrAction" rows="3" required>@Model.MitigationOrAction</textarea>
+    </div>
+
+    <div class="dfe-c-form__group">
+      <label class="dfe-c-form__label" for="LinkedMilestoneId">Linked milestone</label>
+      <span class="dfe-c-form__hint">If this issue directly affects a milestone, link it here.</span>
+      <select class="dfe-c-width-full" id="LinkedMilestoneId" name="LinkedMilestoneId">
+        <option value="">— None —</option>
+        @foreach (var m in milestones)
+        {
+          <option value="@m.Id" selected="@(Model.LinkedMilestoneId == m.Id)">@m.Name</option>
+        }
+      </select>
+    </div>
+
+    <button type="submit" class="dfe-c-button dfe-c-button--primary">Add issue</button>
+    <a href="@Url.Action("Detail", "ModernWork", new { id = Model.WorkItemId })#wd-risks" class="dfe-c-button dfe-c-button--secondary dfe-c-ms-2">Cancel</a>
+  </form>
+    </div>
+  </div>
+  </div>
+</div>

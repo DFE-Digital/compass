@@ -515,10 +515,49 @@
                             </td>
                         </tr>
                         <tr>
+                            <td class="summary-label"><strong>Other contacts</strong></td>
+                            <td class="summary-value">
+                                @{
+                                    var overviewOtherContacts = Model.ProjectContacts?
+                                        .Where(pc => string.Equals(pc.TeamStatus, "governance", StringComparison.OrdinalIgnoreCase))
+                                        .OrderBy(pc => pc.SortOrder)
+                                        .ToList() ?? new List<Compass.Models.ProjectContact>();
+                                }
+                                @if (overviewOtherContacts.Any())
+                                {
+                                    @foreach (var oc in overviewOtherContacts)
+                                    {
+                                        var ocUser = oc.User;
+                                        var ocDisplayName = ocUser?.Name ?? oc.Name;
+                                        var ocDisplayEmail = ocUser?.Email ?? oc.Email;
+                                        <div class="mb-2">
+                                            @if (!string.IsNullOrEmpty(ocDisplayEmail))
+                                            {
+                                                <a href="mailto:@ocDisplayEmail" class="d-block font-weight-bold">@ocDisplayName</a>
+                                            }
+                                            else
+                                            {
+                                                <span class="d-block font-weight-bold">@ocDisplayName</span>
+                                            }
+                                            <span class="text-muted">@oc.Role</span>
+                                        </div>
+                                    }
+                                }
+                                else
+                                {
+                                    <span class="text-muted">None</span>
+                                }
+                            </td>
+                            <td class="text-right">
+                                <a asp-action="Details" asp-route-id="@Model.Id" asp-route-tab="contactsandgovernance">View all</a>
+                            </td>
+                        </tr>
+                        <tr>
                             <td class="summary-label"><strong>Team</strong></td>
                             <td class="summary-value">
                                 @{
                                     var currentTeamMembers = Model.ProjectContacts?
+                                        .Where(pc => !string.Equals(pc.TeamStatus, "governance", StringComparison.OrdinalIgnoreCase))
                                         .Where(pc => string.IsNullOrEmpty(pc.TeamStatus) || 
                                                      pc.TeamStatus.ToLower() == "current")
                                         .ToList() ?? new List<Compass.Models.ProjectContact>();
@@ -719,9 +758,11 @@
                 </div>
             </div>
             <div class="card-body p-0">
-                @if (Model.ProjectContacts.Any())
+                @if (Model.ProjectContacts.Any(c => !string.Equals(c.TeamStatus, "governance", StringComparison.OrdinalIgnoreCase)))
                 {
-                    var teamMembers = Model.ProjectContacts.OrderBy(c => c.SortOrder).ToList();
+                    var teamMembers = Model.ProjectContacts
+                        .Where(c => !string.Equals(c.TeamStatus, "governance", StringComparison.OrdinalIgnoreCase))
+                        .OrderBy(c => c.SortOrder).ToList();
                     var displayedMembers = teamMembers.Take(5).ToList();
                     var remainingCount = teamMembers.Count - displayedMembers.Count;
                     

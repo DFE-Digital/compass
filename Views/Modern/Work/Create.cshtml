@@ -1,0 +1,299 @@
+@model Compass.Models.Modern.Work.WorkItem
+@using Compass.Models.Modern.Work
+@{
+    ViewData["Title"] = "Create work item";
+    var portfolios = (List<Compass.Models.Portfolio>)ViewBag.Portfolios ?? new List<Compass.Models.Portfolio>();
+    var directorates = (List<Compass.Models.Directorate>)ViewBag.Directorates ?? new List<Compass.Models.Directorate>();
+    var workStatusOptions = (List<LookupOption>)ViewBag.WorkStatusOptions ?? new List<LookupOption>();
+    var workPriorityOptions = (List<LookupOption>)ViewBag.WorkPriorityOptions ?? new List<LookupOption>();
+    var deliveryPhaseOptions = (List<LookupOption>)ViewBag.DeliveryPhaseOptions ?? new List<LookupOption>();
+    var activityTypeOptions = (List<LookupOption>)ViewBag.ActivityTypeOptions ?? new List<LookupOption>();
+    var riskAppetiteOptions = (List<LookupOption>)ViewBag.RiskAppetiteOptions ?? new List<LookupOption>();
+    var ragStatuses = (List<Compass.Models.RagStatus>)ViewBag.RagStatuses ?? new List<Compass.Models.RagStatus>();
+    var priorityOutcomes = (List<WorkLookupOption>)ViewBag.PriorityOutcomes ?? new List<WorkLookupOption>();
+    var missionPillars = (List<WorkLookupOption>)ViewBag.MissionPillars ?? new List<WorkLookupOption>();
+    var governmentDepartments = (List<Compass.Models.GovernmentDepartment>)ViewBag.GovernmentDepartments ?? new List<Compass.Models.GovernmentDepartment>();
+    var selectedDirectorateIds = (int[])ViewBag.SelectedDirectorateIds ?? Array.Empty<int>();
+    var selectedPriorityOutcomeIds = (int[])ViewBag.SelectedPriorityOutcomeIds ?? Array.Empty<int>();
+    var selectedMissionPillarIds = (int[])ViewBag.SelectedMissionPillarIds ?? Array.Empty<int>();
+    var fromDemand = ViewBag.FromDemand as DemandRequest;
+    var fromBc = ViewBag.FromBusinessCase as BusinessCase;
+}
+
+@section Breadcrumbs {
+    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="@Url.Action("Index", "ModernWork")">Work</a></li>
+    <li class="dfe-c-breadcrumb__item" aria-current="page">Create work item</li>
+}
+
+<div id="sc-work-create">
+<p class="dfe-c-body dfe-c-mb-3">
+  <a href="@(fromDemand != null ? Url.Action("Detail", "Demand", new { id = fromDemand.Id }) : fromBc != null ? Url.Action("Detail", "Horizon", new { id = fromBc.Id }) : Url.Action("Index", "ModernWork"))" class="dfe-c-link">← @(fromDemand != null ? "Back to demand request" : fromBc != null ? "Back to business case" : "Back to work register")</a>
+</p>
+
+@if (fromDemand != null)
+{
+  <div class="dfe-c-notification-banner dfe-c-notification-banner--info" role="alert">
+    <div class="dfe-c-notification-banner__header">
+      <h2 class="dfe-c-notification-banner__title" id="demand-banner-title">Linked to demand</h2>
+    </div>
+    <div class="dfe-c-notification-banner__content">
+      <p class="dfe-c-body">This work item will be linked to demand request <strong>@fromDemand.Reference — @fromDemand.Title</strong>. Complete the form and create when ready.</p>
+    </div>
+  </div>
+}
+
+<div class="dfe-c-page-title">
+  <div class="dfe-c-page-title__caption">Work</div>
+  <h1 class="dfe-c-page-title__heading">Create work item</h1>
+  <p class="dfe-c-page-title__lede">Create a new DDT work item to track in the portfolio. Typically linked to an approved demand or business case.</p>
+</div>
+
+<div class="dfe-c-form-layout">
+  <div class="dfe-c-form-layout__main">
+    <div class="dfe-c-card dfe-c-card--plain">
+<form asp-controller="ModernWork" asp-action="Create" method="post">
+  @Html.AntiForgeryToken()
+  <input type="hidden" asp-for="DemandRequestId" />
+  <input type="hidden" asp-for="BusinessCaseId" />
+  @if (fromBc != null)
+  {
+    <input type="hidden" name="businessCaseId" value="@fromBc.Id" />
+  }
+
+      <div class="form-layout" style="margin-bottom:0">
+        <fieldset>
+          <legend>Work item details</legend>
+          <div class="dfe-c-form__group @(ViewData.ModelState["Title"]?.Errors?.Any() == true ? "dfe-c-form__group--error" : "")">
+            <label asp-for="Title">Title <span style="color:var(--red)">*</span></label>
+            <input asp-for="Title" type="text" placeholder="Short, clear title for this work item" />
+            @if (ViewData.ModelState["Title"]?.Errors?.Any() == true)
+            { <span class="dfe-c-form__error">@ViewData.ModelState["Title"]?.Errors?.FirstOrDefault()?.ErrorMessage</span> }
+          </div>
+          <div class="dfe-c-form__group @(ViewData.ModelState["ProblemStatement"]?.Errors?.Any() == true ? "dfe-c-form__group--error" : "")">
+            <label asp-for="ProblemStatement">Problem statement <span style="color:var(--red)">*</span></label>
+            <div class="form-hint">What is the problem this work is solving? Be specific — this is the 'why'.</div>
+            <textarea asp-for="ProblemStatement" rows="4" placeholder="Describe the problem in plain English..."></textarea>
+          </div>
+          <div class="dfe-c-form__group @(ViewData.ModelState["Aim"]?.Errors?.Any() == true ? "dfe-c-form__group--error" : "")">
+            <label asp-for="Aim">Aim <span style="color:var(--red)">*</span></label>
+            <div class="form-hint">What will success look like? What is this work item trying to achieve?</div>
+            <textarea asp-for="Aim" rows="3" placeholder="Describe the aim and expected outcome..."></textarea>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Portfolio and directorates</legend>
+          <div class="dfe-c-form__group @(ViewData.ModelState["PortfolioId"]?.Errors?.Any() == true ? "dfe-c-form__group--error" : "")">
+            <label asp-for="PortfolioId">Portfolio <span style="color:var(--red)">*</span></label>
+            <select asp-for="PortfolioId">
+              <option value="">— Select portfolio —</option>
+              @foreach (var p in portfolios)
+              { <option value="@p.Id">@p.Name</option> }
+            </select>
+          </div>
+          <div class="dfe-c-form__group">
+            <label for="DirectorateIds">Directorate(s)</label>
+            <div class="form-hint">Select all that apply.</div>
+            <div class="dfe-c-form__check-group" style="margin-top:8px;">
+              @foreach (var d in directorates)
+              {
+                var isChecked = selectedDirectorateIds.Contains(d.Id);
+                <label class="dfe-c-form__check-item" for="dir-@d.Id">
+                  <input type="checkbox" name="DirectorateIds" value="@d.Id" id="dir-@d.Id" checked="@isChecked" />
+                  <div>@d.Name</div>
+                </label>
+              }
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Delivery and status</legend>
+          <div class="dfe-c-form__group">
+            <label asp-for="Status">Status <span style="color:var(--red)">*</span></label>
+            <select asp-for="Status">
+              @foreach (var opt in workStatusOptions)
+              { <option value="@opt.Value" selected="@(Model?.Status == opt.Value)">@opt.Name</option> }
+            </select>
+          </div>
+          <div class="dfe-c-form__group">
+            <label asp-for="PriorityId">Priority <span style="color:var(--red)">*</span></label>
+            <select asp-for="PriorityId">
+              <option value="">— Select —</option>
+              @foreach (var opt in workPriorityOptions)
+              { <option value="@opt.Id" selected="@(Model?.PriorityId == opt.Id)">@opt.Name</option> }
+            </select>
+          </div>
+          <div class="dfe-c-form__group">
+            <label asp-for="DeliveryPhaseId">Phase</label>
+            <div class="form-hint">Delivery phase (e.g. Discovery, Alpha, Beta, Live).</div>
+            <select asp-for="DeliveryPhaseId">
+              <option value="">— Select phase —</option>
+              @foreach (var opt in deliveryPhaseOptions)
+              { <option value="@opt.Id" selected="@(Model?.DeliveryPhaseId == opt.Id)">@opt.Name</option> }
+            </select>
+          </div>
+          <div class="dfe-c-form__group">
+            <label asp-for="ActivityTypeId">Activity type <span style="color:var(--red)">*</span></label>
+            <select asp-for="ActivityTypeId">
+              <option value="">— Select —</option>
+              @foreach (var opt in activityTypeOptions)
+              { <option value="@opt.Id" selected="@(Model?.ActivityTypeId == opt.Id)">@opt.Name</option> }
+            </select>
+          </div>
+          <div class="fr2">
+            <div class="dfe-c-form__group">
+              <label asp-for="StartDate">Start date <span style="color:var(--red)">*</span></label>
+              <input asp-for="StartDate" type="date" />
+            </div>
+            <div class="dfe-c-form__group">
+              <label asp-for="TargetEndDate">Target end date</label>
+              <input asp-for="TargetEndDate" type="date" />
+            </div>
+          </div>
+          <div class="dfe-c-form__group">
+            <label asp-for="RiskAppetiteId">Risk appetite</label>
+            <select asp-for="RiskAppetiteId">
+              <option value="">— Select —</option>
+              @foreach (var opt in riskAppetiteOptions)
+              { <option value="@opt.Id" selected="@(Model?.RiskAppetiteId == opt.Id)">@opt.Name</option> }
+            </select>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Strategic alignment</legend>
+          <div class="dfe-c-form__group">
+            <span class="legend-sm" style="font-size:15px;font-weight:700;">Priority outcome</span>
+            <div class="form-hint">Select all that apply.</div>
+            <div class="dfe-c-form__check-group" style="margin-top:8px;">
+              @foreach (var po in priorityOutcomes)
+              {
+                var isChecked = selectedPriorityOutcomeIds.Contains(po.Id);
+                <label class="dfe-c-form__check-item" for="po-@po.Id">
+                  <input type="checkbox" name="PriorityOutcomeIds" value="@po.Id" id="po-@po.Id" checked="@isChecked" />
+                  <div>@po.Name</div>
+                </label>
+              }
+            </div>
+          </div>
+          <div class="dfe-c-form__group">
+            <span class="legend-sm" style="font-size:15px;font-weight:700;">Mission pillar</span>
+            <div class="form-hint">Select all that apply.</div>
+            <div class="dfe-c-form__check-group" style="margin-top:8px;">
+              @foreach (var mp in missionPillars)
+              {
+                var isChecked = selectedMissionPillarIds.Contains(mp.Id);
+                <label class="dfe-c-form__check-item" for="mp-@mp.Id">
+                  <input type="checkbox" name="MissionPillarIds" value="@mp.Id" id="mp-@mp.Id" checked="@isChecked" />
+                  <div>@mp.Name</div>
+                </label>
+              }
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>RAG and flags</legend>
+          <div class="fr2">
+            <div class="dfe-c-form__group">
+              <label asp-for="RagStatusId">Initial RAG status</label>
+              <select asp-for="RagStatusId">
+                <option value="">— Not set —</option>
+                @foreach (var r in ragStatuses)
+                { <option value="@r.Id" selected="@(Model?.RagStatusId == r.Id)">@r.Name</option> }
+              </select>
+            </div>
+            <div class="dfe-c-form__group">
+              <label for="InitialRagJustification">Initial RAG justification</label>
+              <div class="form-hint">Explain the current status. If Red or Amber, a path to green is required.</div>
+              <textarea id="InitialRagJustification" name="InitialRagJustification" rows="2" placeholder="Brief justification...">@(ViewBag.InitialRagJustification as string)</textarea>
+            </div>
+          </div>
+          <div class="fr2">
+            <div class="dfe-c-form__group">
+              <span class="legend-sm" style="font-size:15px;font-weight:700;">Subject to spend control?</span>
+              <div class="dfe-c-form__radio-group dfe-c-form__radio-group--inline" style="margin-top:8px;">
+                <label class="dfe-c-form__radio-item"><input type="radio" asp-for="SubjectToSpendControl" value="true" /><div>Yes</div></label>
+                <label class="dfe-c-form__radio-item"><input type="radio" asp-for="SubjectToSpendControl" value="false" checked="@(!Model?.SubjectToSpendControl)" /><div>No</div></label>
+              </div>
+            </div>
+            <div class="dfe-c-form__group">
+              <span class="legend-sm" style="font-size:15px;font-weight:700;">Flagship project?</span>
+              <div class="dfe-c-form__radio-group dfe-c-form__radio-group--inline" style="margin-top:8px;">
+                <label class="dfe-c-form__radio-item"><input type="radio" asp-for="FlagshipProject" value="true" /><div>Yes</div></label>
+                <label class="dfe-c-form__radio-item"><input type="radio" asp-for="FlagshipProject" value="false" checked="@(!Model?.FlagshipProject)" /><div>No</div></label>
+              </div>
+            </div>
+            <div class="dfe-c-form__group">
+              <span class="legend-sm" style="font-size:15px;font-weight:700;">Multi-department cooperation?</span>
+              <div class="dfe-c-form__radio-group dfe-c-form__radio-group--inline" style="margin-top:8px;">
+                <label class="dfe-c-form__radio-item"><input type="radio" name="MultiDept" id="multidept-yes" value="yes" /><div>Yes</div></label>
+                <label class="dfe-c-form__radio-item"><input type="radio" name="MultiDept" id="multidept-no" value="no" checked /><div>No</div></label>
+              </div>
+              <div id="dept-names" style="display:none;margin-top:8px;">
+                <label style="font-size:13px;font-weight:700;">Which departments?</label>
+                <div class="form-hint">Select all that apply.</div>
+                <div class="dfe-c-form__check-group" style="margin-top:8px;">
+                @foreach (var g in governmentDepartments)
+                {
+                  <label class="dfe-c-form__check-item" for="govdept-@g.Id">
+                    <input type="checkbox" name="GovernmentDepartmentIds" value="@g.Id" id="govdept-@g.Id" />
+                    <div>@g.Title</div>
+                  </label>
+                }
+                </div>
+              </div>
+            </div>
+          </div>
+        </fieldset>
+      </div>
+
+      <div class="dfe-c-button-group">
+        <button type="submit" class="dfe-c-button dfe-c-button--primary">Create work item</button>
+        <a href="@(fromDemand != null ? Url.Action("Detail", "Demand", new { id = fromDemand.Id }) : fromBc != null ? Url.Action("Detail", "Horizon", new { id = fromBc.Id }) : Url.Action("Index", "ModernWork"))" class="dfe-c-button dfe-c-button--secondary">Cancel</a>
+      </div>
+</form>
+    </div>
+  </div>
+
+  <div class="dfe-c-form-layout__aside">
+    <div class="dfe-c-sidebar">
+      <div class="dfe-c-scard">
+        <div class="dfe-c-scard__title">Work item phases</div>
+        <div style="font-size:0.8125rem;display:flex;flex-direction:column;gap:0.5rem;">
+          <div><span class="dfe-c-phase dfe-c-phase--explore">EXPLORE</span><span style="color:var(--grey-4);margin-left:0.5rem;">Concept stage. Not yet committed.</span></div>
+          <div><span class="dfe-c-phase dfe-c-phase--discovery">DISCOVERY</span><span style="color:var(--grey-4);margin-left:0.5rem;">Understanding the problem space.</span></div>
+          <div><span class="dfe-c-phase dfe-c-phase--alpha">ALPHA</span><span style="color:var(--grey-4);margin-left:0.5rem;">Testing hypotheses with users.</span></div>
+          <div><span class="dfe-c-phase dfe-c-phase--private-beta">PRIVATE BETA</span><span style="color:var(--grey-4);margin-left:0.5rem;">Limited release for testing.</span></div>
+          <div><span class="dfe-c-phase dfe-c-phase--public-beta">PUBLIC BETA</span><span style="color:var(--grey-4);margin-left:0.5rem;">Wider release before live.</span></div>
+          <div><span class="dfe-c-phase dfe-c-phase--live">LIVE</span><span style="color:var(--grey-4);margin-left:0.5rem;">Full production release.</span></div>
+        </div>
+      </div>
+      <div class="dfe-c-scard">
+        <div class="dfe-c-scard__title">Monthly reporting</div>
+        <div style="font-size:0.8125rem;color:var(--grey-4);">Work items at Alpha or above are expected to submit a monthly RAG update. Updates are typically due in the last week of each month — check your portfolio guidance.</div>
+      </div>
+      <div class="dfe-c-scard">
+        <div class="dfe-c-scard__title">Priority guidance</div>
+        <div style="font-size:0.8125rem;color:var(--grey-4);">High priority items appear prominently in portfolio reviews. Use High for statutory, ministerial, or critical delivery risk. Medium for significant commitments. Low for improvements and exploratory work.</div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+@section Scripts {
+<script>
+(function() {
+  var multideptYes = document.getElementById('multidept-yes');
+  var multideptNo = document.getElementById('multidept-no');
+  var deptNames = document.getElementById('dept-names');
+  if (multideptYes && multideptNo && deptNames) {
+    function toggle() { deptNames.style.display = multideptYes.checked ? 'block' : 'none'; }
+    multideptYes.addEventListener('change', toggle);
+    multideptNo.addEventListener('change', toggle);
+  }
+})();
+</script>
+}

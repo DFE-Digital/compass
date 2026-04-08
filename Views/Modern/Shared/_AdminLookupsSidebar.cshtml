@@ -1,0 +1,78 @@
+@{
+  var groups = ViewBag.AdminLookupGroups as IEnumerable<Compass.Models.AdminLookupGroup> ?? new List<Compass.Models.AdminLookupGroup>();
+  var current = ViewBag.AdminLookupCurrent as string;
+  var searchJson = ViewBag.AdminLookupSearchJson as string ?? "[]";
+}
+<nav class="admin-sidebar admin-sidebar--collapsible" aria-label="Lookups and options">
+  <h2 class="admin-sidebar__title">Lookups &amp; options</h2>
+
+  <div class="admin-sidebar__search dfe-c-mb-2">
+    <label class="dfe-c-form__label dfe-c-form__label--s" for="admin-settings-search">Search settings</label>
+    <input class="dfe-c-width-full" id="admin-settings-search" type="text" autocomplete="off" placeholder="e.g. Priorities, RAG, Portfolios…" aria-describedby="admin-settings-search-hint" />
+    <div id="admin-settings-search-results" class="admin-sidebar__search-results" role="listbox" aria-label="Search results" hidden></div>
+  </div>
+
+  <div class="admin-sidebar__groups">
+    @foreach (var group in groups)
+    {
+      <details class="admin-sidebar__group dfe-c-mb-1" @(group.Sections.Any(s => string.Equals(s.Key, current, StringComparison.OrdinalIgnoreCase)) ? "open" : null)>
+        <summary class="admin-sidebar__group-summary">@group.Title</summary>
+        <ul class="admin-sidebar__list">
+          @foreach (var s in group.Sections)
+          {
+            var isActive = string.Equals(s.Key, current, StringComparison.OrdinalIgnoreCase);
+            <li class="admin-sidebar__item">
+              <a href="@s.Url" class="admin-sidebar__link @(isActive ?"admin-sidebar__link--active" : "")" data-search-keywords="@s.DisplayName">
+                @s.DisplayName<span class="admin-sidebar__count">(@s.Count)</span>
+              </a>
+            </li>
+          }
+        </ul>
+      </details>
+    }
+  </div>
+</nav>
+
+<script>
+(function() {
+  var searchJson = @Html.Raw(searchJson);
+  var input = document.getElementById('admin-settings-search');
+  var results = document.getElementById('admin-settings-search-results');
+  if (!input || !results) return;
+
+  function match(item, q) {
+    var lower = q.toLowerCase();
+    return item.label.toLowerCase().indexOf(lower) !== -1 || (item.keywords && item.keywords.toLowerCase().indexOf(lower) !== -1);
+  }
+
+  function showResults(matches) {
+    results.innerHTML = '';
+    results.hidden = matches.length === 0;
+    if (matches.length === 0) return;
+    matches.slice(0, 8).forEach(function(item) {
+      var a = document.createElement('a');
+      a.href = item.url;
+      a.className = 'admin-sidebar__search-result';
+      a.textContent = item.label;
+      a.setAttribute('role', 'option');
+      results.appendChild(a);
+    });
+    results.setAttribute('role', 'listbox');
+  }
+
+  input.addEventListener('input', function() {
+    var q = (input.value || '').trim();
+    if (q.length < 2) { results.hidden = true; return; }
+    var matches = searchJson.filter(function(item) { return match(item, q); });
+    showResults(matches);
+  });
+  input.addEventListener('blur', function() { setTimeout(function() { results.hidden = true; }, 150); });
+  input.addEventListener('focus', function() {
+    var q = (input.value || '').trim();
+    if (q.length >= 2) {
+      var matches = searchJson.filter(function(item) { return match(item, q); });
+      showResults(matches);
+    }
+  });
+})();
+</script>

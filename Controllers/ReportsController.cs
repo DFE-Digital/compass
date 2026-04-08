@@ -5,6 +5,7 @@ using Microsoft.Extensions.Caching.Memory;
 using Compass.Data;
 using Compass.Models;
 using Compass.Services;
+using Compass.ViewModels;
 using System.Security.Claims;
 
 namespace Compass.Controllers;
@@ -24,7 +25,7 @@ public class ReportsController : Controller
     private static readonly TimeSpan ExternalApiCacheDuration   = TimeSpan.FromMinutes(10);
     private static readonly TimeSpan LookupCacheDuration        = TimeSpan.FromMinutes(15);
 
-    private const string AllProjectsCacheKey         = "reports_all_projects";
+    private const string AllProjectsCacheKey         = "reports_all_projects_v2";
     private const string ServiceAssessmentCacheKey   = "reports_service_assessments";
     private const string ProductsCacheKey            = "reports_products";
     private const string DivisionsCacheKey           = "reports_divisions";
@@ -93,6 +94,125 @@ public class ReportsController : Controller
         return string.IsNullOrEmpty(legacy) ? "Not set" : legacy;
     }
 
+    private static readonly string[] RagDonutOrder = { "Green", "Amber-Green", "Amber", "Amber-Red", "Red", "Not set" };
+
+    private static readonly Dictionary<string, string> RagDonutColors = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["Green"] = "#28a745",
+        ["Amber-Green"] = "#9cb300",
+        ["Amber"] = "#ffc107",
+        ["Amber-Red"] = "#fd7e14",
+        ["Red"] = "#dc3545",
+        ["Not set"] = "#6c757d",
+    };
+
+    private List<DonutChartSlice> BuildRagDonutSlices(IReadOnlyCollection<Project> projects)
+    {
+        var map = RagDonutOrder.ToDictionary(k => k, _ => 0);
+        foreach (var p in projects)
+        {
+            var name = GetProjectRagName(p);
+            if (!map.ContainsKey(name)) name = "Not set";
+            map[name]++;
+        }
+
+        return RagDonutOrder
+            .Where(k => map[k] > 0)
+            .Select(k => new DonutChartSlice
+            {
+                Label = k,
+                Value = map[k],
+                Color = RagDonutColors.GetValueOrDefault(k, "#6c757d")
+            })
+            .ToList();
+    }
+
+    private static List<DonutChartSlice> BuildDeliveryPriorityDonutSlices(IReadOnlyCollection<Project> projects)
+    {
+        var dict = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (var p in projects)
+        {
+            var name = string.IsNullOrWhiteSpace(p.DeliveryPriority?.Name)
+                ? "Not set"
+                : p.DeliveryPriority!.Name.Trim();
+            dict[name] = dict.GetValueOrDefault(name, 0) + 1;
+        }
+
+        var palette = new[]
+        {
+            "#0d6efd", "#6610f2", "#6f42c1", "#d63384", "#dc3545", "#fd7e14", "#ffc107", "#20c997", "#198754", "#495057"
+        };
+        var orderedKeys = dict.Keys.OrderBy(k => k.Equals("Not set", StringComparison.OrdinalIgnoreCase) ? "zzzz" : k).ToList();
+        var slices = new List<DonutChartSlice>();
+        for (var i = 0; i < orderedKeys.Count; i++)
+        {
+            var k = orderedKeys[i];
+            slices.Add(new DonutChartSlice
+            {
+                Label = k,
+                Value = dict[k],
+                Color = palette[i % palette.Length]
+            });
+        }
+
+        return slices;
+    }
+
+    private static List<DonutChartSlice> BuildMilestoneDonutSlices(IReadOnlyCollection<Project> projects)
+    {
+        var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (var p in projects)
+        {
+            if (p.Milestones == null) continue;
+            foreach (var m in p.Milestones)
+            {
+                var key = string.IsNullOrWhiteSpace(m.Status) ? "not_started" : m.Status.Trim().ToLowerInvariant();
+                counts[key] = counts.GetValueOrDefault(key, 0) + 1;
+            }
+        }
+
+        if (counts.Count == 0) return new List<DonutChartSlice>();
+
+        static string MilestoneLabel(string k) => k switch
+        {
+            "not_started" => "Not started",
+            "on_track" => "On track",
+            "at_risk" => "At risk",
+            "delayed" => "Delayed",
+            "complete" => "Complete",
+            "cancelled" => "Cancelled",
+            _ => k
+        };
+
+        var preferredOrder = new[] { "not_started", "on_track", "at_risk", "delayed", "complete", "cancelled" };
+        var palette = new[] { "#adb5bd", "#28a745", "#ffc107", "#fd7e14", "#0d6efd", "#6c757d" };
+        var slices = new List<DonutChartSlice>();
+        var idx = 0;
+        foreach (var key in preferredOrder.Where(counts.ContainsKey))
+        {
+            slices.Add(new DonutChartSlice
+            {
+                Label = MilestoneLabel(key),
+                Value = counts[key],
+                Color = palette[idx % palette.Length]
+            });
+            idx++;
+        }
+
+        foreach (var kv in counts.OrderBy(k => k.Key))
+        {
+            if (preferredOrder.Any(x => x.Equals(kv.Key, StringComparison.OrdinalIgnoreCase))) continue;
+            slices.Add(new DonutChartSlice
+            {
+                Label = MilestoneLabel(kv.Key),
+                Value = kv.Value,
+                Color = "#495057"
+            });
+        }
+
+        return slices;
+    }
+
     private IQueryable<Project> AllProjectsQuery() =>
         _context.Projects
             .Where(p => !p.IsDeleted && (p.Status == "Active" || p.Status == "Paused"))
@@ -109,7 +229,8 @@ public class ReportsController : Controller
             .Include(p => p.Milestones.Where(m => !m.IsDeleted))
             .Include(p => p.MonthlyUpdates)
             .Include(p => p.DeliveryPriority)
-            .Include(p => p.ActivityTypeLookup);
+            .Include(p => p.ActivityTypeLookup)
+            .Include(p => p.ProjectObjectives).ThenInclude(po => po.Objective);
 
     // ─────────────────────────────────────────────────────────────────────────
     // Cached data helpers – avoid repeated heavy queries across page loads
@@ -378,7 +499,7 @@ public class ReportsController : Controller
 
             if (!availableDivisions.Any())
             {
-                TempData["ErrorMessage"] = "You are not assigned to any divisions.";
+                TempData["ErrorMessage"] = "You are not assigned to any directorates.";
                 return RedirectToAction(nameof(Index));
             }
         }
@@ -447,7 +568,7 @@ public class ReportsController : Controller
         var allDivisionsForNav = await GetDivisionsCachedAsync();
         var allBusinessAreasForNav = await GetBusinessAreasCachedAsync();
 
-        ViewData["Title"] = selectedDivision != null ? $"{selectedDivision.Name} – division report" : "Division report";
+        ViewData["Title"] = selectedDivision != null ? $"{selectedDivision.Name} – directorate report" : "Directorate report";
         ViewBag.IsAdmin = isAdmin;
         ViewBag.AvailableDivisions = availableDivisions;
         ViewBag.AllDivisions = allDivisionsForNav;
@@ -759,7 +880,7 @@ public class ReportsController : Controller
     // ─────────────────────────────────────────────────────────────────────────
     [HttpGet]
     [Route("Reports/PriorityOutcomes")]
-    public async Task<IActionResult> PriorityOutcomes()
+    public async Task<IActionResult> PriorityOutcomes(string? tab = null, int? objectiveId = null)
     {
         var currentUser = await GetCurrentUserAsync();
         if (currentUser == null)
@@ -781,6 +902,43 @@ public class ReportsController : Controller
             .OrderBy(p => p.DeliveryPriority?.Name).ThenBy(p => p.Title)
             .ToList();
 
+        // Strategic priority outcomes (Objectives) — same entities as Admin/Objectives
+        var adminObjectives = await _context.Objectives
+            .AsNoTracking()
+            .Where(o => !o.IsDeleted)
+            .OrderBy(o => o.Title)
+            .ToListAsync();
+
+        var objectiveIdSet = adminObjectives.Select(o => o.Id).ToHashSet();
+
+        var projectsByObjectiveFull = adminObjectives
+            .Select(obj => new PriorityOutcomesObjectiveGroupViewModel
+            {
+                Objective = obj,
+                Projects = allProjects
+                    .Where(p => p.ProjectObjectives != null &&
+                        p.ProjectObjectives.Any(po => po.ObjectiveId == obj.Id))
+                    .OrderBy(p => p.Title)
+                    .ToList()
+            })
+            .Where(g => g.Projects.Count > 0)
+            .ToList();
+
+        int? objectiveFilterId = objectiveId;
+        if (objectiveFilterId.HasValue &&
+            !projectsByObjectiveFull.Any(g => g.Objective.Id == objectiveFilterId.Value))
+        {
+            objectiveFilterId = null;
+        }
+
+        var projectsByObjective = objectiveFilterId.HasValue
+            ? projectsByObjectiveFull.Where(g => g.Objective.Id == objectiveFilterId.Value).ToList()
+            : projectsByObjectiveFull;
+
+        var totalWithPriorityOutcome = allProjects.Count(p =>
+            p.ProjectObjectives != null &&
+            p.ProjectObjectives.Any(po => objectiveIdSet.Contains(po.ObjectiveId)));
+
         // Delivery priorities lookup (cached)
         var deliveryPriorities = await GetDeliveryPrioritiesCachedAsync();
 
@@ -797,6 +955,21 @@ public class ReportsController : Controller
         var allDivisionsForNav3 = await GetDivisionsCachedAsync();
         var allBusinessAreasForNav3 = await GetBusinessAreasCachedAsync();
 
+        var totalFlagship  = flagshipProjects.Count;
+        var totalMultiDept = multiDeptProjects.Count;
+        var totalAi        = aiProjects.Count;
+        var totalPriority  = priorityProjects.Count;
+
+        const string defaultTab = "objectives";
+
+        var allowedTabs = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "objectives", "flagship", "multidept", "ai", "priority", "all"
+        };
+        var activeTab = !string.IsNullOrWhiteSpace(tab) && allowedTabs.Contains(tab.Trim())
+            ? tab.Trim().ToLowerInvariant()
+            : defaultTab;
+
         ViewData["Title"] = "Priority outcomes and flagship projects";
         ViewBag.IsAdmin          = isAdmin;
         ViewBag.AllDivisions = allDivisionsForNav3;
@@ -807,14 +980,76 @@ public class ReportsController : Controller
         ViewBag.PriorityProjects  = priorityProjects;
         ViewBag.ProjectsByPriority = projectsByPriority;
         ViewBag.DeliveryPriorities = deliveryPriorities;
-        ViewBag.TotalFlagship  = flagshipProjects.Count;
-        ViewBag.TotalMultiDept = multiDeptProjects.Count;
-        ViewBag.TotalAi        = aiProjects.Count;
-        ViewBag.TotalPriority  = priorityProjects.Count;
+        ViewBag.TotalFlagship  = totalFlagship;
+        ViewBag.TotalMultiDept = totalMultiDept;
+        ViewBag.TotalAi        = totalAi;
+        ViewBag.TotalPriority  = totalPriority;
+        ViewBag.TotalWithPriorityOutcome = totalWithPriorityOutcome;
+        ViewBag.ProjectsByObjective = projectsByObjective;
+        ViewBag.ObjectiveFilterOptions = projectsByObjectiveFull
+            .OrderBy(g => g.Objective.Title)
+            .Select(g => new KeyValuePair<int, string>(g.Objective.Id, g.Objective.Title))
+            .ToList();
+        ViewBag.ObjectiveFilterSelectedId = objectiveFilterId;
         // Pass all projects so the view can show a fallback "all" tab
         ViewBag.AllProjects    = allProjects;
+        ViewBag.ActiveTab      = activeTab;
 
         return View();
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // PRIORITY OUTCOMES SUMMARY – charts per strategic objective
+    // ─────────────────────────────────────────────────────────────────────────
+    [HttpGet]
+    [Route("Reports/PriorityOutcomesSummary")]
+    public async Task<IActionResult> PriorityOutcomesSummary()
+    {
+        var currentUser = await GetCurrentUserAsync();
+        if (currentUser == null)
+        {
+            TempData["ErrorMessage"] = "Unable to identify the current user.";
+            return RedirectToAction("Index", "Home");
+        }
+
+        var allProjects = await GetAllProjectsCachedAsync();
+        var adminObjectives = await _context.Objectives
+            .AsNoTracking()
+            .Where(o => !o.IsDeleted)
+            .OrderBy(o => o.Title)
+            .ToListAsync();
+
+        var sections = new List<PriorityOutcomeSummarySectionViewModel>();
+        foreach (var obj in adminObjectives)
+        {
+            var projects = allProjects
+                .Where(p => p.ProjectObjectives != null && p.ProjectObjectives.Any(po => po.ObjectiveId == obj.Id))
+                .OrderBy(p => p.Title)
+                .ToList();
+            if (projects.Count == 0) continue;
+
+            sections.Add(new PriorityOutcomeSummarySectionViewModel
+            {
+                ObjectiveId = obj.Id,
+                Title = obj.Title,
+                Theme = obj.Theme,
+                ProjectCount = projects.Count,
+                RagSlices = BuildRagDonutSlices(projects),
+                DeliveryPrioritySlices = BuildDeliveryPriorityDonutSlices(projects),
+                MilestoneSlices = BuildMilestoneDonutSlices(projects)
+            });
+        }
+
+        var vm = new PriorityOutcomeSummaryPageViewModel { Sections = sections };
+        ViewData["Title"] = "Priority outcomes summary";
+        ViewBag.AllDivisions = await GetDivisionsCachedAsync();
+        ViewBag.AllBusinessAreas = await GetBusinessAreasCachedAsync();
+        var objectiveIdsForIntel = adminObjectives.Select(o => o.Id).ToHashSet();
+        ViewBag.TotalWithPriorityOutcome = allProjects.Count(p =>
+            p.ProjectObjectives != null &&
+            p.ProjectObjectives.Any(po => objectiveIdsForIntel.Contains(po.ObjectiveId)));
+
+        return View(vm);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
