@@ -1,0 +1,139 @@
+@model Compass.ViewModels.Modern.StandardsDashboardViewModel
+@{
+  ViewData["Title"] = "Standards dashboard";
+  string DdtRowHref(Compass.ViewModels.Modern.StandardsDashboardDdtRow r) =>
+    r.UseDraftAction
+      ? Url.Action("DdtDetail", "ModernStandards", new { id = r.StandardId }) ?? "#"
+      : Url.Action("DdtDetail", "ModernStandards", new { id = r.StandardId }) ?? "#";
+  // Opens this assessment: conduct if in progress, summary if submitted.
+  string AssessmentHref(Compass.ViewModels.Modern.StandardsDashboardAssessmentRow r) =>
+    r.IsSubmitted
+      ? Url.Action("AssessmentSummary", "ModernStandards", new { assessmentId = r.Id }) ?? "#"
+      : Url.Action("ConductAssessment", "ModernStandards", new { assessmentId = r.Id }) ?? "#";
+}
+
+@section Breadcrumbs {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">Standards</li>
+}
+
+ <div class="dfe-c-page-title">
+ <div class="dfe-c-page-title__caption">Standards</div>
+ <h1 class="dfe-c-page-title__heading">Standards dashboard</h1>
+  </div>
+
+  @if (!string.IsNullOrEmpty(Model.ReviewCalloutHeading))
+  {
+ <div class="dfe-c-callout dfe-c-callout--warning dfe-c-mb-3">
+ <div class="dfe-c-callout__heading">@Model.ReviewCalloutHeading</div>
+    </div>
+  }
+
+ <div class="dfe-c-grid dfe-c-grid--4 dfe-c-mb-4">
+ <div class="dfe-c-metric dfe-c-metric--navy">
+ <div class="dfe-c-metric__number">@Model.PublishedDdtCount</div>
+ <div class="dfe-c-metric__label">DDT standards published</div>
+    </div>
+ <div class="dfe-c-metric dfe-c-metric--blue">
+ <div class="dfe-c-metric__number" style="color:var(--blue);">@Model.FunctionalStandardsCount</div>
+ <div class="dfe-c-metric__label">Functional standards (GovS)</div>
+    </div>
+ <div class="dfe-c-metric dfe-c-metric--amber">
+ <div class="dfe-c-metric__number" style="color:var(--rag-a);">@Model.InProgressAssessmentsCount</div>
+ <div class="dfe-c-metric__label">Assessments in progress</div>
+    </div>
+ <div class="dfe-c-metric dfe-c-metric--teal">
+ <div class="dfe-c-metric__number" style="color:var(--teal);">@Model.CompleteAssessmentsYtdCount</div>
+ <div class="dfe-c-metric__label">Assessments complete (YTD)</div>
+    </div>
+  </div>
+
+ <div class="dfe-c-grid dfe-c-grid--2">
+    <div>
+ <div class="dfe-c-section-header">
+        <h2>DDT standards</h2>
+ <a class="dfe-c-button--link" style="font-size:0.875rem;" href="@Url.Action("DdtStandards", "ModernStandards")">All standards →</a>
+      </div>
+ <div class="dfe-c-table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Standard</th>
+              <th scope="col">Status</th>
+              <th scope="col">Version</th>
+            </tr>
+          </thead>
+          <tbody>
+          @if (Model.DdtRows == null || Model.DdtRows.Count == 0)
+          {
+            <tr>
+ <td colspan="3" class="dfe-c-body muted">No DDT standards yet.</td>
+            </tr>
+          }
+          else
+          {
+            foreach (var s in Model.DdtRows)
+            {
+              <tr>
+                <td><a href="@DdtRowHref(s)">@s.Title</a></td>
+ <td><span class="dfe-c-tag @s.StatusTagClass">@s.StatusLabel</span></td>
+                <td>@s.VersionDisplay</td>
+              </tr>
+            }
+          }
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div>
+ <div class="dfe-c-section-header">
+        <h2>Active assessments</h2>
+ <a class="dfe-c-button--link" style="font-size:0.875rem;" href="@Url.Action("FunctionalStandards", "ModernStandards")">All assessments →</a>
+      </div>
+ <div class="dfe-c-table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Assessment</th>
+              <th scope="col">Standard</th>
+              <th scope="col">Status</th>
+              <th scope="col">Attainment</th>
+            </tr>
+          </thead>
+          <tbody>
+          @if (Model.AssessmentRows == null || Model.AssessmentRows.Count == 0)
+          {
+            <tr>
+ <td colspan="4" class="dfe-c-body muted">No assessments yet.</td>
+            </tr>
+          }
+          else
+          {
+            foreach (var a in Model.AssessmentRows)
+            {
+              <tr>
+                <td>
+ <a href="@AssessmentHref(a)">@a.AssessmentTitle</a><span class="dfe-c-table-ref">@a.Reference</span>
+                </td>
+                <td>
+ <a class="govuk-link govuk-link--no-visited-state" href="@(Url.Action("FunctionalStandardDashboard", "ModernStandards", new { id = a.FunctionalStandardId }) ?? "#")">@a.StandardRef</a>
+                </td>
+ <td><span class="dfe-c-tag @a.StatusTagClass">@a.StatusLabel</span></td>
+                <td>
+                  @if (!string.IsNullOrEmpty(a.AttainmentLabel) && !string.IsNullOrEmpty(a.AttainmentTagClass))
+                  {
+ <span class="dfe-c-attainment @a.AttainmentTagClass">@a.AttainmentLabel</span>
+                  }
+                  else
+                  {
+ <span class="dfe-c-body muted">—</span>
+                  }
+                </td>
+              </tr>
+            }
+          }
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>

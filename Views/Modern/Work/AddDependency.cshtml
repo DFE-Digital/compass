@@ -2,83 +2,174 @@
 @{
     var work = ViewBag.WorkItem as Compass.Models.Modern.Work.WorkItem;
     var workItemsSelectList = ViewBag.WorkItemsSelectList as Microsoft.AspNetCore.Mvc.Rendering.SelectList ?? new Microsoft.AspNetCore.Mvc.Rendering.SelectList(new List<object>(), "Id", "Title");
+    var postedTarget = ViewBag.PostedTargetWorkItemId as int?;
+    var directionIn = !string.Equals(Model.Direction, "Out", StringComparison.OrdinalIgnoreCase);
     ViewData["Title"] = "Add dependency";
+    bool HasError(string field) => ViewData.ModelState[field]?.Errors?.Count > 0;
+    string? ErrorMsg(string field) => ViewData.ModelState[field]?.Errors?.FirstOrDefault()?.ErrorMessage;
+    bool hasKeyError = ViewData.ModelState[""]?.Errors?.Count > 0;
+    string? keyErrorMsg = ViewData.ModelState[""]?.Errors?.FirstOrDefault()?.ErrorMessage;
 }
 @section Breadcrumbs {
-    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="/">Home</a></li>
-    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="@Url.Action("Index", "ModernWork")">Work</a></li>
-    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="@Url.Action("Detail", "ModernWork", new { id = Model.WorkItemId })">@(work?.Title ?? "Work")</a></li>
-    <li class="dfe-c-breadcrumb__item" aria-current="page">Add dependency</li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="/">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernWork")">Work</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Detail", "ModernWork", new { id = Model.WorkItemId })">@(work?.Title ?? "Work")</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">Add dependency</li>
 }
 
 <div id="sc-work-adddependency">
   @await Html.PartialAsync("_WorkItemChrome", ViewBag.WorkItem as Compass.Models.Modern.Work.WorkItem)
-  <h2 class="dfe-c-heading-m dfe-c-mt-0">Add dependency</h2>
-  <p class="dfe-c-body muted dfe-c-mb-3">In-dependencies (upstream) or out-dependencies (downstream); internal or external.</p>
 
-  <div class="dfe-c-grid-row">
-    <div class="dfe-c-grid-col dfe-c-grid-col--two-thirds">
-<form asp-action="AddDependency" asp-route-id="@Model.WorkItemId" method="post" class="dfe-c-mb-4" id="dep-form">
-  @Html.AntiForgeryToken()
-
-  <div class="dfe-c-form__group">
-    <label class="dfe-c-form__label" for="Direction">Direction</label>
-    <select class="dfe-c-width-full" name="Direction" id="Direction">
-      <option value="In" selected="@(Model.Direction == "In")">In (upstream – this work depends on)</option>
-      <option value="Out" selected="@(Model.Direction == "Out")">Out (downstream – others depend on this)</option>
-    </select>
+ <div class="dfe-c-page-title">
+ <div class="dfe-c-page-title__caption">@(work?.Title ?? "Work")</div>
+ <h1 class="dfe-c-page-title__heading">Add dependency</h1>
+ <p class="dfe-c-page-title__lede">Record an upstream or downstream dependency — either a link to another work item or an external dependency.</p>
   </div>
 
-  <div class="dfe-c-form__group">
-    <div class="dfe-c-form__radio-group">
-      <div class="dfe-c-radios__item">
-        <input class="dfe-c-radios__input" id="Internal" name="IsInternal" type="radio" value="true" @(Model.IsInternal ? "checked" : null) data-dep-type="internal" />
-        <label class="dfe-c-form__label dfe-c-radios__label" for="Internal">Internal (link to another work item)</label>
-      </div>
-      <div class="dfe-c-radios__item">
-        <input class="dfe-c-radios__input" id="External" name="IsInternal" type="radio" value="false" @(!Model.IsInternal ? "checked" : null) data-dep-type="external" />
-        <label class="dfe-c-form__label dfe-c-radios__label" for="External">External (e.g. vendor, regulatory)</label>
+ <div class="dfe-c-form-layout">
+ <div class="dfe-c-form-layout__main">
+ <div class="dfe-c-card dfe-c-card--plain">
+        <form asp-controller="ModernWork" asp-action="AddDependency" asp-route-id="@Model.WorkItemId" method="post" id="dep-form" novalidate>
+          @Html.AntiForgeryToken()
+
+          @if (!ViewData.ModelState.IsValid)
+          {
+ <div class="govuk-error-summary" data-module="govuk-error-summary" role="alert" aria-labelledby="error-summary-title">
+ <h2 id="error-summary-title" class="govuk-error-summary__title">There is a problem</h2>
+ <div class="govuk-error-summary__body">
+ <ul class="govuk-list govuk-error-summary__list">
+              @if (hasKeyError)
+              {
+ <li><a href="#dep-form">@keyErrorMsg</a></li>
+              }
+              @foreach (var kv in ViewData.ModelState)
+              {
+                if (string.IsNullOrEmpty(kv.Key) || kv.Value?.Errors?.Count == 0) { continue; }
+ <li><a href="#@kv.Key">@kv.Value!.Errors[0].ErrorMessage</a></li>
+              }
+            </ul>
+          </div>
+        </div>
+          }
+
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="Direction">Direction</label>
+ <p id="Direction-hint" class="govuk-hint">Choose whether this work depends on something else (in) or something else depends on this work (out).</p>
+ <select class="govuk-select govuk-!-width-full" name="Direction" id="Direction" required aria-describedby="Direction-hint">
+            @if (directionIn)
+            {
+ <option value="In" selected="selected">In (upstream — this work depends on)</option>
+ <option value="Out">Out (downstream — others depend on this)</option>
+            }
+            else
+            {
+ <option value="In">In (upstream — this work depends on)</option>
+ <option value="Out" selected="selected">Out (downstream — others depend on this)</option>
+            }
+          </select>
+        </div>
+
+ <div class="govuk-form-group">
+ <fieldset class="govuk-fieldset" aria-describedby="IsInternal-hint">
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Type</legend>
+ <p class="govuk-hint" id="IsInternal-hint">Internal dependencies link to another tracked work item. External dependencies are outside the portfolio.</p>
+ <div class="govuk-radios" data-module="govuk-radios">
+ <div class="govuk-radios__item">
+ <input class="govuk-radios__input" id="Internal" name="IsInternal" type="radio" value="true" @(Model.IsInternal ? "checked" : null) data-dep-type="internal" />
+ <label class="govuk-label govuk-radios__label" for="Internal">Internal (link to another work item)</label>
+            </div>
+ <div class="govuk-radios__item">
+ <input class="govuk-radios__input" id="External" name="IsInternal" type="radio" value="false" @(!Model.IsInternal ? "checked" : null) data-dep-type="external" />
+ <label class="govuk-label govuk-radios__label" for="External">External (e.g. vendor, regulatory, cross-government)</label>
+            </div>
+          </div>
+        </fieldset>
+        </div>
+
+ <div class="govuk-form-group @(HasError("TargetWorkItemId") ? "govuk-form-group--error" : "")" id="target-work-group">
+ <label class="govuk-label" for="TargetWorkItemId">Work item</label>
+ <p id="TargetWorkItemId-hint" class="govuk-hint">Select the work item this dependency relates to.</p>
+          @if (HasError("TargetWorkItemId"))
+          {
+ <p id="TargetWorkItemId-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @ErrorMsg("TargetWorkItemId")</p>
+          }
+ <select class="govuk-select govuk-!-width-full @(HasError("TargetWorkItemId") ? "govuk-select--error" : "")" name="TargetWorkItemId" id="TargetWorkItemId" aria-describedby="TargetWorkItemId-hint @(HasError("TargetWorkItemId") ? "TargetWorkItemId-error" : "")">
+            <option value="">— Select work item —</option>
+            @foreach (Microsoft.AspNetCore.Mvc.Rendering.SelectListItem item in workItemsSelectList)
+            {
+              var isSel = item.Selected
+                || (postedTarget.HasValue
+                    && int.TryParse(item.Value, out var v)
+                    && v == postedTarget.Value);
+              if (isSel)
+              {
+ <option value="@item.Value" selected="selected">@item.Text</option>
+              }
+              else
+              {
+ <option value="@item.Value">@item.Text</option>
+              }
+            }
+          </select>
+        </div>
+
+ <div class="govuk-form-group @(HasError("ExternalDescription") ? "govuk-form-group--error" : "")" id="external-desc-group" style="display:none;">
+ <label class="govuk-label" for="ExternalDescription">Description</label>
+ <p id="ExternalDescription-hint" class="govuk-hint">Describe the external dependency — what it is, who owns it, and any relevant timelines.</p>
+          @if (HasError("ExternalDescription"))
+          {
+ <p id="ExternalDescription-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @ErrorMsg("ExternalDescription")</p>
+          }
+ <textarea class="govuk-textarea govuk-!-width-full @(HasError("ExternalDescription") ? "govuk-textarea--error" : "")" name="ExternalDescription" id="ExternalDescription" rows="5" aria-describedby="ExternalDescription-hint @(HasError("ExternalDescription") ? "ExternalDescription-error" : "")">@Model.ExternalDescription</textarea>
+        </div>
+
+ <div class="govuk-button-group">
+ <button type="submit" class="govuk-button">Add dependency</button>
+ <a href="@Url.Action("Detail", "ModernWork", new { id = Model.WorkItemId })#wd-dependencies" class="govuk-button govuk-button--secondary">Cancel</a>
+        </div>
+        </form>
       </div>
     </div>
-  </div>
 
-  <div class="dfe-c-form__group" id="target-work-group">
-    <label class="dfe-c-form__label" for="TargetWorkItemId">Work item</label>
-    <select class="dfe-c-width-full" name="TargetWorkItemId" id="TargetWorkItemId">
-      <option value="">— Select work item —</option>
-      @foreach (Microsoft.AspNetCore.Mvc.Rendering.SelectListItem item in workItemsSelectList)
-      {
-        <option value="@item.Value">@item.Text</option>
-      }
-    </select>
-  </div>
-
-  <div class="dfe-c-form__group" id="external-desc-group" style="display:none;">
-    <label class="dfe-c-form__label" for="ExternalDescription">Description</label>
-    <textarea class="dfe-c-width-full" name="ExternalDescription" id="ExternalDescription" rows="3"></textarea>
-  </div>
-
-  <button type="submit" class="dfe-c-button dfe-c-button--primary">Add dependency</button>
-  <a href="@Url.Action("Detail", "ModernWork", new { id = Model.WorkItemId })" class="dfe-c-button dfe-c-button--secondary dfe-c-ms-2">Cancel</a>
-</form>
+ <div class="dfe-c-form-layout__aside">
+ <div class="dfe-c-sidebar">
+ <div class="dfe-c-scard">
+ <div class="dfe-c-scard__title">About dependencies</div>
+          <div style="font-size:0.8125rem;color:var(--grey-4);">Dependencies track relationships between work items or external factors that could affect delivery. Recording them helps identify risks and plan around blockers.</div>
+        </div>
+ <div class="dfe-c-scard">
+ <div class="dfe-c-scard__title">Direction</div>
+          <div style="font-size:0.8125rem;display:flex;flex-direction:column;gap:0.5rem;">
+            <div><strong>In (upstream)</strong><span style="color:var(--grey-4);margin-left:0.5rem;">This work is blocked or dependent on something else.</span></div>
+            <div><strong>Out (downstream)</strong><span style="color:var(--grey-4);margin-left:0.5rem;">Other work or teams depend on this work completing.</span></div>
+          </div>
+        </div>
+ <div class="dfe-c-scard">
+ <div class="dfe-c-scard__title">Internal vs External</div>
+          <div style="font-size:0.8125rem;color:var(--grey-4);">Internal dependencies link directly to another work item in the register. External dependencies describe factors outside the portfolio — e.g. vendor deliverables, regulatory deadlines, or cross-government programmes.</div>
+        </div>
+      </div>
     </div>
   </div>
 </div>
 
 @section Scripts {
-<script>
+<script nonce="@Context.Items["Nonce"]">
 (function() {
   var internalRadio = document.getElementById('Internal');
   var externalRadio = document.getElementById('External');
   var targetGroup = document.getElementById('target-work-group');
   var externalGroup = document.getElementById('external-desc-group');
   function toggle() {
+    if (!internalRadio || !targetGroup || !externalGroup) return;
     var isInternal = internalRadio.checked;
-    targetGroup.style.display = isInternal ? 'block' : 'none';
-    externalGroup.style.display = isInternal ? 'none' : 'block';
+    targetGroup.style.display = isInternal ? '' : 'none';
+    targetGroup.setAttribute('aria-hidden', isInternal ? 'false' : 'true');
+    externalGroup.style.display = isInternal ? 'none' : '';
+    externalGroup.setAttribute('aria-hidden', isInternal ? 'true' : 'false');
   }
-  internalRadio.addEventListener('change', toggle);
-  externalRadio.addEventListener('change', toggle);
+  if (internalRadio) internalRadio.addEventListener('change', toggle);
+  if (externalRadio) externalRadio.addEventListener('change', toggle);
   toggle();
 })();
 </script>

@@ -1,146 +1,106 @@
 @using Compass.Models.Modern.Work
+@using Compass.ViewModels.Dashboard
 @{
-  string Trunc(string? s, int n)
+  string PriorityTagClass(string? priorityName)
   {
-    if (string.IsNullOrEmpty(s)) return "—";
-    return s.Length <= n ? s : s[..n] + "…";
+    if (string.IsNullOrWhiteSpace(priorityName)) return "dfe-c-tag dfe-c-tag--grey";
+    var s = priorityName.ToLowerInvariant();
+    if (s.Contains("high") || s.Contains("critical")) return "dfe-c-tag dfe-c-tag--red";
+    if (s.Contains("medium")) return "dfe-c-tag dfe-c-tag--amber";
+    if (s.Contains("low")) return "dfe-c-tag dfe-c-tag--green";
+    return "dfe-c-tag dfe-c-tag--grey";
   }
   var periodLabel = ViewBag.WdMrPeriodLabel as string;
-  var dueDate = ViewBag.WdMrDueDate as DateTime?;
-  var daysRemaining = ViewBag.WdMrDaysRemaining as int?;
   var submitted = ViewBag.WdMrSubmitted as int? ?? 0;
-  var draft = ViewBag.WdMrDraft as int? ?? 0;
-  var missing = ViewBag.WdMrMissing as int? ?? 0;
   var activeAssigned = ViewBag.WdMrActiveAssignedCount as int? ?? 0;
   var rows = ViewBag.WdMrRows as List<HomeMonthlyUpdateRow> ?? new();
-  var monthlyTotal = submitted + draft + missing;
-  var extendedTable = ViewBag.WdMrExtendedReportingTable as bool? == true;
+  var monthlyTotal = (ViewBag.WdMrSubmitted as int? ?? 0) + (ViewBag.WdMrDraft as int? ?? 0) + (ViewBag.WdMrMissing as int? ?? 0);
+  var windowOpen = ViewBag.WdMrWindowOpen as bool? ?? false;
+  var windowOpensOn = ViewBag.WdMrWindowOpensOn as DateTime?;
+  var monthlyColHeader = ViewBag.WdMrMonthlyUpdateColumnHeader as string ?? "Monthly update";
 }
 
 <div>
-  <p class="dfe-c-body dfe-c-mb-2">
-    <strong>@(periodLabel ?? "Current period")</strong>
-    @if (dueDate.HasValue)
-    {
-      <span class="dfe-c-text-muted"> — due @dueDate.Value.ToString("d MMMM yyyy")</span>
-    }
-    @if (daysRemaining.HasValue && dueDate.HasValue)
-    {
-      var days = (dueDate!.Value.Date - DateTime.UtcNow.Date).Days;
-      if (days >= 0)
-      {
-        <span class="dfe-c-text-muted"> (@days day@(days == 1 ? "" : "s") left)</span>
-      }
-    }
-  </p>
-  @if (activeAssigned > 0 && monthlyTotal > 0)
+  @if (activeAssigned > 0 && !windowOpen && windowOpensOn.HasValue)
   {
-    var pctOk = (int)Math.Round(100.0 * submitted / monthlyTotal);
-    var pctDraft = (int)Math.Round(100.0 * draft / monthlyTotal);
-    var pctMiss = Math.Max(0, 100 - pctOk - pctDraft);
-    <div class="dfe-c-mb-2" role="img" aria-label="Submitted @submitted, in progress @draft, missing @missing out of @monthlyTotal">
-      <div style="display:flex;gap:2px;height:0.75rem;border-radius:1px;overflow:hidden;margin-bottom:0.375rem;">
-        <div style="flex:@Math.Max(pctOk, 0.0001);background:var(--rag-g);min-width:2px;"></div>
-        <div style="flex:@Math.Max(pctDraft, 0.0001);background:var(--orange);min-width:2px;"></div>
-        <div style="flex:@Math.Max(pctMiss, 0.0001);background:var(--rag-r);min-width:2px;"></div>
-      </div>
-      <p class="dfe-c-text-muted" style="font-size:0.8125rem;margin:0;">
-        <span style="color:var(--rag-g);">■</span> Submitted (@submitted)
-        <span style="margin-left:0.75rem;"><span style="color:var(--orange);">■</span> In progress (@draft)</span>
-        <span style="margin-left:0.75rem;"><span style="color:var(--rag-r);">■</span> Not started (@missing)</span>
-      </p>
-    </div>
+ <p class="dfe-c-body dfe-c-text-muted dfe-c-mb-3">Reporting for this period is not open yet. It opens on <strong>@windowOpensOn.Value.ToString("dddd d MMMM yyyy")</strong>@if (submitted> 0) { <text> — @submitted already submitted.</text> }.</p>
   }
   else if (activeAssigned == 0)
   {
-    <p class="dfe-c-body dfe-c-text-muted dfe-c-mb-3">No work items are assigned to you — monthly reporting tasks will show here when you are on a delivery team.</p>
+ <p class="dfe-c-body dfe-c-text-muted dfe-c-mb-3">No work items are assigned to you — monthly reporting tasks will show here when you are on a delivery team.</p>
   }
-  else
+  else if (activeAssigned > 0 && windowOpen && monthlyTotal == 0)
   {
-    <p class="dfe-c-body dfe-c-text-muted dfe-c-mb-3">No active assigned work in scope for this period summary.</p>
+ <p class="dfe-c-body dfe-c-text-muted dfe-c-mb-3">All assigned work has a submitted update for this period.</p>
   }
 
   @if (activeAssigned > 0 && rows.Count > 0)
   {
-    <div class="dfe-c-table-wrap">
-      <table>
-        <caption class="compass2-visually-hidden">Your work items for @(periodLabel ?? "this reporting period")</caption>
+ <div class="dfe-c-table-wrap">
+      <table class="modern-work-table" id="work-dashboard-table">
+ <caption class="compass2-visually-hidden">Your work items for @(periodLabel ?? "this reporting period")</caption>
         <thead>
           <tr>
             <th scope="col">Work item</th>
-            @if (extendedTable)
-            {
-              <th scope="col">Portfolio</th>
-              <th scope="col">RAG</th>
-              <th scope="col">Deadline</th>
-            }
+            <th scope="col">Business area</th>
+            <th scope="col">Priority</th>
+            <th scope="col">RAG</th>
+            <th scope="col">Primary contact</th>
+            <th scope="col">Tags</th>
             <th scope="col">Status</th>
-            <th scope="col">Action</th>
+            <th scope="col">@monthlyColHeader</th>
           </tr>
         </thead>
         <tbody>
           @foreach (var row in rows)
           {
-            var overdueRow = row.DueDate.HasValue && row.DueDate.Value.Date < DateTime.UtcNow.Date
-                             && row.StatusLabel != "Submitted";
-            <tr style="@(overdueRow ? "background:#fde8e4;" : null)">
+            <tr>
               <td>
-                <a class="dfe-c-link dfe-c-fw-bold" href="@row.ActionUrl">@Trunc(row.WorkTitle, 56)</a>
+ <a href="@Url.Action("Detail", "ModernWork", new { id = row.WorkItemId })">@row.WorkTitle</a>
+ <div class="dfe-c-body-s dfe-c-text-muted" style="margin-top:0.25rem;line-height:1.3;">
+ WI-@row.WorkItemId.ToString("D8")@if (!string.IsNullOrEmpty(row.PhaseName)) { <span aria-hidden="true"> · </span><span>@row.PhaseName</span> }
+                </div>
               </td>
-              @if (extendedTable)
-              {
-                <td>@row.PortfolioName</td>
-                <td>
-                  @if (!string.IsNullOrEmpty(row.RagStatusName))
-                  {
-                    <span class="dfe-c-rag @(row.RagStatusName.Contains("Red", StringComparison.OrdinalIgnoreCase) ? "dfe-c-rag--red" : row.RagStatusName.Contains("Amber", StringComparison.OrdinalIgnoreCase) ? "dfe-c-rag--amber" : row.RagStatusName.Contains("Green", StringComparison.OrdinalIgnoreCase) ? "dfe-c-rag--green" : "")">@row.RagStatusName.ToUpperInvariant()</span>
-                  }
-                  else
-                  {
-                    <span class="dfe-c-text-muted">—</span>
-                  }
-                </td>
-                <td>
-                  @if (row.DueDate.HasValue)
-                  {
-                    @row.DueDate.Value.ToString("d MMM yyyy")
-                  }
-                  else
-                  {
-                    <span class="dfe-c-text-muted">—</span>
-                  }
-                </td>
-              }
+              <td>@row.BusinessArea</td>
               <td>
-                @if (row.StatusLabel == "Submitted")
+                @if (!string.IsNullOrEmpty(row.PriorityName))
                 {
-                  <span class="dfe-c-tag dfe-c-tag--green">@row.StatusLabel</span>
-                }
-                else if (row.StatusLabel == "Started")
-                {
-                  <span class="dfe-c-tag dfe-c-tag--orange">@row.StatusLabel</span>
-                }
-                else if (row.StatusLabel == "Draft")
-                {
-                  <span class="dfe-c-tag dfe-c-tag--amber">@row.StatusLabel</span>
+ <span class="@PriorityTagClass(row.PriorityName)">@row.PriorityName.ToUpperInvariant()</span>
                 }
                 else
                 {
-                  <span class="dfe-c-tag dfe-c-tag--red">@row.StatusLabel</span>
+ <span class="dfe-c-text-muted">—</span>
                 }
               </td>
+              <td>@await Html.PartialAsync("_WorkRagBadge", row.LatestRag)</td>
+              <td>@row.PrimaryContact</td>
+ <td class="dfe-c-body-s">@(string.IsNullOrEmpty(row.TagNamesSummary) ? "—" : row.TagNamesSummary)</td>
+ <td><span class="@WorkBadgeCss.StatusDfeTagClass(row.WorkItemStatus)">@row.WorkItemStatus</span></td>
               <td>
-                @if (extendedTable && (row.StatusLabel == "Not started" || row.StatusLabel == "Draft" || row.StatusLabel == "Started"))
-                {
-                  <a class="dfe-c-button dfe-c-button--primary dfe-c-button--sm" href="@row.ActionUrl">@(row.StatusLabel == "Draft" || row.StatusLabel == "Started" ? "Continue" : "Submit")</a>
+                @{
+                  string? badgeClass = row.StatusLabel switch
+                  {
+                    "Submitted" => "dfe-c-tag dfe-c-tag--green",
+                    "Draft" => "dfe-c-tag dfe-c-tag--amber",
+                    "Not due" => "dfe-c-tag dfe-c-tag--grey",
+                    _ => "dfe-c-tag dfe-c-tag--red"
+                  };
+                  var canLink = row.RowKind is "view" or "complete" && !string.IsNullOrEmpty(row.ActionUrl);
                 }
-                else if (extendedTable && row.StatusLabel == "Submitted")
+                @if (canLink)
                 {
-                  <a class="dfe-c-link" href="@row.ActionUrl">View update</a>
+ <a class="govuk-link govuk-link--no-visited-state wd-mr-update-badge-link"
+    href="@row.ActionUrl"
+    aria-label="@row.PeriodLabel monthly update: @row.StatusLabel — @row.ActionLabel">
+ <span class="@badgeClass wd-mr-update-badge wd-mr-update-badge--with-icon">
+ <span class="wd-mr-update-badge__text">@row.StatusLabel</span>
+ <svg class="wd-mr-update-badge__icon" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M14 4h6v6h-2V7.4l-9.3 9.3-1.4-1.4L16.6 6H14V4z"/></svg>
+                  </span>
+                  </a>
                 }
                 else
                 {
-                  <a class="dfe-c-link" href="@row.ActionUrl">@row.ActionLabel</a>
+ <span class="@badgeClass" style="font-size:0.75rem;">@row.StatusLabel</span>
                 }
               </td>
             </tr>

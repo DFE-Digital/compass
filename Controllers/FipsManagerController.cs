@@ -1317,6 +1317,7 @@ public class FipsManagerController : Controller
             InformationAssetOwner = iaoContacts.Count > 0 ? string.Join(", ", iaoContacts) : null,
             DeliveryManager = deliveryManagerContacts.Count > 0 ? string.Join(", ", deliveryManagerContacts) : null,
             ServiceOwner = serviceOwnerContacts.Count > 0 ? string.Join(", ", serviceOwnerContacts) : null,
+            
             SeniorResponsibleOfficerContacts = new List<string>(sroContacts),
             InformationAssetOwnerContacts = new List<string>(iaoContacts),
             DeliveryManagerContacts = new List<string>(deliveryManagerContacts),

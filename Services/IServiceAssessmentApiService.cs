@@ -3,6 +3,10 @@ namespace Compass.Services;
 public interface IServiceAssessmentApiService
 {
     Task<ServiceAssessmentResponse?> GetActionsByStandardAsync();
+
+    Task<SasPublishedSummaryResponse?> GetPublishedSummaryAsync(CancellationToken cancellationToken = default);
+
+    Task<SasActionsByStandardResponse?> GetPublishedActionsByStandardAsync(CancellationToken cancellationToken = default);
 }
 
 public class ServiceAssessmentResponse

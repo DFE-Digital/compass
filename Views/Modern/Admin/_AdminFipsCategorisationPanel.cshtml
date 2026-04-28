@@ -1,0 +1,123 @@
+@model Compass.ViewModels.Modern.AdminHubViewModel
+@{
+  var groups = Model.FipsCategorisationGroups;
+}
+
+<div id="panel-fips-categorisation" class="admin-panel">
+  <h2 class="govuk-heading-m">FIPS categorisation groups</h2>
+  <p class="govuk-body">
+    Define custom classification dimensions (for example portfolio strand or funding line). Add a group, then add values to it. Products can be tagged with any active values when editing a service register entry.
+  </p>
+
+  <div class="govuk-inset-text govuk-!-margin-bottom-6">
+    <p class="govuk-body govuk-!-margin-bottom-1"><strong>Add new group</strong></p>
+    <form method="post" action="@Url.Action("FipsAddCategorisationGroup", "ModernAdmin")" class="govuk-!-margin-bottom-0">
+      @Html.AntiForgeryToken()
+      <div class="govuk-form-group govuk-!-margin-bottom-2">
+        <label class="govuk-label" for="fips-cat-group-name">Group name</label>
+        <input class="govuk-input govuk-!-width-two-thirds" type="text" id="fips-cat-group-name" name="name" required maxlength="200" />
+      </div>
+      <div class="govuk-form-group govuk-!-margin-bottom-2">
+        <label class="govuk-label" for="fips-cat-group-desc">Description (optional)</label>
+        <textarea class="govuk-textarea" id="fips-cat-group-desc" name="description" rows="2"></textarea>
+      </div>
+      <div class="govuk-form-group govuk-!-margin-bottom-2">
+        <label class="govuk-label" for="fips-cat-group-order">Display order</label>
+        <input class="govuk-input govuk-input--width-5" type="number" id="fips-cat-group-order" name="displayOrder" value="10" />
+      </div>
+      <button type="submit" class="govuk-button">Add group</button>
+    </form>
+  </div>
+
+  @if (groups.Count == 0)
+  {
+    <p class="govuk-body dfe-c-text-muted">No categorisation groups yet.</p>
+  }
+  else
+  {
+    @foreach (var g in groups)
+    {
+      <div class="dfe-c-card dfe-c-card--plain govuk-!-margin-bottom-6">
+        <div class="dfe-c-flex--between" style="flex-wrap:wrap;gap:0.5rem 1rem;align-items:flex-start;margin-bottom:0.75rem;">
+          <div>
+            <h3 class="govuk-heading-s govuk-!-margin-bottom-1">@g.Name</h3>
+            @if (!string.IsNullOrWhiteSpace(g.Description))
+            {
+              <p class="govuk-body-s govuk-!-margin-bottom-0 dfe-c-text-muted">@g.Description</p>
+            }
+          </div>
+          <div class="dfe-c-flex" style="gap:0.5rem;align-items:center;">
+            <span class="dfe-c-tag @(g.Active ? "dfe-c-tag--green" : "dfe-c-tag--grey")">@(g.Active ? "Active" : "Inactive")</span>
+            <form method="post" action="@Url.Action("FipsToggleCategorisationGroup", "ModernAdmin", new { id = g.Id })" style="display:inline;">
+              @Html.AntiForgeryToken()
+              <button type="submit" class="govuk-button govuk-button--secondary">Toggle group</button>
+            </form>
+          </div>
+        </div>
+
+        <p class="govuk-body-s dfe-c-text-muted govuk-!-margin-bottom-2">Order @g.DisplayOrder · add values users can assign to products.</p>
+
+        @if (g.Items.Count == 0)
+        {
+          <p class="govuk-body-s govuk-!-margin-bottom-3">No values yet for this group.</p>
+        }
+        else
+        {
+          <div class="dfe-c-table-wrap govuk-!-margin-bottom-4">
+            <table class="govuk-table">
+              <thead class="govuk-table__head">
+                <tr class="govuk-table__row">
+                  <th scope="col" class="govuk-table__header">Value</th>
+                  <th scope="col" class="govuk-table__header">Order</th>
+                  <th scope="col" class="govuk-table__header">Status</th>
+                  <th scope="col" class="govuk-table__header"><span class="govuk-visually-hidden">Actions</span></th>
+                </tr>
+              </thead>
+              <tbody class="govuk-table__body">
+              @foreach (var it in g.Items)
+              {
+                <tr class="govuk-table__row">
+                  <td class="govuk-table__cell">@it.Name</td>
+                  <td class="govuk-table__cell">@it.SortOrder</td>
+                  <td class="govuk-table__cell">
+                    <span class="dfe-c-tag @(it.IsActive ? "dfe-c-tag--green" : "dfe-c-tag--grey")">@(it.IsActive ? "Active" : "Inactive")</span>
+                  </td>
+                  <td class="govuk-table__cell">
+                    <form method="post" action="@Url.Action("FipsToggleCategorisationItem", "ModernAdmin", new { id = it.Id })" style="display:inline;">
+                      @Html.AntiForgeryToken()
+                      <button type="submit" class="govuk-link govuk-link--muted" style="background:none;border:none;padding:0;cursor:pointer;text-decoration:underline;">Toggle value</button>
+                    </form>
+                  </td>
+                </tr>
+              }
+              </tbody>
+            </table>
+          </div>
+        }
+
+        <details class="govuk-details govuk-!-margin-bottom-0">
+          <summary class="govuk-details__summary"><span class="govuk-details__summary-text">Add value to “@g.Name”</span></summary>
+          <div class="govuk-details__text">
+            <form method="post" action="@Url.Action("FipsAddCategorisationItem", "ModernAdmin")">
+              @Html.AntiForgeryToken()
+              <input type="hidden" name="groupId" value="@g.Id" />
+              <div class="govuk-form-group govuk-!-margin-bottom-2">
+                <label class="govuk-label" for="fips-cat-item-name-@g.Id">Name</label>
+                <input class="govuk-input govuk-!-width-two-thirds" type="text" id="fips-cat-item-name-@g.Id" name="name" required maxlength="200" />
+              </div>
+              <div class="govuk-form-group govuk-!-margin-bottom-2">
+                <label class="govuk-label" for="fips-cat-item-desc-@g.Id">Description (optional)</label>
+                <textarea class="govuk-textarea" id="fips-cat-item-desc-@g.Id" name="description" rows="2"></textarea>
+              </div>
+              <div class="govuk-form-group govuk-!-margin-bottom-2">
+                <label class="govuk-label" for="fips-cat-item-order-@g.Id">Display order</label>
+                <input class="govuk-input govuk-input--width-5" type="number" id="fips-cat-item-order-@g.Id" name="displayOrder" value="10" />
+              </div>
+              <button type="submit" class="govuk-button govuk-button--secondary">Add value</button>
+            </form>
+          </div>
+        </details>
+      </div>
+    }
+  }
+</div>

@@ -20,7 +20,15 @@ public class Feature
     [StringLength(500)]
     public string? Description { get; set; }
 
+    /// <summary>When <see cref="AccessMode"/> is not <see cref="FeatureAccessMode.Off"/>, kept in sync for legacy code paths that read the flag on <see cref="Feature"/>.</summary>
     public bool IsActive { get; set; } = true;
+
+    [Required]
+    public FeatureAccessMode AccessMode { get; set; } = FeatureAccessMode.OnForAll;
+
+    public ICollection<FeatureUserAllow> UserAllows { get; set; } = new List<FeatureUserAllow>();
+
+    public ICollection<FeatureGroupAllow> GroupAllows { get; set; } = new List<FeatureGroupAllow>();
 
     [Required]
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

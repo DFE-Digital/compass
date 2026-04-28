@@ -1,0 +1,676 @@
+@model Compass.Models.DemandPipeline.DemandPipelineRequest
+@using Compass.ViewModels.Modern
+@using Compass.Models.DemandPipeline
+@using Compass.Models
+@using Compass.Services.DemandPipeline
+@{
+  ViewData["Title"] = Model.Title;
+  var stages = ViewBag.PipelineStages as List<Compass.Models.DemandPipeline.DemandPipelineStage> ?? new();
+  var idx = ViewBag.PipelineStageIndex as int? ?? 0;
+  var linkedBc = ViewBag.LinkedBusinessCase as Compass.Models.DemandPipeline.DemandPipelineBusinessCase;
+  var po = ViewBag.PriorityOutcomeName as string;
+  var mp = ViewBag.MissionPillarName as string;
+  var port = ViewBag.PortfolioName as string;
+  var tab = (ViewBag.Tab as string ?? "request").Trim().ToLowerInvariant();
+  if (tab != "request" && tab != "explore" && tab != "risks" && tab != "issues" && tab != "scoring" && tab != "triage" && tab != "linked") { tab = "request"; }
+  string TabUrl(string t) => Url.Action("RequestDetail", "ModernDemand", new { id = Model.Id, tab = t }) ?? "#";
+
+  // Keep in sync with StatusTagMod in _DemandRegisterIndex.cshtml
+  string StatusTagClass(string? s) => s switch
+  {
+    "Draft" => "dfe-c-tag--grey",
+    "Submitted" => "dfe-c-tag--grey",
+    "ExploratoryReview" => "dfe-c-tag--amber",
+    "Scoring" => "dfe-c-tag--blue",
+    "Scored" => "dfe-c-tag--teal",
+    "TriagePending" or "Triage Pending" => "dfe-c-tag--red",
+    "Triaged" => "dfe-c-tag--green",
+    "Closed" => "dfe-c-tag--grey",
+    "Returned" => "dfe-c-tag--amber",
+    "Progressed to delivery" => "dfe-c-tag--green",
+    "Closed - Progressed to delivery" => "dfe-c-tag--green",
+    "Rejected" => "dfe-c-tag--red",
+    "Active" => "dfe-c-tag--blue",
+    "Backlog" => "dfe-c-tag--green",
+    "Paused" => "dfe-c-tag--grey",
+    _ => "dfe-c-tag--grey"
+  };
+
+  string StatusLabel(string? s) => s switch
+  {
+    "ExploratoryReview" => "Exploratory review",
+    "TriagePending" or "Triage Pending" => "Triage pending",
+    _ => s ?? "—"
+  };
+
+  string BandLabel(string? b) => b switch
+  {
+    "MustDo" => "Must do",
+    "CouldDo" => "Could do",
+    "DoNotDo" => "Do not do",
+    _ => b ?? "—"
+  };
+
+  var hasTriageInfo = !string.IsNullOrWhiteSpace(Model.TriageOutcome) || !string.IsNullOrWhiteSpace(Model.TriageOutcomeNarrative) || Model.TriagedAt.HasValue || !string.IsNullOrWhiteSpace(Model.TriagedBy)
+    || Model.TriageStageLookupId.HasValue || Model.TriageAssignedBusinessAreaId.HasValue || Model.TriagePrimaryContactUserId.HasValue;
+  var triageMeetingsForAssignment = ViewBag.TriageMeetingsForAssignment as List<DemandPipelineTriageMeeting> ?? new();
+  var assignedTriageMeeting = ViewBag.AssignedTriageMeeting as DemandPipelineTriageMeeting;
+  var canRecordTriageOutcome = ViewBag.CanRecordTriageOutcome as bool? ?? false;
+  var businessAreasForTriage = ViewBag.BusinessAreasForTriage as List<BusinessAreaLookup> ?? new();
+  var triageCreatedProjectId = ViewBag.TriageCreatedProjectId as int?;
+  var triageCreatedProjectCode = ViewBag.TriageCreatedProjectCode as string;
+  var triageCreatedProjectTitle = ViewBag.TriageCreatedProjectTitle as string;
+  var triageOutcomeStages = ViewBag.TriageOutcomeStagesForForm as List<DemandTriageOutcomeStage> ?? new();
+  var triageOutcomeStageLabel = ViewBag.TriageOutcomeStageLabel as string;
+  var triageAssignedBaName = ViewBag.TriageAssignedBusinessAreaName as string;
+  var triagePrimaryContactDisplay = ViewBag.TriagePrimaryContactDisplay as string;
+
+  var scoringAvailable = true;
+  var workflowTransitions = ViewBag.WorkflowTransitions as List<(string Id, string Label)> ?? new();
+  var showChangeStageLink = workflowTransitions.Count > 0 && Model.Status != "Draft" && tab != "explore" && tab != "risks";
+}
+@section Breadcrumbs {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernDemand")">Demand</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Register", "ModernDemand")">Register</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">@Model.Reference</li>
+}
+
+<div class="dfe-c-mb-4" id="sc-demand-request">
+ <div class="dfe-c-flex--between dfe-c-mb-3" style="flex-wrap:wrap;gap:1rem;">
+ <div class="dfe-c-page-title" style="margin:0;">
+ <div class="dfe-c-page-title__caption">@Model.Reference</div>
+ <h1 class="dfe-c-page-title__heading">@Model.Title</h1>
+    </div>
+ <div class="dfe-c-flex" style="gap:0.5rem;flex-wrap:wrap;">
+      @if (Model.Status == "Scoring" || Model.Status == "Scored")
+      {
+ <a href="@Url.Action("Scoring", "ModernDemand")" class="govuk-button govuk-button--secondary">Scoring queue</a>
+      }
+      @if (Model.Status == "Scored" || Model.Status == "TriagePending" || Model.Status == "Triage Pending")
+      {
+ <a href="@Url.Action("Triage", "ModernDemand")" class="govuk-button govuk-button--secondary">Triage queue</a>
+      }
+    </div>
+  </div>
+
+  @if (TempData["Message"] != null)
+  {
+ <div class="govuk-notification-banner govuk-notification-banner--success dfe-c-mb-3" role="region">
+ <div class="govuk-notification-banner__header">
+ <h2 class="govuk-notification-banner__title">Success</h2>
+      </div>
+ <div class="govuk-notification-banner__content">
+ <p class="govuk-notification-banner__heading">@TempData["Message"]</p>
+      </div>
+    </div>
+  }
+  @if (TempData["Error"] != null)
+  {
+ <div class="govuk-error-summary" role="alert" data-module="govuk-error-summary">
+ <h2 class="govuk-error-summary__title">There is a problem</h2>
+ <div class="govuk-error-summary__body">@TempData["Error"]</div>
+    </div>
+  }
+
+ <div class="tabs dfe-c-mb-3" role="tablist" aria-label="Demand request sections">
+ <a href="@TabUrl("request")" class="tab @(tab =="request" ? "on" : "")" role="tab" aria-selected="@(tab == "request")" aria-controls="d-request" id="tab-request">Request</a>
+ <a href="@TabUrl("explore")" class="tab @(tab =="explore" ? "on" : "")" role="tab" aria-selected="@(tab == "explore")" aria-controls="d-explore" id="tab-explore">Explore</a>
+ <a href="@TabUrl("risks")" class="tab @(tab =="risks" ? "on" : "")" role="tab" aria-selected="@(tab == "risks")" aria-controls="d-risks" id="tab-risks">Risks</a>
+ <a href="@TabUrl("issues")" class="tab @(tab =="issues" ? "on" : "")" role="tab" aria-selected="@(tab == "issues")" aria-controls="d-issues" id="tab-issues">Issues</a>
+ <a href="@TabUrl("scoring")" class="tab @(tab =="scoring" ? "on" : "")" role="tab" aria-selected="@(tab == "scoring")" aria-controls="d-scoring" id="tab-scoring">Scoring</a>
+ <a href="@TabUrl("triage")" class="tab @(tab =="triage" ? "on" : "")" role="tab" aria-selected="@(tab == "triage")" aria-controls="d-triage" id="tab-triage">Triage</a>
+ <a href="@TabUrl("linked")" class="tab @(tab =="linked" ? "on" : "")" role="tab" aria-selected="@(tab == "linked")" aria-controls="d-linked" id="tab-linked">Linked records</a>
+  </div>
+
+ <div class="dfe-c-form-layout">
+ <div class="dfe-c-form-layout__main">
+
+ <div id="d-request" class="tab-pane @(tab =="request" ? "on" : "")" role="tabpanel" aria-labelledby="tab-request">
+ <h2 class="govuk-heading-m">Request details</h2>
+ <dl class="govuk-summary-list">
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">Reference</dt>
+ <dd class="govuk-summary-list__value">@Model.Reference</dd>
+          </div>
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">Type</dt>
+ <dd class="govuk-summary-list__value">@(Model.BusinessCaseId.HasValue ? "Demand" : "Business case")</dd>
+          </div>
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">Status</dt>
+ <dd class="govuk-summary-list__value"><span class="dfe-c-tag @StatusTagClass(Model.Status)">@StatusLabel(Model.Status)</span></dd>
+          </div>
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">Business area</dt>
+ <dd class="govuk-summary-list__value">@(Model.DepartmentGroup ?? "—")</dd>
+          </div>
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">Portfolio</dt>
+ <dd class="govuk-summary-list__value">@(port ?? "—")</dd>
+          </div>
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">Submitted by</dt>
+ <dd class="govuk-summary-list__value">@(Model.SubmittedBy ?? "—")</dd>
+          </div>
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">SRO</dt>
+ <dd class="govuk-summary-list__value">@(Model.Sro ?? "—")</dd>
+          </div>
+          @if (!string.IsNullOrWhiteSpace(Model.PointsOfContact))
+          {
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">Points of contact</dt>
+ <dd class="govuk-summary-list__value" style="white-space:pre-line;">@Model.PointsOfContact</dd>
+            </div>
+          }
+          @if (!string.IsNullOrWhiteSpace(Model.Assignee))
+          {
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">Assignee</dt>
+ <dd class="govuk-summary-list__value">@Model.Assignee</dd>
+            </div>
+          }
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">Submitted</dt>
+ <dd class="govuk-summary-list__value">@(Model.SubmittedDate?.ToString("d MMM yyyy") ?? "—")</dd>
+          </div>
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">Target delivery</dt>
+ <dd class="govuk-summary-list__value">@(Model.TargetDeliveryDate?.ToString("d MMM yyyy") ?? "—")</dd>
+          </div>
+        </dl>
+
+ <hr class="govuk-section-break govuk-section-break--l govuk-section-break--visible" />
+
+ <h2 class="govuk-heading-m">Strategic alignment</h2>
+ <dl class="govuk-summary-list">
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">Priority outcome</dt>
+ <dd class="govuk-summary-list__value">@(po ?? "—")</dd>
+          </div>
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">Mission pillar</dt>
+ <dd class="govuk-summary-list__value">@(mp ?? "—")</dd>
+          </div>
+        </dl>
+
+ <hr class="govuk-section-break govuk-section-break--l govuk-section-break--visible" />
+
+ <h2 class="govuk-heading-m">Description and rationale</h2>
+ <dl class="govuk-summary-list">
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">Description</dt>
+ <dd class="govuk-summary-list__value" style="white-space:pre-line;">@(Model.Description ?? "—")</dd>
+          </div>
+          @if (!string.IsNullOrWhiteSpace(Model.ExpectedBenefits))
+          {
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">Expected benefits</dt>
+ <dd class="govuk-summary-list__value" style="white-space:pre-line;">@Model.ExpectedBenefits</dd>
+            </div>
+          }
+          @if (!string.IsNullOrWhiteSpace(Model.RiskIfNotDelivered))
+          {
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">Risk if not delivered</dt>
+ <dd class="govuk-summary-list__value" style="white-space:pre-line;">@Model.RiskIfNotDelivered</dd>
+            </div>
+          }
+        </dl>
+      </div>
+
+ <div id="d-explore" class="tab-pane @(tab =="explore" ? "on" : "")" role="tabpanel" aria-labelledby="tab-explore">
+        @await Html.PartialAsync("~/Views/Modern/Demand/_ExploreReviewProcess.cshtml", Model)
+      </div>
+
+ <div id="d-risks" class="tab-pane @(tab =="risks" ? "on" : "")" role="tabpanel" aria-labelledby="tab-risks">
+        @await Html.PartialAsync("~/Views/Modern/Demand/_DemandRisks.cshtml", Model)
+      </div>
+
+ <div id="d-issues" class="tab-pane @(tab =="issues" ? "on" : "")" role="tabpanel" aria-labelledby="tab-issues">
+        @await Html.PartialAsync("~/Views/Modern/Demand/_DemandIssues.cshtml", Model)
+      </div>
+
+ <div id="d-scoring" class="tab-pane @(tab =="scoring" ? "on" : "")" role="tabpanel" aria-labelledby="tab-scoring">
+        @await Html.PartialAsync("~/Views/Modern/Demand/_DemandScoringFramework.cshtml", ViewBag.ScoringPageVm as Compass.ViewModels.Modern.DemandScoringFrameworkPageViewModel)
+      </div>
+
+ <div id="d-triage" class="tab-pane @(tab =="triage" ? "on" : "")" role="tabpanel" aria-labelledby="tab-triage">
+ <h2 class="govuk-heading-m">Triage</h2>
+
+ <h3 class="govuk-heading-s">Triage meeting</h3>
+        @{
+          var triageBrokenRef = Model.TriageMeetingId.HasValue && assignedTriageMeeting == null;
+          var triageHasAssignment = Model.TriageMeetingId.HasValue && assignedTriageMeeting != null;
+          var canPickMeeting = triageMeetingsForAssignment.Count > 0;
+        }
+ <p class="govuk-body govuk-!-margin-bottom-3">Link this demand to a central triage session so it appears on the meeting agenda.</p>
+
+        @if (triageHasAssignment)
+        {
+ <div class="dfe-c-table-wrap" style="margin-bottom:1rem;">
+            <table>
+              <thead><tr><th>Meeting</th><th>When</th><th>Chair</th><th>Status</th><th></th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><strong>@assignedTriageMeeting.Name</strong></td>
+                  <td>@FormatTriageMeetingWhen(assignedTriageMeeting)</td>
+                  <td>@(string.IsNullOrWhiteSpace(assignedTriageMeeting.Chair) ? "—" : assignedTriageMeeting.Chair)</td>
+                  <td>
+                    @if (string.Equals(assignedTriageMeeting.Status, "Scheduled", StringComparison.OrdinalIgnoreCase))
+ { <span class="dfe-c-tag dfe-c-tag--blue">Scheduled</span> }
+                    else
+ { <span class="dfe-c-tag dfe-c-tag--grey">@assignedTriageMeeting.Status</span> }
+                  </td>
+                  <td style="text-align:right;">
+ <button type="button" class="govuk-button govuk-button--warning govuk-!-margin-bottom-0" style="font-size:0.875rem;padding:6px 14px;" data-dialog-open="dlg-triage-remove">Remove</button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          @if (canPickMeeting)
+          {
+ <p class="govuk-body govuk-!-margin-bottom-6">
+ <button type="button" class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0" data-dialog-open="dlg-triage-add">Change meeting</button>
+            </p>
+          }
+ <dialog class="risk-detail-dialog" id="dlg-triage-remove" aria-labelledby="dlg-triage-remove-h">
+ <div class="wo-dialog__header">
+              <h2 id="dlg-triage-remove-h">Remove from meeting</h2>
+ <button type="button" class="wo-dialog__close" aria-label="Close" data-dialog-close="dlg-triage-remove">&times;</button>
+            </div>
+            <form method="post" action="@Url.Action("RequestAssignTriageMeeting", "ModernDemand", new { id = Model.Id })">
+              @Html.AntiForgeryToken()
+              <input type="hidden" name="triageMeetingId" value="" />
+ <div class="wo-dialog__body">
+ <p class="govuk-body">Are you sure you want to remove this demand from <strong>@assignedTriageMeeting.Name</strong>?</p>
+ <p class="govuk-body govuk-!-margin-bottom-0">You can add it to a meeting again later.</p>
+              </div>
+ <div class="wo-dialog__footer">
+ <button type="button" class="govuk-button govuk-button--secondary" data-dialog-close="dlg-triage-remove">Cancel</button>
+ <button type="submit" class="govuk-button govuk-button--warning">Remove from meeting</button>
+              </div>
+            </form>
+          </dialog>
+        }
+        else if (triageBrokenRef)
+        {
+ <div class="govuk-inset-text govuk-!-margin-bottom-4">
+ <p class="govuk-body govuk-!-margin-bottom-2">This demand references a triage meeting that no longer exists.</p>
+            <form method="post" action="@Url.Action("RequestAssignTriageMeeting", "ModernDemand", new { id = Model.Id })" style="display:inline;">
+              @Html.AntiForgeryToken()
+              <input type="hidden" name="triageMeetingId" value="" />
+ <button type="submit" class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0">Clear invalid reference</button>
+            </form>
+          </div>
+        }
+        else
+        {
+ <p class="govuk-body govuk-!-margin-bottom-4" style="color:#505a5f;">Not assigned to a meeting.</p>
+        }
+
+        @if (!triageHasAssignment && canPickMeeting)
+        {
+ <p class="govuk-body govuk-!-margin-bottom-6">
+ <button type="button" class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0" data-dialog-open="dlg-triage-add">Add to meeting</button>
+          </p>
+        }
+        else if (!triageHasAssignment && !canPickMeeting && !triageBrokenRef)
+        {
+ <p class="govuk-body govuk-!-margin-bottom-6">No scheduled triage meetings are available yet. Central Operations can add meetings under <a class="govuk-link" href="@Url.Action("ManageTriage", "ModernOperations")">Operations → Manage triage</a>.</p>
+        }
+
+        @if (canPickMeeting)
+        {
+ <dialog class="risk-detail-dialog" id="dlg-triage-add" aria-labelledby="dlg-triage-add-h">
+ <div class="wo-dialog__header">
+              <h2 id="dlg-triage-add-h">@(triageHasAssignment ? "Change triage meeting" : "Add to triage meeting")</h2>
+ <button type="button" class="wo-dialog__close" aria-label="Close" data-dialog-close="dlg-triage-add">&times;</button>
+            </div>
+            <form method="post" action="@Url.Action("RequestAssignTriageMeeting", "ModernDemand", new { id = Model.Id })">
+              @Html.AntiForgeryToken()
+ <div class="wo-dialog__body">
+ <div class="govuk-form-group">
+ <label class="govuk-label govuk-label--s" for="triage-meeting-select">Triage meeting</label>
+ <div class="govuk-hint" id="triage-meeting-select-hint">Choose a scheduled triage session. This demand will appear on that meeting's agenda.</div>
+ <select class="govuk-select govuk-!-width-full" id="triage-meeting-select" name="triageMeetingId" aria-describedby="triage-meeting-select-hint">
+                  @foreach (var tm in triageMeetingsForAssignment)
+                  {
+                      var optLabel = FormatTriageMeetingOptionLabel(tm);
+                      if (Model.TriageMeetingId == tm.Id)
+                      { <option value="@tm.Id" selected="selected">@optLabel</option> }
+                      else
+                      { <option value="@tm.Id">@optLabel</option> }
+                  }
+                  </select>
+                </div>
+              </div>
+ <div class="wo-dialog__footer">
+ <button type="button" class="govuk-button govuk-button--secondary" data-dialog-close="dlg-triage-add">Cancel</button>
+ <button type="submit" class="govuk-button">@(triageHasAssignment ? "Change meeting" : "Add to meeting")</button>
+              </div>
+            </form>
+          </dialog>
+        }
+
+ <h3 class="govuk-heading-s">Outcome</h3>
+        @if (canRecordTriageOutcome && triageOutcomeStages.Count == 0)
+        {
+ <div class="govuk-warning-text govuk-!-margin-bottom-4">
+ <span class="govuk-warning-text__icon" aria-hidden="true">!</span>
+ <strong class="govuk-warning-text__text">
+ <span class="govuk-warning-text__assistive">Warning</span>
+              No triage outcome stages are configured. An administrator must add them under Admin → RAID → Triage outcome stages (or run the latest database migration) before you can record an outcome.
+            </strong>
+          </div>
+        }
+        @if (canRecordTriageOutcome && triageOutcomeStages.Count > 0)
+        {
+ <form method="post" action="@Url.Action("RequestRecordTriageOutcome", "ModernDemand", new { id = Model.Id })" class="govuk-!-margin-bottom-6" id="triage-outcome-form">
+            @Html.AntiForgeryToken()
+ <div class="govuk-form-group">
+ <fieldset class="govuk-fieldset">
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Create a work item for this demand and move into delivery?</legend>
+ <div class="govuk-radios" data-module="govuk-radios">
+ <div class="govuk-radios__item">
+ <input class="govuk-radios__input" id="triage-delivery-yes" name="createWorkForDelivery" type="radio" value="yes" />
+ <label class="govuk-label govuk-radios__label" for="triage-delivery-yes">Yes</label>
+                  </div>
+ <div class="govuk-radios__item">
+ <input class="govuk-radios__input" id="triage-delivery-no" name="createWorkForDelivery" type="radio" value="no" />
+ <label class="govuk-label govuk-radios__label" for="triage-delivery-no">No</label>
+                  </div>
+                </div>
+              </fieldset>
+            </div>
+
+ <div class="govuk-form-group" id="triage-panel-yes" hidden>
+ <label class="govuk-label" for="triage-stage-lookup">Triage outcome stage</label>
+ <div id="triage-stage-lookup-hint" class="govuk-hint">Managed under Admin → Triage outcome stages.</div>
+ <select class="govuk-select govuk-!-width-full" id="triage-stage-lookup" name="triageStageLookupId" aria-describedby="triage-stage-lookup-hint">
+                <option value="">Select stage</option>
+                @foreach (var st in triageOutcomeStages)
+                {
+                  <option value="@st.Id">@st.Label</option>
+                }
+              </select>
+ <label class="govuk-label govuk-!-margin-top-4" for="triage-business-area">Assigned business area</label>
+ <select class="govuk-select govuk-!-width-full" id="triage-business-area" name="businessAreaId">
+                <option value="">Select business area</option>
+                @foreach (var ba in businessAreasForTriage)
+                {
+                  <option value="@ba.Id">@ba.Name</option>
+                }
+              </select>
+              @{
+                var triagePcPicker = new UserPickerViewModel
+                {
+                  FieldName = "primaryContactUserId",
+                  Label = "Primary contact",
+                  Hint = "Search by name or email. This person is set as the work item primary contact.",
+                  InputIdSuffix = "triage-outcome"
+                };
+              }
+ <div class="govuk-!-margin-top-4">
+                @await Html.PartialAsync("~/Views/Modern/Shared/_UserPicker.cshtml", triagePcPicker)
+              </div>
+            </div>
+
+ <div class="govuk-form-group" id="triage-panel-no" hidden>
+ <fieldset class="govuk-fieldset">
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Outcome (pipeline status)</legend>
+ <div class="govuk-radios" data-module="govuk-radios">
+ <div class="govuk-radios__item">
+ <input class="govuk-radios__input" id="triage-no-active" name="withoutDeliveryOutcome" type="radio" value="active" />
+ <label class="govuk-label govuk-radios__label" for="triage-no-active">Active — keep current pipeline status; save comments only</label>
+                  </div>
+ <div class="govuk-radios__item">
+ <input class="govuk-radios__input" id="triage-no-rejected" name="withoutDeliveryOutcome" type="radio" value="rejected" />
+ <label class="govuk-label govuk-radios__label" for="triage-no-rejected">Rejected</label>
+                  </div>
+ <div class="govuk-radios__item">
+ <input class="govuk-radios__input" id="triage-no-paused" name="withoutDeliveryOutcome" type="radio" value="paused" />
+ <label class="govuk-label govuk-radios__label" for="triage-no-paused">Paused</label>
+                  </div>
+                </div>
+              </fieldset>
+            </div>
+
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="triage-outcome-narrative">Comments</label>
+ <textarea class="govuk-textarea" id="triage-outcome-narrative" name="triageOutcomeNarrative" rows="6" required placeholder="Record the triage outcome, rationale, and any next steps."></textarea>
+            </div>
+ <button type="submit" class="govuk-button" data-module="govuk-button">Record triage outcome</button>
+          </form>
+          <script nonce="@Context.Items["Nonce"]">
+            (function () {
+              var y = document.getElementById('triage-delivery-yes');
+              var n = document.getElementById('triage-delivery-no');
+              var py = document.getElementById('triage-panel-yes');
+              var pn = document.getElementById('triage-panel-no');
+              if (!y || !n || !py || !pn) return;
+              function sync() {
+                var yes = y.checked;
+                var no = n.checked;
+                py.hidden = !yes;
+                pn.hidden = !no;
+                if (!yes) {
+                  var st = document.getElementById('triage-stage-lookup');
+                  var ba = document.getElementById('triage-business-area');
+                  if (st) st.selectedIndex = 0;
+                  if (ba) ba.selectedIndex = 0;
+                  var hid = py.querySelector('input.js-user-picker-value');
+                  if (hid) { hid.value = ''; }
+                  var inp = py.querySelector('input.js-user-picker-input');
+                  if (inp) { inp.value = ''; }
+                  var sum = py.querySelector('.js-user-picker-summary');
+ if (sum) { sum.innerHTML = '<span class="dfe-c-form__hint">No user selected.</span>'; }
+                }
+                if (!no) {
+                  ['triage-no-active','triage-no-rejected','triage-no-paused'].forEach(function (id) {
+                    var el = document.getElementById(id);
+                    if (el) el.checked = false;
+                  });
+                }
+              }
+              y.addEventListener('change', sync);
+              n.addEventListener('change', sync);
+              sync();
+            })();
+          </script>
+        }
+        @if (hasTriageInfo)
+        {
+ <dl class="govuk-summary-list @(canRecordTriageOutcome ?"govuk-!-margin-top-6" : "")">
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">Decision</dt>
+ <dd class="govuk-summary-list__value">@DemandTriageDecisions.Label(Model.TriageOutcome)</dd>
+            </div>
+            @if (!string.IsNullOrWhiteSpace(triageOutcomeStageLabel))
+            {
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">Triage stage</dt>
+ <dd class="govuk-summary-list__value">@triageOutcomeStageLabel</dd>
+              </div>
+            }
+            @if (!string.IsNullOrWhiteSpace(triageAssignedBaName))
+            {
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">Assigned business area</dt>
+ <dd class="govuk-summary-list__value">@triageAssignedBaName</dd>
+              </div>
+            }
+            @if (!string.IsNullOrWhiteSpace(triagePrimaryContactDisplay))
+            {
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">Primary contact</dt>
+ <dd class="govuk-summary-list__value">@triagePrimaryContactDisplay</dd>
+              </div>
+            }
+            @if (!string.IsNullOrWhiteSpace(Model.TriageOutcomeNarrative))
+            {
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">Narrative</dt>
+ <dd class="govuk-summary-list__value" style="white-space:pre-wrap;">@Model.TriageOutcomeNarrative</dd>
+              </div>
+            }
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">Triaged</dt>
+ <dd class="govuk-summary-list__value">@(Model.TriagedAt?.ToString("d MMM yyyy HH:mm") ?? "—")</dd>
+            </div>
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">Triaged by</dt>
+ <dd class="govuk-summary-list__value">@(Model.TriagedBy ?? "—")</dd>
+            </div>
+            @if (triageCreatedProjectId.HasValue && !string.IsNullOrWhiteSpace(triageCreatedProjectCode))
+            {
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">Work item</dt>
+ <dd class="govuk-summary-list__value">
+ <a class="govuk-link" href="@Url.Action("Detail", "ModernWork", new { id = triageCreatedProjectId.Value })">@triageCreatedProjectCode — @triageCreatedProjectTitle</a>
+                </dd>
+              </div>
+            }
+          </dl>
+        }
+        else if (!canRecordTriageOutcome)
+        {
+ <p class="govuk-body">No triage outcome recorded yet.</p>
+        }
+      </div>
+
+ <div id="d-linked" class="tab-pane @(tab =="linked" ? "on" : "")" role="tabpanel" aria-labelledby="tab-linked">
+ <h2 class="govuk-heading-m">Linked records</h2>
+        @if (linkedBc == null)
+        {
+ <p class="govuk-body">No business case is linked to this demand.</p>
+        }
+        else
+        {
+ <dl class="govuk-summary-list">
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">Business case</dt>
+ <dd class="govuk-summary-list__value">
+                <a href="@Url.Action("BusinessCaseDetail", "ModernDemand", new { id = linkedBc.Id })">@linkedBc.Reference — @linkedBc.Title</a>
+              </dd>
+            </div>
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">Lead</dt>
+ <dd class="govuk-summary-list__value">@(linkedBc.Lead ?? "—")</dd>
+            </div>
+          </dl>
+        }
+      </div>
+
+    </div>
+
+ <div class="dfe-c-form-layout__aside">
+ <div class="dfe-c-sidebar">
+        @if (tab == "request" && ViewBag.CanEditDemandRequestInfo as bool? == true)
+        {
+ <div class="dfe-c-scard govuk-!-margin-bottom-4">
+ <div class="dfe-c-scard__title">Demand information</div>
+ <div class="govuk-!-text-align-right">
+              @if (string.Equals(Model.Status, "Draft", StringComparison.OrdinalIgnoreCase))
+              {
+ <a href="@Url.Action("Submit", "ModernDemand", new { id = Model.Id })" class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0">Continue editing draft</a>
+              }
+              else
+              {
+ <a href="@Url.Action("RequestEdit", "ModernDemand", new { id = Model.Id })" class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0">Edit demand information</a>
+              }
+            </div>
+          </div>
+        }
+        @if (tab == "scoring" && scoringAvailable && ViewBag.ScoringPageVm is DemandScoringFrameworkPageViewModel scoringVm)
+        {
+          @await Html.PartialAsync("~/Views/Modern/Demand/_DemandScoringLiveScore.cshtml", scoringVm)
+        }
+        @if (tab == "risks" && (ViewBag.DemandCanEditRisksIssues as bool? ?? false))
+        {
+ <div class="dfe-c-scard govuk-!-margin-bottom-4">
+ <div class="dfe-c-scard__title">Risks</div>
+ <div class="govuk-!-text-align-right">
+              <a href="@Url.Action("RequestAddRiskIssueForm", "ModernDemand", new { id = Model.Id, entryType = "Risk" })" class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0">Add a risk</a>
+            </div>
+          </div>
+        }
+        @if (tab == "issues" && (ViewBag.DemandCanEditRisksIssues as bool? ?? false))
+        {
+ <div class="dfe-c-scard govuk-!-margin-bottom-4">
+ <div class="dfe-c-scard__title">Issues</div>
+ <div class="govuk-!-text-align-right">
+              <a href="@Url.Action("RequestAddRiskIssueForm", "ModernDemand", new { id = Model.Id, entryType = "Issue" })" class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0">Add an issue</a>
+            </div>
+          </div>
+        }
+ <div class="dfe-c-scard">
+ <div class="dfe-c-scard__title">Status</div>
+ <dl class="demand-status-panel">
+            <div style="display:flex;justify-content:space-between;margin-bottom:0.5rem;gap:0.5rem;align-items:flex-start;">
+              <dt>Pipeline status</dt>
+ <dd><span class="dfe-c-tag @StatusTagClass(Model.Status)">@StatusLabel(Model.Status)</span></dd>
+            </div>
+            @if (showChangeStageLink)
+            {
+ <p class="govuk-body" style="margin-top:0;margin-bottom:0.75rem;font-size:0.875rem;">
+ <a href="#demand-pipeline-actions" class="dfe-c-link">Change stage</a>
+              </p>
+            }
+            <div style="display:flex;justify-content:space-between;margin-bottom:0.5rem;">
+              <dt>Created</dt>
+              <dd>@Model.CreatedAt.ToString("d MMM yyyy")</dd>
+            </div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:0.5rem;">
+              <dt>Last updated</dt>
+              <dd>@Model.UpdatedAt.ToString("d MMM yyyy")</dd>
+            </div>
+            @if (!string.IsNullOrWhiteSpace(Model.CreatedBy))
+            {
+              <div style="display:flex;justify-content:space-between;margin-bottom:0.5rem;">
+                <dt>Created by</dt>
+                <dd>@(ViewBag.CreatedByDisplayName as string ?? Model.CreatedBy)</dd>
+              </div>
+            }
+          </dl>
+        </div>
+
+ <div class="dfe-c-scard">
+ <div class="dfe-c-scard__title">Actions</div>
+          <div style="display:flex;flex-direction:column;gap:0.5rem;">
+            @if (linkedBc != null)
+            {
+ <a href="@Url.Action("BusinessCaseDetail", "ModernDemand", new { id = linkedBc.Id })" class="dfe-c-link">View linked business case</a>
+            }
+            @if (triageCreatedProjectId.HasValue)
+            {
+ <a href="@Url.Action("Detail", "ModernWork", new { id = triageCreatedProjectId.Value })" class="dfe-c-link">View linked work item</a>
+            }
+ <a href="@Url.Action("Register", "ModernDemand")" class="dfe-c-link">Back to register</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+@functions {
+  private static string FormatTriageMeetingWhen(DemandPipelineTriageMeeting tm)
+  {
+    var datePart = tm.MeetingDate?.ToString("d MMM yyyy") ?? "Date TBC";
+    if (!string.IsNullOrWhiteSpace(tm.StartTime) || !string.IsNullOrWhiteSpace(tm.EndTime))
+      return $"{datePart} · {(tm.StartTime ?? "").Trim()}–{(tm.EndTime ?? "").Trim()}";
+    return datePart;
+  }
+
+  private static string FormatTriageMeetingOptionLabel(DemandPipelineTriageMeeting tm)
+  {
+    var datePart = tm.MeetingDate?.ToString("d MMM yyyy") ?? "Date TBC";
+    var timePart = "";
+    if (!string.IsNullOrWhiteSpace(tm.StartTime) || !string.IsNullOrWhiteSpace(tm.EndTime))
+      timePart = $" ({(tm.StartTime ?? "").Trim()}–{(tm.EndTime ?? "").Trim()})";
+    var suffix = string.Equals(tm.Status, "Scheduled", StringComparison.OrdinalIgnoreCase) ? "" : $" [{tm.Status}]";
+    return $"{tm.Name} — {datePart}{timePart}{suffix}";
+  }
+}

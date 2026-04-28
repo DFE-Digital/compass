@@ -1,0 +1,531 @@
+@model Compass.ViewModels.Modern.ModernRaidDashboardViewModel
+@using System.Globalization
+@using System.Linq
+@using System.Text.Json
+@using Compass.ViewModels.Modern
+@{
+  ViewData["Title"] = "RAID — your summary";
+  var dataAsAt = Model.DataAsAtUtc.ToString("d MMMM yyyy", CultureInfo.CurrentCulture);
+  string MatrixCellBg(string tone) => tone switch
+  {
+    "r" => "#c00",
+    "ar" => "#e0761e",
+    "ag" => "#f5e6c8",
+    _ => "#dceedd"
+  };
+  var matrixRowGroups = Model.MatrixCells.Count > 0
+    ? Model.MatrixCells.Chunk(5)
+    : Enumerable.Empty<ModernRaidMatrixCellVm[]>();
+  var matrixDrillLookup = Model.MatrixCells
+    .Where(c => c.Count > 0)
+    .ToDictionary(
+      c => $"{c.ImpactRating}|{c.LikelihoodRating}",
+      c => c.Risks.Select(r => new
+      {
+        id = r.Id,
+        reference = r.Reference,
+        title = r.Title,
+        href = Url.Action("RiskDetail", "ModernRaid", new { id = r.Id }) ?? "#",
+        businessArea = r.BusinessAreaLabel ?? "—",
+        tier = r.Tier ?? "",
+        relationKind = r.RelationKind,
+        relationProjectId = r.RelationProjectId,
+        relationTarget = r.RelationTarget ?? "",
+        relationWorkItemUrl = r.RelationWorkItemUrl ?? "",
+        status = r.Status ?? "—",
+        owner = r.Owner ?? "—",
+        likelihood = r.LikelihoodLabel ?? "—",
+        impact = r.ImpactLabel ?? "—",
+        riskScore = r.RiskScore
+      }).ToList());
+  var matrixDrillJson = JsonSerializer.Serialize(matrixDrillLookup);
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">RAID</li>
+}
+
+<div id="sc-raid-dash" class="modern-work-page raid-dash-page govuk-!-padding-bottom-6" style="max-width:100%;">
+  <style>
+    .raid-dash-page { width: 100%; max-width: 100%; box-sizing: border-box; }
+  </style>
+
+  <div class="dfe-c-flex--between dfe-c-mb-4" style="flex-wrap:wrap;gap:1rem;align-items:flex-start;">
+    <div class="dfe-c-page-title" style="margin:0;flex:1;min-width:14rem;max-width:100%;">
+      <div class="dfe-c-page-title__caption">RAID</div>
+      <h1 class="dfe-c-page-title__heading">Your summary</h1>
+      <p class="dfe-c-page-title__lede" style="max-width: 50rem; margin-top:0.5rem;">
+        @if (!string.IsNullOrWhiteSpace(Model.ViewerDisplayName))
+        {
+          <span><strong>@Model.ViewerDisplayName</strong> · </span>
+        }
+        <span class="dfe-c-text-muted dfe-c-body-s">Data as at @dataAsAt (UTC).</span>
+        @if (!string.IsNullOrWhiteSpace(Model.ScopeSummary))
+        {
+          <span class="dfe-c-text-muted dfe-c-body-s" style="display:block; margin-top:0.5rem;">@Model.ScopeSummary</span>
+        }
+      </p>
+    </div>
+    <div class="dfe-c-export-group" style="margin-left:auto;display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">
+      <a class="govuk-button govuk-button--secondary" href="@Url.Action("ExportRaidRegisterExcel", "ModernRaid")">Export (Excel)</a>
+    </div>
+  </div>
+
+  @if (Model.OpenRiskCount == 0 && Model.OpenIssueCount == 0)
+  {
+    <div class="govuk-inset-text govuk-!-margin-bottom-6">
+      <p class="govuk-body govuk-!-margin-bottom-1">No open risks or issues for you yet.</p>
+      <p class="govuk-body govuk-!-margin-bottom-0 govuk-body-s">This page only lists items you <strong>create</strong>, <strong>own</strong> (or own by email on risks), or are <strong>assigned to</strong> through a linked action.</p>
+    </div>
+  }
+
+  <div class="dfe-c-card-grid dfe-c-card-grid--2 dfe-c-mb-4" role="region" aria-label="Open record counts for you">
+    <div class="dfe-c-metric dfe-c-metric--navy">
+      <div class="dfe-c-metric__number">@Model.OpenRiskCount</div>
+      <div class="dfe-c-metric__label">Open risks (for you)</div>
+    </div>
+    <div class="dfe-c-metric dfe-c-metric--navy">
+      <div class="dfe-c-metric__number">@Model.OpenIssueCount</div>
+      <div class="dfe-c-metric__label">Open issues (for you)</div>
+    </div>
+  </div>
+
+  <div class="dfe-c-section-header dfe-c-mb-2">
+    <h2 id="raid-matrix-section-title" class="govuk-heading-m govuk-!-margin-bottom-0">Inherent risk matrix (open)</h2>
+  </div>
+  <p id="raid-matrix-summary" class="dfe-c-body-s dfe-c-text-muted govuk-!-margin-bottom-3">
+    Impact × likelihood for your open risks. Each cell shows how many <strong>open</strong> risks sit in that impact and likelihood band, or a dash when the count is zero. Select a count to list those risks.
+  </p>
+
+  <div class="dfe-c-mb-5" id="raid-rpt-matrix" role="region" aria-labelledby="raid-matrix-section-title" aria-describedby="raid-matrix-summary">
+    <style>
+      .raid-matrix-legend { display: flex; flex-wrap: wrap; gap: 0.75rem 1.5rem; margin: 0 0 1.25rem 0; padding: 0; list-style: none; font-size: clamp(0.75rem, 1.1vw, 0.875rem); line-height: 1.3; }
+      .raid-matrix-legend__item { display: flex; align-items: center; gap: 0.4rem; min-height: 2.75rem; }
+      .raid-matrix-legend__swatch {
+        width: 1.125rem; height: 1.125rem; border-radius: 2px; flex-shrink: 0;
+        border: 1px solid rgba(11, 12, 12, 0.2);
+        box-sizing: border-box;
+      }
+      .raid-matrix-wrap { min-width: 0; max-width: 100%; }
+      .raid-matrix-scroll { min-width: 36rem; }
+      @@media (min-width: 40em) {
+        .raid-matrix-scroll { min-width: 44rem; }
+      }
+      /* Separate cells so columns/rows read clearly */
+      .raid-matrix-wrap.raid-matrix-wrap--heatmap table {
+        table-layout: fixed;
+        width: 100%;
+        font-size: clamp(0.8125rem, 1.2vw, 0.9375rem);
+        border-collapse: separate;
+        border-spacing: 0.45rem 0.45rem;
+        border: none;
+      }
+      .raid-matrix-wrap.raid-matrix-wrap--heatmap thead th,
+      .raid-matrix-wrap.raid-matrix-wrap--heatmap tbody th {
+        word-break: break-word;
+        hyphens: auto;
+        padding: 0.6rem 0.55rem;
+        vertical-align: middle;
+      }
+      .raid-matrix-wrap.raid-matrix-wrap--heatmap tbody td.raid-matrix-metric {
+        padding: 0.45rem 0.35rem;
+        vertical-align: middle;
+        border-radius: 0;
+        box-shadow: inset 0 0 0 1px rgba(11, 12, 12, 0.12);
+        border-bottom: none;
+      }
+      .raid-matrix-wrap--heatmap tbody th.raid-matrix-corner { border-bottom: none; }
+      .raid-matrix-wrap .raid-matrix-corner { width: 20%; min-width: 6.5rem; }
+      .raid-matrix-wrap .raid-matrix-metric { text-align: center; width: 16%; min-width: 3.75rem; }
+      .raid-matrix-drill {
+        margin: 0;
+        min-width: 2.75rem;
+        min-height: 2.75rem;
+        width: 100%;
+        max-width: 5rem;
+        margin-left: auto;
+        margin-right: auto;
+        box-sizing: border-box;
+        padding: 0.4rem 0.45rem;
+        border: 2px solid transparent;
+        border-radius: 0.35rem;
+        background: none;
+        font: inherit;
+        font-weight: 700;
+        font-size: max(0.9rem, 0.9em);
+        line-height: 1.2;
+        cursor: pointer;
+        color: inherit;
+        text-decoration: underline;
+        text-decoration-style: dotted;
+        text-underline-offset: 2px;
+      }
+      .raid-matrix-drill:hover, .raid-matrix-drill:focus-visible {
+        text-decoration-style: solid;
+        border-color: #0b0c0c;
+        outline: 3px solid #fd0;
+        outline-offset: 0;
+      }
+      .raid-matrix-drill:focus:not(:focus-visible) { outline: none; }
+      .raid-matrix-drill--active { text-decoration-style: solid; border-color: #0b0c0c; }
+      .raid-matrix-empty { font-weight: 700; opacity: 0.5; }
+      .raid-matrix-drilldown__header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.75rem;
+        gap: 0.75rem;
+      }
+      .raid-matrix-drilldown__title { margin: 0; font-size: 1.05rem; }
+      .raid-matrix-drilldown__close {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 2.75rem;
+        min-height: 2.75rem;
+        background: #f3f2f1;
+        border: 2px solid #0b0c0c;
+        font-size: 1.25rem;
+        line-height: 1;
+        cursor: pointer;
+        margin: 0;
+        padding: 0;
+        color: #0b0c0c;
+        border-radius: 4px;
+      }
+      .raid-matrix-drilldown__close:hover { background: #e5e5e5; }
+      .raid-matrix-drilldown__close:focus {
+        outline: 3px solid #fd0;
+        outline-offset: 0;
+      }
+    </style>
+    <ul class="raid-matrix-legend" aria-label="Inherent risk band legend">
+      <li class="raid-matrix-legend__item">
+        <span class="raid-matrix-legend__swatch" style="background:#c00;" aria-hidden="true"></span>
+        <span><span class="govuk-visually-hidden">Band: </span>Highest (20–25)</span>
+      </li>
+      <li class="raid-matrix-legend__item">
+        <span class="raid-matrix-legend__swatch" style="background:#e0761e;" aria-hidden="true"></span>
+        <span><span class="govuk-visually-hidden">Band: </span>Elevated (15–16)</span>
+      </li>
+      <li class="raid-matrix-legend__item">
+        <span class="raid-matrix-legend__swatch" style="background:#f5e6c8;" aria-hidden="true"></span>
+        <span><span class="govuk-visually-hidden">Band: </span>Medium (8–12)</span>
+      </li>
+      <li class="raid-matrix-legend__item">
+        <span class="raid-matrix-legend__swatch" style="background:#dceedd; opacity:0.85;" aria-hidden="true"></span>
+        <span><span class="govuk-visually-hidden">Band: </span>Lower (1–7)</span>
+      </li>
+    </ul>
+
+    <div class="dfe-c-table-wrap raid-matrix-wrap raid-matrix-wrap--heatmap" style="min-width:0;">
+      <div class="raid-matrix-scroll">
+      <table aria-describedby="raid-matrix-summary">
+        <caption class="govuk-visually-hidden">Open risk counts by impact (rows) and likelihood (columns). Zero counts show as a dash.</caption>
+        <thead>
+          <tr>
+            <th
+              class="raid-matrix-corner"
+              scope="col"
+              id="raid-matrix-corner">Impact (rows) <span aria-hidden="true">→</span>
+              <span class="govuk-visually-hidden">, columns are likelihood: </span>
+              <span style="font-weight:400;color:var(--grey-4);"><span aria-hidden="true"> / </span>Likelihood (columns) <span aria-hidden="true">→</span></span>
+            </th>
+            @for (var lh = 0; lh < Model.MatrixLikelihoodAxisLabels.Count; lh++)
+            {
+              var h = Model.MatrixLikelihoodAxisLabels[lh];
+              <th class="raid-matrix-metric" scope="col" id="raid-matrix-lik-@lh" style="text-align:center;">@h</th>
+            }
+          </tr>
+        </thead>
+        <tbody>
+          @{ var impactIdx = 0; }
+          @foreach (var row in matrixRowGroups)
+          {
+            var impactLabel = Model.MatrixImpactAxisLabels.Count > impactIdx
+              ? Model.MatrixImpactAxisLabels[Model.MatrixImpactAxisLabels.Count - 1 - impactIdx]
+              : $"Impact {5 - impactIdx}";
+            var colIdx = 0;
+            <tr>
+              <th class="raid-matrix-corner" scope="row" id="raid-matrix-imp-@impactIdx" style="background:var(--grey-1);">@impactLabel</th>
+              @foreach (var cell in row)
+              {
+                var bg = MatrixCellBg(cell.CellTone);
+                var fg = cell.Count > 0 && (cell.CellTone == "r" || cell.CellTone == "ar") ? "#fff" : "#0b0c0c";
+                var likR = cell.LikelihoodRating;
+                var likIdx = likR < 1 ? 0 : (likR > 5 ? 4 : likR - 1);
+                var likHdr = Model.MatrixLikelihoodAxisLabels.Count > likIdx
+                  ? Model.MatrixLikelihoodAxisLabels[likIdx]
+                  : cell.LikelihoodRating.ToString();
+                var cellHeaders = $"raid-matrix-imp-{impactIdx} raid-matrix-lik-{colIdx}";
+                <td
+                  class="raid-matrix-metric"
+                  style="text-align:center;background:@bg;color:@fg;"
+                  headers="@cellHeaders">
+                  @if (cell.Count == 0)
+                  {
+                    <span class="raid-matrix-empty" aria-hidden="true">—</span>
+                    <span class="govuk-visually-hidden">0 open risks, @impactLabel impact, @likHdr likelihood</span>
+                  }
+                  else
+                  {
+                    <button type="button"
+                            class="raid-matrix-drill"
+                            data-matrix-key="@($"{cell.ImpactRating}|{cell.LikelihoodRating}")"
+                            data-impact-label="@impactLabel"
+                            data-likelihood-label="@likHdr"
+                            aria-expanded="false"
+                            aria-controls="raid-matrix-drilldown-panel"
+                            id="raid-matrix-btn-@impactIdx-@colIdx">
+                      <span class="govuk-visually-hidden">Show list of</span> @cell.Count
+                      <span class="govuk-visually-hidden"> @(cell.Count == 1 ? "open risk" : "open risks") at @impactLabel impact, @likHdr likelihood. Activates a list below the matrix.</span>
+                    </button>
+                  }
+                </td>
+                colIdx++;
+              }
+            </tr>
+            impactIdx++;
+          }
+        </tbody>
+      </table>
+      </div>
+    </div>
+
+    <div id="raid-matrix-drilldown-panel" class="govuk-!-margin-top-4" hidden role="region" aria-labelledby="raid-matrix-drilldown-title" aria-live="polite">
+      <div class="raid-matrix-drilldown__header">
+        <h3 class="raid-matrix-drilldown__title" id="raid-matrix-drilldown-title"></h3>
+        <button type="button" class="raid-matrix-drilldown__close" aria-label="Close the risk list below the matrix">&times;</button>
+      </div>
+      <style>
+        #raid-matrix-drill-table.raid-reg-like-open-risks { width: 100%; }
+        #raid-matrix-drill-table.raid-reg-like-open-risks th,
+        #raid-matrix-drill-table.raid-reg-like-open-risks td { vertical-align: top; }
+        .raid-reg-score { display: inline-block; min-width: 2.5rem; padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-weight: 700; font-variant-numeric: tabular-nums; text-align: center; line-height: 1.25; box-shadow: inset 0 0 0 1px rgba(11, 12, 12, 0.12); }
+        .raid-reg-score--highest { background: #c00; color: #fff; }
+        .raid-reg-score--elevated { background: #e0761e; color: #0b0c0c; }
+        .raid-reg-score--medium { background: #f5e6c8; color: #0b0c0c; }
+        .raid-reg-score--lower { background: #dceedd; color: #0b0c0c; }
+      </style>
+      <div class="dfe-c-table-wrap govuk-!-margin-bottom-0">
+        <table class="raid-reg-like-open-risks" id="raid-matrix-drill-table">
+          <thead>
+            <tr>
+              <th scope="col">Risk</th>
+              <th scope="col">Business area</th>
+              <th scope="col">Tier</th>
+              <th scope="col">Relation</th>
+              <th scope="col">Status</th>
+              <th scope="col">Owner</th>
+              <th scope="col">Likelihood</th>
+              <th scope="col">Impact</th>
+              <th scope="col" class="govuk-!-text-align-right">Score (inherent)</th>
+            </tr>
+          </thead>
+          <tbody id="raid-matrix-drilldown-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <script nonce="@Context.Items["Nonce"]">
+    (function () {
+      var data = @Html.Raw(matrixDrillJson);
+      var panel = document.getElementById('raid-matrix-drilldown-panel');
+      var titleEl = document.getElementById('raid-matrix-drilldown-title');
+      var bodyEl = document.getElementById('raid-matrix-drilldown-body');
+      var matrixRoot = document.getElementById('raid-rpt-matrix');
+      if (!panel || !titleEl || !bodyEl || !matrixRoot) return;
+      var activeBtn = null;
+      function escHtml(s) {
+        var d = document.createElement('div');
+        d.appendChild(document.createTextNode(s || ''));
+        return d.innerHTML;
+      }
+      function raidRegScoreClass(score) {
+        if (score >= 20) return 'raid-reg-score raid-reg-score--highest';
+        if (score >= 15) return 'raid-reg-score raid-reg-score--elevated';
+        if (score >= 8) return 'raid-reg-score raid-reg-score--medium';
+        return 'raid-reg-score raid-reg-score--lower';
+      }
+      function tierCell(tier) {
+        var t = (tier || '').trim();
+        if (!t) return '<span class="govuk-body-s dfe-c-text-muted">—</span>';
+        return '<span class="dfe-c-tag dfe-c-tag--blue">' + escHtml(t) + '</span>';
+      }
+      function statusTag(status) {
+        if (!status || status === '—') return '<span class="govuk-body-s dfe-c-text-muted">—</span>';
+        var up = String(status).toUpperCase();
+        var isClosed = String(status).toLowerCase().indexOf('closed') >= 0;
+        var tagClass = isClosed ? 'dfe-c-tag--green' : 'dfe-c-tag--blue';
+        return '<span class="dfe-c-tag ' + tagClass + '">' + escHtml(up) + '</span>';
+      }
+      function relationHtml(r) {
+        var k = (r.relationKind || 'Unknown') + '';
+        var target = (r.relationTarget || '') + '';
+        if (k === 'Organisation') return '<span>Organisation</span>';
+        if (k === 'FIPS' || k === 'Fips') {
+          if (!target) return '<span class="dfe-c-text-muted">—</span>';
+          return '<span>FIPS</span> <span>·</span> <span>' + escHtml(target) + '</span>';
+        }
+        if (k === 'Work') {
+          var wurl = (r.relationWorkItemUrl || '') + '';
+          if (wurl && r.relationProjectId) {
+            return '<span>Work</span> <span>·</span> <a class="govuk-link" href="' + escHtml(wurl) + '">' + escHtml(target || 'View') + '</a>';
+          }
+          if (target) return '<span>Work</span> <span>·</span> <span>' + escHtml(target) + '</span>';
+          return '<span>Work</span>';
+        }
+        if (!target) return '<span class="dfe-c-text-muted">—</span>';
+        return '<span>' + escHtml(target) + '</span>';
+      }
+      function show(btn) {
+        var key = btn.getAttribute('data-matrix-key');
+        var imp = btn.getAttribute('data-impact-label') || '';
+        var lik = btn.getAttribute('data-likelihood-label') || '';
+        var rows = (key && data[key]) ? data[key] : [];
+        titleEl.textContent = imp + ' × ' + lik + ' · ' + rows.length + (rows.length === 1 ? ' open risk' : ' open risks');
+        bodyEl.innerHTML = '';
+        rows.forEach(function (r) {
+          var tr = document.createElement('tr');
+          var sc = (typeof r.riskScore === 'number' ? r.riskScore : parseInt(r.riskScore, 10)) || 0;
+          var scoreSpan = '<span class="' + raidRegScoreClass(sc) + '">' + escHtml(String(sc)) + '</span>';
+          tr.innerHTML =
+            '<td><a class="govuk-link govuk-!-font-weight-bold" href="' + escHtml(r.href) + '">' + escHtml(r.title) + '</a>' +
+            '<div class="dfe-c-body-s dfe-c-text-muted govuk-!-margin-top-1" style="line-height:1.3;">' + escHtml(r.reference) + '</div></td>' +
+            '<td class="govuk-body-s">' + escHtml((r.businessArea == null || r.businessArea === '') ? '—' : r.businessArea) + '</td>' +
+            '<td class="govuk-body-s">' + tierCell(r.tier) + '</td>' +
+            '<td class="govuk-body-s">' + relationHtml(r) + '</td>' +
+            '<td>' + statusTag(r.status) + '</td>' +
+            '<td class="govuk-body-s">' + escHtml((r.owner == null || r.owner === '') ? '—' : r.owner) + '</td>' +
+            '<td class="govuk-body-s">' + escHtml((r.likelihood == null || r.likelihood === '') ? '—' : r.likelihood) + '</td>' +
+            '<td class="govuk-body-s">' + escHtml((r.impact == null || r.impact === '') ? '—' : r.impact) + '</td>' +
+            '<td class="govuk-body-s govuk-!-text-align-right">' + scoreSpan + '</td>';
+          bodyEl.appendChild(tr);
+        });
+        panel.hidden = false;
+        document.querySelectorAll('.raid-matrix-drill').forEach(function (b) { b.setAttribute('aria-expanded', 'false'); });
+        btn.setAttribute('aria-expanded', 'true');
+        panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        window.setTimeout(function () {
+          var first = bodyEl.querySelector('a[href]');
+          if (first) first.focus();
+        }, 0);
+      }
+      function hide() {
+        var toFocus = activeBtn;
+        panel.hidden = true;
+        if (activeBtn) {
+          activeBtn.classList.remove('raid-matrix-drill--active');
+          activeBtn.setAttribute('aria-expanded', 'false');
+          activeBtn = null;
+        }
+        if (toFocus) toFocus.focus();
+      }
+      matrixRoot.addEventListener('click', function (e) {
+        var btn = e.target.closest('.raid-matrix-drill');
+        if (!btn) return;
+        if (activeBtn === btn) { hide(); return; }
+        if (activeBtn) activeBtn.classList.remove('raid-matrix-drill--active');
+        activeBtn = btn;
+        activeBtn.classList.add('raid-matrix-drill--active');
+        show(btn);
+      });
+      panel.querySelector('.raid-matrix-drilldown__close').addEventListener('click', hide);
+    })();
+    </script>
+  </div>
+
+  <div class="dfe-c-section-header dfe-c-mb-2 dfe-c-mt-4">
+    <h2 class="govuk-heading-m govuk-!-margin-bottom-0">Open issues by severity and priority</h2>
+  </div>
+
+  <div class="govuk-!-margin-bottom-4">
+    <h3 class="govuk-heading-s govuk-!-margin-top-0">By severity</h3>
+    <div class="dfe-c-table-wrap govuk-!-width-full">
+      <table>
+        <thead>
+          <tr><th scope="col">Severity</th><th scope="col" class="govuk-!-text-align-right">Open</th></tr>
+        </thead>
+        <tbody>
+          @if (Model.OpenIssueSeverityBreakdown.Count == 0)
+          {
+            <tr><td colspan="2" class="dfe-c-text-muted dfe-c-body-s">No open issues for you.</td></tr>
+          }
+          @foreach (var r in Model.OpenIssueSeverityBreakdown)
+          {
+            <tr>
+              <td class="dfe-c-body-s">@r.Label</td>
+              <td class="govuk-!-text-align-right dfe-c-body-s">@r.Count</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="govuk-!-margin-bottom-4">
+    <h3 class="govuk-heading-s govuk-!-margin-top-0">By priority</h3>
+    <div class="dfe-c-table-wrap govuk-!-width-full">
+      <table>
+        <thead>
+          <tr><th scope="col">Priority</th><th scope="col" class="govuk-!-text-align-right">Open</th></tr>
+        </thead>
+        <tbody>
+          @if (Model.OpenIssuePriorityBreakdown.Count == 0)
+          {
+            <tr><td colspan="2" class="dfe-c-text-muted dfe-c-body-s">No open issues for you.</td></tr>
+          }
+          @foreach (var r in Model.OpenIssuePriorityBreakdown)
+          {
+            <tr>
+              <td class="dfe-c-body-s">@r.Label</td>
+              <td class="govuk-!-text-align-right dfe-c-body-s">@r.Count</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="dfe-c-section-header dfe-c-mb-2">
+    <h2 class="govuk-heading-m govuk-!-margin-bottom-0">Risks — inherent rating not updated in 3+ months</h2>
+  </div>
+  <p class="dfe-c-body-s dfe-c-text-muted govuk-!-margin-bottom-2">
+    Inherent (impact / likelihood) changes from the <strong>audit</strong> log, or the record’s created time if there is no history. Threshold: 90 days. Only your open risks are listed.
+  </p>
+  <div class="dfe-c-table-wrap govuk-!-margin-bottom-2 govuk-!-width-full">
+    <table>
+      <caption class="govuk-visually-hidden">Your open risks with no inherent rating change in 90 days</caption>
+      <thead>
+        <tr>
+          <th scope="col">Ref</th>
+          <th scope="col">Title</th>
+          <th scope="col" class="govuk-!-text-align-right">Days since last inherent change (approx.)</th>
+        </tr>
+      </thead>
+      <tbody>
+        @if (Model.RisksInherentRatingUnchangedThreePlusMonths.Count == 0)
+        {
+          <tr>
+            <td colspan="3" class="dfe-c-body-s dfe-c-text-muted">No open risks for you with an inherent rating unchanged for 3+ months (or audit data is not available yet).</td>
+          </tr>
+        }
+        else
+        {
+          @foreach (var a in Model.RisksInherentRatingUnchangedThreePlusMonths)
+          {
+            <tr>
+              <td class="dfe-c-mono dfe-c-body-s">
+                <a class="dfe-c-link" href="@Url.Action("RiskDetail", "ModernRaid", new { id = a.Id })">@a.Reference</a>
+              </td>
+              <td class="dfe-c-body-s">@a.Title</td>
+              <td class="dfe-c-body-s govuk-!-text-align-right">@(a.DaysSinceLastRatingChange?.ToString() ?? "—")</td>
+            </tr>
+          }
+        }
+      </tbody>
+    </table>
+  </div>
+  <p class="govuk-body-s dfe-c-text-muted govuk-!-margin-bottom-0">Also tracked: <strong>@Model.StagnantOpenIssueCount</strong> of your open issue(s) with no severity or priority change in the audit for 90+ days.</p>
+</div>

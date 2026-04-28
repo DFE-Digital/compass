@@ -1,0 +1,205 @@
+@model Compass.ViewModels.Modern.ModernRaidIssuesPageViewModel
+@using System
+@{
+  ViewData["Title"] = "RAID — Issues";
+  var formAction = "/modern/raid/issues";
+  var clearUrl = "/modern/raid/issues";
+  var activeTab = string.IsNullOrWhiteSpace(Model.ActiveTab) ? "my" : Model.ActiveTab;
+  var baQ = Model.RaidBusinessAreaQueryFragment;
+  var baSuffix = string.IsNullOrEmpty(baQ) ? "" : "&" + baQ;
+  var pageOpenCount = Model.Rows.Count(i => !(i.Status ?? "").Contains("closed", StringComparison.OrdinalIgnoreCase));
+  var pageHighSeverity = Model.Rows.Count(i => (i.Severity ?? "").Contains("major", StringComparison.OrdinalIgnoreCase) || (i.Severity ?? "").Contains("critical", StringComparison.OrdinalIgnoreCase));
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="/modern/raid/dashboard">RAID</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">Issues</li>
+}
+
+<div class="modern-work-page">
+  <div class="dfe-c-flex--between dfe-c-mb-3" style="flex-wrap:wrap;gap:1rem;">
+    <div class="dfe-c-page-title" style="margin:0;">
+      <div class="dfe-c-page-title__caption">RAID</div>
+      <h1 class="dfe-c-page-title__heading">Issues register</h1>
+      <p class="dfe-c-page-title__lede">Browse and filter issues (@Model.TotalFiltered matched).</p>
+    </div>
+    <div class="dfe-c-flex" style="gap:0.5rem;flex-wrap:wrap;">
+      <a href="/modern/raid/issues/create" class="govuk-button">Add issue</a>
+    </div>
+  </div>
+
+  @if (TempData["Message"] is string issuePrefMsg && !string.IsNullOrWhiteSpace(issuePrefMsg))
+  {
+    <div class="govuk-notification-banner govuk-notification-banner--success govuk-!-margin-bottom-4" role="region" aria-labelledby="raid-issue-pref-banner-title">
+      <div class="govuk-notification-banner__header">
+        <h2 class="govuk-notification-banner__title" id="raid-issue-pref-banner-title">Success</h2>
+      </div>
+      <div class="govuk-notification-banner__content">
+        <p class="govuk-notification-banner__heading">@issuePrefMsg</p>
+      </div>
+    </div>
+  }
+  @if (TempData["ErrorMessage"] is string issuePrefErr && !string.IsNullOrWhiteSpace(issuePrefErr))
+  {
+    <div class="govuk-error-summary govuk-!-margin-bottom-4" tabindex="-1">
+      <h2 class="govuk-error-summary__title">There is a problem</h2>
+      <div class="govuk-error-summary__body">@issuePrefErr</div>
+    </div>
+  }
+
+  <div class="dfe-c-card-grid dfe-c-mb-3" role="region" aria-label="Issue register summary for current filters and page">
+    <div class="dfe-c-metric dfe-c-metric--navy">
+      <div class="dfe-c-metric__number">@Model.TotalFiltered</div>
+      <div class="dfe-c-metric__label">Matched issues</div>
+    </div>
+    <div class="dfe-c-metric dfe-c-metric--teal">
+      <div class="dfe-c-metric__number">@pageOpenCount</div>
+      <div class="dfe-c-metric__label">Open on this page</div>
+    </div>
+    <div class="dfe-c-metric dfe-c-metric--red">
+      <div class="dfe-c-metric__number">@pageHighSeverity</div>
+      <div class="dfe-c-metric__label">Major / critical (this page)</div>
+    </div>
+  </div>
+
+  <form method="get" action="@formAction" id="raid-issues-register-form" class="dfe-c-mb-3">
+    <input type="hidden" name="tab" value="@activeTab" />
+    <input type="hidden" name="page" value="1" />
+    <div id="search-and-filter">
+      <div class="filter-toolbar">
+        <div class="filter-toolbar__search-wrap">
+          <input type="search" name="search" id="raid-issues-search" value="@Model.Search" placeholder="Search title or description…" class="filter-search" autocomplete="off" aria-label="Search issues" />
+          <button type="submit" class="govuk-button govuk-button--secondary filter-toolbar__search-submit">Search</button>
+        </div>
+        <button type="button" class="filter-toggle-btn" id="raid-issues-filter-btn" aria-expanded="false" aria-controls="raid-issues-filter-panel">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="flex-shrink:0;" aria-hidden="true"><path d="M1 3h14v1.5l-5 5V14l-4-2V9.5L1 4.5V3z"></path></svg>
+          <span class="filter-toggle-label">Filter</span>
+        </button>
+      </div>
+      <div class="filter-panel filter-panel--allwork" id="raid-issues-filter-panel">
+        <div class="filter-panel__grid">
+          @if (Model.BusinessAreaOptions.Count > 0)
+          {
+            <div>
+              <label for="raid-issues-ba">Business area</label>
+              <select name="businessAreaId" id="raid-issues-ba" class="govuk-select">
+                @if (Model.RaidBusinessAreaExplicitNone || Model.BusinessAreaId is not > 0)
+                { <option value="0" selected>All business areas</option> }
+                else
+                { <option value="0">All business areas</option> }
+                @foreach (var o in Model.BusinessAreaOptions)
+                {
+                  var optSelected = !Model.RaidBusinessAreaExplicitNone && Model.BusinessAreaId == o.Id;
+                  if (optSelected) { <option value="@o.Id" selected>@o.Name</option> }
+                  else { <option value="@o.Id">@o.Name</option> }
+                }
+              </select>
+            </div>
+          }
+          <div>
+            <label for="raid-issues-project">Work item</label>
+            <select name="projectId" id="raid-issues-project" class="govuk-select">
+              <option value="">All</option>
+              @foreach (var o in Model.ProjectOptions)
+              {
+                if (Model.ProjectId == o.Id) { <option value="@o.Id" selected>@o.Name</option> }
+                else { <option value="@o.Id">@o.Name</option> }
+              }
+            </select>
+          </div>
+          <div>
+            <label for="raid-issues-status">Status</label>
+            <select name="issueStatusId" id="raid-issues-status" class="govuk-select">
+              <option value="">All</option>
+              @foreach (var o in Model.IssueStatusOptions)
+              {
+                if (Model.IssueStatusId == o.Id) { <option value="@o.Id" selected>@o.Name</option> }
+                else { <option value="@o.Id">@o.Name</option> }
+              }
+            </select>
+          </div>
+          <div>
+            <label for="raid-issues-sev">Severity</label>
+            <select name="severityId" id="raid-issues-sev" class="govuk-select">
+              <option value="">All</option>
+              @foreach (var o in Model.SeverityOptions)
+              {
+                if (Model.SeverityId == o.Id) { <option value="@o.Id" selected>@o.Name</option> }
+                else { <option value="@o.Id">@o.Name</option> }
+              }
+            </select>
+          </div>
+        </div>
+        <div class="filter-panel__actions" style="margin-top:0.75rem;display:flex;gap:0.5rem;flex-wrap:wrap;">
+          <button type="submit" class="govuk-button">Apply filters</button>
+          <a class="govuk-button govuk-button--secondary" href="@clearUrl">Clear</a>
+        </div>
+      </div>
+    </div>
+  </form>
+
+  <div class="tabs" role="tablist" aria-label="RAID issue sections">
+    <a href="@($"/modern/raid/issues?tab=my&page=1&search={Uri.EscapeDataString(Model.Search ?? "")}&projectId={Model.ProjectId}&issueStatusId={Model.IssueStatusId}&severityId={Model.SeverityId}{baSuffix}")" class="tab @(activeTab == "my" ? "on" : "")" role="tab" aria-selected="@(activeTab == "my" ? "true" : "false")" aria-controls="raid-issues-my" id="tab-raid-issues-my">My issues <span class="dfe-c-fw-regular">(@Model.MyCount)</span></a>
+    <a href="@($"/modern/raid/issues?tab=open&page=1&search={Uri.EscapeDataString(Model.Search ?? "")}&projectId={Model.ProjectId}&issueStatusId={Model.IssueStatusId}&severityId={Model.SeverityId}{baSuffix}")" class="tab @(activeTab == "open" ? "on" : "")" role="tab" aria-selected="@(activeTab == "open" ? "true" : "false")" aria-controls="raid-issues-open" id="tab-raid-issues-open">Open issues <span class="dfe-c-fw-regular">(@Model.OpenCount)</span></a>
+    <a href="@($"/modern/raid/issues?tab=closed&page=1&search={Uri.EscapeDataString(Model.Search ?? "")}&projectId={Model.ProjectId}&issueStatusId={Model.IssueStatusId}&severityId={Model.SeverityId}{baSuffix}")" class="tab @(activeTab == "closed" ? "on" : "")" role="tab" aria-selected="@(activeTab == "closed" ? "true" : "false")" aria-controls="raid-issues-closed" id="tab-raid-issues-closed">Closed issues <span class="dfe-c-fw-regular">(@Model.ClosedCount)</span></a>
+    <a href="@($"/modern/raid/issues?tab=all&page=1&search={Uri.EscapeDataString(Model.Search ?? "")}&projectId={Model.ProjectId}&issueStatusId={Model.IssueStatusId}&severityId={Model.SeverityId}{baSuffix}")" class="tab @(activeTab == "all" ? "on" : "")" role="tab" aria-selected="@(activeTab == "all" ? "true" : "false")" aria-controls="raid-issues-all" id="tab-raid-issues-all">All issues <span class="dfe-c-fw-regular">(@Model.AllCount)</span></a>
+  </div>
+
+  @if (Model.TotalPages > 1)
+  {
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:0.875rem;flex-wrap:wrap;gap:0.5rem;">
+      <p class="dfe-c-text-muted" style="margin:0;">Page @Model.Page of @Model.TotalPages</p>
+      <nav class="dfe-c-flex" style="gap:0.5rem;align-items:center;flex-wrap:wrap;" aria-label="Pagination">
+        @if (Model.Page > 1)
+        {
+          <a class="govuk-link" href="@($"/modern/raid/issues?tab={activeTab}&search={Uri.EscapeDataString(Model.Search ?? "")}&projectId={Model.ProjectId}&issueStatusId={Model.IssueStatusId}&severityId={Model.SeverityId}{baSuffix}&page={Model.Page - 1}")">Previous</a>
+        }
+        @if (Model.Page < Model.TotalPages)
+        {
+          <a class="govuk-link" href="@($"/modern/raid/issues?tab={activeTab}&search={Uri.EscapeDataString(Model.Search ?? "")}&projectId={Model.ProjectId}&issueStatusId={Model.IssueStatusId}&severityId={Model.SeverityId}{baSuffix}&page={Model.Page + 1}")">Next</a>
+        }
+      </nav>
+    </div>
+  }
+
+  @if (Model.Rows.Count == 0)
+  {
+    <p class="govuk-body">No issues match your filters.</p>
+  }
+  else
+  {
+    <div class="dfe-c-table-wrap">
+      <table id="raid-issues-table">
+        <thead>
+          <tr>
+            <th data-sort-bound="1" class="sortable">Issue</th>
+            <th data-sort-bound="1" class="sortable">Business area</th>
+            <th data-sort-bound="1" class="sortable">Relation</th>
+            <th data-sort-bound="1" class="sortable">Status</th>
+            <th data-sort-bound="1" class="sortable">Owner</th>
+            <th data-sort-bound="1" class="sortable">Priority</th>
+            <th data-sort-bound="1" class="sortable">Severity</th>
+          </tr>
+        </thead>
+        <tbody>
+          @foreach (var i in Model.Rows)
+          {
+            <tr>
+              @{
+                var issueDetailUrl = Url.Action("IssueDetail", "ModernRaid", new { id = i.Id }) ?? "#";
+              }
+              @await Html.PartialAsync("~/Views/Modern/Raid/_RaidRegisterItemTitleCell.cshtml", new RaidRegisterItemTitleVm(issueDetailUrl, i.Title, $"I-{i.Id:D4}"))
+              <td class="govuk-body-s">@(string.IsNullOrEmpty(i.BusinessAreaLabel) ? "—" : i.BusinessAreaLabel)</td>
+              @await Html.PartialAsync("~/Views/Modern/Raid/_RaidRegisterRelationCell.cshtml", i.Relation)
+              <td><span class="dfe-c-tag @((i.Status ?? "").Contains("closed", StringComparison.OrdinalIgnoreCase) ? "dfe-c-tag--green" : "dfe-c-tag--blue")">@((i.Status ?? "—").ToUpperInvariant())</span></td>
+              <td class="govuk-body-s">@(i.Owner ?? "—")</td>
+              <td><span class="dfe-c-tag @((i.Priority ?? "").Contains("critical", StringComparison.OrdinalIgnoreCase) ? "dfe-c-tag--red" : (i.Priority ?? "").Contains("high", StringComparison.OrdinalIgnoreCase) ? "dfe-c-tag--amber" : "dfe-c-tag--grey")">@((i.Priority ?? "—").ToUpperInvariant())</span></td>
+              <td><span class="dfe-c-tag @((i.Severity ?? "").Contains("critical", StringComparison.OrdinalIgnoreCase) ? "dfe-c-tag--red" : (i.Severity ?? "").Contains("major", StringComparison.OrdinalIgnoreCase) ? "dfe-c-tag--amber" : "dfe-c-tag--green")">@((i.Severity ?? "—").ToUpperInvariant())</span></td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</div>

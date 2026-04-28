@@ -1,0 +1,213 @@
+@model Compass.ViewModels.Modern.DdtStandardsRegisterViewModel
+@using System.Globalization
+@{
+  ViewData["Title"] = "DDT standards register";
+  var tab = Model.Tab ?? "published";
+  var culture = CultureInfo.GetCultureInfo("en-GB");
+  var cat = Model.CategoryFilter ?? "";
+  var search = Model.Search;
+  var owner = Model.OwnerFilter;
+  var categories = Model.CategoryOptions ?? new List<string>();
+
+  string DdtUrl(string tabVal) => Url.Action("DdtStandards", "ModernStandards", new { tab = tabVal }) ?? "#";
+
+  var clearUrl = Url.Action("DdtStandards", "ModernStandards", new { tab });
+  var formAction = Url.Action("DdtStandards", "ModernStandards");
+  var exportUrl = Url.Action("DdtStandards", "ModernStandards", new
+  {
+    tab,
+    category = string.IsNullOrWhiteSpace(cat) ? null : cat,
+    owner,
+    search = string.IsNullOrWhiteSpace(search) ? null : search,
+    export = "csv"
+  });
+}
+
+@section Breadcrumbs {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernStandards")">Standards</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">DDT standards register</li>
+}
+
+<div id="sc-standards-ddtstandards">
+
+<div class="dfe-c-flex--between dfe-c-mb-3" style="flex-wrap:wrap;gap:1rem;">
+ <div class="dfe-c-page-title" style="margin:0;">
+ <div class="dfe-c-page-title__caption">Standards</div>
+ <h1 class="dfe-c-page-title__heading">DDT standards register</h1>
+ <p class="dfe-c-page-title__lede">@Model.TotalCount standard@(Model.TotalCount == 1 ? "" : "s") across all statuses</p>
+  </div>
+ <div class="dfe-c-flex" style="gap:0.5rem;flex-wrap:wrap;">
+ <a href="@Url.Action("DdtCreate", "ModernStandards")" class="govuk-button">New standard</a>
+  </div>
+</div>
+
+<form method="get" action="@formAction" id="ddt-filter-form" class="dfe-c-mb-3">
+  <input type="hidden" name="tab" value="@tab" />
+  <div id="search-and-filter">
+ <div class="filter-toolbar">
+ <div class="filter-toolbar__search-wrap">
+ <input type="search" name="search" id="ddt-register-search" placeholder="Search standards…" class="filter-search" autocomplete="off" aria-label="Search standards" value="@search" />
+ <button type="submit" class="govuk-button govuk-button--secondary filter-toolbar__search-submit" id="ddt-search-submit">Search</button>
+      </div>
+ <button type="button" class="filter-toggle-btn" id="ddt-filter-btn" aria-expanded="false" aria-controls="ddt-filter-panel">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="flex-shrink:0;" aria-hidden="true"><path d="M1 3h14v1.5l-5 5V14l-4-2V9.5L1 4.5V3z"></path></svg>
+ <span class="filter-toggle-label">Filter</span>
+      </button>
+    </div>
+ <div class="filter-panel" id="ddt-filter-panel">
+ <div class="filter-panel__grid">
+        <div>
+          <label for="ddt-filter-category">Category</label>
+ <select name="category" id="ddt-filter-category" class="govuk-select">
+            <option value="">All categories</option>
+            @foreach (var c in categories)
+            {
+              <option value="@c" selected="@(string.Equals(cat, c, StringComparison.OrdinalIgnoreCase))">@c</option>
+            }
+          </select>
+        </div>
+        <div>
+          <label for="ddt-filter-owner">Owner</label>
+ <select name="owner" id="ddt-filter-owner" class="govuk-select">
+            <option value="">All owners</option>
+            @foreach (var o in Model.OwnerOptions)
+            {
+              <option value="@o.Id" selected="@(owner == o.Id)">@o.Name</option>
+            }
+          </select>
+        </div>
+      </div>
+ <div class="filter-panel__actions">
+ <button type="submit" class="govuk-button">Apply filters</button>
+ <a href="@clearUrl" class="govuk-link">Clear filters</a>
+      </div>
+    </div>
+  </div>
+</form>
+
+<div class="tabs dfe-c-mb-2" role="tablist" aria-label="DDT standards register sections">
+ <a href="@DdtUrl("published")" class="tab @(tab =="published" ? "on" : "")" role="tab" aria-selected="@(tab == "published")" aria-controls="d-ddt-register" id="tab-ddt-published">Published</a>
+ <a href="@DdtUrl("review")" class="tab @(tab =="review" ? "on" : "")" role="tab" aria-selected="@(tab == "review")" aria-controls="d-ddt-register" id="tab-ddt-review">In review</a>
+ <a href="@DdtUrl("draft")" class="tab @(tab =="draft" ? "on" : "")" role="tab" aria-selected="@(tab == "draft")" aria-controls="d-ddt-register" id="tab-ddt-draft">Draft</a>
+ <a href="@DdtUrl("withdrawn")" class="tab @(tab =="withdrawn" ? "on" : "")" role="tab" aria-selected="@(tab == "withdrawn")" aria-controls="d-ddt-register" id="tab-ddt-withdrawn">Withdrawn</a>
+</div>
+
+<div id="d-ddt-register" class="tab-pane on" role="tabpanel" aria-labelledby="@(tab == "published" ? "tab-ddt-published" : tab == "review" ? "tab-ddt-review" : tab == "draft" ? "tab-ddt-draft" : "tab-ddt-withdrawn")">
+@if (Model.Items == null || !Model.Items.Any())
+{
+ <p class="dfe-c-body dfe-c-text-muted">No standards found for this tab.</p>
+}
+else if (tab == "published")
+{
+ <div class="dfe-c-table-wrap">
+    <table>
+      <thead>
+        <tr>
+ <th data-sort-bound="1" class="sortable">Standard</th>
+ <th data-sort-bound="1" class="sortable">Category</th>
+ <th data-sort-bound="1" class="sortable">Version</th>
+ <th data-sort-bound="1" class="sortable">Published</th>
+ <th data-sort-bound="1" class="sortable">Owner</th>
+        </tr>
+      </thead>
+      <tbody>
+      @foreach (var s in Model.Items)
+      {
+        var pub = s.PublishedAt.HasValue ? s.PublishedAt.Value.ToString("MMM yyyy", culture) : "—";
+        <tr>
+          <td><a href="@Url.Action("DdtDetail", "ModernStandards", new { id = s.Id })">@s.Title</a></td>
+          <td>@(string.IsNullOrEmpty(s.CategoryDisplay) ? "—" : s.CategoryDisplay)</td>
+          <td>v@(s.Version)</td>
+          <td>@pub</td>
+          <td>@(string.IsNullOrEmpty(s.OwnerDisplay) ? "—" : s.OwnerDisplay)</td>
+        </tr>
+      }
+      </tbody>
+    </table>
+  </div>
+}
+else if (tab == "review")
+{
+ <div class="dfe-c-table-wrap">
+    <table >
+      <thead>
+        <tr>
+ <th data-sort-bound="1" class="sortable">Standard</th>
+ <th data-sort-bound="1" class="sortable">Category</th>
+ <th data-sort-bound="1" class="sortable">Version</th>
+          <th>Status</th>
+ <th data-sort-bound="1" class="sortable">Owner</th>
+        </tr>
+      </thead>
+      <tbody>
+      @foreach (var s in Model.Items)
+      {
+        <tr>
+          <td><a href="@Url.Action("DdtDetail", "ModernStandards", new { id = s.Id })">@s.Title</a></td>
+          <td>@(string.IsNullOrEmpty(s.CategoryDisplay) ? "—" : s.CategoryDisplay)</td>
+          <td>v@(s.Version)</td>
+ <td><span class="dfe-c-tag dfe-c-tag--amber">AWAITING SIGN-OFF</span></td>
+          <td>@(string.IsNullOrEmpty(s.OwnerDisplay) ? "—" : s.OwnerDisplay)</td>
+        </tr>
+      }
+      </tbody>
+    </table>
+  </div>
+}
+else if (tab == "draft")
+{
+ <div class="dfe-c-table-wrap">
+    <table >
+      <thead>
+        <tr>
+ <th data-sort-bound="1" class="sortable">Standard</th>
+ <th data-sort-bound="1" class="sortable">Category</th>
+ <th data-sort-bound="1" class="sortable">Draft version</th>
+ <th data-sort-bound="1" class="sortable">Owner</th>
+ <th data-sort-bound="1" class="sortable">Started</th>
+        </tr>
+      </thead>
+      <tbody>
+      @foreach (var s in Model.Items)
+      {
+        var started = s.DraftCreated.ToString("MMM yyyy", culture);
+        <tr>
+          <td><a href="@Url.Action("DdtDetail", "ModernStandards", new { id = s.Id })">@s.Title</a></td>
+          <td>@(string.IsNullOrEmpty(s.CategoryDisplay) ? "—" : s.CategoryDisplay)</td>
+          <td>v@(s.Version)</td>
+          <td>@(string.IsNullOrEmpty(s.OwnerDisplay) ? "—" : s.OwnerDisplay)</td>
+          <td>@started</td>
+        </tr>
+      }
+      </tbody>
+    </table>
+  </div>
+}
+else
+{
+ <div class="dfe-c-table-wrap">
+    <table >
+      <thead>
+        <tr>
+ <th data-sort-bound="1" class="sortable">Standard</th>
+ <th data-sort-bound="1" class="sortable">Category</th>
+          <th>Reason</th>
+        </tr>
+      </thead>
+      <tbody>
+      @foreach (var s in Model.Items)
+      {
+        var reason = string.IsNullOrEmpty(s.WithdrawalNote) ? "—" : s.WithdrawalNote;
+        <tr>
+          <td><a href="@Url.Action("DdtDetail", "ModernStandards", new { id = s.Id })">@s.Title</a></td>
+          <td>@(string.IsNullOrEmpty(s.CategoryDisplay) ? "—" : s.CategoryDisplay)</td>
+          <td>@reason</td>
+        </tr>
+      }
+      </tbody>
+    </table>
+  </div>
+}
+</div>
+</div>

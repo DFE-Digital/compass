@@ -150,10 +150,25 @@ public class Risk
     [ForeignKey(nameof(PrimaryProductId))]
     public FipsService? PrimaryProduct { get; set; }
 
+    /// <summary>WorkItem, Product, or Organisation — see <see cref="RaidAssociationKinds"/>.</summary>
+    [MaxLength(20)]
+    public string? RaidAssociationKind { get; set; }
+
+    public int? SroUserId { get; set; }
+
+    [ForeignKey(nameof(SroUserId))]
+    public User? SroUser { get; set; }
+
     public string? ResponseStrategy { get; set; }
 
     [MaxLength(1000)]
     public string? HowIdentified { get; set; }
+
+    /// <summary>Root cause or drivers (narrative).</summary>
+    public string? Cause { get; set; }
+
+    /// <summary>Consequence narrative if the risk materialises.</summary>
+    public string? ImpactIfRealised { get; set; }
 
     public int? CreatedByUserId { get; set; }
 
@@ -194,5 +209,17 @@ public class Risk
     public ICollection<RiskDecision> RiskDecisions { get; set; } = new List<RiskDecision>();
 
     public ICollection<IssueRisk> IssueRisks { get; set; } = new List<IssueRisk>();
+
+    /// <summary>Measurable indicators for this risk.</summary>
+    public ICollection<RiskKeyRiskIndicator> KeyRiskIndicators { get; set; } = new List<RiskKeyRiskIndicator>();
+
+    /// <summary>Modern RAID: multiple category labels.</summary>
+    public ICollection<RiskRiskCategory> RiskRiskCategories { get; set; } = new List<RiskRiskCategory>();
+
+    /// <summary>Modern RAID: divisions (multi-select).</summary>
+    public ICollection<RiskDivision> RiskDivisions { get; set; } = new List<RiskDivision>();
+
+    /// <summary>Modern RAID: business areas from admin lookup (multi-select).</summary>
+    public ICollection<RiskBusinessArea> RiskBusinessAreas { get; set; } = new List<RiskBusinessArea>();
 }
 

@@ -1,0 +1,98 @@
+@model Compass.Models.FunctionalStandardTheme
+@{
+    ViewData["Title"] = $"Theme {Model.ThemeId} — {Model.Title}";
+    var standard = Model.FunctionalStandard!;
+    string StdUrl() => Url.Action("FunctionalStandardDetail", "ModernAdmin", new { id = standard.Id }) ?? "#";
+}
+
+@section Breadcrumbs {
+    <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+    <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernAdmin")">Admin</a></li>
+    <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernAdmin", new { panel = "std-functional" })">Functional standards</a></li>
+    <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@StdUrl()">@standard.Title</a></li>
+    <li class="govuk-breadcrumbs__list-item" aria-current="page">Theme @Model.ThemeId</li>
+}
+
+<div class="admin-hub">
+    <div class="dfe-c-page-title dfe-c-mb-3">
+        <div class="dfe-c-page-title__caption">@standard.Title — Theme @Model.ThemeId</div>
+        <h1 class="dfe-c-page-title__heading">@Model.Title</h1>
+        <p class="dfe-c-page-title__lede"><a class="govuk-link govuk-link--no-visited-state" href="@StdUrl()">Back to @standard.Title</a></p>
+    </div>
+
+    @if (ViewBag.AdminMessage != null)
+    {
+        <div class="govuk-notification-banner govuk-notification-banner--success" role="alert" style="margin-bottom:1.5rem;">
+            <div class="govuk-notification-banner__content"><p class="govuk-body">@ViewBag.AdminMessage</p></div>
+        </div>
+    }
+    @if (ViewBag.AdminError != null)
+    {
+        <div class="govuk-error-summary" role="alert" style="margin-bottom:1.5rem;">
+            <h2 class="govuk-error-summary__title">There is a problem</h2>
+            <div class="govuk-error-summary__body">@ViewBag.AdminError</div>
+        </div>
+    }
+
+    <div class="dfe-c-card dfe-c-mb-4" style="border:1px solid var(--grey-2);padding:1.25rem 1.5rem;background:var(--white);max-width:50rem;">
+        <dl class="govuk-summary-list govuk-!-margin-bottom-0">
+            <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">Theme ID</dt>
+                <dd class="govuk-summary-list__value">@Model.ThemeId</dd>
+            </div>
+            <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">Title</dt>
+                <dd class="govuk-summary-list__value">@Model.Title</dd>
+            </div>
+            <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">Description</dt>
+                <dd class="govuk-summary-list__value">@(string.IsNullOrWhiteSpace(Model.Description) ? "—" : Model.Description)</dd>
+            </div>
+        </dl>
+        <div class="govuk-button-group govuk-!-margin-top-4 govuk-!-margin-bottom-0">
+            <a href="@Url.Action("FsThemeEdit", "ModernAdmin", new { standardId = standard.Id, themeId = Model.ThemeId })" class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0">Edit theme</a>
+            <form method="post" action="@Url.Action("FsThemeDelete", "ModernAdmin", new { standardId = standard.Id, themeId = Model.ThemeId })" style="display:inline;">
+                @Html.AntiForgeryToken()
+                <button type="submit" class="govuk-button govuk-button--warning govuk-!-margin-bottom-0" data-confirm="Delete this theme and all its practice areas and criteria? This cannot be undone.">Delete</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="dfe-c-flex--between dfe-c-mb-2">
+        <h2 class="govuk-heading-m" style="margin:0;">Practice areas (@Model.PracticeAreas.Count)</h2>
+        <a class="govuk-button govuk-!-margin-bottom-0" href="@Url.Action("FsPracticeAreaCreate", "ModernAdmin", new { standardId = standard.Id, themeId = Model.ThemeId })">Add practice area</a>
+    </div>
+
+    <div class="dfe-c-table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th data-sort-bound="1" class="sortable">ID</th>
+                    <th>Title</th>
+                    <th>Criteria</th>
+                    <th><span class="govuk-visually-hidden">Actions</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (!Model.PracticeAreas.Any())
+                {
+                    <tr><td colspan="4" class="dfe-c-text-muted">No practice areas yet.</td></tr>
+                }
+                else
+                {
+                    foreach (var pa in Model.PracticeAreas.OrderBy(p => p.PracticeAreaId))
+                    {
+                        <tr>
+                            <td>@pa.PracticeAreaId</td>
+                            <td><strong>@pa.Title</strong></td>
+                            <td>@pa.Criteria.Count</td>
+                            <td style="text-align:right;white-space:nowrap;">
+                                <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("FsPracticeAreaDetail", "ModernAdmin", new { standardId = standard.Id, themeId = Model.ThemeId, paId = pa.Id })">Manage</a>
+                            </td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+</div>

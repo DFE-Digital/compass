@@ -1,0 +1,988 @@
+@model Compass.Models.Risk
+@using Compass.Models
+@using Compass.ViewModels.Modern
+@using System.Globalization
+@using System.Linq
+@{
+  string UserDisplayLine(User? u, string? fallbackWhenNoUser = null)
+  {
+    if (u != null)
+    {
+      if (!string.IsNullOrWhiteSpace(u.Name))
+        return u.Name.Trim();
+      var fl = string.Join(" ", new[] { u.FirstName, u.LastName }.Where(s => !string.IsNullOrWhiteSpace(s)));
+      if (!string.IsNullOrWhiteSpace(fl))
+        return fl;
+      if (!string.IsNullOrWhiteSpace(u.Email))
+        return u.Email;
+      if (!string.IsNullOrWhiteSpace(u.UserPrincipalName))
+        return u.UserPrincipalName;
+    }
+    if (!string.IsNullOrWhiteSpace(fallbackWhenNoUser))
+      return fallbackWhenNoUser;
+    return "—";
+  }
+
+  ViewData["Title"] = "Risk — " + Model.Title;
+  var wi = Model.ProjectId;
+  var activeTab = (ViewBag.ActiveTab as string ?? "detail").ToLowerInvariant();
+  var linkedIssues = ViewBag.LinkedIssues as IReadOnlyList<RiskLinkedIssueCardVm> ?? Array.Empty<RiskLinkedIssueCardVm>();
+  var orderedKris = Model.KeyRiskIndicators.OrderBy(k => k.SortOrder).ThenBy(k => k.Id).ToList();
+  var riskCatLabels = Model.RiskRiskCategories?
+    .Select(x => x.RiskCategory?.Label)
+    .Where(x => !string.IsNullOrWhiteSpace(x))
+    .Distinct()
+    .ToList() ?? new List<string?>();
+  if (riskCatLabels.Count == 0 && Model.RiskCategory?.Label != null)
+    riskCatLabels = new List<string?> { Model.RiskCategory.Label };
+
+  var divRegisterLabels = Model.RiskDivisions?
+    .Select(x => x.Division?.Name)
+    .Where(x => !string.IsNullOrWhiteSpace(x))
+    .ToList() ?? new List<string?>();
+  var baRegisterLabels = Model.RiskBusinessAreas?
+    .Select(x => x.BusinessAreaLookup?.Name)
+    .Where(x => !string.IsNullOrWhiteSpace(x))
+    .ToList() ?? new List<string?>();
+
+  var score = Model.RiskScore;
+  var ratingLabel = ViewBag.RatingLabel as string ?? "—";
+  var tierBadgeStep = ViewBag.TierBadgeStep is int ts ? ts : 2;
+  var openDurationText = ViewBag.OpenDurationText as string ?? "—";
+  var openedDate = Model.IdentifiedDate ?? Model.CreatedAt;
+  var openedDateUk = openedDate.ToString("d MMMM yyyy", CultureInfo.GetCultureInfo("en-GB"));
+
+  var teamLabel = Model.Project?.BusinessAreaLookup?.Name ?? Model.BusinessArea ?? "—";
+  var groupLabel = Model.Project?.PrimaryOrganizationalGroup?.Name ?? "—";
+  var ownerDisplay = UserDisplayLine(Model.OwnerUser, Model.OwnerEmail);
+  var sroDisplay = UserDisplayLine(Model.SroUser);
+  var createdByDisplay = UserDisplayLine(Model.CreatedByUser);
+  var updatedByDisplay = UserDisplayLine(Model.UpdatedByUser);
+
+  var riskStatusLabelForDisplay = (Model.RiskStatus?.Label ?? Model.Status ?? "").Trim();
+  string TierBadgeDisplayText() =>
+    Model.RiskTier == null
+      ? ""
+      : string.Equals(riskStatusLabelForDisplay, "Proposed", StringComparison.OrdinalIgnoreCase)
+        ? Model.RiskTier.Name.ToUpperInvariant() + " PROPOSED RISK"
+        : Model.RiskTier.Name.ToUpperInvariant();
+
+  /// <summary>GOV tag pill classes: Tier 1 (and "Tier 1 - Proposed") = red, Tier 2 / proposed = yellow, Tier 3 / proposed = green.</summary>
+  string TierTagClass() =>
+    Model.RiskTier == null
+      ? "dfe-c-tag dfe-c-tag--grey"
+      : tierBadgeStep switch
+      {
+        1 => "dfe-c-tag dfe-c-tag--red",
+        2 => "dfe-c-tag dfe-c-tag--yellow",
+        3 => "dfe-c-tag dfe-c-tag--green",
+        _ => "dfe-c-tag dfe-c-tag--amber"
+      };
+
+  string StatusTagClass()
+  {
+    var s = (Model.RiskStatus?.Label ?? Model.Status ?? "").ToLowerInvariant();
+    if (s.Contains("escalat")) return "dfe-c-tag dfe-c-tag--red";
+    if (s.Contains("closed")) return "dfe-c-tag dfe-c-tag--green";
+    return "dfe-c-tag dfe-c-tag--blue";
+  }
+
+  var ragBarCurrent = score >= 16 ? "var(--rag-r)" : score >= 11 ? "var(--rag-a)" : "var(--rag-g)";
+  const int riskScoreMax = 25;
+  var scoreBarPct = Math.Clamp(score <= 0 ? 0 : (double)score * 100.0 / riskScoreMax, 0, 100);
+
+  var linkedCmdbProductId = ViewBag.LinkedCmdbProductId as Guid?;
+  var linkedCmdbProductTitle = ViewBag.LinkedCmdbProductTitle as string;
+  var linkedCmdbPhaseName = ViewBag.LinkedCmdbPhaseName as string;
+
+  var mitigationRows = Model.RiskActions
+    .Where(ra => ra.Action != null && !ra.Action.IsDeleted)
+    .OrderBy(ra => ra.Action!.DueDate ?? DateTime.MaxValue)
+    .ThenBy(ra => ra.Action!.Id)
+    .ToList();
+  var riskHistory = ViewBag.RiskHistoryTimeline as IReadOnlyList<RiskAuditTimelineItemVm>
+    ?? Array.Empty<RiskAuditTimelineItemVm>();
+
+  var riskEditUrl = Url.Action("RiskEdit", "ModernRaid", new { id = Model.Id }) ?? "";
+  var mitigationsTabUrl = Url.Action("RiskDetail", "ModernRaid", new { id = Model.Id, tab = "mitigations" }) ?? "#";
+  var assocScopeSentence = Model.RaidAssociationKind switch
+  {
+    RaidAssociationKinds.WorkItem => "This risk is scoped to a work item.",
+    RaidAssociationKinds.Product => "This risk is scoped to a product (FIPS service).",
+    RaidAssociationKinds.Organisation => "This risk is organisation-wide.",
+    _ => null
+  };
+  var hasClassification =
+      riskCatLabels.Count > 0 ||
+      divRegisterLabels.Count > 0 ||
+      baRegisterLabels.Count > 0 ||
+      Model.GovernanceBoard != null;
+  var cspNonce = Context.Items["Nonce"]?.ToString() ?? "";
+
+  var riskAssocUi = (ViewBag.RiskAssociationUiKind as string ?? "work").Trim().ToLowerInvariant();
+  var riskLinkedAssocEditor = ViewBag.RiskLinkedAssociationEditor as bool? ?? false;
+  var linkPj = ViewBag.ProjectOptions as List<RiskIssueNamedIntOption> ?? new List<RiskIssueNamedIntOption>();
+  var linkFp = ViewBag.FipsProductOptions as List<RiskIssueNamedIntOption> ?? new List<RiskIssueNamedIntOption>();
+  var riskAssocUpdateUrl = Url.Action("RiskAssociationUpdate", "ModernRaid", new { id = Model.Id }) ?? "#";
+}
+
+@functions {
+  private static string ScoreStripSub(Risk r)
+  {
+    var imp = r.ImpactLevel?.Label ?? $"Impact {r.ImpactRating}";
+    var lik = r.Likelihood?.Label ?? $"Likelihood {r.LikelihoodRating}";
+    return $"{imp} × {lik}";
+  }
+
+  private static string LinkedPhaseCssSuffix(string? phaseName)
+  {
+    if (string.IsNullOrWhiteSpace(phaseName)) return "";
+    var n = phaseName.Trim().ToLowerInvariant();
+    if (n.Contains("public") && n.Contains("beta")) return "public-beta";
+    if (n.Contains("private") && n.Contains("beta")) return "private-beta";
+    if (n.Contains("live")) return "live";
+    if (n.Contains("discovery")) return "discovery";
+    if (n.Contains("alpha")) return "alpha";
+    if (n.Contains("retired")) return "retired";
+    if (n.Contains("explore")) return "explore";
+    return "";
+  }
+
+  private static string LinkedRagCssSuffix(string? ragName) => (ragName ?? "") switch
+  {
+    "Green" => "g",
+    "Amber-Green" => "ag",
+    "Amber" => "a",
+    "Amber-Red" => "ar",
+    "Red" => "r",
+    _ => ""
+  };
+
+  private static string LinkedIssueStatusTagClass(string? status)
+  {
+    var s = (status ?? "").ToLowerInvariant();
+    if (s.Contains("escalat")) return "dfe-c-tag dfe-c-tag--red";
+    if (s.Contains("closed") || s.Contains("resolved")) return "dfe-c-tag dfe-c-tag--green";
+    return "dfe-c-tag dfe-c-tag--blue";
+  }
+
+  private static string MitigationNormalizeStored(string? raw)
+  {
+    if (string.IsNullOrWhiteSpace(raw)) return "Not started";
+    var t = raw.Trim();
+    var l = t.ToLowerInvariant();
+    if (l is "not started" or "not_started" or "open") return "Not started";
+    if (l is "in progress" or "in_progress" or "progress") return "In progress";
+    if (l is "complete" or "completed" or "done") return "Complete";
+    if (l == "overdue") return "Overdue";
+    if (l.Contains("progress")) return "In progress";
+    if (l.Contains("complete")) return "Complete";
+    return t.Length > 0 ? t : "Not started";
+  }
+
+  private static string MitigationEffectiveSelectValue(Compass.Models.Action a)
+  {
+    var s = MitigationNormalizeStored(a.Status);
+    if (s == "Complete") return "Complete";
+    if (s == "Overdue") return "Overdue";
+    if (a.DueDate is DateTime d && d.Date < DateTime.UtcNow.Date && s != "Complete")
+      return "Overdue";
+    return s is "In progress" or "Not started" ? s : "Not started";
+  }
+
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="/modern/raid/dashboard">RAID</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="/modern/raid/risks">Risks</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">@Model.Title</li>
+}
+
+<div id="sc-risk-view" class="dfe-c-screen dfe-c-screen--active">
+<div class="modern-work-page">
+  @if (TempData["Message"] is string tm)
+  {
+    <div class="govuk-notification-banner govuk-notification-banner--success govuk-!-margin-bottom-4" role="region">
+      <div class="govuk-notification-banner__header"><h2 class="govuk-notification-banner__title">Success</h2></div>
+      <div class="govuk-notification-banner__content"><p class="govuk-notification-banner__heading">@tm</p></div>
+    </div>
+  }
+  @if (TempData["ErrorMessage"] is string em)
+  {
+    <div class="govuk-error-summary govuk-!-margin-bottom-4" role="alert" data-module="govuk-error-summary">
+      <h2 class="govuk-error-summary__title">There is a problem</h2>
+      <div class="govuk-error-summary__body">@em</div>
+    </div>
+  }
+
+  @{
+    var pendingRiskTierChange = ViewBag.PendingRiskTierChange as RiskPendingTierChangeVm;
+  }
+  @if (pendingRiskTierChange != null)
+  {
+    <div class="govuk-inset-text govuk-!-margin-bottom-4">
+      <p class="govuk-body govuk-!-margin-bottom-1"><strong>Pending tier change</strong></p>
+      <p class="govuk-body govuk-!-margin-bottom-2">@pendingRiskTierChange.RequestLine</p>
+      <p class="govuk-body-s govuk-!-margin-bottom-0" style="color: #505a5f;">
+        <a class="govuk-link" href="@(Url.Action("RaidEscalations", "ModernOperations", new { tab = "escalations" }) ?? "/modern/operations/raid/escalations")">View in Operations escalation queue</a>
+      </p>
+    </div>
+  }
+
+  <!-- Header strip -->
+  <p class="dfe-c-body govuk-!-margin-bottom-2">
+    <a href="/modern/raid/risks" class="dfe-c-link">← Back to risks register</a>
+  </p>
+  <div style="font-size:0.8125rem;color:var(--grey-4);margin-bottom:0.75rem;">
+    <span class="dfe-c-mono--inline">R-@Model.Id.ToString("D4")</span>
+  </div>
+  <div class="dfe-c-flex--between dfe-c-mb-2" style="flex-wrap:wrap;gap:1rem;align-items:flex-start;">
+    <div style="flex:1;min-width:min(100%, 18rem);">
+      <h1 class="dfe-c-page-title__heading" style="margin-bottom:0.375rem;">@Model.Title</h1>
+      <div class="dfe-c-flex" style="gap:0.5rem;flex-wrap:wrap;align-items:center;">
+        @if (Model.RiskTier != null)
+        {
+          <span class="@TierTagClass()">@TierBadgeDisplayText()</span>
+        }
+        else
+        {
+          <span class="dfe-c-tag dfe-c-tag--grey">UNASSIGNED</span>
+        }
+        <span class="@StatusTagClass()">@(Model.RiskStatus?.Label ?? Model.Status ?? "Open")</span>
+        @foreach (var c in riskCatLabels)
+        {
+          <span class="dfe-c-tag dfe-c-tag--teal">@c?.ToUpperInvariant()</span>
+        }
+        <span style="font-size:0.875rem;color:var(--grey-4);">
+          Proximity: @(Model.Proximity?.Label ?? "Not set")
+          <span aria-hidden="true">&nbsp;·&nbsp;</span>
+          Updated @Model.UpdatedAt.ToString("d MMM yyyy", CultureInfo.InvariantCulture) by @updatedByDisplay
+        </span>
+      </div>
+    </div>
+    <div class="dfe-c-flex" style="gap:0.5rem;flex-wrap:wrap;align-items:flex-start;flex-shrink:0;">
+      <a href="/modern/raid/risks/@Model.Id/escalation-request" class="govuk-button govuk-button--secondary">Escalate / de-escalate</a>
+      <a href="/modern/raid/risks/@Model.Id/edit" class="govuk-button">Edit risk</a>
+    </div>
+  </div>
+
+  <!-- Current risk rating (score 0–25 scale) -->
+  <div style="border:1px solid var(--grey-2);margin-bottom:1.5rem;background:var(--white);padding:0.875rem 1.125rem;">
+    <div style="font-size:0.6875rem;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;color:var(--grey-4);margin-bottom:0.5rem;">Current risk rating</div>
+    <div class="dfe-c-flex--between" style="flex-wrap:wrap;gap:0.75rem 1rem;align-items:flex-end;margin-bottom:0.75rem;">
+      <div>
+        <div style="font-size:1.5rem;font-weight:700;line-height:1.2;color:@ragBarCurrent;">@ratingLabel</div>
+        <div style="font-size:0.8125rem;color:var(--grey-4);margin-top:0.25rem;">@ScoreStripSub(Model)</div>
+      </div>
+      <div style="font-size:1.125rem;font-weight:700;color:var(--grey-4);white-space:nowrap;">@score / @riskScoreMax</div>
+    </div>
+    <div role="progressbar"
+         aria-valuemin="0"
+         aria-valuemax="@riskScoreMax"
+         aria-valuenow="@Math.Clamp(score, 0, riskScoreMax)"
+         aria-label="Inherent risk score @score out of @riskScoreMax">
+      <div style="display:flex;justify-content:space-between;font-size:0.75rem;color:var(--grey-4);margin-bottom:0.35rem;">
+        <span>0</span>
+        <span>@riskScoreMax</span>
+      </div>
+      <div style="position:relative;height:0.625rem;background:var(--grey-3);border-radius:4px;overflow:visible;">
+        <div style="height:100%;width:@scoreBarPct.ToString("0.#", CultureInfo.InvariantCulture)%;background:@ragBarCurrent;border-radius:4px;min-width:@(score > 0 ? "2px" : "0");transition:width 0.2s ease;"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="dfe-c-grid dfe-c-grid--content">
+    <div>
+      <div class="tabs" role="tablist" aria-label="Risk sections">
+        <a href="/modern/raid/risks/@Model.Id?tab=detail" class="tab @(activeTab == "detail" ? "on" : "")" role="tab" aria-selected="@(activeTab == "detail" ? "true" : "false")" aria-controls="risk-detail" id="tab-risk-detail">Risk detail</a>
+        <a href="/modern/raid/risks/@Model.Id?tab=kris" class="tab @(activeTab == "kris" ? "on" : "")" role="tab" aria-selected="@(activeTab == "kris" ? "true" : "false")" aria-controls="risk-key-risk-indicators" id="tab-risk-kris">Key risk indicators</a>
+        <a href="/modern/raid/risks/@Model.Id?tab=mitigations" class="tab @(activeTab == "mitigations" ? "on" : "")" role="tab" aria-selected="@(activeTab == "mitigations" ? "true" : "false")" aria-controls="risk-mitigations" id="tab-risk-mitigations">Mitigations</a>
+        <a href="/modern/raid/risks/@Model.Id?tab=linked" class="tab @(activeTab == "linked" ? "on" : "")" role="tab" aria-selected="@(activeTab == "linked" ? "true" : "false")" aria-controls="risk-linked" id="tab-risk-linked">Linked records</a>
+        <a href="/modern/raid/risks/@Model.Id?tab=history" class="tab @(activeTab == "history" ? "on" : "")" role="tab" aria-selected="@(activeTab == "history" ? "true" : "false")" aria-controls="risk-history" id="tab-risk-history">Update history</a>
+      </div>
+
+      <div id="risk-detail" class="tab-pane @(activeTab == "detail" ? "on" : "")" role="tabpanel" aria-labelledby="tab-risk-detail">
+        <dl class="govuk-summary-list govuk-!-margin-bottom-0">
+            <div class="govuk-summary-list__row">
+              <dt class="govuk-summary-list__key">Associated with</dt>
+              <dd class="govuk-summary-list__value">
+                @if (riskAssocUi == "product" && Model.PrimaryProductId is > 0 && Model.PrimaryProduct != null)
+                {
+                  var prodLabel = Model.PrimaryProduct?.DisplayName ?? Model.PrimaryProduct?.FipsId ?? "FIPS product";
+                  var prodManageHref = linkedCmdbProductId is Guid pGuid
+                    ? (Url.Action("FipsProduct", "ModernManage", new { id = pGuid }) ?? "#")
+                    : null;
+                  if (prodManageHref != null)
+                  {
+                    <a class="govuk-link" href="@prodManageHref">@prodLabel</a>
+                  }
+                  else
+                  {
+                    <span class="govuk-body">@prodLabel</span>
+                  }
+                }
+                else if (riskAssocUi == "work" && wi is int wkId && Model.Project != null)
+                {
+                  <a class="govuk-link" href="@Url.Action("Detail", "ModernWork", new { id = wkId, tab = "risks" })">@Model.Project.Title</a>
+                }
+                else
+                {
+                  <text>Organisation</text>
+                }
+              </dd>
+              <dd class="govuk-summary-list__actions">
+                <a class="govuk-link" href="@($"{riskEditUrl}#AssociationKind")">Change<span class="govuk-visually-hidden"> associated with</span></a>
+              </dd>
+            </div>
+            <div class="govuk-summary-list__row">
+              <dt class="govuk-summary-list__key">Description</dt>
+              <dd class="govuk-summary-list__value">@if (string.IsNullOrWhiteSpace(Model.Description)) { <text>—</text> } else { <span class="govuk-body" style="white-space:pre-wrap;">@Model.Description</span> }</dd>
+              <dd class="govuk-summary-list__actions">
+                <a class="govuk-link" href="@($"{riskEditUrl}#raid-risk-edit-description")">Change<span class="govuk-visually-hidden"> description</span></a>
+              </dd>
+            </div>
+            <div class="govuk-summary-list__row">
+              <dt class="govuk-summary-list__key">Cause</dt>
+              <dd class="govuk-summary-list__value">@if (string.IsNullOrWhiteSpace(Model.Cause)) { <text>—</text> } else { <span class="govuk-body" style="white-space:pre-wrap;">@Model.Cause</span> }</dd>
+              <dd class="govuk-summary-list__actions">
+                <a class="govuk-link" href="@($"{riskEditUrl}#raid-risk-edit-cause")">Change<span class="govuk-visually-hidden"> cause</span></a>
+              </dd>
+            </div>
+            <div class="govuk-summary-list__row">
+              <dt class="govuk-summary-list__key">Impact if realised</dt>
+              <dd class="govuk-summary-list__value">@if (string.IsNullOrWhiteSpace(Model.ImpactIfRealised)) { <text>—</text> } else { <span class="govuk-body" style="white-space:pre-wrap;">@Model.ImpactIfRealised</span> }</dd>
+              <dd class="govuk-summary-list__actions">
+                <a class="govuk-link" href="@($"{riskEditUrl}#raid-risk-edit-impact-realised")">Change<span class="govuk-visually-hidden"> impact if realised</span></a>
+              </dd>
+            </div>
+            <div class="govuk-summary-list__row">
+              <dt class="govuk-summary-list__key">Treatment / mitigation</dt>
+              <dd class="govuk-summary-list__value">
+                @if (string.IsNullOrWhiteSpace(Model.Response) && string.IsNullOrWhiteSpace(Model.ResponseStrategy) && string.IsNullOrWhiteSpace(Model.Notes))
+                {
+                  <text>—</text>
+                }
+                else
+                {
+                  @if (!string.IsNullOrWhiteSpace(Model.Response))
+                  {
+                    <p class="govuk-body govuk-!-margin-bottom-1"><strong>Treatment:</strong> @Model.Response</p>
+                  }
+                  @if (!string.IsNullOrWhiteSpace(Model.ResponseStrategy) || !string.IsNullOrWhiteSpace(Model.Notes))
+                  {
+                    <p class="govuk-body govuk-!-margin-bottom-0" style="white-space:pre-wrap;"><strong>Mitigation:</strong> @(Model.ResponseStrategy ?? Model.Notes)</p>
+                  }
+                }
+              </dd>
+              <dd class="govuk-summary-list__actions">
+                <a class="govuk-link" href="@($"{riskEditUrl}#raid-risk-edit-mitigation")">Change<span class="govuk-visually-hidden"> treatment or mitigation</span></a>
+              </dd>
+            </div>
+            <div class="govuk-summary-list__row">
+              <dt class="govuk-summary-list__key">Identified</dt>
+              <dd class="govuk-summary-list__value">@((Model.IdentifiedDate ?? Model.CreatedAt).ToString("d MMMM yyyy", CultureInfo.GetCultureInfo("en-GB")))</dd>
+              <dd class="govuk-summary-list__actions">
+                <a class="govuk-link" href="@($"{riskEditUrl}#raid-risk-edit-identified")">Change<span class="govuk-visually-hidden"> identified date</span></a>
+              </dd>
+            </div>
+            <div class="govuk-summary-list__row">
+              <dt class="govuk-summary-list__key">Next review</dt>
+              <dd class="govuk-summary-list__value">@(Model.NextReviewDate?.ToString("d MMMM yyyy", CultureInfo.GetCultureInfo("en-GB")) ?? "—")</dd>
+              <dd class="govuk-summary-list__actions">
+                <a class="govuk-link" href="@($"{riskEditUrl}#raid-risk-edit-nextreview")">Change<span class="govuk-visually-hidden"> next review</span></a>
+              </dd>
+            </div>
+          </dl>
+      </div>
+
+      <div id="risk-key-risk-indicators" class="tab-pane @(activeTab == "kris" ? "on" : "")" role="tabpanel" aria-labelledby="tab-risk-kris">
+        <div class="dfe-c-flex--between dfe-c-mb-2" style="align-items:center;flex-wrap:wrap;gap:0.75rem;">
+          <h2 class="govuk-heading-m" style="margin:0;font-size:1rem;">Key risk indicators</h2>
+          <button type="button" class="govuk-button" data-module="govuk-button" id="raid-kri-add-toggle">+ Add KRI</button>
+        </div>
+
+        <div id="raid-kri-add-form" class="govuk-!-margin-bottom-6" style="display:none;">
+          <h3 class="govuk-heading-s">Add key risk indicator</h3>
+          <form method="post" action="@Url.Action("RiskKeyRiskIndicatorAdd", "ModernRaid", new { riskId = Model.Id })" novalidate>
+            @Html.AntiForgeryToken()
+            <div class="govuk-form-group">
+              <label class="govuk-label govuk-label--s" for="raid-kri-title">Title <span class="govuk-visually-hidden">(required)</span></label>
+              <input class="govuk-input govuk-!-width-full" id="raid-kri-title" name="title" type="text" maxlength="300" required autocomplete="off" />
+            </div>
+            <div class="govuk-form-group">
+              <label class="govuk-label govuk-label--s" for="raid-kri-desc">Description</label>
+              <div id="raid-kri-desc-hint" class="govuk-hint">What this indicator represents for the risk.</div>
+              <textarea class="govuk-textarea govuk-!-width-full" id="raid-kri-desc" name="description" rows="4" aria-describedby="raid-kri-desc-hint"></textarea>
+            </div>
+            <div class="govuk-form-group">
+              <label class="govuk-label govuk-label--s" for="raid-kri-metric">Metric</label>
+              <div id="raid-kri-metric-hint" class="govuk-hint">What you measure, units, thresholds, or reporting frequency.</div>
+              <textarea class="govuk-textarea govuk-!-width-full" id="raid-kri-metric" name="metric" rows="3" maxlength="2000" aria-describedby="raid-kri-metric-hint"></textarea>
+            </div>
+            <div class="govuk-button-group">
+              <button type="submit" class="govuk-button" data-module="govuk-button">Add</button>
+              <button type="button" class="govuk-button govuk-button--secondary" data-module="govuk-button" id="raid-kri-add-cancel">Cancel</button>
+            </div>
+          </form>
+        </div>
+
+        @if (orderedKris.Count > 0)
+        {
+          <div class="dfe-c-table-wrap">
+            <table id="raid-risk-kri-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Title</th>
+                  <th>Description</th>
+                  <th>Metric</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                @{ var kriIdx = 0; }
+                @foreach (var k in orderedKris)
+                {
+                  kriIdx++;
+                  var descCell = string.IsNullOrWhiteSpace(k.Description) ? "—" : k.Description;
+                  var metricCell = string.IsNullOrWhiteSpace(k.Metric) ? "—" : k.Metric;
+                  <tr>
+                    <td>@kriIdx</td>
+                    <td>
+                      <div style="font-weight:600;white-space:pre-wrap;">@k.Title</div>
+                    </td>
+                    <td>
+                      <div class="govuk-body-s" style="white-space:pre-wrap;max-width:24rem;">@descCell</div>
+                    </td>
+                    <td>
+                      <div class="govuk-body-s" style="white-space:pre-wrap;max-width:24rem;">@metricCell</div>
+                    </td>
+                    <td>
+                      <form method="post"
+                            action="@Url.Action("RiskKeyRiskIndicatorRemove", "ModernRaid", new { riskId = Model.Id, kriId = k.Id })"
+                            data-confirm-title="Remove key risk indicator"
+                            data-confirm-message="Remove this indicator? This cannot be undone."
+                            class="govuk-!-margin-bottom-0">
+                        @Html.AntiForgeryToken()
+                        <button type="submit" class="govuk-button govuk-button--warning govuk-button--small" data-module="govuk-button">Remove<span class="govuk-visually-hidden"> indicator @kriIdx</span></button>
+                      </form>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+        else
+        {
+          <p class="govuk-body">No key risk indicators yet. Use <strong>Add KRI</strong> to record title, description, and metric.</p>
+        }
+
+        <script nonce="@cspNonce">
+          (function () {
+            var addBox = document.getElementById('raid-kri-add-form');
+            var addBtn = document.getElementById('raid-kri-add-toggle');
+            var addCancel = document.getElementById('raid-kri-add-cancel');
+            function toggleAdd() {
+              if (!addBox) return;
+              addBox.style.display = addBox.style.display === 'none' || addBox.style.display === '' ? 'block' : 'none';
+            }
+            if (addBtn) addBtn.addEventListener('click', toggleAdd);
+            if (addCancel) addCancel.addEventListener('click', function () { if (addBox) addBox.style.display = 'none'; });
+          })();
+        </script>
+      </div>
+
+      <div id="risk-mitigations" class="tab-pane @(activeTab == "mitigations" ? "on" : "")" role="tabpanel" aria-labelledby="tab-risk-mitigations">
+        <div class="dfe-c-flex--between dfe-c-mb-2" style="align-items:center;flex-wrap:wrap;gap:0.75rem;">
+          <h2 class="govuk-heading-m" style="margin:0;font-size:1rem;">Mitigation actions</h2>
+          <button type="button" class="govuk-button" data-module="govuk-button" id="raid-mit-add-toggle">Add mitigation</button>
+        </div>
+
+        <div id="raid-mit-add-form" class="govuk-!-margin-bottom-6" style="display:none;">
+          <h3 class="govuk-heading-s">Add mitigation action</h3>
+          <form method="post" action="@Url.Action("RiskMitigationAdd", "ModernRaid", new { riskId = Model.Id })" novalidate>
+            @Html.AntiForgeryToken()
+            <div class="govuk-form-group">
+              <label class="govuk-label govuk-label--s" for="raid-mit-new-desc">Action <span class="govuk-visually-hidden">(required)</span></label>
+              <div id="raid-mit-new-desc-hint" class="govuk-hint">Use “We are” or “We will” language. Must be funded and resourced.</div>
+              <textarea class="govuk-textarea govuk-!-width-full" id="raid-mit-new-desc" name="title" rows="5" maxlength="450" aria-describedby="raid-mit-new-desc-hint" placeholder="e.g. We will implement multi-AZ cloud redundancy"></textarea>
+            </div>
+            <div class="user-picker-wrapper user-picker-wrapper--full-width">
+              @{
+                var mitAddPicker = ViewBag.MitigationAddOwnerUserPicker as UserPickerViewModel;
+              }
+              @if (mitAddPicker != null)
+              {
+                @await Html.PartialAsync("~/Views/Shared/_UserPicker.cshtml", mitAddPicker)
+              }
+            </div>
+            <div class="govuk-form-group">
+              <label class="govuk-label govuk-label--s" for="raid-mit-new-date">Target date <span class="govuk-visually-hidden">(required)</span></label>
+              <input class="govuk-input govuk-input--width-10" type="date" id="raid-mit-new-date" name="targetDate" autocomplete="off" />
+            </div>
+            <div class="govuk-button-group">
+              <button type="submit" class="govuk-button" data-module="govuk-button">Add</button>
+              <button type="button" class="govuk-button govuk-button--secondary" data-module="govuk-button" id="raid-mit-add-cancel">Cancel</button>
+            </div>
+          </form>
+        </div>
+
+        @if (mitigationRows.Count > 0)
+        {
+          <div class="dfe-c-table-wrap">
+            <table id="raid-risk-actions-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Action</th>
+                  <th>Owner</th>
+                  <th>Target date</th>
+                  <th>Status</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                @{ var mi = 0; }
+                @foreach (var ra in mitigationRows)
+                {
+                  mi++;
+                  var a = ra.Action!;
+                  var ef = MitigationEffectiveSelectValue(a);
+                  var ownerDisp = a.AssignedToUser?.Name ?? a.AssignedToEmail ?? "—";
+                  var dueDisp = a.DueDate?.ToString("d MMM yyyy", CultureInfo.InvariantCulture) ?? "—";
+                  <tr>
+                    <td>@mi</td>
+                    <td>
+                      <div style="font-weight:600;white-space:pre-wrap;">@a.Title</div>
+                    </td>
+                    <td>@ownerDisp</td>
+                    <td>@dueDisp</td>
+                    <td><span class="dfe-c-tag dfe-c-tag--blue">@ef</span></td>
+                    <td>
+                      <a class="govuk-link govuk-link--no-visited-state govuk-!-font-weight-bold" href="@Url.Action("MitigationEdit", "ModernRaid", new { riskId = Model.Id, actionId = a.Id })">Edit<span class="govuk-visually-hidden"> mitigation @mi</span></a>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+        else
+        {
+          <p class="govuk-body">No mitigation actions yet. Use <strong>Add mitigation</strong> to record actions that reduce likelihood or impact.</p>
+        }
+
+        <script nonce="@cspNonce">
+          (function () {
+            var addBox = document.getElementById('raid-mit-add-form');
+            var addBtn = document.getElementById('raid-mit-add-toggle');
+            var addCancel = document.getElementById('raid-mit-add-cancel');
+            function toggleAdd() {
+              if (!addBox) return;
+              addBox.style.display = addBox.style.display === 'none' || addBox.style.display === '' ? 'block' : 'none';
+            }
+            if (addBtn) addBtn.addEventListener('click', toggleAdd);
+            if (addCancel) addCancel.addEventListener('click', function () { if (addBox) addBox.style.display = 'none'; });
+          })();
+        </script>
+      </div>
+
+      <div id="risk-linked" class="tab-pane @(activeTab == "linked" ? "on" : "")" role="tabpanel" aria-labelledby="tab-risk-linked">
+        <div style="display:flex;flex-direction:column;gap:1.25rem;">
+          <p class="govuk-body govuk-!-margin-bottom-0">
+            This tab shows how this risk is anchored in the register — its <strong>primary</strong> work item or FIPS product (if any), plus related issues and mitigations. Use the form below to add, change, or remove that primary link without opening the full edit screen.
+          </p>
+          @if (!string.IsNullOrWhiteSpace(assocScopeSentence))
+          {
+            <p class="govuk-body-s govuk-!-margin-bottom-0" style="color:var(--grey-4);">@assocScopeSentence</p>
+          }
+
+          <section aria-labelledby="risk-linked-primary-heading">
+            <div class="dfe-c-flex--between govuk-!-margin-bottom-2" style="align-items:flex-start;flex-wrap:wrap;gap:0.75rem;">
+              <h2 id="risk-linked-primary-heading" class="govuk-heading-s govuk-!-margin-bottom-0">Primary register link</h2>
+              <a class="govuk-link govuk-link--no-visited-state govuk-!-font-weight-bold govuk-body-s" href="@riskEditUrl">Open full edit risk form</a>
+            </div>
+            <p class="govuk-hint govuk-!-margin-top-0">Each risk has exactly one primary scope: one work item, one FIPS product, or organisation-wide (no specific record).</p>
+
+            <div class="govuk-!-margin-bottom-3" style="display:flex;flex-wrap:wrap;gap:0.5rem;align-items:center;">
+              @if (riskAssocUi == "work" && wi.HasValue && Model.Project != null)
+              {
+                <span class="dfe-c-tag dfe-c-tag--navy">Work item</span>
+                <span class="govuk-body-s govuk-!-margin-bottom-0">Anchored to a delivery work item.</span>
+              }
+              else if (riskAssocUi == "product" && Model.PrimaryProductId.HasValue && Model.PrimaryProduct != null)
+              {
+                <span class="dfe-c-tag dfe-c-tag--teal">FIPS product</span>
+                <span class="govuk-body-s govuk-!-margin-bottom-0">Anchored to a service in the FIPS product register.</span>
+              }
+              else
+              {
+                <span class="dfe-c-tag dfe-c-tag--grey">Organisation-wide</span>
+                <span class="govuk-body-s govuk-!-margin-bottom-0">Not tied to a specific work item or product.</span>
+              }
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:1rem;">
+              @if (riskAssocUi == "work" && wi.HasValue && Model.Project != null)
+              {
+                var wproj = Model.Project;
+                var wPhase = wproj.PhaseLookup?.Name;
+                var wPhaseSuf = LinkedPhaseCssSuffix(wPhase);
+                var wRag = wproj.RagStatusLookup?.Name;
+                var wRagSuf = LinkedRagCssSuffix(wRag);
+                <div style="background:var(--white);border:1px solid var(--grey-2);border-radius:4px;border-left:4px solid var(--navy);padding:1rem 1.125rem;display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:0.75rem;">
+                  <div style="flex:1;min-width:min(100%,14rem);">
+                    <div style="font-size:0.75rem;color:var(--grey-4);text-transform:uppercase;font-weight:700;letter-spacing:0.03em;margin-bottom:0.35rem;">Linked work item</div>
+                    <a class="govuk-link govuk-link--no-visited-state" style="font-size:1.125rem;font-weight:700;line-height:1.3;" href="@Url.Action("Detail", "ModernWork", new { id = wi.Value, tab = "risks" })">@wproj.Title</a>
+                    <span class="dfe-c-table-ref govuk-!-margin-left-1">@wproj.ProjectCode</span>
+                    @if (!string.IsNullOrWhiteSpace(wproj.Aim))
+                    {
+                      var aimTrim = wproj.Aim!.Length > 220 ? wproj.Aim[..220] + "…" : wproj.Aim;
+                      <div class="govuk-body-s govuk-!-margin-top-2 govuk-!-margin-bottom-0" style="color:var(--grey-4);line-height:1.45;">@aimTrim</div>
+                    }
+                    <div class="dfe-c-kv govuk-!-margin-top-2 govuk-!-margin-bottom-0" style="font-size:0.875rem;">
+                      <div class="dfe-c-kv"><span class="dfe-c-kv__k">Business area</span><span class="dfe-c-kv__v">@(wproj.BusinessAreaLookup?.Name ?? teamLabel)</span></div>
+                      <div class="dfe-c-kv"><span class="dfe-c-kv__k">Portfolio / group</span><span class="dfe-c-kv__v">@(wproj.PrimaryOrganizationalGroup?.Name ?? groupLabel)</span></div>
+                      <div class="dfe-c-kv"><span class="dfe-c-kv__k">Work status</span><span class="dfe-c-kv__v">@(wproj.Status ?? "—")</span></div>
+                      <div class="dfe-c-kv"><span class="dfe-c-kv__k">Target delivery</span><span class="dfe-c-kv__v">@(wproj.TargetDeliveryDate?.ToString("d MMM yyyy", CultureInfo.InvariantCulture) ?? "—")</span></div>
+                      @if (wproj.DeliveryPriority != null)
+                      {
+                        <div class="dfe-c-kv"><span class="dfe-c-kv__k">Delivery priority</span><span class="dfe-c-kv__v">@wproj.DeliveryPriority.Name</span></div>
+                      }
+                    </div>
+                  </div>
+                  <div style="display:flex;flex-direction:column;align-items:flex-end;gap:0.5rem;flex-shrink:0;">
+                    @if (!string.IsNullOrEmpty(wPhaseSuf))
+                    {
+                      <span class="dfe-c-phase dfe-c-phase--@wPhaseSuf">@(wPhase ?? "—").ToUpperInvariant()</span>
+                    }
+                    else if (!string.IsNullOrWhiteSpace(wPhase))
+                    {
+                      <span class="dfe-c-phase">@wPhase.ToUpperInvariant()</span>
+                    }
+                    @if (!string.IsNullOrEmpty(wRagSuf))
+                    {
+                      <span class="dfe-c-rag dfe-c-rag--@wRagSuf">@(wRag ?? "—").ToUpperInvariant()</span>
+                    }
+                    else if (!string.IsNullOrWhiteSpace(wRag))
+                    {
+                      <span class="dfe-c-rag dfe-c-rag--tbc">@wRag.ToUpperInvariant()</span>
+                    }
+                  </div>
+                </div>
+              }
+              else if (riskAssocUi == "work" && wi.HasValue)
+              {
+                <p class="govuk-body govuk-!-margin-bottom-0">Work item ID @wi.Value is stored on this risk, but details could not be loaded.</p>
+              }
+
+              @if (riskAssocUi == "product" && Model.PrimaryProductId.HasValue && Model.PrimaryProduct != null)
+              {
+                var svc = Model.PrimaryProduct;
+                var prodTitle = !string.IsNullOrWhiteSpace(linkedCmdbProductTitle) ? linkedCmdbProductTitle! : (svc.DisplayName ?? svc.FipsId);
+                var prodPhase = linkedCmdbPhaseName;
+                var prodPhaseSuf = LinkedPhaseCssSuffix(prodPhase);
+                var prodRef = string.IsNullOrWhiteSpace(svc.FipsId)
+                  ? $"SRV-{svc.ServiceId}"
+                  : (svc.FipsId.StartsWith("FIPS-", StringComparison.OrdinalIgnoreCase) ? svc.FipsId : $"FIPS-{svc.FipsId}");
+                var prodHref = linkedCmdbProductId is Guid pg
+                  ? Url.Action("FipsProduct", "ModernManage", new { id = pg }) ?? "#"
+                  : null;
+                <div style="background:var(--white);border:1px solid var(--grey-2);border-radius:4px;border-left:4px solid var(--teal);padding:1rem 1.125rem;display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:0.75rem;">
+                  <div style="flex:1;min-width:min(100%,14rem);">
+                    <div style="font-size:0.75rem;color:var(--grey-4);text-transform:uppercase;font-weight:700;letter-spacing:0.03em;margin-bottom:0.35rem;">Linked FIPS product</div>
+                    @if (prodHref != null)
+                    {
+                      <a class="govuk-link govuk-link--no-visited-state" style="font-size:1.125rem;font-weight:700;line-height:1.3;" href="@prodHref">@prodTitle</a>
+                    }
+                    else
+                    {
+                      <span style="font-size:1.125rem;font-weight:700;line-height:1.3;">@prodTitle</span>
+                    }
+                    <span class="dfe-c-table-ref govuk-!-margin-left-1">@prodRef</span>
+                    <div class="dfe-c-kv govuk-!-margin-top-2 govuk-!-margin-bottom-0" style="font-size:0.875rem;">
+                      <div class="dfe-c-kv"><span class="dfe-c-kv__k">Service register</span><span class="dfe-c-kv__v">@(linkedCmdbProductId.HasValue ? "Linked to CMDB product" : "Service row — enrich from FIPS register where available")</span></div>
+                      <div class="dfe-c-kv"><span class="dfe-c-kv__k">Active</span><span class="dfe-c-kv__v">@(svc.IsActive ? "Yes" : "No")</span></div>
+                    </div>
+                  </div>
+                  <div style="flex-shrink:0;">
+                    @if (!string.IsNullOrEmpty(prodPhaseSuf))
+                    {
+                      <span class="dfe-c-phase dfe-c-phase--@prodPhaseSuf">@(prodPhase ?? "—").ToUpperInvariant()</span>
+                    }
+                    else if (!string.IsNullOrWhiteSpace(prodPhase))
+                    {
+                      <span class="dfe-c-phase">@prodPhase.ToUpperInvariant()</span>
+                    }
+                    else
+                    {
+                      <span class="dfe-c-tag dfe-c-tag--grey">Phase not set</span>
+                    }
+                  </div>
+                </div>
+              }
+
+              @if (riskAssocUi == "organisation")
+              {
+                <div class="govuk-inset-text govuk-!-margin-bottom-0">
+                  <p class="govuk-body govuk-!-margin-bottom-0">This risk is <strong>organisation-wide</strong> — it is not scoped to a single work item or product.@if (riskLinkedAssocEditor) {<text> Use <strong>Change primary link</strong> below to attach one if needed.</text>}</p>
+                </div>
+              }
+            </div>
+
+            @if (riskLinkedAssocEditor)
+            {
+              <div class="govuk-!-margin-top-4" style="border:1px solid var(--grey-2);border-radius:4px;padding:1.25rem;background:var(--grey-1);">
+                <h3 class="govuk-heading-s govuk-!-margin-top-0">Change primary link</h3>
+                <form method="post" action="@riskAssocUpdateUrl" class="govuk-!-margin-bottom-0">
+                  @Html.AntiForgeryToken()
+                  <div class="govuk-form-group govuk-!-margin-bottom-4" id="raid-risk-linked-association">
+                    <fieldset class="govuk-fieldset" aria-describedby="raid-risk-linked-association-hint">
+                      <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Associate this risk with</legend>
+                      <div id="raid-risk-linked-association-hint" class="govuk-hint">Choose one option, then save. This replaces the current primary link.</div>
+                      <div class="govuk-radios" data-module="govuk-radios">
+                        <div class="govuk-radios__item">
+                          <input class="govuk-radios__input" id="raid-risk-linked-assoc-work" name="AssociationKind" type="radio" value="work" data-aria-controls="conditional-raid-risk-linked-assoc-work" @(riskAssocUi == "work" ? "checked" : null) />
+                          <label class="govuk-label govuk-radios__label" for="raid-risk-linked-assoc-work">Work item</label>
+                        </div>
+                        <div class="govuk-radios__conditional@(riskAssocUi != "work" ? " govuk-radios__conditional--hidden" : null)" id="conditional-raid-risk-linked-assoc-work">
+                          <div class="govuk-form-group govuk-!-margin-bottom-0">
+                            <label class="govuk-label" for="raid-risk-linked-ProjectId">Work item</label>
+                            <select class="govuk-select govuk-!-width-full" id="raid-risk-linked-ProjectId" name="ProjectId">
+                              <option value="">— Select —</option>
+                              @foreach (var o in linkPj)
+                              {
+                                if (Model.ProjectId == o.Id) { <option value="@o.Id" selected>@o.Name</option> }
+                                else { <option value="@o.Id">@o.Name</option> }
+                              }
+                            </select>
+                          </div>
+                        </div>
+
+                        <div class="govuk-radios__item">
+                          <input class="govuk-radios__input" id="raid-risk-linked-assoc-product" name="AssociationKind" type="radio" value="product" data-aria-controls="conditional-raid-risk-linked-assoc-product" @(riskAssocUi == "product" ? "checked" : null) />
+                          <label class="govuk-label govuk-radios__label" for="raid-risk-linked-assoc-product">Product (FIPS)</label>
+                        </div>
+                        <div class="govuk-radios__conditional@(riskAssocUi != "product" ? " govuk-radios__conditional--hidden" : null)" id="conditional-raid-risk-linked-assoc-product">
+                          <div class="govuk-form-group govuk-!-margin-bottom-0">
+                            <label class="govuk-label" for="raid-risk-linked-PrimaryProductId">FIPS product</label>
+                            <select class="govuk-select govuk-!-width-full" id="raid-risk-linked-PrimaryProductId" name="PrimaryProductId">
+                              <option value="">— Select —</option>
+                              @foreach (var o in linkFp)
+                              {
+                                if (Model.PrimaryProductId == o.Id) { <option value="@o.Id" selected>@o.Name</option> }
+                                else { <option value="@o.Id">@o.Name</option> }
+                              }
+                            </select>
+                          </div>
+                        </div>
+
+                        <div class="govuk-radios__item">
+                          <input class="govuk-radios__input" id="raid-risk-linked-assoc-org" name="AssociationKind" type="radio" value="organisation" data-aria-controls="conditional-raid-risk-linked-assoc-org" @(riskAssocUi == "organisation" ? "checked" : null) />
+                          <label class="govuk-label govuk-radios__label" for="raid-risk-linked-assoc-org">Organisation-wide</label>
+                        </div>
+                        <div class="govuk-radios__conditional@(riskAssocUi != "organisation" ? " govuk-radios__conditional--hidden" : null)" id="conditional-raid-risk-linked-assoc-org">
+                          <div class="govuk-form-group govuk-!-margin-bottom-0">
+                            <div class="govuk-inset-text govuk-!-margin-bottom-0">No work item or product. Use for cross-cutting risks (people, funding, policy, etc.).</div>
+                          </div>
+                        </div>
+                      </div>
+                    </fieldset>
+                  </div>
+                  <button type="submit" class="govuk-button" data-module="govuk-button">Save primary link</button>
+                </form>
+
+                @if (riskAssocUi != "organisation")
+                {
+                  <form method="post" action="@riskAssocUpdateUrl" class="govuk-!-margin-top-3 govuk-!-padding-top-3" style="border-top:1px solid var(--grey-2);">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="AssociationKind" value="organisation" />
+                    <p class="govuk-body-s govuk-!-margin-bottom-2">Remove the work item or product link and mark this risk as organisation-wide.</p>
+                    <button type="submit" class="govuk-button govuk-button--warning">Remove primary link</button>
+                  </form>
+                }
+              </div>
+            }
+          </section>
+
+          @if (linkedIssues.Any())
+          {
+            <section aria-labelledby="risk-linked-issues-heading">
+              <h2 id="risk-linked-issues-heading" class="govuk-heading-s govuk-!-margin-bottom-2">Linked issues (@linkedIssues.Count)</h2>
+              <div style="display:flex;flex-direction:column;gap:0.75rem;">
+                @foreach (var issue in linkedIssues)
+                {
+                  var st = issue.Status ?? "";
+                  var sev = issue.Severity;
+                  var pri = issue.Priority;
+                  <div style="background:var(--white);border:1px solid var(--grey-2);border-left:4px solid var(--rag-r);padding:0.875rem 1.125rem;display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:0.75rem;">
+                    <div style="flex:1;min-width:min(100%,14rem);">
+                      <div style="font-size:0.75rem;color:var(--grey-4);text-transform:uppercase;font-weight:700;margin-bottom:0.25rem;">Issue · @issue.LinkRelationship</div>
+                      <a class="govuk-link govuk-link--no-visited-state" style="font-weight:700;" href="@(Url.Action("IssueDetail", "ModernRaid", new { id = issue.Id }) ?? "#")">@issue.Title</a>
+                      <span class="dfe-c-table-ref govuk-!-margin-left-1">I-@(issue.Id.ToString("D4"))</span>
+                      <div class="dfe-c-kv govuk-!-margin-top-2 govuk-!-margin-bottom-0" style="font-size:0.875rem;">
+                        @if (!string.IsNullOrWhiteSpace(sev))
+                        {
+                          <div class="dfe-c-kv"><span class="dfe-c-kv__k">Severity</span><span class="dfe-c-kv__v">@sev</span></div>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(pri))
+                        {
+                          <div class="dfe-c-kv"><span class="dfe-c-kv__k">Priority</span><span class="dfe-c-kv__v">@pri</span></div>
+                        }
+                        <div class="dfe-c-kv"><span class="dfe-c-kv__k">Updated</span><span class="dfe-c-kv__v">@issue.UpdatedAt.ToString("d MMM yyyy", CultureInfo.InvariantCulture)</span></div>
+                      </div>
+                    </div>
+                    <div style="flex-shrink:0;">
+                      <span class="@LinkedIssueStatusTagClass(st)">@(string.IsNullOrWhiteSpace(st) ? "—" : st.ToUpperInvariant())</span>
+                    </div>
+                  </div>
+                }
+              </div>
+            </section>
+          }
+
+          <section aria-labelledby="risk-linked-actions-heading">
+            <h2 id="risk-linked-actions-heading" class="govuk-heading-s govuk-!-margin-bottom-2">Mitigation actions (@mitigationRows.Count)</h2>
+            @if (mitigationRows.Count > 0)
+            {
+              <div style="display:flex;flex-direction:column;gap:0.75rem;">
+                @foreach (var ra in mitigationRows)
+                {
+                  var act = ra.Action!;
+                  var due = act.DueDate?.ToString("d MMM yyyy", CultureInfo.InvariantCulture) ?? "—";
+                  var prog = MitigationNormalizeStored(act.Status);
+                  <div style="background:var(--white);border:1px solid var(--grey-2);border-left:4px solid var(--rag-g);padding:0.875rem 1.125rem;display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:0.75rem;">
+                    <div style="flex:1;min-width:min(100%,14rem);">
+                      <div style="font-size:0.75rem;color:var(--grey-4);text-transform:uppercase;font-weight:700;margin-bottom:0.25rem;">Mitigation action</div>
+                      <span style="font-weight:700;">@act.Title</span>
+                      <span class="dfe-c-table-ref govuk-!-margin-left-1">A-@(act.Id.ToString("D4"))</span>
+                      <div class="dfe-c-kv govuk-!-margin-top-2 govuk-!-margin-bottom-0" style="font-size:0.875rem;">
+                        <div class="dfe-c-kv"><span class="dfe-c-kv__k">Due</span><span class="dfe-c-kv__v">@due</span></div>
+                        <div class="dfe-c-kv"><span class="dfe-c-kv__k">Progress</span><span class="dfe-c-kv__v">@act.ProgressPercent%</span></div>
+                      </div>
+                    </div>
+                    <div style="flex-shrink:0;display:flex;flex-direction:column;align-items:flex-end;gap:0.5rem;">
+                      <a class="govuk-link govuk-!-font-weight-bold" href="@Url.Action("MitigationEdit", "ModernRaid", new { riskId = Model.Id, actionId = act.Id })">Edit</a>
+                      <span class="dfe-c-tag dfe-c-tag--blue">@prog.ToUpperInvariant()</span>
+                    </div>
+                  </div>
+                }
+              </div>
+              <p class="govuk-body-s govuk-!-margin-top-3 govuk-!-margin-bottom-0">
+                <a class="govuk-link govuk-link--no-visited-state" href="@mitigationsTabUrl">Edit actions on the Mitigations tab</a>
+              </p>
+            }
+            else
+            {
+              <p class="govuk-body-s govuk-!-margin-bottom-0" style="color:var(--grey-4);">No mitigation actions are linked yet.</p>
+            }
+          </section>
+
+          @if (hasClassification)
+          {
+            <section aria-labelledby="risk-linked-class-heading">
+              <h2 id="risk-linked-class-heading" class="govuk-heading-s govuk-!-margin-bottom-2">Classification and governance</h2>
+              <div style="background:var(--white);border:1px solid var(--grey-2);padding:0.875rem 1.125rem;">
+                <div class="dfe-c-kv govuk-!-margin-bottom-0" style="font-size:0.875rem;">
+                  @if (riskCatLabels.Count > 0)
+                  {
+                    <div class="dfe-c-kv"><span class="dfe-c-kv__k">Risk categories</span><span class="dfe-c-kv__v">@string.Join(", ", riskCatLabels.Where(x => !string.IsNullOrWhiteSpace(x)))</span></div>
+                  }
+                  @if (divRegisterLabels.Count > 0)
+                  {
+                    <div class="dfe-c-kv"><span class="dfe-c-kv__k">Divisions</span><span class="dfe-c-kv__v">@string.Join(", ", divRegisterLabels.Where(x => !string.IsNullOrWhiteSpace(x)))</span></div>
+                  }
+                  @if (baRegisterLabels.Count > 0)
+                  {
+                    <div class="dfe-c-kv"><span class="dfe-c-kv__k">Business areas</span><span class="dfe-c-kv__v">@string.Join(", ", baRegisterLabels.Where(x => !string.IsNullOrWhiteSpace(x)))</span></div>
+                  }
+                  @if (Model.GovernanceBoard != null)
+                  {
+                    <div class="dfe-c-kv"><span class="dfe-c-kv__k">Governance board</span><span class="dfe-c-kv__v">@Model.GovernanceBoard.Label</span></div>
+                  }
+                </div>
+              </div>
+            </section>
+          }
+
+          @{
+            var hasAssoc = wi.HasValue || (Model.PrimaryProductId.HasValue && Model.PrimaryProduct != null);
+            var anythingLinked = hasAssoc || linkedIssues.Any() || mitigationRows.Count > 0 || hasClassification;
+          }
+          @if (!anythingLinked)
+          {
+            <p class="govuk-body govuk-!-margin-bottom-0">Nothing is linked to this risk yet — add a work item or product on <a class="govuk-link govuk-link--no-visited-state" href="@riskEditUrl">Edit risk</a>, or attach mitigation actions from the Mitigations tab.</p>
+          }
+        </div>
+      </div>
+
+      <div id="risk-history" class="tab-pane @(activeTab == "history" ? "on" : "")" role="tabpanel" aria-labelledby="tab-risk-history">
+        @if (riskHistory.Count > 0)
+        {
+          <div class="dfe-c-timeline">
+            @foreach (var h in riskHistory)
+            {
+              var itemClass = "dfe-c-timeline__item" + (h.IsAlert ? " dfe-c-timeline__item--alert" : "");
+              var whenDisplay = $"{h.WhenUtc.ToString("d MMM yyyy", CultureInfo.InvariantCulture)} · {h.ActorDisplay}";
+              <div class="@itemClass">
+                <div class="dfe-c-timeline__when">@whenDisplay</div>
+                <div class="dfe-c-timeline__what">@h.What</div>
+                @if (!string.IsNullOrWhiteSpace(h.Detail))
+                {
+                  <div class="dfe-c-timeline__detail">@h.Detail</div>
+                }
+              </div>
+            }
+          </div>
+        }
+        else
+        {
+          <p class="govuk-body">No recorded updates yet. Changes appear here after you save edits to this risk or its mitigation actions (audit logging must be enabled).</p>
+        }
+        <p class="govuk-body-s govuk-!-margin-top-4 govuk-!-margin-bottom-0" style="color:var(--grey-4);">
+          Latest save: @Model.UpdatedAt.ToString("d MMM yyyy HH:mm", CultureInfo.InvariantCulture) UTC · Created @Model.CreatedAt.ToString("d MMM yyyy HH:mm", CultureInfo.InvariantCulture) UTC
+        </p>
+      </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="dfe-c-sidebar">
+      <div class="dfe-c-scard">
+        <div class="dfe-c-scard__title">Open duration</div>
+        <div style="font-size:1.25rem;font-weight:700;">@openDurationText</div>
+        <div style="font-size:0.8125rem;color:var(--grey-4);margin-top:0.35rem;line-height:1.35;">Opened @openedDateUk</div>
+      </div>
+
+      <div class="dfe-c-scard">
+        <div class="dfe-c-scard__title">Ownership</div>
+        <div class="dfe-c-kv"><span class="dfe-c-kv__k">SRO</span><span class="dfe-c-kv__v">@sroDisplay</span></div>
+        <div class="dfe-c-kv"><span class="dfe-c-kv__k">Risk owner</span><span class="dfe-c-kv__v">@ownerDisplay</span></div>
+        <div class="dfe-c-kv"><span class="dfe-c-kv__k">Created by</span><span class="dfe-c-kv__v">@createdByDisplay</span></div>
+        <div class="dfe-c-kv"><span class="dfe-c-kv__k">Team</span><span class="dfe-c-kv__v">@teamLabel</span></div>
+      </div>
+
+      <div class="dfe-c-scard">
+        <div class="dfe-c-scard__title">Classification</div>
+        <div class="dfe-c-kv"><span class="dfe-c-kv__k">Reference</span><span class="dfe-c-kv__v dfe-c-mono">R-@Model.Id.ToString("D4")</span></div>
+        <div class="dfe-c-kv">
+          <span class="dfe-c-kv__k">Tier</span>
+          <span class="dfe-c-kv__v">
+            @if (Model.RiskTier != null)
+            {<span class="@TierTagClass()">@TierBadgeDisplayText()</span>}
+            else
+            {<span class="dfe-c-tag dfe-c-tag--grey">—</span>}
+          </span>
+        </div>
+        <div class="dfe-c-kv"><span class="dfe-c-kv__k">Impact type</span><span class="dfe-c-kv__v">@(riskCatLabels.FirstOrDefault() ?? Model.RiskCategory?.Label ?? "—")</span></div>
+        <div class="dfe-c-kv"><span class="dfe-c-kv__k">Divisions</span><span class="dfe-c-kv__v">@(divRegisterLabels.Count > 0 ? string.Join(", ", divRegisterLabels!) : "—")</span></div>
+        <div class="dfe-c-kv"><span class="dfe-c-kv__k">Business areas</span><span class="dfe-c-kv__v">@(baRegisterLabels.Count > 0 ? string.Join(", ", baRegisterLabels!) : "—")</span></div>
+        <div class="dfe-c-kv"><span class="dfe-c-kv__k">Proximity</span><span class="dfe-c-kv__v">@(Model.Proximity?.Label ?? "—")</span></div>
+        <div class="dfe-c-kv"><span class="dfe-c-kv__k">Status</span><span class="dfe-c-kv__v"><span class="@StatusTagClass()">@(Model.RiskStatus?.Label ?? Model.Status ?? "—")</span></span></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+</div>

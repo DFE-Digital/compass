@@ -1,46 +1,124 @@
 @model Compass.Models.Modern.Work.WorkRegisterViewModel
 @using Compass.Models.Modern.Work
+@using System.Linq
 @{
-    ViewData["Title"] = "All work";
+    var opsManage = ViewBag.OpsManageWork as bool? == true;
+    var listAction = opsManage ? "ManageWork" : "AllWork";
+    var listController = opsManage ? "ModernOperations" : "ModernWork";
+    ViewData["Title"] = opsManage ? "Manage work" : "All work";
     var activeTab = ViewBag.ActiveTab as string ?? "active";
     var searchAndFilter = ViewBag.SearchAndFilter as SearchAndFilterViewModel;
-    var activePausedCount = Model.ActivePaused.Count;
-    var totalRegisterCount = Model.ActiveCount + Model.PausedCount + Model.CompletedCount + Model.CancelledCount;
-    var portfolioCount = Model.Portfolios?.Count ?? 0;
-    var allFilteredCount = Model.ActivePaused.Count + Model.Completed.Count + Model.Cancelled.Count;
+    var businessAreaCount = Model.BusinessAreas?.Count ?? 0;
+    var allFilteredCount = Model.ActiveCount + Model.PausedCount + Model.CompletedCount + Model.CancelledCount;
 
     object AllWorkTabQuery(string tab) => new {
         tab,
+        page = 1,
+        mine = Model.IsMyWork ? true : (bool?)null,
         search = Model.FilterSearch,
-        portfolioId = Model.FilterPortfolioId,
+        businessAreaId = Model.FilterBusinessAreaId,
         directorateId = Model.FilterDirectorateId,
         phaseId = Model.FilterPhaseId,
         ragId = Model.FilterRagId,
         priorityId = Model.FilterPriorityId,
-        monthlyUpdate = Model.FilterMonthlyUpdate
+        monthlyUpdate = Model.FilterMonthlyUpdate,
+        primaryContactUserId = Model.FilterPrimaryContactUserId,
+        tagId = Model.FilterTagId,
+        sort = Model.RegisterSortField,
+        sd = Model.RegisterSortDescending
     };
 
-    string PhaseDfeClass(string? name) {
-        if (string.IsNullOrWhiteSpace(name) || name == "—") return "";
-        var n = name.Trim().ToLowerInvariant().Replace(" ", "-");
-        if (n.Contains("public") && n.Contains("beta")) return "dfe-c-phase--public-beta";
-        if (n.Contains("private") && n.Contains("beta")) return "dfe-c-phase--private-beta";
-        if (n.Contains("alpha")) return "dfe-c-phase--alpha";
-        if (n.Contains("live")) return "dfe-c-phase--live";
-        if (n.Contains("retired")) return "dfe-c-phase--retired";
-        if (n.Contains("discovery")) return "dfe-c-phase--discovery";
-        if (n.Contains("explore")) return "dfe-c-phase--explore";
-        return "";
+    object AllWorkYourWorkTabQuery() => new {
+        tab = "active",
+        page = 1,
+        mine = true,
+        search = Model.FilterSearch,
+        businessAreaId = Model.FilterBusinessAreaId,
+        directorateId = Model.FilterDirectorateId,
+        phaseId = Model.FilterPhaseId,
+        ragId = Model.FilterRagId,
+        priorityId = Model.FilterPriorityId,
+        monthlyUpdate = Model.FilterMonthlyUpdate,
+        primaryContactUserId = Model.FilterPrimaryContactUserId,
+        tagId = Model.FilterTagId,
+        sort = Model.RegisterSortField,
+        sd = Model.RegisterSortDescending
+    };
+
+    object AllWorkOrgScopeTabQuery(string tab) => new {
+        tab,
+        page = 1,
+        search = Model.FilterSearch,
+        businessAreaId = Model.FilterBusinessAreaId,
+        directorateId = Model.FilterDirectorateId,
+        phaseId = Model.FilterPhaseId,
+        ragId = Model.FilterRagId,
+        priorityId = Model.FilterPriorityId,
+        monthlyUpdate = Model.FilterMonthlyUpdate,
+        primaryContactUserId = Model.FilterPrimaryContactUserId,
+        tagId = Model.FilterTagId,
+        sort = Model.RegisterSortField,
+        sd = Model.RegisterSortDescending
+    };
+
+    object AllWorkPageQuery(int page) => new {
+        tab = activeTab,
+        page,
+        mine = Model.IsMyWork ? true : (bool?)null,
+        search = Model.FilterSearch,
+        businessAreaId = Model.FilterBusinessAreaId,
+        directorateId = Model.FilterDirectorateId,
+        phaseId = Model.FilterPhaseId,
+        ragId = Model.FilterRagId,
+        priorityId = Model.FilterPriorityId,
+        monthlyUpdate = Model.FilterMonthlyUpdate,
+        primaryContactUserId = Model.FilterPrimaryContactUserId,
+        tagId = Model.FilterTagId,
+        sort = Model.RegisterSortField,
+        sd = Model.RegisterSortDescending
+    };
+
+    object RegisterSortQuery(string field)
+    {
+        var sf = Model.RegisterSortField ?? "title";
+        var same = string.Equals(sf, field, StringComparison.OrdinalIgnoreCase);
+        var nextSd = same ? !Model.RegisterSortDescending : false;
+        return new {
+            tab = activeTab,
+            page = 1,
+            mine = Model.IsMyWork ? true : (bool?)null,
+            search = Model.FilterSearch,
+            businessAreaId = Model.FilterBusinessAreaId,
+            directorateId = Model.FilterDirectorateId,
+            phaseId = Model.FilterPhaseId,
+            ragId = Model.FilterRagId,
+            priorityId = Model.FilterPriorityId,
+            monthlyUpdate = Model.FilterMonthlyUpdate,
+            primaryContactUserId = Model.FilterPrimaryContactUserId,
+            tagId = Model.FilterTagId,
+            sort = field,
+            sd = nextSd
+        };
     }
-    string RagDfeClass(string? name) {
-        if (string.IsNullOrEmpty(name)) return "dfe-c-rag--tbc";
-        var n = name.ToLowerInvariant();
-        if (n.Contains("green")) return "dfe-c-rag--green";
-        if (n.Contains("amber") && n.Contains("red")) return "dfe-c-rag--amber";
-        if (n.Contains("red")) return "dfe-c-rag--red";
-        if (n.Contains("amber")) return "dfe-c-rag--amber";
-        return "dfe-c-rag--tbc";
+
+    IEnumerable<WorkRegisterRow> RowsForTab(string tab)
+    {
+        if (Model.RegisterIsPaginated && string.Equals(activeTab, tab, StringComparison.OrdinalIgnoreCase))
+            return Model.RegisterPageRows;
+        if (!Model.RegisterIsPaginated)
+        {
+            return tab switch
+            {
+                "active" => Model.ActivePaused,
+                "completed" => Model.Completed,
+                "cancelled" => Model.Cancelled,
+                "all" => Model.ActivePaused.Concat(Model.Completed).Concat(Model.Cancelled),
+                _ => Model.ActivePaused
+            };
+        }
+        return Enumerable.Empty<WorkRegisterRow>();
     }
+
     string PriorityTagClass(string? name) {
         if (string.IsNullOrEmpty(name)) return "dfe-c-tag dfe-c-tag--grey";
         var s = name.ToLowerInvariant();
@@ -49,56 +127,63 @@
         if (s.Contains("low")) return "dfe-c-tag dfe-c-tag--green";
         return "dfe-c-tag dfe-c-tag--grey";
     }
-    string MonthlyTagClass(string? text) {
-        if (string.IsNullOrEmpty(text)) return "dfe-c-tag dfe-c-tag--grey";
-        var t = text.ToLowerInvariant();
-        if (t.Contains("late")) return "dfe-c-tag dfe-c-tag--red";
-        if (t.Contains("submitted")) return "dfe-c-tag dfe-c-tag--grey";
-        if (t.Contains("due")) return "dfe-c-tag dfe-c-tag--amber";
-        return "dfe-c-tag dfe-c-tag--grey";
-    }
-
 }
 @section Breadcrumbs {
-    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
-    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="@Url.Action("Dashboard", "ModernWork")">Work</a></li>
-    <li class="dfe-c-breadcrumb__item" aria-current="page">All work</li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+ @if (opsManage)
+ {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernOperations")">Operations</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">Manage work</li>
+ }
+ else
+ {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernWork")">Work</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">All work</li>
+ }
 }
 
 <div class="modern-work-page">
 <div class="dfe-c-flex--between dfe-c-mb-3" style="flex-wrap:wrap;gap:1rem;">
-  <div class="dfe-c-page-title" style="margin:0">
-    <div class="dfe-c-page-title__caption">Work</div>
-    <h1 class="dfe-c-page-title__heading">All work</h1>
-    <p class="dfe-c-page-title__lede" id="work-reg-count">@(Model.ActiveCount + Model.PausedCount) work items across @(portfolioCount) portfolios</p>
+ <div class="dfe-c-page-title" style="margin:0">
+ <div class="dfe-c-page-title__caption">@(opsManage ? "Operations" : "Work")</div>
+ <h1 class="dfe-c-page-title__heading">@(opsManage ? "Manage work" : "All work")</h1>
+ <p class="dfe-c-page-title__lede" id="work-reg-count">@(Model.IsMyWork ? "Work assigned to you" : $"{Model.ActiveCount + Model.PausedCount} work items across {businessAreaCount} business areas")@(opsManage && !Model.IsMyWork ? " — search, filter and edit any delivery item." : Model.IsMyWork ? "." : "")</p>
   </div>
-  <div class="dfe-c-flex" style="gap:0.5rem;flex-wrap:wrap;align-items:center;">
+ <div class="dfe-c-flex" style="gap:0.5rem;flex-wrap:wrap;align-items:center;">
     @if (searchAndFilter?.SecondaryActionUrl != null)
     {
-      <a href="@searchAndFilter.SecondaryActionUrl" class="govuk-button govuk-button--outline-blue">Export</a>
+ <a href="@searchAndFilter.SecondaryActionUrl" class="govuk-button govuk-button--outline-blue">Export</a>
     }
-    <a href="@Url.Action("Create", "ModernWork")" class="govuk-button">Create work item</a>
+ <a href="@Url.Action("Create", "ModernWork")" class="govuk-button">Create work item</a>
   </div>
 </div>
 
-<form method="get" action="@Url.Action("AllWork", "ModernWork")" id="allwork-register-form" class="dfe-c-mb-3">
+<form method="get" action="@Url.Action(listAction, listController)" id="allwork-register-form" class="dfe-c-mb-3">
   <input type="hidden" name="tab" value="@activeTab" />
+  <input type="hidden" name="page" value="1" />
+  @if (Model.IsMyWork)
+  {
+    <input type="hidden" name="mine" value="true" />
+  }
+  <input type="hidden" name="sort" value="@Model.RegisterSortField" />
+  <input type="hidden" name="sd" value="@(Model.RegisterSortDescending.ToString().ToLowerInvariant())" />
   <div id="search-and-filter">
-  <div class="filter-toolbar">
-    <div class="filter-toolbar__search-wrap">
-      <input type="search" name="search" id="allwork-register-search" value="@Model.FilterSearch" placeholder="Search work items…" class="filter-search" autocomplete="off" aria-label="Search work items" />
-      <button type="submit" class="govuk-button govuk-button--secondary filter-toolbar__search-submit" id="allwork-search-submit">Search</button>
+ <div class="filter-toolbar">
+ <div class="filter-toolbar__search-wrap">
+ <input type="search" name="search" id="allwork-register-search" value="@Model.FilterSearch" placeholder="Search titles, aims and tag names…" class="filter-search" autocomplete="off" aria-label="Search work items" />
+ <button type="submit" class="govuk-button govuk-button--secondary filter-toolbar__search-submit" id="allwork-search-submit">Search</button>
     </div>
-    <button type="button" class="filter-toggle-btn" id="allwork-filter-btn" aria-expanded="false" aria-controls="allwork-filter-panel">
+ <button type="button" class="filter-toggle-btn" id="allwork-filter-btn" aria-expanded="false" aria-controls="allwork-filter-panel">
       <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="flex-shrink:0;" aria-hidden="true"><path d="M1 3h14v1.5l-5 5V14l-4-2V9.5L1 4.5V3z"></path></svg>
-      <span class="filter-toggle-label">Filter</span>
+ <span class="filter-toggle-label">Filter</span>
     </button>
   </div>
-  <div class="filter-panel filter-panel--allwork" id="allwork-filter-panel">
-    <div class="filter-panel__grid">
+@await Html.PartialAsync("~/Views/Modern/Shared/_FilterActiveChips.cshtml", Model.ActiveFilterChips)
+ <div class="filter-panel filter-panel--allwork" id="allwork-filter-panel">
+ <div class="filter-panel__grid">
       <div>
         <label for="allwork-filter-rag">RAG</label>
-        <select name="ragId" id="allwork-filter-rag" class="govuk-select">
+ <select name="ragId" id="allwork-filter-rag" class="govuk-select">
           <option value="">All</option>
           @foreach (var r in Model.RagOptions)
           {
@@ -115,7 +200,7 @@
       </div>
       <div>
         <label for="allwork-filter-phase">Phase</label>
-        <select name="phaseId" id="allwork-filter-phase" class="govuk-select">
+ <select name="phaseId" id="allwork-filter-phase" class="govuk-select">
           <option value="">All</option>
           @foreach (var o in Model.DeliveryPhaseOptions)
           {
@@ -131,25 +216,25 @@
         </select>
       </div>
       <div>
-        <label for="allwork-filter-portfolio">Portfolio</label>
-        <select name="portfolioId" id="allwork-filter-portfolio" class="govuk-select">
-          <option value="">All (@portfolioCount)</option>
-          @foreach (var p in Model.Portfolios)
+        <label for="allwork-filter-businessarea">Business area</label>
+ <select name="businessAreaId" id="allwork-filter-businessarea" class="govuk-select">
+          <option value="">All (@businessAreaCount)</option>
+          @foreach (var b in Model.BusinessAreas)
           {
-            if (Model.FilterPortfolioId == p.Id)
+            if (Model.FilterBusinessAreaId == b.Id)
             {
-              <option value="@p.Id" selected>@p.Name</option>
+              <option value="@b.Id" selected>@b.Name</option>
             }
             else
             {
-              <option value="@p.Id">@p.Name</option>
+              <option value="@b.Id">@b.Name</option>
             }
           }
         </select>
       </div>
       <div>
         <label for="allwork-filter-directorate">Directorate</label>
-        <select name="directorateId" id="allwork-filter-directorate" class="govuk-select">
+ <select name="directorateId" id="allwork-filter-directorate" class="govuk-select">
           <option value="">All</option>
           @foreach (var d in Model.Directorates)
           {
@@ -166,7 +251,7 @@
       </div>
       <div>
         <label for="allwork-filter-priority">Priority</label>
-        <select name="priorityId" id="allwork-filter-priority" class="govuk-select">
+ <select name="priorityId" id="allwork-filter-priority" class="govuk-select">
           <option value="">All</option>
           @foreach (var o in Model.PriorityOptions)
           {
@@ -183,7 +268,7 @@
       </div>
       <div>
         <label for="allwork-filter-monthly">Monthly update</label>
-        <select name="monthlyUpdate" id="allwork-filter-monthly" class="govuk-select">
+ <select name="monthlyUpdate" id="allwork-filter-monthly" class="govuk-select">
           @if (string.IsNullOrEmpty(Model.FilterMonthlyUpdate))
           {
             <option value="" selected>All</option>
@@ -226,278 +311,355 @@
           }
         </select>
       </div>
+      <div>
+        <label for="allwork-filter-primarycontact">Primary contact</label>
+ <select name="primaryContactUserId" id="allwork-filter-primarycontact" class="govuk-select">
+          <option value="">All</option>
+          @foreach (var pc in Model.PrimaryContactFilterOptions)
+          {
+            if (Model.FilterPrimaryContactUserId == pc.UserId)
+            {
+              <option value="@pc.UserId" selected>@pc.DisplayName</option>
+            }
+            else
+            {
+              <option value="@pc.UserId">@pc.DisplayName</option>
+            }
+          }
+        </select>
+      </div>
+      <div>
+        <label for="allwork-filter-tags">Tags</label>
+        @if ((Model.TagFilterOptions?.Count ?? 0) == 0)
+        {
+ <p class="dfe-c-body-s dfe-c-text-muted govuk-!-margin-bottom-0" id="allwork-filter-tags">No tags defined — add tags in Admin → Work → Tagging.</p>
+        }
+        else
+        {
+ <select name="tagId" id="allwork-filter-tags" class="govuk-select">
+          <option value="">All tags</option>
+          @foreach (var tg in Model.TagFilterOptions!)
+          {
+            if (Model.FilterTagId == tg.Id)
+            {
+              <option value="@tg.Id" selected>@(tg.Name ?? tg.Value)</option>
+            }
+            else
+            {
+              <option value="@tg.Id">@(tg.Name ?? tg.Value)</option>
+            }
+          }
+        </select>
+        }
+      </div>
     </div>
-    <div class="filter-panel__actions">
-      <button type="submit" class="govuk-button">Apply filters</button>
-      <a href="@Url.Action("AllWork", "ModernWork", new { tab = activeTab })" class="govuk-link">Clear filters</a>
+ <div class="filter-panel__actions">
+ <button type="submit" class="govuk-button">Apply filters</button>
+ <a href="@Url.Action(listAction, listController, new { tab = activeTab, mine = Model.IsMyWork ? true : (bool?)null })" class="govuk-link">Clear filters</a>
     </div>
   </div>
   </div>
 </form>
 
 <div class="tabs" role="tablist" aria-label="Work status sections">
-  <a href="@Url.Action("AllWork", "ModernWork", AllWorkTabQuery("active"))"
-     class="tab @(activeTab == "active" ? "on" : "")"
+  <a href="@Url.Action(listAction, listController, AllWorkYourWorkTabQuery())"
+ class="tab @(Model.IsMyWork && activeTab == "active" ? "on" : "")"
      role="tab"
-     aria-selected="@(activeTab == "active")"
+     aria-selected="@(Model.IsMyWork && activeTab == "active")"
      aria-controls="d-active"
-     id="tab-active">Active &amp; Paused <span class="dfe-c-fw-regular">(@(Model.ActivePausedCountBeforeMonthlyFilter))</span></a>
-  <a href="@Url.Action("AllWork", "ModernWork", AllWorkTabQuery("completed"))"
-     class="tab @(activeTab == "completed" ? "on" : "")"
+ id="tab-your-work">Your work <span class="dfe-c-fw-regular">(@Model.RegisterActivePausedCountMine)</span></a>
+  <a href="@Url.Action(listAction, listController, AllWorkOrgScopeTabQuery("active"))"
+ class="tab @(!Model.IsMyWork && activeTab == "active" ? "on" : "")"
+     role="tab"
+     aria-selected="@(!Model.IsMyWork && activeTab == "active")"
+     aria-controls="d-active"
+ id="tab-active">Active &amp; Paused <span class="dfe-c-fw-regular">(@Model.RegisterActivePausedCountOrg)</span></a>
+  <a href="@Url.Action(listAction, listController, AllWorkTabQuery("completed"))"
+ class="tab @(activeTab =="completed" ? "on" : "")"
      role="tab"
      aria-selected="@(activeTab == "completed")"
      aria-controls="d-completed"
-     id="tab-completed">Completed <span class="dfe-c-fw-regular">(@Model.CompletedCount)</span></a>
-  <a href="@Url.Action("AllWork", "ModernWork", AllWorkTabQuery("cancelled"))"
-     class="tab @(activeTab == "cancelled" ? "on" : "")"
+ id="tab-completed">Completed <span class="dfe-c-fw-regular">(@Model.CompletedCount)</span></a>
+  <a href="@Url.Action(listAction, listController, AllWorkTabQuery("cancelled"))"
+ class="tab @(activeTab =="cancelled" ? "on" : "")"
      role="tab"
      aria-selected="@(activeTab == "cancelled")"
      aria-controls="d-cancelled"
-     id="tab-cancelled">Cancelled <span class="dfe-c-fw-regular">(@Model.CancelledCount)</span></a>
-  <a href="@Url.Action("AllWork", "ModernWork", AllWorkTabQuery("all"))"
-     class="tab @(activeTab == "all" ? "on" : "")"
+ id="tab-cancelled">Cancelled <span class="dfe-c-fw-regular">(@Model.CancelledCount)</span></a>
+  <a href="@Url.Action(listAction, listController, AllWorkTabQuery("all"))"
+ class="tab @(activeTab =="all" ? "on" : "")"
      role="tab"
      aria-selected="@(activeTab == "all")"
      aria-controls="d-all"
-     id="tab-all">All items <span class="dfe-c-fw-regular">(@allFilteredCount)</span></a>
+ id="tab-all">All items <span class="dfe-c-fw-regular">(@allFilteredCount)</span></a>
 </div>
 
-<div id="d-active" class="tab-pane @(activeTab == "active" ? "on" : "")" role="tabpanel">
-  <div class="dfe-c-table-wrap">
-    <table id="work-table">
+<div id="d-active" class="tab-pane @(activeTab =="active" ? "on" : "")" role="tabpanel">
+ <div class="dfe-c-table-wrap">
+    <table class="modern-work-table" id="work-table-active">
       <thead>
         <tr>
-          <th>Work item</th>
-          <th>Portfolio</th>
-          <th>Directorate</th>
-          <th>Phase</th>
-          <th>Priority</th>
-          <th>SRO</th>
-          <th>RAG</th>
-          <th>Monthly update</th>
-          <th>Risks</th>
+          <th scope="col"><a class="govuk-link" href="@Url.Action(listAction, listController, RegisterSortQuery("title"))">Work item</a></th>
+          <th scope="col"><a class="govuk-link" href="@Url.Action(listAction, listController, RegisterSortQuery("businessarea"))">Business area</a></th>
+          <th scope="col"><a class="govuk-link" href="@Url.Action(listAction, listController, RegisterSortQuery("priority"))">Priority</a></th>
+          <th scope="col"><a class="govuk-link" href="@Url.Action(listAction, listController, RegisterSortQuery("rag"))">RAG</a></th>
+          <th scope="col"><a class="govuk-link" href="@Url.Action(listAction, listController, RegisterSortQuery("primarycontact"))">Primary contact</a></th>
+          <th scope="col"><a class="govuk-link" href="@Url.Action(listAction, listController, RegisterSortQuery("tags"))">Tags</a></th>
+          <th scope="col"><a class="govuk-link" href="@Url.Action(listAction, listController, RegisterSortQuery("status"))">Status</a></th>
+          <th scope="col"><a class="govuk-link" href="@Url.Action(listAction, listController, RegisterSortQuery("monthly"))">@Model.RegisterMonthlyColumnHeader</a></th>
         </tr>
       </thead>
       <tbody>
-        @foreach (var r in Model.ActivePaused)
+        @foreach (var r in RowsForTab("active"))
         {
-          var phaseClass = PhaseDfeClass(r.PhaseName);
-          var phaseDisplay = phaseClass != "" ? (r.PhaseName ?? "").ToUpperInvariant() : (r.PhaseName ?? "—");
           <tr>
             <td>
               <a href="@Url.Action("Detail", "ModernWork", new { id = r.Id })">@r.Title</a>
-              <span class="dfe-c-table-ref">WI-@r.Id.ToString("D8")</span>
+ <div class="dfe-c-body-s dfe-c-text-muted" style="margin-top:0.25rem;line-height:1.3;">
+                WI-@r.Id.ToString("D8")@if (!string.IsNullOrEmpty(r.PhaseName) && r.PhaseName != "—") { <span aria-hidden="true"> · </span><span>@r.PhaseName</span> }
+              </div>
             </td>
-            <td>@(r.PortfolioName ?? "—")</td>
-            <td>@(r.DirectorateSummary ?? "—")</td>
-            <td>
-              @if (!string.IsNullOrEmpty(phaseClass))
-              {
-                <span class="dfe-c-phase @phaseClass">@phaseDisplay</span>
-              }
-              else
-              {
-                <span>@(r.PhaseName ?? "—")</span>
-              }
-            </td>
-            <td><span class="@PriorityTagClass(r.PriorityName)">@((r.PriorityName ?? "—").ToUpperInvariant())</span></td>
-            <td>@(r.SroDisplayName ?? "—")</td>
+            <td>@(r.BusinessAreaName ?? "—")</td>
+ <td><span class="@PriorityTagClass(r.PriorityName)">@((r.PriorityName ?? "—").ToUpperInvariant())</span></td>
             <td>
               @if (!string.IsNullOrEmpty(r.RagBackgroundColourKey) || !string.IsNullOrEmpty(r.RagTextColourKey))
               {
-                <span class="rag-badge" style="@(string.IsNullOrEmpty(r.RagBackgroundColourKey) ? "" : "background-color: var(--govuk-colour-" + r.RagBackgroundColourKey + ");")@(string.IsNullOrEmpty(r.RagTextColourKey) ? "" : " color: var(--govuk-colour-" + r.RagTextColourKey + ");")">@((r.RagName ?? "—").ToUpperInvariant())</span>
+ <span class="rag-badge" style="@(string.IsNullOrEmpty(r.RagBackgroundColourKey) ? "" : "background-color: var(--govuk-colour-" + r.RagBackgroundColourKey + ");")@(string.IsNullOrEmpty(r.RagTextColourKey) ? "" : " color: var(--govuk-colour-" + r.RagTextColourKey + ");")">@((r.RagName ?? "—").ToUpperInvariant())</span>
               }
               else
               {
-                <span class="dfe-c-rag @RagDfeClass(r.RagName)">@((r.RagName ?? "—").ToUpperInvariant())</span>
+ <span class="@WorkBadgeCss.RagDfeTagClass(r.RagCssClass, r.RagName)">@((r.RagName ?? "—").ToUpperInvariant())</span>
               }
             </td>
-            <td>
-              @{
-                var monthlyText = r.MonthlyUpdateStatus ?? "—";
-              }
-              @if (r.MonthlyUpdateStatusLink == "wd-updates")
-              { <a href="@Url.Action("Detail", "ModernWork", new { id = r.Id })#wd-updates" class="dfe-c-link"><span class="@MonthlyTagClass(monthlyText)">@monthlyText.ToUpperInvariant()</span></a> }
-              else if (r.MonthlyUpdateStatusLink == "add")
-              { <a href="@Url.Action("AddMonthlyUpdate", "ModernWork", new { id = r.Id })" class="dfe-c-link"><span class="@MonthlyTagClass(monthlyText)">@monthlyText.ToUpperInvariant()</span></a> }
-              else
-              { <span class="@MonthlyTagClass(monthlyText)">@monthlyText.ToUpperInvariant()</span> }
-            </td>
-            <td>
-              @if (r.FirstRiskOrIssueId.HasValue && !string.IsNullOrEmpty(r.FirstRiskReference))
-              {
-                <a href="@Url.Action("RiskDetail", "ModernWork", new { workId = r.Id, id = r.FirstRiskOrIssueId.Value })">@r.FirstRiskReference</a>
-              }
-              else
-              {
-                <span class="dfe-c-text-muted">—</span>
-              }
-            </td>
+            <td>@(r.PrimaryContactName ?? "—")</td>
+ <td class="dfe-c-body-s">@(string.IsNullOrEmpty(r.TagNamesSummary) ? "—" : r.TagNamesSummary)</td>
+ <td><span class="@WorkBadgeCss.StatusDfeTagClass(r.Status)">@r.Status</span></td>
+            <td>@await Html.PartialAsync("~/Views/Modern/Work/_WorkRegisterMonthlyUpdateCell.cshtml", r)</td>
           </tr>
         }
       </tbody>
     </table>
   </div>
-  @if (!Model.ActivePaused.Any())
+  @if (!RowsForTab("active").Any())
   {
-    <p class="dfe-c-body muted">No active or paused work items.</p>
+ <p class="dfe-c-body muted">No active or paused work items.</p>
   }
+  @if (activeTab == "active")
+  {
   <div style="display:flex;justify-content:space-between;align-items:center;margin-top:0.875rem;flex-wrap:wrap;gap:0.5rem;">
-    <p class="dfe-c-text-muted" style="margin:0;" id="work-showing-count">Showing @activePausedCount of @Model.ActivePausedCountBeforeMonthlyFilter work items</p>
-  </div>
-</div>
-
-<div id="d-completed" class="tab-pane @(activeTab == "completed" ? "on" : "")" role="tabpanel">
-  <div class="dfe-c-table-wrap">
-    <table class="data-table">
-      <thead>
-        <tr>
-          <th>Work item</th>
-          <th>Primary contact</th>
-          <th>Portfolio</th>
-          <th>Phase</th>
-          <th>Priority</th>
-          <th>Milestones</th>
-          <th>Completed</th>
-        </tr>
-      </thead>
-      <tbody>
-        @foreach (var r in Model.Completed)
+    @if (Model.RegisterIsPaginated)
+    {
+ <p class="dfe-c-text-muted" style="margin:0;" id="work-showing-count">Showing @(Model.RegisterDisplayRowStart)–@(Model.RegisterDisplayRowEnd) of @(Model.RegisterTotalCount) work items</p>
+    }
+    @if (Model.RegisterIsPaginated && Model.RegisterPageCount > 1)
+    {
+ <nav class="dfe-c-flex" style="gap:0.5rem;align-items:center;flex-wrap:wrap;" aria-label="Pagination">
+        @if (Model.RegisterPage > 1)
         {
-          <tr class="wreg-row" data-searchable="@(r.Title ?? "") @(r.PrimaryContactName ?? "") @(r.PortfolioName ?? "") @(r.PhaseName ?? "") @(r.PriorityName ?? "") @(r.Id.ToString("D8"))">
-            <td>
-              <a href="@Url.Action("Detail", "ModernWork", new { id = r.Id })">@r.Title</a>
-              <div style="font-size:12px;color:#505a5f;margin-top:2px;">WI-@r.Id.ToString("D8")</div>
-            </td>
-            <td>@(r.PrimaryContactName ?? "—")</td>
-            <td>@(r.PortfolioName ?? "—")</td>
-            <td><span class="wreg-phase" style="background:#f3f2f1;color:#505a5f;border-color:#dee0e2;">@(r.PhaseName ?? "—")</span></td>
-            <td><span class="@PriorityTagClass(r.PriorityName)">@(r.PriorityName ?? "—")</span></td>
-            <td><span class="wreg-milestone-count">@r.MilestoneCount</span></td>
-            <td style="font-size:13px;color:#505a5f;">@(r.CompletedAt ?? "—")</td>
-          </tr>
+ <a class="govuk-link" href="@Url.Action(listAction, listController, AllWorkPageQuery(Model.RegisterPage - 1))">Previous</a>
         }
-      </tbody>
-    </table>
+ <span class="dfe-c-body-s dfe-c-text-muted">Page @Model.RegisterPage of @Model.RegisterPageCount</span>
+        @if (Model.RegisterPage < Model.RegisterPageCount)
+        {
+ <a class="govuk-link" href="@Url.Action(listAction, listController, AllWorkPageQuery(Model.RegisterPage + 1))">Next</a>
+        }
+      </nav>
+    }
   </div>
-  @if (!Model.Completed.Any())
-  {
-    <p class="dfe-c-body muted">No completed work items.</p>
   }
 </div>
 
-<div id="d-cancelled" class="tab-pane @(activeTab == "cancelled" ? "on" : "")" role="tabpanel">
-  <div class="dfe-c-table-wrap">
-    <table class="data-table">
+<div id="d-completed" class="tab-pane @(activeTab =="completed" ? "on" : "")" role="tabpanel">
+ <div class="dfe-c-table-wrap">
+ <table class="modern-work-table" id="work-table-completed">
       <thead>
         <tr>
-          <th>Work item</th>
-          <th>Primary contact</th>
-          <th>Portfolio</th>
-          <th>Priority</th>
-          <th>Milestones</th>
-          <th>Cancelled</th>
-          <th>Reason</th>
+          <th scope="col"><a class="govuk-link" href="@Url.Action(listAction, listController, RegisterSortQuery("title"))">Work item</a></th>
+          <th scope="col"><a class="govuk-link" href="@Url.Action(listAction, listController, RegisterSortQuery("businessarea"))">Business area</a></th>
+          <th scope="col"><a class="govuk-link" href="@Url.Action(listAction, listController, RegisterSortQuery("priority"))">Priority</a></th>
+          <th scope="col"><a class="govuk-link" href="@Url.Action(listAction, listController, RegisterSortQuery("rag"))">RAG</a></th>
+          <th scope="col"><a class="govuk-link" href="@Url.Action(listAction, listController, RegisterSortQuery("primarycontact"))">Primary contact</a></th>
+          <th scope="col"><a class="govuk-link" href="@Url.Action(listAction, listController, RegisterSortQuery("tags"))">Tags</a></th>
+          <th scope="col"><a class="govuk-link" href="@Url.Action(listAction, listController, RegisterSortQuery("status"))">Status</a></th>
+          <th scope="col"><a class="govuk-link" href="@Url.Action(listAction, listController, RegisterSortQuery("monthly"))">@Model.RegisterMonthlyColumnHeader</a></th>
         </tr>
       </thead>
       <tbody>
-        @foreach (var r in Model.Cancelled)
+        @foreach (var r in RowsForTab("completed"))
         {
-          <tr class="wreg-row" data-searchable="@(r.Title ?? "") @(r.PrimaryContactName ?? "") @(r.PortfolioName ?? "") @(r.PriorityName ?? "") @(r.CancelledReason ?? "") @(r.Id.ToString("D8"))">
+ <tr class="wreg-row" data-searchable="@(r.Title ?? "") @(r.PrimaryContactName ?? "") @(r.TagNamesSummary ?? "") @(r.PortfolioName ?? "") @(r.PhaseName ?? "") @(r.PriorityName ?? "") @(r.Id.ToString("D8"))">
             <td>
               <a href="@Url.Action("Detail", "ModernWork", new { id = r.Id })">@r.Title</a>
-              <div style="font-size:12px;color:#505a5f;margin-top:2px;">WI-@r.Id.ToString("D8")</div>
+ <div class="dfe-c-body-s dfe-c-text-muted" style="margin-top:0.25rem;line-height:1.3;">
+                WI-@r.Id.ToString("D8")@if (!string.IsNullOrEmpty(r.PhaseName) && r.PhaseName != "—") { <span aria-hidden="true"> · </span><span>@r.PhaseName</span> }
+              </div>
             </td>
-            <td>@(r.PrimaryContactName ?? "—")</td>
-            <td>@(r.PortfolioName ?? "—")</td>
-            <td><span class="@PriorityTagClass(r.PriorityName)">@(r.PriorityName ?? "—")</span></td>
-            <td><span class="wreg-milestone-count">@r.MilestoneCount</span></td>
-            <td style="font-size:13px;color:#505a5f;">@(r.CompletedAt ?? "—")</td>
-            <td style="font-size:13px;color:#505a5f;">@(r.CancelledReason ?? "—")</td>
-          </tr>
-        }
-      </tbody>
-    </table>
-  </div>
-  @if (!Model.Cancelled.Any())
-  {
-    <p class="dfe-c-body muted">No cancelled work items.</p>
-  }
-</div>
-
-<div id="d-all" class="tab-pane @(activeTab == "all" ? "on" : "")" role="tabpanel">
-  <div class="dfe-c-table-wrap">
-    <table id="work-table-all">
-      <thead>
-        <tr>
-          <th>Work item</th>
-          <th>Status</th>
-          <th>Portfolio</th>
-          <th>Directorate</th>
-          <th>Phase</th>
-          <th>Priority</th>
-          <th>SRO</th>
-          <th>RAG</th>
-          <th>Monthly update</th>
-          <th>Risks</th>
-        </tr>
-      </thead>
-      <tbody>
-        @foreach (var r in Model.ActivePaused.Concat(Model.Completed).Concat(Model.Cancelled))
-        {
-          var phaseClass = PhaseDfeClass(r.PhaseName);
-          var phaseDisplay = phaseClass != "" ? (r.PhaseName ?? "").ToUpperInvariant() : (r.PhaseName ?? "—");
-          <tr>
-            <td>
-              <a href="@Url.Action("Detail", "ModernWork", new { id = r.Id })">@r.Title</a>
-              <span class="dfe-c-table-ref">WI-@r.Id.ToString("D8")</span>
-            </td>
-            <td><span class="work-item-badge work-item-badge--status">@(r.Status ?? "—")</span></td>
-            <td>@(r.PortfolioName ?? "—")</td>
-            <td>@(r.DirectorateSummary ?? "—")</td>
-            <td>
-              @if (!string.IsNullOrEmpty(phaseClass))
-              {
-                <span class="dfe-c-phase @phaseClass">@phaseDisplay</span>
-              }
-              else
-              {
-                <span>@(r.PhaseName ?? "—")</span>
-              }
-            </td>
-            <td><span class="@PriorityTagClass(r.PriorityName)">@((r.PriorityName ?? "—").ToUpperInvariant())</span></td>
-            <td>@(r.SroDisplayName ?? "—")</td>
+            <td>@(r.BusinessAreaName ?? "—")</td>
+ <td><span class="@PriorityTagClass(r.PriorityName)">@((r.PriorityName ?? "—").ToUpperInvariant())</span></td>
             <td>
               @if (!string.IsNullOrEmpty(r.RagBackgroundColourKey) || !string.IsNullOrEmpty(r.RagTextColourKey))
               {
-                <span class="rag-badge" style="@(string.IsNullOrEmpty(r.RagBackgroundColourKey) ? "" : "background-color: var(--govuk-colour-" + r.RagBackgroundColourKey + ");")@(string.IsNullOrEmpty(r.RagTextColourKey) ? "" : " color: var(--govuk-colour-" + r.RagTextColourKey + ");")">@((r.RagName ?? "—").ToUpperInvariant())</span>
+ <span class="rag-badge" style="@(string.IsNullOrEmpty(r.RagBackgroundColourKey) ? "" : "background-color: var(--govuk-colour-" + r.RagBackgroundColourKey + ");")@(string.IsNullOrEmpty(r.RagTextColourKey) ? "" : " color: var(--govuk-colour-" + r.RagTextColourKey + ");")">@((r.RagName ?? "—").ToUpperInvariant())</span>
               }
               else
               {
-                <span class="dfe-c-rag @RagDfeClass(r.RagName)">@((r.RagName ?? "—").ToUpperInvariant())</span>
+ <span class="@WorkBadgeCss.RagDfeTagClass(r.RagCssClass, r.RagName)">@((r.RagName ?? "—").ToUpperInvariant())</span>
               }
             </td>
+            <td>@(r.PrimaryContactName ?? "—")</td>
+ <td class="dfe-c-body-s">@(string.IsNullOrEmpty(r.TagNamesSummary) ? "—" : r.TagNamesSummary)</td>
+ <td><span class="@WorkBadgeCss.StatusDfeTagClass(r.Status)">@r.Status</span></td>
+ <td><span class="dfe-c-text-muted">—</span></td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+  @if (!RowsForTab("completed").Any())
+  {
+ <p class="dfe-c-body muted">No completed work items.</p>
+  }
+  @if (activeTab == "completed")
+  {
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-top:0.875rem;flex-wrap:wrap;gap:0.5rem;">
+    @if (Model.RegisterIsPaginated)
+    {
+ <p class="dfe-c-text-muted" style="margin:0;">Showing @(Model.RegisterDisplayRowStart)–@(Model.RegisterDisplayRowEnd) of @(Model.RegisterTotalCount) work items</p>
+    }
+    @if (Model.RegisterIsPaginated && Model.RegisterPageCount > 1)
+    {
+ <nav class="dfe-c-flex" style="gap:0.5rem;align-items:center;flex-wrap:wrap;" aria-label="Pagination">
+        @if (Model.RegisterPage > 1)
+        {
+ <a class="govuk-link" href="@Url.Action(listAction, listController, AllWorkPageQuery(Model.RegisterPage - 1))">Previous</a>
+        }
+ <span class="dfe-c-body-s dfe-c-text-muted">Page @Model.RegisterPage of @Model.RegisterPageCount</span>
+        @if (Model.RegisterPage < Model.RegisterPageCount)
+        {
+ <a class="govuk-link" href="@Url.Action(listAction, listController, AllWorkPageQuery(Model.RegisterPage + 1))">Next</a>
+        }
+      </nav>
+    }
+  </div>
+  }
+</div>
+
+<div id="d-cancelled" class="tab-pane @(activeTab =="cancelled" ? "on" : "")" role="tabpanel">
+ <div class="dfe-c-table-wrap">
+ <table class="modern-work-table" id="work-table-cancelled">
+      <thead>
+        <tr>
+          <th scope="col"><a class="govuk-link" href="@Url.Action(listAction, listController, RegisterSortQuery("title"))">Work item</a></th>
+          <th scope="col"><a class="govuk-link" href="@Url.Action(listAction, listController, RegisterSortQuery("businessarea"))">Business area</a></th>
+          <th scope="col"><a class="govuk-link" href="@Url.Action(listAction, listController, RegisterSortQuery("priority"))">Priority</a></th>
+          <th scope="col"><a class="govuk-link" href="@Url.Action(listAction, listController, RegisterSortQuery("rag"))">RAG</a></th>
+          <th scope="col"><a class="govuk-link" href="@Url.Action(listAction, listController, RegisterSortQuery("primarycontact"))">Primary contact</a></th>
+          <th scope="col"><a class="govuk-link" href="@Url.Action(listAction, listController, RegisterSortQuery("tags"))">Tags</a></th>
+          <th scope="col"><a class="govuk-link" href="@Url.Action(listAction, listController, RegisterSortQuery("status"))">Status</a></th>
+          <th scope="col"><a class="govuk-link" href="@Url.Action(listAction, listController, RegisterSortQuery("monthly"))">@Model.RegisterMonthlyColumnHeader</a></th>
+        </tr>
+      </thead>
+      <tbody>
+        @foreach (var r in RowsForTab("cancelled"))
+        {
+ <tr class="wreg-row" data-searchable="@(r.Title ?? "") @(r.PrimaryContactName ?? "") @(r.TagNamesSummary ?? "") @(r.PortfolioName ?? "") @(r.PriorityName ?? "") @(r.CancelledReason ?? "") @(r.Id.ToString("D8"))">
             <td>
-              @{
-                var monthlyTextAll = r.MonthlyUpdateStatus ?? "—";
-              }
-              @if (r.MonthlyUpdateStatusLink == "wd-updates")
-              { <a href="@Url.Action("Detail", "ModernWork", new { id = r.Id })#wd-updates" class="dfe-c-link"><span class="@MonthlyTagClass(monthlyTextAll)">@monthlyTextAll.ToUpperInvariant()</span></a> }
-              else if (r.MonthlyUpdateStatusLink == "add")
-              { <a href="@Url.Action("AddMonthlyUpdate", "ModernWork", new { id = r.Id })" class="dfe-c-link"><span class="@MonthlyTagClass(monthlyTextAll)">@monthlyTextAll.ToUpperInvariant()</span></a> }
-              else
-              { <span class="@MonthlyTagClass(monthlyTextAll)">@monthlyTextAll.ToUpperInvariant()</span> }
+              <a href="@Url.Action("Detail", "ModernWork", new { id = r.Id })">@r.Title</a>
+ <div class="dfe-c-body-s dfe-c-text-muted" style="margin-top:0.25rem;line-height:1.3;">
+                WI-@r.Id.ToString("D8")@if (!string.IsNullOrEmpty(r.PhaseName) && r.PhaseName != "—") { <span aria-hidden="true"> · </span><span>@r.PhaseName</span> }
+              </div>
             </td>
+            <td>@(r.BusinessAreaName ?? "—")</td>
+ <td><span class="@PriorityTagClass(r.PriorityName)">@((r.PriorityName ?? "—").ToUpperInvariant())</span></td>
             <td>
-              @if (r.FirstRiskOrIssueId.HasValue && !string.IsNullOrEmpty(r.FirstRiskReference))
+              @if (!string.IsNullOrEmpty(r.RagBackgroundColourKey) || !string.IsNullOrEmpty(r.RagTextColourKey))
               {
-                <a href="@Url.Action("RiskDetail", "ModernWork", new { workId = r.Id, id = r.FirstRiskOrIssueId.Value })">@r.FirstRiskReference</a>
+ <span class="rag-badge" style="@(string.IsNullOrEmpty(r.RagBackgroundColourKey) ? "" : "background-color: var(--govuk-colour-" + r.RagBackgroundColourKey + ");")@(string.IsNullOrEmpty(r.RagTextColourKey) ? "" : " color: var(--govuk-colour-" + r.RagTextColourKey + ");")">@((r.RagName ?? "—").ToUpperInvariant())</span>
               }
               else
               {
-                <span class="dfe-c-text-muted">—</span>
+ <span class="@WorkBadgeCss.RagDfeTagClass(r.RagCssClass, r.RagName)">@((r.RagName ?? "—").ToUpperInvariant())</span>
               }
             </td>
+            <td>@(r.PrimaryContactName ?? "—")</td>
+ <td class="dfe-c-body-s">@(string.IsNullOrEmpty(r.TagNamesSummary) ? "—" : r.TagNamesSummary)</td>
+ <td><span class="@WorkBadgeCss.StatusDfeTagClass(r.Status)">@r.Status</span></td>
+ <td><span class="dfe-c-text-muted">—</span></td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+  @if (!RowsForTab("cancelled").Any())
+  {
+ <p class="dfe-c-body muted">No cancelled work items.</p>
+  }
+  @if (activeTab == "cancelled")
+  {
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-top:0.875rem;flex-wrap:wrap;gap:0.5rem;">
+    @if (Model.RegisterIsPaginated)
+    {
+ <p class="dfe-c-text-muted" style="margin:0;">Showing @(Model.RegisterDisplayRowStart)–@(Model.RegisterDisplayRowEnd) of @(Model.RegisterTotalCount) work items</p>
+    }
+    @if (Model.RegisterIsPaginated && Model.RegisterPageCount > 1)
+    {
+ <nav class="dfe-c-flex" style="gap:0.5rem;align-items:center;flex-wrap:wrap;" aria-label="Pagination">
+        @if (Model.RegisterPage > 1)
+        {
+ <a class="govuk-link" href="@Url.Action(listAction, listController, AllWorkPageQuery(Model.RegisterPage - 1))">Previous</a>
+        }
+ <span class="dfe-c-body-s dfe-c-text-muted">Page @Model.RegisterPage of @Model.RegisterPageCount</span>
+        @if (Model.RegisterPage < Model.RegisterPageCount)
+        {
+ <a class="govuk-link" href="@Url.Action(listAction, listController, AllWorkPageQuery(Model.RegisterPage + 1))">Next</a>
+        }
+      </nav>
+    }
+  </div>
+  }
+</div>
+
+<div id="d-all" class="tab-pane @(activeTab =="all" ? "on" : "")" role="tabpanel">
+ <div class="dfe-c-table-wrap">
+    <table class="modern-work-table" id="work-table-all">
+      <thead>
+        <tr>
+          <th scope="col"><a class="govuk-link" href="@Url.Action(listAction, listController, RegisterSortQuery("title"))">Work item</a></th>
+          <th scope="col"><a class="govuk-link" href="@Url.Action(listAction, listController, RegisterSortQuery("businessarea"))">Business area</a></th>
+          <th scope="col"><a class="govuk-link" href="@Url.Action(listAction, listController, RegisterSortQuery("priority"))">Priority</a></th>
+          <th scope="col"><a class="govuk-link" href="@Url.Action(listAction, listController, RegisterSortQuery("rag"))">RAG</a></th>
+          <th scope="col"><a class="govuk-link" href="@Url.Action(listAction, listController, RegisterSortQuery("primarycontact"))">Primary contact</a></th>
+          <th scope="col"><a class="govuk-link" href="@Url.Action(listAction, listController, RegisterSortQuery("tags"))">Tags</a></th>
+          <th scope="col"><a class="govuk-link" href="@Url.Action(listAction, listController, RegisterSortQuery("status"))">Status</a></th>
+          <th scope="col"><a class="govuk-link" href="@Url.Action(listAction, listController, RegisterSortQuery("monthly"))">@Model.RegisterMonthlyColumnHeader</a></th>
+        </tr>
+      </thead>
+      <tbody>
+        @foreach (var r in RowsForTab("all"))
+        {
+          <tr>
+            <td>
+              <a href="@Url.Action("Detail", "ModernWork", new { id = r.Id })">@r.Title</a>
+ <div class="dfe-c-body-s dfe-c-text-muted" style="margin-top:0.25rem;line-height:1.3;">
+                WI-@r.Id.ToString("D8")@if (!string.IsNullOrEmpty(r.PhaseName) && r.PhaseName != "—") { <span aria-hidden="true"> · </span><span>@r.PhaseName</span> }
+              </div>
+            </td>
+            <td>@(r.BusinessAreaName ?? "—")</td>
+ <td><span class="@PriorityTagClass(r.PriorityName)">@((r.PriorityName ?? "—").ToUpperInvariant())</span></td>
+            <td>
+              @if (!string.IsNullOrEmpty(r.RagBackgroundColourKey) || !string.IsNullOrEmpty(r.RagTextColourKey))
+              {
+ <span class="rag-badge" style="@(string.IsNullOrEmpty(r.RagBackgroundColourKey) ? "" : "background-color: var(--govuk-colour-" + r.RagBackgroundColourKey + ");")@(string.IsNullOrEmpty(r.RagTextColourKey) ? "" : " color: var(--govuk-colour-" + r.RagTextColourKey + ");")">@((r.RagName ?? "—").ToUpperInvariant())</span>
+              }
+              else
+              {
+ <span class="@WorkBadgeCss.RagDfeTagClass(r.RagCssClass, r.RagName)">@((r.RagName ?? "—").ToUpperInvariant())</span>
+              }
+            </td>
+            <td>@(r.PrimaryContactName ?? "—")</td>
+ <td class="dfe-c-body-s">@(string.IsNullOrEmpty(r.TagNamesSummary) ? "—" : r.TagNamesSummary)</td>
+ <td><span class="@WorkBadgeCss.StatusDfeTagClass(r.Status)">@(r.Status ?? "—")</span></td>
+            <td>@await Html.PartialAsync("~/Views/Modern/Work/_WorkRegisterMonthlyUpdateCell.cshtml", r)</td>
           </tr>
         }
       </tbody>
@@ -505,11 +667,31 @@
   </div>
   @if (allFilteredCount == 0)
   {
-    <p class="dfe-c-body muted">No work items match these filters.</p>
+ <p class="dfe-c-body muted">No work items match these filters.</p>
   }
+  @if (activeTab == "all")
+  {
   <div style="display:flex;justify-content:space-between;align-items:center;margin-top:0.875rem;flex-wrap:wrap;gap:0.5rem;">
-    <p class="dfe-c-text-muted" style="margin:0;">Showing @allFilteredCount work items</p>
+    @if (Model.RegisterIsPaginated)
+    {
+ <p class="dfe-c-text-muted" style="margin:0;">Showing @(Model.RegisterDisplayRowStart)–@(Model.RegisterDisplayRowEnd) of @(Model.RegisterTotalCount) work items</p>
+    }
+    @if (Model.RegisterIsPaginated && Model.RegisterPageCount > 1)
+    {
+ <nav class="dfe-c-flex" style="gap:0.5rem;align-items:center;flex-wrap:wrap;" aria-label="Pagination">
+        @if (Model.RegisterPage > 1)
+        {
+ <a class="govuk-link" href="@Url.Action(listAction, listController, AllWorkPageQuery(Model.RegisterPage - 1))">Previous</a>
+        }
+ <span class="dfe-c-body-s dfe-c-text-muted">Page @Model.RegisterPage of @Model.RegisterPageCount</span>
+        @if (Model.RegisterPage < Model.RegisterPageCount)
+        {
+ <a class="govuk-link" href="@Url.Action(listAction, listController, AllWorkPageQuery(Model.RegisterPage + 1))">Next</a>
+        }
+      </nav>
+    }
   </div>
+  }
 </div>
 
 </div>

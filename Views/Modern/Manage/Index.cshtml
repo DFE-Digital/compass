@@ -1,0 +1,111 @@
+@model FipsProductsViewModel
+@{
+    ViewData["Title"] = "FIPS — Products";
+    var tab = Model.ActiveTab;
+}
+
+@section Breadcrumbs {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Fips", "ModernManage")">Service Register</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">FIPS</li>
+}
+
+@functions {
+    string TabCount(int count) => count > 0 ? $" ({count})" : "";
+
+        string QualityPercent(int score, int max) =>
+        max > 0 ? $"{Math.Round((double)score / max * 100):0}%" : "0%";
+
+    string QualityTagClass(int score, int max) =>
+        score >= (int)(max * 0.7) ? "dfe-c-tag--green" :
+        score >= (int)(max * 0.4) ? "dfe-c-tag--amber" :
+        "dfe-c-tag--red";
+}
+
+@if (TempData["Success"] != null)
+{
+ <div class="govuk-notification-banner govuk-notification-banner--success" role="region" aria-labelledby="fips-sync-success-title">
+ <div class="govuk-notification-banner__header">
+ <h2 class="govuk-notification-banner__title" id="fips-sync-success-title">Success</h2>
+        </div>
+ <div class="govuk-notification-banner__content">
+ <p class="govuk-notification-banner__heading">@TempData["Success"]</p>
+        </div>
+    </div>
+}
+@if (TempData["Error"] != null)
+{
+ <div class="govuk-error-summary" role="alert" style="margin-bottom:1.5rem;">
+ <h2 class="govuk-error-summary__title">Something went wrong</h2>
+ <div class="govuk-error-summary__body">@TempData["Error"]</div>
+    </div>
+}
+
+<div class="dfe-c-flex--between dfe-c-mb-3" style="flex-wrap:wrap;gap:1rem;align-items:flex-end;">
+ <div class="dfe-c-page-title" style="margin:0;">
+ <div class="dfe-c-page-title__caption">Service Register</div>
+ <h1 class="dfe-c-page-title__heading">Products</h1>
+    </div>
+</div>
+
+<div class="tabs dfe-c-mb-3" role="tablist" aria-label="Product sections">
+ <a href="@Url.Action("Fips", "ModernManage", new { tab = "my" })" class="tab @(tab =="my" ? "on" : "")" role="tab" aria-selected="@(tab == "my")" aria-controls="d-my" id="tab-my">Your products@(TabCount(Model.MyProductsCount))</a>
+ <a href="@Url.Action("Fips", "ModernManage", new { tab = "all" })" class="tab @(tab =="all" ? "on" : "")" role="tab" aria-selected="@(tab == "all")" aria-controls="d-all" id="tab-all">Active products@(TabCount(Model.AllProductsCount))</a>
+ <a href="@Url.Action("Fips", "ModernManage", new { tab = "new" })" class="tab @(tab =="new" ? "on" : "")" role="tab" aria-selected="@(tab == "new")" aria-controls="d-new" id="tab-new">New products@(TabCount(Model.NewProductsCount))</a>
+ <a href="@Url.Action("Fips", "ModernManage", new { tab = "inactive" })" class="tab @(tab =="inactive" ? "on" : "")" role="tab" aria-selected="@(tab == "inactive")" aria-controls="d-inactive" id="tab-inactive">Inactive products@(TabCount(Model.InactiveProductsCount))</a>
+ <a href="@Url.Action("Fips", "ModernManage", new { tab = "retired" })" class="tab @(tab =="retired" ? "on" : "")" role="tab" aria-selected="@(tab == "retired")" aria-controls="d-retired" id="tab-retired">Retired@(TabCount(Model.RetiredCount))</a>
+</div>
+
+@if (tab == "inactive")
+{
+  <p class="govuk-body-s govuk-!-margin-bottom-3" style="color:#505a5f;">These products are <strong>excluded from the FIPS service register</strong> (for example by CMDB sync rules). They are not shown in the active catalogue.</p>
+}
+else if (tab == "retired")
+{
+  <p class="govuk-body-s govuk-!-margin-bottom-3" style="color:#505a5f;">These products are <strong>retired</strong> in Compass. CMDB sync does not update these records.</p>
+}
+
+@await Html.PartialAsync("_SearchAndFilter", (SearchAndFilterViewModel)ViewBag.SearchAndFilter)
+
+<div id="d-@tab" class="tab-pane on" role="tabpanel">
+    @if (Model.Products.Count == 0)
+    {
+ <p class="govuk-body">No products found.</p>
+    }
+    else
+    {
+ <div class="dfe-c-table-wrap" >
+            <table>
+ <caption class="govuk-visually-hidden">Products</caption>
+                <thead>
+                    <tr>
+ <th scope="col">Product</th>
+ <th scope="col" data-sort-bound="1" class="sortable">Phase</th>
+ <th scope="col" data-sort-bound="1" class="sortable">Business area</th>
+ <th scope="col" data-sort-bound="1" class="sortable">Service owner</th>
+ <th scope="col" data-sort-bound="1" class="sortable">Data completion</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var p in Model.Products)
+                {
+                    <tr>
+                        <td>
+ <a href="@Url.Action("FipsProduct", "ModernManage", new { id = p.Id })" class="dfe-c-link dfe-c-fw-bold">@p.Title</a>
+ <div class="dfe-c-body-s dfe-c-text-muted" style="margin-top:0.25rem;line-height:1.3;">
+                                ID: @p.UniqueID
+                            </div>
+                        </td>
+                        <td>@(p.PhaseName ?? "—")</td>
+                        <td>@(string.IsNullOrWhiteSpace(p.BusinessAreaDisplay) ? "—" : p.BusinessAreaDisplay)</td>
+                        <td>@(p.ServiceOwner ?? "—")</td>
+                       <td>
+ <span class="fips-quality @QualityTagClass(p.QualityScore, p.QualityScoreMax)">@QualityPercent(p.QualityScore, p.QualityScoreMax)</span>
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>

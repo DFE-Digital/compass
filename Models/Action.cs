@@ -36,7 +36,7 @@ public class Action
     public string? ProductDocumentId { get; set; } // Product DocumentID from CMS (primary identifier)
 
     [Required]
-    [MaxLength(200)]
+    [MaxLength(450)]
     public string Title { get; set; } = string.Empty;
 
     public string? Description { get; set; }

@@ -1,0 +1,255 @@
+@model Compass.ViewModels.Modern.ModernOperationsAccessibilityViewModel
+@using System.Text.Json
+@using System.Text.Json.Serialization
+@using Compass.Services.Aiss
+@{
+  ViewData["Title"] = "Accessibility";
+  var jsonOpts = new JsonSerializerOptions
+  {
+    PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+    DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+  };
+  var trendsJson = Model.Trends != null ? JsonSerializer.Serialize(Model.Trends, jsonOpts) : "null";
+  string CriterionLabel(string key) => key switch
+  {
+    "a" => "WCAG A",
+    "aa" => "WCAG AA",
+    "aaa" => "WCAG AAA",
+    "bp" => "Best practice",
+    "ux" => "Usability (UX)",
+    "other" => "Other",
+    _ => key
+  };
+}
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernReporting")">Reporting</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">Accessibility</li>
+}
+
+<div class="modern-work-page" style="max-width: 100%; box-sizing: border-box;">
+  <div class="dfe-c-mb-4 dfe-c-flex--between" style="flex-wrap:wrap;align-items:flex-start;gap:1rem;">
+    <div class="dfe-c-page-title" style="margin:0;min-width:0;flex:1;max-width: 100%;">
+      <div class="dfe-c-page-title__caption">Reporting</div>
+      <h1 class="dfe-c-page-title__heading">Accessibility (AISS)</h1>
+      <p class="dfe-c-page-title__lede" style="margin:0.25rem 0 0 0;max-width: 44rem;">
+        All data is live from the <a class="govuk-link" href="https://accessibility-statements.education.gov.uk" rel="noopener noreferrer" target="_blank">Accessibility issues and statement service (opens in new tab)</a>.
+      </p>
+    </div>
+  </div>
+
+  @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+  {
+    <div class="govuk-error-summary" role="alert" data-module="govuk-error-summary" aria-labelledby="aiss-error-title">
+      <h2 class="govuk-error-summary__title" id="aiss-error-title">Summary unavailable</h2>
+      <p class="govuk-body govuk-!-margin-bottom-0">@Model.ErrorMessage</p>
+    </div>
+  }
+  @if (Model.Summary is { } s)
+  {
+    <h2 class="govuk-heading-m govuk-!-margin-top-4">At a glance</h2>
+    <div class="dfe-c-card-grid dfe-c-card-grid--2 dfe-c-mb-3" role="region" aria-label="Accessibility counts">
+      <div class="dfe-c-metric dfe-c-metric--red">
+        <div class="dfe-c-metric__number">@(s.Issues?.Open.ToString() ?? "—")</div>
+        <div class="dfe-c-metric__label">Open issues</div>
+      </div>
+      <div class="dfe-c-metric dfe-c-metric--navy">
+        <div class="dfe-c-metric__number">@(s.Issues?.Overdue.ToString() ?? "—")</div>
+        <div class="dfe-c-metric__label">Overdue issues</div>
+      </div>
+      <div class="dfe-c-metric dfe-c-metric--teal">
+        <div class="dfe-c-metric__number">@(s.Services?.Onboarded.ToString() ?? "—")</div>
+        <div class="dfe-c-metric__label">Onboarded</div>
+      </div>
+      <div class="dfe-c-metric dfe-c-metric--green">
+        <div class="dfe-c-metric__number">@(s.Services?.Installed.ToString() ?? "—")</div>
+        <div class="dfe-c-metric__label">Installed</div>
+        <div class="dfe-c-metric__note">With statement installed in AISS</div>
+      </div>
+    </div>
+
+    @if (s.IssueCriteria != null)
+    {
+      var c = s.IssueCriteria;
+      <h2 class="govuk-heading-m govuk-!-margin-top-4">By WCAG and category</h2>
+      <p class="govuk-body dfe-c-text-muted govuk-!-margin-bottom-2">Open, closed, and overdue counts per designops bucket.</p>
+      <div class="dfe-c-table-wrap">
+        <table id="aiss-ops-criteria" class="govuk-!-margin-bottom-0" aria-label="Issue counts by criterion">
+          <thead>
+            <tr>
+              <th scope="col">Criterion</th>
+              <th scope="col" style="text-align: right;">Open</th>
+              <th scope="col" style="text-align: right;">Closed</th>
+              <th scope="col" style="text-align: right;">Overdue (open)</th>
+            </tr>
+          </thead>
+          <tbody>
+            @foreach (var row in new (string key, AissCriterionTrio? t)[]
+            {
+              ("a", c.A), ("aa", c.Aa), ("aaa", c.Aaa), ("bp", c.Bp), ("ux", c.Ux), ("other", c.Other)
+            })
+            {
+              <tr>
+                <td class="govuk-body-s govuk-!-font-weight-bold">@CriterionLabel(row.key)</td>
+                <td class="govuk-body-s" style="text-align: right;">@(row.t?.Open.ToString() ?? "—")</td>
+                <td class="govuk-body-s" style="text-align: right;">@(row.t?.Closed.ToString() ?? "—")</td>
+                <td class="govuk-body-s" style="text-align: right;">@(row.t?.Overdue.ToString() ?? "—")</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+
+    @if (s.ByService is { Count: > 0 } list)
+    {
+      <h2 class="govuk-heading-m govuk-!-margin-top-6">By service</h2>
+      <p class="govuk-body dfe-c-text-muted govuk-!-margin-bottom-2">FIPS / AISS services with open issue counts and open issues by bucket.</p>
+      <div class="dfe-c-table-wrap">
+        <table id="aiss-ops-byservice" class="govuk-!-margin-bottom-0" aria-label="Open issues by service">
+          <thead>
+            <tr>
+              <th scope="col">Service</th>
+              <th scope="col" style="text-align: right;">Open</th>
+              <th scope="col" style="text-align: right;">A</th>
+              <th scope="col" style="text-align: right;">AA</th>
+              <th scope="col" style="text-align: right;">AAA</th>
+              <th scope="col" style="text-align: right;">BP</th>
+              <th scope="col" style="text-align: right;">UX</th>
+              <th scope="col" style="text-align: right;">Other</th>
+            </tr>
+          </thead>
+          <tbody>
+            @foreach (var row in list.OrderByDescending(x => x.IssuesOpen).ThenBy(x => x.Name))
+            {
+              var o = row.OpenByCriterion;
+              <tr>
+                <td class="govuk-body-s" style="max-width: 22rem;">
+                  <span class="govuk-!-font-weight-bold">@(string.IsNullOrWhiteSpace(row.Name) ? "—" : row.Name)</span>
+                </td>
+                <td class="govuk-body-s" style="text-align: right;">@row.IssuesOpen</td>
+                <td class="govuk-body-s" style="text-align: right;">@(o?.A ?? 0)</td>
+                <td class="govuk-body-s" style="text-align: right;">@(o?.Aa ?? 0)</td>
+                <td class="govuk-body-s" style="text-align: right;">@(o?.Aaa ?? 0)</td>
+                <td class="govuk-body-s" style="text-align: right;">@(o?.Bp ?? 0)</td>
+                <td class="govuk-body-s" style="text-align: right;">@(o?.Ux ?? 0)</td>
+                <td class="govuk-body-s" style="text-align: right;">@(o?.Other ?? 0)</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  }
+  else if (string.IsNullOrWhiteSpace(Model.ErrorMessage))
+  {
+    <p class="govuk-body">No summary was returned. Try again later or check AISS health.</p>
+  }
+
+  @if (!string.IsNullOrWhiteSpace(Model.TrendsError))
+  {
+    <div class="govuk-inset-text govuk-!-margin-top-4" role="status">Trend charts: @Model.TrendsError</div>
+  }
+  else if (Model.Trends is { } tr && tr.MonthLabels is { Count: > 0 })
+  {
+    <h2 class="govuk-heading-m @(Model.Summary == null ? "govuk-!-margin-top-4" : "govuk-!-margin-top-6")">Issue trends (by month)</h2>
+    <p class="govuk-body dfe-c-text-muted govuk-!-margin-bottom-2">Uses the same issue scope as the AISS summary (when the register is available, only services linked to the service register). “Open (end of month)” is the not-yet-resolved backlog at each month end, split by WCAG A / AA / AAA, best practice, usability, and other. “Closed in month” is issues resolved or closed in that calendar month (bucket is the issue’s current classification).</p>
+    <div class="ops-aiss-trend-grid govuk-!-margin-bottom-4">
+      <div class="ops-aiss-trend-card">
+        <h3 class="govuk-heading-s govuk-!-margin-top-0">Open issues at month end (by bucket)</h3>
+        <div class="ops-aiss-trend-wrap">
+          <canvas id="aiss-chart-open-criterion" aria-label="Open accessibility issues at end of each month by WCAG and category"></canvas>
+        </div>
+      </div>
+      <div class="ops-aiss-trend-card">
+        <h3 class="govuk-heading-s govuk-!-margin-top-0">Closed in month (by bucket)</h3>
+        <div class="ops-aiss-trend-wrap">
+          <canvas id="aiss-chart-closed-criterion" aria-label="Accessibility issues closed in each month by WCAG and category"></canvas>
+        </div>
+      </div>
+    </div>
+  }
+</div>
+
+<style nonce="@Context.Items["Nonce"]">
+  .ops-aiss-trend-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+  @@media (min-width: 48rem) {
+    .ops-aiss-trend-grid { grid-template-columns: 1fr 1fr; }
+  }
+  .ops-aiss-trend-wrap {
+    position: relative;
+    width: 100%;
+    max-width: 100%;
+    height: 280px;
+  }
+  .ops-aiss-trend-card h3 { margin-bottom: 0.5rem; }
+</style>
+
+@section Scripts {
+  @if (Model.Trends is { } trendData && trendData.MonthLabels.Count > 0 && string.IsNullOrWhiteSpace(Model.TrendsError))
+  {
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" nonce="@Context.Items["Nonce"]"></script>
+  <script nonce="@Context.Items["Nonce"]">
+    (function () {
+      var data = @Html.Raw(trendsJson);
+      if (!data || !data.monthLabels || !data.monthLabels.length) return;
+      if (typeof Chart === 'undefined') return;
+
+      var monthLabels = data.monthLabels;
+      var openBy = data.openAtMonthEnd || {};
+      var closedBy = data.closedInMonth || {};
+      var order = ['a', 'aa', 'aaa', 'bp', 'ux', 'other'];
+      var labelNames = { a: 'WCAG A', aa: 'WCAG AA', aaa: 'WCAG AAA', bp: 'Best practice', ux: 'Usability (UX)', other: 'Other' };
+      var colors = {
+        a: { c: '#d4351c', f: 'rgba(212,53,28,0.18)' },
+        aa: { c: '#f47738', f: 'rgba(244,119,56,0.18)' },
+        aaa: { c: '#a8250f', f: 'rgba(168,37,15,0.18)' },
+        bp: { c: '#003078', f: 'rgba(0,48,120,0.12)' },
+        ux: { c: '#4c2c92', f: 'rgba(76,44,146,0.12)' },
+        other: { c: '#6f777b', f: 'rgba(111,119,123,0.15)' }
+      };
+      var chartFont = { family: "'Inter', system-ui, -apple-system, sans-serif" };
+      var chartDefaults = {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'bottom', labels: { boxWidth: 14, boxHeight: 14, font: Object.assign({ size: 12, weight: '600' }, chartFont), padding: 10 } },
+          tooltip: {
+            backgroundColor: 'rgba(11,12,12,0.92)', titleFont: { size: 13, weight: '700' }, bodyFont: { size: 12 },
+            padding: 10, cornerRadius: 6, displayColors: true
+          }
+        }
+      };
+      function stackedFor(sourceObj) {
+        return order.map(function (key) {
+          var p = colors[key] || { c: '#5a5a5a', f: 'rgba(0,0,0,0.1)' };
+          return {
+            label: labelNames[key] || key,
+            data: (sourceObj[key] && sourceObj[key].length === monthLabels.length) ? sourceObj[key] : monthLabels.map(function () { return 0; }),
+            borderColor: p.c, backgroundColor: p.f, tension: 0.3, fill: true, pointRadius: 2, pointHoverRadius: 5, borderWidth: 2, stack: 's',
+            pointBackgroundColor: p.c, pointBorderColor: '#fff', pointBorderWidth: 1.5
+          };
+        });
+      }
+      var opts = Object.assign({}, chartDefaults, {
+        interaction: { mode: 'index', intersect: false },
+        scales: {
+          x: { stacked: true, ticks: { maxRotation: 45, minRotation: 0, font: { size: 11, family: chartFont.family } }, grid: { display: false } },
+          y: { stacked: true, beginAtZero: true, ticks: { precision: 0, font: { size: 11, family: chartFont.family } } }
+        }
+      });
+      function render(id, sourceObj) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        new Chart(el.getContext('2d'), { type: 'line', data: { labels: monthLabels, datasets: stackedFor(sourceObj) }, options: opts });
+      }
+      render('aiss-chart-open-criterion', openBy);
+      render('aiss-chart-closed-criterion', closedBy);
+    })();
+  </script>
+  }
+}

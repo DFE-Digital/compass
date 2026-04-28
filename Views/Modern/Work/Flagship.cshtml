@@ -15,41 +15,56 @@
     var filterStatus = ViewBag.StatusFilter as string;
     var hasActiveFilters = !string.IsNullOrEmpty(filterStatus) || filterPortfolioId != null || filterDirectorateId != null || !string.IsNullOrEmpty(filterSearch);
     var filterCount = (filterPortfolioId != null ? 1 : 0) + (filterDirectorateId != null ? 1 : 0) + (!string.IsNullOrEmpty(filterStatus) ? 1 : 0) + (!string.IsNullOrEmpty(filterSearch) ? 1 : 0);
+    var phaseNames = ViewBag.PhaseNames as Dictionary<int, string> ?? new Dictionary<int, string>();
+    var priorityNames = ViewBag.PriorityNames as Dictionary<int, string> ?? new Dictionary<int, string>();
+    var businessAreaById = ViewBag.BusinessAreaNameByProjectId as Dictionary<int, string> ?? new Dictionary<int, string>();
+    string PriorityTagClass(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "dfe-c-tag dfe-c-tag--grey";
+        var s = name.ToLowerInvariant();
+        if (s.Contains("high") || s.Contains("critical")) return "dfe-c-tag dfe-c-tag--red";
+        if (s.Contains("medium")) return "dfe-c-tag dfe-c-tag--amber";
+        if (s.Contains("low")) return "dfe-c-tag dfe-c-tag--green";
+        return "dfe-c-tag dfe-c-tag--grey";
+    }
+    string DirSummary(WorkItem w) =>
+        w.Directorates?.Any() == true
+            ? string.Join(", ", w.Directorates.Select(d => d.Division?.Name).Where(n => !string.IsNullOrEmpty(n)).Distinct().OrderBy(n => n))
+            : "—";
 }
 @section Breadcrumbs {
-    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
-    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="@Url.Action("Dashboard", "ModernWork")">Work</a></li>
-    <li class="dfe-c-breadcrumb__item" aria-current="page">Flagship work</li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernWork")">Work</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">Flagship work</li>
 }
 
 <div id="sc-work-flagship" class="modern-work-page">
-  <div class="dfe-c-flex--between dfe-c-mb-3" style="flex-wrap:wrap;gap:1rem;">
-    <div class="dfe-c-page-title" style="margin:0;">
-      <div class="dfe-c-page-title__caption">Work</div>
-      <h1 class="dfe-c-page-title__heading">Flagship work</h1>
-      <p class="dfe-c-page-title__lede">Delivery work flagged as flagship — use search and filters to narrow the list.</p>
+ <div class="dfe-c-flex--between dfe-c-mb-3" style="flex-wrap:wrap;gap:1rem;">
+ <div class="dfe-c-page-title" style="margin:0;">
+ <div class="dfe-c-page-title__caption">Work</div>
+ <h1 class="dfe-c-page-title__heading">Flagship work</h1>
+ <p class="dfe-c-page-title__lede">Delivery work flagged as flagship — use search and filters to narrow the list.</p>
     </div>
   </div>
 
-  <form method="get" action="@Url.Action("Flagship", "ModernWork")" id="flagship-filter-form" class="dfe-c-mb-3">
+ <form method="get" action="@Url.Action("Flagship", "ModernWork")" id="flagship-filter-form" class="dfe-c-mb-3">
     <div id="search-and-filter">
-      <div class="filter-toolbar">
-        <div class="filter-toolbar__search-wrap">
-          <input type="search" name="search" id="flagship-register-search" value="@filterSearch" placeholder="Search flagship work…" class="filter-search" autocomplete="off" aria-label="Search flagship work" />
-          <button type="submit" class="govuk-button govuk-button--secondary filter-toolbar__search-submit">Search</button>
+ <div class="filter-toolbar">
+ <div class="filter-toolbar__search-wrap">
+ <input type="search" name="search" id="flagship-register-search" value="@filterSearch" placeholder="Search flagship work…" class="filter-search" autocomplete="off" aria-label="Search flagship work" />
+ <button type="submit" class="govuk-button govuk-button--secondary filter-toolbar__search-submit">Search</button>
         </div>
-        <button type="button" class="filter-toggle-btn" id="flagship-filter-btn" aria-expanded="false" aria-controls="flagship-filter-panel">
+ <button type="button" class="filter-toggle-btn" id="flagship-filter-btn" aria-expanded="false" aria-controls="flagship-filter-panel">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="flex-shrink:0;" aria-hidden="true"><path d="M1 3h14v1.5l-5 5V14l-4-2V9.5L1 4.5V3z"></path></svg>
-          <span class="filter-toggle-label">Filter</span>
-          @if (hasActiveFilters) { <span class="filter-toggle-badge" aria-label="Active filters">@filterCount</span> }
+ <span class="filter-toggle-label">Filter</span>
+ @if (hasActiveFilters) { <span class="filter-toggle-badge" aria-label="Active filters">@filterCount</span> }
         </button>
-        <a href="@Url.Action("ExportFlagship", "ModernWork", new { search = filterSearch, portfolioId = filterPortfolioId, directorateId = filterDirectorateId, status = filterStatus })" class="govuk-button govuk-button--secondary">Export CSV</a>
       </div>
-      <div class="filter-panel" id="flagship-filter-panel">
-        <div class="filter-panel__grid">
+ <div class="filter-panel" id="flagship-filter-panel">
+ <div class="filter-panel__grid">
           <div>
             <label for="filter-portfolio">Portfolio</label>
-            <select name="portfolioId" id="filter-portfolio" class="govuk-select">
+ <select name="portfolioId" id="filter-portfolio" class="govuk-select">
               <option value="">All portfolios (@portfolioCount)</option>
               @foreach (var p in portfolios)
               {
@@ -66,7 +81,7 @@
           </div>
           <div>
             <label for="filter-directorate">Directorate</label>
-            <select name="directorateId" id="filter-directorate" class="govuk-select">
+ <select name="directorateId" id="filter-directorate" class="govuk-select">
               <option value="">All directorates</option>
               @foreach (var d in directorates)
               {
@@ -83,7 +98,7 @@
           </div>
           <div>
             <label for="filter-status">Status</label>
-            <select name="status" id="filter-status" class="govuk-select">
+ <select name="status" id="filter-status" class="govuk-select">
               <option value="">All statuses</option>
               @foreach (var opt in workStatusOptions)
               {
@@ -99,9 +114,9 @@
             </select>
           </div>
         </div>
-        <div class="filter-panel__actions">
-          <button type="submit" class="govuk-button">Apply filters</button>
-          <a href="@Url.Action("Flagship", "ModernWork")" class="govuk-link">Clear filters</a>
+ <div class="filter-panel__actions">
+ <button type="submit" class="govuk-button">Apply filters</button>
+ <a href="@Url.Action("Flagship", "ModernWork")" class="govuk-link">Clear filters</a>
         </div>
       </div>
     </div>
@@ -109,45 +124,58 @@
 
   @if (count == 0)
   {
-    <p class="dfe-c-text-muted">No flagship work items match these filters. Clear filters or mark a work item as flagship on its overview to include it here.</p>
+ <p class="dfe-c-text-muted">No flagship work items match these filters. Clear filters or mark a work item as flagship on its overview to include it here.</p>
   }
   else
   {
-    <div class="dfe-c-table-wrap">
-      <table class="data-table">
+ <div class="dfe-c-table-wrap">
+      <table class="modern-work-table" id="work-flagship-table">
         <thead>
           <tr>
-            <th>Work item</th>
-            <th>Portfolio</th>
-            <th>RAG</th>
-            <th>Status</th>
-            <th>Start</th>
-            <th>Target end</th>
-            <th>Updated</th>
+            <th scope="col">Work item</th>
+            <th scope="col">Business area</th>
+            <th scope="col">Directorate</th>
+            <th scope="col">Priority</th>
+            <th scope="col">RAG</th>
+            <th scope="col">Primary contact</th>
+            <th scope="col">Status</th>
           </tr>
         </thead>
         <tbody>
           @foreach (var w in items)
           {
             var latestRag = w.RagHistory?.OrderByDescending(r => r.UpdatedAt).FirstOrDefault();
-            var ragName = latestRag?.RagStatus?.Name ?? "";
-            var rowSearchable = (w.Title ?? "") + " " + (w.PortfolioId.HasValue && portfolioNames.TryGetValue(w.PortfolioId.Value, out var pn) ? pn : "") + " " + ragName + " " + (w.Status ?? "") + " " + w.Id.ToString("D8");
-            <tr class="wreg-row" data-searchable="@rowSearchable">
+            var phaseName = w.DeliveryPhaseId.HasValue && phaseNames.TryGetValue(w.DeliveryPhaseId.Value, out var ph) ? ph : null;
+            var priorityName = w.PriorityId.HasValue && priorityNames.TryGetValue(w.PriorityId.Value, out var pr) ? pr : null;
+            var pcName = ViewBag.PrimaryContactById is Dictionary<int, string> pcMap && pcMap.TryGetValue(w.Id, out var pc) ? pc : "—";
+            var baName = businessAreaById.TryGetValue(w.Id, out var ban) ? ban : "—";
+            <tr>
               <td>
-                <a href="@Url.Action("Detail", "ModernWork", new { id = w.Id })">@w.Title</a>
-                <span class="dfe-c-table-ref">WI-@w.Id.ToString("D8")</span>
+ <a href="@Url.Action("Detail", "ModernWork", new { id = w.Id })">@w.Title</a>
+ <div class="dfe-c-body-s dfe-c-text-muted" style="margin-top:0.25rem;line-height:1.3;">
+ WI-@w.Id.ToString("D8")@if (!string.IsNullOrEmpty(phaseName)) { <span aria-hidden="true"> · </span><span class="dfe-c-text-muted">@phaseName</span> }
+                </div>
               </td>
-              <td>@(w.PortfolioId.HasValue && portfolioNames.TryGetValue(w.PortfolioId.Value, out var pname) ? pname : "—")</td>
+              <td class="dfe-c-body-s">@baName</td>
+              <td class="dfe-c-body-s">@DirSummary(w)</td>
+              <td>
+                @if (!string.IsNullOrEmpty(priorityName))
+                {
+ <span class="@PriorityTagClass(priorityName)">@priorityName.ToUpperInvariant()</span>
+                }
+                else
+                {
+ <span class="dfe-c-text-muted">—</span>
+                }
+              </td>
               <td>@await Html.PartialAsync("_WorkRagBadge", latestRag)</td>
-              <td><span class="tag">@w.Status</span></td>
-              <td>@(w.StartDate?.ToString("d MMM yyyy") ?? "—")</td>
-              <td>@(w.TargetEndDate?.ToString("d MMM yyyy") ?? "—")</td>
-              <td>@w.UpdatedAt.ToString("d MMM yyyy")</td>
+              <td>@pcName</td>
+ <td><span class="@WorkBadgeCss.StatusDfeTagClass(w.Status)">@w.Status</span></td>
             </tr>
           }
         </tbody>
       </table>
     </div>
-    <p class="dfe-c-body-s muted dfe-c-mt-2">Showing @count flagship work item@(count == 1 ? "" : "s").</p>
+ <p class="dfe-c-body-s muted dfe-c-mt-2">Showing @count flagship work item@(count == 1 ? "" : "s").</p>
   }
 </div>

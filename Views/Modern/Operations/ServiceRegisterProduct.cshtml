@@ -1,0 +1,643 @@
+@model FipsProductDetailViewModel
+@{
+    ViewData["Title"] = Model.Product.Title + " — Service register (operations)";
+    var p = Model.Product;
+    var detailTab = Model.ActiveDetailTab;
+}
+
+@section Breadcrumbs {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernOperations")">Operations</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("ServiceRegister", "ModernOperations")">Service register</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">@p.Title</li>
+}
+
+@if (TempData["Success"] != null)
+{
+ <div class="govuk-notification-banner govuk-notification-banner--success govuk-!-margin-bottom-4" role="region">
+ <div class="govuk-notification-banner__header">
+ <h2 class="govuk-notification-banner__title">Success</h2>
+        </div>
+ <div class="govuk-notification-banner__content">
+ <p class="govuk-notification-banner__heading">@TempData["Success"]</p>
+        </div>
+    </div>
+}
+@if (TempData["Error"] != null)
+{
+ <div class="govuk-error-summary govuk-!-margin-bottom-4" role="alert">
+ <h2 class="govuk-error-summary__title">Something went wrong</h2>
+ <div class="govuk-error-summary__body">@TempData["Error"]</div>
+    </div>
+}
+
+<div class="dfe-c-screen">
+ <div class="dfe-c-flex--between dfe-c-mb-3" style="flex-wrap:wrap;gap:1rem;align-items:flex-start;">
+ <div class="dfe-c-screen__header" style="margin:0;">
+ <h1 class="govuk-heading-l govuk-!-margin-bottom-0">@p.Title</h1>
+ <p class="govuk-body-s govuk-!-margin-top-2 govuk-!-margin-bottom-0" style="color:#505a5f;">Operations view — full edit, single-product CMDB sync, and stored CMDB JSON snapshot.</p>
+        </div>
+ <div class="dfe-c-flex" style="gap:0.75rem;flex-wrap:wrap;align-items:center;">
+ <form id="fips-cmdb-single-sync-antiforgery" method="post" class="govuk-!-margin-bottom-0" aria-hidden="true">
+                @Html.AntiForgeryToken()
+            </form>
+ <button type="button" class="btn btn-secondary" id="fips-cmdb-single-sync-start" aria-haspopup="dialog">Sync this product from CMDB</button>
+ <a class="govuk-link govuk-link--no-visited-state govuk-!-font-weight-bold" href="@Url.Action("ServiceRegister", "ModernOperations")">Service register list · sync all</a>
+        </div>
+    </div>
+
+ <div class="tabs dfe-c-mb-3" role="tablist" aria-label="Product sections">
+        <a href="@Url.Action("ServiceRegisterProduct", "ModernOperations", new { id = p.Id, tab = "information", edit = Model.EditMode })"
+ class="tab @(detailTab =="information" ? "on" : "")" role="tab" aria-selected="@(detailTab == "information")" aria-controls="d-ops-fips-information" id="tab-ops-fips-information">Information</a>
+        <a href="@Url.Action("ServiceRegisterProduct", "ModernOperations", new { id = p.Id, tab = "history" })"
+ class="tab @(detailTab =="history" ? "on" : "")" role="tab" aria-selected="@(detailTab == "history")" aria-controls="d-ops-fips-history" id="tab-ops-fips-history">History</a>
+        <a href="@Url.Action("ServiceRegisterProduct", "ModernOperations", new { id = p.Id, tab = "risks" })"
+ class="tab @(detailTab =="risks" ? "on" : "")" role="tab" aria-selected="@(detailTab == "risks")" aria-controls="d-fips-risks" id="tab-ops-fips-risks">Risks (@Model.ProductRisks.Count)</a>
+        <a href="@Url.Action("ServiceRegisterProduct", "ModernOperations", new { id = p.Id, tab = "issues" })"
+ class="tab @(detailTab =="issues" ? "on" : "")" role="tab" aria-selected="@(detailTab == "issues")" aria-controls="d-fips-issues" id="tab-ops-fips-issues">Issues (@Model.ProductIssues.Count)</a>
+        <a href="@Url.Action("ServiceRegisterProduct", "ModernOperations", new { id = p.Id, tab = "cmdb" })"
+ class="tab @(detailTab =="cmdb" ? "on" : "")" role="tab" aria-selected="@(detailTab == "cmdb")" aria-controls="d-ops-fips-cmdb" id="tab-ops-fips-cmdb">CMDB snapshot (JSON)</a>
+    </div>
+
+    @if (Model.EditMode && Model.CanManage && detailTab == "information")
+    {
+        var reportingRoleNames = new[] { "Reporting contact", "Reporting user" };
+        var existingReportingContacts = p.Contacts
+            .Where(c => reportingRoleNames.Contains(c.FipsContactRole.Name))
+            .OrderBy(c => c.UserName)
+            .ThenBy(c => c.UserEmail)
+            .ToList();
+        var reportingContactPicker = new Compass.Models.UserPickerViewModel
+        {
+            FieldName = "reportingContactUserId",
+            Label = "Reporting contact",
+            Hint = "Search and select a user from Entra.",
+            DefaultSummaryText = "No user selected."
+        };
+ <div class="dfe-c-form-layout">
+ <div class="dfe-c-form-layout__main">
+ <div id="d-ops-fips-information" class="tab-pane on" role="tabpanel">
+ <div class="dfe-c-card dfe-c-card--plain">
+                        <form method="post" novalidate asp-controller="ModernOperations" asp-action="ServiceRegisterProductUpdate" asp-route-id="@p.Id">
+                            @Html.AntiForgeryToken()
+
+ <fieldset class="govuk-fieldset govuk-!-margin-bottom-6">
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">CMDB reference</legend>
+ <p class="govuk-body-s govuk-!-margin-bottom-3" style="color:#505a5f;">Synced from CMDB. Use <strong>Sync this product from CMDB</strong> above to refresh title, description, contacts, and the JSON snapshot.</p>
+ <dl class="govuk-summary-list govuk-!-margin-bottom-0">
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">CMDB description</dt>
+ <dd class="govuk-summary-list__value">@(string.IsNullOrWhiteSpace(p.CMDBDescription) ? "—" : p.CMDBDescription)</dd>
+                                    </div>
+                                </dl>
+                            </fieldset>
+
+ <fieldset class="govuk-fieldset govuk-!-margin-bottom-6">
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Product details</legend>
+
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="userDescription">User description</label>
+ <div class="govuk-hint" id="userDescription-hint">Plain-language description for colleagues and the service register.</div>
+ <textarea class="govuk-textarea" id="userDescription" name="userDescription" rows="4" aria-describedby="userDescription-hint">@p.UserDescription</textarea>
+                                </div>
+
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="phaseId">Phase</label>
+ <select class="govuk-select govuk-!-width-full" id="phaseId" name="phaseId">
+                                        <option value="">— Select —</option>
+                                        @foreach (var opt in Model.PhaseOptions)
+                                        {
+                                            var isPhaseSelected = opt.Id == p.PhaseId;
+                                            if (isPhaseSelected)
+                                            {
+                                                <option value="@opt.Id" selected>@opt.Name</option>
+                                            }
+                                            else
+                                            {
+                                                <option value="@opt.Id">@opt.Name</option>
+                                            }
+                                        }
+                                    </select>
+                                </div>
+
+ <div class="govuk-form-group">
+ <fieldset class="govuk-fieldset">
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Business area</legend>
+ <div class="govuk-hint" id="ba-hint">Select all that apply.</div>
+ <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes" aria-describedby="ba-hint">
+                                            @foreach (var ba in Model.BusinessAreaLookupOptions)
+                                            {
+                                                var isChecked = Model.SelectedBusinessAreaLookupIds.Contains(ba.Id);
+ <div class="govuk-checkboxes__item">
+ <input class="govuk-checkboxes__input" id="ba-lkp-@ba.Id" name="businessAreaLookupIds" type="checkbox" value="@ba.Id" @(isChecked ? "checked" : "")>
+ <label class="govuk-label govuk-checkboxes__label" for="ba-lkp-@ba.Id">@ba.Name</label>
+                                                </div>
+                                            }
+                                        </div>
+                                    </fieldset>
+                                </div>
+
+ <div class="govuk-form-group">
+ <fieldset class="govuk-fieldset">
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Channel</legend>
+ <div class="govuk-hint" id="ch-hint">Select all that apply.</div>
+ <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes" aria-describedby="ch-hint">
+                                            @foreach (var ch in Model.ChannelOptions)
+                                            {
+                                                var isChecked = p.Channels.Any(x => x.FipsChannelId == ch.Id);
+ <div class="govuk-checkboxes__item">
+ <input class="govuk-checkboxes__input" id="ch-@ch.Id" name="channelIds" type="checkbox" value="@ch.Id" @(isChecked ? "checked" : "")>
+ <label class="govuk-label govuk-checkboxes__label" for="ch-@ch.Id">@ch.Name</label>
+                                                </div>
+                                            }
+                                        </div>
+                                    </fieldset>
+                                </div>
+
+ <div class="govuk-form-group">
+ <fieldset class="govuk-fieldset">
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">User group</legend>
+ <div class="govuk-hint" id="ug-hint">Select all that apply.</div>
+ <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes" aria-describedby="ug-hint">
+                                            @foreach (var ug in Model.UserGroupOptions)
+                                            {
+                                                var isChecked = p.UserGroups.Any(x => x.FipsUserGroupId == ug.Id);
+ <div class="govuk-checkboxes__item">
+ <input class="govuk-checkboxes__input" id="ug-@ug.Id" name="userGroupIds" type="checkbox" value="@ug.Id" @(isChecked ? "checked" : "")>
+ <label class="govuk-label govuk-checkboxes__label" for="ug-@ug.Id">@ug.Name</label>
+                                                </div>
+                                            }
+                                        </div>
+                                    </fieldset>
+                                </div>
+
+ <div class="govuk-form-group">
+ <fieldset class="govuk-fieldset">
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Type</legend>
+ <div class="govuk-hint" id="tp-hint">Select all that apply.</div>
+ <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes" aria-describedby="tp-hint">
+                                            @foreach (var tp in Model.TypeOptions)
+                                            {
+                                                var isChecked = p.Types.Any(x => x.FipsTypeId == tp.Id);
+ <div class="govuk-checkboxes__item">
+ <input class="govuk-checkboxes__input" id="tp-@tp.Id" name="typeIds" type="checkbox" value="@tp.Id" @(isChecked ? "checked" : "")>
+ <label class="govuk-label govuk-checkboxes__label" for="tp-@tp.Id">@tp.Name</label>
+                                                </div>
+                                            }
+                                        </div>
+                                    </fieldset>
+                                </div>
+
+                                @await Html.PartialAsync("~/Views/Modern/Shared/_FipsProductCategorisationFields.cshtml", Model)
+
+ <div class="govuk-form-group govuk-!-margin-bottom-0">
+ <label class="govuk-label" for="productURL">Product URL</label>
+ <div class="govuk-hint" id="productURL-hint">Public or internal URL for the live product or service.</div>
+ <input class="govuk-input govuk-!-width-full" id="productURL" name="productURL" type="url" value="@p.ProductURL" aria-describedby="productURL-hint">
+                                </div>
+                            </fieldset>
+
+ <fieldset class="govuk-fieldset govuk-!-margin-bottom-6">
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Reporting contact</legend>
+ <p class="govuk-body-s govuk-!-margin-bottom-3" style="color:#505a5f;">Add one reporting contact using Entra user lookup.</p>
+
+                                @if (existingReportingContacts.Any())
+                                {
+ <div class="govuk-inset-text govuk-!-margin-top-0 govuk-!-margin-bottom-3">
+ <strong>Current reporting contacts:</strong>
+                                        @foreach (var rc in existingReportingContacts)
+                                        {
+ <div class="govuk-body-s govuk-!-margin-bottom-1">@(!string.IsNullOrWhiteSpace(rc.UserName) ? rc.UserName : "—") · @(!string.IsNullOrWhiteSpace(rc.UserEmail) ? rc.UserEmail : "—")</div>
+                                        }
+                                    </div>
+                                }
+
+                                @await Html.PartialAsync("~/Views/Modern/Shared/_UserPicker.cshtml", reportingContactPicker)
+                            </fieldset>
+
+ <div class="govuk-button-group govuk-!-margin-top-6 govuk-!-margin-bottom-0">
+ <button type="submit" class="govuk-button" data-module="govuk-button">Save changes</button>
+                                <a href="@Url.Action("ServiceRegisterProduct", "ModernOperations", new { id = p.Id, tab = "information", edit = false })"
+ class="govuk-button govuk-button--secondary">Cancel editing</a>
+                            </div>
+                        </form>
+                    </div>
+
+ <h2 class="govuk-heading-m govuk-!-margin-top-6">People</h2>
+                    @if (p.Contacts.Count == 0)
+                    {
+ <p class="govuk-body">No contacts assigned.</p>
+                    }
+                    else
+                    {
+ <dl class="govuk-summary-list">
+                            @foreach (var c in p.Contacts.OrderBy(c => c.FipsContactRole.DisplayOrder))
+                            {
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">@c.FipsContactRole.Name</dt>
+ <dd class="govuk-summary-list__value">
+                                        @if (!string.IsNullOrWhiteSpace(c.UserName))
+                                        {
+ <div class="govuk-body govuk-!-margin-bottom-1">@c.UserName</div>
+                                        }
+                                        @if (!string.IsNullOrWhiteSpace(c.UserEmail))
+                                        {
+ <div class="govuk-body">
+ <a href="mailto:@c.UserEmail" class="govuk-link govuk-link--no-visited-state">@c.UserEmail</a>
+                                            </div>
+                                        }
+                                        else if (string.IsNullOrWhiteSpace(c.UserName))
+                                        {
+                                            <span>—</span>
+                                        }
+                                    </dd>
+                                </div>
+                            }
+                        </dl>
+                    }
+                </div>
+            </div>
+
+ <div class="dfe-c-form-layout__aside">
+ <div class="dfe-c-sidebar">
+ <div class="dfe-c-scard govuk-!-margin-bottom-4">
+ <div class="dfe-c-scard__title">Product record</div>
+ <p class="govuk-body govuk-!-margin-bottom-3">
+ <span class="dfe-c-tag @ProductStatusDfeTagClass(p.Status)">@p.Status</span>
+                        </p>
+ <dl class="dfe-c-scard__list">
+                            <dt>Entry ID</dt>
+ <dd class="govuk-!-font-size-16" style="word-break:break-all;">@p.Id</dd>
+                            <dt>Unique ID</dt>
+                            <dd>@(p.UniqueID == 0 ? "—" : p.UniqueID.ToString())</dd>
+                            @if (p.CMDBID != null)
+                            {
+                                <dt>CMDB ID</dt>
+                                <dd>@p.CMDBID</dd>
+                            }
+                            <dt>Access</dt>
+                            <dd>Central operations — edit any product</dd>
+                        </dl>
+                        @{
+                            var editTransitions = StatusTransitions(p.Status);
+                        }
+                        @if (editTransitions.Length > 0)
+                        {
+ <div class="govuk-!-margin-top-3">
+                                @foreach (var t in editTransitions)
+                                {
+                                    if (t.Status == CMDBProductStatus.Inactive)
+                                    {
+ <form method="post" asp-controller="ModernOperations" asp-action="ServiceRegisterProductChangeStatus" asp-route-id="@p.Id" class="govuk-!-margin-bottom-2" data-confirm-title="Set product to inactive" data-confirm-message="The product will be treated as retired in Compass and will not be included in the active FIPS/CMDB sync. You can reactivate it later.">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="newStatus" value="@((int)t.Status)" />
+ <button type="submit" class="govuk-button govuk-button--warning govuk-!-margin-bottom-0">@t.Label</button>
+                                        </form>
+                                    }
+                                    else
+                                    {
+ <form method="post" asp-controller="ModernOperations" asp-action="ServiceRegisterProductChangeStatus" asp-route-id="@p.Id" class="govuk-!-margin-bottom-2">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="newStatus" value="@((int)t.Status)" />
+ <button type="submit" class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0">@t.Label</button>
+                                        </form>
+                                    }
+                                }
+                            </div>
+                        }
+                    </div>
+ <div class="dfe-c-scard">
+ <div class="dfe-c-scard__title">CMDB data</div>
+ <p class="govuk-body-s govuk-!-margin-bottom-0" style="color:#505a5f;">Run sync to refresh the snapshot shown on the <strong>CMDB snapshot</strong> tab.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+    else
+    {
+ <div class="dfe-c-form-layout">
+ <div class="dfe-c-form-layout__main">
+
+ <div id="d-ops-fips-information" class="tab-pane @(detailTab =="information" ? "on" : "")" role="tabpanel">
+ <h2 class="govuk-heading-m">Overview</h2>
+ <dl class="govuk-summary-list">
+                    @{ var readOnlyFields = new (string Label, string? Value, bool IsUrl)[] {
+                        ("CMDB description", p.CMDBDescription, false),
+                        ("User description", p.UserDescription, false),
+                        ("Phase", p.Phase?.Name, false),
+                        ("Business area", Model.BusinessAreasDisplay, false),
+                        ("Channel", Model.ChannelsDisplay, false),
+                        ("User group", Model.UserGroupsDisplay, false),
+                        ("Type", Model.TypesDisplay, false),
+                        ("Product URL", p.ProductURL, true)
+                    }; }
+                    @foreach (var f in readOnlyFields)
+                    {
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">@f.Label</dt>
+ <dd class="govuk-summary-list__value">
+                                @if (f.IsUrl && !string.IsNullOrWhiteSpace(f.Value))
+                                {
+ <a href="@f.Value" class="govuk-link" target="_blank" rel="noopener">@f.Value</a>
+                                }
+                                else
+                                {
+                                    @(string.IsNullOrWhiteSpace(f.Value) ? "—" : f.Value)
+                                }
+                            </dd>
+                        </div>
+                    }
+                    @foreach (var cat in Model.CategorisationSummaryLines)
+                    {
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">@cat.GroupName</dt>
+ <dd class="govuk-summary-list__value">@cat.ItemsDisplay</dd>
+                        </div>
+                    }
+                </dl>
+
+ <h2 class="govuk-heading-m govuk-!-margin-top-6">People</h2>
+                @if (p.Contacts.Count == 0)
+                {
+ <p class="govuk-body">No contacts assigned.</p>
+                }
+                else
+                {
+ <dl class="govuk-summary-list">
+                        @foreach (var c in p.Contacts.OrderBy(c => c.FipsContactRole.DisplayOrder))
+                        {
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">@c.FipsContactRole.Name</dt>
+ <dd class="govuk-summary-list__value">
+                                    @if (!string.IsNullOrWhiteSpace(c.UserName))
+                                    {
+ <div class="govuk-body govuk-!-margin-bottom-1">@c.UserName</div>
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(c.UserEmail))
+                                    {
+ <div class="govuk-body">
+ <a href="mailto:@c.UserEmail" class="govuk-link govuk-link--no-visited-state">@c.UserEmail</a>
+                                        </div>
+                                    }
+                                    else if (string.IsNullOrWhiteSpace(c.UserName))
+                                    {
+                                        <span>—</span>
+                                    }
+                                </dd>
+                            </div>
+                        }
+                    </dl>
+                }
+            </div>
+
+ <div id="d-ops-fips-history" class="tab-pane @(detailTab =="history" ? "on" : "")" role="tabpanel">
+ <h2 class="govuk-heading-m">Change history</h2>
+                @if (Model.AuditHistory.Count == 0)
+                {
+ <p class="govuk-body">No changes recorded.</p>
+                }
+                else
+                {
+ <ul class="fips-audit-timeline govuk-!-margin-top-4">
+                        @foreach (var row in Model.AuditHistory)
+                        {
+                            var fieldLabel = string.IsNullOrWhiteSpace(row.FieldName) ? "Record" : row.FieldName;
+ <li class="fips-audit-timeline__item">
+ <div class="fips-audit-timeline__meta">
+                                    @row.ChangedAt.ToString("d MMM yyyy HH:mm")
+                                    @if (!string.IsNullOrWhiteSpace(row.ChangedBy))
+                                    {
+                                        <span> · @row.ChangedBy</span>
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(row.ChangeType))
+                                    {
+ <span class="govuk-tag govuk-tag--blue govuk-!-margin-left-1" style="font-size:0.75rem;">@row.ChangeType</span>
+                                    }
+                                </div>
+ <h3 class="fips-audit-timeline__field">@fieldLabel</h3>
+ <div class="fips-audit-timeline__diff">
+                                    <div>
+ <p class="govuk-body-s govuk-!-margin-bottom-1" style="color:#505a5f;">Previous</p>
+ <div class="fips-audit-timeline__diff-box">@(string.IsNullOrWhiteSpace(row.PreviousValue) ? "—" : row.PreviousValue)</div>
+                                    </div>
+                                    <div>
+ <p class="govuk-body-s govuk-!-margin-bottom-1" style="color:#505a5f;">New</p>
+ <div class="fips-audit-timeline__diff-box">@(string.IsNullOrWhiteSpace(row.NewValue) ? "—" : row.NewValue)</div>
+                                    </div>
+                                </div>
+                            </li>
+                        }
+                    </ul>
+                }
+            </div>
+
+ <div id="d-ops-fips-cmdb" class="tab-pane @(detailTab =="cmdb" ? "on" : "")" role="tabpanel">
+ <h2 class="govuk-heading-m">CMDB snapshot stored in Compass</h2>
+ <p class="govuk-body">This is the JSON saved on the product row during the last successful CMDB sync (single or bulk). Use it for rules, support, and future reporting.</p>
+                @if (string.IsNullOrWhiteSpace(Model.CmdbSnapshotJsonFormatted))
+                {
+ <p class="govuk-body govuk-!-margin-bottom-0">No snapshot yet. Run <strong>Sync this product from CMDB</strong> above.</p>
+                }
+                else
+                {
+ <pre class="govuk-body-s" style="max-height:32rem;overflow:auto;background:#f3f2f1;padding:1rem;border:1px solid #b1b4b6;white-space:pre-wrap;word-break:break-word;">@Model.CmdbSnapshotJsonFormatted</pre>
+                }
+            </div>
+
+            <partial name="~/Views/Modern/Shared/_FipsProductRaidPanes.cshtml" model="Model" />
+
+        </div>
+
+ <div class="dfe-c-form-layout__aside">
+ <div class="dfe-c-sidebar">
+ <div class="dfe-c-scard govuk-!-margin-bottom-4">
+ <div class="dfe-c-scard__title">Product record</div>
+ <p class="govuk-body govuk-!-margin-bottom-3">
+ <span class="dfe-c-tag @ProductStatusDfeTagClass(p.Status)">@p.Status</span>
+                </p>
+ <dl class="dfe-c-scard__list">
+                    <dt>Entry ID</dt>
+ <dd class="govuk-!-font-size-16" style="word-break:break-all;">@p.Id</dd>
+                    <dt>Unique ID</dt>
+                    <dd>@(p.UniqueID == 0 ? "—" : p.UniqueID.ToString())</dd>
+                    @if (p.CMDBID != null)
+                    {
+                        <dt>CMDB ID</dt>
+                        <dd>@p.CMDBID</dd>
+                    }
+                    <dt>Access</dt>
+                    <dd>Central operations — edit any product</dd>
+                </dl>
+                @if (detailTab == "information")
+                {
+ <div class="govuk-button-group govuk-!-margin-top-4 govuk-!-margin-bottom-0">
+                        <a href="@Url.Action("ServiceRegisterProduct", "ModernOperations", new { id = p.Id, tab = "information", edit = true })"
+ class="govuk-button govuk-button--secondary">Edit entry</a>
+                    </div>
+                    var transitions = StatusTransitions(p.Status);
+                    @if (transitions.Length > 0)
+                    {
+ <div class="govuk-!-margin-top-3">
+                            @foreach (var t in transitions)
+                            {
+                                if (t.Status == CMDBProductStatus.Inactive)
+                                {
+ <form method="post" asp-controller="ModernOperations" asp-action="ServiceRegisterProductChangeStatus" asp-route-id="@p.Id" class="govuk-!-margin-bottom-2" data-confirm-title="Set product to inactive" data-confirm-message="The product will be treated as retired in Compass and will not be included in the active FIPS/CMDB sync. You can reactivate it later.">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="newStatus" value="@((int)t.Status)" />
+ <button type="submit" class="govuk-button govuk-button--warning govuk-!-margin-bottom-0">@t.Label</button>
+                                    </form>
+                                }
+                                else
+                                {
+ <form method="post" asp-controller="ModernOperations" asp-action="ServiceRegisterProductChangeStatus" asp-route-id="@p.Id" class="govuk-!-margin-bottom-2">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="newStatus" value="@((int)t.Status)" />
+ <button type="submit" class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0">@t.Label</button>
+                                    </form>
+                                }
+                            }
+                        </div>
+                    }
+                }
+            </div>
+            </div>
+        </div>
+    </div>
+    }
+</div>
+
+<div id="fips-cmdb-single-sync-modal" class="fips-modal fips-cmdb-sync-modal" hidden role="dialog" aria-modal="true" aria-labelledby="fips-cmdb-single-sync-title">
+ <div class="fips-modal__content fips-cmdb-sync-modal__panel">
+ <h2 class="govuk-heading-m govuk-!-margin-top-0" id="fips-cmdb-single-sync-title">Sync from CMDB</h2>
+ <p class="govuk-body" id="fips-cmdb-single-sync-live" aria-live="polite" aria-atomic="true">Starting…</p>
+ <div class="fips-cmdb-sync-modal__progress-wrap govuk-!-margin-bottom-4">
+ <progress id="fips-cmdb-single-sync-progress" class="fips-cmdb-sync-modal__progress" max="100" aria-hidden="true"></progress>
+        </div>
+ <div id="fips-cmdb-single-sync-summary" class="govuk-body-s govuk-!-margin-bottom-4" style="display:none;"></div>
+ <div class="govuk-button-group govuk-!-margin-bottom-0">
+ <button type="button" class="govuk-button" id="fips-cmdb-single-sync-close" style="display:none;">Close and refresh</button>
+ <button type="button" class="govuk-button govuk-button--secondary" id="fips-cmdb-single-sync-dismiss">Cancel</button>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script nonce="@Context.Items["Nonce"]">
+        (function () {
+            var jsonUrl = @Html.Raw(Json.Serialize(Url.Action("ServiceRegisterProductSyncCmdbJson", "ModernOperations", new { id = p.Id })));
+            var startBtn = document.getElementById('fips-cmdb-single-sync-start');
+            var modal = document.getElementById('fips-cmdb-single-sync-modal');
+            var live = document.getElementById('fips-cmdb-single-sync-live');
+            var progress = document.getElementById('fips-cmdb-single-sync-progress');
+            var summary = document.getElementById('fips-cmdb-single-sync-summary');
+            var closeBtn = document.getElementById('fips-cmdb-single-sync-close');
+            var dismissBtn = document.getElementById('fips-cmdb-single-sync-dismiss');
+            var tokenForm = document.getElementById('fips-cmdb-single-sync-antiforgery');
+            if (!startBtn || !modal || !tokenForm) return;
+
+            var syncFinished = false;
+            var abortController = null;
+
+            function getToken() {
+                var input = tokenForm.querySelector('input[name="__RequestVerificationToken"]');
+                return input ? input.value : '';
+            }
+
+            function openModal() {
+                syncFinished = false;
+                abortController = new AbortController();
+                modal.hidden = false;
+                summary.style.display = 'none';
+                summary.textContent = '';
+                summary.style.color = '';
+                closeBtn.style.display = 'none';
+                dismissBtn.textContent = 'Cancel';
+                progress.removeAttribute('value');
+                live.textContent = 'Fetching this product from CMDB…';
+                startBtn.disabled = true;
+            }
+
+            function endModal(success) {
+                syncFinished = true;
+                abortController = null;
+                startBtn.disabled = false;
+                dismissBtn.textContent = 'Close';
+                if (success) {
+                    progress.value = 100;
+                    closeBtn.style.display = '';
+                }
+            }
+
+            dismissBtn.addEventListener('click', function () {
+                if (!syncFinished && abortController) abortController.abort();
+                modal.hidden = true;
+            });
+            closeBtn.addEventListener('click', function () { window.location.reload(); });
+
+            startBtn.addEventListener('click', function () {
+                openModal();
+                var body = new URLSearchParams();
+                body.set('__RequestVerificationToken', getToken());
+                fetch(jsonUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/json' },
+                    body: body,
+                    signal: abortController.signal
+                }).then(function (res) {
+                    return res.json().then(function (data) {
+                        return { ok: res.ok, data: data };
+                    });
+                }).then(function (pack) {
+                    if (!pack) return;
+                    var data = pack.data;
+                    if (!pack.ok) {
+                        live.textContent = (data && data.message) ? data.message : 'Sync failed.';
+                        summary.style.display = '';
+                        summary.style.color = '#d4351c';
+                        summary.textContent = live.textContent;
+                        endModal(false);
+                        return;
+                    }
+                    live.textContent = data.success ? 'Sync finished.' : 'Sync could not complete.';
+                    summary.style.display = '';
+                    summary.style.color = data.success ? '' : '#d4351c';
+                    summary.textContent = data.message || '';
+                    endModal(!!data.success);
+                }).catch(function (err) {
+                    if (err && err.name === 'AbortError') {
+                        live.textContent = 'Cancelled.';
+                    } else {
+                        live.textContent = 'Network error during sync.';
+                    }
+                    endModal(false);
+                });
+            });
+        })();
+    </script>
+}
+
+@functions {
+    string ProductStatusDfeTagClass(CMDBProductStatus status) => status switch
+    {
+        CMDBProductStatus.Active => "dfe-c-tag--green",
+        CMDBProductStatus.New => "dfe-c-tag--blue",
+        CMDBProductStatus.Inactive => "dfe-c-tag--grey",
+        CMDBProductStatus.Rejected => "dfe-c-tag--red",
+        _ => "dfe-c-tag--grey"
+    };
+
+    (CMDBProductStatus Status, string Label)[] StatusTransitions(CMDBProductStatus current) => current switch
+    {
+        CMDBProductStatus.New => new[]
+        {
+            (CMDBProductStatus.Active, "Set active"),
+            (CMDBProductStatus.Inactive, "Set as inactive")
+        },
+        CMDBProductStatus.Active => new[] { (CMDBProductStatus.Inactive, "Set as inactive") },
+        CMDBProductStatus.Inactive => new[] { (CMDBProductStatus.Active, "Reactivate") },
+        CMDBProductStatus.Rejected => new[] { (CMDBProductStatus.Active, "Set active") },
+        _ => Array.Empty<(CMDBProductStatus, string)>()
+    };
+}

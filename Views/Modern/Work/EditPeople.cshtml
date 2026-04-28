@@ -4,129 +4,181 @@
     ViewData["Title"] = "Edit key people";
     var work = ViewBag.WorkItem as WorkItem ?? Model;
     var roleTypes = (List<ContactRoleType>)ViewBag.ContactRoleTypes ?? new List<ContactRoleType>();
+    var standardRoles = roleTypes.Where(r => r.Id >= 1 && r.Id <= 4).ToList();
     var primaryContactName = ViewBag.PrimaryContactName as string;
     var primaryContactSubtitle = ViewBag.PrimaryContactSubtitle as string;
     var budgetOwnerName = ViewBag.BudgetOwnerName as string;
     var firstSroName = ViewBag.FirstSroName as string;
     var budgetOwnerSameAsSro = ViewBag.BudgetOwnerSameAsSro as bool? ?? false;
-    string Initials(string? name, string? email) {
-        if (!string.IsNullOrWhiteSpace(name)) {
-            var parts = name.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length >= 2) return (parts[0][0] + parts[^1][0].ToString()).ToUpperInvariant();
-            if (parts[0].Length >= 2) return parts[0].Substring(0, 2).ToUpperInvariant();
-            return parts[0].Substring(0, 1).ToUpperInvariant();
-        }
-        if (!string.IsNullOrWhiteSpace(email)) return email.Substring(0, Math.Min(2, email.Length)).ToUpperInvariant();
-        return "—";
-    }
-    var contactsByRole = (work.Contacts ?? new List<WorkItemContact>()).GroupBy(c => c.ContactRoleTypeId).ToDictionary(g => g.Key, g => g.ToList());
+    var contactsByRole = (work.Contacts ?? new List<WorkItemContact>())
+        .Where(c => c.ContactRoleTypeId is >= 1 and <= 4)
+        .GroupBy(c => c.ContactRoleTypeId!.Value)
+        .ToDictionary(g => g.Key, g => g.ToList());
+    var customRoleGroups = (work.Contacts ?? new List<WorkItemContact>())
+        .Where(c => c.ContactRoleTypeId == 5 && !string.IsNullOrEmpty(c.RoleName))
+        .GroupBy(c => c.RoleName!)
+        .OrderBy(g => g.Key)
+        .ToList();
 }
 @section Breadcrumbs {
-    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="/">Home</a></li>
-    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="@Url.Action("Index", "ModernWork")">Work</a></li>
-    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="@Url.Action("Detail", "ModernWork", new { id = work.Id })">@work.Title</a></li>
-    <li class="dfe-c-breadcrumb__item" aria-current="page">Edit key people</li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="/">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernWork")">Work</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Detail", "ModernWork", new { id = work.Id })">@work.Title</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">Key people</li>
 }
 
-<div id="sc-work-editpeople">
+<div id="sc-work-editpeople" class="modern-work-page">
   @await Html.PartialAsync("_WorkItemChrome", ViewBag.WorkItem as WorkItem ?? work)
-  <h2 class="dfe-c-heading-l dfe-c-mt-0">Edit key people</h2>
-  <p class="dfe-c-body dfe-c-mb-4">Manage who holds each role for this work item. Add or change people using the links below.</p>
 
-  <div class="ep-roles" style="max-width: 36em;">
-    @* Primary contact *@
-    <div class="ep-role">
-      <h3 class="ep-role__heading">Primary contact <span class="dfe-c-form__required">*</span></h3>
-      <p class="ep-role__hint">Day-to-day management and communications.</p>
-      @if (work.PrimaryContactUserId.HasValue && !string.IsNullOrEmpty(primaryContactName))
-      {
-        <div class="ep-person">
-          <div class="ep-person__avatar" aria-hidden="true">@Initials(primaryContactName, primaryContactSubtitle)</div>
-          <div class="ep-person__details">
-            <p class="ep-person__name">@primaryContactName</p>
-            @if (!string.IsNullOrEmpty(primaryContactSubtitle)) { <p class="ep-person__email">@primaryContactSubtitle</p> }
-          </div>
-          <div class="ep-person__action">
-            <form method="post" action="@Url.Action("SetPrimaryContact", "ModernWork", new { id = work.Id })" style="display:inline;" data-confirm-title="Remove primary contact" data-confirm-message="Remove this person as primary contact? The work item will have no primary contact until one is set.">
-              @Html.AntiForgeryToken()
-              <input type="hidden" name="AppUserId" value="0" />
-              <button type="submit" class="dfe-c-link" style="color:#d4351c;">Remove</button>
-            </form>
-          </div>
-        </div>
-      }
-      else
-      {
-        <p class="ep-empty">No primary contact set.</p>
-      }
-      <div class="ep-actions">
-        <a href="@Url.Action("SetPrimaryContact", "ModernWork", new { id = work.Id })" class="dfe-c-button dfe-c-button--secondary dfe-c-mb-0">@(work.PrimaryContactUserId.HasValue ? "Change" : "Add primary contact")</a>
-      </div>
+ <h2 class="govuk-heading-l">Key people</h2>
+ <p class="govuk-body govuk-!-margin-bottom-6">Assign a person to each role, or remove them when they no longer apply.</p>
+
+ <dl class="govuk-summary-list govuk-!-margin-bottom-6">
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">Primary contact</dt>
+ <dd class="govuk-summary-list__value">
+        @if (work.PrimaryContactUserId.HasValue && !string.IsNullOrEmpty(primaryContactName))
+        {
+          <strong>@primaryContactName</strong>
+          @if (!string.IsNullOrEmpty(primaryContactSubtitle))
+ { <br /><span class="govuk-body-s" style="color:#505a5f;">@primaryContactSubtitle</span> }
+        }
+        else
+        {
+ <span class="govuk-body" style="color:#505a5f;">Not assigned</span>
+        }
+      </dd>
+ <dd class="govuk-summary-list__actions">
+        @if (work.PrimaryContactUserId.HasValue && !string.IsNullOrEmpty(primaryContactName))
+        {
+ <ul class="govuk-summary-list__actions-list">
+ <li class="govuk-summary-list__actions-list-item">
+ <a class="govuk-link" href="@Url.Action("SetPrimaryContact", "ModernWork", new { id = work.Id })">Change<span class="govuk-visually-hidden"> primary contact</span></a>
+            </li>
+ <li class="govuk-summary-list__actions-list-item">
+              <form method="post" action="@Url.Action("SetPrimaryContactPost", "ModernWork", new { id = work.Id })" style="display:inline;" data-confirm-title="Remove primary contact" data-confirm-message="Remove this person as primary contact?">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="AppUserId" value="0" />
+ <button type="submit" class="govuk-link" style="padding:0;border:0;background:none;cursor:pointer;font:inherit;color:#d4351c;">Remove<span class="govuk-visually-hidden"> primary contact</span></button>
+              </form>
+            </li>
+          </ul>
+        }
+        else
+        {
+ <a class="govuk-link" href="@Url.Action("SetPrimaryContact", "ModernWork", new { id = work.Id })">Add<span class="govuk-visually-hidden"> primary contact</span></a>
+        }
+      </dd>
     </div>
 
-    @* Other role types (SRO, Service Owner, etc.) *@
-    @foreach (var rt in roleTypes.Where(r => !string.Equals(r.Name, "Primary contact", StringComparison.OrdinalIgnoreCase) && !string.Equals(r.Name, "Budget owner", StringComparison.OrdinalIgnoreCase)))
+    @foreach (var rt in standardRoles)
     {
       var contacts = contactsByRole.TryGetValue(rt.Id, out var list) ? list : new List<WorkItemContact>();
-      var isMulti = rt.Name?.Contains("SRO", StringComparison.OrdinalIgnoreCase) == true || rt.Name?.Contains("Service Owner", StringComparison.OrdinalIgnoreCase) == true;
-      var hint = rt.Name?.Contains("SRO", StringComparison.OrdinalIgnoreCase) == true ? "Senior civil servant ultimately accountable." : (rt.Name?.Contains("Service Owner", StringComparison.OrdinalIgnoreCase) == true ? "Responsible for quality and performance of the service." : null);
-      <div class="ep-role">
-        <h3 class="ep-role__heading">@rt.Name@(rt.Name?.Contains("SRO", StringComparison.OrdinalIgnoreCase) == true ? " (Senior Responsible Owner)" : "") @(rt.Name?.Contains("SRO", StringComparison.OrdinalIgnoreCase) == true ? Html.Raw("<span class=\"dfe-c-form__required\">*</span>") : null)</h3>
-        @if (!string.IsNullOrEmpty(hint)) { <p class="ep-role__hint">@hint</p> }
-        @foreach (var c in contacts)
-        {
-          var un = c.AppUser?.Name ?? c.AppUser?.Email ?? "—";
-          var ue = c.AppUser?.Email;
-          <div class="ep-person">
-            <div class="ep-person__avatar" aria-hidden="true">@Initials(un, ue)</div>
-            <div class="ep-person__details">
-              <p class="ep-person__name">@un</p>
-              @if (!string.IsNullOrEmpty(ue)) { <p class="ep-person__email">@ue</p> }
-            </div>
-            <div class="ep-person__action">
-              <form method="post" action="@Url.Action("RemoveContact", "ModernWork", new { id = work.Id, contactId = c.Id })" style="display:inline;" data-confirm-title="Remove contact" data-confirm-message="Remove this person from the work item?">
-                @Html.AntiForgeryToken()
-                <button type="submit" class="dfe-c-link" style="color:#d4351c;">Remove</button>
-              </form>
-            </div>
-          </div>
-        }
-        @if (!contacts.Any()) { <p class="ep-empty">None assigned.</p> }
-        <div class="ep-actions">
-          <a href="@Url.Action("AddContact", "ModernWork", new { id = work.Id, contactRoleTypeId = rt.Id, returnTo = "EditPeople" })" class="dfe-c-button dfe-c-button--secondary dfe-c-mb-0">@(isMulti ? "Add " + rt.Name : "Add contact")</a>
-        </div>
+      var roleName = rt.Name ?? "Role";
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">@roleName</dt>
+ <dd class="govuk-summary-list__value">
+          @if (contacts.Any())
+          {
+            @foreach (var c in contacts)
+            {
+              var un = c.AppUser?.Name ?? c.AppUser?.Email ?? "—";
+              var ue = c.AppUser?.Email;
+              <div style="@(contacts.IndexOf(c) > 0 ? "margin-top:0.5rem;" : "")">
+                <strong>@un</strong>
+                @if (!string.IsNullOrEmpty(ue))
+ { <br /><span class="govuk-body-s" style="color:#505a5f;">@ue</span> }
+                <form method="post" action="@Url.Action("RemoveContact", "ModernWork", new { id = work.Id, contactId = c.Id })" style="display:inline;margin-left:0.5rem;" data-confirm-title="Remove contact" data-confirm-message="Remove this person from the work item?">
+                  @Html.AntiForgeryToken()
+ <button type="submit" class="govuk-link" style="padding:0;border:0;background:none;cursor:pointer;font:inherit;color:#d4351c;font-size:0.875rem;">Remove<span class="govuk-visually-hidden"> @un from @roleName</span></button>
+                </form>
+              </div>
+            }
+          }
+          else
+          {
+ <span class="govuk-body" style="color:#505a5f;">Not assigned</span>
+          }
+        </dd>
+ <dd class="govuk-summary-list__actions">
+ <a class="govuk-link" href="@Url.Action("AddContact", "ModernWork", new { id = work.Id, contactRoleTypeId = rt.Id, returnTo = "EditPeople" })">Add<span class="govuk-visually-hidden"> @roleName.ToLowerInvariant()</span></a>
+        </dd>
       </div>
     }
 
-    @* Budget owner *@
-    <div class="ep-role">
-      <h3 class="ep-role__heading">Budget owner</h3>
-      <p class="ep-role__hint">Defaults to SRO unless set separately.</p>
-      <div class="ep-budget">
-        <span class="ep-budget__name">@(budgetOwnerSameAsSro ? "Same as SRO — " + (firstSroName ?? "—") : "Different person — " + (budgetOwnerName ?? "—"))</span>
-        <form method="post" action="@Url.Action("SetBudgetOwner", "ModernWork", new { id = work.Id })" style="display:inline;">
-          @Html.AntiForgeryToken()
-          <input type="hidden" name="SameAsSro" value="true" />
-          <input type="hidden" name="AppUserId" value="0" />
-          <button type="submit" class="dfe-c-link">Use SRO</button>
-        </form>
-        <a href="@Url.Action("SetBudgetOwner", "ModernWork", new { id = work.Id })" class="dfe-c-link">@(budgetOwnerSameAsSro ? "Set different person" : "Change")</a>
+    @foreach (var grp in customRoleGroups)
+    {
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">@grp.Key</dt>
+ <dd class="govuk-summary-list__value">
+          @foreach (var c in grp)
+          {
+            var un = c.AppUser?.Name ?? c.AppUser?.Email ?? "—";
+            var ue = c.AppUser?.Email;
+            <div style="@(grp.ToList().IndexOf(c) > 0 ? "margin-top:0.5rem;" : "")">
+              <strong>@un</strong>
+              @if (!string.IsNullOrEmpty(ue))
+ { <br /><span class="govuk-body-s" style="color:#505a5f;">@ue</span> }
+              <form method="post" action="@Url.Action("RemoveContact", "ModernWork", new { id = work.Id, contactId = c.Id })" style="display:inline;margin-left:0.5rem;" data-confirm-title="Remove contact" data-confirm-message="Remove this person from the work item?">
+                @Html.AntiForgeryToken()
+ <button type="submit" class="govuk-link" style="padding:0;border:0;background:none;cursor:pointer;font:inherit;color:#d4351c;font-size:0.875rem;">Remove<span class="govuk-visually-hidden"> @un from @grp.Key</span></button>
+              </form>
+            </div>
+          }
+        </dd>
+ <dd class="govuk-summary-list__actions">
+ <a class="govuk-link" href="@Url.Action("AddContact", "ModernWork", new { id = work.Id, contactRoleTypeId = 5, customRoleName = grp.Key, returnTo = "EditPeople" })">Add<span class="govuk-visually-hidden"> @grp.Key.ToLowerInvariant()</span></a>
+        </dd>
       </div>
-    </div>
-  </div>
+    }
 
-  <details class="dfe-c-details dfe-c-mt-5" data-module="dfe-c-details">
-    <summary class="dfe-c-details__summary">
-      <span class="dfe-c-details__summary-text">About these roles</span>
-    </summary>
-    <div class="dfe-c-details__text dfe-c-body-s">
-      <ul class="dfe-c-list dfe-c-list--spaced" style="margin-bottom:0;">
-        <li><strong>Primary contact</strong> — Day-to-day management and communications.</li>
-        <li><strong>SRO</strong> — Ultimately accountable; typically G5 Deputy Director or above.</li>
-        <li><strong>Service Owner</strong> — Responsible for quality and performance of the service.</li>
-        <li><strong>PMO Contact</strong> — Portfolio management office contact for reporting.</li>
-        <li><strong>Reporting contact</strong> — Receives monthly updates and reports.</li>
-      </ul>
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">Custom role</dt>
+ <dd class="govuk-summary-list__value">
+ <span class="govuk-body" style="color:#505a5f;">Add a contact with a custom role name</span>
+      </dd>
+ <dd class="govuk-summary-list__actions">
+ <a class="govuk-link" href="@Url.Action("AddContact", "ModernWork", new { id = work.Id, contactRoleTypeId = 5, returnTo = "EditPeople" })">Add<span class="govuk-visually-hidden"> custom role</span></a>
+      </dd>
     </div>
-  </details>
+
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">Budget owner</dt>
+ <dd class="govuk-summary-list__value">
+        @if (budgetOwnerSameAsSro)
+        {
+          <strong>Same as SRO</strong>
+          @if (!string.IsNullOrEmpty(firstSroName))
+ { <br /><span class="govuk-body-s" style="color:#505a5f;">@firstSroName</span> }
+        }
+        else if (!string.IsNullOrEmpty(budgetOwnerName))
+        {
+          <strong>@budgetOwnerName</strong>
+        }
+        else
+        {
+ <span class="govuk-body" style="color:#505a5f;">Not assigned</span>
+        }
+      </dd>
+ <dd class="govuk-summary-list__actions">
+ <ul class="govuk-summary-list__actions-list">
+ <li class="govuk-summary-list__actions-list-item">
+ <a class="govuk-link" href="@Url.Action("SetBudgetOwner", "ModernWork", new { id = work.Id })">Change<span class="govuk-visually-hidden"> budget owner</span></a>
+          </li>
+ <li class="govuk-summary-list__actions-list-item">
+            <form method="post" action="@Url.Action("SetBudgetOwnerPost", "ModernWork", new { id = work.Id })" style="display:inline;">
+              @Html.AntiForgeryToken()
+              <input type="hidden" name="SameAsSro" value="true" />
+              <input type="hidden" name="AppUserId" value="0" />
+ <button type="submit" class="govuk-link" style="padding:0;border:0;background:none;cursor:pointer;font:inherit;">Use SRO<span class="govuk-visually-hidden"> as budget owner</span></button>
+            </form>
+          </li>
+        </ul>
+      </dd>
+    </div>
+  </dl>
+
+ <p class="govuk-body govuk-!-margin-top-4">
+ <a href="@Url.Action("Detail", "ModernWork", new { id = work.Id })#wd-overview" class="govuk-button govuk-button--secondary">Back to work item</a>
+  </p>
 </div>

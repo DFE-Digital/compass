@@ -1,0 +1,224 @@
+@model Compass.Models.DemandDashboardViewModel
+@{
+  ViewData["Title"] = "Demand dashboard";
+}
+@functions {
+  string ScoreColour(int? s) => s switch
+  {
+    null => "",
+    var n when n >= 57 => "var(--green)",
+    var n when n >= 30 => "var(--rag-a)",
+    _ => "var(--rag-r)"
+  };
+  (string CssClass, string Label) BandParts(string? b) => b switch
+  {
+    "MustDo" => ("dfe-c-band--must", "MUST DO"),
+    "CouldDo" => ("dfe-c-band--could", "COULD DO"),
+    "DoNotDo" => ("dfe-c-band--not", "DO NOT DO"),
+    _ => ("", "")
+  };
+  string DemandsReadyPhrase(int n) => n == 1 ? "1 demand ready" : $"{n} demands ready";
+  string DaysUntilPhrase(int? days) => days switch
+  {
+    null => "",
+    0 => "Today",
+    1 => "1 day",
+    var d when d > 1 => $"{d} days",
+    _ => "Past date"
+  };
+}
+
+@section Breadcrumbs {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Register", "ModernDemand")">Demand</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">Dashboard</li>
+}
+
+<div id="sc-demand-dash">
+<div class="dfe-c-flex--between dfe-c-mb-3" style="flex-wrap:wrap;gap:1rem;">
+ <div class="dfe-c-page-title" style="margin:0;">
+ <div class="dfe-c-page-title__caption">Demand pipeline</div>
+ <h1 class="dfe-c-page-title__heading">Demand dashboard</h1>
+ <p class="dfe-c-page-title__lede">Pipeline overview, recent submissions, and the next triage meeting</p>
+  </div>
+ <div class="dfe-c-flex" style="gap:0.5rem;flex-wrap:wrap;">
+ <a href="@Url.Action("BusinessCaseNew", "ModernDemand")" class="govuk-button govuk-button--secondary">Add business case</a>
+ <a href="@Url.Action("Submit", "ModernDemand")" class="govuk-button">Submit demand</a>
+  </div>
+</div>
+
+<div class="dfe-c-grid dfe-c-grid--6 dfe-c-mb-4">
+ <a class="dfe-c-metric dfe-c-metric--grey" href="@Url.Action("Register", "ModernDemand")" title="View all demand">
+ <div class="dfe-c-metric__number">@Model.TotalRequests</div>
+ <div class="dfe-c-metric__label">Total requests</div>
+ <div class="dfe-c-metric__note" style="color:var(--blue);">View all →</div>
+  </a>
+ <a class="dfe-c-metric dfe-c-metric--navy" href="@Url.Action("Register", "ModernDemand", new { stage = "submitted" })" title="View submitted">
+ <div class="dfe-c-metric__number" style="color:var(--navy);">@Model.SubmittedCount</div>
+ <div class="dfe-c-metric__label">Submitted</div>
+ <div class="dfe-c-metric__note" style="color:var(--blue);">View →</div>
+  </a>
+ <a class="dfe-c-metric dfe-c-metric--amber" href="@Url.Action("Explore", "ModernDemand")" title="View explore queue">
+ <div class="dfe-c-metric__number" style="color:var(--rag-a);">@Model.InExploreCount</div>
+ <div class="dfe-c-metric__label">In explore</div>
+ <div class="dfe-c-metric__note" style="color:var(--blue);">View explore →</div>
+  </a>
+ <a class="dfe-c-metric dfe-c-metric--teal" href="@Url.Action("Scoring", "ModernDemand")" title="View scoring queue">
+ <div class="dfe-c-metric__number" style="color:var(--teal);">@Model.ScoringCount</div>
+ <div class="dfe-c-metric__label">In scoring</div>
+ <div class="dfe-c-metric__note" style="color:var(--blue);">View scoring →</div>
+  </a>
+ <a class="dfe-c-metric @(Model.TriagePendingCount> 0 ?"dfe-c-metric--red" : "dfe-c-metric--grey")" href="@Url.Action("Triage", "ModernDemand")" title="View triage queue">
+ <div class="dfe-c-metric__number" style="@(Model.TriagePendingCount> 0 ? "color:var(--rag-r);" : "")">@Model.TriagePendingCount</div>
+ <div class="dfe-c-metric__label">Triage pending</div>
+ <div class="dfe-c-metric__note" style="color:@(Model.TriagePendingCount> 0 ? "var(--rag-r)" : "var(--blue)");">@(Model.TriagePendingCount> 0 ? "Action required →" : "View →")</div>
+  </a>
+ <a class="dfe-c-metric dfe-c-metric--grey" href="@Url.Action("WorkDemandReport", "ModernDemand")" title="Triaged and settled outcomes">
+ <div class="dfe-c-metric__number">@Model.ClosedCount</div>
+ <div class="dfe-c-metric__label">Closed</div>
+ <div class="dfe-c-metric__note" style="color:var(--blue);">View closed →</div>
+  </a>
+</div>
+
+<div class="dfe-c-mb-4">
+ <div class="dfe-c-section-header">
+  <h2>Recent submissions</h2>
+  <a class="dfe-c-button--link" style="font-size:0.875rem;" href="@Url.Action("Register", "ModernDemand")">Full register →</a>
+ </div>
+ <div class="dfe-c-table-wrap">
+  <table>
+   <thead><tr><th>Request</th><th>Business area</th><th>Status</th><th>Score</th><th>Band</th></tr></thead>
+   <tbody>
+    @if (!Model.RecentSubmissions.Any())
+    {
+ <tr><td colspan="5" class="dfe-c-text-muted">No submitted demand requests yet.</td></tr>
+    }
+    else
+    {
+     foreach (var row in Model.RecentSubmissions)
+     {
+      var band = BandParts(row.SuggestedBand);
+      <tr>
+       <td>
+ <a href="@Url.Action("RequestDetail", "ModernDemand", new { id = row.Id })">@row.Title</a><span class="dfe-c-table-ref">@row.Reference</span>
+       </td>
+       <td>@row.Department</td>
+ <td><span class="dfe-c-tag @row.StatusTagClass">@row.StatusLabel</span></td>
+       <td>
+        @if (row.TotalScore.HasValue)
+        {
+         <strong style="color:@ScoreColour(row.TotalScore);">@row.TotalScore</strong>
+        }
+        else
+        {
+ <span class="dfe-c-text-muted">—</span>
+        }
+       </td>
+       <td>
+        @if (!string.IsNullOrEmpty(band.CssClass))
+        {
+ <span class="@band.CssClass">@band.Label</span>
+        }
+        else
+        {
+ <span class="dfe-c-text-muted">—</span>
+        }
+       </td>
+      </tr>
+     }
+    }
+   </tbody>
+  </table>
+ </div>
+</div>
+
+<!-- Next triage meeting items -->
+<div class="dfe-c-mb-4">
+ <div class="dfe-c-section-header">
+  <h2>Next triage meeting</h2>
+  <a class="dfe-c-button--link" style="font-size:0.875rem;" href="@Url.Action("Triage", "ModernDemand")">View triage →</a>
+ </div>
+  @if (Model.NextTriageMeetingDate == null)
+  {
+ <p class="govuk-body dfe-c-text-muted">No upcoming meeting scheduled.</p>
+  }
+  else
+  {
+ <p class="govuk-body">
+  <strong>@Model.NextTriageMeetingDate.Value.ToString("d MMMM yyyy")</strong>
+  @if (!string.IsNullOrEmpty(Model.NextTriageMeetingName)) { <text> — @Model.NextTriageMeetingName</text> }
+  @{ var dayLabel = DaysUntilPhrase(Model.NextTriageMeetingDaysUntil); }
+  @if (!string.IsNullOrEmpty(dayLabel)) { <span class="dfe-c-text-muted"> · @dayLabel</span> }
+  · @DemandsReadyPhrase(Model.NextMeetingItems.Count)
+ </p>
+ <div class="dfe-c-table-wrap">
+  <table>
+   <thead><tr><th>Request</th><th>Business area</th><th>Status</th><th>Score</th><th>Band</th></tr></thead>
+   <tbody>
+    @if (!Model.NextMeetingItems.Any())
+    {
+ <tr><td colspan="5" class="dfe-c-text-muted">No scored demands on this agenda yet.</td></tr>
+    }
+    else
+    {
+     foreach (var item in Model.NextMeetingItems)
+     {
+      <tr>
+       <td>
+ <a href="@Url.Action("RequestDetail", "ModernDemand", new { id = item.Id })">@item.Title</a><span class="dfe-c-table-ref">@item.Reference</span>
+       </td>
+       <td>@item.Department</td>
+ <td><span class="dfe-c-tag @item.StatusTagClass">@item.StatusLabel</span></td>
+       <td>
+        @if (item.TotalScore.HasValue)
+        {
+         <strong style="color:@ScoreColour(item.TotalScore);">@item.TotalScore</strong>
+        }
+        else
+        {
+ <span class="dfe-c-text-muted">—</span>
+        }
+       </td>
+ <td><span class="@item.BandClass">@item.BandLabel</span></td>
+      </tr>
+     }
+    }
+   </tbody>
+  </table>
+ </div>
+  }
+</div>
+
+<!-- Business cases with no demand -->
+<div class="dfe-c-mb-4">
+ <div class="dfe-c-section-header">
+  <h2>Business cases with no demand created</h2>
+  <a class="dfe-c-button--link" style="font-size:0.875rem;" href="@Url.Action("BusinessCaseNew", "ModernDemand")">Add business case →</a>
+ </div>
+ <div class="dfe-c-table-wrap">
+  <table>
+   <thead><tr><th>Business case</th><th>Stage</th><th>Business area</th><th>Created</th></tr></thead>
+   <tbody>
+    @if (!Model.OrphanBusinessCases.Any())
+    {
+ <tr><td colspan="4" class="dfe-c-text-muted">All business cases have a demand request.</td></tr>
+    }
+    else
+    {
+     foreach (var bc in Model.OrphanBusinessCases)
+     {
+      <tr>
+       <td>
+ <a href="@Url.Action("BusinessCase", "ModernDemand", new { id = bc.Id })">@bc.Title</a><span class="dfe-c-table-ref">@bc.Reference</span>
+       </td>
+ <td><span class="dfe-c-tag dfe-c-tag--grey">@bc.Stage</span></td>
+       <td>@(string.IsNullOrEmpty(bc.BusinessArea) ? "—" : bc.BusinessArea)</td>
+       <td>@bc.CreatedAt.ToString("d MMM yyyy")</td>
+      </tr>
+     }
+    }
+   </tbody>
+  </table>
+ </div>
+</div>
+</div>

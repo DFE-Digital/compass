@@ -1,0 +1,319 @@
+@using Compass.Models
+@using System.Text.RegularExpressions
+@{
+    ViewData["Title"] = "Manage API token";
+    var token = ViewBag.Token as ApiToken;
+    var permissions = ViewBag.Permissions as Dictionary<string, (bool read, bool create, bool update, bool delete)>;
+    var resources = ViewBag.Resources as string[];
+
+    string FormatResource(string s)
+    {
+        return Regex.Replace(s ?? string.Empty, "([a-z])([A-Z])", "$1 $2");
+    }
+}
+
+@section Breadcrumbs {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernAdmin")">Admin</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernAdmin", new { panel = "api-tokens" })">API tokens</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">@token?.Name</li>
+}
+
+<div class="admin-hub">
+
+ <div class="dfe-c-page-title dfe-c-mb-2">
+  <div class="dfe-c-page-title__caption">API token</div>
+  <h1 class="dfe-c-page-title__heading">@token?.Name</h1>
+    @if (!string.IsNullOrEmpty(token?.Description))
+    {
+  <p class="dfe-c-page-title__lede">@token.Description</p>
+    }
+ </div>
+
+ <div class="dfe-c-flex" style="gap:0.5rem;flex-wrap:wrap;margin-bottom:1rem;">
+    @if (token?.IsActive == true)
+    {
+  <span class="dfe-c-tag dfe-c-tag--green">Active</span>
+    }
+    else
+    {
+  <span class="dfe-c-tag dfe-c-tag--grey">Inactive</span>
+    }
+    @if (token?.ExpiresAt != null && token.ExpiresAt.Value < DateTime.UtcNow)
+    {
+  <span class="dfe-c-tag dfe-c-tag--red">Expired</span>
+    }
+ </div>
+
+  @if (ViewBag.AdminError != null)
+  {
+ <div class="govuk-error-summary" role="alert" data-module="govuk-error-summary" style="margin-bottom:1.5rem;">
+  <h2 class="govuk-error-summary__title">There is a problem</h2>
+  <div class="govuk-error-summary__body">@ViewBag.AdminError</div>
+ </div>
+  }
+  @if (ViewBag.AdminMessage != null)
+  {
+ <div class="govuk-notification-banner govuk-notification-banner--success dfe-c-mb-3" role="region" aria-labelledby="token-notif-title">
+  <div class="govuk-notification-banner__header">
+   <h2 class="govuk-notification-banner__title" id="token-notif-title">Success</h2>
+  </div>
+  <div class="govuk-notification-banner__content">
+   <p class="govuk-notification-banner__heading">@ViewBag.AdminMessage</p>
+  </div>
+ </div>
+  }
+
+  @if (TempData["NewToken"] != null)
+  {
+ <div class="govuk-warning-text" style="border:3px solid #f47738;padding:1rem 1.25rem;margin-bottom:1.5rem;background:#fff7f0;">
+  <span class="govuk-warning-text__icon" aria-hidden="true" style="top:0.65rem;">!</span>
+  <strong class="govuk-warning-text__text" style="padding-left:2.75rem;">
+   <span class="govuk-visually-hidden">Warning</span>
+   Copy your API token now — you will not be able to see it again.
+  </strong>
+  <div style="margin-top:0.75rem;padding-left:2.75rem;">
+   <div class="govuk-input__wrapper" style="display:flex;gap:0.5rem;">
+    <input class="govuk-input govuk-input--width-30" type="text" id="tokenValue" value="@TempData["NewToken"]" readonly style="font-family:monospace;" />
+    <button type="button" class="govuk-button govuk-button--secondary" id="copyTokenBtn" style="margin-bottom:0;">Copy</button>
+   </div>
+  </div>
+ </div>
+  }
+
+ <div class="govuk-grid-row">
+  <div class="govuk-grid-column-two-thirds">
+
+   <!-- Permissions card -->
+   <div class="dfe-c-card dfe-c-card--plain" style="margin-bottom:1.5rem;">
+    <h2 class="govuk-heading-m">Permissions</h2>
+
+    <div class="govuk-inset-text">Follow the principle of least privilege — only grant the minimum permissions the token needs.</div>
+
+    <form method="post" action="@Url.Action("ApiTokenSavePermissions", "ModernAdmin", new { id = token?.Id })" id="permissionsForm">
+     @Html.AntiForgeryToken()
+
+     <div class="dfe-c-table-wrap">
+      <table>
+       <thead>
+        <tr>
+         <th>Resource</th>
+         <th class="dfe-c-text-centre">Read</th>
+         <th class="dfe-c-text-centre">Create</th>
+         <th class="dfe-c-text-centre">Update</th>
+         <th class="dfe-c-text-centre">Delete</th>
+        </tr>
+       </thead>
+       <tbody>
+        @foreach (var resource in resources ?? Array.Empty<string>())
+        {
+         var hasPermissions = permissions?.ContainsKey(resource) ?? false;
+         var perm = hasPermissions ? permissions![resource] : (read: false, create: false, update: false, delete: false);
+         <tr>
+          <td><strong>@FormatResource(resource)</strong></td>
+          <td class="dfe-c-text-centre">
+           <div class="govuk-checkboxes govuk-checkboxes--small" style="display:inline-block;">
+            <div class="govuk-checkboxes__item" style="min-height:auto;padding-left:24px;">
+             <input class="govuk-checkboxes__input" type="checkbox" name="@(resource)_read" id="@(resource)_read" @(perm.read ? "checked" : "") />
+             <label class="govuk-label govuk-checkboxes__label" for="@(resource)_read"><span class="govuk-visually-hidden">Read @FormatResource(resource)</span></label>
+            </div>
+           </div>
+          </td>
+          <td class="dfe-c-text-centre">
+           <div class="govuk-checkboxes govuk-checkboxes--small" style="display:inline-block;">
+            <div class="govuk-checkboxes__item" style="min-height:auto;padding-left:24px;">
+             <input class="govuk-checkboxes__input" type="checkbox" name="@(resource)_create" id="@(resource)_create" @(perm.create ? "checked" : "") />
+             <label class="govuk-label govuk-checkboxes__label" for="@(resource)_create"><span class="govuk-visually-hidden">Create @FormatResource(resource)</span></label>
+            </div>
+           </div>
+          </td>
+          <td class="dfe-c-text-centre">
+           <div class="govuk-checkboxes govuk-checkboxes--small" style="display:inline-block;">
+            <div class="govuk-checkboxes__item" style="min-height:auto;padding-left:24px;">
+             <input class="govuk-checkboxes__input" type="checkbox" name="@(resource)_update" id="@(resource)_update" @(perm.update ? "checked" : "") />
+             <label class="govuk-label govuk-checkboxes__label" for="@(resource)_update"><span class="govuk-visually-hidden">Update @FormatResource(resource)</span></label>
+            </div>
+           </div>
+          </td>
+          <td class="dfe-c-text-centre">
+           <div class="govuk-checkboxes govuk-checkboxes--small" style="display:inline-block;">
+            <div class="govuk-checkboxes__item" style="min-height:auto;padding-left:24px;">
+             <input class="govuk-checkboxes__input" type="checkbox" name="@(resource)_delete" id="@(resource)_delete" @(perm.delete ? "checked" : "") />
+             <label class="govuk-label govuk-checkboxes__label" for="@(resource)_delete"><span class="govuk-visually-hidden">Delete @FormatResource(resource)</span></label>
+            </div>
+           </div>
+          </td>
+         </tr>
+        }
+       </tbody>
+      </table>
+     </div>
+
+     <div class="dfe-c-flex" style="gap:0.75rem;margin-top:1rem;">
+      <button type="submit" class="govuk-button">Save permissions</button>
+      <a href="@Url.Action("Index", "ModernAdmin", new { panel = "api-tokens" })" class="govuk-button govuk-button--secondary">Back to tokens</a>
+     </div>
+    </form>
+   </div>
+
+   <!-- Danger zone card -->
+   <div class="dfe-c-card dfe-c-card--plain" style="margin-bottom:1.5rem;border-left:4px solid #d4351c;">
+    <h2 class="govuk-heading-m" style="color:#d4351c;">Danger zone</h2>
+
+    <div style="margin-bottom:1.25rem;">
+     <h3 class="govuk-heading-s">Recycle token</h3>
+     <p class="govuk-body">Generate a new token value. The old token will be invalidated immediately.</p>
+     <form method="post" action="@Url.Action("ApiTokenRecycle", "ModernAdmin", new { id = token?.Id })">
+      @Html.AntiForgeryToken()
+      <button type="submit" class="govuk-button govuk-button--warning" data-confirm="Generate a new token? The old token will stop working immediately.">Recycle token</button>
+     </form>
+    </div>
+
+    <hr class="govuk-section-break govuk-section-break--visible" />
+
+    <div style="margin-top:1.25rem;margin-bottom:1.25rem;">
+     <h3 class="govuk-heading-s">@(token?.IsActive == true ? "Suspend" : "Activate") token</h3>
+     <p class="govuk-body">
+      @if (token?.IsActive == true)
+      {
+       <text>Temporarily disable this token without deleting it. It can be reactivated later.</text>
+      }
+      else
+      {
+       <text>Reactivate this token to allow API requests.</text>
+      }
+     </p>
+     <form method="post" action="@Url.Action("ApiTokenToggle", "ModernAdmin", new { id = token?.Id })">
+      @Html.AntiForgeryToken()
+      <button type="submit" class="govuk-button govuk-button--secondary" data-confirm="@(token?.IsActive == true ? "Suspend" : "Activate") this token?">@(token?.IsActive == true ? "Suspend" : "Activate") token</button>
+     </form>
+    </div>
+
+    <hr class="govuk-section-break govuk-section-break--visible" />
+
+    <div style="margin-top:1.25rem;">
+     <h3 class="govuk-heading-s">Delete token</h3>
+     <p class="govuk-body">Permanently delete this token. This action cannot be undone.</p>
+     <form method="post" action="@Url.Action("ApiTokenDelete", "ModernAdmin", new { id = token?.Id })" id="deleteTokenForm">
+      @Html.AntiForgeryToken()
+      <div class="govuk-form-group" style="margin-bottom:0.75rem;">
+       <label class="govuk-label" for="deleteConfirmInput">Type <strong>DELETE</strong> to confirm</label>
+       <input class="govuk-input govuk-input--width-10" type="text" id="deleteConfirmInput" autocomplete="off" />
+      </div>
+      <button type="submit" class="govuk-button govuk-button--warning" id="confirmDeleteBtn" disabled>Delete token</button>
+     </form>
+    </div>
+   </div>
+
+  </div>
+
+  <div class="govuk-grid-column-one-third">
+
+   <!-- Token details sidebar -->
+   <div class="dfe-c-card dfe-c-card--plain" style="margin-bottom:1.5rem;">
+    <h2 class="govuk-heading-s">Token details</h2>
+    <dl class="govuk-summary-list govuk-summary-list--no-border">
+     <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Name</dt>
+      <dd class="govuk-summary-list__value">@token?.Name</dd>
+     </div>
+     @if (!string.IsNullOrEmpty(token?.Description))
+     {
+     <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Description</dt>
+      <dd class="govuk-summary-list__value">@token.Description</dd>
+     </div>
+     }
+     <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Created</dt>
+      <dd class="govuk-summary-list__value">@token?.CreatedAt.ToString("d MMM yyyy")</dd>
+     </div>
+     <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Created by</dt>
+      <dd class="govuk-summary-list__value">@token?.CreatedByEmail</dd>
+     </div>
+     <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Status</dt>
+      <dd class="govuk-summary-list__value">
+       @if (token?.IsActive == true) { <span class="dfe-c-tag dfe-c-tag--green">Active</span> }
+       else { <span class="dfe-c-tag dfe-c-tag--grey">Inactive</span> }
+      </dd>
+     </div>
+     @if (token?.ExpiresAt != null)
+     {
+     <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Expires</dt>
+      <dd class="govuk-summary-list__value">@token.ExpiresAt.Value.ToString("d MMM yyyy")</dd>
+     </div>
+     }
+     @if (token?.LastUsedAt != null)
+     {
+     <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Last used</dt>
+      <dd class="govuk-summary-list__value">@token.LastUsedAt.Value.ToString("d MMM yyyy HH:mm")</dd>
+     </div>
+     }
+    </dl>
+   </div>
+
+   <!-- Permission levels sidebar -->
+   <div class="dfe-c-card dfe-c-card--plain">
+    <h2 class="govuk-heading-s">Permission levels</h2>
+    <dl class="govuk-summary-list govuk-summary-list--no-border">
+     <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Read</dt>
+      <dd class="govuk-summary-list__value">View and list resources</dd>
+     </div>
+     <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Create</dt>
+      <dd class="govuk-summary-list__value">Create new resources</dd>
+     </div>
+     <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Update</dt>
+      <dd class="govuk-summary-list__value">Modify existing resources</dd>
+     </div>
+     <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Delete</dt>
+      <dd class="govuk-summary-list__value">Remove resources</dd>
+     </div>
+    </dl>
+   </div>
+
+  </div>
+ </div>
+
+</div>
+
+<script nonce="@Context.Items["Nonce"]">
+document.addEventListener('DOMContentLoaded', function() {
+    // Copy token button
+    var copyBtn = document.getElementById('copyTokenBtn');
+    if (copyBtn) {
+        copyBtn.addEventListener('click', function() {
+            var input = document.getElementById('tokenValue');
+            navigator.clipboard.writeText(input.value).then(function() {
+                copyBtn.textContent = 'Copied!';
+                setTimeout(function() { copyBtn.textContent = 'Copy'; }, 2000);
+            });
+        });
+    }
+
+    // Delete confirmation
+    var deleteInput = document.getElementById('deleteConfirmInput');
+    var confirmBtn = document.getElementById('confirmDeleteBtn');
+    if (deleteInput && confirmBtn) {
+        deleteInput.addEventListener('input', function() {
+            confirmBtn.disabled = this.value !== 'DELETE';
+        });
+    }
+
+    // Confirm buttons via data-confirm attribute
+    document.querySelectorAll('[data-confirm]').forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+            if (!confirm(this.getAttribute('data-confirm'))) {
+                e.preventDefault();
+            }
+        });
+    });
+});
+</script>

@@ -1,0 +1,82 @@
+@model ModernPerformanceBulkVerifyViewModel
+@{
+  ViewData["Title"] = "Verify bulk upload — " + Model.CommissionName;
+}
+
+@section Breadcrumbs {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernPerformance")">Performance</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Commission", "ModernPerformance", new { commissionId = Model.CommissionId, tab = Model.Tab })">@Model.CommissionName</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">Verify upload</li>
+}
+
+<div class="dfe-c-page-title dfe-c-mb-4">
+ <h1 class="dfe-c-page-title__heading">Verify bulk upload</h1>
+ <p class="govuk-body dfe-c-mb-0">@Model.StagedRowCount data row(s) in file.</p>
+</div>
+
+@if (Model.CanApply)
+{
+ <div class="govuk-notification-banner govuk-notification-banner--success dfe-c-mb-4" role="region">
+ <div class="govuk-notification-banner__header"><h2 class="govuk-notification-banner__title">Ready to apply</h2></div>
+ <div class="govuk-notification-banner__content">
+ <p class="govuk-body">No blocking errors were found. Applying will write metric values using the same rules as single-product entry.</p>
+    </div>
+  </div>
+
+ <form asp-controller="ModernPerformance" asp-action="BulkApply" asp-route-commissionId="@Model.CommissionId" method="post" class="govuk-form-group">
+    @Html.AntiForgeryToken()
+    <input type="hidden" name="token" value="@Model.Token" />
+ <button type="submit" class="govuk-button">Apply import</button>
+ <a class="govuk-button govuk-button--secondary" href="@Url.Action("BulkUpload", "ModernPerformance", new { commissionId = Model.CommissionId, tab = Model.Tab })">Upload a different file</a>
+  </form>
+}
+else
+{
+ <div class="govuk-error-summary dfe-c-mb-4" role="alert">
+ <h2 class="govuk-error-summary__title">Fix errors and upload again</h2>
+ <p class="govuk-body">Correct the file and run verify again. Nothing was saved.</p>
+  </div>
+ <p class="govuk-body">
+ <a class="govuk-link" href="@Url.Action("BulkUpload", "ModernPerformance", new { commissionId = Model.CommissionId, tab = Model.Tab })">Back to bulk upload</a>
+  </p>
+}
+
+<h2 class="govuk-heading-m dfe-c-mt-4">Row results</h2>
+<div class="dfe-c-table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th scope="col">Row</th>
+        <th scope="col">DocumentId</th>
+        <th scope="col">Product</th>
+        <th scope="col">Errors</th>
+      </tr>
+    </thead>
+    <tbody>
+    @foreach (var line in Model.Lines)
+    {
+      <tr>
+        <td>@line.RowNumber</td>
+ <td class="govuk-body-s">@line.DocumentId</td>
+        <td>@(line.ProductTitle ?? "—")</td>
+        <td>
+          @if (line.Errors.Count == 0)
+          {
+ <span class="dfe-c-tag dfe-c-tag--green">OK</span>
+          }
+          else
+          {
+ <ul class="govuk-list govuk-error-summary__list govuk-body-s">
+              @foreach (var e in line.Errors)
+              {
+                <li>@e</li>
+              }
+            </ul>
+          }
+        </td>
+      </tr>
+    }
+    </tbody>
+  </table>
+</div>

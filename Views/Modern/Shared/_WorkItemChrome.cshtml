@@ -14,7 +14,7 @@
   var ragDisplayName = latestRag?.RagStatus?.Name ?? ViewBag.CurrentRagName as string;
   var currentRagBgKey = ViewBag.CurrentRagBackgroundColourKey as string;
   var currentRagTextKey = ViewBag.CurrentRagTextColourKey as string;
-  var milestoneCount = ViewBag.MilestoneCount as int? ?? work.Milestones?.Count ?? 0;
+  var currentRagCssClass = ViewBag.CurrentRagCssClass as string;
   var currentSection = (ViewBag.WorkChromeSection as string) ?? "overview";
   var subPageChrome = ViewBag.WorkChromeSubPage as bool? ?? false;
   var tabsAsLinks = ViewBag.WorkChromeTabsAsLinks as bool? ?? false;
@@ -23,101 +23,67 @@
   var monthlyReportDue = ViewBag.MonthlyReportDue as bool? ?? false;
   var currentPeriodLabel = ViewBag.CurrentPeriodLabel as string;
   var currentPeriodDueDate = ViewBag.CurrentPeriodDueDate as DateTime?;
-  var currentPeriodMonthLabel = ViewBag.CurrentPeriodMonthLabel as string ?? currentPeriodLabel;
-  var currentPeriodDraftUpdateId = ViewBag.CurrentPeriodDraftUpdateId as int?;
-  var currentPeriodKey = ViewBag.CurrentPeriodKey as string;
-  var completeReturnUrl = currentPeriodDraftUpdateId.HasValue
-    ? Url.Action("EditMonthlyUpdate", "ModernWork", new { id = work.Id, updateId = currentPeriodDraftUpdateId.Value })
-    : Url.Action("AddMonthlyUpdate", "ModernWork", new { id = work.Id, periodKey = currentPeriodKey });
-  var exportsUrl = Url.Action("Index", "Exports", new { section = "work" });
   var lastMonthlyMonth = ViewBag.LastMonthlyUpdateMonth as string;
   var lastMonthlyBy = ViewBag.LastMonthlyUpdateBy as string;
-  string PhaseDfeClass(string? name) {
-    if (string.IsNullOrWhiteSpace(name) || name == "—") return "";
-    var n = name.Trim().ToLowerInvariant().Replace(" ", "-");
-    if (n.Contains("public") && n.Contains("beta")) return "dfe-c-phase--public-beta";
-    if (n.Contains("private") && n.Contains("beta")) return "dfe-c-phase--private-beta";
-    if (n.Contains("alpha")) return "dfe-c-phase--alpha";
-    if (n.Contains("live")) return "dfe-c-phase--live";
-    if (n.Contains("retired")) return "dfe-c-phase--retired";
-    if (n.Contains("discovery")) return "dfe-c-phase--discovery";
-    if (n.Contains("explore")) return "dfe-c-phase--explore";
-    return "";
-  }
-  string RagDfeClass(string? name) {
-    if (string.IsNullOrEmpty(name)) return "dfe-c-rag--tbc";
-    var n = name.ToLowerInvariant();
-    if (n.Contains("green")) return "dfe-c-rag--green";
-    if (n.Contains("amber") && n.Contains("red")) return "dfe-c-rag--amber";
-    if (n.Contains("red")) return "dfe-c-rag--red";
-    if (n.Contains("amber")) return "dfe-c-rag--amber";
-    return "dfe-c-rag--tbc";
-  }
-  var phaseClass = PhaseDfeClass(deliveryPhaseName);
   var phaseDisplay = (!string.IsNullOrWhiteSpace(deliveryPhaseName) && deliveryPhaseName != "—") ? deliveryPhaseName : null;
-  var ragDfeClass = (!string.IsNullOrEmpty(currentRagBgKey) || !string.IsNullOrEmpty(currentRagTextKey)) ? "" : RagDfeClass(ragDisplayName);
-  var pri = (priorityName ?? "").ToLowerInvariant();
-  var priorityTagClass = pri.Contains("critical") || pri.Contains("high") ? "dfe-c-tag dfe-c-tag--red-strong" : pri.Contains("low") ? "dfe-c-tag dfe-c-tag--grey" : "dfe-c-tag dfe-c-tag--navy";
+  var phaseTagClass = WorkBadgeCss.PhaseDfeTagClass(deliveryPhaseName);
+  var ragTagClass = (!string.IsNullOrEmpty(currentRagBgKey) || !string.IsNullOrEmpty(currentRagTextKey))
+    ? ""
+    : WorkBadgeCss.RagDfeTagClass(currentRagCssClass, ragDisplayName);
+  var priorityTagClass = WorkBadgeCss.PriorityDfeTagClass(priorityName);
+  var minimalHeader = ViewBag.WorkChromeMinimalHeader as bool? ?? false;
 }
 @if (subPageChrome)
 {
-  <a href="@detailUrl" class="govuk-back-link dfe-c-mt-0 dfe-c-mb-2">Back to work item</a>
+ <a href="@detailUrl" class="govuk-back-link dfe-c-mt-0 dfe-c-mb-2">Back to work item</a>
 }
+@if (!minimalHeader)
+{
 <div class="dfe-c-flex--between dfe-c-mb-2" style="flex-wrap:wrap;gap:1rem;align-items:flex-start;">
   <div>
     <div style="font-size:0.8125rem;color:var(--grey-4);margin-bottom:0.25rem;">
-      <span class="dfe-c-mono--inline">WI-@workIdShort</span>
+ <span class="dfe-c-mono--inline">WI-@workIdShort</span>
       <text> · @(portfolioName)</text>
-      @if (phaseDisplay != null && !string.IsNullOrEmpty(phaseClass))
+      @if (phaseDisplay != null)
       {
-        <text> · </text><span class="dfe-c-phase @phaseClass">@phaseDisplay.ToUpperInvariant()</span>
-      }
-      else if (phaseDisplay != null)
-      {
-        <text> · @phaseDisplay</text>
+ <text> · </text><span class="@phaseTagClass">@phaseDisplay.ToUpperInvariant()</span>
       }
     </div>
-    <h1 class="dfe-c-page-title__heading" style="margin-bottom:0.25rem;">@work.Title</h1>
-    <div class="dfe-c-flex" style="gap:0.5rem;flex-wrap:wrap;align-items:center;">
+ <h1 class="dfe-c-page-title__heading" style="margin-bottom:0.25rem;">@work.Title</h1>
+ <div class="dfe-c-flex" style="gap:0.5rem;flex-wrap:wrap;align-items:center;">
       @if (!string.IsNullOrEmpty(ragDisplayName))
       {
         @if (!string.IsNullOrEmpty(currentRagBgKey) || !string.IsNullOrEmpty(currentRagTextKey))
         {
-          <span class="rag-badge" style="@(string.IsNullOrEmpty(currentRagBgKey) ? "" : "background-color: var(--govuk-colour-" + currentRagBgKey + ");")@(string.IsNullOrEmpty(currentRagTextKey) ? "" : " color: var(--govuk-colour-" + currentRagTextKey + ");")">@ragDisplayName.ToUpperInvariant()</span>
+ <span class="rag-badge" style="@(string.IsNullOrEmpty(currentRagBgKey) ? "" : "background-color: var(--govuk-colour-" + currentRagBgKey + ");")@(string.IsNullOrEmpty(currentRagTextKey) ? "" : " color: var(--govuk-colour-" + currentRagTextKey + ");")">@ragDisplayName.ToUpperInvariant() RAG</span>
         }
         else
         {
-          <span class="dfe-c-rag @ragDfeClass">@ragDisplayName.ToUpperInvariant()</span>
+ <span class="@ragTagClass">@ragDisplayName.ToUpperInvariant() RAG</span>
         }
       }
       @if (monthlyReportDue)
       {
-        <span class="dfe-c-tag dfe-c-tag--red">MONTHLY UPDATE OVERDUE</span>
+ <span class="dfe-c-tag dfe-c-tag--red">MONTHLY UPDATE OVERDUE</span>
       }
       @if (!string.IsNullOrWhiteSpace(priorityName) && priorityName != "—")
       {
-        <span class="@priorityTagClass">@(priorityName.ToUpperInvariant()) PRIORITY</span>
+ <span class="@priorityTagClass">@(priorityName.ToUpperInvariant()) PRIORITY</span>
       }
       @if (work.FlagshipProject)
       {
-        <span class="dfe-c-tag dfe-c-tag--teal">FLAGSHIP</span>
+ <span class="dfe-c-tag dfe-c-tag--teal">FLAGSHIP</span>
       }
     </div>
   </div>
-  @if (!subPageChrome)
-  {
-  <div class="dfe-c-export-group" style="margin:0;">
-    <a href="@exportsUrl" class="govuk-button govuk-button--outline-blue">Export</a>
-    <a href="@completeReturnUrl" class="govuk-button">Submit monthly update</a>
-  </div>
-  }
 </div>
+}
 
 @if (!subPageChrome && monthlyReportDue && !string.IsNullOrEmpty(currentPeriodLabel))
 {
-  <div class="dfe-c-callout dfe-c-callout--warning dfe-c-mb-2" role="region" aria-label="Monthly update overdue">
-    <div class="dfe-c-callout__heading">Monthly update overdue — window closes @(currentPeriodDueDate?.ToString("d MMMM yyyy") ?? "—")</div>
-    <p class="dfe-c-callout__body">
+ <div class="dfe-c-callout dfe-c-callout--warning dfe-c-mb-2" role="region" aria-label="Monthly update overdue">
+ <div class="dfe-c-callout__heading">Monthly update overdue — window closes @(currentPeriodDueDate?.ToString("d MMMM yyyy") ?? "—")</div>
+ <p class="dfe-c-callout__body">
       @if (!string.IsNullOrEmpty(lastMonthlyMonth))
       {
         <text>Last submitted: @lastMonthlyMonth@(string.IsNullOrEmpty(lastMonthlyBy) ? "." : " (" + lastMonthlyBy + ").")</text>
@@ -135,33 +101,35 @@
 <div class="tabs wd-tabs" role="tablist" aria-label="Work item sections" style="position:relative;">
   @if (tabsAsLinks)
   {
-    <a href="@(detailUrl)#wd-overview" class="tab @TabClass("overview")" role="tab" aria-selected="@(currentSection == "overview")" aria-controls="wd-overview" id="wd-tab-overview">Overview</a>
-    <a href="@(detailUrl)#wd-updates" class="tab @TabClass("updates")" role="tab" aria-selected="@(currentSection == "updates")" aria-controls="wd-updates" id="wd-tab-updates">Monthly updates</a>
-    <a href="@(detailUrl)#wd-risks" class="tab @TabClass("risks")" role="tab" aria-selected="@(currentSection == "risks")" aria-controls="wd-risks" id="wd-tab-risks">Risks &amp; Issues</a>
-    <a href="@(detailUrl)#wd-milestones" class="tab @TabClass("milestones")" role="tab" aria-selected="@(currentSection == "milestones")" aria-controls="wd-milestones" id="wd-tab-milestones">Milestones @if (milestoneCount > 0) { <span class="wd-tab-count">@milestoneCount</span> }</a>
-    <a href="@(detailUrl)#wd-team" class="tab @TabClass("team")" role="tab" aria-selected="@(currentSection == "team")" aria-controls="wd-team" id="wd-tab-team">Team</a>
+ <a href="@(detailUrl)#wd-overview" class="tab @TabClass("overview")" role="tab" aria-selected="@(currentSection == "overview")" aria-controls="wd-overview" id="wd-tab-overview">Overview</a>
+ <a href="@(detailUrl)#wd-updates" class="tab @TabClass("updates")" role="tab" aria-selected="@(currentSection == "updates")" aria-controls="wd-updates" id="wd-tab-updates">Monthly updates</a>
+ <a href="@(detailUrl)#wd-risks" class="tab @TabClass("risks")" role="tab" aria-selected="@(currentSection == "risks")" aria-controls="wd-risks" id="wd-tab-risks">Risks &amp; Issues</a>
+ <a href="@(detailUrl)#wd-milestones" class="tab @TabClass("milestones")" role="tab" aria-selected="@(currentSection == "milestones")" aria-controls="wd-milestones" id="wd-tab-milestones">Milestones</a>
+ <a href="@(detailUrl)#wd-contacts" class="tab @TabClass("contacts")" role="tab" aria-selected="@(currentSection == "contacts")" aria-controls="wd-contacts" id="wd-tab-contacts">Contacts</a>
+ <a href="@(detailUrl)#wd-governance" class="tab @TabClass("governance")" role="tab" aria-selected="@(currentSection == "governance")" aria-controls="wd-governance" id="wd-tab-governance">Governance</a>
+ <a href="@(detailUrl)#wd-dependencies" class="tab @TabClass("dependencies")" role="tab" aria-selected="@(currentSection == "dependencies")" aria-controls="wd-dependencies" id="wd-tab-dependencies">Dependencies</a>
     <div style="position:relative;display:flex;align-items:stretch;margin-bottom:-2px;" id="wd-more-wrap">
-      <button type="button" id="wd-more-btn" class="tab wd-more-tab-btn @(currentSection == "dependencies" || currentSection == "links" || currentSection == "audit" ? "on" : "")" role="tab" aria-haspopup="true" aria-expanded="false" aria-controls="wd-more-menu" data-wd-more-btn="1">More <span id="wd-more-active-label" class="wd-more-active-label" style="display:none;"> — <span id="wd-more-active-name"></span></span> ▾</button>
+ <button type="button" id="wd-more-btn" class="tab wd-more-tab-btn @(currentSection == "links" || currentSection == "audit" ? "on" : "")" role="tab" aria-haspopup="true" aria-expanded="false" aria-controls="wd-more-menu" data-wd-more-btn="1">More <span id="wd-more-active-label" class="wd-more-active-label" style="display:none;"> — <span id="wd-more-active-name"></span></span> ▾</button>
       <div id="wd-more-menu" style="display:none;position:absolute;top:100%;left:0;background:#fff;border:1px solid #dee0e2;border-top:3px solid #003a69;box-shadow:0 4px 12px rgba(0,0,0,0.12);min-width:200px;z-index:200;" role="group" aria-label="More sections">
-        <a id="wd-tab-dependencies" href="@(detailUrl)#wd-dependencies" class="wd-more-link" style="display:flex;align-items:center;padding:10px 16px;font-size:14px;font-weight:600;color:#505a5f;cursor:pointer;border-bottom:1px solid #f3f2f1;text-decoration:none;">Dependencies</a>
-        <a id="wd-tab-links" href="@(detailUrl)#wd-links" class="wd-more-link" style="display:flex;align-items:center;padding:10px 16px;font-size:14px;font-weight:600;color:#505a5f;cursor:pointer;border-bottom:1px solid #f3f2f1;text-decoration:none;">Linked records</a>
-        <a id="wd-tab-audit" href="@(detailUrl)#wd-audit" class="wd-more-link" style="display:flex;align-items:center;padding:10px 16px;font-size:14px;font-weight:600;color:#505a5f;cursor:pointer;text-decoration:none;">Audit trail</a>
+ <a id="wd-tab-links" href="@(detailUrl)#wd-links" class="wd-more-link" style="display:flex;align-items:center;padding:10px 16px;font-size:14px;font-weight:600;color:#505a5f;cursor:pointer;border-bottom:1px solid #f3f2f1;text-decoration:none;">Linked records</a>
+ <a id="wd-tab-audit" href="@(detailUrl)#wd-audit" class="wd-more-link" style="display:flex;align-items:center;padding:10px 16px;font-size:14px;font-weight:600;color:#505a5f;cursor:pointer;text-decoration:none;">Audit trail</a>
       </div>
     </div>
   }
   else
   {
-    <button type="button" class="tab @(currentSection == "overview" ? "on" : "")" id="wd-tab-overview" role="tab" aria-selected="@(currentSection == "overview")" aria-controls="wd-overview" onclick="typeof wdTab==='function'&&wdTab(this,'wd-overview')">Overview</button>
-    <button type="button" class="tab @(currentSection == "updates" ? "on" : "")" id="wd-tab-updates" role="tab" aria-selected="@(currentSection == "updates")" aria-controls="wd-updates" onclick="typeof wdTab==='function'&&wdTab(this,'wd-updates')">Monthly updates</button>
-    <button type="button" class="tab @(currentSection == "risks" ? "on" : "")" id="wd-tab-risks" role="tab" aria-selected="@(currentSection == "risks")" aria-controls="wd-risks" onclick="typeof wdTab==='function'&&wdTab(this,'wd-risks')">Risks &amp; Issues</button>
-    <button type="button" class="tab @(currentSection == "milestones" ? "on" : "")" id="wd-tab-milestones" role="tab" aria-selected="@(currentSection == "milestones")" aria-controls="wd-milestones" onclick="typeof wdTab==='function'&&wdTab(this,'wd-milestones')">Milestones @if (milestoneCount > 0) { <span class="wd-tab-count">@milestoneCount</span> }</button>
-    <button type="button" class="tab @(currentSection == "team" ? "on" : "")" id="wd-tab-team" role="tab" aria-selected="@(currentSection == "team")" aria-controls="wd-team" onclick="typeof wdTab==='function'&&wdTab(this,'wd-team')">Team</button>
+ <button type="button" class="tab @(currentSection =="overview" ? "on" : "")" id="wd-tab-overview" role="tab" aria-selected="@(currentSection == "overview")" aria-controls="wd-overview" onclick="typeof wdTab==='function'&&wdTab(this,'wd-overview')">Overview</button>
+ <button type="button" class="tab @(currentSection =="updates" ? "on" : "")" id="wd-tab-updates" role="tab" aria-selected="@(currentSection == "updates")" aria-controls="wd-updates" onclick="typeof wdTab==='function'&&wdTab(this,'wd-updates')">Monthly updates</button>
+ <button type="button" class="tab @(currentSection =="risks" ? "on" : "")" id="wd-tab-risks" role="tab" aria-selected="@(currentSection == "risks")" aria-controls="wd-risks" onclick="typeof wdTab==='function'&&wdTab(this,'wd-risks')">Risks &amp; Issues</button>
+ <button type="button" class="tab @(currentSection =="milestones" ? "on" : "")" id="wd-tab-milestones" role="tab" aria-selected="@(currentSection == "milestones")" aria-controls="wd-milestones" onclick="typeof wdTab==='function'&&wdTab(this,'wd-milestones')">Milestones</button>
+ <button type="button" class="tab @(currentSection =="contacts" ? "on" : "")" id="wd-tab-contacts" role="tab" aria-selected="@(currentSection == "contacts")" aria-controls="wd-contacts" onclick="typeof wdTab==='function'&&wdTab(this,'wd-contacts')">Contacts</button>
+ <button type="button" class="tab @(currentSection =="governance" ? "on" : "")" id="wd-tab-governance" role="tab" aria-selected="@(currentSection == "governance")" aria-controls="wd-governance" onclick="typeof wdTab==='function'&&wdTab(this,'wd-governance')">Governance</button>
+ <button type="button" class="tab @(currentSection =="dependencies" ? "on" : "")" id="wd-tab-dependencies" role="tab" aria-selected="@(currentSection == "dependencies")" aria-controls="wd-dependencies" onclick="typeof wdTab==='function'&&wdTab(this,'wd-dependencies')">Dependencies</button>
     <div style="position:relative;display:flex;align-items:stretch;margin-bottom:-2px;" id="wd-more-wrap">
-      <button type="button" id="wd-more-btn" class="tab wd-more-tab-btn @(currentSection == "dependencies" || currentSection == "links" || currentSection == "audit" ? "on" : "")" role="tab" aria-haspopup="true" aria-expanded="false" aria-controls="wd-more-menu" data-wd-more-btn="1">More <span id="wd-more-active-label" class="wd-more-active-label" style="display:none;"> — <span id="wd-more-active-name"></span></span> ▾</button>
+ <button type="button" id="wd-more-btn" class="tab wd-more-tab-btn @(currentSection == "links" || currentSection == "audit" ? "on" : "")" role="tab" aria-haspopup="true" aria-expanded="false" aria-controls="wd-more-menu" data-wd-more-btn="1">More <span id="wd-more-active-label" class="wd-more-active-label" style="display:none;"> — <span id="wd-more-active-name"></span></span> ▾</button>
       <div id="wd-more-menu" style="display:none;position:absolute;top:100%;left:0;background:#fff;border:1px solid #dee0e2;border-top:3px solid #003a69;box-shadow:0 4px 12px rgba(0,0,0,0.12);min-width:200px;z-index:200;" role="group" aria-label="More sections">
-        <a id="wd-tab-dependencies" href="@(detailUrl)#wd-dependencies" class="wd-more-link" style="display:flex;align-items:center;padding:10px 16px;font-size:14px;font-weight:600;color:#505a5f;cursor:pointer;border-bottom:1px solid #f3f2f1;text-decoration:none;">Dependencies</a>
-        <a id="wd-tab-links" href="@(detailUrl)#wd-links" class="wd-more-link" style="display:flex;align-items:center;padding:10px 16px;font-size:14px;font-weight:600;color:#505a5f;cursor:pointer;border-bottom:1px solid #f3f2f1;text-decoration:none;">Linked records</a>
-        <a id="wd-tab-audit" href="@(detailUrl)#wd-audit" class="wd-more-link" style="display:flex;align-items:center;padding:10px 16px;font-size:14px;font-weight:600;color:#505a5f;cursor:pointer;text-decoration:none;">Audit trail</a>
+ <a id="wd-tab-links" href="@(detailUrl)#wd-links" class="wd-more-link" style="display:flex;align-items:center;padding:10px 16px;font-size:14px;font-weight:600;color:#505a5f;cursor:pointer;border-bottom:1px solid #f3f2f1;text-decoration:none;">Linked records</a>
+ <a id="wd-tab-audit" href="@(detailUrl)#wd-audit" class="wd-more-link" style="display:flex;align-items:center;padding:10px 16px;font-size:14px;font-weight:600;color:#505a5f;cursor:pointer;text-decoration:none;">Audit trail</a>
       </div>
     </div>
   }
@@ -179,26 +147,4 @@
 .wd-updates-badge { font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 4px; display: inline-block; }
 .wd-updates-badge--red { background: #d4351c; color: #fff; }
 .wd-updates-badge--blue { background: #1d70b8; color: #fff; }
-.tabs.wd-tabs .wd-more-tab-btn {
-  background: transparent;
-  border: none;
-  border-bottom: 4px solid transparent;
-  margin-bottom: -2px;
-  padding: 12px 20px 14px;
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--govuk-grey-4, #505a5f);
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-family: inherit;
-  border-radius: 4px 4px 0 0;
-  text-decoration: none;
-  transition: color 0.15s, background 0.15s, border-color 0.15s;
-}
-.tabs.wd-tabs .wd-more-tab-btn:hover { color: #0b0c0c; background: var(--govuk-grey-1, #f3f2f1); }
-.tabs.wd-tabs .wd-more-tab-btn:focus { outline: 3px solid var(--govuk-focus-colour, #fd0); outline-offset: 2px; }
-.tabs.wd-tabs .wd-more-tab-btn.on { background: #fff; color: #0b0c0c; border-bottom-color: var(--dfe-navy, #003a69); font-weight: 700; }
-.tabs.wd-tabs .wd-more-tab-btn .wd-more-active-label { font-weight: 400; font-size: 12px; color: #505a5f; }
 </style>

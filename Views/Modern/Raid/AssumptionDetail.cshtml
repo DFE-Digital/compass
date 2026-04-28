@@ -1,0 +1,286 @@
+@model Compass.Models.Assumption
+@using Compass.Models
+@using System.Globalization
+@using System.Linq
+@{
+  ViewData["Title"] = "Assumption — A-" + Model.Id.ToString("D4");
+  var d = (Model.Description ?? "").Trim();
+  string displayTitle;
+  if (string.IsNullOrEmpty(d))
+  {
+    displayTitle = "No description";
+  }
+  else
+  {
+    var lineParts = d.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None);
+    if (lineParts.Length > 1 && !string.IsNullOrWhiteSpace(lineParts[0]))
+    {
+      displayTitle = lineParts[0].Trim();
+    }
+    else
+    {
+      const int maxTitleLen = 120;
+      if (d.Length <= maxTitleLen)
+        displayTitle = d;
+      else
+      {
+        var searchEnd = Math.Min(maxTitleLen, d.Length);
+        var lastSpace = d.LastIndexOf(' ', searchEnd - 1);
+        displayTitle = lastSpace > 40 ? d[..lastSpace].Trim() + "…" : d[..maxTitleLen].Trim() + "…";
+      }
+    }
+  }
+
+  var asmDivLabels = Model.AssumptionDivisions?
+      .Select(x => x.Division?.Name)
+      .Where(x => !string.IsNullOrWhiteSpace(x))
+      .ToList() ?? new List<string?>();
+  var asmBaLabels = Model.AssumptionBusinessAreas?
+      .Select(x => x.BusinessAreaLookup?.Name)
+      .Where(x => !string.IsNullOrWhiteSpace(x))
+      .ToList() ?? new List<string?>();
+
+  var teamLabel = Model.Project?.BusinessAreaLookup?.Name ?? "—";
+  var groupLabel = Model.Project?.PrimaryOrganizationalGroup?.Name ?? "—";
+  var ownerDisplay = Model.OwnerUser?.Name ?? Model.OwnerUser?.Email ?? "—";
+  var sroDisplay = Model.SroUser?.Name ?? Model.SroUser?.Email ?? "—";
+  var createdUk = Model.CreatedAt.ToString("d MMMM yyyy", CultureInfo.GetCultureInfo("en-GB"));
+  var updatedLine = Model.UpdatedAt.ToString("d MMM yyyy", CultureInfo.InvariantCulture);
+
+  var assumpEditUrl = Url.Action("AssumptionEdit", "ModernRaid", new { id = Model.Id }) ?? "#";
+  var assumptionsRegisterUrl = Url.Action("Assumptions", "ModernRaid") ?? "/modern/raid/assumptions";
+  string? workItemUrl = null;
+  if (Model.ProjectId is int pid && pid > 0)
+  {
+    workItemUrl = $"{Url.Action("Detail", "ModernWork", new { id = pid, tab = "risks" })}#wd-risks";
+  }
+
+  string StatusTagClass()
+  {
+    var s = (Model.StatusLookup?.Label ?? "").ToLowerInvariant();
+    if (s.Contains("close")) return "dfe-c-tag dfe-c-tag--green";
+    return "dfe-c-tag dfe-c-tag--blue";
+  }
+  string CritTagClass()
+  {
+    var c = (Model.CriticalityLookup?.Label ?? "").ToLowerInvariant();
+    if (c.Contains("high") || c.Contains("crit") || c.Contains("major")) return "dfe-c-tag dfe-c-tag--red";
+    if (c.Contains("med") || c.Contains("moder")) return "dfe-c-tag dfe-c-tag--amber";
+    return "dfe-c-tag dfe-c-tag--grey";
+  }
+  var stLower = (Model.StatusLookup?.Label ?? "").ToLowerInvariant();
+  var statusStripColor = stLower.Contains("close") ? "var(--rag-g)" : "var(--rag-a)";
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="/modern/raid/dashboard">RAID</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Assumptions", "ModernRaid")">Assumptions</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">A-@Model.Id.ToString("D4")</li>
+}
+
+<div id="sc-raid-assumption-detail" class="dfe-c-screen dfe-c-screen--active">
+<div class="modern-work-page">
+  @if (TempData["Message"] is string tm)
+  {
+    <div class="govuk-notification-banner govuk-notification-banner--success govuk-!-margin-bottom-4" role="region">
+      <div class="govuk-notification-banner__header"><h2 class="govuk-notification-banner__title">Success</h2></div>
+      <div class="govuk-notification-banner__content"><p class="govuk-notification-banner__heading">@tm</p></div>
+    </div>
+  }
+
+  <p class="dfe-c-body govuk-!-margin-bottom-2">
+    <a href="@assumptionsRegisterUrl" class="dfe-c-link">← Back to assumptions register</a>
+  </p>
+  <div style="font-size:0.8125rem;color:var(--grey-4);margin-bottom:0.75rem;">
+    <span class="dfe-c-mono--inline">A-@Model.Id.ToString("D4")</span>
+    <span aria-hidden="true">&nbsp;·&nbsp;</span>@teamLabel
+    <span aria-hidden="true">&nbsp;·&nbsp;</span>Owner: @ownerDisplay
+  </div>
+  <div class="dfe-c-flex--between dfe-c-mb-2" style="flex-wrap:wrap;gap:1rem;align-items:flex-start;">
+    <div style="flex:1;min-width:min(100%, 18rem);">
+      <h1 class="dfe-c-page-title__heading" style="margin-bottom:0.375rem;word-wrap:break-word;">@displayTitle</h1>
+      <div class="dfe-c-flex" style="gap:0.5rem;flex-wrap:wrap;align-items:center;">
+        <span class="@CritTagClass()">@((Model.CriticalityLookup?.Label ?? "—").ToUpperInvariant())</span>
+        <span class="@StatusTagClass()">@((Model.StatusLookup?.Label ?? "—").ToUpperInvariant())</span>
+        <span style="font-size:0.875rem;color:var(--grey-4);">
+          Created @createdUk
+          <span aria-hidden="true">&nbsp;·&nbsp;</span>Updated @updatedLine
+        </span>
+      </div>
+    </div>
+    <div class="dfe-c-flex" style="gap:0.5rem;flex-wrap:wrap;align-items:flex-start;flex-shrink:0;">
+      @if (workItemUrl != null)
+      {
+        <a href="@workItemUrl" class="govuk-button govuk-button--secondary">Work item</a>
+      }
+      <a href="@assumpEditUrl" class="govuk-button">Edit assumption</a>
+    </div>
+  </div>
+
+  <div style="border:1px solid var(--grey-2);margin-bottom:1.5rem;background:var(--white);">
+    <div style="font-size:0.6875rem;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;color:var(--grey-4);padding:0.875rem 1.125rem 0.25rem;">Assumption at a glance</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid var(--grey-2);">
+      <div style="padding:0.875rem 1.125rem;border-right:1px solid var(--grey-2);">
+        <div style="font-size:0.6875rem;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;color:var(--grey-4);margin-bottom:0.375rem;">Criticality</div>
+        <div style="font-size:1.375rem;font-weight:700;color:var(--rag-r);">@(Model.CriticalityLookup?.Label ?? "—")</div>
+        <div style="font-size:0.8125rem;color:var(--grey-4);">How sensitive this is if the assumption is wrong</div>
+      </div>
+      <div style="padding:0.875rem 1.125rem;border-right:1px solid var(--grey-2);">
+        <div style="font-size:0.6875rem;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;color:var(--grey-4);margin-bottom:0.375rem;">Status</div>
+        <div style="font-size:1.375rem;font-weight:700;color:@statusStripColor;">@(Model.StatusLookup?.Label ?? "—")</div>
+        <div style="font-size:0.8125rem;color:var(--grey-4);">Lifecycle in the register</div>
+      </div>
+      <div style="padding:0.875rem 1.125rem;">
+        <div style="font-size:0.6875rem;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;color:var(--grey-4);margin-bottom:0.375rem;">Next review</div>
+        <div style="font-size:1.375rem;font-weight:700;color:var(--rag-a);">@(Model.ReviewDate?.ToString("d MMM yyyy", CultureInfo.InvariantCulture) ?? "—")</div>
+        <div style="font-size:0.8125rem;color:var(--grey-4);">When to confirm or retire this assumption</div>
+      </div>
+    </div>
+  </div>
+
+  @if (string.IsNullOrEmpty(d))
+  {
+    <div class="govuk-inset-text govuk-!-margin-bottom-4">This assumption has no text yet. Use <a class="govuk-link" href="@assumpEditUrl">Edit assumption</a> to add a description.</div>
+  }
+
+  <div class="dfe-c-grid dfe-c-grid--content">
+    <div>
+      <div class="dfe-c-flex--between govuk-!-margin-bottom-4" style="align-items:flex-start;flex-wrap:wrap;gap:0.75rem;">
+        <div>
+          <h2 class="govuk-heading-s govuk-!-margin-bottom-1">Assumption summary</h2>
+          <p class="govuk-body-s govuk-!-margin-bottom-0 dfe-c-text-muted">Key fields for this assumption. Use Change to open the edit form at the matching section.</p>
+        </div>
+        <a class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0" href="@assumpEditUrl">Edit assumption</a>
+      </div>
+
+      <dl class="govuk-summary-list govuk-!-margin-bottom-0">
+        <div class="govuk-summary-list__row">
+          <dt class="govuk-summary-list__key">Assumption</dt>
+          <dd class="govuk-summary-list__value">@if (string.IsNullOrWhiteSpace(Model.Description)) { <text>—</text> } else { <span class="govuk-body" style="white-space:pre-wrap;">@Model.Description</span> }</dd>
+          <dd class="govuk-summary-list__actions">
+            <a class="govuk-link" href="@($"{assumpEditUrl}#Description")">Change<span class="govuk-visually-hidden"> assumption</span></a>
+          </dd>
+        </div>
+        <div class="govuk-summary-list__row">
+          <dt class="govuk-summary-list__key">Associated with</dt>
+          <dd class="govuk-summary-list__value">
+            @if (Model.RaidAssociationKind == RaidAssociationKinds.Product || Model.PrimaryProductId.HasValue)
+            {
+              @(Model.PrimaryProduct?.DisplayName ?? Model.PrimaryProduct?.FipsId ?? "—")
+            }
+            else if (Model.RaidAssociationKind == RaidAssociationKinds.Organisation)
+            {
+              @:Organisation
+            }
+            else if (Model.ProjectId.HasValue)
+            {
+              <a class="govuk-link" href="@Url.Action("Detail", "ModernWork", new { id = Model.ProjectId, tab = "risks" })#wd-risks">@(Model.Project?.Title ?? $"Work #{Model.ProjectId}")</a>
+            }
+            else
+            {
+              @:—
+            }
+          </dd>
+          <dd class="govuk-summary-list__actions">
+            <a class="govuk-link" href="@($"{assumpEditUrl}#raid-asm-edit-association")">Change<span class="govuk-visually-hidden"> association</span></a>
+          </dd>
+        </div>
+        <div class="govuk-summary-list__row">
+          <dt class="govuk-summary-list__key">Divisions</dt>
+          <dd class="govuk-summary-list__value">@(asmDivLabels.Count > 0 ? string.Join(", ", asmDivLabels!) : "—")</dd>
+          <dd class="govuk-summary-list__actions">
+            <a class="govuk-link" href="@($"{assumpEditUrl}#raid-asm-edit-divisions")">Change<span class="govuk-visually-hidden"> divisions</span></a>
+          </dd>
+        </div>
+        <div class="govuk-summary-list__row">
+          <dt class="govuk-summary-list__key">Business areas</dt>
+          <dd class="govuk-summary-list__value">@(asmBaLabels.Count > 0 ? string.Join(", ", asmBaLabels!) : "—")</dd>
+          <dd class="govuk-summary-list__actions">
+            <a class="govuk-link" href="@($"{assumpEditUrl}#raid-asm-edit-business-areas")">Change<span class="govuk-visually-hidden"> business areas</span></a>
+          </dd>
+        </div>
+        <div class="govuk-summary-list__row">
+          <dt class="govuk-summary-list__key">Criticality</dt>
+          <dd class="govuk-summary-list__value">@(Model.CriticalityLookup?.Label ?? "—")</dd>
+          <dd class="govuk-summary-list__actions">
+            <a class="govuk-link" href="@($"{assumpEditUrl}#AssumptionCriticalityId")">Change<span class="govuk-visually-hidden"> criticality</span></a>
+          </dd>
+        </div>
+        <div class="govuk-summary-list__row">
+          <dt class="govuk-summary-list__key">Status</dt>
+          <dd class="govuk-summary-list__value">@(Model.StatusLookup?.Label ?? "—")</dd>
+          <dd class="govuk-summary-list__actions">
+            <a class="govuk-link" href="@($"{assumpEditUrl}#AssumptionStatusId")">Change<span class="govuk-visually-hidden"> status</span></a>
+          </dd>
+        </div>
+        <div class="govuk-summary-list__row">
+          <dt class="govuk-summary-list__key">Review date</dt>
+          <dd class="govuk-summary-list__value">@(Model.ReviewDate?.ToString("d MMMM yyyy", CultureInfo.GetCultureInfo("en-GB")) ?? "—")</dd>
+          <dd class="govuk-summary-list__actions">
+            <a class="govuk-link" href="@($"{assumpEditUrl}#Review")">Change<span class="govuk-visually-hidden"> review date</span></a>
+          </dd>
+        </div>
+        @if (!string.IsNullOrWhiteSpace(Model.ValidationOutcome))
+        {
+          <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">Validation outcome</dt>
+            <dd class="govuk-summary-list__value"><span class="govuk-body" style="white-space:pre-wrap;">@Model.ValidationOutcome</span></dd>
+          </div>
+        }
+        <div class="govuk-summary-list__row">
+          <dt class="govuk-summary-list__key">Owner</dt>
+          <dd class="govuk-summary-list__value">@ownerDisplay</dd>
+          <dd class="govuk-summary-list__actions">
+            <a class="govuk-link" href="@($"{assumpEditUrl}#raid-asm-edit-ownership")">Change<span class="govuk-visually-hidden"> owner</span></a>
+          </dd>
+        </div>
+        <div class="govuk-summary-list__row">
+          <dt class="govuk-summary-list__key">SRO</dt>
+          <dd class="govuk-summary-list__value">@sroDisplay</dd>
+          <dd class="govuk-summary-list__actions">
+            <a class="govuk-link" href="@($"{assumpEditUrl}#raid-asm-edit-ownership")">Change<span class="govuk-visually-hidden"> SRO</span></a>
+          </dd>
+        </div>
+      </dl>
+    </div>
+
+    <div class="dfe-c-sidebar">
+      <div class="dfe-c-scard">
+        <div class="dfe-c-scard__title">Next review</div>
+        <div style="font-size:1.25rem;font-weight:700;">@(Model.ReviewDate?.ToString("d MMMM yyyy", CultureInfo.GetCultureInfo("en-GB")) ?? "Not set")</div>
+        <div style="font-size:0.8125rem;color:var(--grey-4);margin-top:0.35rem;line-height:1.35;">Created @createdUk</div>
+      </div>
+
+      <div class="dfe-c-scard">
+        <div class="dfe-c-scard__title">Ownership</div>
+        <div class="dfe-c-kv"><span class="dfe-c-kv__k">SRO</span><span class="dfe-c-kv__v">@sroDisplay</span></div>
+        <div class="dfe-c-kv"><span class="dfe-c-kv__k">Owner</span><span class="dfe-c-kv__v">@ownerDisplay</span></div>
+        <div class="dfe-c-kv"><span class="dfe-c-kv__k">Group</span><span class="dfe-c-kv__v">@groupLabel</span></div>
+        <div class="dfe-c-kv"><span class="dfe-c-kv__k">Team</span><span class="dfe-c-kv__v">@teamLabel</span></div>
+      </div>
+
+      <div class="dfe-c-scard">
+        <div class="dfe-c-scard__title">Classification</div>
+        <div class="dfe-c-kv"><span class="dfe-c-kv__k">Reference</span><span class="dfe-c-kv__v dfe-c-mono">A-@Model.Id.ToString("D4")</span></div>
+        <div class="dfe-c-kv"><span class="dfe-c-kv__k">Criticality</span><span class="dfe-c-kv__v">@(Model.CriticalityLookup?.Label ?? "—")</span></div>
+        <div class="dfe-c-kv"><span class="dfe-c-kv__k">Status</span><span class="dfe-c-kv__v"><span class="@StatusTagClass()">@((Model.StatusLookup?.Label ?? "—").ToUpperInvariant())</span></span></div>
+        <div class="dfe-c-kv"><span class="dfe-c-kv__k">Divisions</span><span class="dfe-c-kv__v">@(asmDivLabels.Count > 0 ? string.Join(", ", asmDivLabels!) : "—")</span></div>
+        <div class="dfe-c-kv"><span class="dfe-c-kv__k">Business areas</span><span class="dfe-c-kv__v">@(asmBaLabels.Count > 0 ? string.Join(", ", asmBaLabels!) : "—")</span></div>
+      </div>
+
+      <div class="dfe-c-scard">
+        <div class="dfe-c-scard__title">Quick actions</div>
+        <div style="display:flex;flex-direction:column;gap:0.5rem;">
+          <a href="@assumpEditUrl" class="govuk-button govuk-button--secondary" style="width:100%;margin-bottom:0;">Edit this assumption</a>
+          @if (workItemUrl != null)
+          {
+            <a href="@workItemUrl" class="govuk-button govuk-button--secondary" style="width:100%;margin-bottom:0;">View work item</a>
+          }
+          <a href="@assumptionsRegisterUrl" class="govuk-button govuk-button--secondary" style="width:100%;margin-bottom:0;">Assumptions register</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>

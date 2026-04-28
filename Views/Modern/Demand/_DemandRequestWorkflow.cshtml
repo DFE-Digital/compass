@@ -1,0 +1,38 @@
+@model Compass.Models.DemandPipeline.DemandPipelineRequest
+@using Compass.Services.DemandPipeline
+@{
+  var stepIdx = ViewBag.WorkflowStepIndex as int? ?? 0;
+  var transitions = ViewBag.WorkflowTransitions as List<(string Id, string Label)> ?? new();
+  var id = Model.Id;
+}
+<div class="demand-workflow dfe-c-mb-3" aria-label="Demand pipeline progress">
+ <div class="demand-workflow__track">
+    @for (var i = 0; i < DemandPipelineWorkflow.MainSteps.Count; i++)
+    {
+      var (key, label) = DemandPipelineWorkflow.MainSteps[i];
+      var done = i < stepIdx;
+      var current = i == stepIdx;
+ <div class="demand-workflow__step @(done ?"demand-workflow__step--done" : "") @(current ? "demand-workflow__step--current" : "")">
+ <span class="demand-workflow__dot" aria-hidden="true"></span>
+ <span class="demand-workflow__label">@label</span>
+      </div>
+      @if (i < DemandPipelineWorkflow.MainSteps.Count - 1)
+      {
+ <div class="demand-workflow__join @(done ?"demand-workflow__join--done" : "")" aria-hidden="true"></div>
+      }
+    }
+  </div>
+  @if (transitions.Count > 0)
+  {
+ <div class="demand-workflow__actions">
+      @foreach (var (tid, tlabel) in transitions)
+      {
+ <form method="post" asp-controller="ModernDemand" asp-action="RequestWorkflowTransition" asp-route-id="@id" class="demand-workflow__form">
+          @Html.AntiForgeryToken()
+          <input type="hidden" name="transition" value="@tid" />
+ <button type="submit" class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0">@tlabel</button>
+        </form>
+      }
+    </div>
+  }
+</div>

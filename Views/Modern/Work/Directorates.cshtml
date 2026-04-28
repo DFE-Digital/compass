@@ -1,34 +1,74 @@
 @using Compass.Models
+@using Compass.Models.Modern.Work
 @{
     ViewData["Title"] = "Directorates";
     var directorates = (List<Directorate>)ViewBag.Directorates ?? new List<Directorate>();
     var workCountByDirectorateId = (Dictionary<int, int>)ViewBag.WorkCountByDirectorateId ?? new Dictionary<int, int>();
+    var workItemsByDirectorateId = ViewBag.WorkItemsByDirectorateId as Dictionary<int, List<WorkItem>> ?? new Dictionary<int, List<WorkItem>>();
     var search = ViewBag.Search as string;
+    var workItemsFilter = ViewBag.WorkItemsFilter as string ?? "all";
+    var countBeforeWorkFilter = ViewBag.CountBeforeWorkFilter as int?;
 }
 @section Breadcrumbs {
-    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
-    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="@Url.Action("Dashboard", "ModernWork")">Work</a></li>
-    <li class="dfe-c-breadcrumb__item" aria-current="page">Directorates</li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernWork")">Work</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">Directorates</li>
 }
 
 <div id="sc-work-directorates" class="modern-work-page">
-  <div class="dfe-c-flex--between dfe-c-mb-3" style="flex-wrap:wrap;gap:1rem;">
-    <div class="dfe-c-page-title" style="margin:0;">
-      <div class="dfe-c-page-title__caption">Work</div>
-      <h1 class="dfe-c-page-title__heading">Directorates</h1>
-      <p class="dfe-c-page-title__lede">Work items can be associated with one or more directorates. View work by directorate below.</p>
-    </div>
-    <div class="dfe-c-flex" style="gap:0.75rem;flex-wrap:wrap;">
-      <a href="@Url.Action("Create", "ModernWork")" class="govuk-button">New work item</a>
+ <div class="dfe-c-mb-3">
+ <div class="dfe-c-page-title" style="margin:0;">
+ <div class="dfe-c-page-title__caption">Work</div>
+ <h1 class="dfe-c-page-title__heading">Directorates</h1>
+ <p class="dfe-c-page-title__lede">Work items can be associated with one or more directorates. Expand each directorate to see its work items.</p>
     </div>
   </div>
 
-  <form method="get" action="@Url.Action("Directorates", "ModernWork")" id="directorates-search-form" class="dfe-c-mb-3">
+ <form method="get" action="@Url.Action("Directorates", "ModernWork")" id="directorates-search-form" class="dfe-c-mb-3">
     <div id="search-and-filter">
-      <div class="filter-toolbar">
-        <div class="filter-toolbar__search-wrap">
-          <input type="search" name="search" id="directorates-search" value="@search" placeholder="Search directorates…" class="filter-search" autocomplete="off" aria-label="Search directorates" />
-          <button type="submit" class="govuk-button govuk-button--secondary filter-toolbar__search-submit">Search</button>
+ <div class="filter-toolbar">
+ <div class="filter-toolbar__search-wrap">
+ <input type="search" name="search" id="directorates-register-search" value="@search" placeholder="Search directorates…" class="filter-search" autocomplete="off" aria-label="Search directorates" />
+ <button type="submit" class="govuk-button govuk-button--secondary filter-toolbar__search-submit">Search</button>
+        </div>
+ <button type="button" class="filter-toggle-btn" id="directorates-filter-btn" aria-expanded="false" aria-controls="directorates-filter-panel">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="flex-shrink:0;" aria-hidden="true"><path d="M1 3h14v1.5l-5 5V14l-4-2V9.5L1 4.5V3z"></path></svg>
+ <span class="filter-toggle-label">Filter</span>
+        </button>
+      </div>
+ <div class="filter-panel" id="directorates-filter-panel">
+        <div>
+          <label for="directorates-filter-workitems">Work items</label>
+ <select name="workItems" id="directorates-filter-workitems" class="govuk-select">
+            @if (workItemsFilter == "all")
+            {
+              <option value="all" selected>All directorates</option>
+            }
+            else
+            {
+              <option value="all">All directorates</option>
+            }
+            @if (workItemsFilter == "with")
+            {
+              <option value="with" selected>With linked work</option>
+            }
+            else
+            {
+              <option value="with">With linked work</option>
+            }
+            @if (workItemsFilter == "without")
+            {
+              <option value="without" selected>No linked work</option>
+            }
+            else
+            {
+              <option value="without">No linked work</option>
+            }
+          </select>
+        </div>
+ <div class="filter-panel__actions">
+ <button type="submit" class="govuk-button govuk-button--primary">Apply</button>
+ <a href="@Url.Action("Directorates", "ModernWork")" class="govuk-button govuk-button--secondary">Clear filters</a>
         </div>
       </div>
     </div>
@@ -36,40 +76,158 @@
 
   @if (directorates == null || !directorates.Any())
   {
-    <div class="dfe-c-body dfe-c-text-muted">No directorates defined. Add directorates in Admin.</div>
+ <div class="dfe-c-body dfe-c-text-muted">
+      @if (countBeforeWorkFilter is > 0)
+      {
+        <text>No directorates match the work items filter. Try changing the filter or </text>
+        <a href="@Url.Action("Directorates", "ModernWork", new { search })">clear filters</a><text>.</text>
+      }
+      else if (!string.IsNullOrWhiteSpace(search))
+      {
+        <text>No directorates match your search.</text>
+      }
+      else
+      {
+        <text>No directorates defined. Add directorates in Admin.</text>
+      }
+    </div>
   }
   else
   {
-    <div class="dfe-c-table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th scope="col">Directorate</th>
-            <th scope="col" style="text-align:right;">Work items</th>
-            <th scope="col"><span class="dfe-c-sr-only">Actions</span></th>
-          </tr>
-        </thead>
-        <tbody>
-          @foreach (var d in directorates)
-          {
-            var count = workCountByDirectorateId.TryGetValue(d.Id, out var c) ? c : 0;
-            <tr>
-              <td>
-                <strong>@d.Name</strong>
-                @if (!string.IsNullOrEmpty(d.Description))
-                {
-                  <p class="dfe-c-body-s dfe-c-text-muted dfe-c-m-0 dfe-c-mt-1">@d.Description</p>
-                }
-              </td>
-              <td style="text-align:right;">@count</td>
-              <td>
-                <a href="@Url.Action("AllWork", "ModernWork", new { directorateId = d.Id })" class="dfe-c-link">View work →</a>
-              </td>
-            </tr>
-          }
-        </tbody>
-      </table>
+ <div class="bypriority-bulk-bar">
+ <button type="button" class="govuk-button govuk-button--secondary" id="directorates-bulk-toggle" aria-label="Open all sections">Open all</button>
     </div>
-    <p class="dfe-c-body-s dfe-c-text-muted dfe-c-mt-2">@directorates.Count directorate@(directorates.Count == 1 ? "" : "s").</p>
+ <div class="bypriority-group-stack dfe-c-mb-3" id="directorates-stack">
+      @foreach (var d in directorates)
+      {
+        var count = workCountByDirectorateId.TryGetValue(d.Id, out var c) ? c : 0;
+        var groupItems = workItemsByDirectorateId.TryGetValue(d.Id, out var items) ? items : new List<WorkItem>();
+ <details class="dfe-c-collapsible bypriority-group">
+ <summary class="dfe-c-collapsible__trigger">
+ <span class="dfe-c-collapsible__icon" aria-hidden="true"></span>
+            <span>@d.Name</span>
+ <span class="dfe-c-collapsible__status"><span class="govuk-tag govuk-tag--grey">@count work item@(count == 1 ? "" : "s")</span></span>
+          </summary>
+ <div class="dfe-c-collapsible__body">
+            @if (!string.IsNullOrEmpty(d.Description))
+            {
+ <p class="dfe-c-body-s dfe-c-text-muted" style="margin-bottom:1rem;">@d.Description</p>
+            }
+            @if (groupItems.Any())
+            {
+ <div class="dfe-c-table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th scope="col">Work item</th>
+                      <th scope="col">Business area</th>
+                      <th scope="col">Directorate</th>
+                      <th scope="col">Priority</th>
+                      <th scope="col">RAG</th>
+                      <th scope="col">Primary contact</th>
+                      <th scope="col">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @await Html.PartialAsync("_ByPriorityWorkRows", groupItems)
+                  </tbody>
+                </table>
+              </div>
+            }
+            else
+            {
+ <p class="dfe-c-body-s muted dfe-c-m-0">No work items linked to this directorate.</p>
+            }
+          </div>
+        </details>
+      }
+    </div>
+ <p class="dfe-c-body-s dfe-c-text-muted dfe-c-mt-2">@directorates.Count directorate@(directorates.Count == 1 ? "" : "s").</p>
   }
 </div>
+
+@section Styles {
+<style>
+  .bypriority-bulk-bar {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 0.75rem;
+  }
+  .bypriority-group-stack .bypriority-group { margin-bottom: 0.75rem; }
+  .bypriority-group-stack .dfe-c-collapsible__trigger { align-items: center; justify-content: flex-start; gap: 0.5rem; flex-wrap: wrap; }
+  #sc-work-directorates details.bypriority-group .dfe-c-collapsible__icon {
+    font-size: 0;
+    line-height: 0;
+    overflow: hidden;
+  }
+  #sc-work-directorates details.bypriority-group .dfe-c-collapsible__icon::before {
+    content: '+';
+    font-size: 1rem;
+    line-height: 1;
+    font-weight: 700;
+    color: var(--navy);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+  }
+  #sc-work-directorates details.bypriority-group[open] .dfe-c-collapsible__icon::before {
+    content: '\2212';
+  }
+</style>
+}
+
+@section Scripts {
+<script nonce="@Context.Items["Nonce"]">
+(function() {
+  function initBulkToggle(stackId, btnId) {
+    var stack = document.getElementById(stackId);
+    var btn = document.getElementById(btnId);
+    if (!stack || !btn) return;
+    function getDetails() {
+      return stack.querySelectorAll('details.bypriority-group');
+    }
+    function allExpanded() {
+      var ds = getDetails();
+      if (!ds.length) return false;
+      for (var i = 0; i < ds.length; i++) {
+        if (!ds[i].open) return false;
+      }
+      return true;
+    }
+    function sync() {
+      var ds = getDetails();
+      if (!ds.length) {
+        btn.style.display = 'none';
+        return;
+      }
+      btn.style.display = '';
+      if (allExpanded()) {
+        btn.textContent = 'Close all';
+        btn.setAttribute('aria-label', 'Close all sections');
+      } else {
+        btn.textContent = 'Open all';
+        btn.setAttribute('aria-label', 'Open all sections');
+      }
+    }
+    btn.addEventListener('click', function() {
+      var ds = getDetails();
+      var expand = !allExpanded();
+      for (var i = 0; i < ds.length; i++) {
+        ds[i].open = expand;
+      }
+      sync();
+    });
+    getDetails().forEach(function(d) {
+      d.addEventListener('toggle', sync);
+    });
+    sync();
+  }
+
+  document.addEventListener('DOMContentLoaded', function() {
+    initBulkToggle('directorates-stack', 'directorates-bulk-toggle');
+  });
+})();
+</script>
+}

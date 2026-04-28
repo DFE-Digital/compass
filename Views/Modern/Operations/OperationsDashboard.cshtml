@@ -1,0 +1,140 @@
+@model Compass.ViewModels.Modern.ModernOperationsDashboardViewModel
+@{
+  ViewData["Title"] = "Operations";
+}
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">Operations</li>
+}
+
+<div class="modern-work-page" style="max-width: 100%; box-sizing: border-box;">
+  <div class="dfe-c-mb-4 dfe-c-flex--between" style="flex-wrap:wrap;align-items:flex-start;gap:1rem;">
+    <div class="dfe-c-page-title" style="margin:0;min-width:0;flex:1;max-width: 100%;">
+      <div class="dfe-c-page-title__caption">Operations</div>
+      <h1 class="dfe-c-page-title__heading">Dashboard</h1>
+      <p class="dfe-c-page-title__lede" style="margin:0.25rem 0 0 0;max-width: 40rem;">
+        Central operations tools: work, demand, performance, RAID tier requests, and the service register. Use the sub-navigation to open each area.
+      </p>
+    </div>
+  </div>
+
+  <h2 class="govuk-heading-m">RAID tier requests (at a glance)</h2>
+  <p class="dfe-c-body dfe-c-text-muted govuk-!-margin-bottom-4" style="max-width: 40rem; margin-top:0;">
+    Summarises <a class="govuk-link" href="@Url.Action("RaidEscalations", "ModernOperations")">RAID</a> queues for proposed tier changes. Open RAID for the full list and to review individual requests.
+  </p>
+  <div class="dfe-c-card-grid dfe-c-card-grid--3 dfe-c-mb-3" role="region" aria-label="RAID tier request summary">
+    @if (Model.PendingEscalationsCount > 0)
+    {
+      <a class="dfe-c-metric dfe-c-metric--red ops-dashboard-raid-metric"
+         href="@Url.Action("RaidEscalations", "ModernOperations", new { tab = "escalations" })"
+         title="Open RAID — requested escalations queue"
+         aria-label="Open RAID tier requests, requested escalations, @Model.PendingEscalationsCount pending">
+        <div class="dfe-c-metric__number">@Model.PendingEscalationsCount</div>
+        <div class="dfe-c-metric__label">Requested escalations (pending)</div>
+        <div class="dfe-c-metric__note ops-dashboard-raid-metric__open">View in RAID</div>
+      </a>
+    }
+    else
+    {
+      <div class="dfe-c-metric dfe-c-metric--red">
+        <div class="dfe-c-metric__number">@Model.PendingEscalationsCount</div>
+        <div class="dfe-c-metric__label">Requested escalations (pending)</div>
+      </div>
+    }
+    @if (Model.PendingDeescalationsCount > 0)
+    {
+      <a class="dfe-c-metric dfe-c-metric--amber ops-dashboard-raid-metric"
+         href="@Url.Action("RaidEscalations", "ModernOperations", new { tab = "deescalations" })"
+         title="Open RAID — requested de-escalations queue"
+         aria-label="Open RAID tier requests, requested de-escalations, @Model.PendingDeescalationsCount pending">
+        <div class="dfe-c-metric__number">@Model.PendingDeescalationsCount</div>
+        <div class="dfe-c-metric__label">Requested de-escalations (pending)</div>
+        <div class="dfe-c-metric__note ops-dashboard-raid-metric__open">View in RAID</div>
+      </a>
+    }
+    else
+    {
+      <div class="dfe-c-metric dfe-c-metric--amber">
+        <div class="dfe-c-metric__number">@Model.PendingDeescalationsCount</div>
+        <div class="dfe-c-metric__label">Requested de-escalations (pending)</div>
+      </div>
+    }
+    @if (Model.CurrentlyEscalatedCount > 0)
+    {
+      <a class="dfe-c-metric dfe-c-metric--navy ops-dashboard-raid-metric"
+         href="@Url.Action("RaidEscalations", "ModernOperations", new { tab = "current" })"
+         title="Open RAID — currently escalated risks"
+         aria-label="Open RAID tier requests, currently escalated, @Model.CurrentlyEscalatedCount shown">
+        <div class="dfe-c-metric__number">@Model.CurrentlyEscalatedCount</div>
+        <div class="dfe-c-metric__label">Currently escalated (from approved moves)</div>
+        <div class="dfe-c-metric__note ops-dashboard-raid-metric__open">View in RAID</div>
+      </a>
+    }
+    else
+    {
+      <div class="dfe-c-metric dfe-c-metric--navy">
+        <div class="dfe-c-metric__number">@Model.CurrentlyEscalatedCount</div>
+        <div class="dfe-c-metric__label">Currently escalated (from approved moves)</div>
+      </div>
+    }
+  </div>
+  <style>
+    .ops-dashboard-raid-metric {
+      display: block;
+      text-decoration: none;
+      color: inherit;
+      box-sizing: border-box;
+    }
+    .ops-dashboard-raid-metric:hover {
+      box-shadow: 0 0 0 2px #fd0;
+    }
+    .ops-dashboard-raid-metric:focus,
+    .ops-dashboard-raid-metric:focus-visible {
+      outline: 3px solid #fd0;
+      outline-offset: 0;
+    }
+    .ops-dashboard-raid-metric__open {
+      color: var(--navy, #1d70b8) !important;
+      font-weight: 600;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+  </style>
+  <p class="govuk-body-s dfe-c-text-muted govuk-!-margin-bottom-6" style="max-width: 40rem;">
+    <strong>Total</strong> pending proposed-tier reviews: <strong>@Model.PendingTierChangeCount</strong>
+  </p>
+
+  <h2 class="govuk-heading-m">Tools</h2>
+  <div class="dfe-c-card-grid dfe-c-card-grid--2 dfe-c-mb-3" style="max-width: 56rem;">
+    <div class="dfe-c-card dfe-c-card--plain">
+      <h3 class="govuk-heading-s govuk-!-margin-top-0"><a class="govuk-link" href="@Url.Action("ManageWork", "ModernOperations")">Manage work</a></h3>
+      <p class="govuk-body-s dfe-c-text-muted govuk-!-margin-bottom-0">Search, filter, and support the work register across all programmes.</p>
+    </div>
+    @if (ViewBag.ShowDemandNavigation == true)
+    {
+      <div class="dfe-c-card dfe-c-card--plain">
+        <h3 class="govuk-heading-s govuk-!-margin-top-0"><a class="govuk-link" href="@Url.Action("ManageDemand", "ModernOperations")">Manage demand</a></h3>
+        <p class="govuk-body-s dfe-c-text-muted govuk-!-margin-bottom-0">Pipeline and demand requests for triage and progression.</p>
+      </div>
+      <div class="dfe-c-card dfe-c-card--plain">
+        <h3 class="govuk-heading-s govuk-!-margin-top-0"><a class="govuk-link" href="@Url.Action("ManageTriage", "ModernOperations")">Manage triage</a></h3>
+        <p class="govuk-body-s dfe-c-text-muted govuk-!-margin-bottom-0">Triage meetings, slots, and outcomes.</p>
+      </div>
+    }
+    <div class="dfe-c-card dfe-c-card--plain">
+      <h3 class="govuk-heading-s govuk-!-margin-top-0"><a class="govuk-link" href="@Url.Action("ManagePerformance", "ModernOperations")">Manage performance</a></h3>
+      <p class="govuk-body-s dfe-c-text-muted govuk-!-margin-bottom-0">Commission reporting coverage and return rates.</p>
+    </div>
+    <div class="dfe-c-card dfe-c-card--plain">
+      <h3 class="govuk-heading-s govuk-!-margin-top-0"><a class="govuk-link" href="@Url.Action("RaidEscalations", "ModernOperations")">RAID</a></h3>
+      <p class="govuk-body-s dfe-c-text-muted govuk-!-margin-bottom-0">Approve or reject risk tier (escalation and de-escalation) requests from delivery.</p>
+    </div>
+    @if (ViewBag.ShowFipsDatabaseServiceRegister == true)
+    {
+      <div class="dfe-c-card dfe-c-card--plain">
+        <h3 class="govuk-heading-s govuk-!-margin-top-0"><a class="govuk-link" href="@Url.Action("ServiceRegister", "ModernOperations")">Service register</a></h3>
+        <p class="govuk-body-s dfe-c-text-muted govuk-!-margin-bottom-0">FIPS products, CMDB sync, and catalogue alignment.</p>
+      </div>
+    }
+  </div>
+</div>

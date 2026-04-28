@@ -1,0 +1,220 @@
+@model Compass.ViewModels.Modern.FunctionalStandardsLandingViewModel
+@{
+  ViewData["Title"] = "Functional standards";
+  var rows = Model?.Standards ?? new List<Compass.ViewModels.Modern.FunctionalStandardLandingRow>();
+  var inProgress = Model?.InProgressAssessments ?? new List<Compass.ViewModels.Modern.FunctionalStandardInProgressRow>();
+  var completed = Model?.CompletedAssessments ?? new List<Compass.ViewModels.Modern.FunctionalStandardCompletedAssessmentRow>();
+  var tab = string.IsNullOrWhiteSpace(Model?.Tab) ? "in-progress" : Model!.Tab;
+  var canStartNewAssessment = rows.Any(r => r.ContinueAssessmentId == null);
+}
+
+@functions {
+  string TabCount(int count) => count > 0 ? $" ({count})" : "";
+}
+
+@section Breadcrumbs {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernStandards")">Standards</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">Functional standards</li>
+}
+
+<div class="dfe-c-flex--between dfe-c-mb-3" style="flex-wrap:wrap;gap:1rem;align-items:flex-start;">
+ <div class="dfe-c-page-title" style="margin:0;">
+ <div class="dfe-c-page-title__caption">Standards</div>
+ <h1 class="dfe-c-page-title__heading">Functional standards</h1>
+ <p class="dfe-c-page-title__lede">HM Government functional standards applicable to DDT — with assessment records</p>
+  </div>
+  @if (rows.Any() && canStartNewAssessment)
+  {
+ <button type="button" class="govuk-button" data-modal-open="dlg-fs-landing-start-assessment">Start new assessment</button>
+  }
+</div>
+
+<div class="dfe-c-callout dfe-c-callout--info dfe-c-mb-3">
+ <div class="dfe-c-callout__heading">About functional standards</div>
+ <p class="dfe-c-callout__body">HM Government functional standards set expectations for how government departments manage and run their functions. Departments must assess against applicable standards and maintain evidence of compliance. These are set centrally by Cabinet Office.</p>
+</div>
+
+<div class="tabs dfe-c-mb-3" role="tablist" aria-label="Functional standards sections">
+  <a href="@Url.Action("FunctionalStandards", "ModernStandards", new { tab = "in-progress" })"
+ class="tab @(tab =="in-progress" ? "on" : "")"
+     role="tab"
+     aria-selected="@(tab == "in-progress")"
+     aria-controls="d-fs-in-progress"
+     id="tab-fs-in-progress">In progress @(TabCount(inProgress.Count))</a>
+  <a href="@Url.Action("FunctionalStandards", "ModernStandards", new { tab = "completed" })"
+ class="tab @(tab =="completed" ? "on" : "")"
+     role="tab"
+     aria-selected="@(tab == "completed")"
+     aria-controls="d-fs-completed"
+     id="tab-fs-completed">Completed @(TabCount(completed.Count))</a>
+  <a href="@Url.Action("FunctionalStandards", "ModernStandards", new { tab = "all" })"
+ class="tab @(tab =="all" ? "on" : "")"
+     role="tab"
+     aria-selected="@(tab == "all")"
+     aria-controls="d-fs-all"
+     id="tab-fs-all">All standards @(TabCount(rows.Count))</a>
+</div>
+
+<div id="d-fs-in-progress" class="tab-pane @(tab =="in-progress" ? "on" : "")" role="tabpanel" aria-labelledby="tab-fs-in-progress">
+  @if (!inProgress.Any())
+  {
+ <p class="dfe-c-body muted dfe-c-mb-0">No assessments are in progress.</p>
+  }
+  else
+  {
+ <div class="dfe-c-table-wrap">
+      <table >
+ <caption class="govuk-visually-hidden">Assessments in progress</caption>
+        <thead>
+          <tr>
+ <th scope="col" data-sort-bound="1" class="sortable">Standard</th>
+ <th scope="col" data-sort-bound="1" class="sortable">Assessment</th>
+ <th scope="col" data-sort-bound="1" class="sortable">Started</th>
+ <th scope="col" data-sort-bound="1" class="sortable">Progress</th>
+ <th scope="col" data-dfe-sortable="false" class="govuk-!-text-align-right"><span class="govuk-visually-hidden">Actions</span></th>
+          </tr>
+        </thead>
+        <tbody>
+        @foreach (var a in inProgress)
+        {
+          var progressPct = a.CriteriaTotal > 0 ? (int)Math.Round(100.0 * a.CriteriaAnswered / a.CriteriaTotal) : 0;
+          var progressLabel = $"{a.CriteriaAnswered} / {a.CriteriaTotal} ({progressPct}%)";
+          <tr>
+            <td><strong>@a.StandardTitle</strong></td>
+            <td>@a.AssessmentName</td>
+            <td>@a.AssessmentDate.ToString("d MMM yyyy")</td>
+            <td>@progressLabel</td>
+ <td class="govuk-!-text-align-right"><a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("ConductAssessment", "ModernStandards", new { assessmentId = a.AssessmentId })">Continue</a></td>
+          </tr>
+        }
+        </tbody>
+      </table>
+    </div>
+  }
+</div>
+
+<div id="d-fs-completed" class="tab-pane @(tab =="completed" ? "on" : "")" role="tabpanel" aria-labelledby="tab-fs-completed">
+  @if (!completed.Any())
+  {
+ <p class="dfe-c-body muted dfe-c-mb-0">No completed assessments yet.</p>
+  }
+  else
+  {
+ <div class="dfe-c-table-wrap">
+      <table >
+ <caption class="govuk-visually-hidden">Completed assessments</caption>
+        <thead>
+          <tr>
+ <th scope="col" data-sort-bound="1" class="sortable">Standard</th>
+ <th scope="col" data-sort-bound="1" class="sortable">Assessment</th>
+ <th scope="col" data-sort-bound="1" class="sortable">Started</th>
+ <th scope="col" data-sort-bound="1" class="sortable">Submitted</th>
+ <th scope="col" data-sort-bound="1" class="sortable">Criteria</th>
+ <th scope="col" data-dfe-sortable="false" class="govuk-!-text-align-right"><span class="govuk-visually-hidden">Actions</span></th>
+          </tr>
+        </thead>
+        <tbody>
+        @foreach (var a in completed)
+        {
+          var criteriaLabel = $"{a.CriteriaAnswered} / {a.CriteriaTotal}";
+          <tr>
+            <td><strong>@a.StandardTitle</strong></td>
+            <td>@a.AssessmentName</td>
+            <td>@a.AssessmentDate.ToString("d MMM yyyy")</td>
+            <td>@a.SubmittedAt.ToString("d MMM yyyy")</td>
+            <td>@criteriaLabel</td>
+ <td class="govuk-!-text-align-right"><a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("AssessmentSummary", "ModernStandards", new { assessmentId = a.AssessmentId })">View summary</a></td>
+          </tr>
+        }
+        </tbody>
+      </table>
+    </div>
+  }
+</div>
+
+<div id="d-fs-all" class="tab-pane @(tab =="all" ? "on" : "")" role="tabpanel" aria-labelledby="tab-fs-all">
+ <section id="standards-list" class="fs-functional-standards-anchor" aria-labelledby="fs-all-standards-heading">
+ <h2 id="fs-all-standards-heading" class="govuk-heading-m govuk-!-margin-bottom-2">All standards</h2>
+    @if (!rows.Any())
+    {
+ <p class="dfe-c-body muted">No functional standards are configured yet.</p>
+    }
+    else
+    {
+ <div class="dfe-c-table-wrap">
+        <table >
+ <caption class="govuk-visually-hidden">Functional standards</caption>
+          <thead>
+            <tr>
+ <th scope="col" data-sort-bound="1" class="sortable">Standard</th>
+ <th scope="col" data-sort-bound="1" class="sortable">Summary</th>
+ <th scope="col" data-sort-bound="1" class="sortable">Themes</th>
+ <th scope="col" data-sort-bound="1" class="sortable">Criteria</th>
+            </tr>
+          </thead>
+          <tbody>
+          @foreach (var row in rows)
+          {
+            <tr>
+ <td><strong><a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("FunctionalStandardDashboard", "ModernStandards", new { id = row.Id })">@row.Title</a></strong></td>
+              <td>
+                @if (!string.IsNullOrWhiteSpace(row.Description))
+                {
+                  var shortDesc = row.Description.Length > 160 ? row.Description[..160].TrimEnd() + "…" : row.Description;
+ <span class="govuk-body-s">@shortDesc</span>
+                }
+                else
+                {
+ <span class="govuk-body-s govuk-hint govuk-!-margin-bottom-0">@row.ThemeCount theme(s), @row.CriteriaCount criteria</span>
+                }
+              </td>
+              <td>@row.ThemeCount</td>
+              <td>@row.CriteriaCount</td>
+            </tr>
+          }
+          </tbody>
+        </table>
+      </div>
+    }
+  </section>
+</div>
+
+@if (rows.Any() && canStartNewAssessment)
+{
+ <dialog id="dlg-fs-landing-start-assessment" class="dfe-c-dialog">
+ <div class="dfe-c-dialog__content">
+ <h2 class="govuk-heading-m">Start new assessment</h2>
+ <p class="govuk-body">Choose the standard and a name for this assessment run.</p>
+      <form method="post" action="@Url.Action("StartAssessment", "ModernStandards")">
+        @Html.AntiForgeryToken()
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="landing-fs-standard">Functional standard</label>
+ <select class="govuk-select" id="landing-fs-standard" name="standardId" required>
+            <option value="">Select a standard…</option>
+            @foreach (var r in rows.Where(x => x.ContinueAssessmentId == null))
+            {
+              <option value="@r.Id">@r.Title</option>
+            }
+          </select>
+        </div>
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="landing-assessment-name">Assessment name</label>
+ <span class="govuk-hint">For example, Q2 2026 self-assessment</span>
+ <input class="govuk-input" id="landing-assessment-name" name="assessmentName" type="text" required maxlength="200" autocomplete="off" />
+        </div>
+ <div class="dfe-c-dialog__actions">
+ <button type="submit" class="govuk-button">Start assessment</button>
+ <button type="button" class="govuk-button govuk-button--secondary" data-modal-close="dlg-fs-landing-start-assessment">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </dialog>
+}
+
+<style>
+  .fs-functional-standards-anchor { scroll-margin-top: 6.5rem; }
+  .dfe-c-dialog { border: none; border-radius: 4px; padding: 1.5rem; max-width: 32rem; box-shadow: 0 4px 24px rgba(0,0,0,0.25); }
+  .dfe-c-dialog::backdrop { background: rgba(0,0,0,0.5); }
+  .dfe-c-dialog__actions { display: flex; gap: 0.5rem; margin-top: 1rem; flex-wrap: wrap; }
+</style>

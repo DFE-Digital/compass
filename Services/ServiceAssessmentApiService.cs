@@ -6,6 +6,11 @@ namespace Compass.Services;
 
 public class ServiceAssessmentApiService : IServiceAssessmentApiService
 {
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true
+    };
+
     private readonly HttpClient _httpClient;
     private readonly IConfiguration _configuration;
     private readonly ILogger<ServiceAssessmentApiService> _logger;
@@ -20,30 +25,25 @@ public class ServiceAssessmentApiService : IServiceAssessmentApiService
         _httpClient = httpClient;
         _configuration = configuration;
         _logger = logger;
-        
-        // Get base URL from configuration (stored for logging purposes)
-        _apiBaseUrl = _configuration["ServiceAssessments:ApiUrl"] ?? "https://service-assessments.education.gov.uk/api/";
-        
-        // Ensure base URL ends with /
-        if (!_apiBaseUrl.EndsWith("/"))
+
+        _apiBaseUrl = _configuration["FipsSync:Sas:Endpoint"]
+            ?? _configuration["ServiceAssessments:ApiUrl"]
+            ?? "https://service-assessments.education.gov.uk/api/";
+
+        if (!_apiBaseUrl.EndsWith("/", StringComparison.Ordinal))
         {
             _apiBaseUrl += "/";
         }
-        
-        // Get token from ServiceAssessments:ApiToken only (not FIPSPK_TOKEN)
-        // Trim any whitespace that might cause authentication issues
-        _apiToken = (_configuration["ServiceAssessments:ApiToken"] ?? string.Empty).Trim();
-        
-        // Note: BaseAddress is set in Program.cs via HttpClient configuration
-        // User-Agent and Timeout are also set there
-        
+
+        _apiToken = (
+            _configuration["FipsSync:Sas:SecretKey"]
+            ?? _configuration["ServiceAssessments:ApiToken"]
+            ?? string.Empty).Trim();
+
         if (string.IsNullOrEmpty(_apiToken))
         {
-            _logger.LogWarning("Service assessment API token is not configured. Check ServiceAssessments:ApiToken in appsettings.");
-        }
-        else
-        {
-            _logger.LogInformation("Service assessment API token loaded (length: {TokenLength})", _apiToken.Length);
+            _logger.LogWarning(
+                "Service assessment API token is not configured. Set FipsSync:Sas:SecretKey or ServiceAssessments:ApiToken.");
         }
     }
 
@@ -93,13 +93,7 @@ public class ServiceAssessmentApiService : IServiceAssessmentApiService
             }
 
             var jsonContent = await response.Content.ReadAsStringAsync();
-            var options = new JsonSerializerOptions
-            {
-                PropertyNameCaseInsensitive = true
-            };
-
-            // The API returns a response with assessments array
-            var result = JsonSerializer.Deserialize<ServiceAssessmentResponse>(jsonContent, options);
+            var result = JsonSerializer.Deserialize<ServiceAssessmentResponse>(jsonContent, JsonOptions);
 
             return result;
         }
@@ -116,6 +110,56 @@ public class ServiceAssessmentApiService : IServiceAssessmentApiService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Unexpected error calling service assessment API");
+            return null;
+        }
+    }
+
+    public async Task<SasPublishedSummaryResponse?> GetPublishedSummaryAsync(
+        CancellationToken cancellationToken = default) =>
+        await GetSasJsonAsync<SasPublishedSummaryResponse>(
+            "assessments/published/summary", cancellationToken);
+
+    public async Task<SasActionsByStandardResponse?> GetPublishedActionsByStandardAsync(
+        CancellationToken cancellationToken = default) =>
+        await GetSasJsonAsync<SasActionsByStandardResponse>(
+            "assessments/published/actions-by-standard", cancellationToken);
+
+    private async Task<T?> GetSasJsonAsync<T>(string relativePath, CancellationToken cancellationToken) where T : class
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(_apiToken))
+            {
+                _logger.LogError("Service assessment API token is not configured. Cannot make request.");
+                return null;
+            }
+
+            var path = relativePath.TrimStart('/');
+            var baseUri = _httpClient.BaseAddress ?? new Uri(_apiBaseUrl, UriKind.Absolute);
+            var requestUri = new Uri(baseUri, path);
+            var request = new HttpRequestMessage(HttpMethod.Get, requestUri);
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _apiToken);
+
+            var response = await _httpClient.SendAsync(request, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                var body = await response.Content.ReadAsStringAsync(cancellationToken);
+                _logger.LogWarning(
+                    "Service assessment API {Path} returned {Status}: {Body}",
+                    path, response.StatusCode, body);
+                return null;
+            }
+
+            var json = await response.Content.ReadAsStringAsync(cancellationToken);
+            return JsonSerializer.Deserialize<T>(json, JsonOptions);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error calling service assessment API path {Path}", relativePath);
             return null;
         }
     }

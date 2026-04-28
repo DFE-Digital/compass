@@ -5,33 +5,33 @@
 
 // Application Insights helper functions
 function trackEvent(eventName, properties) {
-    if (window.appInsights) {
-        window.appInsights.trackEvent(eventName, properties);
-    }
+  if (window.appInsights) {
+    window.appInsights.trackEvent(eventName, properties);
+  }
 }
 
 function trackPageView(pageName, url) {
-    if (window.appInsights) {
-        window.appInsights.trackPageView(pageName, url);
-    }
+  if (window.appInsights) {
+    window.appInsights.trackPageView(pageName, url);
+  }
 }
 
 // Track page load
-document.addEventListener('DOMContentLoaded', function() {
-    // Track page view
-    trackPageView(document.title, window.location.href);
-    
-    // Track user interactions
-    trackEvent('PageLoaded', {
-        page: window.location.pathname,
-        referrer: document.referrer,
-        userAgent: navigator.userAgent,
-        timestamp: new Date().toISOString()
-    });
+document.addEventListener('DOMContentLoaded', function () {
+  // Track page view
+  trackPageView(document.title, window.location.href);
+
+  // Track user interactions
+  trackEvent('PageLoaded', {
+    page: window.location.pathname,
+    referrer: document.referrer,
+    userAgent: navigator.userAgent,
+    timestamp: new Date().toISOString()
+  });
 });
 
 // Feedback form functionality
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
   const feedbackLink = document.getElementById('feedback-link');
   const feedbackPanel = document.getElementById('feedback-panel');
   const thanksMessage = document.getElementById('thanksMessage');
@@ -40,34 +40,34 @@ document.addEventListener('DOMContentLoaded', function() {
 
   if (feedbackLink && feedbackPanel && thanksMessage && feedbackForm && cancelButton) {
     // Show feedback panel when link is clicked
-    feedbackLink.addEventListener('click', function(e) {
+    feedbackLink.addEventListener('click', function (e) {
       e.preventDefault();
       feedbackPanel.classList.add('show');
       feedbackPanel.setAttribute('aria-hidden', 'false');
       thanksMessage.classList.remove('show');
-      
+
       // Clear any validation errors when opening the panel
       const formGroup = document.getElementById('feedback_form_group');
       const errorSummary = document.getElementById('feedback-error-summary');
       const errorMessage = document.getElementById('feedback_form_input-error');
       const textarea = document.getElementById('feedback_form_input');
-      
+
       if (formGroup && errorSummary && errorMessage && textarea) {
         formGroup.classList.remove('dfe-c-form__group--error');
         textarea.classList.remove('dfe-c-form__input--error');
         errorSummary.style.display = 'none';
         errorMessage.style.display = 'none';
-        
+
         // Reset aria-describedby
         textarea.setAttribute('aria-describedby', 'feedback_form_input-info');
       }
-      
+
       // Track feedback panel opened
       trackEvent('FeedbackPanelOpened', {
         page: window.location.pathname,
         timestamp: new Date().toISOString()
       });
-      
+
       // Focus on the textarea
       if (textarea) {
         textarea.focus();
@@ -75,27 +75,27 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // Hide feedback panel when cancel button is clicked
-    cancelButton.addEventListener('click', function(e) {
+    cancelButton.addEventListener('click', function (e) {
       e.preventDefault();
       feedbackPanel.classList.remove('show');
       feedbackPanel.setAttribute('aria-hidden', 'true');
-      
+
       // Clear any validation errors
       const formGroup = document.getElementById('feedback_form_group');
       const errorSummary = document.getElementById('feedback-error-summary');
       const errorMessage = document.getElementById('feedback_form_input-error');
       const textarea = document.getElementById('feedback_form_input');
-      
+
       if (formGroup && errorSummary && errorMessage && textarea) {
         formGroup.classList.remove('dfe-c-form__group--error');
         textarea.classList.remove('dfe-c-form__input--error');
         errorSummary.style.display = 'none';
         errorMessage.style.display = 'none';
-        
+
         // Reset aria-describedby
         textarea.setAttribute('aria-describedby', 'feedback_form_input-info');
       }
-      
+
       // Track feedback panel cancelled
       trackEvent('FeedbackPanelCancelled', {
         page: window.location.pathname,
@@ -109,77 +109,77 @@ document.addEventListener('DOMContentLoaded', function() {
       const errorSummary = document.getElementById('feedback-error-summary');
       const errorMessage = document.getElementById('feedback_form_input-error');
       const textarea = document.getElementById('feedback_form_input');
-      
+
       if (formGroup && errorSummary && errorMessage && textarea) {
         formGroup.classList.add('dfe-c-form__group--error');
         textarea.classList.add('dfe-c-form__input--error');
         errorSummary.style.display = 'block';
         errorMessage.style.display = 'block';
-        
+
         // Update aria-describedby to include error message
         const currentDescribedBy = textarea.getAttribute('aria-describedby') || '';
         if (!currentDescribedBy.includes('feedback_form_input-error')) {
           textarea.setAttribute('aria-describedby', 'feedback_form_input-error ' + currentDescribedBy);
         }
-        
+
         // Focus on error summary for screen readers
         errorSummary.focus();
       }
     }
-    
+
     // Function to hide validation errors
     function hideFeedbackError() {
       const formGroup = document.getElementById('feedback_form_group');
       const errorSummary = document.getElementById('feedback-error-summary');
       const errorMessage = document.getElementById('feedback_form_input-error');
       const textarea = document.getElementById('feedback_form_input');
-      
+
       if (formGroup && errorSummary && errorMessage && textarea) {
         formGroup.classList.remove('dfe-c-form__group--error');
         textarea.classList.remove('dfe-c-form__input--error');
         errorSummary.style.display = 'none';
         errorMessage.style.display = 'none';
-        
+
         // Update aria-describedby to remove error message
         const currentDescribedBy = textarea.getAttribute('aria-describedby') || '';
         textarea.setAttribute('aria-describedby', currentDescribedBy.replace('feedback_form_input-error', '').trim());
       }
     }
-    
+
     // Clear errors when user starts typing and is under limit
     const textarea = feedbackForm.querySelector('textarea');
     if (textarea) {
-      textarea.addEventListener('input', function() {
+      textarea.addEventListener('input', function () {
         if (this.value.length <= 1000) {
           hideFeedbackError();
         }
       });
     }
-    
+
     // Handle form submission
-    feedbackForm.addEventListener('submit', function(e) {
+    feedbackForm.addEventListener('submit', function (e) {
       e.preventDefault();
-      
+
       const textarea = feedbackForm.querySelector('textarea');
       const feedbackText = textarea.value.trim();
-      
+
       // Validate character count
       if (feedbackText.length > 1000) {
         showFeedbackError();
-        
+
         // Track validation error
         trackEvent('FeedbackValidationError', {
           page: window.location.pathname,
           characterCount: feedbackText.length,
           timestamp: new Date().toISOString()
         });
-        
+
         return;
       }
-      
+
       // Clear any existing errors
       hideFeedbackError();
-      
+
       if (feedbackText) {
         // Track feedback submission
         trackEvent('FeedbackSubmitted', {
@@ -187,13 +187,13 @@ document.addEventListener('DOMContentLoaded', function() {
           feedbackLength: feedbackText.length,
           timestamp: new Date().toISOString()
         });
-        
+
         // Send feedback to the server
         const submitButton = feedbackForm.querySelector('button[type="submit"]');
         const originalButtonText = submitButton.textContent;
         submitButton.textContent = 'Submitting...';
         submitButton.disabled = true;
-        
+
         fetch('/Contact/SubmitFeedback', {
           method: 'POST',
           headers: {
@@ -203,277 +203,277 @@ document.addEventListener('DOMContentLoaded', function() {
             feedbackFormInput: feedbackText
           })
         })
-        .then(response => response.json())
-        .then(data => {
-          if (data.success) {
-            // Show success message
-            feedbackPanel.classList.remove('show');
-            feedbackPanel.setAttribute('aria-hidden', 'true');
-            thanksMessage.classList.add('show');
-            
-            // Clear the form and errors
-            textarea.value = '';
-            hideFeedbackError();
-            
-            // Focus on the thank you message for screen readers
-            thanksMessage.focus();
-            
-            console.log('Feedback submitted successfully');
-          } else {
+          .then(response => response.json())
+          .then(data => {
+            if (data.success) {
+              // Show success message
+              feedbackPanel.classList.remove('show');
+              feedbackPanel.setAttribute('aria-hidden', 'true');
+              thanksMessage.classList.add('show');
+
+              // Clear the form and errors
+              textarea.value = '';
+              hideFeedbackError();
+
+              // Focus on the thank you message for screen readers
+              thanksMessage.focus();
+
+              console.log('Feedback submitted successfully');
+            } else {
+              // Show error message
+              alert('Sorry, there was an error submitting your feedback. Please try again.');
+              console.error('Feedback submission failed:', data.message);
+            }
+          })
+          .catch(error => {
             // Show error message
             alert('Sorry, there was an error submitting your feedback. Please try again.');
-            console.error('Feedback submission failed:', data.message);
-          }
-        })
-        .catch(error => {
-          // Show error message
-          alert('Sorry, there was an error submitting your feedback. Please try again.');
-          console.error('Feedback submission error:', error);
-        })
-        .finally(() => {
-          // Reset button state
-          submitButton.textContent = originalButtonText;
-          submitButton.disabled = false;
-        });
+            console.error('Feedback submission error:', error);
+          })
+          .finally(() => {
+            // Reset button state
+            submitButton.textContent = originalButtonText;
+            submitButton.disabled = false;
+          });
       }
     });
   }
 });
 
 // Header search: icon + "Search" toggle, expandable panel, close button (GOV.UK style)
-document.addEventListener('DOMContentLoaded', function() {
-    const header = document.querySelector('.govuk-js-header-search');
-    const toggle = document.querySelector('.govuk-js-header-search-toggle');
-    const closeBtn = document.querySelector('.govuk-js-header-search-close');
-    const panel = document.getElementById('header-search-panel');
-    const input = document.getElementById('header-search-input');
+document.addEventListener('DOMContentLoaded', function () {
+  const header = document.querySelector('.govuk-js-header-search');
+  const toggle = document.querySelector('.govuk-js-header-search-toggle');
+  const closeBtn = document.querySelector('.govuk-js-header-search-close');
+  const panel = document.getElementById('header-search-panel');
+  const input = document.getElementById('header-search-input');
 
-    if (!header || !toggle || !panel) return;
+  if (!header || !toggle || !panel) return;
 
-    function openSearch() {
-        panel.hidden = false;
-        panel.setAttribute('aria-hidden', 'false');
-        toggle.setAttribute('aria-expanded', 'true');
-        if (input) {
-            input.focus();
-        }
+  function openSearch() {
+    panel.hidden = false;
+    panel.setAttribute('aria-hidden', 'false');
+    toggle.setAttribute('aria-expanded', 'true');
+    if (input) {
+      input.focus();
     }
+  }
 
-    function closeSearch() {
-        panel.hidden = true;
-        panel.setAttribute('aria-hidden', 'true');
-        toggle.setAttribute('aria-expanded', 'false');
-        toggle.focus();
+  function closeSearch() {
+    panel.hidden = true;
+    panel.setAttribute('aria-hidden', 'true');
+    toggle.setAttribute('aria-expanded', 'false');
+    toggle.focus();
+  }
+
+  function isOpen() {
+    return toggle.getAttribute('aria-expanded') === 'true';
+  }
+
+  toggle.addEventListener('click', function () {
+    if (isOpen()) {
+      closeSearch();
+    } else {
+      openSearch();
     }
+  });
 
-    function isOpen() {
-        return toggle.getAttribute('aria-expanded') === 'true';
+  if (closeBtn) {
+    closeBtn.addEventListener('click', closeSearch);
+  }
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && isOpen()) {
+      closeSearch();
     }
+  });
 
-    toggle.addEventListener('click', function() {
-        if (isOpen()) {
-            closeSearch();
-        } else {
-            openSearch();
-        }
-    });
-
-    if (closeBtn) {
-        closeBtn.addEventListener('click', closeSearch);
+  document.addEventListener('click', function (e) {
+    if (!isOpen()) return;
+    if (!header.contains(e.target)) {
+      closeSearch();
     }
-
-    document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape' && isOpen()) {
-            closeSearch();
-        }
-    });
-
-    document.addEventListener('click', function(e) {
-        if (!isOpen()) return;
-        if (!header.contains(e.target)) {
-            closeSearch();
-        }
-    });
+  });
 });
 
 // Track search interactions
-document.addEventListener('DOMContentLoaded', function() {
-    const searchForms = document.querySelectorAll('form[action*="search"], form[action*="Search"]');
-    searchForms.forEach(function(form) {
-        form.addEventListener('submit', function(e) {
-            const searchInput = form.querySelector('input[type="search"], input[name*="search"], input[name*="Search"]');
-            if (searchInput && searchInput.value.trim()) {
-                trackEvent('SearchPerformed', {
-                    searchTerm: searchInput.value.trim(),
-                    page: window.location.pathname,
-                    timestamp: new Date().toISOString()
-                });
-            }
+document.addEventListener('DOMContentLoaded', function () {
+  const searchForms = document.querySelectorAll('form[action*="search"], form[action*="Search"]');
+  searchForms.forEach(function (form) {
+    form.addEventListener('submit', function (e) {
+      const searchInput = form.querySelector('input[type="search"], input[name*="search"], input[name*="Search"]');
+      if (searchInput && searchInput.value.trim()) {
+        trackEvent('SearchPerformed', {
+          searchTerm: searchInput.value.trim(),
+          page: window.location.pathname,
+          timestamp: new Date().toISOString()
         });
+      }
     });
+  });
 });
 
 // Track product clicks
-document.addEventListener('DOMContentLoaded', function() {
-    const productLinks = document.querySelectorAll('a[href*="/products/"], a[href*="/product/"]');
-    productLinks.forEach(function(link) {
-        link.addEventListener('click', function(e) {
-            trackEvent('ProductClicked', {
-                productUrl: link.href,
-                productText: link.textContent.trim(),
-                page: window.location.pathname,
-                timestamp: new Date().toISOString()
-            });
-        });
+document.addEventListener('DOMContentLoaded', function () {
+  const productLinks = document.querySelectorAll('a[href*="/products/"], a[href*="/product/"]');
+  productLinks.forEach(function (link) {
+    link.addEventListener('click', function (e) {
+      trackEvent('ProductClicked', {
+        productUrl: link.href,
+        productText: link.textContent.trim(),
+        page: window.location.pathname,
+        timestamp: new Date().toISOString()
+      });
     });
+  });
 });
 
 // Track category clicks
-document.addEventListener('DOMContentLoaded', function() {
-    const categoryLinks = document.querySelectorAll('a[href*="/categories/"], a[href*="/category/"]');
-    categoryLinks.forEach(function(link) {
-        link.addEventListener('click', function(e) {
-            trackEvent('CategoryClicked', {
-                categoryUrl: link.href,
-                categoryText: link.textContent.trim(),
-                page: window.location.pathname,
-                timestamp: new Date().toISOString()
-            });
-        });
+document.addEventListener('DOMContentLoaded', function () {
+  const categoryLinks = document.querySelectorAll('a[href*="/categories/"], a[href*="/category/"]');
+  categoryLinks.forEach(function (link) {
+    link.addEventListener('click', function (e) {
+      trackEvent('CategoryClicked', {
+        categoryUrl: link.href,
+        categoryText: link.textContent.trim(),
+        page: window.location.pathname,
+        timestamp: new Date().toISOString()
+      });
     });
+  });
 });
 
 // Compass sub-navigation: show sub-nav when a main nav item is selected
-(function() {
-    var SUBNAV_MAP = {
-        'demand': 'subnav-demand',
-        'work': 'subnav-work',
-        'products-services': 'subnav-products-services',
-        'performance': 'subnav-performance',
-        'operations': 'subnav-operations',
-        'risks': 'subnav-risks',
-        'standards': 'subnav-standards',
-        'reporting': 'subnav-reporting',
-        'admin': 'subnav-admin',
-        'planning': 'subnav-planning',
-        'work-reporting': 'subnav-work-reporting',
-        'issues': 'subnav-issues'
-    };
+(function () {
+  var SUBNAV_MAP = {
+    'demand': 'subnav-demand',
+    'work': 'subnav-work',
+    'products-services': 'subnav-products-services',
+    'performance': 'subnav-performance',
+    'operations': 'subnav-operations',
+    'risks': 'subnav-risks',
+    'standards': 'subnav-standards',
+    'reporting': 'subnav-reporting',
+    'admin': 'subnav-admin',
+    'planning': 'subnav-planning',
+    'work-reporting': 'subnav-work-reporting',
+    'issues': 'subnav-issues'
+  };
 
-    function showSubnav(group) {
-        document.querySelectorAll('.sub-nav').forEach(function(n) {
-            n.classList.remove('visible');
-        });
-        var subId = SUBNAV_MAP[group];
-        if (subId) {
-            var subEl = document.getElementById(subId);
-            if (subEl) subEl.classList.add('visible');
-        }
-        document.querySelectorAll('.dfe-c-service-nav__link').forEach(function(a) {
-            a.classList.toggle('active', a.getAttribute('data-nav') === group);
-        });
-    }
-
-    function setSubNavActive(subId) {
-        if (!subId) return;
-        document.querySelectorAll('.sub-nav__link').forEach(function(a) {
-            var dataSub = (a.getAttribute('data-sub') || '').trim();
-            var ids = dataSub ? dataSub.split(/\s+/).filter(Boolean) : [];
-            a.classList.toggle('active', ids.indexOf(subId) !== -1);
-        });
-    }
-
-    document.addEventListener('DOMContentLoaded', function() {
-        var body = document.body;
-        var mainNav = (body.getAttribute('data-main-nav') || '').trim();
-        var subNav = (body.getAttribute('data-sub-nav') || '').trim();
-        if (mainNav) showSubnav(mainNav);
-        if (subNav) setSubNavActive(subNav);
-
-        var mainNavList = document.getElementById('main-nav');
-        if (!mainNavList) return;
-        mainNavList.addEventListener('click', function(e) {
-            var link = e.target && e.target.closest && e.target.closest('a[data-nav]');
-            if (!link) return;
-            var group = link.getAttribute('data-nav');
-            if (!group) return;
-            if (link.getAttribute('href') === '#') {
-                e.preventDefault();
-                showSubnav(group);
-            }
-        });
+  function showSubnav(group) {
+    document.querySelectorAll('.sub-nav').forEach(function (n) {
+      n.classList.remove('visible');
     });
+    var subId = SUBNAV_MAP[group];
+    if (subId) {
+      var subEl = document.getElementById(subId);
+      if (subEl) subEl.classList.add('visible');
+    }
+    document.querySelectorAll('.dfe-c-service-nav__link').forEach(function (a) {
+      a.classList.toggle('active', a.getAttribute('data-nav') === group);
+    });
+  }
+
+  function setSubNavActive(subId) {
+    if (!subId) return;
+    document.querySelectorAll('.sub-nav__link').forEach(function (a) {
+      var dataSub = (a.getAttribute('data-sub') || '').trim();
+      var ids = dataSub ? dataSub.split(/\s+/).filter(Boolean) : [];
+      a.classList.toggle('active', ids.indexOf(subId) !== -1);
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', function () {
+    var body = document.body;
+    var mainNav = (body.getAttribute('data-main-nav') || '').trim();
+    var subNav = (body.getAttribute('data-sub-nav') || '').trim();
+    if (mainNav) showSubnav(mainNav);
+    if (subNav) setSubNavActive(subNav);
+
+    var mainNavList = document.getElementById('main-nav');
+    if (!mainNavList) return;
+    mainNavList.addEventListener('click', function (e) {
+      var link = e.target && e.target.closest && e.target.closest('a[data-nav]');
+      if (!link) return;
+      var group = link.getAttribute('data-nav');
+      if (!group) return;
+      if (link.getAttribute('href') === '#') {
+        e.preventDefault();
+        showSubnav(group);
+      }
+    });
+  });
 })();
 
 // Products & services: filter tables as the user types (tables expose data-live-search-input / data-live-search-count).
 document.addEventListener('DOMContentLoaded', function () {
-    document.querySelectorAll('table[data-live-search-input]').forEach(function (table) {
-        var inputId = table.getAttribute('data-live-search-input');
-        var countId = table.getAttribute('data-live-search-count');
-        if (!inputId) return;
-        var input = document.getElementById(inputId);
-        if (!input) return;
-        var tbody = table.querySelector('tbody');
-        if (!tbody) return;
-        var rows = tbody.querySelectorAll('tr');
-        var countIds = (countId || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean);
-        var fmt = table.getAttribute('data-live-search-format');
+  document.querySelectorAll('table[data-live-search-input]').forEach(function (table) {
+    var inputId = table.getAttribute('data-live-search-input');
+    var countId = table.getAttribute('data-live-search-count');
+    if (!inputId) return;
+    var input = document.getElementById(inputId);
+    if (!input) return;
+    var tbody = table.querySelector('tbody');
+    if (!tbody) return;
+    var rows = tbody.querySelectorAll('tr');
+    var countIds = (countId || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+    var fmt = table.getAttribute('data-live-search-format');
 
-        function applyFilter() {
-            var q = (input.value || '').trim().toLowerCase().replace(/\s+/g, ' ');
-            var n = 0;
-            for (var i = 0; i < rows.length; i++) {
-                var tr = rows[i];
-                var extra = tr.getAttribute('data-products-search-extras') || '';
-                var text = ((tr.textContent || '') + ' ' + extra).replace(/\s+/g, ' ').trim().toLowerCase();
-                var show = !q || text.indexOf(q) !== -1;
-                tr.hidden = !show;
-                if (show) n++;
-            }
-            var totalRows = rows.length;
-            var msg;
-            if (fmt === 'showing') {
-                msg = 'Showing ' + n + ' of ' + totalRows;
-            } else {
-                msg = n + ' product(s) shown.';
-            }
-            for (var j = 0; j < countIds.length; j++) {
-                var el = document.getElementById(countIds[j]);
-                if (el) el.textContent = msg;
-            }
-        }
+    function applyFilter() {
+      var q = (input.value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+      var n = 0;
+      for (var i = 0; i < rows.length; i++) {
+        var tr = rows[i];
+        var extra = tr.getAttribute('data-products-search-extras') || '';
+        var text = ((tr.textContent || '') + ' ' + extra).replace(/\s+/g, ' ').trim().toLowerCase();
+        var show = !q || text.indexOf(q) !== -1;
+        tr.hidden = !show;
+        if (show) n++;
+      }
+      var totalRows = rows.length;
+      var msg;
+      if (fmt === 'showing') {
+        msg = 'Showing ' + n + ' of ' + totalRows;
+      } else {
+        msg = n + ' product(s) shown.';
+      }
+      for (var j = 0; j < countIds.length; j++) {
+        var el = document.getElementById(countIds[j]);
+        if (el) el.textContent = msg;
+      }
+    }
 
-        input.addEventListener('input', applyFilter);
-        input.addEventListener('search', applyFilter);
-        applyFilter();
-    });
+    input.addEventListener('input', applyFilter);
+    input.addEventListener('search', applyFilter);
+    applyFilter();
+  });
 });
 
 // Track errors
-window.addEventListener('error', function(e) {
-    trackEvent('JavaScriptError', {
-        errorMessage: e.message,
-        errorSource: e.filename,
-        errorLine: e.lineno,
-        errorColumn: e.colno,
-        page: window.location.pathname,
-        timestamp: new Date().toISOString()
-    });
+window.addEventListener('error', function (e) {
+  trackEvent('JavaScriptError', {
+    errorMessage: e.message,
+    errorSource: e.filename,
+    errorLine: e.lineno,
+    errorColumn: e.colno,
+    page: window.location.pathname,
+    timestamp: new Date().toISOString()
+  });
 });
 
 // Track unhandled promise rejections
-window.addEventListener('unhandledrejection', function(e) {
-    trackEvent('UnhandledPromiseRejection', {
-        errorMessage: e.reason ? e.reason.toString() : 'Unknown error',
-        page: window.location.pathname,
-        timestamp: new Date().toISOString()
-    });
+window.addEventListener('unhandledrejection', function (e) {
+  trackEvent('UnhandledPromiseRejection', {
+    errorMessage: e.reason ? e.reason.toString() : 'Unknown error',
+    page: window.location.pathname,
+    timestamp: new Date().toISOString()
+  });
 });
 
 
 
 // Header Navigation and Search Functionality
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
   const navigationToggle = document.getElementById('super-navigation-menu-toggle');
   const searchToggle = document.getElementById('super-search-menu-toggle');
   const navigationMenu = document.getElementById('super-navigation-menu');
@@ -482,87 +482,87 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Function to close all menus and reset button states
   function closeAllMenus() {
-      // Close navigation
-      if (navigationToggle && navigationMenu) {
-          navigationToggle.setAttribute('aria-expanded', 'false');
-          navigationMenu.setAttribute('hidden', 'hidden');
-          navigationToggle.classList.remove('gem-c-layout-super-navigation-header__open-button');
-      }
-      
-      // Close search
-      if (searchToggle && searchMenu) {
-          searchToggle.setAttribute('aria-expanded', 'false');
-          searchMenu.setAttribute('hidden', 'hidden');
-          searchToggle.classList.remove('gem-c-layout-super-navigation-header__open-button');
-      }
+    // Close navigation
+    if (navigationToggle && navigationMenu) {
+      navigationToggle.setAttribute('aria-expanded', 'false');
+      navigationMenu.setAttribute('hidden', 'hidden');
+      navigationToggle.classList.remove('gem-c-layout-super-navigation-header__open-button');
+    }
+
+    // Close search
+    if (searchToggle && searchMenu) {
+      searchToggle.setAttribute('aria-expanded', 'false');
+      searchMenu.setAttribute('hidden', 'hidden');
+      searchToggle.classList.remove('gem-c-layout-super-navigation-header__open-button');
+    }
   }
 
   // Toggle navigation menu
   if (navigationToggle && navigationMenu) {
-      navigationToggle.addEventListener('click', function() {
-          const isExpanded = navigationToggle.getAttribute('aria-expanded') === 'true';
-          const isHidden = navigationMenu.hasAttribute('hidden');
-          
-          if (isHidden) {
-              // Open navigation menu
-              navigationToggle.setAttribute('aria-expanded', 'true');
-              navigationMenu.removeAttribute('hidden');
-              navigationToggle.classList.add('gem-c-layout-super-navigation-header__open-button');
-              
-              // Close search if open
-              if (searchToggle && searchMenu) {
-                  searchToggle.setAttribute('aria-expanded', 'false');
-                  searchMenu.setAttribute('hidden', 'hidden');
-                  searchToggle.classList.remove('gem-c-layout-super-navigation-header__open-button');
-              }
-          } else {
-              // Close navigation menu
-              navigationToggle.setAttribute('aria-expanded', 'false');
-              navigationMenu.setAttribute('hidden', 'hidden');
-              navigationToggle.classList.remove('gem-c-layout-super-navigation-header__open-button');
-          }
-      });
+    navigationToggle.addEventListener('click', function () {
+      const isExpanded = navigationToggle.getAttribute('aria-expanded') === 'true';
+      const isHidden = navigationMenu.hasAttribute('hidden');
+
+      if (isHidden) {
+        // Open navigation menu
+        navigationToggle.setAttribute('aria-expanded', 'true');
+        navigationMenu.removeAttribute('hidden');
+        navigationToggle.classList.add('gem-c-layout-super-navigation-header__open-button');
+
+        // Close search if open
+        if (searchToggle && searchMenu) {
+          searchToggle.setAttribute('aria-expanded', 'false');
+          searchMenu.setAttribute('hidden', 'hidden');
+          searchToggle.classList.remove('gem-c-layout-super-navigation-header__open-button');
+        }
+      } else {
+        // Close navigation menu
+        navigationToggle.setAttribute('aria-expanded', 'false');
+        navigationMenu.setAttribute('hidden', 'hidden');
+        navigationToggle.classList.remove('gem-c-layout-super-navigation-header__open-button');
+      }
+    });
   }
 
   // Toggle search panel
   if (searchToggle && searchMenu) {
-      searchToggle.addEventListener('click', function() {
-          const isExpanded = searchToggle.getAttribute('aria-expanded') === 'true';
-          const isHidden = searchMenu.hasAttribute('hidden');
-          
-          if (isHidden) {
-              // Open search menu
-              searchToggle.setAttribute('aria-expanded', 'true');
-              searchMenu.removeAttribute('hidden');
-              searchToggle.classList.add('gem-c-layout-super-navigation-header__open-button');
-              
-              // Close navigation if open
-              if (navigationToggle && navigationMenu) {
-                  navigationToggle.setAttribute('aria-expanded', 'false');
-                  navigationMenu.setAttribute('hidden', 'hidden');
-                  navigationToggle.classList.remove('gem-c-layout-super-navigation-header__open-button');
-              }
-          } else {
-              // Close search menu
-              searchToggle.setAttribute('aria-expanded', 'false');
-              searchMenu.setAttribute('hidden', 'hidden');
-              searchToggle.classList.remove('gem-c-layout-super-navigation-header__open-button');
-          }
-      });
+    searchToggle.addEventListener('click', function () {
+      const isExpanded = searchToggle.getAttribute('aria-expanded') === 'true';
+      const isHidden = searchMenu.hasAttribute('hidden');
+
+      if (isHidden) {
+        // Open search menu
+        searchToggle.setAttribute('aria-expanded', 'true');
+        searchMenu.removeAttribute('hidden');
+        searchToggle.classList.add('gem-c-layout-super-navigation-header__open-button');
+
+        // Close navigation if open
+        if (navigationToggle && navigationMenu) {
+          navigationToggle.setAttribute('aria-expanded', 'false');
+          navigationMenu.setAttribute('hidden', 'hidden');
+          navigationToggle.classList.remove('gem-c-layout-super-navigation-header__open-button');
+        }
+      } else {
+        // Close search menu
+        searchToggle.setAttribute('aria-expanded', 'false');
+        searchMenu.setAttribute('hidden', 'hidden');
+        searchToggle.classList.remove('gem-c-layout-super-navigation-header__open-button');
+      }
+    });
   }
 
   // Header search form submits normally to /search/all?keywords=...
 
   // Close panels on escape key
-  document.addEventListener('keydown', function(e) {
-      if (e.key === 'Escape') {
-          closeAllMenus();
-      }
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') {
+      closeAllMenus();
+    }
   });
 });
 
 // Work list filter panel toggle (used by Index, MyWork, Watching, ByPriority, Flagship)
-window.toggleFilterPanel = function(btnEl, panelId) {
+window.toggleFilterPanel = function (btnEl, panelId) {
   var panel = document.getElementById(panelId);
   if (!panel) return;
   var isOpen = panel.classList.contains('open');
@@ -574,7 +574,7 @@ window.toggleFilterPanel = function(btnEl, panelId) {
 };
 
 // Filter toolbar: open/close panel via aria-controls (no inline onclick; Index uses <summary> for native <details> instead)
-document.addEventListener('click', function(e) {
+document.addEventListener('click', function (e) {
   var btn = e.target.closest('.filter-toggle-btn, .dfe-c-search-filter__toggle');
   if (!btn || btn.tagName === 'SUMMARY') return;
   var panelId = btn.getAttribute('aria-controls');
@@ -584,8 +584,8 @@ document.addEventListener('click', function(e) {
 });
 
 // Live filter for data-table rows when user types in .filter-search (Demand, Risks, Issues list views)
-document.addEventListener('DOMContentLoaded', function() {
-  document.querySelectorAll('.filter-search').forEach(function(searchEl) {
+document.addEventListener('DOMContentLoaded', function () {
+  document.querySelectorAll('.filter-search').forEach(function (searchEl) {
     var form = searchEl.closest('form');
     var scope = (form && form.closest('.dfe-c-page')) || form || document.body;
     var table = scope.querySelector('.data-table');
@@ -594,7 +594,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!rows.length) return;
     function filterRows() {
       var q = (searchEl.value || '').trim().toLowerCase();
-      rows.forEach(function(tr) {
+      rows.forEach(function (tr) {
         var text = (tr.getAttribute('data-searchable') || tr.textContent || '').toLowerCase();
         tr.style.display = (q === '' || text.indexOf(q) !== -1) ? '' : 'none';
       });
@@ -606,8 +606,8 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // Guide/Collection meta: expand/collapse audience "+N more"
-document.addEventListener('DOMContentLoaded', function() {
-  document.body.addEventListener('click', function(e) {
+document.addEventListener('DOMContentLoaded', function () {
+  document.body.addEventListener('click', function (e) {
     var btn = e.target && e.target.closest && e.target.closest('.guide-meta__audience-toggle');
     if (!btn) return;
     e.preventDefault();
@@ -631,8 +631,8 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // TempData success/error banner: Dismiss button hides the banner for this page view
-document.addEventListener('DOMContentLoaded', function() {
-  document.body.addEventListener('click', function(e) {
+document.addEventListener('DOMContentLoaded', function () {
+  document.body.addEventListener('click', function (e) {
     var btn = e.target && e.target.closest && e.target.closest('.js-dismiss-tempdata-banner');
     if (!btn) return;
     e.preventDefault();
@@ -642,14 +642,14 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // Pipeline view section: when present, one toggle for whole "Pipeline view" section (Demand register, Pipeline page)
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
   var section = document.getElementById('pipeline-view-section');
   var sectionHeader = document.getElementById('pipeline-view-section-header');
   var sectionBody = document.getElementById('pipeline-view-section-body');
   if (section && sectionHeader && sectionBody) {
     var storageKey = section.getAttribute('data-storage-key') || 'pipeline-tracker-expanded';
-    var isExpanded = function() { return localStorage.getItem(storageKey) !== 'false'; };
-    var applyState = function() {
+    var isExpanded = function () { return localStorage.getItem(storageKey) !== 'false'; };
+    var applyState = function () {
       var open = isExpanded();
       if (open) {
         section.classList.remove('collapsed');
@@ -660,12 +660,12 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     };
     applyState();
-    sectionHeader.addEventListener('click', function() {
+    sectionHeader.addEventListener('click', function () {
       var open = isExpanded();
       localStorage.setItem(storageKey, (!open).toString());
       applyState();
     });
-    sectionHeader.addEventListener('keydown', function(e) {
+    sectionHeader.addEventListener('keydown', function (e) {
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
         sectionHeader.click();
@@ -680,8 +680,8 @@ document.addEventListener('DOMContentLoaded', function() {
   var body = document.getElementById('pipeline-tracker-body');
   if (tracker && header && body) {
     var storageKey = tracker.getAttribute('data-storage-key') || 'pipeline-tracker-expanded';
-    var isExpanded = function() { return localStorage.getItem(storageKey) !== 'false'; };
-    var applyState = function() {
+    var isExpanded = function () { return localStorage.getItem(storageKey) !== 'false'; };
+    var applyState = function () {
       var open = isExpanded();
       if (open) {
         tracker.classList.remove('collapsed');
@@ -692,12 +692,12 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     };
     applyState();
-    header.addEventListener('click', function() {
+    header.addEventListener('click', function () {
       var open = isExpanded();
       localStorage.setItem(storageKey, (!open).toString());
       applyState();
     });
-    header.addEventListener('keydown', function(e) {
+    header.addEventListener('keydown', function (e) {
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
         header.click();
@@ -708,9 +708,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Modern work item detail: tab panels + URL hash (tabs are <a href="...#wd-…">; hashchange alone is unreliable in some cases)
 (function () {
-  var WD_ALL_PANES = ['wd-overview', 'wd-updates', 'wd-risks', 'wd-milestones', 'wd-team', 'wd-dependencies', 'wd-links', 'wd-audit'];
-  var WD_MORE_TABS = ['wd-dependencies', 'wd-links', 'wd-audit'];
-  var WD_MORE_LABELS = { 'wd-dependencies': 'Dependencies', 'wd-links': 'Linked records', 'wd-audit': 'Audit trail' };
+  var WD_ALL_PANES = ['wd-overview', 'wd-updates', 'wd-risks', 'wd-milestones', 'wd-contacts', 'wd-governance', 'wd-dependencies', 'wd-links', 'wd-audit'];
+  var WD_MORE_TABS = ['wd-links', 'wd-audit'];
+  var WD_MORE_LABELS = { 'wd-links': 'Linked records', 'wd-audit': 'Audit trail' };
 
   function isWorkDetailPage() {
     return !!document.querySelector('.tabs.wd-tabs');
@@ -860,7 +860,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     pane.classList.add('on');
 
-    var primaryTabIds = ['wd-tab-overview', 'wd-tab-updates', 'wd-tab-risks', 'wd-tab-milestones', 'wd-tab-team'];
+    var primaryTabIds = ['wd-tab-overview', 'wd-tab-updates', 'wd-tab-risks', 'wd-tab-milestones', 'wd-tab-contacts', 'wd-tab-governance', 'wd-tab-dependencies'];
     primaryTabIds.forEach(function (id) {
       var t = document.getElementById(id);
       if (t) t.classList.remove('on');
@@ -920,7 +920,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
   document.addEventListener('click', function (e) {
     var el = wdEventElement(e);
-    var a = el && el.closest && el.closest('a[href*="#"]');
+    // Risks / Issues sub-tabs on work detail (#ri-tabs-bar) — not primary section navigation.
+    if (el && el.closest && el.closest('#ri-tabs-bar')) return;
+    // Milestone sub-tabs (In progress / Complete) — server-roundtrip links, not JS tabs.
+    if (el && el.closest && el.closest('#milestone-tabs-bar')) return;
+    // Use the innermost <a> that received the click — not closest ancestor with "#" in href.
+    // Otherwise a tab link (…#wd-risks) above in the tree could steal clicks meant for real navigations.
+    var a = el && el.closest && el.closest('a[href]');
     if (!a || !isWorkDetailPage()) return;
 
     var hrefAttr = a.getAttribute('href');
@@ -947,3 +953,88 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }, false);
 })();
+
+// Demand request detail: scroll to pipeline actions (native #fragment scroll is flaky with sticky sidebars / unchanged hash)
+document.addEventListener(
+  'click',
+  function (e) {
+    var a = e.target.closest && e.target.closest('#sc-demand-request a[href="#demand-pipeline-actions"]');
+    if (!a) return;
+    var el = document.getElementById('demand-pipeline-actions');
+    if (!el) return;
+    e.preventDefault();
+    el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    try {
+      history.replaceState(
+        null,
+        '',
+        window.location.pathname + window.location.search + '#demand-pipeline-actions'
+      );
+    } catch (err) {
+      window.location.hash = 'demand-pipeline-actions';
+    }
+    try {
+      el.focus({ preventScroll: true });
+    } catch (err2) {
+      try {
+        el.focus();
+      } catch (err3) { /* ignore */ }
+    }
+  },
+  false
+);
+
+/* Admin hub — illustrative feature-flag toggles (panel=flags); client-side only, not persisted. */
+document.addEventListener('click', function (e) {
+  var wrap = e.target.closest && e.target.closest('#panel-flags .flag-row__toggle');
+  if (!wrap) return;
+  var btn = wrap.querySelector('.flag-toggle');
+  var label = wrap.querySelector('.flag-toggle__label');
+  if (!btn || !label) return;
+  e.preventDefault();
+  var turningOn = !btn.classList.contains('flag-toggle--on');
+  btn.classList.toggle('flag-toggle--on', turningOn);
+  btn.classList.toggle('flag-toggle--off', !turningOn);
+  label.textContent = turningOn ? 'ON' : 'OFF';
+  label.classList.toggle('flag-on-label', turningOn);
+  label.classList.toggle('flag-off-label', !turningOn);
+  btn.setAttribute('aria-pressed', turningOn ? 'true' : 'false');
+  var row = wrap.closest('.flag-row');
+  var nameEl = row && row.querySelector('.flag-row__name');
+  var name = nameEl ? nameEl.textContent.trim() : 'Feature';
+  btn.setAttribute('aria-label', name + ': ' + (turningOn ? 'on' : 'off'));
+}, false);
+
+document.addEventListener('click', function (e) {
+  var openBtn = e.target.closest('[data-dialog-open]');
+  if (openBtn) {
+    var dlg = document.getElementById(openBtn.getAttribute('data-dialog-open'));
+    if (dlg && dlg.showModal) dlg.showModal();
+    return;
+  }
+  var closeBtn = e.target.closest('[data-dialog-close]');
+  if (closeBtn) {
+    var dlg = document.getElementById(closeBtn.getAttribute('data-dialog-close'));
+    if (dlg && dlg.close) dlg.close();
+  }
+});
+
+document.addEventListener('click', function (e) {
+  var btn = e.target.closest('[data-confirm]');
+  if (btn) {
+    var msg = btn.getAttribute('data-confirm');
+    if (msg && !confirm(msg)) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+    }
+  }
+});
+
+document.addEventListener('change', function (e) {
+  var sel = e.target.closest('#syn-group');
+  if (!sel) return;
+  var form = sel.closest('form[data-synonym-base-url]');
+  if (!form) return;
+  var base = form.getAttribute('data-synonym-base-url');
+  form.action = base.replace('/0/', '/' + sel.value + '/');
+});

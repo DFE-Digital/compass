@@ -1,0 +1,557 @@
+@model Compass.ViewModels.Modern.AdminLookupEditorViewModel
+@using Compass.ViewModels.Modern
+@{
+  ViewData["Title"] = Model.PageHeading;
+  var panel = Model.Panel;
+  string Hub() => Url.Action("Index", "ModernAdmin", new { panel }) ?? "#";
+  var id = Model.Id ?? 0;
+  var showDeactivate = !Model.IsCreate && Model.IsActive;
+  var showActivate = !Model.IsCreate && !Model.IsActive;
+  string ToggleAction() => panel switch
+  {
+    "business-areas" => Url.Action("BusinessAreaToggle", "ModernAdmin", new { id })!,
+    "phases" => Url.Action("PhaseToggle", "ModernAdmin", new { id })!,
+    "directorates" => Url.Action("DirectorateToggle", "ModernAdmin", new { id })!,
+    "universal-barriers" => Url.Action("UniversalBarrierToggle", "ModernAdmin", new { id })!,
+    "priorities" => Url.Action("PriorityToggle", "ModernAdmin", new { id })!,
+    "rag-defns" => Url.Action("RagToggle", "ModernAdmin", new { id })!,
+    "activity-types" => Url.Action("ActivityTypeToggle", "ModernAdmin", new { id })!,
+    "risk-appetites" => Url.Action("RiskAppetiteToggle", "ModernAdmin", new { id })!,
+    "work-tagging" => Url.Action("WorkItemTagToggle", "ModernAdmin", new { id })!,
+    "mission-pillars" => Url.Action("MissionPillarToggle", "ModernAdmin", new { id })!,
+    "priority-outcomes" => Url.Action("PriorityOutcomeToggle", "ModernAdmin", new { id })!,
+    "portfolios" => Url.Action("PortfolioToggle", "ModernAdmin", new { id })!,
+    "risk-tiers" => Url.Action("RiskTierToggle", "ModernAdmin", new { id })!,
+    "departments" => Url.Action("DepartmentToggle", "ModernAdmin", new { id })!,
+    "std-categories" => Url.Action("StdCategoryToggle", "ModernAdmin", new { id })!,
+    "std-subcategories" => Url.Action("StdSubCategoryToggle", "ModernAdmin", new { id })!,
+    _ => Url.Action("RaidLookupToggle", "ModernAdmin", new { lookupKey = panel, id })!
+  };
+
+  string DeleteAction() => panel switch
+  {
+    "risk-tiers" => Url.Action("RiskTierDelete", "ModernAdmin", new { id })!,
+    _ => Url.Action("RaidLookupDelete", "ModernAdmin", new { lookupKey = panel, id })!
+  };
+
+  var showPermanentDelete = !Model.IsCreate &&
+    (Model.EditorKind == AdminLookupEditorKind.RiskTierLike || Model.EditorKind == AdminLookupEditorKind.Raid);
+  var showRaidMatrix =
+      string.Equals(panel, "risk-likelihoods", StringComparison.OrdinalIgnoreCase)
+      || string.Equals(panel, "risk-impact-levels", StringComparison.OrdinalIgnoreCase);
+}
+
+@section Breadcrumbs {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernAdmin")">Admin</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Hub()">@char.ToUpper(panel[0])@panel.Substring(1)</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">@(Model.IsCreate ? "Add" : "Edit")</li>
+}
+
+<div class="admin-hub">
+ <div class="dfe-c-page-title dfe-c-mb-3">
+ <div class="dfe-c-page-title__caption">Administration</div>
+ <h1 class="dfe-c-page-title__heading">@Model.PageHeading</h1>
+ <p class="dfe-c-page-title__lede"><a class="govuk-link" href="@Hub()">Back to @panel.Replace("-", " ")</a></p>
+  </div>
+
+  @if (ViewBag.AdminMessage != null)
+  {
+ <div class="govuk-notification-banner govuk-notification-banner--success dfe-c-mb-3" role="region">
+ <div class="govuk-notification-banner__content"><p class="govuk-notification-banner__heading">@ViewBag.AdminMessage</p></div>
+    </div>
+  }
+
+ <div class="dfe-c-card dfe-c-mb-4" style="border:1px solid var(--grey-2);border-left:4px solid var(--blue);padding:1.25rem 1.5rem;background:var(--white);">
+    @if (Model.IsCreate)
+    {
+      @switch (Model.EditorKind)
+      {
+        case AdminLookupEditorKind.UniversalBarrier:
+          <form method="post" action="@Url.Action("UniversalBarrierCreate", "ModernAdmin")" novalidate>
+            @Html.AntiForgeryToken()
+ <div class="govuk-form-group"><label class="govuk-label" for="name">Name</label><input class="govuk-input govuk-!-width-two-thirds" type="text" id="name" name="name" required maxlength="200" /></div>
+ <div class="govuk-form-group"><label class="govuk-label" for="description">Description</label><textarea class="govuk-textarea" id="description" name="description" rows="3"></textarea></div>
+ <div class="govuk-form-group"><label class="govuk-label" for="guidanceUrl">Guidance URL</label><input class="govuk-input govuk-!-width-two-thirds" type="url" id="guidanceUrl" name="guidanceUrl" maxlength="500" /></div>
+ <div class="govuk-form-group"><label class="govuk-label" for="sortOrder">Order</label><input class="govuk-input govuk-input--width-5" type="number" id="sortOrder" name="sortOrder" value="0" /></div>
+ <button type="submit" class="govuk-button">Save</button>
+          </form>
+          break;
+        case AdminLookupEditorKind.Priority:
+          <form method="post" action="@Url.Action("PriorityCreate", "ModernAdmin")" novalidate>
+            @Html.AntiForgeryToken()
+ <div class="govuk-form-group"><label class="govuk-label" for="name">Name</label><input class="govuk-input govuk-!-width-two-thirds" type="text" id="name" name="name" required /></div>
+ <div class="govuk-form-group"><label class="govuk-label" for="summary">Summary</label><input class="govuk-input govuk-!-width-two-thirds" type="text" id="summary" name="summary" /></div>
+ <div class="govuk-form-group"><label class="govuk-label" for="description">Description</label><textarea class="govuk-textarea" id="description" name="description" rows="3"></textarea></div>
+ <div class="govuk-form-group"><label class="govuk-label" for="cssClass">CSS class</label><input class="govuk-input govuk-input--width-10" type="text" id="cssClass" name="cssClass" /></div>
+ <div class="govuk-form-group"><label class="govuk-label" for="sortOrder">Order</label><input class="govuk-input govuk-input--width-5" type="number" id="sortOrder" name="sortOrder" value="0" /></div>
+ <button type="submit" class="govuk-button">Save</button>
+          </form>
+          break;
+        case AdminLookupEditorKind.Rag:
+          <form method="post" action="@Url.Action("RagCreate", "ModernAdmin")" novalidate>
+            @Html.AntiForgeryToken()
+ <div class="govuk-form-group"><label class="govuk-label" for="name">Name</label><input class="govuk-input govuk-!-width-two-thirds" type="text" id="name" name="name" required /></div>
+ <div class="govuk-form-group"><label class="govuk-label" for="description">Description</label><textarea class="govuk-textarea" id="description" name="description" rows="3"></textarea></div>
+ <div class="govuk-form-group"><label class="govuk-label" for="cssClass">CSS class</label><input class="govuk-input govuk-input--width-10" type="text" id="cssClass" name="cssClass" /></div>
+ <div class="govuk-form-group"><label class="govuk-label" for="sortOrder">Order</label><input class="govuk-input govuk-input--width-5" type="number" id="sortOrder" name="sortOrder" value="0" /></div>
+ <button type="submit" class="govuk-button">Save</button>
+          </form>
+          break;
+        case AdminLookupEditorKind.ActivityType:
+          <form method="post" action="@Url.Action("ActivityTypeCreate", "ModernAdmin")" novalidate>
+            @Html.AntiForgeryToken()
+ <div class="govuk-form-group"><label class="govuk-label" for="name">Name</label><input class="govuk-input govuk-!-width-two-thirds" type="text" id="name" name="name" required /></div>
+ <div class="govuk-form-group"><label class="govuk-label" for="description">Description</label><textarea class="govuk-textarea" id="description" name="description" rows="3"></textarea></div>
+ <div class="govuk-form-group"><label class="govuk-label" for="sortOrder">Order</label><input class="govuk-input govuk-input--width-5" type="number" id="sortOrder" name="sortOrder" value="0" /></div>
+ <button type="submit" class="govuk-button">Save</button>
+          </form>
+          break;
+        case AdminLookupEditorKind.WorkItemTag:
+          <form method="post" action="@Url.Action("WorkItemTagCreate", "ModernAdmin")" novalidate>
+            @Html.AntiForgeryToken()
+ <div class="govuk-form-group"><label class="govuk-label" for="name">Name</label><input class="govuk-input govuk-!-width-two-thirds" type="text" id="name" name="name" required /></div>
+ <div class="govuk-form-group"><label class="govuk-label" for="description">Description</label><textarea class="govuk-textarea" id="description" name="description" rows="3"></textarea></div>
+ <div class="govuk-form-group"><label class="govuk-label" for="sortOrder">Order</label><input class="govuk-input govuk-input--width-5" type="number" id="sortOrder" name="sortOrder" value="0" /></div>
+ <button type="submit" class="govuk-button">Save</button>
+          </form>
+          break;
+        case AdminLookupEditorKind.MissionPillar:
+          <form method="post" action="@Url.Action("MissionPillarCreate", "ModernAdmin")" novalidate>
+            @Html.AntiForgeryToken()
+ <div class="govuk-form-group"><label class="govuk-label" for="name">Title</label><input class="govuk-input govuk-!-width-two-thirds" type="text" id="name" name="name" required maxlength="200" /></div>
+ <div class="govuk-form-group"><label class="govuk-label" for="description">Description</label><textarea class="govuk-textarea" id="description" name="description" rows="4"></textarea></div>
+ <button type="submit" class="govuk-button">Save</button>
+          </form>
+          break;
+        case AdminLookupEditorKind.PriorityOutcome:
+          <form method="post" action="@Url.Action("PriorityOutcomeCreate", "ModernAdmin")" novalidate>
+            @Html.AntiForgeryToken()
+ <div class="govuk-form-group"><label class="govuk-label" for="name">Title</label><input class="govuk-input govuk-!-width-two-thirds" type="text" id="name" name="name" required maxlength="200" /></div>
+ <div class="govuk-form-group"><label class="govuk-label" for="theme">Theme</label><input class="govuk-input govuk-!-width-two-thirds" type="text" id="theme" name="theme" maxlength="100" /></div>
+ <div class="govuk-form-group"><label class="govuk-label" for="description">Description</label><textarea class="govuk-textarea" id="description" name="description" rows="4"></textarea></div>
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="missionId">Mission pillar (optional)</label>
+ <select class="govuk-select govuk-!-width-two-thirds" id="missionId" name="missionId">
+                <option value="">—</option>
+                @foreach (var o in Model.MissionOptions)
+                {
+                  if (o.Selected) { <option value="@o.Value" selected="selected">@o.Text</option> }
+                  else { <option value="@o.Value">@o.Text</option> }
+                }
+              </select>
+            </div>
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="status">Status</label>
+ <select class="govuk-select govuk-!-width-two-thirds" id="status" name="status">
+                <option value="">—</option>
+                <option value="proposed" selected="@(Model.Status == "proposed")">Proposed</option>
+                <option value="active" selected="@(Model.Status == "active")">Active</option>
+                <option value="paused" selected="@(Model.Status == "paused")">Paused</option>
+                <option value="completed" selected="@(Model.Status == "completed")">Completed</option>
+                <option value="cancelled" selected="@(Model.Status == "cancelled")">Cancelled</option>
+              </select>
+            </div>
+            @await Html.PartialAsync("~/Views/Modern/Shared/_UserPicker.cshtml", new Compass.Models.UserPickerViewModel
+            {
+              FieldName = "OwnerUserId", Label = "Owner", Hint = "Start typing a name or email to search.",
+              DefaultSummaryText = "No owner selected.", InputIdSuffix = "po-owner"
+            })
+            @await Html.PartialAsync("~/Views/Modern/Shared/_UserPicker.cshtml", new Compass.Models.UserPickerViewModel
+            {
+              FieldName = "ThemeSroUserId", Label = "Theme SRO", Hint = "Start typing a name or email to search.",
+              DefaultSummaryText = "No theme SRO selected.", InputIdSuffix = "po-theme-sro"
+            })
+            @await Html.PartialAsync("~/Views/Modern/Shared/_UserPicker.cshtml", new Compass.Models.UserPickerViewModel
+            {
+              FieldName = "OutcomeSroUserId", Label = "Outcome SRO", Hint = "Start typing a name or email to search.",
+              DefaultSummaryText = "No outcome SRO selected.", InputIdSuffix = "po-outcome-sro"
+            })
+ <button type="submit" class="govuk-button">Save</button>
+          </form>
+          break;
+        case AdminLookupEditorKind.Department:
+ <p class="govuk-body dfe-c-text-muted">Government departments are populated via the GOV.UK sync. Use this form to edit local overrides.</p>
+          <form method="post" action="@Url.Action("DepartmentEdit", "ModernAdmin", new { id = 0 })" novalidate>
+            @Html.AntiForgeryToken()
+ <div class="govuk-form-group"><label class="govuk-label" for="name">Title</label><input class="govuk-input govuk-!-width-two-thirds" type="text" id="name" name="name" required maxlength="500" /></div>
+ <div class="govuk-form-group"><label class="govuk-label" for="summary">Abbreviation</label><input class="govuk-input govuk-!-width-two-thirds" type="text" id="summary" name="summary" maxlength="200" /></div>
+ <div class="govuk-form-group"><label class="govuk-label" for="description">Description</label><textarea class="govuk-textarea" id="description" name="description" rows="3"></textarea></div>
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="parentDepartmentId">Parent department (optional)</label>
+ <select class="govuk-select govuk-!-width-two-thirds" id="parentDepartmentId" name="parentDepartmentId">
+                <option value="">—</option>
+                @foreach (var o in Model.ParentDepartmentOptions)
+                {
+                  if (o.Selected) { <option value="@o.Value" selected="selected">@o.Text</option> }
+                  else { <option value="@o.Value">@o.Text</option> }
+                }
+              </select>
+            </div>
+ <button type="submit" class="govuk-button">Save</button>
+          </form>
+          break;
+        case AdminLookupEditorKind.Portfolio:
+          <form method="post" action="@Url.Action("PortfolioCreate", "ModernAdmin")" novalidate>
+            @Html.AntiForgeryToken()
+ <div class="govuk-form-group"><label class="govuk-label" for="name">Name</label><input class="govuk-input govuk-!-width-two-thirds" type="text" id="name" name="name" required maxlength="200" /></div>
+ <div class="govuk-form-group"><label class="govuk-label" for="description">Description</label><textarea class="govuk-textarea" id="description" name="description" rows="3"></textarea></div>
+ <div class="govuk-form-group"><label class="govuk-label" for="sortOrder">Order</label><input class="govuk-input govuk-input--width-5" type="number" id="sortOrder" name="sortOrder" value="0" /></div>
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="parentGroupId">Parent group (optional)</label>
+ <select class="govuk-select govuk-!-width-two-thirds" id="parentGroupId" name="parentGroupId">
+                <option value="">—</option>
+                @foreach (var o in Model.ParentGroupOptions)
+                {
+                  if (o.Selected)
+                  {
+                    <option value="@o.Value" selected="selected">@o.Text</option>
+                  }
+                  else
+                  {
+                    <option value="@o.Value">@o.Text</option>
+                  }
+                }
+              </select>
+            </div>
+ <button type="submit" class="govuk-button">Save</button>
+          </form>
+          break;
+        case AdminLookupEditorKind.RiskTierLike:
+          <form method="post" action="@Url.Action("RiskTierCreate", "ModernAdmin")" novalidate>
+            @Html.AntiForgeryToken()
+ <div class="govuk-form-group"><label class="govuk-label" for="code">Code</label><input class="govuk-input govuk-input--width-10" type="text" id="code" name="code" required maxlength="50" /></div>
+ <div class="govuk-form-group"><label class="govuk-label" for="name">Name</label><input class="govuk-input govuk-!-width-two-thirds" type="text" id="name" name="name" required maxlength="100" /></div>
+ <div class="govuk-form-group"><label class="govuk-label" for="description">Description</label><textarea class="govuk-textarea" id="description" name="description" rows="3"></textarea></div>
+ <div class="govuk-form-group"><label class="govuk-label" for="summary">Summary</label><input class="govuk-input govuk-!-width-two-thirds" type="text" id="summary" name="summary" /></div>
+ <div class="govuk-form-group"><label class="govuk-label" for="sortOrder">Order</label><input class="govuk-input govuk-input--width-5" type="number" id="sortOrder" name="sortOrder" value="0" /></div>
+ <div class="govuk-form-group"><label class="govuk-label" for="governanceLevel">Governance level</label><div class="govuk-hint" id="gov-level-hint">1 = highest (typically Tier 1); larger numbers = lower intensity. Use 0 to derive from sort order among non-proposed tiers.</div><input class="govuk-input govuk-input--width-5" type="number" id="governanceLevel" name="governanceLevel" value="0" min="0" max="99" aria-describedby="gov-level-hint" /></div>
+ <div class="govuk-form-group">
+ <fieldset class="govuk-fieldset">
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Escalation workflow</legend>
+ <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes">
+ <div class="govuk-checkboxes__item">
+ <input class="govuk-checkboxes__input" id="isProposedTier" name="isProposedTier" type="checkbox" value="true" />
+ <label class="govuk-label govuk-checkboxes__label" for="isProposedTier">Proposed tier (targets for escalation/de-escalation requests — not selectable on risks)</label>
+              </div>
+            </div>
+ </fieldset>
+            </div>
+ <button type="submit" class="govuk-button">Save</button>
+          </form>
+          break;
+        case AdminLookupEditorKind.Raid:
+          <form method="post" action="@Url.Action("RaidLookupCreate", "ModernAdmin")" novalidate>
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="lookupKey" value="@panel" />
+ <div class="govuk-form-group"><label class="govuk-label" for="code">Code</label><input class="govuk-input govuk-input--width-10" type="text" id="code" name="code" required maxlength="30" /></div>
+ <div class="govuk-form-group"><label class="govuk-label" for="name">Label</label><input class="govuk-input govuk-!-width-two-thirds" type="text" id="name" name="label" required maxlength="100" /></div>
+ <div class="govuk-form-group"><label class="govuk-label" for="description">Description</label><textarea class="govuk-textarea" id="description" name="description" rows="3"></textarea></div>
+ @if (showRaidMatrix)
+ {
+ <div class="govuk-form-group"><label class="govuk-label" for="matrixScore">Matrix score (1–5)</label><div class="govuk-hint">Used to calculate inherent risk score (likelihood × impact).</div><input class="govuk-input govuk-input--width-5" type="number" id="matrixScore" name="matrixScore" min="1" max="5" value="3" /></div>
+ }
+ <div class="govuk-form-group"><label class="govuk-label" for="sortOrder">Order</label><input class="govuk-input govuk-input--width-5" type="number" id="sortOrder" name="sortOrder" value="0" /></div>
+ <button type="submit" class="govuk-button">Save</button>
+          </form>
+          break;
+        case AdminLookupEditorKind.StandardSubCategory:
+          <form method="post" action="@Url.Action("StdSubCategoryCreate", "ModernAdmin")" novalidate>
+            @Html.AntiForgeryToken()
+ <div class="govuk-form-group"><label class="govuk-label" for="name">Name</label><input class="govuk-input govuk-!-width-two-thirds" type="text" id="name" name="name" required maxlength="200" /></div>
+ <div class="govuk-form-group"><label class="govuk-label" for="description">Description</label><textarea class="govuk-textarea" id="description" name="description" rows="3"></textarea></div>
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="categoryId">Parent category</label>
+ <select class="govuk-select govuk-!-width-two-thirds" id="categoryId" name="categoryId" required>
+                <option value="">— Select category —</option>
+                @foreach (var o in Model.CategoryOptions)
+                {
+                  <option value="@o.Value">@o.Text</option>
+                }
+              </select>
+            </div>
+ <div class="govuk-form-group"><label class="govuk-label" for="sortOrder">Order</label><input class="govuk-input govuk-input--width-5" type="number" id="sortOrder" name="sortOrder" value="0" /></div>
+ <button type="submit" class="govuk-button">Save</button>
+          </form>
+          break;
+        default:
+          <form method="post" action="@(panel == "phases" ? Url.Action("PhaseCreate", "ModernAdmin") : panel == "directorates" ? Url.Action("DirectorateCreate", "ModernAdmin") : panel == "std-categories" ? Url.Action("StdCategoryCreate", "ModernAdmin") : panel == "risk-appetites" ? Url.Action("RiskAppetiteCreate", "ModernAdmin") : Url.Action("BusinessAreaCreate", "ModernAdmin"))" novalidate>
+            @Html.AntiForgeryToken()
+ <div class="govuk-form-group"><label class="govuk-label" for="name">Name</label><input class="govuk-input govuk-!-width-two-thirds" type="text" id="name" name="name" required /></div>
+ <div class="govuk-form-group"><label class="govuk-label" for="description">Description</label><textarea class="govuk-textarea" id="description" name="description" rows="3"></textarea></div>
+ <div class="govuk-form-group"><label class="govuk-label" for="sortOrder">Order</label><input class="govuk-input govuk-input--width-5" type="number" id="sortOrder" name="sortOrder" value="0" /></div>
+ <button type="submit" class="govuk-button">Save</button>
+          </form>
+          break;
+      }
+    }
+    else
+    {
+      @switch (Model.EditorKind)
+      {
+        case AdminLookupEditorKind.UniversalBarrier:
+          <form method="post" action="@Url.Action("UniversalBarrierEdit", "ModernAdmin", new { id })" novalidate>
+            @Html.AntiForgeryToken()
+ <div class="govuk-form-group"><label class="govuk-label" for="name">Name</label><input class="govuk-input govuk-!-width-two-thirds" type="text" id="name" name="name" required maxlength="200" value="@Model.Name" /></div>
+ <div class="govuk-form-group"><label class="govuk-label" for="description">Description</label><textarea class="govuk-textarea" id="description" name="description" rows="3">@Model.Description</textarea></div>
+ <div class="govuk-form-group"><label class="govuk-label" for="guidanceUrl">Guidance URL</label><input class="govuk-input govuk-!-width-two-thirds" type="url" id="guidanceUrl" name="guidanceUrl" maxlength="500" value="@Model.GuidanceUrl" /></div>
+ <div class="govuk-form-group"><label class="govuk-label" for="sortOrder">Order</label><input class="govuk-input govuk-input--width-5" type="number" id="sortOrder" name="sortOrder" value="@Model.SortOrder" /></div>
+ <button type="submit" class="govuk-button">Save changes</button>
+          </form>
+          break;
+        case AdminLookupEditorKind.Priority:
+          <form method="post" action="@Url.Action("PriorityEdit", "ModernAdmin", new { id })" novalidate>
+            @Html.AntiForgeryToken()
+ <div class="govuk-form-group"><label class="govuk-label" for="name">Name</label><input class="govuk-input govuk-!-width-two-thirds" type="text" id="name" name="name" required value="@Model.Name" /></div>
+ <div class="govuk-form-group"><label class="govuk-label" for="summary">Summary</label><input class="govuk-input govuk-!-width-two-thirds" type="text" id="summary" name="summary" value="@Model.Summary" /></div>
+ <div class="govuk-form-group"><label class="govuk-label" for="description">Description</label><textarea class="govuk-textarea" id="description" name="description" rows="3">@Model.Description</textarea></div>
+ <div class="govuk-form-group"><label class="govuk-label" for="cssClass">CSS class</label><input class="govuk-input govuk-input--width-10" type="text" id="cssClass" name="cssClass" value="@Model.CssClass" /></div>
+ <div class="govuk-form-group"><label class="govuk-label" for="sortOrder">Order</label><input class="govuk-input govuk-input--width-5" type="number" id="sortOrder" name="sortOrder" value="@Model.SortOrder" /></div>
+ <button type="submit" class="govuk-button">Save changes</button>
+          </form>
+          break;
+        case AdminLookupEditorKind.Rag:
+          <form method="post" action="@Url.Action("RagEdit", "ModernAdmin", new { id })" novalidate>
+            @Html.AntiForgeryToken()
+ <div class="govuk-form-group"><label class="govuk-label" for="name">Name</label><input class="govuk-input govuk-!-width-two-thirds" type="text" id="name" name="name" required value="@Model.Name" /></div>
+ <div class="govuk-form-group"><label class="govuk-label" for="description">Description</label><textarea class="govuk-textarea" id="description" name="description" rows="3">@Model.Description</textarea></div>
+ <div class="govuk-form-group"><label class="govuk-label" for="cssClass">CSS class</label><input class="govuk-input govuk-input--width-10" type="text" id="cssClass" name="cssClass" value="@Model.CssClass" /></div>
+ <div class="govuk-form-group"><label class="govuk-label" for="sortOrder">Order</label><input class="govuk-input govuk-input--width-5" type="number" id="sortOrder" name="sortOrder" value="@Model.SortOrder" /></div>
+ <button type="submit" class="govuk-button">Save changes</button>
+          </form>
+          break;
+        case AdminLookupEditorKind.ActivityType:
+          <form method="post" action="@Url.Action("ActivityTypeEdit", "ModernAdmin", new { id })" novalidate>
+            @Html.AntiForgeryToken()
+ <div class="govuk-form-group"><label class="govuk-label" for="name">Name</label><input class="govuk-input govuk-!-width-two-thirds" type="text" id="name" name="name" required value="@Model.Name" /></div>
+ <div class="govuk-form-group"><label class="govuk-label" for="description">Description</label><textarea class="govuk-textarea" id="description" name="description" rows="3">@Model.Description</textarea></div>
+ <div class="govuk-form-group"><label class="govuk-label" for="sortOrder">Order</label><input class="govuk-input govuk-input--width-5" type="number" id="sortOrder" name="sortOrder" value="@Model.SortOrder" /></div>
+ <button type="submit" class="govuk-button">Save changes</button>
+          </form>
+          break;
+        case AdminLookupEditorKind.WorkItemTag:
+          <form method="post" action="@Url.Action("WorkItemTagEdit", "ModernAdmin", new { id })" novalidate>
+            @Html.AntiForgeryToken()
+ <div class="govuk-form-group"><label class="govuk-label" for="name">Name</label><input class="govuk-input govuk-!-width-two-thirds" type="text" id="name" name="name" required value="@Model.Name" /></div>
+ <div class="govuk-form-group"><label class="govuk-label" for="description">Description</label><textarea class="govuk-textarea" id="description" name="description" rows="3">@Model.Description</textarea></div>
+ <div class="govuk-form-group"><label class="govuk-label" for="sortOrder">Order</label><input class="govuk-input govuk-input--width-5" type="number" id="sortOrder" name="sortOrder" value="@Model.SortOrder" /></div>
+ <button type="submit" class="govuk-button">Save changes</button>
+          </form>
+          break;
+        case AdminLookupEditorKind.MissionPillar:
+          <form method="post" action="@Url.Action("MissionPillarEdit", "ModernAdmin", new { id })" novalidate>
+            @Html.AntiForgeryToken()
+ <div class="govuk-form-group"><label class="govuk-label" for="name">Title</label><input class="govuk-input govuk-!-width-two-thirds" type="text" id="name" name="name" required value="@Model.Name" /></div>
+ <div class="govuk-form-group"><label class="govuk-label" for="description">Description</label><textarea class="govuk-textarea" id="description" name="description" rows="4">@Model.Description</textarea></div>
+ <button type="submit" class="govuk-button">Save changes</button>
+          </form>
+          break;
+        case AdminLookupEditorKind.PriorityOutcome:
+          <form method="post" action="@Url.Action("PriorityOutcomeEdit", "ModernAdmin", new { id })" novalidate>
+            @Html.AntiForgeryToken()
+ <div class="govuk-form-group"><label class="govuk-label" for="name">Title</label><input class="govuk-input govuk-!-width-two-thirds" type="text" id="name" name="name" required value="@Model.Name" /></div>
+ <div class="govuk-form-group"><label class="govuk-label" for="theme">Theme</label><input class="govuk-input govuk-!-width-two-thirds" type="text" id="theme" name="theme" maxlength="100" value="@Model.Theme" /></div>
+ <div class="govuk-form-group"><label class="govuk-label" for="description">Description</label><textarea class="govuk-textarea" id="description" name="description" rows="4">@Model.Description</textarea></div>
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="missionId">Mission pillar (optional)</label>
+ <select class="govuk-select govuk-!-width-two-thirds" id="missionId" name="missionId">
+                <option value="">—</option>
+                @foreach (var o in Model.MissionOptions)
+                {
+                  if (o.Selected) { <option value="@o.Value" selected="selected">@o.Text</option> }
+                  else { <option value="@o.Value">@o.Text</option> }
+                }
+              </select>
+            </div>
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="status">Status</label>
+ <select class="govuk-select govuk-!-width-two-thirds" id="status" name="status">
+                <option value="">—</option>
+                <option value="proposed" selected="@(Model.Status == "proposed")">Proposed</option>
+                <option value="active" selected="@(Model.Status == "active")">Active</option>
+                <option value="paused" selected="@(Model.Status == "paused")">Paused</option>
+                <option value="completed" selected="@(Model.Status == "completed")">Completed</option>
+                <option value="cancelled" selected="@(Model.Status == "cancelled")">Cancelled</option>
+              </select>
+            </div>
+            @await Html.PartialAsync("~/Views/Modern/Shared/_UserPicker.cshtml", new Compass.Models.UserPickerViewModel
+            {
+              FieldName = "OwnerUserId", Label = "Owner", Hint = "Start typing a name or email to search.",
+              DefaultUserId = Model.OwnerUserId, DefaultName = Model.OwnerName, DefaultEmail = Model.OwnerEmail,
+              DefaultSummaryText = "No owner selected.", InputIdSuffix = "po-owner"
+            })
+            @await Html.PartialAsync("~/Views/Modern/Shared/_UserPicker.cshtml", new Compass.Models.UserPickerViewModel
+            {
+              FieldName = "ThemeSroUserId", Label = "Theme SRO", Hint = "Start typing a name or email to search.",
+              DefaultUserId = Model.ThemeSroUserId, DefaultName = Model.ThemeSroName, DefaultEmail = Model.ThemeSroEmail,
+              DefaultSummaryText = "No theme SRO selected.", InputIdSuffix = "po-theme-sro"
+            })
+            @await Html.PartialAsync("~/Views/Modern/Shared/_UserPicker.cshtml", new Compass.Models.UserPickerViewModel
+            {
+              FieldName = "OutcomeSroUserId", Label = "Outcome SRO", Hint = "Start typing a name or email to search.",
+              DefaultUserId = Model.OutcomeSroUserId, DefaultName = Model.OutcomeSroName, DefaultEmail = Model.OutcomeSroEmail,
+              DefaultSummaryText = "No outcome SRO selected.", InputIdSuffix = "po-outcome-sro"
+            })
+ <button type="submit" class="govuk-button">Save changes</button>
+          </form>
+          break;
+        case AdminLookupEditorKind.Department:
+          @if (!string.IsNullOrEmpty(Model.Format) || !string.IsNullOrEmpty(Model.GovukStatus) || !string.IsNullOrEmpty(Model.WebUrl))
+          {
+            <div style="background:var(--grey-1);border:1px solid var(--grey-2);padding:0.75rem 1rem;margin-bottom:1.25rem;font-size:0.875rem;">
+              <strong>GOV.UK sync data</strong>
+              @if (!string.IsNullOrEmpty(Model.Format)) { <span style="margin-left:1rem;">Format: <strong>@Model.Format</strong></span> }
+              @if (!string.IsNullOrEmpty(Model.GovukStatus)) { <span style="margin-left:1rem;">Status: <strong>@Model.GovukStatus</strong></span> }
+              @if (Model.LastSyncedAt.HasValue) { <span style="margin-left:1rem;">Last synced: <strong>@Model.LastSyncedAt.Value.ToString("d MMM yyyy HH:mm")</strong></span> }
+              @if (!string.IsNullOrEmpty(Model.WebUrl))
+              {
+ <span style="margin-left:1rem;"><a href="@Model.WebUrl" class="govuk-link" target="_blank" rel="noopener noreferrer">View on GOV.UK</a></span>
+              }
+            </div>
+          }
+          <form method="post" action="@Url.Action("DepartmentEdit", "ModernAdmin", new { id })" novalidate>
+            @Html.AntiForgeryToken()
+ <div class="govuk-form-group"><label class="govuk-label" for="name">Title</label><input class="govuk-input govuk-!-width-two-thirds" type="text" id="name" name="name" required maxlength="500" value="@Model.Name" /></div>
+ <div class="govuk-form-group"><label class="govuk-label" for="summary">Abbreviation</label><input class="govuk-input govuk-!-width-two-thirds" type="text" id="summary" name="summary" maxlength="200" value="@Model.Summary" /></div>
+ <div class="govuk-form-group"><label class="govuk-label" for="description">Description</label><textarea class="govuk-textarea" id="description" name="description" rows="3">@Model.Description</textarea></div>
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="parentDepartmentId">Parent department (optional)</label>
+ <select class="govuk-select govuk-!-width-two-thirds" id="parentDepartmentId" name="parentDepartmentId">
+                <option value="">—</option>
+                @foreach (var o in Model.ParentDepartmentOptions)
+                {
+                  if (o.Selected) { <option value="@o.Value" selected="selected">@o.Text</option> }
+                  else { <option value="@o.Value">@o.Text</option> }
+                }
+              </select>
+            </div>
+ <button type="submit" class="govuk-button">Save changes</button>
+          </form>
+          break;
+        case AdminLookupEditorKind.Portfolio:
+          <form method="post" action="@Url.Action("PortfolioEdit", "ModernAdmin", new { id })" novalidate>
+            @Html.AntiForgeryToken()
+ <div class="govuk-form-group"><label class="govuk-label" for="name">Name</label><input class="govuk-input govuk-!-width-two-thirds" type="text" id="name" name="name" required value="@Model.Name" /></div>
+ <div class="govuk-form-group"><label class="govuk-label" for="description">Description</label><textarea class="govuk-textarea" id="description" name="description" rows="3">@Model.Description</textarea></div>
+ <div class="govuk-form-group"><label class="govuk-label" for="sortOrder">Order</label><input class="govuk-input govuk-input--width-5" type="number" id="sortOrder" name="sortOrder" value="@Model.SortOrder" /></div>
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="parentGroupId">Parent group (optional)</label>
+ <select class="govuk-select govuk-!-width-two-thirds" id="parentGroupId" name="parentGroupId">
+                <option value="">—</option>
+                @foreach (var o in Model.ParentGroupOptions)
+                {
+                  if (o.Selected)
+                  {
+                    <option value="@o.Value" selected="selected">@o.Text</option>
+                  }
+                  else
+                  {
+                    <option value="@o.Value">@o.Text</option>
+                  }
+                }
+              </select>
+            </div>
+ <button type="submit" class="govuk-button">Save changes</button>
+          </form>
+          break;
+        case AdminLookupEditorKind.RiskTierLike:
+          <form method="post" action="@Url.Action("RiskTierEdit", "ModernAdmin", new { id })" novalidate>
+            @Html.AntiForgeryToken()
+ <div class="govuk-form-group"><label class="govuk-label" for="code">Code</label><input class="govuk-input govuk-input--width-10" type="text" id="code" name="code" required value="@Model.Code" /></div>
+ <div class="govuk-form-group"><label class="govuk-label" for="name">Name</label><input class="govuk-input govuk-!-width-two-thirds" type="text" id="name" name="name" required value="@Model.Name" /></div>
+ <div class="govuk-form-group"><label class="govuk-label" for="description">Description</label><textarea class="govuk-textarea" id="description" name="description" rows="3">@Model.Description</textarea></div>
+ <div class="govuk-form-group"><label class="govuk-label" for="summary">Summary</label><input class="govuk-input govuk-!-width-two-thirds" type="text" id="summary" name="summary" value="@Model.DetailSummary" /></div>
+ <div class="govuk-form-group"><label class="govuk-label" for="sortOrder">Order</label><input class="govuk-input govuk-input--width-5" type="number" id="sortOrder" name="sortOrder" value="@Model.SortOrder" /></div>
+ <div class="govuk-form-group"><label class="govuk-label" for="governanceLevel">Governance level</label><div class="govuk-hint" id="gov-level-hint-edit">1 = highest (typically Tier 1); larger = lower. Use 0 to derive from sort order among non-proposed tiers.</div><input class="govuk-input govuk-input--width-5" type="number" id="governanceLevel" name="governanceLevel" value="@Model.RiskTierGovernanceLevel" min="0" max="99" aria-describedby="gov-level-hint-edit" /></div>
+ <div class="govuk-form-group">
+ <fieldset class="govuk-fieldset">
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Escalation workflow</legend>
+ <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes">
+ <div class="govuk-checkboxes__item">
+ <input class="govuk-checkboxes__input" id="isProposedTier" name="isProposedTier" type="checkbox" value="true" @(Model.RiskTierIsProposedTier ? "checked" : null) />
+ <label class="govuk-label govuk-checkboxes__label" for="isProposedTier">Proposed tier (targets for escalation/de-escalation requests — not selectable on risks)</label>
+              </div>
+            </div>
+ </fieldset>
+            </div>
+ <button type="submit" class="govuk-button">Save changes</button>
+          </form>
+          break;
+        case AdminLookupEditorKind.Raid:
+          <form method="post" action="@Url.Action("RaidLookupEdit", "ModernAdmin", new { lookupKey = panel, id })" novalidate>
+            @Html.AntiForgeryToken()
+ <div class="govuk-form-group"><label class="govuk-label" for="code">Code</label><input class="govuk-input govuk-input--width-10" type="text" id="code" name="code" required value="@Model.Code" /></div>
+ <div class="govuk-form-group"><label class="govuk-label" for="name">Label</label><input class="govuk-input govuk-!-width-two-thirds" type="text" id="name" name="label" required value="@Model.Name" /></div>
+ <div class="govuk-form-group"><label class="govuk-label" for="description">Description</label><textarea class="govuk-textarea" id="description" name="description" rows="3">@Model.Description</textarea></div>
+ @if (showRaidMatrix)
+ {
+ <div class="govuk-form-group"><label class="govuk-label" for="matrixScore">Matrix score (1–5)</label><div class="govuk-hint">Used to calculate inherent risk score (likelihood × impact).</div><input class="govuk-input govuk-input--width-5" type="number" id="matrixScore" name="matrixScore" min="1" max="5" value="@(Model.RaidMatrixScore ?? 3)" /></div>
+ }
+ <div class="govuk-form-group"><label class="govuk-label" for="sortOrder">Order</label><input class="govuk-input govuk-input--width-5" type="number" id="sortOrder" name="sortOrder" value="@Model.SortOrder" /></div>
+ <button type="submit" class="govuk-button">Save changes</button>
+          </form>
+          break;
+        case AdminLookupEditorKind.StandardSubCategory:
+          <form method="post" action="@Url.Action("StdSubCategoryEdit", "ModernAdmin", new { id })" novalidate>
+            @Html.AntiForgeryToken()
+ <div class="govuk-form-group"><label class="govuk-label" for="name">Name</label><input class="govuk-input govuk-!-width-two-thirds" type="text" id="name" name="name" required maxlength="200" value="@Model.Name" /></div>
+ <div class="govuk-form-group"><label class="govuk-label" for="description">Description</label><textarea class="govuk-textarea" id="description" name="description" rows="3">@Model.Description</textarea></div>
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="categoryId">Parent category</label>
+ <select class="govuk-select govuk-!-width-two-thirds" id="categoryId" name="categoryId" required>
+                <option value="">— Select category —</option>
+                @foreach (var o in Model.CategoryOptions)
+                {
+                  if (o.Selected) { <option value="@o.Value" selected="selected">@o.Text</option> }
+                  else { <option value="@o.Value">@o.Text</option> }
+                }
+              </select>
+            </div>
+ <div class="govuk-form-group"><label class="govuk-label" for="sortOrder">Order</label><input class="govuk-input govuk-input--width-5" type="number" id="sortOrder" name="sortOrder" value="@Model.SortOrder" /></div>
+ <button type="submit" class="govuk-button">Save changes</button>
+          </form>
+          break;
+        default:
+          <form method="post" action="@(panel == "phases" ? Url.Action("PhaseEdit", "ModernAdmin", new { id }) : panel == "directorates" ? Url.Action("DirectorateEdit", "ModernAdmin", new { id }) : panel == "std-categories" ? Url.Action("StdCategoryEdit", "ModernAdmin", new { id }) : panel == "risk-appetites" ? Url.Action("RiskAppetiteEdit", "ModernAdmin", new { id }) : Url.Action("BusinessAreaEdit", "ModernAdmin", new { id }))" novalidate>
+            @Html.AntiForgeryToken()
+ <div class="govuk-form-group"><label class="govuk-label" for="name">Name</label><input class="govuk-input govuk-!-width-two-thirds" type="text" id="name" name="name" required value="@Model.Name" /></div>
+ <div class="govuk-form-group"><label class="govuk-label" for="description">Description</label><textarea class="govuk-textarea" id="description" name="description" rows="3">@Model.Description</textarea></div>
+ <div class="govuk-form-group"><label class="govuk-label" for="sortOrder">Order</label><input class="govuk-input govuk-input--width-5" type="number" id="sortOrder" name="sortOrder" value="@Model.SortOrder" /></div>
+ <button type="submit" class="govuk-button">Save changes</button>
+          </form>
+          break;
+      }
+
+      @if (!Model.IsCreate)
+      {
+ <hr class="govuk-section-break govuk-section-break--l govuk-section-break--visible" />
+ <h2 class="govuk-heading-m">Change status</h2>
+        @if (showActivate)
+        {
+          <form method="post" action="@ToggleAction()" style="display:inline;">
+            @Html.AntiForgeryToken()
+ <button type="submit" class="govuk-button govuk-button--secondary">Activate</button>
+          </form>
+        }
+        @if (showDeactivate)
+        {
+          <form method="post" action="@ToggleAction()" style="display:inline;margin-left:0;">
+            @Html.AntiForgeryToken()
+ <button type="submit" class="govuk-button govuk-button--warning" data-confirm="Deactivate this item? It will be marked inactive and hidden from pick lists. You can activate it again later.">Deactivate</button>
+          </form>
+        }
+      }
+
+      @if (showPermanentDelete)
+      {
+ <hr class="govuk-section-break govuk-section-break--l govuk-section-break--visible" />
+ <h2 class="govuk-heading-m">Remove entry</h2>
+ <p class="govuk-body govuk-hint">Permanently deletes this row only if nothing in Compass still references it.</p>
+ <form method="post" action="@DeleteAction()" style="display:inline;">
+          @Html.AntiForgeryToken()
+ <button type="submit" class="govuk-button govuk-button--warning" data-confirm="Permanently delete this entry from the admin list? If risks, issues or other data still reference it, deletion will be blocked.">Delete permanently</button>
+        </form>
+      }
+    }
+  </div>
+</div>

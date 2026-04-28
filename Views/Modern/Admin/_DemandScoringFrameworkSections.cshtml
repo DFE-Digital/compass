@@ -1,0 +1,373 @@
+@using System
+@model List<Compass.Models.DemandPipeline.DemandScoringFrameworkSection>
+@{
+  var sections = Model ?? new();
+  var highlightId = ViewBag.HighlightSectionId as int?;
+  string QPreview(string? p, int max = 72)
+  {
+    if (string.IsNullOrEmpty(p)) return "—";
+    var t = p.Trim();
+    return t.Length <= max ? t : t.Substring(0, max) + "…";
+  }
+}
+
+<div class="admin-dsf-panel">
+ <p class="govuk-body">Each <strong>section</strong> has a points cap and an optional legacy column. Questions have a unique <code>Code</code> (stored in saved answers). Use <strong>Radio</strong> for scored multiple-choice, <strong>Number</strong> for numeric input, <strong>Text</strong> for free text, <strong>Context</strong> to show read-only demand fields.</p>
+
+ <div class="dfe-c-card dfe-c-card--plain admin-dsf-add-card" id="admin-dsf-add-section">
+ <h2 class="govuk-heading-m">Add a section</h2>
+ <p class="govuk-body-s govuk-!-margin-bottom-3">Create a new scorecard block (for example Strategic alignment, Urgency). You can add questions to it below after saving.</p>
+    <form method="post" action="@Url.Action("DemandScoringFrameworkSectionSave", "ModernAdmin")">
+      @Html.AntiForgeryToken()
+ <div class="admin-dsf-field-row">
+ <div class="govuk-form-group govuk-!-margin-bottom-3">
+ <label class="govuk-label" for="newsec-key">Key <span class="govuk-hint govuk-!-display-inline">(short id, no spaces)</span></label>
+ <input class="govuk-input govuk-input--width-10" id="newsec-key" name="key" required placeholder="e.g. strategic" />
+        </div>
+ <div class="govuk-form-group govuk-!-margin-bottom-3">
+ <label class="govuk-label" for="newsec-title">Title</label>
+ <input class="govuk-input govuk-input--width-30" id="newsec-title" name="title" required />
+        </div>
+ <div class="govuk-form-group govuk-!-margin-bottom-3">
+ <label class="govuk-label" for="newsec-max">Max points</label>
+ <input class="govuk-input govuk-input--width-4" id="newsec-max" name="maxPoints" type="number" value="0" min="0" />
+        </div>
+ <div class="govuk-form-group govuk-!-margin-bottom-3">
+ <label class="govuk-label" for="newsec-ord">Display order</label>
+ <input class="govuk-input govuk-input--width-4" id="newsec-ord" name="sortOrder" type="number" value="0" />
+        </div>
+ <div class="govuk-form-group govuk-!-margin-bottom-3">
+ <label class="govuk-label" for="newsec-leg">Legacy column</label>
+ <select class="govuk-select" id="newsec-leg" name="legacyColumn">
+            <option value="">—</option>
+            <option value="Strategic">Strategic</option>
+            <option value="Urgency">Urgency</option>
+            <option value="Funding">Funding</option>
+            <option value="Rice">Rice</option>
+          </select>
+        </div>
+ <div class="govuk-form-group govuk-!-margin-bottom-3">
+ <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes">
+ <div class="govuk-checkboxes__item">
+ <input class="govuk-checkboxes__input" id="newsec-active" name="isActive" type="checkbox" value="true" checked />
+ <label class="govuk-label govuk-checkboxes__label" for="newsec-active">Active</label>
+            </div>
+          </div>
+        </div>
+      </div>
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="newsec-desc">Description <span class="govuk-hint govuk-!-display-inline">(optional, shown to scorers)</span></label>
+ <textarea class="govuk-textarea" id="newsec-desc" name="description" rows="2"></textarea>
+      </div>
+ <button type="submit" class="govuk-button">Add section</button>
+    </form>
+  </div>
+
+  @if (sections.Count == 0)
+  {
+ <p class="govuk-body govuk-!-margin-top-4">No sections yet. Add one above.</p>
+  }
+
+  @foreach (var sec in sections)
+  {
+    var qCount = sec.Questions.Count;
+    var isOpen = highlightId.HasValue && highlightId.Value == sec.Id;
+ <details class="admin-dsf-section" id="admin-dsf-section-@sec.Id" @(isOpen ? "open" : null)>
+ <summary class="admin-dsf-section__summary">
+ <span class="admin-dsf-section__title">@sec.Title</span>
+ <span class="dfe-c-tag dfe-c-tag--grey">@sec.Key</span>
+        @if (!sec.IsActive)
+        {
+ <span class="dfe-c-tag dfe-c-tag--yellow">Inactive</span>
+        }
+ <span class="admin-dsf-section__meta">Max @sec.MaxPoints pts · @qCount question@(qCount == 1 ? "" : "s")@(string.IsNullOrEmpty(sec.LegacyColumn) ? "" : $" · {sec.LegacyColumn}")</span>
+      </summary>
+ <div class="admin-dsf-section__body">
+ <div class="admin-dsf-section-toolbar">
+ <form method="post" action="@Url.Action("DemandScoringFrameworkSectionDelete", "ModernAdmin", new { id = sec.Id })" class="admin-dsf-inline-form">
+            @Html.AntiForgeryToken()
+ <button type="submit" class="govuk-button govuk-button--warning" data-confirm="Delete this section and all its questions and options? This cannot be undone.">Delete section</button>
+          </form>
+        </div>
+
+ <form method="post" action="@Url.Action("DemandScoringFrameworkSectionSave", "ModernAdmin")" class="admin-dsf-section-form">
+          @Html.AntiForgeryToken()
+          <input type="hidden" name="id" value="@sec.Id" />
+ <h3 class="govuk-heading-s">Section details</h3>
+ <div class="admin-dsf-field-row">
+ <div class="govuk-form-group govuk-!-margin-bottom-3">
+ <label class="govuk-label" for="sk-@sec.Id">Key</label>
+ <input class="govuk-input govuk-input--width-10" id="sk-@sec.Id" name="key" value="@sec.Key" required />
+            </div>
+ <div class="govuk-form-group govuk-!-margin-bottom-3">
+ <label class="govuk-label" for="st-@sec.Id">Title</label>
+ <input class="govuk-input govuk-input--width-30" id="st-@sec.Id" name="title" value="@sec.Title" required />
+            </div>
+ <div class="govuk-form-group govuk-!-margin-bottom-3">
+ <label class="govuk-label" for="sm-@sec.Id">Max points</label>
+ <input class="govuk-input govuk-input--width-4" id="sm-@sec.Id" name="maxPoints" type="number" value="@sec.MaxPoints" min="0" />
+            </div>
+ <div class="govuk-form-group govuk-!-margin-bottom-3">
+ <label class="govuk-label" for="sso-@sec.Id">Display order</label>
+ <input class="govuk-input govuk-input--width-4" id="sso-@sec.Id" name="sortOrder" type="number" value="@sec.SortOrder" />
+            </div>
+ <div class="govuk-form-group govuk-!-margin-bottom-3">
+ <label class="govuk-label" for="sl-@sec.Id">Legacy column</label>
+ <select class="govuk-select" id="sl-@sec.Id" name="legacyColumn">
+                @foreach (var lv in new[] { "", "Strategic", "Urgency", "Funding", "Rice" })
+                {
+                  var lbl = string.IsNullOrEmpty(lv) ? "—" : lv;
+                  if (sec.LegacyColumn == lv)
+                  { <option value="@lv" selected>@lbl</option> }
+                  else
+                  { <option value="@lv">@lbl</option> }
+                }
+              </select>
+            </div>
+ <div class="govuk-form-group govuk-!-margin-bottom-3">
+ <div class="govuk-checkboxes govuk-checkboxes--small">
+ <div class="govuk-checkboxes__item">
+ <input class="govuk-checkboxes__input" id="sa-@sec.Id" name="isActive" type="checkbox" value="true" @(sec.IsActive ? "checked" : null) />
+ <label class="govuk-label govuk-checkboxes__label" for="sa-@sec.Id">Active</label>
+                </div>
+              </div>
+            </div>
+          </div>
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="sd-@sec.Id">Description</label>
+ <textarea class="govuk-textarea" id="sd-@sec.Id" name="description" rows="2">@sec.Description</textarea>
+          </div>
+ <button type="submit" class="govuk-button govuk-button--secondary">Save section</button>
+        </form>
+
+ <h3 class="govuk-heading-s govuk-!-margin-top-6">Questions</h3>
+        @if (qCount == 0)
+        {
+ <p class="govuk-body-s govuk-!-margin-bottom-3">No questions in this section yet.</p>
+        }
+        else
+        {
+ <div class="govuk-!-margin-bottom-4">
+ <div class="dfe-c-table-wrap">
+ <table class="admin-dsf-q-overview" >
+              <thead>
+                <tr>
+ <th data-sort-bound="1" class="sortable">Code</th>
+ <th data-sort-bound="1" class="sortable">Type</th>
+ <th data-sort-bound="1" class="sortable">Prompt</th>
+ <th data-sort-bound="1" class="sortable">Order</th>
+ <th data-sort-bound="1" class="sortable">Scored</th>
+                </tr>
+              </thead>
+              <tbody>
+                @foreach (var q in sec.Questions.OrderBy(x => x.SortOrder))
+                {
+                  <tr>
+                    <td><code>@q.Code</code></td>
+ <td><span class="admin-dsf-q-type">@q.QuestionType</span></td>
+                    <td>@QPreview(q.Prompt)</td>
+                    <td>@q.SortOrder</td>
+                    <td>@(q.IsScored ? "Yes" : "No")</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+ </div>
+          </div>
+        }
+
+        @foreach (var q in sec.Questions.OrderBy(x => x.SortOrder))
+        {
+ <details class="govuk-details govuk-!-margin-bottom-3 admin-dsf-q-details">
+ <summary class="govuk-details__summary">
+ <span class="govuk-details__summary-text">
+ <span class="admin-dsf-q-type admin-dsf-q-type--inline">@q.QuestionType</span>
+ <code class="admin-dsf-q-code">@q.Code</code>
+ <span class="admin-dsf-q-sum-prompt">@QPreview(q.Prompt, 90)</span>
+              </span>
+            </summary>
+ <div class="govuk-details__text">
+ <form method="post" action="@Url.Action("DemandScoringFrameworkQuestionSave", "ModernAdmin")" class="admin-dsf-q-form">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="id" value="@q.Id" />
+                <input type="hidden" name="sectionId" value="@sec.Id" />
+ <div class="admin-dsf-field-row">
+ <div class="govuk-form-group govuk-!-margin-bottom-3">
+ <label class="govuk-label" for="qc-@q.Id">Code</label>
+ <input class="govuk-input govuk-input--width-10" id="qc-@q.Id" name="code" value="@q.Code" required />
+                  </div>
+ <div class="govuk-form-group govuk-!-margin-bottom-3">
+ <label class="govuk-label" for="qt-@q.Id">Type</label>
+ <select class="govuk-select" id="qt-@q.Id" name="questionType">
+                      @foreach (var qt in new[] { "Radio", "Number", "Text", "Context" })
+                      {
+                        if (string.Equals(q.QuestionType, qt, StringComparison.OrdinalIgnoreCase))
+                        { <option value="@qt" selected>@qt</option> }
+                        else
+                        { <option value="@qt">@qt</option> }
+                      }
+                    </select>
+                  </div>
+ <div class="govuk-form-group govuk-!-margin-bottom-3">
+ <label class="govuk-label" for="qso-@q.Id">Order</label>
+ <input class="govuk-input govuk-input--width-4" id="qso-@q.Id" name="sortOrder" type="number" value="@q.SortOrder" />
+                  </div>
+ <div class="govuk-form-group govuk-!-margin-bottom-3">
+ <div class="govuk-checkboxes govuk-checkboxes--small">
+ <div class="govuk-checkboxes__item">
+ <input class="govuk-checkboxes__input" id="qs-@q.Id" name="isScored" type="checkbox" value="true" @(q.IsScored ? "checked" : null) />
+ <label class="govuk-label govuk-checkboxes__label" for="qs-@q.Id">Scored</label>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="qp-@q.Id">Prompt</label>
+ <input class="govuk-input" id="qp-@q.Id" name="prompt" value="@q.Prompt" required />
+                </div>
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="qh-@q.Id">Hint</label>
+ <input class="govuk-input" id="qh-@q.Id" name="hint" value="@q.Hint" />
+                </div>
+ <div class="admin-dsf-field-row">
+ <div class="govuk-form-group govuk-!-margin-bottom-3">
+ <label class="govuk-label" for="qnmin-@q.Id">Number min</label>
+ <input class="govuk-input govuk-input--width-4" id="qnmin-@q.Id" name="numberMin" type="number" value="@q.NumberMin" />
+                  </div>
+ <div class="govuk-form-group govuk-!-margin-bottom-3">
+ <label class="govuk-label" for="qnmax-@q.Id">Number max</label>
+ <input class="govuk-input govuk-input--width-4" id="qnmax-@q.Id" name="numberMax" type="number" value="@q.NumberMax" />
+                  </div>
+ <div class="govuk-form-group govuk-!-margin-bottom-3">
+ <label class="govuk-label" for="qck-@q.Id">Context key</label>
+ <input class="govuk-input govuk-input--width-20" id="qck-@q.Id" name="contextKey" value="@q.ContextKey" placeholder="Description, ExploreAimClarification, …" />
+                  </div>
+                </div>
+ <div class="govuk-button-group">
+ <button type="submit" class="govuk-button govuk-button--secondary">Save question</button>
+                </div>
+              </form>
+ <form method="post" action="@Url.Action("DemandScoringFrameworkQuestionDelete", "ModernAdmin", new { id = q.Id })" class="admin-dsf-danger-form">
+                @Html.AntiForgeryToken()
+ <button type="submit" class="govuk-link govuk-link--no-visited-state" style="color:#d4351c;" data-confirm="Delete this question?">Delete question</button>
+              </form>
+
+              @if (string.Equals(q.QuestionType, "Radio", StringComparison.OrdinalIgnoreCase))
+              {
+ <h4 class="govuk-heading-s govuk-!-margin-top-4">Answer options</h4>
+ <p class="govuk-body-s">Each option has points that count toward the section total (subject to the section max).</p>
+                @if (q.Options.Count > 0)
+                {
+ <div class="admin-dsf-options-list" role="list">
+ <div class="admin-dsf-options-list__head" aria-hidden="true">
+                      <span>Label</span>
+                      <span>Points</span>
+                      <span>Order</span>
+                      <span></span>
+                    </div>
+                    @foreach (var o in q.Options.OrderBy(x => x.SortOrder))
+                    {
+ <div class="admin-dsf-option-row" role="listitem">
+ <form method="post" action="@Url.Action("DemandScoringFrameworkOptionSave", "ModernAdmin")" class="admin-dsf-option-form">
+                          @Html.AntiForgeryToken()
+                          <input type="hidden" name="id" value="@o.Id" />
+                          <input type="hidden" name="questionId" value="@q.Id" />
+ <input class="govuk-input" name="label" value="@o.Label" aria-label="Option label" />
+ <input class="govuk-input govuk-input--width-4" name="points" type="number" value="@o.Points" aria-label="Points" />
+ <input class="govuk-input govuk-input--width-4" name="sortOrder" type="number" value="@o.SortOrder" aria-label="Order" />
+ <button type="submit" class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0">Save</button>
+                        </form>
+ <form method="post" action="@Url.Action("DemandScoringFrameworkOptionDelete", "ModernAdmin", new { id = o.Id })" class="admin-dsf-inline-form">
+                          @Html.AntiForgeryToken()
+ <button type="submit" class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0" data-confirm="Remove this option?">Remove</button>
+                        </form>
+                      </div>
+                    }
+                  </div>
+                }
+ <form method="post" action="@Url.Action("DemandScoringFrameworkOptionSave", "ModernAdmin")" class="admin-dsf-add-option govuk-!-margin-top-2">
+                  @Html.AntiForgeryToken()
+                  <input type="hidden" name="questionId" value="@q.Id" />
+ <h5 class="govuk-heading-s">Add option</h5>
+ <div class="admin-dsf-field-row">
+ <div class="govuk-form-group govuk-!-margin-bottom-2">
+ <label class="govuk-label" for="newopt-l-@q.Id">Label</label>
+ <input class="govuk-input govuk-input--width-30" id="newopt-l-@q.Id" name="label" placeholder="Answer text shown to scorers" />
+                    </div>
+ <div class="govuk-form-group govuk-!-margin-bottom-2">
+ <label class="govuk-label" for="newopt-p-@q.Id">Points</label>
+ <input class="govuk-input govuk-input--width-4" id="newopt-p-@q.Id" name="points" type="number" value="0" />
+                    </div>
+ <div class="govuk-form-group govuk-!-margin-bottom-2">
+ <label class="govuk-label" for="newopt-s-@q.Id">Order</label>
+ <input class="govuk-input govuk-input--width-4" id="newopt-s-@q.Id" name="sortOrder" type="number" value="0" />
+                    </div>
+ <button type="submit" class="govuk-button govuk-!-margin-bottom-2">Add option</button>
+                  </div>
+                </form>
+              }
+            </div>
+          </details>
+        }
+
+ <div class="admin-dsf-add-question">
+ <h3 class="govuk-heading-s govuk-!-margin-top-6">Add question to this section</h3>
+          <form method="post" action="@Url.Action("DemandScoringFrameworkQuestionSave", "ModernAdmin")">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="sectionId" value="@sec.Id" />
+ <div class="admin-dsf-field-row">
+ <div class="govuk-form-group govuk-!-margin-bottom-3">
+ <label class="govuk-label" for="newq-code-@sec.Id">Code</label>
+ <input class="govuk-input govuk-input--width-10" id="newq-code-@sec.Id" name="code" required placeholder="e.g. S5Q1" />
+              </div>
+ <div class="govuk-form-group govuk-!-margin-bottom-3">
+ <label class="govuk-label" for="newq-type-@sec.Id">Type</label>
+ <select class="govuk-select" id="newq-type-@sec.Id" name="questionType">
+                  <option value="Radio">Radio</option>
+                  <option value="Number">Number</option>
+                  <option value="Text">Text</option>
+                  <option value="Context">Context</option>
+                </select>
+              </div>
+ <div class="govuk-form-group govuk-!-margin-bottom-3">
+ <label class="govuk-label" for="newq-so-@sec.Id">Order</label>
+ <input class="govuk-input govuk-input--width-4" id="newq-so-@sec.Id" name="sortOrder" type="number" value="0" />
+              </div>
+ <div class="govuk-form-group govuk-!-margin-bottom-3">
+ <div class="govuk-checkboxes govuk-checkboxes--small">
+ <div class="govuk-checkboxes__item">
+ <input class="govuk-checkboxes__input" id="newq-s-@sec.Id" name="isScored" type="checkbox" value="true" checked />
+ <label class="govuk-label govuk-checkboxes__label" for="newq-s-@sec.Id">Scored</label>
+                  </div>
+                </div>
+              </div>
+            </div>
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="newq-prompt-@sec.Id">Prompt</label>
+ <input class="govuk-input" id="newq-prompt-@sec.Id" name="prompt" required />
+            </div>
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="newq-hint-@sec.Id">Hint</label>
+ <input class="govuk-input" id="newq-hint-@sec.Id" name="hint" />
+            </div>
+ <div class="admin-dsf-field-row">
+ <div class="govuk-form-group govuk-!-margin-bottom-3">
+ <label class="govuk-label" for="newq-nmin-@sec.Id">Number min</label>
+ <input class="govuk-input govuk-input--width-4" id="newq-nmin-@sec.Id" name="numberMin" type="number" />
+              </div>
+ <div class="govuk-form-group govuk-!-margin-bottom-3">
+ <label class="govuk-label" for="newq-nmax-@sec.Id">Number max</label>
+ <input class="govuk-input govuk-input--width-4" id="newq-nmax-@sec.Id" name="numberMax" type="number" />
+              </div>
+ <div class="govuk-form-group govuk-!-margin-bottom-3">
+ <label class="govuk-label" for="newq-ctx-@sec.Id">Context key</label>
+ <input class="govuk-input govuk-input--width-20" id="newq-ctx-@sec.Id" name="contextKey" />
+              </div>
+            </div>
+ <button type="submit" class="govuk-button">Add question</button>
+          </form>
+        </div>
+      </div>
+    </details>
+  }
+</div>

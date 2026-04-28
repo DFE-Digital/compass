@@ -106,7 +106,7 @@ public class UsersController : ControllerBase
                 .Select(u => new
                 {
                     id = u!.Id,
-                    name = u.DisplayName,
+                    name = GraphUserNameFormatter.FormatFriendlyName(u),
                     email = string.IsNullOrWhiteSpace(u.Mail) ? u.UserPrincipalName : u.Mail,
                     jobTitle = u.JobTitle
                 })
@@ -292,7 +292,7 @@ public class UsersController : ControllerBase
 
             requestConfiguration.QueryParameters.Select = new[]
             {
-                "id", "displayName", "userPrincipalName", "mail", "jobTitle"
+                "id", "displayName", "givenName", "surname", "userPrincipalName", "mail", "jobTitle"
             };
             requestConfiguration.QueryParameters.Orderby = new[] { "displayName" };
         });
@@ -425,12 +425,12 @@ public class UserSelectionResponse
     public string Email { get; set; } = string.Empty;
     public string? JobTitle { get; set; }
     public DateTime? PhotoUpdatedAt { get; set; }
-    
+
     [System.Text.Json.Serialization.JsonPropertyName("objectId")]
     public string? ObjectId { get; set; }
-    
+
     public UserSelectionResponse() { }
-    
+
     public UserSelectionResponse(int id, string name, string email, string? jobTitle, DateTime? photoUpdatedAt, string? objectId)
     {
         Id = id;

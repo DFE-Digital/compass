@@ -1,0 +1,981 @@
+@model Compass.ViewModels.Modern.AdminHubViewModel
+@using Compass.Models
+@using Compass.ViewModels.Modern
+@{
+  var panel = Model.Panel;
+}
+
+@switch (panel)
+{
+  case "hub":
+ <div id="panel-hub" class="admin-panel">
+ <p class="govuk-body" style="max-width:40rem;">Select an option from the left hand nav to manage settings or items in COMPASS.</p>
+    </div>
+    break;
+
+  case "business-areas":
+    @await Html.PartialAsync("~/Views/Modern/Admin/_AdminLookupTable5Col.cshtml", new AdminLookupTable5ColModel
+    {
+      Panel = "business-areas",
+      Heading = "Business areas",
+      IntroHtml = "Business areas used to classify work items and map to divisions.",
+      AddButtonLabel = "Add new business area",
+      Rows = Model.BusinessAreas
+    })
+    break;
+
+  case "universal-barriers":
+    @await Html.PartialAsync("~/Views/Modern/Admin/_AdminLookupTable5Col.cshtml", new AdminLookupTable5ColModel
+    {
+      Panel = "universal-barriers",
+      Heading = "Universal barriers",
+ IntroHtml = @"Options for the demand Explore tab — aligned with <a href=""https://www.gov.uk/service-manual/design/making-your-service-more-inclusive#universal-barriers-to-using-a-service"" govuk-link"" target=""_blank"" rel=""noopener noreferrer"">GOV.UK universal barriers (opens in a new tab)</a>.",
+      AddButtonLabel = "Add new universal barrier",
+      Rows = Model.UniversalBarriers
+    })
+    break;
+
+  case "directorates":
+    @await Html.PartialAsync("~/Views/Modern/Admin/_AdminLookupTable5Col.cshtml", new AdminLookupTable5ColModel
+    {
+      Panel = "directorates",
+      Heading = "Directorates",
+      IntroHtml = "Directorates group portfolios and leadership reporting lines.",
+      AddButtonLabel = "Add new directorate",
+      Rows = Model.Directorates
+    })
+    break;
+
+  case "phases":
+    @await Html.PartialAsync("~/Views/Modern/Admin/_AdminLookupTable5Col.cshtml", new AdminLookupTable5ColModel
+    {
+      Panel = "phases",
+      Heading = "Delivery phases",
+      IntroHtml = "Delivery phases assigned to work items (for example Discovery, Alpha, Beta, Live).",
+      AddButtonLabel = "Add new delivery phase",
+      Rows = Model.Phases
+    })
+    break;
+
+  case "priorities":
+    @await Html.PartialAsync("~/Views/Modern/Admin/_AdminLookupTable5Col.cshtml", new AdminLookupTable5ColModel
+    {
+      Panel = "priorities",
+      Heading = "Priority levels",
+      IntroHtml = "Delivery priority levels assigned to work items for triage and reporting.",
+      AddButtonLabel = "Add new priority level",
+      Rows = Model.Priorities.Select(p => new AdminLookupRow
+      {
+        Id = p.Id,
+        Name = p.Name,
+        Description = string.IsNullOrEmpty(p.Summary) ? p.Description : $"{p.Summary} — {p.Description}",
+        SortOrder = p.SortOrder,
+        IsActive = p.IsActive
+      }).ToList()
+    })
+    break;
+
+  case "rag-defns":
+    @await Html.PartialAsync("~/Views/Modern/Admin/_AdminLookupTable5Col.cshtml", new AdminLookupTable5ColModel
+    {
+      Panel = "rag-defns",
+      Heading = "RAG definitions",
+      IntroHtml = "Configurable Red, Amber and Green status labels used in monthly updates and dashboards.",
+      AddButtonLabel = "Add new RAG status",
+      Rows = Model.RagDefinitions.Select(r => new AdminLookupRow
+      {
+        Id = r.Id,
+        Name = r.Name,
+        Description = string.IsNullOrEmpty(r.CssClass) ? r.Description : $"{r.Description} (class: {r.CssClass})",
+        SortOrder = r.SortOrder,
+        IsActive = r.IsActive
+      }).ToList()
+    })
+    break;
+
+  case "activity-types":
+    @await Html.PartialAsync("~/Views/Modern/Admin/_AdminLookupTable5Col.cshtml", new AdminLookupTable5ColModel
+    {
+      Panel = "activity-types",
+      Heading = "Activity types",
+      IntroHtml = "Activity types used to classify work and projects.",
+      AddButtonLabel = "Add new activity type",
+      Rows = Model.ActivityTypes
+    })
+    break;
+
+  case "work-tagging":
+    @await Html.PartialAsync("~/Views/Modern/Admin/_AdminLookupTable5Col.cshtml", new AdminLookupTable5ColModel
+    {
+      Panel = "work-tagging",
+      Heading = "Work tagging",
+      IntroHtml = "Custom tags for work items. Assign tags on each work item from the overview or when creating work.",
+      AddButtonLabel = "Add new tag",
+      Rows = Model.WorkItemTags
+    })
+    break;
+
+  case "mission-pillars":
+    @await Html.PartialAsync("~/Views/Modern/Admin/_AdminLookupTable5Col.cshtml", new AdminLookupTable5ColModel
+    {
+      Panel = "mission-pillars",
+      Heading = "Mission pillars",
+      IntroHtml = "Strategic mission pillars used when aligning work and demand to missions.",
+      AddButtonLabel = "Add new mission pillar",
+      Rows = Model.MissionPillars
+    })
+    break;
+
+  case "priority-outcomes":
+ <div id="panel-priority-outcomes" class="admin-panel">
+ <div class="dfe-c-flex--between dfe-c-mb-2">
+ <h2 class="govuk-heading-m" style="margin:0;">Priority outcomes</h2>
+ <a class="govuk-button" href="@Url.Action("LookupCreate", "ModernAdmin", new { panel = "priority-outcomes" })">Add new priority outcome</a>
+      </div>
+ <p class="govuk-body dfe-c-text-muted dfe-c-mb-2">Priority outcomes (objectives) used across work and demand. Assign owners, theme SROs, outcome SROs and mission pillars.</p>
+ <div class="dfe-c-table-wrap">
+        <table >
+          <thead>
+            <tr>
+ <th data-sort-bound="1" class="sortable">Title</th>
+ <th data-sort-bound="1" class="sortable">Theme</th>
+ <th data-sort-bound="1" class="sortable">Mission pillar</th>
+ <th data-sort-bound="1" class="sortable">Theme SRO</th>
+ <th data-sort-bound="1" class="sortable">Outcome SRO</th>
+ <th data-sort-bound="1" class="sortable">Owner</th>
+ <th data-sort-bound="1" class="sortable">Status</th>
+ <th><span class="govuk-visually-hidden">Actions</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            @if (Model.PriorityOutcomes.Count == 0)
+            {
+ <tr><td colspan="8" class="dfe-c-text-muted">No priority outcomes yet. Use <strong>Add new priority outcome</strong> to create one.</td></tr>
+            }
+            else
+            {
+              foreach (var row in Model.PriorityOutcomes)
+              {
+                var statusClass = row.Status switch
+                {
+                  "active" => "dfe-c-tag--green",
+                  "proposed" => "dfe-c-tag--blue",
+                  "paused" => "dfe-c-tag--yellow",
+                  "completed" => "dfe-c-tag--purple",
+                  "cancelled" => "dfe-c-tag--grey",
+                  _ => "dfe-c-tag--grey"
+                };
+                var statusLabel = string.IsNullOrEmpty(row.Status) ? "—" : char.ToUpper(row.Status[0]) + row.Status.Substring(1);
+                <tr>
+                  <td>
+ <a href="@Url.Action("LookupEdit", "ModernAdmin", new { panel = "priority-outcomes", id = row.Id })" class="govuk-link govuk-link--no-visited-state"><strong>@row.Title</strong></a>
+                  </td>
+                  <td>@(string.IsNullOrEmpty(row.Theme) ? "—" : row.Theme)</td>
+                  <td>@(string.IsNullOrEmpty(row.MissionPillar) ? "—" : row.MissionPillar)</td>
+                  <td>@(string.IsNullOrEmpty(row.ThemeSroName) ? "—" : row.ThemeSroName)</td>
+                  <td>@(string.IsNullOrEmpty(row.OutcomeSroName) ? "—" : row.OutcomeSroName)</td>
+                  <td>@(string.IsNullOrEmpty(row.OwnerName) ? "—" : row.OwnerName)</td>
+                  <td>
+                    @if (!string.IsNullOrEmpty(row.Status))
+                    {
+ <span class="dfe-c-tag @statusClass">@statusLabel</span>
+                    }
+                    else
+                    {
+ <span class="dfe-c-text-muted">—</span>
+                    }
+                    @if (row.IsDeleted)
+                    {
+ <span class="dfe-c-tag dfe-c-tag--red" style="margin-left:0.25rem;">Inactive</span>
+                    }
+                  </td>
+                  <td style="text-align:right;white-space:nowrap;">
+ <a href="@Url.Action("LookupEdit", "ModernAdmin", new { panel = "priority-outcomes", id = row.Id })" class="govuk-link govuk-link--no-visited-state">Edit</a>
+                  </td>
+                </tr>
+              }
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+    break;
+
+  case "risk-tiers":
+    @await Html.PartialAsync("~/Views/Modern/Admin/_AdminLookupTable5Col.cshtml", new AdminLookupTable5ColModel
+    {
+      Panel = "risk-tiers",
+      Heading = "Risk tiers",
+      IntroHtml = "Risk tiers used when rating and reporting risks.",
+      AddButtonLabel = "Add new risk tier",
+      Rows = Model.RiskTiers,
+      ShowCodeInDescription = true
+    })
+    break;
+
+  case "risk-statuses": case "risk-categories": case "risk-priorities": case "risk-likelihoods": case "risk-impact-levels": case "risk-proximities": case "risk-treatments": case "risk-appetites":
+  case "action-statuses": case "action-priorities": case "action-types": case "action-categories":
+  case "action-impact-levels": case "action-reminder-frequencies": case "action-escalation-thresholds":
+  case "issue-statuses": case "issue-categories": case "issue-priorities": case "issue-severities":
+  case "decision-statuses": case "decision-priorities": case "decision-outcomes": case "decision-implementation-statuses":
+  case "raid-evidence-types": case "governance-boards": case "demand-request-statuses": case "triage-outcome-stages":
+  case "assumption-statuses": case "assumption-criticalities": case "dependency-criticalities": case "dependency-link-types":
+    @await Html.PartialAsync("~/Views/Modern/Admin/_AdminLookupTable5Col.cshtml", new AdminLookupTable5ColModel
+    {
+      Panel = Model.RaidPanelKey ?? Model.Panel,
+      Heading = Model.RaidPanelLabel ?? Model.Panel,
+      IntroHtml = Model.RaidPanelDescription,
+      AddButtonLabel = (Model.RaidPanelKey ?? Model.Panel) == "risk-appetites"
+        ? "Add new risk appetite"
+        : $"Add new {Model.RaidPanelLabel?.ToLowerInvariant().TrimEnd('s', 'e') ?? "entry"}",
+      Rows = Model.RaidLookupRows,
+      ShowCodeInDescription = true
+    })
+    @if (Model.RaidCanSeedDefaults)
+    {
+      <form method="post" action="@Url.Action("RaidLookupSeed", "ModernAdmin", new { lookupKey = Model.RaidPanelKey })" style="margin-top:0.5rem;">
+        @Html.AntiForgeryToken()
+ <button type="submit" class="govuk-button govuk-button--secondary" style="margin:0;"
+                onclick="return confirm('@(((Model.RaidPanelKey ?? "").ToLowerInvariant() == "risk-categories") ? "Replace all existing risk categories with the recommended values?" : ((Model.RaidPanelKey ?? "").ToLowerInvariant() == "risk-proximities") ? "Replace all existing risk proximities with the recommended values?" : "Import any recommended values that do not already exist?")');">
+          Import recommended values
+        </button>
+      </form>
+    }
+    break;
+
+  case "product-types":
+ <div id="panel-product-types" class="admin-panel">
+ <h2 class="govuk-heading-m">Product types</h2>
+ <p class="govuk-body dfe-c-text-muted">Product and service types for the catalogue are configured in product governance tools. This hub will list them here when wired to the same data store.</p>
+    </div>
+    break;
+
+  case "departments":
+ <div id="panel-departments" class="admin-panel">
+ <div class="dfe-c-flex--between dfe-c-mb-2">
+ <h2 class="govuk-heading-m" style="margin:0;">Government departments</h2>
+ <button type="button" class="govuk-button" id="dept-sync-btn">Sync from GOV.UK</button>
+      </div>
+ <p class="govuk-body dfe-c-text-muted dfe-c-mb-2">Government departments synchronised from the <a href="https://www.gov.uk/api/organisations" class="govuk-link" target="_blank" rel="noopener noreferrer">GOV.UK organisations API</a>. Click <strong>Sync</strong> to refresh.</p>
+
+      <div id="dept-sync-banner" style="display:none;margin-bottom:1rem;padding:0.75rem 1rem;border:2px solid var(--blue);background:var(--grey-1);">
+ <p class="govuk-body" style="margin:0;" id="dept-sync-status">Connecting to GOV.UK API…</p>
+      </div>
+
+ <div class="dfe-c-table-wrap">
+        <table >
+          <thead>
+            <tr>
+ <th data-sort-bound="1" class="sortable">Title</th>
+ <th data-sort-bound="1" class="sortable">Abbreviation</th>
+ <th data-sort-bound="1" class="sortable">Format</th>
+ <th data-sort-bound="1" class="sortable">Parent</th>
+ <th data-sort-bound="1" class="sortable">Status</th>
+ <th data-sort-bound="1" class="sortable">Children</th>
+ <th data-sort-bound="1" class="sortable">Last synced</th>
+ <th><span class="govuk-visually-hidden">Actions</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            @if (Model.GovernmentDepartmentRows.Count == 0)
+            {
+ <tr><td colspan="8" class="dfe-c-text-muted">No government departments found. Use <strong>Sync from GOV.UK</strong> to populate the list.</td></tr>
+            }
+            else
+            {
+              foreach (var row in Model.GovernmentDepartmentRows)
+              {
+                var statusClass = row.GovukStatus switch
+                {
+                  "live" => "dfe-c-tag--green",
+                  "exempt" => "dfe-c-tag--blue",
+                  _ => "dfe-c-tag--grey"
+                };
+                var statusLabel = !row.IsActive ? "Closed" : (string.IsNullOrEmpty(row.GovukStatus) ? "—" : char.ToUpper(row.GovukStatus[0]) + row.GovukStatus.Substring(1));
+                if (!row.IsActive) { statusClass = "dfe-c-tag--grey"; }
+                <tr>
+                  <td>
+ <a href="@Url.Action("LookupEdit", "ModernAdmin", new { panel = "departments", id = row.Id })" class="govuk-link govuk-link--no-visited-state"><strong>@row.Title</strong></a>
+                  </td>
+                  <td>@(string.IsNullOrEmpty(row.Abbreviation) ? "—" : row.Abbreviation)</td>
+ <td><span class="dfe-c-text-muted" style="font-size:0.875rem;">@(string.IsNullOrEmpty(row.Format) ? "—" : row.Format)</span></td>
+                  <td>@(string.IsNullOrEmpty(row.ParentTitle) ? "—" : row.ParentTitle)</td>
+                  <td>
+                    @if (!string.IsNullOrEmpty(statusLabel) && statusLabel != "—")
+                    {
+ <span class="dfe-c-tag @statusClass">@statusLabel</span>
+                    }
+                    else
+                    {
+ <span class="dfe-c-text-muted">—</span>
+                    }
+                  </td>
+                  <td>@(row.ChildCount > 0 ? row.ChildCount.ToString() : "—")</td>
+ <td><span class="dfe-c-text-muted" style="font-size:0.875rem;white-space:nowrap;">@row.LastSyncedAt.ToString("d MMM yyyy HH:mm")</span></td>
+                  <td style="text-align:right;white-space:nowrap;">
+ <a href="@Url.Action("LookupEdit", "ModernAdmin", new { panel = "departments", id = row.Id })" class="govuk-link govuk-link--no-visited-state">Edit</a>
+                  </td>
+                </tr>
+              }
+            }
+          </tbody>
+        </table>
+      </div>
+
+      <script>
+        (function () {
+          var btn = document.getElementById('dept-sync-btn');
+          var banner = document.getElementById('dept-sync-banner');
+          var status = document.getElementById('dept-sync-status');
+          if (!btn) return;
+          btn.addEventListener('click', function () {
+            btn.disabled = true;
+            btn.textContent = 'Syncing…';
+            banner.style.display = 'block';
+            status.textContent = 'Connecting to GOV.UK API… this may take a minute.';
+            fetch('/Admin/GovernmentDepartment/Sync', { method: 'POST' })
+              .then(function (r) { return r.json(); })
+              .then(function (data) {
+                if (data.success) {
+                  status.textContent = 'Sync complete — Added: ' + data.added + ', Updated: ' + data.updated + (data.errors > 0 ? ', Errors: ' + data.errors : '') + '. Reloading…';
+                  banner.style.borderColor = 'var(--green)';
+                  setTimeout(function () { window.location.reload(); }, 1500);
+                } else {
+                  status.textContent = 'Sync failed: ' + (data.message || 'Unknown error');
+                  banner.style.borderColor = 'var(--red)';
+                  btn.disabled = false;
+                  btn.textContent = 'Sync from GOV.UK';
+                }
+              })
+              .catch(function (err) {
+                status.textContent = 'Sync error: ' + err.message;
+                banner.style.borderColor = 'var(--red)';
+                btn.disabled = false;
+                btn.textContent = 'Sync from GOV.UK';
+              });
+          });
+        })();
+      </script>
+    </div>
+    break;
+
+  case "compliance":
+ <div id="panel-compliance" class="admin-panel">
+ <h2 class="govuk-heading-m">Compliance statuses</h2>
+ <p class="govuk-body dfe-c-text-muted">Compliance reference data will be managed here in a future update.</p>
+    </div>
+    break;
+
+  case "scoring-fw":
+ <div id="panel-scoring-fw" class="admin-panel">
+ <div class="dfe-c-flex--between dfe-c-mb-2">
+ <h2 class="govuk-heading-m" style="margin:0;">Scoring framework</h2>
+ <a class="govuk-button" href="@Url.Action("DemandScoringFramework", "ModernAdmin")">Demand scoring framework</a>
+      </div>
+ <p class="govuk-body dfe-c-text-muted">Configure demand prioritisation sections, questions, and bands used on the demand Scoring tab.</p>
+    </div>
+    break;
+
+  case "perf-cycles":
+ <div id="panel-perf-cycles" class="admin-panel">
+ <h2 class="govuk-heading-m">Performance cycles</h2>
+ <p class="govuk-body dfe-c-text-muted">Configure metrics, commissions and submission windows in <a class="govuk-link" href="@Url.Action("PerformanceReporting", "ModernAdmin", new { panel = "commissions" })">Performance reporting</a>.</p>
+    </div>
+    break;
+
+  case "assess-cycles":
+ <div id="panel-assess-cycles" class="admin-panel">
+ <h2 class="govuk-heading-m">Assessment cycles</h2>
+ <p class="govuk-body dfe-c-text-muted">Functional standards content is maintained in <a class="govuk-link" href="@Url.Action("Index", "FunctionalStandard")">Functional standards admin</a>.</p>
+    </div>
+    break;
+
+  case "groups":
+ <div id="panel-groups" class="admin-panel">
+      @if (ViewBag.AdminError != null)
+      {
+ <div class="govuk-error-summary" role="alert" data-module="govuk-error-summary" style="margin-bottom:1.5rem;">
+ <h2 class="govuk-error-summary__title">There is a problem</h2>
+ <div class="govuk-error-summary__body">@ViewBag.AdminError</div>
+        </div>
+      }
+ <div class="dfe-c-flex--between dfe-c-mb-2">
+ <h2 class="govuk-heading-m" style="margin:0;">Groups</h2>
+ <a class="govuk-button" href="@Url.Action("GroupCreate", "ModernAdmin")" id="btn-add-group">Add group</a>
+      </div>
+ <p class="govuk-body dfe-c-text-muted dfe-c-mb-2">Create groups, assign members, and configure feature permissions for access control.</p>
+ <div class="dfe-c-table-wrap">
+        <table >
+          <thead>
+            <tr>
+ <th data-sort-bound="1" class="sortable">Name</th>
+              <th>Description</th>
+ <th data-sort-bound="1" class="sortable">Members</th>
+ <th data-sort-bound="1" class="sortable">Features</th>
+ <th data-sort-bound="1" class="sortable">Active</th>
+ <th data-sort-bound="1" class="sortable">Type</th>
+ <th><span class="govuk-visually-hidden">Actions</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            @if (Model.GroupRows.Count == 0)
+            {
+ <tr><td colspan="7" class="dfe-c-text-muted">No groups yet. Use <strong>Add group</strong> to create one.</td></tr>
+            }
+            else
+            {
+              foreach (var row in Model.GroupRows)
+              {
+                <tr>
+                  <td>
+ <a href="@Url.Action("GroupDetail", "ModernAdmin", new { id = row.Id })" class="govuk-link govuk-link--no-visited-state"><strong>@row.Name</strong></a>
+                  </td>
+                  <td>@(string.IsNullOrEmpty(row.Description) ? "—" : row.Description)</td>
+                  <td>@row.MemberCount</td>
+                  <td>@row.FeatureCount</td>
+                  <td>
+ @if (row.IsActive) { <span class="dfe-c-tag dfe-c-tag--green">Yes</span> }
+ else { <span class="dfe-c-tag dfe-c-tag--grey">No</span> }
+                  </td>
+                  <td>
+ @if (row.IsSystemGroup) { <span class="dfe-c-tag dfe-c-tag--blue">System</span> }
+ else { <span class="dfe-c-tag dfe-c-tag--grey">Custom</span> }
+                  </td>
+                  <td style="text-align:right;white-space:nowrap;">
+ <a href="@Url.Action("GroupDetail", "ModernAdmin", new { id = row.Id })" class="govuk-link govuk-link--no-visited-state">Manage</a>
+                    <span style="margin:0 0.25rem;" aria-hidden="true">·</span>
+ <a href="@Url.Action("GroupEdit", "ModernAdmin", new { id = row.Id })" class="govuk-link govuk-link--no-visited-state">Edit</a>
+                  </td>
+                </tr>
+              }
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+    break;
+
+  case "business-area-admins":
+ <div id="panel-business-area-admins" class="admin-panel">
+      @if (ViewBag.AdminError != null)
+      {
+ <div class="govuk-error-summary" role="alert" data-module="govuk-error-summary" style="margin-bottom:1.5rem;">
+ <h2 class="govuk-error-summary__title">There is a problem</h2>
+ <div class="govuk-error-summary__body">@ViewBag.AdminError</div>
+        </div>
+      }
+ <div class="dfe-c-flex--between dfe-c-mb-2">
+ <h2 class="govuk-heading-m" style="margin:0;">Business area permissions</h2>
+ <a class="govuk-button" href="@Url.Action("BusinessAreaAdminCreate", "ModernAdmin")" id="btn-add-ba-admin">Add permission</a>
+      </div>
+ <p class="govuk-body dfe-c-text-muted dfe-c-mb-2">
+        Assign delegated admins for each Compass business area. They can manage work items, RAID items and performance reporting scoped to that area, in addition to owners and contributors.
+      </p>
+
+ <div class="dfe-c-table-wrap">
+ <table>
+        <thead>
+          <tr>
+ <th data-sort-bound="1" class="sortable">Business area</th>
+ <th data-sort-bound="1" class="sortable">User</th>
+ <th data-sort-bound="1" class="sortable">Email</th>
+ <th><span class="govuk-visually-hidden">Actions</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          @if (Model.BusinessAreaAdminMemberRows.Count == 0)
+          {
+ <tr><td colspan="4" class="dfe-c-text-muted">No delegated admins yet. Use <strong>Add permission</strong> to assign someone from the directory.</td></tr>
+          }
+          else
+          {
+            foreach (var row in Model.BusinessAreaAdminMemberRows)
+            {
+              <tr>
+                <td>@row.BusinessAreaName</td>
+                <td>@row.UserDisplayName</td>
+                <td class="dfe-c-mono">@row.UserEmail</td>
+                <td style="text-align:right;">
+                  <form method="post" action="@Url.Action("BusinessAreaAdminRemove", "ModernAdmin")" style="display:inline;">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="membershipId" value="@row.MembershipId" />
+ <button type="submit" class="govuk-link govuk-link--no-visited-state" style="background:none;border:none;padding:0;cursor:pointer;font:inherit;color:#1d70b8;text-decoration:underline;">Remove</button>
+                  </form>
+                </td>
+              </tr>
+            }
+          }
+        </tbody>
+      </table>
+    </div>
+    </div>
+    break;
+
+  case "business-area-leadership":
+ <div id="panel-business-area-leadership" class="admin-panel">
+      @if (ViewBag.AdminError != null)
+      {
+ <div class="govuk-error-summary" role="alert" data-module="govuk-error-summary" style="margin-bottom:1.5rem;">
+ <h2 class="govuk-error-summary__title">There is a problem</h2>
+ <div class="govuk-error-summary__body">@ViewBag.AdminError</div>
+        </div>
+      }
+ <div class="dfe-c-flex--between dfe-c-mb-2">
+ <h2 class="govuk-heading-m" style="margin:0;">Business area leadership (DD)</h2>
+ <a class="govuk-button" href="@Url.Action("BusinessAreaLeadershipCreate", "ModernAdmin")" id="btn-add-ba-leadership">Add person</a>
+      </div>
+ <p class="govuk-body dfe-c-text-muted dfe-c-mb-2">
+        Record the Deputy Director (DD) and other leadership roles for each business area. They receive the same work, RAID and performance access as <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("Index", "ModernAdmin", new { panel = "business-area-admins" })">delegated business area permissions</a>, in addition to owners and contributors.
+      </p>
+
+ <div class="dfe-c-table-wrap">
+ <table>
+        <thead>
+          <tr>
+ <th data-sort-bound="1" class="sortable">Business area</th>
+ <th data-sort-bound="1" class="sortable">User</th>
+ <th data-sort-bound="1" class="sortable">Email</th>
+ <th><span class="govuk-visually-hidden">Actions</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          @if (Model.BusinessAreaLeadershipMemberRows.Count == 0)
+          {
+ <tr><td colspan="4" class="dfe-c-text-muted">No business area leadership yet. Use <strong>Add person</strong> to assign someone from the directory.</td></tr>
+          }
+          else
+          {
+            foreach (var row in Model.BusinessAreaLeadershipMemberRows)
+            {
+              <tr>
+                <td>@row.BusinessAreaName</td>
+                <td>@row.UserDisplayName</td>
+                <td class="dfe-c-mono">@row.UserEmail</td>
+                <td style="text-align:right;">
+                  <form method="post" action="@Url.Action("BusinessAreaLeadershipRemove", "ModernAdmin")" style="display:inline;">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="membershipId" value="@row.MembershipId" />
+ <button type="submit" class="govuk-link govuk-link--no-visited-state" style="background:none;border:none;padding:0;cursor:pointer;font:inherit;color:#1d70b8;text-decoration:underline;">Remove</button>
+                  </form>
+                </td>
+              </tr>
+            }
+          }
+        </tbody>
+      </table>
+    </div>
+    </div>
+    break;
+
+  case "directorate-leadership":
+ <div id="panel-directorate-leadership" class="admin-panel">
+      @if (ViewBag.AdminError != null)
+      {
+ <div class="govuk-error-summary" role="alert" data-module="govuk-error-summary" style="margin-bottom:1.5rem;">
+ <h2 class="govuk-error-summary__title">There is a problem</h2>
+ <div class="govuk-error-summary__body">@ViewBag.AdminError</div>
+        </div>
+      }
+ <div class="dfe-c-flex--between dfe-c-mb-2">
+ <h2 class="govuk-heading-m" style="margin:0;">Directorate leadership</h2>
+ <a class="govuk-button" href="@Url.Action("DirectorateLeadershipCreate", "ModernAdmin")" id="btn-add-dir-leadership">Add person</a>
+      </div>
+ <p class="govuk-body dfe-c-text-muted dfe-c-mb-2">
+        Assign people as leadership for a directorate (the same list as <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("Index", "ModernAdmin", new { panel = "directorates" })">Directorates</a>).
+        They can manage work and RAID for items in that directorate, or for business areas linked under it in <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("OrganisationStructure", "ModernAdmin")">Organisation structure</a>, in addition to owners and contributors.
+      </p>
+
+ <div class="dfe-c-table-wrap">
+ <table>
+        <thead>
+          <tr>
+ <th data-sort-bound="1" class="sortable">Directorate</th>
+ <th data-sort-bound="1" class="sortable">User</th>
+ <th data-sort-bound="1" class="sortable">Email</th>
+ <th><span class="govuk-visually-hidden">Actions</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          @if (Model.DirectorateLeadershipMemberRows.Count == 0)
+          {
+ <tr><td colspan="4" class="dfe-c-text-muted">No directorate leadership yet. Use <strong>Add person</strong> to assign someone from the directory.</td></tr>
+          }
+          else
+          {
+            foreach (var row in Model.DirectorateLeadershipMemberRows)
+            {
+              <tr>
+                <td>@row.DirectorateName</td>
+                <td>@row.UserDisplayName</td>
+                <td class="dfe-c-mono">@row.UserEmail</td>
+                <td style="text-align:right;">
+                  <form method="post" action="@Url.Action("DirectorateLeadershipRemove", "ModernAdmin")" style="display:inline;">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="membershipId" value="@row.MembershipId" />
+ <button type="submit" class="govuk-link govuk-link--no-visited-state" style="background:none;border:none;padding:0;cursor:pointer;font:inherit;color:#1d70b8;text-decoration:underline;">Remove</button>
+                  </form>
+                </td>
+              </tr>
+            }
+          }
+        </tbody>
+      </table>
+    </div>
+    </div>
+    break;
+
+  case "api-tokens":
+ <div id="panel-api-tokens" class="admin-panel">
+ <div class="dfe-c-flex--between dfe-c-mb-2">
+ <h2 class="govuk-heading-m" style="margin:0;">API tokens</h2>
+ <a class="govuk-button" href="@Url.Action("ApiTokenCreate", "ModernAdmin")" id="btn-add-token">Add token</a>
+      </div>
+ <p class="govuk-body dfe-c-text-muted dfe-c-mb-2">Manage API tokens for external integrations and service-to-service authentication.</p>
+ <div class="dfe-c-table-wrap">
+        <table >
+          <thead>
+            <tr>
+ <th data-sort-bound="1" class="sortable">Name</th>
+              <th>Description</th>
+ <th data-sort-bound="1" class="sortable">Created</th>
+ <th data-sort-bound="1" class="sortable">Expires</th>
+ <th data-sort-bound="1" class="sortable">Active</th>
+ <th><span class="govuk-visually-hidden">Actions</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            @if (Model.ApiTokenRows.Count == 0)
+            {
+ <tr><td colspan="6" class="dfe-c-text-muted">No API tokens yet. Use <strong>Add token</strong> to create one.</td></tr>
+            }
+            else
+            {
+              foreach (var t in Model.ApiTokenRows)
+              {
+                <tr>
+                  <td><strong>@t.Name</strong></td>
+                  <td>@(string.IsNullOrEmpty(t.Description) ? "—" : t.Description)</td>
+                  <td>@t.CreatedAt.ToString("d MMM yyyy")</td>
+                  <td>@(t.ExpiresAt?.ToString("d MMM yyyy") ?? "Never")</td>
+                  <td>
+ @if (t.IsActive) { <span class="dfe-c-tag dfe-c-tag--green">Yes</span> }
+ else { <span class="dfe-c-tag dfe-c-tag--grey">No</span> }
+                  </td>
+                  <td style="text-align:right;">
+ <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("ApiTokenDetail", "ModernAdmin", new { id = t.Id })">Manage</a>
+                  </td>
+                </tr>
+              }
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+    break;
+
+  case "audit":
+ <div id="panel-audit" class="admin-panel">
+ <div class="dfe-c-flex--between dfe-c-mb-2">
+ <h2 class="govuk-heading-m" style="margin:0;">Audit log</h2>
+      </div>
+ <p class="govuk-body dfe-c-text-muted dfe-c-mb-2">Recent administrative actions and system changes.</p>
+ <div class="dfe-c-table-wrap">
+        <table >
+          <thead>
+            <tr>
+ <th data-sort-bound="1" class="sortable">Date</th>
+ <th data-sort-bound="1" class="sortable">User</th>
+ <th data-sort-bound="1" class="sortable">Action</th>
+ <th data-sort-bound="1" class="sortable">Entity</th>
+              <th>Detail</th>
+            </tr>
+          </thead>
+          <tbody>
+            @if (Model.AuditRows.Count == 0)
+            {
+ <tr><td colspan="5" class="dfe-c-text-muted">No audit entries recorded yet.</td></tr>
+            }
+            else
+            {
+              foreach (var a in Model.AuditRows)
+              {
+                <tr>
+                  <td style="white-space:nowrap;">@a.Timestamp.ToString("d MMM yyyy HH:mm")</td>
+                  <td>@a.UserName</td>
+                  <td>@a.Action</td>
+                  <td>@a.EntityType</td>
+                  <td>@(string.IsNullOrEmpty(a.Detail) ? "—" : a.Detail)</td>
+                </tr>
+              }
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+    break;
+
+  case "migration":
+ <div id="panel-migration" class="admin-panel">
+ <h2 class="govuk-heading-m">Legacy migration import</h2>
+ <p class="govuk-body dfe-c-text-muted">Bulk migration from workbooks is not configured in this admin hub.</p>
+    </div>
+    break;
+
+  case "feature-settings":
+ <div id="panel-feature-settings" class="admin-panel">
+ <h2 class="govuk-heading-m">Feature settings</h2>
+ <p class="govuk-body dfe-c-text-muted" style="max-width:40rem;">Choose whether a product area is <strong>off for everyone</strong>, <strong>on for all signed-in users</strong>, or <strong>on for only the people and groups you list</strong> (anyone not in scope is treated the same as off for navigation and server checks). <a class="govuk-link" href="@Url.Action("Index", "ModernAdmin", new { panel = "groups" })">Create and manage groups</a> in Admin → Groups.</p>
+ <form method="post" action="@Url.Action("FeatureSettingsSave", "ModernAdmin")" novalidate>
+ @Html.AntiForgeryToken()
+ @for (var i = 0; i < Model.FeatureSettingsRows.Count; i++)
+ {
+   var row = Model.FeatureSettingsRows[i];
+   var fAll = row.AccessMode == FeatureAccessMode.OnForAll;
+   var fOff = row.AccessMode == FeatureAccessMode.Off;
+   var fSome = row.AccessMode == FeatureAccessMode.OnForSome;
+ <div class="govuk-form-group govuk-!-margin-bottom-6">
+ <fieldset class="govuk-fieldset" aria-describedby="feature-hint-@(i)">
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">@row.Label</legend>
+ <div class="govuk-hint" id="feature-hint-@(i)">@row.Hint</div>
+ <input type="hidden" name="featureToggles[@i].Code" value="@row.Code" />
+ <div class="govuk-radios" data-module="govuk-radios">
+ <div class="govuk-radios__item">
+ @if (fAll)
+ { <input class="govuk-radios__input" id="f-access-@i-all" name="featureToggles[@i].AccessMode" type="radio" value="1" checked="checked" /> }
+ else
+ { <input class="govuk-radios__input" id="f-access-@i-all" name="featureToggles[@i].AccessMode" type="radio" value="1" /> }
+ <label class="govuk-label govuk-radios__label" for="f-access-@i-all">On for all</label>
+ </div>
+ <div class="govuk-radios__item">
+ @if (fSome)
+ { <input class="govuk-radios__input" id="f-access-@i-some" name="featureToggles[@i].AccessMode" type="radio" value="2" checked="checked" /> }
+ else
+ { <input class="govuk-radios__input" id="f-access-@i-some" name="featureToggles[@i].AccessMode" type="radio" value="2" /> }
+ <label class="govuk-label govuk-radios__label" for="f-access-@i-some">On for some</label>
+ </div>
+ <div class="govuk-radios__item">
+ @if (fOff)
+ { <input class="govuk-radios__input" id="f-access-@i-off" name="featureToggles[@i].AccessMode" type="radio" value="0" checked="checked" /> }
+ else
+ { <input class="govuk-radios__input" id="f-access-@i-off" name="featureToggles[@i].AccessMode" type="radio" value="0" /> }
+ <label class="govuk-label govuk-radios__label" for="f-access-@i-off">Off</label>
+ </div>
+ </div>
+ <div class="govuk-inset-text govuk-!-margin-top-2 @(fSome ? "" : "govuk-!-display-none")" data-feature-allow-box="@i" id="f-allow-@i" aria-hidden="@(fSome ? "false" : "true")">
+   <h3 class="govuk-heading-s">Who can access @row.Label (on for some)</h3>
+   <p class="govuk-body-s">A signed-in user has access if they are <strong>listed as a person below</strong> or are in an <strong>active group</strong> you add below. Groups are the same <a class="govuk-link" href="@Url.Action("Index", "ModernAdmin", new { panel = "groups" })">Directory groups</a> (members, plus feature permissions, are set per group in Admin).</p>
+   <h4 class="govuk-heading-s govuk-!-margin-top-2 govuk-!-margin-bottom-1">People (look-up)</h4>
+   <p class="govuk-body-s dfe-c-text-muted govuk-!-margin-bottom-2">Add up to @row.AllowSlots.Count people.</p>
+  @for (var j = 0; j < row.AllowSlots.Count; j++)
+  {
+   var s = row.AllowSlots[j];
+   <div class="govuk-!-margin-bottom-2">
+  @{
+   var pvm = new UserPickerViewModel
+   {
+     UseGovUkStyling = true,
+     FieldName = "featureToggles[" + i + "].AllowedUserIds[" + j + "]",
+     Label = "Person " + (j + 1),
+     InputIdSuffix = "feat-" + i + "-" + j,
+     DefaultUserId = s.UserId,
+     DefaultName = s.Name,
+     DefaultEmail = s.Email
+   };
+  }
+  <partial name="~/Views/Modern/Shared/_UserPicker.cshtml" model="pvm" />
+   </div>
+  }
+  <h4 class="govuk-heading-s govuk-!-margin-top-2 govuk-!-margin-bottom-1">Groups</h4>
+  <p class="govuk-body-s dfe-c-text-muted govuk-!-margin-bottom-2">All active members of a selected group (plus anyone named above) can access this product area. Up to @row.GroupSlots.Count group slots; pick the same group in one slot only.</p>
+  @if (Model.FeatureSettingsGroupOptions.Count == 0)
+  {
+  <p class="govuk-body-s">No active groups. <a class="govuk-link" href="@Url.Action("Index", "ModernAdmin", new { panel = "groups" })">Add a group</a> first, then return here.</p>
+  }
+  @for (var g = 0; g < row.GroupSlots.Count; g++)
+  {
+   var gs = row.GroupSlots[g];
+   <div class="govuk-!-margin-bottom-2">
+   <label class="govuk-label" for="feature-group-@i-@g">Group @(g + 1) (optional)</label>
+  <select class="govuk-select" id="feature-group-@i-@g" name="featureToggles[@i].AllowedGroupIds[@g]">
+   <option value="">—</option>
+  @foreach (var opt in Model.FeatureSettingsGroupOptions)
+  {
+  if (gs.GroupId == opt.Id)
+  {
+  <option value="@opt.Id" selected>@opt.Name</option>
+  }
+  else
+  {
+  <option value="@opt.Id">@opt.Name</option>
+  }
+  }
+  </select>
+  </div>
+  }
+ </div>
+ </fieldset>
+ </div>
+ }
+ <button type="submit" class="govuk-button govuk-!-margin-top-2">Save feature settings</button>
+ </form>
+    </div>
+    break;
+
+  case "fips-channels":
+    @await Html.PartialAsync("~/Views/Modern/Admin/_AdminFipsSimplePanel.cshtml", new AdminFipsSimplePanelModel
+    {
+      Heading = "FIPS channels",
+      IntroHtml = "Channel categories used to classify FIPS products (e.g. Web, Phone, Email).",
+      Rows = Model.FipsChannels,
+      AddActionUrl = Url.Action("FipsAddChannel", "ModernAdmin") ?? "#",
+      ToggleActionName = "FipsToggleChannel",
+      EntityLabel = "channel"
+    })
+    break;
+
+  case "fips-types":
+    @await Html.PartialAsync("~/Views/Modern/Admin/_AdminFipsSimplePanel.cshtml", new AdminFipsSimplePanelModel
+    {
+      Heading = "FIPS types",
+      IntroHtml = "Type categories for FIPS products.",
+      Rows = Model.FipsTypes,
+      AddActionUrl = Url.Action("FipsAddType", "ModernAdmin") ?? "#",
+      ToggleActionName = "FipsToggleType",
+      EntityLabel = "type"
+    })
+    break;
+
+  case "fips-business-areas":
+    @await Html.PartialAsync("~/Views/Modern/Admin/_AdminFipsBusinessAreasSyncedPanel.cshtml", new AdminFipsBusinessAreasSyncedPanelModel
+    {
+      Rows = Model.FipsBusinessAreas,
+      MasterBusinessAreasUrl = Url.Action("Index", "ModernAdmin", new { panel = "business-areas" }) ?? "#"
+    })
+    break;
+
+  case "fips-user-groups":
+    @await Html.PartialAsync("~/Views/Modern/Admin/_AdminFipsUserGroupsPanel.cshtml", Model)
+    break;
+
+  case "fips-contact-roles":
+    @await Html.PartialAsync("~/Views/Modern/Admin/_AdminFipsContactRolesPanel.cshtml", Model)
+    break;
+
+  case "fips-categorisation":
+    @await Html.PartialAsync("~/Views/Modern/Admin/_AdminFipsCategorisationPanel.cshtml", Model)
+    break;
+
+  case "std-categories":
+    @await Html.PartialAsync("~/Views/Modern/Admin/_AdminLookupTable5Col.cshtml", new AdminLookupTable5ColModel
+    {
+      Panel = "std-categories",
+      Heading = "DDT standard categories",
+      IntroHtml = "Top-level categories used to organise DDT standards.",
+      AddButtonLabel = "Add new category",
+      Rows = Model.StdCategories
+    })
+    break;
+
+  case "std-subcategories":
+ <div id="panel-std-subcategories" class="admin-panel">
+ <div class="dfe-c-flex--between dfe-c-mb-2">
+ <h2 class="govuk-heading-m" style="margin:0;">Standard sub-categories</h2>
+ <a class="govuk-button" href="@Url.Action("LookupCreate", "ModernAdmin", new { panel = "std-subcategories" })">Add new sub-category</a>
+      </div>
+ <p class="govuk-body dfe-c-text-muted dfe-c-mb-2">Sub-categories within each standard category, used for finer-grained classification of DDT standards.</p>
+ <div class="dfe-c-table-wrap">
+        <table >
+          <thead>
+            <tr>
+ <th data-sort-bound="1" class="sortable">Name</th>
+ <th data-sort-bound="1" class="sortable">Category</th>
+              <th>Description</th>
+ <th data-sort-bound="1" class="sortable">Sort order</th>
+ <th data-sort-bound="1" class="sortable">Active</th>
+ <th><span class="govuk-visually-hidden">Actions</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            @if (Model.StdSubCategories.Count == 0)
+            {
+ <tr><td colspan="6" class="dfe-c-text-muted">No sub-categories yet. Use <strong>Add new sub-category</strong> to create one.</td></tr>
+            }
+            else
+            {
+              foreach (var row in Model.StdSubCategories)
+              {
+                <tr>
+                  <td>
+ <a href="@Url.Action("LookupEdit", "ModernAdmin", new { panel = "std-subcategories", id = row.Id })" class="govuk-link govuk-link--no-visited-state"><strong>@row.Name</strong></a>
+                  </td>
+                  <td>@row.CategoryName</td>
+                  <td>@(string.IsNullOrEmpty(row.Description) ? "—" : row.Description)</td>
+                  <td>@row.SortOrder</td>
+                  <td>
+ @if (row.IsActive) { <span class="dfe-c-tag dfe-c-tag--green">Yes</span> }
+ else { <span class="dfe-c-tag dfe-c-tag--grey">No</span> }
+                  </td>
+                  <td style="text-align:right;white-space:nowrap;">
+ <a href="@Url.Action("LookupEdit", "ModernAdmin", new { panel = "std-subcategories", id = row.Id })" class="govuk-link govuk-link--no-visited-state">Edit</a>
+                  </td>
+                </tr>
+              }
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+    break;
+
+  case "std-functional":
+ <div id="panel-std-functional" class="admin-panel">
+ <div class="dfe-c-flex--between" style="align-items:flex-start;">
+   <div>
+     <h2 class="govuk-heading-m">Functional standards</h2>
+     <p class="govuk-body dfe-c-text-muted dfe-c-mb-2">Functional standards and their themes, practice areas and criteria.</p>
+   </div>
+   <a href="@Url.Action("FunctionalStandardCreate", "ModernAdmin")" class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0" style="white-space:nowrap;">Add standard</a>
+ </div>
+ <div class="dfe-c-table-wrap">
+        <table >
+          <thead>
+            <tr>
+ <th data-sort-bound="1" class="sortable">Title</th>
+              <th>Description</th>
+ <th data-sort-bound="1" class="sortable">Themes</th>
+ <th data-sort-bound="1" class="sortable">Published</th>
+ <th><span class="govuk-visually-hidden">Actions</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            @if (Model.StdFunctional.Count == 0)
+            {
+ <tr><td colspan="5" class="dfe-c-text-muted">No functional standards found.</td></tr>
+            }
+            else
+            {
+              foreach (var row in Model.StdFunctional)
+              {
+                <tr>
+                  <td><strong>@row.Title</strong></td>
+                  <td style="max-width:20rem;">@(string.IsNullOrEmpty(row.Description) ? "—" : (row.Description.Length > 120 ? row.Description.Substring(0, 120) + "…" : row.Description))</td>
+                  <td>@row.ThemeCount</td>
+                  <td>@(row.PublishedDate?.ToString("d MMM yyyy") ?? "—")</td>
+                  <td style="text-align:right;white-space:nowrap;">
+ <a href="@Url.Action("FunctionalStandardDetail", "ModernAdmin", new { id = row.Id })" class="govuk-link govuk-link--no-visited-state">Manage</a>
+                  </td>
+                </tr>
+              }
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+    break;
+
+  default:
+ <div class="admin-panel">
+ <p class="dfe-c-text-muted">Select a configuration area from the left. <a class="govuk-link" href="@Url.Action("Index", "ModernAdmin")">Back to admin home</a>.</p>
+    </div>
+    break;
+}

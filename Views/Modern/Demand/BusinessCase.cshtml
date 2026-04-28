@@ -1,0 +1,157 @@
+@model IEnumerable<Compass.Models.DemandPipeline.DemandPipelineBusinessCase>
+@{
+  ViewData["Title"] = "Business cases";
+  int readyCount = ViewBag.ReadyCounts ?? 0;
+  int devCount = ViewBag.DevCount ?? 0;
+  int ideaCount = ViewBag.IdeaCount ?? 0;
+  int submittedGrand = ViewBag.SubmittedCount as int? ?? 0;
+  int mineCasesCount = ViewBag.MineCasesCount as int? ?? 0;
+  int allCasesCount = ViewBag.AllCasesCount as int? ?? ViewBag.PipelineTotal as int? ?? ViewBag.DraftCount as int? ?? 0;
+  var stageFilter = ViewBag.StageFilter as string;
+  var search = ViewBag.Search as string;
+  var deptFilter = ViewBag.DepartmentFilter as string;
+  var tab = (ViewBag.Tab as string) ?? "mine";
+  var isMineTab = tab == "mine";
+  var isAllTab = tab == "all";
+  var isSubmittedTab = tab == "submitted";
+  var departments = ViewBag.DepartmentOptions as List<string> ?? new List<string>();
+
+  string TabUrl(string t) =>
+    Url.Action("BusinessCase", "ModernDemand", new { tab = t }) ?? "#";
+}
+
+@section Breadcrumbs {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernDemand")">Demand</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">Business cases</li>
+}
+
+<div id="sc-business-case-index">
+ <div class="dfe-c-flex--between dfe-c-mb-3" style="flex-wrap:wrap;gap:1rem;">
+ <div class="dfe-c-page-title" style="margin:0;">
+ <div class="dfe-c-page-title__caption">Demand pipeline</div>
+ <h1 class="dfe-c-page-title__heading">Business cases</h1>
+ <p class="dfe-c-page-title__lede">Ideas and business cases being developed before submission to the demand register</p>
+    </div>
+ <div class="dfe-c-flex" style="gap:0.5rem;flex-wrap:wrap;">
+ <a href="@Url.Action("BusinessCaseNew", "ModernDemand")" class="govuk-button">Add business case</a>
+ <a href="@Url.Action("Submit", "ModernDemand")" class="govuk-button govuk-button--secondary">Submit demand</a>
+    </div>
+  </div>
+
+  @if (isMineTab || isAllTab)
+  {
+ <div class="dfe-c-grid dfe-c-grid--4 dfe-c-mb-3">
+ <div class="dfe-c-metric dfe-c-metric--green">
+ <div class="dfe-c-metric__number" style="color:var(--green);">@submittedGrand</div>
+ <div class="dfe-c-metric__label">Submitted</div>
+      </div>
+ <div class="dfe-c-metric dfe-c-metric--teal">
+ <div class="dfe-c-metric__number" style="color:var(--teal);">@readyCount</div>
+ <div class="dfe-c-metric__label">Ready to submit</div>
+      </div>
+ <div class="dfe-c-metric dfe-c-metric--amber">
+ <div class="dfe-c-metric__number" style="color:var(--rag-a);">@devCount</div>
+ <div class="dfe-c-metric__label">Developing</div>
+      </div>
+ <div class="dfe-c-metric dfe-c-metric--grey">
+ <div class="dfe-c-metric__number">@ideaCount</div>
+ <div class="dfe-c-metric__label">Ideas / concept</div>
+      </div>
+    </div>
+  }
+  else
+  {
+ <div class="dfe-c-callout dfe-c-callout--info dfe-c-mb-3">
+ <div class="dfe-c-callout__heading">Submitted to demand</div>
+ <p class="dfe-c-callout__body dfe-c-mb-0">Business cases that have been submitted or linked to a demand request (@submittedGrand total).</p>
+    </div>
+  }
+
+ <div class="tabs dfe-c-mb-3" role="tablist" aria-label="Business case views">
+    <a href="@TabUrl("mine")"
+ class="tab @(isMineTab ?"on" : "")"
+       role="tab"
+       aria-selected="@isMineTab"
+       aria-controls="d-bc-mine"
+ id="tab-bc-mine">My cases <span class="dfe-c-fw-regular">(@mineCasesCount)</span></a>
+    <a href="@TabUrl("all")"
+ class="tab @(isAllTab ?"on" : "")"
+       role="tab"
+       aria-selected="@isAllTab"
+       aria-controls="d-bc-all"
+ id="tab-bc-all">All cases <span class="dfe-c-fw-regular">(@allCasesCount)</span></a>
+    <a href="@TabUrl("submitted")"
+ class="tab @(isSubmittedTab ?"on" : "")"
+       role="tab"
+       aria-selected="@isSubmittedTab"
+       aria-controls="d-bc-submitted"
+ id="tab-bc-submitted">Submitted <span class="dfe-c-fw-regular">(@submittedGrand)</span></a>
+  </div>
+
+ <form method="get" action="@Url.Action("BusinessCase", "ModernDemand")" id="bc-filter-form" class="dfe-c-mb-3">
+    <input type="hidden" name="tab" value="@tab" />
+    <div id="search-and-filter">
+ <div class="filter-toolbar">
+ <div class="filter-toolbar__search-wrap">
+ <input type="search" name="search" id="bc-register-search" value="@search" placeholder="Search business cases…" class="filter-search" autocomplete="off" aria-label="Search business cases" />
+ <button type="submit" class="govuk-button govuk-button--secondary filter-toolbar__search-submit" id="bc-search-submit">Search</button>
+        </div>
+ <button type="button" class="filter-toggle-btn" id="bc-filter-btn" aria-expanded="false" aria-controls="bc-filter-panel">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="flex-shrink:0;" aria-hidden="true"><path d="M1 3h14v1.5l-5 5V14l-4-2V9.5L1 4.5V3z"></path></svg>
+ <span class="filter-toggle-label">Filter</span>
+        </button>
+      </div>
+ <div class="filter-panel" id="bc-filter-panel">
+ <div class="filter-panel__grid">
+          <div>
+            <label for="bc-filter-stage">Stage</label>
+ <select name="stage" id="bc-filter-stage" class="govuk-select">
+              @{ var bcStageOpts = new[] { ("", "All"), ("Ready", "Ready to submit"), ("Developing", "Developing"), ("Idea", "Idea / concept") }; }
+              @foreach (var (val, label) in bcStageOpts)
+              {
+                if ((string.IsNullOrEmpty(val) && string.IsNullOrEmpty(stageFilter)) || val == stageFilter) { <option value="@val" selected>@label</option> }
+                else { <option value="@val">@label</option> }
+              }
+            </select>
+          </div>
+          <div>
+            <label for="bc-filter-dept">Business area</label>
+ <select name="department" id="bc-filter-dept" class="govuk-select">
+              <option value="">All business areas</option>
+              @foreach (var d in departments)
+              {
+                if (deptFilter == d) { <option value="@d" selected>@d</option> }
+                else { <option value="@d">@d</option> }
+              }
+            </select>
+          </div>
+        </div>
+ <div class="filter-panel__actions">
+ <button type="submit" class="govuk-button">Apply filters</button>
+ <a href="@Url.Action("BusinessCase", "ModernDemand", new { tab })" class="govuk-link">Clear filters</a>
+        </div>
+      </div>
+    </div>
+  </form>
+
+ <div id="d-bc-mine" class="tab-pane @(isMineTab ?"on" : "")" role="tabpanel" aria-labelledby="tab-bc-mine">
+    @if (isMineTab)
+    {
+      @await Html.PartialAsync("~/Views/Modern/Demand/_CaseTable.cshtml", Model)
+    }
+  </div>
+
+ <div id="d-bc-all" class="tab-pane @(isAllTab ?"on" : "")" role="tabpanel" aria-labelledby="tab-bc-all">
+    @if (isAllTab)
+    {
+      @await Html.PartialAsync("~/Views/Modern/Demand/_CaseTable.cshtml", Model)
+    }
+  </div>
+
+ <div id="d-bc-submitted" class="tab-pane @(isSubmittedTab ?"on" : "")" role="tabpanel" aria-labelledby="tab-bc-submitted">
+    @if (isSubmittedTab)
+    {
+      @await Html.PartialAsync("~/Views/Modern/Demand/_CaseTable.cshtml", Model)
+    }
+  </div>
+</div>

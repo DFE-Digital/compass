@@ -1,0 +1,207 @@
+@model List<Compass.Models.PerformanceMetric>
+@using System.Text.Json
+@{
+  ViewData["Title"] = "Performance metric guidance";
+
+  Compass.Models.ValidationRules? ParseRules(string? json)
+  {
+    if (string.IsNullOrWhiteSpace(json)) return null;
+    try { return JsonSerializer.Deserialize<Compass.Models.ValidationRules>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }); }
+    catch { return null; }
+  }
+
+  string FormatValueType(Compass.Models.ValueType vt) => vt switch
+  {
+    Compass.Models.ValueType.Text => "Text",
+    Compass.Models.ValueType.Number => "Whole number",
+    Compass.Models.ValueType.Decimal => "Decimal",
+    Compass.Models.ValueType.Percentage => "Percentage",
+    _ => vt.ToString()
+  };
+
+  string Slugify(string title) => System.Text.RegularExpressions.Regex.Replace(title.Trim().ToLowerInvariant(), @"[^a-z0-9]+", "-").Trim('-');
+}
+
+@section Breadcrumbs {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernPerformance")">Performance</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">Guidance</li>
+}
+
+<div class="admin-hub">
+ <div class="dfe-c-page-title dfe-c-mb-4">
+ <div class="dfe-c-page-title__caption">Performance</div>
+ <h1 class="dfe-c-page-title__heading">Metric guidance</h1>
+ <p class="dfe-c-page-title__lede govuk-body">Reference for all active performance metrics including descriptions, data types, validation rules and applicable criteria.</p>
+  </div>
+
+@if (Model.Count == 0)
+{
+ <p class="govuk-body dfe-c-text-muted">No active performance metrics found.</p>
+}
+else
+{
+  @* Same left-hand nav pattern as /modern/admin — bordered panel, navy header strip, admin-nav-link items *@
+  <div style="display:grid;grid-template-columns:17rem 1fr;gap:1.5rem;align-items:start;" id="guidance-layout">
+    <nav style="background:var(--white);border:1px solid var(--grey-2);position:sticky;top:1rem;align-self:start;max-height:calc(100vh - 2rem);" aria-label="Metric navigation">
+      <div style="padding:0.75rem 1rem;background:var(--grey-1);border-bottom:2px solid var(--navy);font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--navy);">Configuration areas</div>
+ <details class="admin-nav-group admin-nav-group--open" id="guidance-metric-nav" open>
+ <summary class="admin-nav-group__header">
+ <span class="admin-nav-group__icon-open" aria-hidden="true">−</span>
+ <span class="admin-nav-group__icon-closed" aria-hidden="true">+</span>
+          <span>Metrics (@Model.Count)</span>
+        </summary>
+ <div class="admin-nav-group__body" id="guidance-nav" style="max-height:min(28rem, calc(100vh - 14rem));overflow-y:auto;">
+        @foreach (var m in Model)
+        {
+          var slug = Slugify(m.Title);
+ <a href="#metric-@slug" class="admin-nav-link">@m.Title</a>
+        }
+      </div>
+      </details>
+    </nav>
+
+    <!-- Metric cards -->
+    <div>
+      <p class="govuk-body dfe-c-mb-4">There are <strong>@Model.Count</strong> active metrics.</p>
+
+      @foreach (var m in Model)
+      {
+        var rules = ParseRules(m.ValidationRules);
+        var phases = string.IsNullOrWhiteSpace(m.ApplicablePhases) ? null : m.ApplicablePhases.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var types = string.IsNullOrWhiteSpace(m.ApplicableTypes) ? null : m.ApplicableTypes.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var slug = Slugify(m.Title);
+
+        <div class="govuk-summary-card dfe-c-mb-4" id="metric-@slug">
+          <div class="govuk-summary-card__title-wrapper">
+            <h2 class="govuk-summary-card__title">@m.Title <span class="dfe-c-tag dfe-c-tag--grey govuk-!-margin-left-2" style="font-size:0.85rem;">@m.Identifier</span></h2>
+          </div>
+          <div class="govuk-summary-card__content">
+            <dl class="govuk-summary-list">
+              <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">Description</dt>
+                <dd class="govuk-summary-list__value">@m.Description</dd>
+              </div>
+              @if (!string.IsNullOrWhiteSpace(m.Purpose))
+              {
+              <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">Purpose</dt>
+                <dd class="govuk-summary-list__value">@m.Purpose</dd>
+              </div>
+              }
+              @if (!string.IsNullOrWhiteSpace(m.HintText))
+              {
+              <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">Hint</dt>
+                <dd class="govuk-summary-list__value">@m.HintText</dd>
+              </div>
+              }
+              <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">Data type</dt>
+                <dd class="govuk-summary-list__value">@FormatValueType(m.ValueType)</dd>
+              </div>
+              @if (rules != null)
+              {
+              <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">Validation rules</dt>
+                <dd class="govuk-summary-list__value">
+                  <ul class="govuk-list govuk-list--bullet govuk-!-margin-bottom-0">
+                    <li>Required: <strong>@(rules.Required ? "Yes" : "No")</strong></li>
+                    @if (rules.AllowNull)
+                    {
+                      <li>Allows "not captured"</li>
+                    }
+                    @if (rules.MinimumValue.HasValue)
+                    {
+                      <li>Minimum value: <strong>@rules.MinimumValue</strong></li>
+                    }
+                    @if (rules.MaximumValue.HasValue)
+                    {
+                      <li>Maximum value: <strong>@rules.MaximumValue</strong></li>
+                    }
+                    @if (rules.DecimalPlaces.HasValue)
+                    {
+                      <li>Decimal places: <strong>@rules.DecimalPlaces</strong></li>
+                    }
+                    @if (rules.Range != null)
+                    {
+                      <li>Range: @(rules.Range.Min?.ToString() ?? "—") to @(rules.Range.Max?.ToString() ?? "—")</li>
+                    }
+                  </ul>
+                </dd>
+              </div>
+              }
+              <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">Applicable phases</dt>
+                <dd class="govuk-summary-list__value">
+                  @if (phases == null || phases.Length == 0)
+                  {
+                    <span>All phases</span>
+                  }
+                  else
+                  {
+                    @string.Join(", ", phases)
+                  }
+                </dd>
+              </div>
+              <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">Applicable types</dt>
+                <dd class="govuk-summary-list__value">
+                  @if (types == null || types.Length == 0)
+                  {
+                    <span>All types</span>
+                  }
+                  else
+                  {
+                    @string.Join(", ", types)
+                  }
+                </dd>
+              </div>
+              <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">Valid from</dt>
+                <dd class="govuk-summary-list__value">@m.ValidFromMonth/@m.ValidFromYear</dd>
+              </div>
+            </dl>
+          </div>
+        </div>
+      }
+    </div>
+  </div>
+
+  <style>
+    @@media (max-width: 56.25rem) {
+      #guidance-layout { grid-template-columns: 1fr !important; }
+      #guidance-layout > nav { position: static !important; max-height: none !important; align-self: stretch !important; margin-bottom: 1rem; }
+      #guidance-nav { max-height: none !important; overflow: visible !important; }
+    }
+  </style>
+
+  <script>
+    (function () {
+      var nav = document.getElementById('guidance-nav');
+      if (!nav) return;
+      var links = nav.querySelectorAll('a.admin-nav-link');
+      var cards = [];
+      links.forEach(function (a) {
+        var id = a.getAttribute('href').replace('#', '');
+        var el = document.getElementById(id);
+        if (el) cards.push({ link: a, card: el });
+      });
+      if (!cards.length) return;
+
+      function update() {
+        var offset = 80;
+        var activeIdx = 0;
+        for (var i = 0; i < cards.length; i++) {
+          if (cards[i].card.getBoundingClientRect().top - offset <= 0) activeIdx = i;
+        }
+        links.forEach(function (a) { a.classList.remove('admin-nav-link--active'); });
+        cards[activeIdx].link.classList.add('admin-nav-link--active');
+      }
+
+      window.addEventListener('scroll', update, { passive: true });
+      update();
+    })();
+  </script>
+}
+</div>

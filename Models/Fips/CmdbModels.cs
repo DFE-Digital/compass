@@ -9,6 +9,10 @@ namespace Compass.Models.Fips;
 /// </summary>
 public class CmdbEntry
 {
+    /// <summary>Raw JSON object for this service offering row as returned by ServiceNow (used for snapshots and rule matching).</summary>
+    [JsonIgnore]
+    public string? RecordJson { get; set; }
+
     [JsonPropertyName("sys_id")]
     public string SysId { get; set; } = string.Empty;
     

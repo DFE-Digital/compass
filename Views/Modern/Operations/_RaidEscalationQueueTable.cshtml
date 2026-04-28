@@ -1,0 +1,69 @@
+@model IReadOnlyList<Compass.ViewModels.Modern.ModernRaidEscalationPendingRow>
+@{
+  var emptyMsg = ViewBag.RaidEscQueueEmpty as string ?? "Nothing in this queue.";
+  var returnTab = ViewBag.RaidEscReturnTab as string ?? "escalations";
+}
+@if (Model == null || Model.Count == 0)
+{
+  <p class="govuk-body dfe-c-text-muted govuk-!-margin-bottom-0">@emptyMsg</p>
+}
+else
+{
+  <div class="dfe-c-table-wrap">
+    <table id="raid-ops-escalations-pending" aria-label="Pending tier change requests" class="govuk-!-margin-bottom-0">
+      <thead>
+        <tr>
+          <th scope="col">Risk</th>
+          <th scope="col">Current (proposed)</th>
+          <th scope="col">Requested to</th>
+          <th scope="col">Requestor</th>
+          <th scope="col">Date</th>
+          <th scope="col">Rationale (snippet)</th>
+          <th scope="col" style="white-space:nowrap">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        @foreach (var row in Model)
+        {
+          var viewInRaidUrl = Url.Action("RiskDetail", "ModernRaid", new { id = row.RecordId });
+          <tr>
+            <td>
+              @if (row.RequestId is { } titleRequestId)
+              {
+                var actionUrl = Url.Action("RaidEscalationAction", "ModernOperations", new { requestId = titleRequestId, returnTab = returnTab });
+                <a class="dfe-c-link govuk-!-font-weight-bold" href="@actionUrl" title="Open the Operations view to approve or reject this tier request">@(!string.IsNullOrWhiteSpace(row.Title) ? row.Title : row.Reference)</a>
+                <div class="dfe-c-mono govuk-body-s dfe-c-text-muted">@row.Reference
+                  <span class="govuk-!-margin-left-1">· <a class="govuk-link govuk-link--no-visited-state" href="@viewInRaidUrl" rel="noopener noreferrer" target="_blank" title="Open the risk in RAID (read-only)">View in RAID</a></span>
+                </div>
+              }
+              else
+              {
+                <a class="dfe-c-link govuk-!-font-weight-bold" href="@viewInRaidUrl" title="View risk in RAID — no pending request record in Operations; fix data or submit a new tier change from RAID">@(!string.IsNullOrWhiteSpace(row.Title) ? row.Title : row.Reference)</a>
+                <div class="dfe-c-mono govuk-body-s dfe-c-text-muted">@row.Reference
+                  <span class="govuk-!-margin-left-1 dfe-c-text-muted">· <span class="govuk-!-font-size-16">No pending request id</span></span>
+                </div>
+              }
+            </td>
+            <td class="govuk-body-s">@row.CurrentTierLabel</td>
+            <td class="govuk-body-s">@row.ProposedTierLabel</td>
+            <td class="govuk-body-s">@row.RequestedBy</td>
+            <td class="govuk-body-s">@row.RequestedAt.ToString("d MMM yyyy")</td>
+            <td class="govuk-body-s" style="max-width:20rem; word-wrap:break-word;">
+              <span title="@row.FullReason">@(string.IsNullOrWhiteSpace(row.ReasonSnippet) ? "—" : row.ReasonSnippet)</span>
+            </td>
+            <td class="govuk-body-s" style="white-space: nowrap;">
+              @if (row.RequestId is { } qid)
+              {
+                <a class="govuk-button govuk-button--secondary" href="@Url.Action("RaidEscalationAction", "ModernOperations", new { requestId = qid, returnTab = returnTab })">Action request</a>
+              }
+              else
+              {
+                <span class="govuk-!-font-size-16 dfe-c-text-muted" title="The risk is in a proposed tier but there is no pending tier-change request in the database.">—</span>
+              }
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+}

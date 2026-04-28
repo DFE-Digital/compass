@@ -1,0 +1,81 @@
+@model Compass.ViewModels.Modern.PerfCommissionRow
+@{
+  var p = ViewBag.CommissionFieldPrefix as string ?? "scope";
+}
+<fieldset class="govuk-fieldset govuk-!-margin-top-6">
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Product rules (phase and type)</legend>
+ <p class="govuk-hint">Only products matching these rules appear on the commission and can submit returns. Leave a group unticked to allow <strong>any</strong> value (still subject to global reporting rules, for example decommissioned products stay excluded).</p>
+ <div class="govuk-form-group">
+ <fieldset class="govuk-fieldset">
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Phases in scope</legend>
+      @if (Model.CataloguePhaseOptions.Count == 0)
+      {
+     <p class="govuk-body-s govuk-hint">No active phases found in admin lookups. Add phases in Admin and return here.</p>
+      }
+      else
+      {
+        var selPhases = CommissionReportingProductScope.ParseCommaSeparatedValues(Model.InScopePhases);
+ <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes">
+          @for (var i = 0; i < Model.CataloguePhaseOptions.Count; i++)
+          {
+            var ph = Model.CataloguePhaseOptions[i];
+            var id = $"{p}-phase-{i}";
+ <div class="govuk-checkboxes__item">
+ <input class="govuk-checkboxes__input" id="@id" name="inScopePhases" type="checkbox" value="@ph" @(selPhases.Contains(ph) ? "checked" : null) />
+ <label class="govuk-label govuk-checkboxes__label" for="@id">@ph</label>
+            </div>
+          }
+        </div>
+      }
+    </fieldset>
+  </div>
+ <div class="govuk-form-group">
+ <fieldset class="govuk-fieldset">
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Product types in scope</legend>
+ <p class="govuk-hint govuk-!-margin-bottom-2">Uses the FIPS &quot;Type&quot; category on each product.</p>
+      @if (Model.CatalogueTypeOptions.Count == 0)
+      {
+     <p class="govuk-body-s govuk-hint">No active FIPS types found in admin lookups. Add types in Admin and return here.</p>
+      }
+      else
+      {
+        var selTypes = CommissionReportingProductScope.ParseCommaSeparatedValues(Model.InScopeTypes);
+ <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes">
+          @for (var i = 0; i < Model.CatalogueTypeOptions.Count; i++)
+          {
+            var ty = Model.CatalogueTypeOptions[i];
+            var id = $"{p}-type-{i}";
+ <div class="govuk-checkboxes__item">
+ <input class="govuk-checkboxes__input" id="@id" name="inScopeTypes" type="checkbox" value="@ty" @(selTypes.Contains(ty) ? "checked" : null) />
+ <label class="govuk-label govuk-checkboxes__label" for="@id">@ty</label>
+            </div>
+          }
+        </div>
+      }
+    </fieldset>
+  </div>
+</fieldset>
+
+<fieldset class="govuk-fieldset govuk-!-margin-top-6">
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Metrics to include</legend>
+ <p class="govuk-hint">Tick the metrics that may appear on this commission. On each product return, only metrics that are ticked here <strong>and</strong> apply to that product’s phase and type (per metric configuration) are shown. Leave all ticked to mean <strong>all</strong> enabled metrics valid for the commission period.</p>
+  @if (Model.MetricOptions.Count == 0)
+  {
+ <p class="govuk-body">No enabled metrics are valid for this commission end date yet.</p>
+  }
+  else
+  {
+    <div style="max-height:22rem;overflow:auto;border:1px solid #b1b4b6;padding:0.75rem 1rem;border-radius:4px;background:#fafafa;">
+ <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes">
+        @foreach (var m in Model.MetricOptions)
+        {
+          var id = $"{p}-metric-{m.Id}";
+ <div class="govuk-checkboxes__item">
+ <input class="govuk-checkboxes__input" id="@id" name="includedMetricIds" type="checkbox" value="@m.Id" @(m.Included ? "checked" : null) />
+ <label class="govuk-label govuk-checkboxes__label" for="@id"><span class="govuk-!-font-weight-bold">@m.Identifier</span> — @m.Title</label>
+          </div>
+        }
+      </div>
+    </div>
+  }
+</fieldset>

@@ -1,0 +1,89 @@
+@model Compass.ViewModels.Modern.CompassNotificationEmailLogPageViewModel
+@{
+  ViewData["Title"] = "Notification email log";
+}
+
+@section Breadcrumbs {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernAdmin")">Admin</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("NotificationSettings", "ModernAdminNotificationSettings")">Notification settings</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">Email log</li>
+}
+
+<div class="admin-hub">
+ <div class="dfe-c-flex--between dfe-c-mb-3" style="flex-wrap:wrap;gap:1rem;align-items:flex-start;">
+ <div class="dfe-c-page-title" style="margin:0;flex:1 1 20rem;">
+ <div class="dfe-c-page-title__caption">Administration</div>
+ <h1 class="dfe-c-page-title__heading">Notification email log</h1>
+ <p class="dfe-c-page-title__lede">
+      Audit of Compass notification emails. Rows are written when sending code calls <code class="govuk-body-s">ICompassNotificationEmailLogService</code>.
+    </p>
+    </div>
+ <div class="dfe-c-flex" style="gap:0.5rem;flex-wrap:wrap;">
+ <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("NotificationSettings", "ModernAdminNotificationSettings")">Notification settings</a>
+    </div>
+  </div>
+
+ @if (Model.TotalCount == 0)
+  {
+ <p class="govuk-body dfe-c-text-muted">No notification emails logged yet.</p>
+  }
+  else
+  {
+ <p class="govuk-body-s dfe-c-text-muted govuk-!-margin-bottom-3">@Model.TotalCount total · Page @Model.Page of @Model.TotalPages</p>
+ <div class="dfe-c-table-wrap">
+ <table>
+        <thead>
+          <tr>
+ <th data-sort-bound="1" class="sortable">Sent (UTC)</th>
+ <th data-sort-bound="1" class="sortable">Notification</th>
+ <th data-sort-bound="1" class="sortable">Recipient</th>
+ <th>Subject</th>
+ <th data-sort-bound="1" class="sortable">OK</th>
+ <th>Context</th>
+          </tr>
+        </thead>
+        <tbody>
+          @foreach (var r in Model.Rows)
+          {
+            <tr>
+              <td class="govuk-body-s">@r.SentAtUtc.ToString("yyyy-MM-dd HH:mm")</td>
+              <td class="govuk-body-s">
+                <span title="@r.EventKey">@r.EventDisplayName</span>
+              </td>
+              <td class="govuk-body-s">
+                @(string.IsNullOrEmpty(r.RecipientName) ? r.RecipientEmail : $"{r.RecipientName} ({r.RecipientEmail})")
+              </td>
+              <td class="govuk-body-s">@r.Subject</td>
+              <td>
+ @if (r.SendSucceeded)
+                {
+ <span class="dfe-c-tag dfe-c-tag--green">Yes</span>
+                }
+                else
+                {
+ <span class="dfe-c-tag dfe-c-tag--red">No</span>
+                }
+              </td>
+              <td class="govuk-body-s dfe-c-mono">@(string.IsNullOrEmpty(r.ContextReference) ? "—" : r.ContextReference)</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+
+ @if (Model.TotalPages > 1)
+    {
+ <nav class="dfe-c-flex govuk-!-margin-top-3" style="gap:0.75rem;align-items:center;flex-wrap:wrap;" aria-label="Pagination">
+ @if (Model.Page > 1)
+        {
+ <a class="govuk-link" href="@Url.Action("NotificationEmailLog", "ModernAdminNotificationSettings", new { page = Model.Page - 1 })">Previous</a>
+        }
+ @if (Model.Page < Model.TotalPages)
+        {
+ <a class="govuk-link" href="@Url.Action("NotificationEmailLog", "ModernAdminNotificationSettings", new { page = Model.Page + 1 })">Next</a>
+        }
+      </nav>
+    }
+  }
+</div>

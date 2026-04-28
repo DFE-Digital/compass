@@ -1,0 +1,178 @@
+@model Compass.ViewModels.Modern.ModernRaidAssumptionsPageViewModel
+@{
+  ViewData["Title"] = "RAID — Assumptions";
+  var formAction = "/modern/raid/assumptions";
+  var clearUrl = "/modern/raid/assumptions";
+  var activeTab = string.IsNullOrWhiteSpace(Model.ActiveTab) ? "open" : Model.ActiveTab;
+  var highCount = Model.Rows.Count(r => (r.Criticality ?? "").Contains("high", StringComparison.OrdinalIgnoreCase));
+  var mediumCount = Model.Rows.Count(r => (r.Criticality ?? "").Contains("medium", StringComparison.OrdinalIgnoreCase));
+  var lowCount = Model.Rows.Count(r => (r.Criticality ?? "").Contains("low", StringComparison.OrdinalIgnoreCase));
+  var closedCount = Model.Rows.Count(r => (r.Status ?? "").Contains("closed", StringComparison.OrdinalIgnoreCase));
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="/modern/raid/dashboard">RAID</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">Assumptions</li>
+}
+
+<div class="modern-work-page">
+  <div class="dfe-c-flex--between dfe-c-mb-3" style="flex-wrap:wrap;gap:1rem;">
+    <div class="dfe-c-page-title" style="margin:0;">
+      <div class="dfe-c-page-title__caption">RAID</div>
+      <h1 class="dfe-c-page-title__heading">Assumptions register</h1>
+      <p class="dfe-c-page-title__lede">Track planning assumptions that might change and require risk treatment (@Model.TotalFiltered matched).</p>
+    </div>
+    <a href="/modern/raid/assumptions/create" class="govuk-button">Add assumption</a>
+  </div>
+
+  <div class="dfe-c-card-grid dfe-c-mb-3" role="region" aria-label="Assumption summary for this page">
+    <div class="dfe-c-metric dfe-c-metric--red">
+      <div class="dfe-c-metric__number">@highCount</div>
+      <div class="dfe-c-metric__label">High</div>
+    </div>
+    <div class="dfe-c-metric dfe-c-metric--amber">
+      <div class="dfe-c-metric__number">@mediumCount</div>
+      <div class="dfe-c-metric__label">Medium</div>
+    </div>
+    <div class="dfe-c-metric dfe-c-metric--green">
+      <div class="dfe-c-metric__number">@lowCount</div>
+      <div class="dfe-c-metric__label">Low</div>
+    </div>
+    <div class="dfe-c-metric dfe-c-metric--grey">
+      <div class="dfe-c-metric__number">@closedCount</div>
+      <div class="dfe-c-metric__label">Closed (this page)</div>
+    </div>
+  </div>
+
+  <form method="get" action="@formAction" id="raid-asm-register-form" class="dfe-c-mb-3">
+    <input type="hidden" name="tab" value="@activeTab" />
+    <input type="hidden" name="page" value="1" />
+    <div id="search-and-filter">
+      <div class="filter-toolbar">
+        <div class="filter-toolbar__search-wrap">
+          <input type="search" name="search" id="raid-asm-search" value="@Model.Search" placeholder="Search assumption text…" class="filter-search" autocomplete="off" aria-label="Search assumptions" />
+          <button type="submit" class="govuk-button govuk-button--secondary filter-toolbar__search-submit">Search</button>
+        </div>
+        <button type="button" class="filter-toggle-btn" id="raid-asm-filter-btn" aria-expanded="false" aria-controls="raid-asm-filter-panel">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="flex-shrink:0;" aria-hidden="true"><path d="M1 3h14v1.5l-5 5V14l-4-2V9.5L1 4.5V3z"></path></svg>
+          <span class="filter-toggle-label">Filter</span>
+        </button>
+      </div>
+      <div class="filter-panel filter-panel--allwork" id="raid-asm-filter-panel">
+        <div class="filter-panel__grid">
+          <div>
+            <label for="raid-asm-project">Work item</label>
+            <select name="projectId" id="raid-asm-project" class="govuk-select">
+              <option value="">All</option>
+              @foreach (var o in Model.ProjectOptions)
+              {
+                if (Model.ProjectId == o.Id) { <option value="@o.Id" selected>@o.Name</option> }
+                else { <option value="@o.Id">@o.Name</option> }
+              }
+            </select>
+          </div>
+          <div>
+            <label for="raid-asm-cr">Criticality</label>
+            <select name="criticalityId" id="raid-asm-cr" class="govuk-select">
+              <option value="">All</option>
+              @foreach (var o in Model.CriticalityOptions)
+              {
+                if (Model.CriticalityId == o.Id) { <option value="@o.Id" selected>@o.Name</option> }
+                else { <option value="@o.Id">@o.Name</option> }
+              }
+            </select>
+          </div>
+          <div>
+            <label for="raid-asm-st">Status</label>
+            <select name="statusId" id="raid-asm-st" class="govuk-select">
+              <option value="">All</option>
+              @foreach (var o in Model.StatusOptions)
+              {
+                if (Model.StatusId == o.Id) { <option value="@o.Id" selected>@o.Name</option> }
+                else { <option value="@o.Id">@o.Name</option> }
+              }
+            </select>
+          </div>
+        </div>
+        <div class="filter-panel__actions" style="margin-top:0.75rem;display:flex;gap:0.5rem;flex-wrap:wrap;">
+          <button type="submit" class="govuk-button">Apply filters</button>
+          <a class="govuk-button govuk-button--secondary" href="@clearUrl">Clear</a>
+        </div>
+      </div>
+    </div>
+  </form>
+
+  <div class="tabs" role="tablist" aria-label="RAID assumption sections">
+    <a href="@($"/modern/raid/assumptions?tab=open&page=1&search={Uri.EscapeDataString(Model.Search ?? "")}&projectId={Model.ProjectId}&criticalityId={Model.CriticalityId}&statusId={Model.StatusId}")" class="tab @(activeTab == "open" ? "on" : "")" role="tab" aria-selected="@(activeTab == "open" ? "true" : "false")" aria-controls="raid-assumptions-open" id="tab-raid-assumptions-open">Open assumptions <span class="dfe-c-fw-regular">(@Model.OpenCount)</span></a>
+    <a href="@($"/modern/raid/assumptions?tab=closed&page=1&search={Uri.EscapeDataString(Model.Search ?? "")}&projectId={Model.ProjectId}&criticalityId={Model.CriticalityId}&statusId={Model.StatusId}")" class="tab @(activeTab == "closed" ? "on" : "")" role="tab" aria-selected="@(activeTab == "closed" ? "true" : "false")" aria-controls="raid-assumptions-closed" id="tab-raid-assumptions-closed">Closed assumptions <span class="dfe-c-fw-regular">(@Model.ClosedCount)</span></a>
+    <a href="@($"/modern/raid/assumptions?tab=all&page=1&search={Uri.EscapeDataString(Model.Search ?? "")}&projectId={Model.ProjectId}&criticalityId={Model.CriticalityId}&statusId={Model.StatusId}")" class="tab @(activeTab == "all" ? "on" : "")" role="tab" aria-selected="@(activeTab == "all" ? "true" : "false")" aria-controls="raid-assumptions-all" id="tab-raid-assumptions-all">All assumptions <span class="dfe-c-fw-regular">(@Model.AllCount)</span></a>
+  </div>
+
+  @if (Model.Rows.Count == 0)
+  {
+    <p class="govuk-body">No assumptions match your filters.</p>
+  }
+  else
+  {
+    <div class="dfe-c-table-wrap">
+      <table id="raid-assumptions-table">
+        <thead>
+          <tr>
+            <th data-sort-bound="1" class="sortable">Assumption</th>
+            <th data-sort-bound="1" class="sortable">Associated with</th>
+            <th data-sort-bound="1" class="sortable">Criticality</th>
+            <th data-sort-bound="1" class="sortable">Status</th>
+            <th data-sort-bound="1" class="sortable">Review</th>
+            <th data-sort-bound="1" class="sortable">Updated</th>
+          </tr>
+        </thead>
+        <tbody>
+          @foreach (var a in Model.Rows)
+          {
+            <tr>
+              <td>
+                <a class="govuk-link" href="/modern/raid/assumptions/@a.Id">@a.DescriptionSnippet</a>
+                <div class="dfe-c-body-s dfe-c-text-muted" style="margin-top:0.25rem;line-height:1.3;">A-@a.Id.ToString("D4")</div>
+              </td>
+              <td>
+                @if (a.AssociationUi == "work" && a.ProjectId.HasValue && !string.IsNullOrEmpty(a.ProjectTitle))
+                {
+                  <a class="govuk-link" href="@Url.Action("Detail", "ModernWork", new { id = a.ProjectId })">@a.ProjectTitle</a>
+                }
+                else if (a.AssociationUi == "product")
+                {
+                  @(a.ProductLabel ?? "—")
+                }
+                else
+                {
+                  @:Organisation
+                }
+              </td>
+              <td><span class="dfe-c-tag @((a.Criticality ?? "").Contains("high", StringComparison.OrdinalIgnoreCase) ? "dfe-c-tag--red" : (a.Criticality ?? "").Contains("medium", StringComparison.OrdinalIgnoreCase) ? "dfe-c-tag--amber" : "dfe-c-tag--green")">@((a.Criticality ?? "—").ToUpperInvariant())</span></td>
+              <td><span class="dfe-c-tag @((a.Status ?? "").Contains("closed", StringComparison.OrdinalIgnoreCase) ? "dfe-c-tag--green" : "dfe-c-tag--blue")">@((a.Status ?? "—").ToUpperInvariant())</span></td>
+              <td>@(a.ReviewDate.HasValue ? a.ReviewDate.Value.ToString("d MMM yyyy") : "—")</td>
+              <td>@a.Updated.ToString("d MMM yyyy")</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+  @if (Model.TotalPages > 1)
+  {
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:0.875rem;flex-wrap:wrap;gap:0.5rem;">
+      <p class="dfe-c-text-muted" style="margin:0;">Page @Model.Page of @Model.TotalPages</p>
+      <nav class="dfe-c-flex" style="gap:0.5rem;align-items:center;flex-wrap:wrap;" aria-label="Pagination">
+        @if (Model.Page > 1)
+        {
+          <a class="govuk-link" href="@($"/modern/raid/assumptions?tab={activeTab}&search={Uri.EscapeDataString(Model.Search ?? "")}&projectId={Model.ProjectId}&criticalityId={Model.CriticalityId}&statusId={Model.StatusId}&page={Model.Page - 1}")">Previous</a>
+        }
+        @if (Model.Page < Model.TotalPages)
+        {
+          <a class="govuk-link" href="@($"/modern/raid/assumptions?tab={activeTab}&search={Uri.EscapeDataString(Model.Search ?? "")}&projectId={Model.ProjectId}&criticalityId={Model.CriticalityId}&statusId={Model.StatusId}&page={Model.Page + 1}")">Next</a>
+        }
+      </nav>
+    </div>
+  }
+</div>

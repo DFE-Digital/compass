@@ -1,4 +1,5 @@
 @model IEnumerable<Compass.Models.Modern.Work.WorkItem>
+@using System.Linq
 @using Compass.Models.Modern.Work
 @{
     ViewData["Title"] = "Watching";
@@ -15,27 +16,8 @@
     var filterDirectorateId = ViewBag.FilterDirectorateId as int?;
     var filterSearch = ViewBag.Search as string;
     var filterStatus = ViewBag.StatusFilter as string;
-    string PhaseDfeClass(string? name) {
-        if (string.IsNullOrWhiteSpace(name) || name == "—") return "";
-        var n = name.Trim().ToLowerInvariant().Replace(" ", "-");
-        if (n.Contains("public") && n.Contains("beta")) return "dfe-c-phase--public-beta";
-        if (n.Contains("private") && n.Contains("beta")) return "dfe-c-phase--private-beta";
-        if (n.Contains("alpha")) return "dfe-c-phase--alpha";
-        if (n.Contains("live")) return "dfe-c-phase--live";
-        if (n.Contains("retired")) return "dfe-c-phase--retired";
-        if (n.Contains("discovery")) return "dfe-c-phase--discovery";
-        if (n.Contains("explore")) return "dfe-c-phase--explore";
-        return "";
-    }
-    string RagDfeClass(string? name) {
-        if (string.IsNullOrEmpty(name)) return "dfe-c-rag--tbc";
-        var n = name.ToLowerInvariant();
-        if (n.Contains("green")) return "dfe-c-rag--green";
-        if (n.Contains("amber") && n.Contains("red")) return "dfe-c-rag--amber";
-        if (n.Contains("red")) return "dfe-c-rag--red";
-        if (n.Contains("amber")) return "dfe-c-rag--amber";
-        return "dfe-c-rag--tbc";
-    }
+    var businessAreaByProjectId = ViewBag.BusinessAreaByProjectId as Dictionary<int, string> ?? new Dictionary<int, string>();
+    var monthlyColHeader = ViewBag.WatchingMonthlyColumnHeader as string ?? "Monthly update";
     string PriorityTagClass(string? name) {
         if (string.IsNullOrEmpty(name)) return "dfe-c-tag dfe-c-tag--grey";
         var s = name.ToLowerInvariant();
@@ -44,52 +26,39 @@
         if (s.Contains("low")) return "dfe-c-tag dfe-c-tag--green";
         return "dfe-c-tag dfe-c-tag--grey";
     }
-    string StatusTagClass(string? s) {
-        if (string.IsNullOrEmpty(s)) return "dfe-c-tag dfe-c-tag--grey";
-        var x = s.ToLowerInvariant();
-        if (x == "active") return "dfe-c-tag dfe-c-tag--green";
-        if (x == "paused") return "dfe-c-tag dfe-c-tag--amber";
-        if (x == "completed") return "dfe-c-tag dfe-c-tag--grey";
-        if (x == "cancelled") return "dfe-c-tag dfe-c-tag--red";
-        return "dfe-c-tag dfe-c-tag--grey";
-    }
-    string DirSummary(WorkItem w) =>
-        w.Directorates?.Any() == true
-            ? string.Join(", ", w.Directorates.Select(d => d.Division?.Name).Where(n => !string.IsNullOrEmpty(n)).Distinct().OrderBy(n => n))
-            : "—";
 }
 @section Breadcrumbs {
-    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
-    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="@Url.Action("Dashboard", "ModernWork")">Work</a></li>
-    <li class="dfe-c-breadcrumb__item" aria-current="page">Watching</li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernWork")">Work</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">Watching</li>
 }
 
 <div id="sc-work-watching" class="modern-work-page">
-  <div class="dfe-c-flex--between dfe-c-mb-3" style="flex-wrap:wrap;gap:1rem;">
-    <div class="dfe-c-page-title" style="margin:0;">
-      <div class="dfe-c-page-title__caption">Work</div>
-      <h1 class="dfe-c-page-title__heading">Watching</h1>
-      <p class="dfe-c-page-title__lede">@(count == 0 ? "Work items you have opted to watch appear here." : $"{count} work item{(count == 1 ? "" : "s")} on your watch list")</p>
+ <div class="dfe-c-flex--between dfe-c-mb-3" style="flex-wrap:wrap;gap:1rem;">
+ <div class="dfe-c-page-title" style="margin:0;">
+ <div class="dfe-c-page-title__caption">Work</div>
+ <h1 class="dfe-c-page-title__heading">Watching</h1>
+ <p class="dfe-c-page-title__lede">@(count == 0 ? "Work items you have opted to watch appear here." : $"{count} work item{(count == 1 ? "" : "s")} on your watch list")</p>
     </div>
   </div>
 
-  <form method="get" action="@Url.Action("Watching", "ModernWork")" id="watching-register-form" class="dfe-c-mb-3">
+ <form method="get" action="@Url.Action("Watching", "ModernWork")" id="watching-register-form" class="dfe-c-mb-3">
     <div id="search-and-filter">
-      <div class="filter-toolbar">
-        <div class="filter-toolbar__search-wrap">
-          <input type="search" name="search" id="watching-register-search" value="@filterSearch" placeholder="Search watched work…" class="filter-search" autocomplete="off" aria-label="Search watched work" />
-          <button type="submit" class="govuk-button govuk-button--secondary filter-toolbar__search-submit">Search</button>
+ <div class="filter-toolbar">
+ <div class="filter-toolbar__search-wrap">
+ <input type="search" name="search" id="watching-register-search" value="@filterSearch" placeholder="Search watched work…" class="filter-search" autocomplete="off" aria-label="Search watched work" />
+ <button type="submit" class="govuk-button govuk-button--secondary filter-toolbar__search-submit">Search</button>
         </div>
-        <button type="button" class="filter-toggle-btn" id="watching-filter-btn" aria-expanded="false" aria-controls="watching-filter-panel">
+ <button type="button" class="filter-toggle-btn" id="watching-filter-btn" aria-expanded="false" aria-controls="watching-filter-panel">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="flex-shrink:0;" aria-hidden="true"><path d="M1 3h14v1.5l-5 5V14l-4-2V9.5L1 4.5V3z"></path></svg>
-          <span class="filter-toggle-label">Filter</span>
+ <span class="filter-toggle-label">Filter</span>
         </button>
       </div>
-      <div class="filter-panel" id="watching-filter-panel">
-        <div class="filter-panel__grid">
+ <div class="filter-panel" id="watching-filter-panel">
+ <div class="filter-panel__grid">
       <div>
         <label for="watching-portfolio">Portfolio</label>
-        <select name="portfolioId" id="watching-portfolio" class="govuk-select">
+ <select name="portfolioId" id="watching-portfolio" class="govuk-select">
           <option value="">All portfolios (@portfolioCount)</option>
           @foreach (var p in portfolios)
           {
@@ -106,7 +75,7 @@
       </div>
       <div>
         <label for="watching-directorate">Directorate</label>
-        <select name="directorateId" id="watching-directorate" class="govuk-select">
+ <select name="directorateId" id="watching-directorate" class="govuk-select">
           <option value="">All directorates</option>
           @foreach (var d in directorates)
           {
@@ -123,7 +92,7 @@
       </div>
       <div>
         <label for="watching-status">Status</label>
-        <select name="status" id="watching-status" class="govuk-select">
+ <select name="status" id="watching-status" class="govuk-select">
           <option value="">All statuses</option>
           @foreach (var opt in workStatusOptions)
           {
@@ -139,9 +108,9 @@
         </select>
       </div>
         </div>
-        <div class="filter-panel__actions">
-          <button type="submit" class="govuk-button">Apply filters</button>
-          <a href="@Url.Action("Watching", "ModernWork")" class="govuk-link">Clear filters</a>
+ <div class="filter-panel__actions">
+ <button type="submit" class="govuk-button">Apply filters</button>
+ <a href="@Url.Action("Watching", "ModernWork")" class="govuk-link">Clear filters</a>
         </div>
       </div>
     </div>
@@ -149,69 +118,61 @@
 
   @if (count == 0)
   {
-    <p class="dfe-c-text-muted">No watched work items match these filters. Clear filters or open a work item and choose &quot;Follow this work item&quot; to add it to your list.</p>
+ <p class="dfe-c-text-muted">No watched work items match these filters. Clear filters or open a work item and choose &quot;Follow this work item&quot; to add it to your list.</p>
   }
   else
   {
-    <div class="dfe-c-table-wrap">
-      <table class="data-table">
+ <div class="dfe-c-table-wrap">
+      <table class="modern-work-table" id="work-watching-table">
         <thead>
           <tr>
-            <th>Work item</th>
-            <th>Portfolio</th>
-            <th>Directorate</th>
-            <th>Phase</th>
-            <th>Priority</th>
-            <th>RAG</th>
-            <th>Status</th>
-            <th>Updated</th>
+            <th scope="col">Work item</th>
+            <th scope="col">Business area</th>
+            <th scope="col">Priority</th>
+            <th scope="col">RAG</th>
+            <th scope="col">Primary contact</th>
+            <th scope="col">Tags</th>
+            <th scope="col">Status</th>
+            <th scope="col">@monthlyColHeader</th>
           </tr>
         </thead>
         <tbody>
         @foreach (var w in items)
         {
           var latestRag = w.RagHistory?.OrderByDescending(r => r.UpdatedAt).FirstOrDefault();
-          var ragName = latestRag?.RagStatus?.Name ?? "";
-          var rs = latestRag?.RagStatus;
           var phaseName = w.DeliveryPhaseId.HasValue && phaseNames.TryGetValue(w.DeliveryPhaseId.Value, out var ph) ? ph : null;
-          var phaseClass = PhaseDfeClass(phaseName);
-          var phaseDisplay = phaseClass != "" ? (phaseName ?? "").ToUpperInvariant() : (phaseName ?? "—");
           var priorityName = w.PriorityId.HasValue && priorityNames.TryGetValue(w.PriorityId.Value, out var pr) ? pr : null;
+          var pcName = ViewBag.PrimaryContactById is Dictionary<int, string> pcMap && pcMap.TryGetValue(w.Id, out var pc) ? pc : "—";
+          var baName = businessAreaByProjectId.TryGetValue(w.Id, out var ba) ? ba : "—";
+          var tagSummary = w.Tags == null || w.Tags.Count == 0 ? null : string.Join(", ", w.Tags.OrderBy(t => t.Name).Select(t => t.Name));
           <tr>
             <td>
-              <a href="@Url.Action("Detail", "ModernWork", new { id = w.Id })">@w.Title</a>
-              <span class="dfe-c-table-ref">WI-@w.Id.ToString("D8")</span>
+ <a href="@Url.Action("Detail", "ModernWork", new { id = w.Id })">@w.Title</a>
+ <div class="dfe-c-body-s dfe-c-text-muted" style="margin-top:0.25rem;line-height:1.3;">
+ WI-@w.Id.ToString("D8")@if (!string.IsNullOrEmpty(phaseName)) { <span aria-hidden="true"> · </span><span>@phaseName</span> }
+              </div>
             </td>
-            <td>@(w.PortfolioId.HasValue && portfolioNames.TryGetValue(w.PortfolioId.Value, out var pname) ? pname : "—")</td>
-            <td>@DirSummary(w)</td>
+            <td>@baName</td>
             <td>
-              @if (!string.IsNullOrEmpty(phaseClass))
+              @if (!string.IsNullOrEmpty(priorityName))
               {
-                <span class="dfe-c-phase @phaseClass">@phaseDisplay</span>
+ <span class="@PriorityTagClass(priorityName)">@priorityName.ToUpperInvariant()</span>
               }
               else
               {
-                <span>@(phaseName ?? "—")</span>
+ <span class="dfe-c-text-muted">—</span>
               }
             </td>
-            <td><span class="@PriorityTagClass(priorityName)">@((priorityName ?? "—").ToUpperInvariant())</span></td>
-            <td>
-              @if (rs != null && (!string.IsNullOrEmpty(rs.BackgroundColourKey) || !string.IsNullOrEmpty(rs.TextColourKey)))
-              {
-                <span class="rag-badge" style="@(string.IsNullOrEmpty(rs.BackgroundColourKey) ? "" : "background-color: var(--govuk-colour-" + rs.BackgroundColourKey + ");")@(string.IsNullOrEmpty(rs.TextColourKey) ? "" : " color: var(--govuk-colour-" + rs.TextColourKey + ");")">@((ragName ?? "—").ToUpperInvariant())</span>
-              }
-              else
-              {
-                <span class="dfe-c-rag @RagDfeClass(ragName)">@((ragName ?? "—").ToUpperInvariant())</span>
-              }
-            </td>
-            <td><span class="@StatusTagClass(w.Status)">@((w.Status ?? "—").ToUpperInvariant())</span></td>
-            <td>@w.UpdatedAt.ToString("d MMM yyyy")</td>
+            <td>@await Html.PartialAsync("_WorkRagBadge", latestRag)</td>
+            <td>@pcName</td>
+ <td class="dfe-c-body-s">@(string.IsNullOrEmpty(tagSummary) ? "—" : tagSummary)</td>
+ <td><span class="@WorkBadgeCss.StatusDfeTagClass(w.Status)">@w.Status</span></td>
+ <td><span class="dfe-c-text-muted">—</span></td>
           </tr>
         }
         </tbody>
       </table>
     </div>
-    <p class="dfe-c-text-muted" style="margin:0.875rem 0 0;">Showing @count work item@(count == 1 ? "" : "s")</p>
+ <p class="dfe-c-text-muted" style="margin:0.875rem 0 0;">Showing @count work item@(count == 1 ? "" : "s")</p>
   }
 </div>

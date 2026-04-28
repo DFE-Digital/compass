@@ -7,6 +7,7 @@ namespace Compass.Services;
 public class PermissionService : IPermissionService
 {
     private readonly CompassDbContext _context;
+    private readonly IGlobalFeatureToggleService _globalFeatures;
     private readonly ILogger<PermissionService> _logger;
 
     // Super Admin group name - users in this group have all permissions
@@ -15,9 +16,13 @@ public class PermissionService : IPermissionService
     // Central Operations Admin group name - default group with all permissions
     private const string CentralOpsAdminGroupName = "Central Operations Admin";
 
-    public PermissionService(CompassDbContext context, ILogger<PermissionService> logger)
+    public PermissionService(
+        CompassDbContext context,
+        IGlobalFeatureToggleService globalFeatures,
+        ILogger<PermissionService> logger)
     {
         _context = context;
+        _globalFeatures = globalFeatures;
         _logger = logger;
     }
 
@@ -30,19 +35,46 @@ public class PermissionService : IPermissionService
         return await IsInGroupAsync(userEmail, SuperAdminGroupName);
     }
 
+    /// <inheritdoc />
+    public async Task<bool> IsCentralOperationsAdminOrSuperAdminAsync(string userEmail)
+    {
+        if (string.IsNullOrWhiteSpace(userEmail))
+            return false;
+        if (await IsSuperAdminAsync(userEmail))
+            return true;
+        return await IsInGroupAsync(userEmail, CentralOpsAdminGroupName);
+    }
+
+    private const string AppAdminGroupName = "Admin";
+
+    /// <inheritdoc />
+    public async Task<bool> IsOperationConsoleUserAsync(string userEmail)
+    {
+        if (string.IsNullOrWhiteSpace(userEmail))
+            return false;
+        if (await IsSuperAdminAsync(userEmail))
+            return true;
+        if (await IsInGroupAsync(userEmail, CentralOpsAdminGroupName))
+            return true;
+        return await IsInGroupAsync(userEmail, AppAdminGroupName);
+    }
+
     public async Task<bool> HasPermissionAsync(string userEmail, string featureCode, PermissionType permission)
     {
         if (string.IsNullOrWhiteSpace(userEmail) || string.IsNullOrWhiteSpace(featureCode))
+            return false;
+
+        var userForFeature = await GetOrCreateUserAsync(userEmail);
+        if (userForFeature == null)
+            return false;
+        if (!await _globalFeatures.IsFeatureEnabledForUserAsync(featureCode, userForFeature.Id))
             return false;
 
         // Super admin has all permissions
         if (await IsSuperAdminAsync(userEmail))
             return true;
 
-        // Get or create user
-        var user = await GetOrCreateUserAsync(userEmail);
-        if (user == null)
-            return false;
+        var user = userForFeature;
 
         // Get user's groups
         var userGroups = await _context.UserGroups
@@ -61,7 +93,7 @@ public class PermissionService : IPermissionService
         var hasPermission = userGroups
             .SelectMany(g => g.GroupFeaturePermissions)
             .Any(gfp => gfp.Feature.Code.Equals(featureCode, StringComparison.OrdinalIgnoreCase) &&
-                       gfp.Feature.IsActive &&
+                       gfp.Feature.AccessMode != FeatureAccessMode.Off &&
                        gfp.Permission == permission);
 
         return hasPermission;
@@ -108,13 +140,15 @@ public class PermissionService : IPermissionService
         if (string.IsNullOrWhiteSpace(userEmail) || string.IsNullOrWhiteSpace(featureCode))
             return new List<PermissionType>();
 
-        // Super admin has all permissions
-        if (await IsSuperAdminAsync(userEmail))
-            return Enum.GetValues<PermissionType>().ToList();
-
         var user = await GetOrCreateUserAsync(userEmail);
         if (user == null)
             return new List<PermissionType>();
+        if (!await _globalFeatures.IsFeatureEnabledForUserAsync(featureCode, user.Id))
+            return new List<PermissionType>();
+
+        // Super admin has all permissions
+        if (await IsSuperAdminAsync(userEmail))
+            return Enum.GetValues<PermissionType>().ToList();
 
         // Get user's groups
         var userGroups = await _context.UserGroups
@@ -133,7 +167,7 @@ public class PermissionService : IPermissionService
         var permissions = userGroups
             .SelectMany(g => g.GroupFeaturePermissions)
             .Where(gfp => gfp.Feature.Code.Equals(featureCode, StringComparison.OrdinalIgnoreCase) &&
-                         gfp.Feature.IsActive)
+                         gfp.Feature.AccessMode != FeatureAccessMode.Off)
             .Select(gfp => gfp.Permission)
             .Distinct()
             .ToList();

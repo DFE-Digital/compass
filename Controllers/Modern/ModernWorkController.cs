@@ -1,15 +1,19 @@
+using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
 using ClosedXML.Excel;
 using Compass.Data;
+using Compass.Helpers;
 using Compass.Models;
 using Compass.Models.Modern.Work;
 using Compass.Services;
 using Compass.Services.Modern;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
+using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 
 namespace Compass.Controllers.Modern;
@@ -19,6 +23,16 @@ namespace Compass.Controllers.Modern;
 [Route("modern/work")]
 public class ModernWorkController : Controller
 {
+    private static string? ComposeMonthlyUpdateNarrativeForDisplay(ProjectMonthlyUpdate? mu)
+    {
+        if (mu == null) return null;
+        if (!string.IsNullOrWhiteSpace(mu.Narrative))
+            return mu.Narrative;
+        if (mu.MonthlyUpdateNarratives is { Count: > 0 })
+            return string.Join("\n\n", mu.MonthlyUpdateNarratives.OrderBy(n => n.CreatedAt).Select(n => n.Narrative));
+        return mu.Narrative;
+    }
+
     private readonly CompassDbContext _context;
     private readonly IModernWorkService _modernWork;
     private readonly INotificationRuleService _notificationRuleService;
@@ -37,6 +51,65 @@ public class ModernWorkController : Controller
         _notificationRuleService = notificationRuleService;
         _monthlyUpdateService = monthlyUpdateService;
         _logger = logger;
+    }
+
+    private static readonly HashSet<string> ValidMilestoneStatuses = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "not_started", "in_progress", "on_track", "at_risk", "delayed", "complete", "cancelled"
+    };
+
+    private static int[]? MergeWorkTagQuery(int? tagId, int[]? tagIds)
+    {
+        var list = new List<int>();
+        if (tagId.HasValue && tagId.Value > 0)
+            list.Add(tagId.Value);
+        if (tagIds != null)
+        {
+            foreach (var t in tagIds)
+            {
+                if (t > 0)
+                    list.Add(t);
+            }
+        }
+
+        var distinct = list.Distinct().ToArray();
+        return distinct.Length == 0 ? null : distinct;
+    }
+
+    private static void BindGovUkDate(
+        ModelStateDictionary modelState,
+        string modelKey,
+        int? day,
+        int? month,
+        int? year,
+        bool required,
+        out DateTime? dateUtc)
+    {
+        dateUtc = null;
+        var any = day.HasValue || month.HasValue || year.HasValue;
+        if (!required && !any)
+            return;
+
+        if (!day.HasValue || !month.HasValue || !year.HasValue)
+        {
+            modelState.AddModelError(modelKey, required ? "Enter the full date." : "Enter the full date or leave all fields blank.");
+            return;
+        }
+
+        if (day.Value is < 1 or > 31 || month.Value is < 1 or > 12 || year.Value is < 1000 or > 9999)
+        {
+            modelState.AddModelError(modelKey, "Enter a valid date.");
+            return;
+        }
+
+        try
+        {
+            dateUtc = new DateTime(year.Value, month.Value, day.Value, 0, 0, 0, DateTimeKind.Utc);
+        }
+        catch
+        {
+            modelState.AddModelError(modelKey, "Enter a valid date.");
+        }
     }
 
     [HttpGet("dashboard")]
@@ -65,11 +138,18 @@ public class ModernWorkController : Controller
     [HttpGet("index")]
     public async Task<IActionResult> Index(
         string? search,
-        int? portfolioId,
+        int? businessAreaId,
         int? directorateId,
         int? phaseId,
         int? ragId,
-        int? priorityId)
+        int? priorityId,
+        string? monthlyUpdate = null,
+        int? primaryContactUserId = null,
+        int? tagId = null,
+        [FromQuery] int[]? tagIds = null,
+        string? sort = null,
+        bool sd = false,
+        CancellationToken cancellationToken = default)
     {
         ViewBag.MainNavSection = "work";
         ViewBag.SubNavItem = "work-all";
@@ -78,36 +158,56 @@ public class ModernWorkController : Controller
         if (string.IsNullOrEmpty(userEmail))
             return Unauthorized();
 
-        var currentUser = await _context.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == userEmail.ToLower());
+        var currentUser = await _context.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == userEmail.ToLower(), cancellationToken);
         if (currentUser == null)
             return Unauthorized();
+
+        var mergedTags = MergeWorkTagQuery(tagId, tagIds);
 
         var vm = await _modernWork.BuildWorkRegisterAsync(
             isMyWork: false,
             search,
-            portfolioId,
+            portfolioId: null,
             directorateId,
             phaseId,
             ragId,
             priorityId,
-            monthlyUpdate: null,
+            monthlyUpdate,
             currentUser,
             userEmail,
-            Url);
+            Url,
+            registerTab: null,
+            registerPage: null,
+            registerPageSize: 20,
+            businessAreaId: businessAreaId,
+            primaryContactUserId: primaryContactUserId,
+            tagIds: mergedTags,
+            registerSort: sort,
+            registerSortDesc: sd,
+            cancellationToken);
 
         return View("~/Views/Modern/Work/Index.cshtml", vm);
     }
 
     [HttpGet("all")]
+    [HttpGet("/ModernWork/AllWork")]
     public async Task<IActionResult> AllWork(
         string? tab,
-        string? search,
-        int? portfolioId,
-        int? directorateId,
-        int? phaseId,
-        int? ragId,
-        int? priorityId,
-        string? monthlyUpdate)
+        [FromQuery(Name = "page")] int page = 1,
+        string? search = null,
+        int? businessAreaId = null,
+        int? directorateId = null,
+        int? phaseId = null,
+        int? ragId = null,
+        int? priorityId = null,
+        string? monthlyUpdate = null,
+        int? primaryContactUserId = null,
+        int? tagId = null,
+        [FromQuery] int[]? tagIds = null,
+        bool mine = false,
+        string? sort = null,
+        bool sd = false,
+        CancellationToken cancellationToken = default)
     {
         ViewBag.MainNavSection = "work";
         ViewBag.SubNavItem = "work-allwork";
@@ -116,7 +216,7 @@ public class ModernWorkController : Controller
         if (string.IsNullOrEmpty(userEmail))
             return Unauthorized();
 
-        var currentUser = await _context.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == userEmail.ToLower());
+        var currentUser = await _context.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == userEmail.ToLower(), cancellationToken);
         if (currentUser == null)
             return Unauthorized();
 
@@ -128,10 +228,14 @@ public class ModernWorkController : Controller
             _ => "active"
         };
 
+        var safePage = page < 1 ? 1 : page;
+
+        var mergedTags = MergeWorkTagQuery(tagId, tagIds);
+
         var vm = await _modernWork.BuildWorkRegisterAsync(
-            isMyWork: false,
+            isMyWork: mine,
             search,
-            portfolioId,
+            portfolioId: null,
             directorateId,
             phaseId,
             ragId,
@@ -139,28 +243,47 @@ public class ModernWorkController : Controller
             monthlyUpdate,
             currentUser,
             userEmail,
-            Url);
+            Url,
+            registerTab: activeTab,
+            registerPage: safePage,
+            registerPageSize: 20,
+            businessAreaId: businessAreaId,
+            primaryContactUserId: primaryContactUserId,
+            tagIds: mergedTags,
+            registerSort: sort,
+            registerSortDesc: sd,
+            cancellationToken);
+
+        vm.ActiveFilterChips = SearchAndFilterActiveChipsBuilder.ForWorkRegister(
+            vm, Url, nameof(AllWork), "ModernWork", activeTab);
 
         var allWorkUrl = Url.Action(nameof(AllWork), "ModernWork") ?? "/modern/work/all";
         ViewBag.SearchAndFilter = new Compass.Models.SearchAndFilterViewModel
         {
             IdPrefix = "work",
-            SearchPlaceholder = "Search work items…",
+            SearchPlaceholder = "Search titles, aims and tag names…",
             SearchValue = search,
-            FormActionUrl = Url.Action(nameof(AllWork), "ModernWork", new { tab = activeTab }) ?? allWorkUrl,
+            FormActionUrl = Url.Action(nameof(AllWork), "ModernWork", new { tab = activeTab, page = 1 }) ?? allWorkUrl,
             FormMethod = "get",
             ClearUrl = Url.Action(nameof(AllWork), "ModernWork", new { tab = activeTab }) ?? allWorkUrl,
+            ActiveChips = vm.ActiveFilterChips,
             SecondaryActionUrl = Url.Action(nameof(ExportRegister), "ModernWork", new
             {
                 scope = "allwork",
                 tab = activeTab,
                 search,
-                portfolioId,
+                businessAreaId,
                 directorateId,
                 phaseId,
                 ragId,
                 priorityId,
-                monthlyUpdate
+                monthlyUpdate,
+                primaryContactUserId,
+                tagId,
+                tagIds = mergedTags,
+                mine,
+                sort,
+                sd
             }),
             SecondaryActionLabel = "Export this view",
             Fields = new List<Compass.Models.SearchAndFilterFieldViewModel>()
@@ -172,22 +295,31 @@ public class ModernWorkController : Controller
     }
 
     [HttpGet("export-register")]
-    public async Task<IActionResult> ExportRegister(string? scope, string? tab, string? search, int? portfolioId, int? directorateId, int? phaseId, int? ragId, int? priorityId, string? monthlyUpdate)
+    public async Task<IActionResult> ExportRegister(string? scope, string? tab, string? search, int? portfolioId, int? businessAreaId, int? directorateId, int? phaseId, int? ragId, int? priorityId, string? monthlyUpdate,
+        int? primaryContactUserId = null,
+        int? tagId = null,
+        [FromQuery] int[]? tagIds = null,
+        bool mine = false,
+        string? sort = null,
+        bool sd = false,
+        CancellationToken cancellationToken = default)
     {
         var scopeLabel = string.IsNullOrWhiteSpace(scope) ? "allwork" : scope.Trim().ToLowerInvariant();
         var userEmail = User.Identity?.Name;
         if (string.IsNullOrEmpty(userEmail))
             return Unauthorized();
 
-        var currentUser = await _context.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == userEmail.ToLower());
+        var currentUser = await _context.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == userEmail.ToLower(), cancellationToken);
         if (currentUser == null)
             return Unauthorized();
 
         var normalizedTab = (tab ?? "active").Trim().ToLowerInvariant();
         var exportTab = normalizedTab is "completed" or "cancelled" or "all" ? normalizedTab : "active";
 
+        var mergedTags = MergeWorkTagQuery(tagId, tagIds);
+
         var vm = await _modernWork.BuildWorkRegisterAsync(
-            isMyWork: false,
+            mine,
             search,
             portfolioId,
             directorateId,
@@ -197,7 +329,16 @@ public class ModernWorkController : Controller
             monthlyUpdate,
             currentUser,
             userEmail,
-            Url);
+            Url,
+            registerTab: null,
+            registerPage: null,
+            registerPageSize: 20,
+            businessAreaId: businessAreaId,
+            primaryContactUserId: primaryContactUserId,
+            tagIds: mergedTags,
+            registerSort: sort,
+            registerSortDesc: sd,
+            cancellationToken);
 
         IEnumerable<WorkRegisterRow> rows = exportTab switch
         {
@@ -225,7 +366,7 @@ public class ModernWorkController : Controller
         worksheet.Cell(1, 1).Value = "Work item";
         worksheet.Cell(1, 2).Value = "Reference";
         worksheet.Cell(1, 3).Value = "Status";
-        worksheet.Cell(1, 4).Value = "Directorate";
+        worksheet.Cell(1, 4).Value = "Business area";
         worksheet.Cell(1, 5).Value = "SRO";
         worksheet.Cell(1, 6).Value = "Primary contact";
         worksheet.Cell(1, 7).Value = "Portfolio";
@@ -237,6 +378,7 @@ public class ModernWorkController : Controller
         worksheet.Cell(1, 13).Value = "Risk ref";
         worksheet.Cell(1, 14).Value = "Completed";
         worksheet.Cell(1, 15).Value = "Cancelled reason";
+        worksheet.Cell(1, 16).Value = "Tags";
 
         var rowNumber = 2;
         foreach (var row in rows)
@@ -244,7 +386,7 @@ public class ModernWorkController : Controller
             worksheet.Cell(rowNumber, 1).Value = row.Title ?? "";
             worksheet.Cell(rowNumber, 2).Value = "WI-" + row.Id.ToString("D8", CultureInfo.InvariantCulture);
             worksheet.Cell(rowNumber, 3).Value = row.Status ?? "";
-            worksheet.Cell(rowNumber, 4).Value = row.DirectorateSummary ?? "";
+            worksheet.Cell(rowNumber, 4).Value = row.BusinessAreaName ?? row.DirectorateSummary ?? "";
             worksheet.Cell(rowNumber, 5).Value = row.SroDisplayName ?? "";
             worksheet.Cell(rowNumber, 6).Value = row.PrimaryContactName ?? "";
             worksheet.Cell(rowNumber, 7).Value = row.PortfolioName ?? "";
@@ -256,13 +398,14 @@ public class ModernWorkController : Controller
             worksheet.Cell(rowNumber, 13).Value = row.FirstRiskReference ?? "";
             worksheet.Cell(rowNumber, 14).Value = row.CompletedAt ?? "";
             worksheet.Cell(rowNumber, 15).Value = row.CancelledReason ?? "";
+            worksheet.Cell(rowNumber, 16).Value = row.TagNamesSummary ?? "";
             rowNumber++;
         }
 
-        var headerRange = worksheet.Range(1, 1, 1, 15);
+        var headerRange = worksheet.Range(1, 1, 1, 16);
         headerRange.Style.Font.Bold = true;
         worksheet.SheetView.FreezeRows(1);
-        worksheet.Columns(1, 15).AdjustToContents();
+        worksheet.Columns(1, 16).AdjustToContents();
     }
 
     [HttpGet("create")]
@@ -304,9 +447,16 @@ public class ModernWorkController : Controller
         int[]? priorityOutcomeIds,
         int[]? missionPillarIds,
         int[]? governmentDepartmentIds,
+        int[]? workTagIds,
         string? initialRagJustification,
         string? multiDept,
         int? businessCaseId,
+        int? startDay,
+        int? startMonth,
+        int? startYear,
+        int? targetEndDay,
+        int? targetEndMonth,
+        int? targetEndYear,
         CancellationToken cancellationToken = default)
     {
         ViewBag.MainNavSection = "work";
@@ -325,6 +475,15 @@ public class ModernWorkController : Controller
         priorityOutcomeIds ??= Array.Empty<int>();
         missionPillarIds ??= Array.Empty<int>();
         governmentDepartmentIds ??= Array.Empty<int>();
+        workTagIds ??= Array.Empty<int>();
+
+        BindGovUkDate(ModelState, nameof(model.StartDate), startDay, startMonth, startYear, required: true, out var startUtc);
+        if (startUtc.HasValue)
+            model.StartDate = startUtc;
+
+        BindGovUkDate(ModelState, nameof(model.TargetEndDate), targetEndDay, targetEndMonth, targetEndYear, required: false, out var targetUtc);
+        if (!ModelState.ContainsKey(nameof(model.TargetEndDate)))
+            model.TargetEndDate = targetUtc;
 
         if (string.IsNullOrWhiteSpace(model.Title))
             ModelState.AddModelError(nameof(model.Title), "Enter a title.");
@@ -338,7 +497,7 @@ public class ModernWorkController : Controller
             ModelState.AddModelError(nameof(model.PriorityId), "Select a priority.");
         if (!model.ActivityTypeId.HasValue)
             ModelState.AddModelError(nameof(model.ActivityTypeId), "Select an activity type.");
-        if (!model.StartDate.HasValue)
+        if (!model.StartDate.HasValue && !ModelState.ContainsKey(nameof(model.StartDate)))
             ModelState.AddModelError(nameof(model.StartDate), "Enter a start date.");
 
         if (!ModelState.IsValid)
@@ -347,6 +506,7 @@ public class ModernWorkController : Controller
             ViewBag.SelectedDirectorateIds = directorateIds;
             ViewBag.SelectedPriorityOutcomeIds = priorityOutcomeIds;
             ViewBag.SelectedMissionPillarIds = missionPillarIds;
+            ViewBag.SelectedWorkTagIds = workTagIds;
             ViewBag.InitialRagJustification = initialRagJustification;
             return View("~/Views/Modern/Work/Create.cshtml", model);
         }
@@ -434,6 +594,19 @@ public class ModernWorkController : Controller
             });
         }
 
+        var activeTagIds = await _context.WorkItemTagLookups.AsNoTracking()
+            .Where(t => t.IsActive && workTagIds.Contains(t.Id))
+            .Select(t => t.Id)
+            .ToListAsync(cancellationToken);
+        foreach (var tagId in activeTagIds.Distinct())
+        {
+            _context.ProjectWorkItemTags.Add(new ProjectWorkItemTag
+            {
+                ProjectId = project.Id,
+                WorkItemTagLookupId = tagId
+            });
+        }
+
         if (model.RagStatusId.HasValue)
         {
             var ragName = await _context.RagStatusLookups.AsNoTracking()
@@ -474,7 +647,9 @@ public class ModernWorkController : Controller
     private async Task PopulateWorkCreateViewBagAsync(int? businessCaseId, CancellationToken cancellationToken)
     {
         var orgGroups = await _context.OrganizationalGroups.AsNoTracking().Where(g => g.IsActive).OrderBy(g => g.Name).ToListAsync(cancellationToken);
-        ViewBag.Portfolios = orgGroups.Select(g => new Portfolio { Id = g.Id, Name = g.Name, IsActive = true }).ToList();
+
+        var businessAreas = await _context.BusinessAreaLookups.AsNoTracking().Where(b => b.IsActive).OrderBy(b => b.SortOrder).ThenBy(b => b.Name).ToListAsync(cancellationToken);
+        ViewBag.Portfolios = businessAreas.Select(b => new Portfolio { Id = b.Id, Name = b.Name, IsActive = true }).ToList();
 
         var directorates = await _context.Divisions.AsNoTracking().Where(d => d.IsActive).OrderBy(d => d.Name)
             .Select(d => new Directorate { Id = d.Id, Name = d.Name, IsActive = true }).ToListAsync(cancellationToken);
@@ -518,6 +693,12 @@ public class ModernWorkController : Controller
         ViewBag.SelectedDirectorateIds = Array.Empty<int>();
         ViewBag.SelectedPriorityOutcomeIds = Array.Empty<int>();
         ViewBag.SelectedMissionPillarIds = Array.Empty<int>();
+        ViewBag.WorkTagOptions = await _context.WorkItemTagLookups.AsNoTracking()
+            .Where(t => t.IsActive)
+            .OrderBy(t => t.SortOrder).ThenBy(t => t.Name)
+            .Select(t => new LookupOption { Id = t.Id, Name = t.Name ?? "", Value = t.Name ?? "" })
+            .ToListAsync(cancellationToken);
+        ViewBag.SelectedWorkTagIds = Array.Empty<int>();
         ViewBag.InitialRagJustification = null;
         ViewBag.FromDemand = null;
         ViewBag.FromBusinessCase = null;
@@ -530,12 +711,23 @@ public class ModernWorkController : Controller
         }
     }
 
-    /// <summary>Bridge to legacy monthly update entry for the current reporting month.</summary>
+    /// <summary>Start a monthly return for the given period (from reporting table) — modern monthly report flow.</summary>
     [HttpGet("{id:int}/monthly-update/add")]
-    public IActionResult AddMonthlyUpdate(int id)
+    public IActionResult AddMonthlyUpdate(int id, [FromQuery] string? periodKey)
     {
+        if (!string.IsNullOrWhiteSpace(periodKey))
+        {
+            var parts = periodKey.Split('-', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (parts.Length >= 2 && int.TryParse(parts[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out var y)
+                && int.TryParse(parts[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var m)
+                && m is >= 1 and <= 12)
+            {
+                return RedirectToAction(nameof(MonthlyReport), new { id, year = y, month = m });
+            }
+        }
+
         var now = DateTime.UtcNow;
-        return RedirectToAction("CreateUpdate", "MilestonesUpdatesSuccesses", new { projectId = id, year = now.Year, month = now.Month });
+        return RedirectToAction(nameof(MonthlyReport), new { id, year = now.Year, month = now.Month });
     }
 
     /// <summary>View a submitted monthly update (modern UI). Matches <c>/ModernWork/ViewMonthlyUpdate/{id}?updateId=</c> from default MVC routes.</summary>
@@ -554,9 +746,13 @@ public class ModernWorkController : Controller
             return Unauthorized();
 
         var mu = await _context.ProjectMonthlyUpdates.AsNoTracking()
+            .Include(m => m.MonthlyUpdateNarratives)
             .FirstOrDefaultAsync(m => m.Id == updateId && m.ProjectId == id, cancellationToken);
         if (mu == null)
             return NotFound();
+
+        if (!mu.SubmittedAt.HasValue)
+            return RedirectToAction(nameof(MonthlyReport), new { id, year = mu.Year, month = mu.Month });
 
         var work = await _modernWork.PopulateWorkDetailAsync(
             this,
@@ -576,10 +772,12 @@ public class ModernWorkController : Controller
             Id = mu.Id,
             WorkItemId = mu.ProjectId,
             ReportMonth = new DateTime(mu.Year, mu.Month, 1, 0, 0, 0, DateTimeKind.Utc),
-            Narrative = mu.Narrative,
+            Narrative = ComposeMonthlyUpdateNarrativeForDisplay(mu),
             SubmittedAt = mu.SubmittedAt,
             SubmittedByUserId = mu.CreatedByUserId,
-            SubmittedBy = mu.CreatedByName ?? (mu.SubmittedAt.HasValue ? mu.CreatedByEmail : null)
+            SubmittedBy = mu.CreatedByName ?? (mu.SubmittedAt.HasValue ? mu.CreatedByEmail : null),
+            PermFte = mu.MonthlyPermFte,
+            MspFte = mu.MonthlyMspFte
         };
 
         if (mu.CreatedByUserId.HasValue)
@@ -593,37 +791,51 @@ public class ModernWorkController : Controller
             ViewBag.SubmittedByName = vm.SubmittedBy ?? "—";
         }
 
-        var submittedAt = mu.SubmittedAt ?? DateTime.MinValue;
-        var nearestRag = await _context.ProjectRagHistories.AsNoTracking()
-            .Include(r => r.RagStatusLookup)
-            .Where(r => r.ProjectId == id && r.ChangedAt <= submittedAt)
-            .OrderByDescending(r => r.ChangedAt)
-            .FirstOrDefaultAsync(cancellationToken);
-        if (nearestRag == null)
+        if (mu.DraftRagStatusLookupId.HasValue)
         {
-            nearestRag = await _context.ProjectRagHistories.AsNoTracking()
+            vm.RagStatusId = mu.DraftRagStatusLookupId;
+            vm.RagJustification = mu.DraftRagJustification;
+            vm.PathToGreen = mu.DraftPathToGreen;
+        }
+        else
+        {
+            var ragHistDesc = await _context.ProjectRagHistories.AsNoTracking()
                 .Include(r => r.RagStatusLookup)
                 .Where(r => r.ProjectId == id)
                 .OrderByDescending(r => r.ChangedAt)
-                .FirstOrDefaultAsync(cancellationToken);
+                .ThenByDescending(r => r.Id)
+                .ToListAsync(cancellationToken);
+            var nearestRag = MonthlyUpdateSubmittedRagResolver.Resolve(ragHistDesc, mu.SubmittedAt!.Value)
+                ?? ragHistDesc.FirstOrDefault();
+            if (nearestRag != null)
+            {
+                vm.RagStatusId = nearestRag.RagStatusLookupId;
+                vm.RagJustification = nearestRag.Justification;
+                vm.PathToGreen = nearestRag.PathToGreen;
+            }
         }
 
-        if (nearestRag != null)
-        {
-            ViewBag.ViewUpdateRagStatusId = nearestRag.RagStatusLookupId;
-            ViewBag.ViewUpdateRagJustification = nearestRag.Justification;
-            ViewBag.ViewUpdatePathToGreen = nearestRag.PathToGreen;
-        }
+        var ragRows = await _context.RagStatusLookups.AsNoTracking()
+            .Where(r => r.IsActive)
+            .OrderBy(r => r.SortOrder)
+            .ToListAsync(cancellationToken);
+        ViewBag.RagStatusesDict = ragRows.ToDictionary(r => r.Id, r => r.Name);
+        ViewBag.RagBgByStatusId = new Dictionary<int, string?>();
+        ViewBag.RagTextByStatusId = new Dictionary<int, string?>();
+        ViewBag.RagCssClassByStatusId = ragRows.ToDictionary(r => r.Id, r => r.CssClass);
 
         var periodDue = _monthlyUpdateService.GetMonthlyUpdateDueDate(mu.Year, mu.Month);
         ViewBag.PeriodDueDate = periodDue;
         var canUnsubmit = mu.SubmittedAt.HasValue && DateTime.UtcNow.Date <= periodDue.Date;
         ViewBag.CanUnsubmit = canUnsubmit;
 
+        ViewBag.WorkChromeSubPage = true;
+        ViewBag.WorkChromeMinimalHeader = true;
+
         return View("~/Views/Modern/Work/ViewMonthlyUpdate.cshtml", vm);
     }
 
-    /// <summary>Edit draft monthly update — delegates to legacy Milestones/Updates flow.</summary>
+    /// <summary>Edit draft monthly return — modern monthly report flow.</summary>
     [HttpGet("{id:int}/monthly-update/edit")]
     [HttpGet("EditMonthlyUpdate/{id:int}")]
     [HttpGet("/ModernWork/EditMonthlyUpdate/{id:int}")]
@@ -635,7 +847,7 @@ public class ModernWorkController : Controller
             return NotFound();
         if (mu.SubmittedAt.HasValue)
             return RedirectToAction(nameof(ViewMonthlyUpdate), new { id, updateId });
-        return RedirectToAction("EditUpdate", "MilestonesUpdatesSuccesses", new { projectId = id, year = mu.Year, month = mu.Month });
+        return RedirectToAction(nameof(MonthlyReport), new { id, year = mu.Year, month = mu.Month });
     }
 
     [HttpPost("{id:int}/monthly-update/unsubmit")]
@@ -673,6 +885,480 @@ public class ModernWorkController : Controller
         return RedirectToAction(nameof(EditMonthlyUpdate), new { id, updateId });
     }
 
+    [HttpGet("{id:int}/monthly-report/{year:int}/{month:int}")]
+    public async Task<IActionResult> MonthlyReport(int id, int year, int month, CancellationToken cancellationToken = default)
+    {
+        if (month < 1 || month > 12)
+            return BadRequest("Invalid month.");
+
+        var vm = await LoadMonthlyReportViewModelAsync(id, year, month, posted: null, cancellationToken);
+        if (vm == null)
+            return NotFound();
+
+        return await MonthlyReportViewResultAsync(vm, cancellationToken);
+    }
+
+    [HttpPost("{id:int}/monthly-report/{year:int}/{month:int}")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> MonthlyReportPost(
+        int id, int year, int month,
+        string? narrative, decimal? permFte, decimal? mspFte,
+        int? ragStatusId, string? ragJustification, string? pathToGreen,
+        string? command,
+        CancellationToken cancellationToken = default)
+    {
+        if (month < 1 || month > 12)
+            return BadRequest("Invalid month.");
+
+        var userEmail = User.Identity?.Name;
+        if (string.IsNullOrEmpty(userEmail))
+            return Unauthorized();
+
+        var currentUser = await _context.Users
+            .FirstOrDefaultAsync(u => u.Email.ToLower() == userEmail.ToLower(), cancellationToken);
+
+        var project = await _context.Projects
+            .FirstOrDefaultAsync(p => p.Id == id && !p.IsDeleted, cancellationToken);
+        if (project == null)
+            return NotFound();
+
+        var explicitPm = _monthlyUpdateService.TryGetActiveExplicitReportingPeriod(year, month);
+        if (explicitPm != null &&
+            !_monthlyUpdateService.IsMonthlyReportEditingAllowed(year, month))
+        {
+            TempData["Error"] =
+                "This reporting period is not accepting submissions yet, or the submission window has closed.";
+            return RedirectToAction(nameof(MonthlyReport), new { id, year, month });
+        }
+
+        var existingForLock = await _context.ProjectMonthlyUpdates.AsNoTracking()
+            .FirstOrDefaultAsync(m => m.ProjectId == id && m.Year == year && m.Month == month, cancellationToken);
+        if (existingForLock?.SubmittedAt != null)
+        {
+            TempData["Error"] = "This monthly report has already been submitted.";
+            return RedirectToAction(nameof(MonthlyReport), new { id, year, month });
+        }
+
+        var isSubmit = string.Equals(command, "submit", StringComparison.OrdinalIgnoreCase);
+        var isSave = string.Equals(command, "save", StringComparison.OrdinalIgnoreCase);
+        if (!isSubmit && !isSave)
+            ModelState.AddModelError(string.Empty, "Choose Save as draft or Submit monthly report.");
+
+        RagStatusLookup? resolvedRag = null;
+        if (ragStatusId is { } ridPost)
+        {
+            resolvedRag = await _context.RagStatusLookups.AsNoTracking()
+                .FirstOrDefaultAsync(r => r.Id == ridPost && r.IsActive, cancellationToken);
+        }
+
+        ValidateMonthlyReportForm(
+            ModelState,
+            isSubmit,
+            narrative,
+            permFte,
+            mspFte,
+            ragStatusId,
+            resolvedRag,
+            ragJustification,
+            pathToGreen);
+
+        if (!ModelState.IsValid)
+        {
+            var posted = new MonthlyReportPostedForm(
+                narrative,
+                permFte,
+                mspFte,
+                ragStatusId,
+                ragJustification,
+                pathToGreen);
+            var vmInvalid = await LoadMonthlyReportViewModelAsync(id, year, month, posted, cancellationToken);
+            if (vmInvalid == null)
+                return NotFound();
+            return await MonthlyReportViewResultAsync(vmInvalid, cancellationToken);
+        }
+
+        var pathPersist = resolvedRag != null && MonthlyReportIsGreenRagName(resolvedRag.Name)
+            ? null
+            : pathToGreen;
+
+        var update = await _context.ProjectMonthlyUpdates
+            .FirstOrDefaultAsync(m => m.ProjectId == id && m.Year == year && m.Month == month, cancellationToken);
+
+        if (update == null)
+        {
+            update = new ProjectMonthlyUpdate
+            {
+                ProjectId = id,
+                Year = year,
+                Month = month,
+                CreatedAt = DateTime.UtcNow,
+                CreatedByEmail = userEmail,
+                CreatedByName = currentUser?.Name,
+                CreatedByUserId = currentUser?.Id
+            };
+            _context.ProjectMonthlyUpdates.Add(update);
+        }
+
+        update.Narrative = narrative ?? string.Empty;
+        update.MonthlyPermFte = permFte;
+        update.MonthlyMspFte = mspFte;
+        update.UpdatedAt = DateTime.UtcNow;
+
+        if (!isSubmit)
+        {
+            update.DraftRagStatusLookupId = ragStatusId;
+            update.DraftRagJustification = ragStatusId.HasValue ? ragJustification : null;
+            update.DraftPathToGreen = ragStatusId.HasValue ? pathPersist : null;
+        }
+        else
+        {
+            // Keep draft RAG fields as the submitted snapshot (used by work detail + ViewMonthlyUpdate).
+            update.DraftRagStatusLookupId = ragStatusId;
+            update.DraftRagJustification = ragStatusId.HasValue ? ragJustification : null;
+            update.DraftPathToGreen = ragStatusId.HasValue ? pathPersist : null;
+            if (ragStatusId.HasValue)
+            {
+                var ragEntry = new ProjectRagHistory
+                {
+                    ProjectId = id,
+                    RagStatusLookupId = ragStatusId.Value,
+                    Justification = ragJustification,
+                    PathToGreen = pathPersist,
+                    ChangedAt = DateTime.UtcNow,
+                    ChangedByEmail = userEmail,
+                    ChangedByName = currentUser?.Name
+                };
+                _context.ProjectRagHistories.Add(ragEntry);
+            }
+        }
+
+        if (isSubmit)
+            update.SubmittedAt = DateTime.UtcNow;
+
+        project.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync(cancellationToken);
+
+        TempData["Message"] = isSubmit
+            ? "Monthly update submitted successfully."
+            : "Monthly update saved as draft.";
+
+        return RedirectToAction(nameof(MonthlyReport), new { id, year, month });
+    }
+
+    [HttpPost("{id:int}/monthly-report/{year:int}/{month:int}/unsubmit")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> MonthlyReportUnsubmit(int id, int year, int month, CancellationToken cancellationToken = default)
+    {
+        var update = await _context.ProjectMonthlyUpdates
+            .FirstOrDefaultAsync(m => m.ProjectId == id && m.Year == year && m.Month == month, cancellationToken);
+        if (update == null)
+            return NotFound();
+
+        if (!update.SubmittedAt.HasValue)
+        {
+            TempData["Message"] = "This update is not submitted.";
+            return RedirectToAction(nameof(MonthlyReport), new { id, year, month });
+        }
+
+        var dueDate = _monthlyUpdateService.GetMonthlyUpdateDueDate(year, month);
+        if (DateTime.UtcNow.Date > dueDate.Date)
+        {
+            TempData["Error"] = "Unsubmit is only allowed before the period due date has passed.";
+            return RedirectToAction(nameof(MonthlyReport), new { id, year, month });
+        }
+
+        update.SubmittedAt = null;
+        var project = await _context.Projects.FirstOrDefaultAsync(p => p.Id == id && !p.IsDeleted, cancellationToken);
+        if (project != null)
+            project.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync(cancellationToken);
+
+        TempData["Message"] = "Monthly update unsubmitted. You can now edit and resubmit.";
+        return RedirectToAction(nameof(MonthlyReport), new { id, year, month });
+    }
+
+    private sealed record MonthlyReportPostedForm(
+        string? Narrative,
+        decimal? PermFte,
+        decimal? MspFte,
+        int? RagStatusId,
+        string? RagJustification,
+        string? PathToGreen);
+
+    private const int MonthlyReportMaxTextLength = 4000;
+    private const decimal MonthlyReportMaxHeadcount = 10000m;
+
+    private static bool MonthlyReportIsGreenRagName(string? name) =>
+        !string.IsNullOrEmpty(name) &&
+        string.Equals(name, "Green", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Server-side validation for monthly report. Path to green is required only when submitting with a non-green RAG (field not in scope when green).
+    /// Permanent FTE and MSC are required on submit only (draft save may omit them).
+    /// </summary>
+    private static void ValidateMonthlyReportForm(
+        ModelStateDictionary modelState,
+        bool isSubmit,
+        string? narrative,
+        decimal? permFte,
+        decimal? mspFte,
+        int? ragStatusId,
+        RagStatusLookup? resolvedRag,
+        string? ragJustification,
+        string? pathToGreen)
+    {
+        static bool FieldHasBinderError(ModelStateDictionary ms, string key) =>
+            ms.TryGetValue(key, out var entry) && entry!.Errors.Count > 0;
+
+        void MaxLen(string key, string? value, string label)
+        {
+            if (!string.IsNullOrEmpty(value) && value.Length > MonthlyReportMaxTextLength)
+                modelState.AddModelError(key, $"{label} must be {MonthlyReportMaxTextLength:N0} characters or fewer.");
+        }
+
+        MaxLen(nameof(narrative), narrative, "Monthly update narrative");
+        MaxLen(nameof(ragJustification), ragJustification, "Justification for RAG");
+        if (resolvedRag != null && !MonthlyReportIsGreenRagName(resolvedRag.Name))
+            MaxLen(nameof(pathToGreen), pathToGreen, "Path to green");
+
+        if (!FieldHasBinderError(modelState, nameof(permFte)) && permFte is { } p &&
+            (p < 0m || p > MonthlyReportMaxHeadcount))
+        {
+            modelState.AddModelError(nameof(permFte),
+                $"Permanent FTE must be between 0 and {MonthlyReportMaxHeadcount:N0}.");
+        }
+
+        if (!FieldHasBinderError(modelState, nameof(mspFte)) && mspFte is { } m &&
+            (m < 0m || m > MonthlyReportMaxHeadcount))
+        {
+            modelState.AddModelError(nameof(mspFte),
+                $"MSC number must be between 0 and {MonthlyReportMaxHeadcount:N0}.");
+        }
+
+        if (!isSubmit)
+            return;
+
+        if (string.IsNullOrWhiteSpace(narrative))
+            modelState.AddModelError(nameof(narrative), "Enter a monthly update narrative.");
+
+        if (!FieldHasBinderError(modelState, nameof(permFte)) && !permFte.HasValue)
+            modelState.AddModelError(nameof(permFte), "Enter permanent FTE.");
+
+        if (!FieldHasBinderError(modelState, nameof(mspFte)) && !mspFte.HasValue)
+            modelState.AddModelError(nameof(mspFte), "Enter MSC number.");
+
+        if (!ragStatusId.HasValue)
+        {
+            modelState.AddModelError("rag-status-group", "Select a RAG outcome.");
+        }
+        else if (resolvedRag == null)
+        {
+            modelState.AddModelError("rag-status-group", "Select a valid RAG outcome.");
+        }
+
+        if (string.IsNullOrWhiteSpace(ragJustification))
+            modelState.AddModelError(nameof(ragJustification), "Enter a justification for the RAG rating.");
+
+        var needsPathToGreen = resolvedRag != null && !MonthlyReportIsGreenRagName(resolvedRag.Name);
+        if (needsPathToGreen && string.IsNullOrWhiteSpace(pathToGreen))
+            modelState.AddModelError(nameof(pathToGreen), "Enter the path to green — describe how delivery confidence will return to green.");
+    }
+
+    private async Task<MonthlyReportViewModel?> LoadMonthlyReportViewModelAsync(
+        int id,
+        int year,
+        int month,
+        MonthlyReportPostedForm? posted,
+        CancellationToken cancellationToken)
+    {
+        if (month < 1 || month > 12)
+            return null;
+
+        var project = await _context.Projects.AsNoTracking()
+            .Include(p => p.PrimaryOrganizationalGroup)
+            .Include(p => p.PhaseLookup)
+            .Include(p => p.DeliveryPriority)
+            .FirstOrDefaultAsync(p => p.Id == id && !p.IsDeleted, cancellationToken);
+        if (project == null)
+            return null;
+
+        var update = await _context.ProjectMonthlyUpdates
+            .AsNoTracking()
+            .Include(m => m.MonthlyUpdateNarratives)
+            .FirstOrDefaultAsync(m => m.ProjectId == id && m.Year == year && m.Month == month, cancellationToken);
+
+        var ragHistDesc = await _context.ProjectRagHistories.AsNoTracking()
+            .Include(r => r.RagStatusLookup)
+            .Where(r => r.ProjectId == id)
+            .OrderByDescending(r => r.ChangedAt)
+            .ThenByDescending(r => r.Id)
+            .ToListAsync(cancellationToken);
+        var latestRag = ragHistDesc.FirstOrDefault();
+
+        var ragStatuses = await _context.RagStatusLookups.AsNoTracking()
+            .Where(r => r.IsActive)
+            .OrderBy(r => r.SortOrder)
+            .Select(r => new RagStatus { Id = r.Id, Name = r.Name, Description = r.Description })
+            .ToListAsync(cancellationToken);
+
+        var dueDate = _monthlyUpdateService.GetMonthlyUpdateDueDate(year, month);
+        var closeDate = _monthlyUpdateService.GetMonthlyUpdateCloseDate(year, month);
+        var canUnsubmit = update?.SubmittedAt != null && DateTime.UtcNow.Date <= dueDate.Date;
+
+        int? currentRagId = null;
+        string? currentRagJustification = null;
+        string? currentPathToGreen = null;
+
+        if (update?.SubmittedAt != null)
+        {
+            if (update.DraftRagStatusLookupId.HasValue)
+            {
+                currentRagId = update.DraftRagStatusLookupId;
+                currentRagJustification = update.DraftRagJustification;
+                currentPathToGreen = update.DraftPathToGreen;
+            }
+            else
+            {
+                var ragAtSubmit = MonthlyUpdateSubmittedRagResolver.Resolve(ragHistDesc, update.SubmittedAt.Value);
+                if (ragAtSubmit != null)
+                {
+                    currentRagId = ragAtSubmit.RagStatusLookupId;
+                    currentRagJustification = ragAtSubmit.Justification;
+                    currentPathToGreen = ragAtSubmit.PathToGreen;
+                }
+            }
+        }
+        else if (update != null && (update.DraftRagStatusLookupId.HasValue ||
+                                    !string.IsNullOrEmpty(update.DraftRagJustification) ||
+                                    !string.IsNullOrEmpty(update.DraftPathToGreen)))
+        {
+            currentRagId = update.DraftRagStatusLookupId;
+            currentRagJustification = update.DraftRagJustification;
+            currentPathToGreen = update.DraftPathToGreen;
+        }
+        else if (latestRag != null)
+        {
+            currentRagId = latestRag.RagStatusLookupId;
+            currentRagJustification = latestRag.Justification;
+            currentPathToGreen = latestRag.PathToGreen;
+        }
+
+        string? submittedByName = null;
+        if (update?.SubmittedAt != null)
+        {
+            submittedByName = update.CreatedByName;
+            if (string.IsNullOrEmpty(submittedByName) && update.CreatedByUserId.HasValue)
+            {
+                var sub = await _context.Users.AsNoTracking()
+                    .FirstOrDefaultAsync(u => u.Id == update.CreatedByUserId.Value, cancellationToken);
+                submittedByName = sub?.Name ?? sub?.Email;
+            }
+            submittedByName ??= update.CreatedByEmail ?? "Unknown";
+        }
+
+        var explicitPeriod =
+            _monthlyUpdateService.TryGetActiveExplicitReportingPeriod(year, month);
+
+        var vm = new MonthlyReportViewModel
+        {
+            WorkItemId = id,
+            WorkItemTitle = project.Title,
+            WorkItemReference = project.ProjectCode,
+            Year = year,
+            Month = month,
+            UpdateId = update?.Id,
+            IsSubmitted = update?.SubmittedAt.HasValue == true,
+            SubmittedAt = update?.SubmittedAt,
+            SubmittedByName = submittedByName,
+            Narrative = ComposeMonthlyUpdateNarrativeForDisplay(update),
+            PermFte = update?.MonthlyPermFte,
+            MspFte = update?.MonthlyMspFte,
+            RagStatusId = currentRagId,
+            RagJustification = currentRagJustification,
+            PathToGreen = currentPathToGreen,
+            DueDate = dueDate,
+            CloseDate = closeDate,
+            CanUnsubmit = canUnsubmit,
+            IsPastCloseDate = DateTime.UtcNow.Date > closeDate.Date,
+            UsesExplicitReportingPeriod = explicitPeriod != null,
+            CanEditMonthlySubmission = _monthlyUpdateService.IsMonthlyReportEditingAllowed(year, month),
+            RagStatuses = ragStatuses
+        };
+
+        var prevMonthDate = new DateTime(year, month, 1).AddMonths(-1);
+        var prevUpdate = await _context.ProjectMonthlyUpdates.AsNoTracking()
+            .FirstOrDefaultAsync(m => m.ProjectId == id && m.Year == prevMonthDate.Year && m.Month == prevMonthDate.Month,
+                cancellationToken);
+        if (prevUpdate != null)
+        {
+            string? prevRagName = null;
+            string? prevRagJust = null;
+            string? prevPtg = null;
+            var prevRag = MonthlyUpdateSubmittedRagResolver.Resolve(
+                ragHistDesc,
+                prevUpdate.SubmittedAt ?? prevUpdate.CreatedAt);
+            if (prevRag != null)
+            {
+                prevRagName = prevRag.RagStatusLookup?.Name;
+                prevRagJust = prevRag.Justification;
+                prevPtg = prevRag.PathToGreen;
+            }
+
+            vm.PreviousMonth = new MonthlyReportPreviousMonth
+            {
+                Year = prevMonthDate.Year,
+                Month = prevMonthDate.Month,
+                Narrative = prevUpdate.Narrative,
+                PermFte = prevUpdate.MonthlyPermFte,
+                MspFte = prevUpdate.MonthlyMspFte,
+                RagStatusName = prevRagName,
+                RagJustification = prevRagJust,
+                PathToGreen = prevPtg,
+                SubmittedAt = prevUpdate.SubmittedAt
+            };
+        }
+
+        if (posted != null)
+        {
+            vm.Narrative = posted.Narrative;
+            vm.PermFte = posted.PermFte;
+            vm.MspFte = posted.MspFte;
+            vm.RagStatusId = posted.RagStatusId;
+            vm.RagJustification = posted.RagJustification;
+            vm.PathToGreen = posted.PathToGreen;
+        }
+
+        return vm;
+    }
+
+    private async Task<IActionResult> MonthlyReportViewResultAsync(
+        MonthlyReportViewModel vm,
+        CancellationToken cancellationToken)
+    {
+        var work = await _modernWork.GetWorkItemAsync(vm.WorkItemId);
+        if (work == null)
+            return NotFound();
+
+        ViewBag.WorkItem = work;
+        ViewBag.WorkIdShort = work.Id.ToString("X8").ToUpperInvariant();
+        ViewBag.WorkChromeSubPage = true;
+        ViewBag.WorkChromeTabsAsLinks = true;
+        ViewBag.WorkChromeMinimalHeader = true;
+
+        var project = await _context.Projects.AsNoTracking()
+            .Include(p => p.PrimaryOrganizationalGroup)
+            .Include(p => p.PhaseLookup)
+            .Include(p => p.DeliveryPriority)
+            .FirstOrDefaultAsync(p => p.Id == vm.WorkItemId && !p.IsDeleted, cancellationToken);
+        ViewBag.PortfolioName = project?.PrimaryOrganizationalGroup?.Name;
+        ViewBag.DeliveryPhaseName = project?.PhaseLookup?.Name;
+        ViewBag.PriorityName = project?.DeliveryPriority?.Name;
+
+        ViewBag.MainNavSection = "work";
+        ViewBag.SubNavItem = "work-dashboard";
+        return View("~/Views/Modern/Work/MonthlyReport.cshtml", vm);
+    }
+
     [HttpGet("detail/{id:int}")]
     public async Task<IActionResult> Detail(
         int id,
@@ -702,6 +1388,395 @@ public class ModernWorkController : Controller
             return NotFound();
 
         return View("~/Views/Modern/Work/Detail.cshtml", work);
+    }
+
+    private async Task<IActionResult?> EnsureUserCanEditWorkAsync(int projectId, CancellationToken cancellationToken = default)
+    {
+        var userEmail = User.Identity?.Name;
+        if (string.IsNullOrEmpty(userEmail))
+            return Unauthorized();
+        if (!await _modernWork.CanUserEditWorkItemAsync(projectId, userEmail, cancellationToken))
+            return Forbid();
+        return null;
+    }
+
+    [HttpGet("{id:int}/strategic-alignment/edit")]
+    [HttpGet("/ModernWork/EditStrategicAlignment/{id:int}")]
+    public async Task<IActionResult> EditStrategicAlignment(int id, CancellationToken cancellationToken = default)
+    {
+        var userEmail = User.Identity?.Name;
+        if (string.IsNullOrEmpty(userEmail))
+            return Unauthorized();
+
+        var currentUser = await _context.Users
+            .FirstOrDefaultAsync(u => u.Email.ToLower() == userEmail.ToLower(), cancellationToken);
+        if (currentUser == null)
+            return Unauthorized();
+
+        var deny = await EnsureUserCanEditWorkAsync(id, cancellationToken);
+        if (deny != null)
+            return deny;
+
+        var work = await _modernWork.PopulateWorkDetailAsync(
+            this, id, currentUser, userEmail, "overview", null, cancellationToken);
+        if (work == null)
+            return NotFound();
+
+        ViewBag.PriorityOutcomes = await _context.Objectives.AsNoTracking()
+            .Where(o => !o.IsDeleted && o.Status == "active")
+            .OrderBy(o => o.Title)
+            .Select(o => new WorkLookupOption { Id = o.Id, Name = o.Title, Value = o.Title })
+            .ToListAsync(cancellationToken);
+        ViewBag.MissionPillars = await _context.Missions.AsNoTracking()
+            .Where(m => !m.IsDeleted)
+            .OrderBy(m => m.Title)
+            .Select(m => new WorkLookupOption { Id = m.Id, Name = m.Title, Value = m.Title })
+            .ToListAsync(cancellationToken);
+        ViewBag.Directorates = await _context.Divisions.AsNoTracking().Where(d => d.IsActive).OrderBy(d => d.Name)
+            .Select(d => new Directorate { Id = d.Id, Name = d.Name, IsActive = true }).ToListAsync(cancellationToken);
+
+        return View("~/Views/Modern/Work/EditStrategicAlignment.cshtml", work);
+    }
+
+    [HttpPost("{id:int}/strategic-alignment/edit")]
+    [HttpPost("/ModernWork/EditStrategicAlignment/{id:int}")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> EditStrategicAlignment(
+        int id,
+        bool? flagshipProject,
+        int[]? priorityOutcomeIds,
+        int[]? missionPillarIds,
+        int[]? directorateIds,
+        CancellationToken cancellationToken = default)
+    {
+        var deny = await EnsureUserCanEditWorkAsync(id, cancellationToken);
+        if (deny != null)
+            return deny;
+
+        priorityOutcomeIds ??= Array.Empty<int>();
+        missionPillarIds ??= Array.Empty<int>();
+        directorateIds ??= Array.Empty<int>();
+
+        var project = await _context.Projects
+            .Include(p => p.ProjectObjectives)
+            .Include(p => p.ProjectMissions)
+            .Include(p => p.Directorates)
+            .FirstOrDefaultAsync(p => p.Id == id && !p.IsDeleted, cancellationToken);
+        if (project == null)
+            return NotFound();
+
+        var now = DateTime.UtcNow;
+        project.IsFlagship = flagshipProject == true;
+        project.UpdatedAt = now;
+
+        _context.ProjectObjectives.RemoveRange(project.ProjectObjectives);
+        foreach (var objectiveId in priorityOutcomeIds.Distinct())
+        {
+            _context.ProjectObjectives.Add(new ProjectObjective
+            {
+                ProjectId = id,
+                ObjectiveId = objectiveId,
+                CreatedAt = now
+            });
+        }
+
+        _context.ProjectMissions.RemoveRange(project.ProjectMissions);
+        foreach (var missionId in missionPillarIds.Distinct())
+        {
+            _context.ProjectMissions.Add(new ProjectMission
+            {
+                ProjectId = id,
+                MissionId = missionId,
+                CreatedAt = now
+            });
+        }
+
+        _context.ProjectDirectorates.RemoveRange(project.Directorates);
+        foreach (var divId in directorateIds.Distinct())
+        {
+            _context.ProjectDirectorates.Add(new ProjectDirectorate
+            {
+                ProjectId = id,
+                DivisionId = divId,
+                CreatedAt = now
+            });
+        }
+
+        await _context.SaveChangesAsync(cancellationToken);
+        TempData["SuccessMessage"] = "Strategic alignment updated.";
+        return RedirectToAction(nameof(Detail), new { id, tab = "overview" });
+    }
+
+    [HttpGet("{id:int}/tags/edit")]
+    [HttpGet("/ModernWork/EditWorkTags/{id:int}")]
+    public async Task<IActionResult> EditWorkTags(int id, CancellationToken cancellationToken = default)
+    {
+        var userEmail = User.Identity?.Name;
+        if (string.IsNullOrEmpty(userEmail))
+            return Unauthorized();
+
+        var currentUser = await _context.Users
+            .FirstOrDefaultAsync(u => u.Email.ToLower() == userEmail.ToLower(), cancellationToken);
+        if (currentUser == null)
+            return Unauthorized();
+
+        var deny = await EnsureUserCanEditWorkAsync(id, cancellationToken);
+        if (deny != null)
+            return deny;
+
+        var work = await _modernWork.PopulateWorkDetailAsync(
+            this, id, currentUser, userEmail, "overview", null, cancellationToken);
+        if (work == null)
+            return NotFound();
+
+        ViewBag.WorkTagOptions = await _context.WorkItemTagLookups.AsNoTracking()
+            .Where(t => t.IsActive)
+            .OrderBy(t => t.SortOrder).ThenBy(t => t.Name)
+            .Select(t => new WorkLookupOption { Id = t.Id, Name = t.Name, Value = t.Description })
+            .ToListAsync(cancellationToken);
+
+        return View("~/Views/Modern/Work/EditWorkTags.cshtml", work);
+    }
+
+    [HttpPost("{id:int}/tags/edit")]
+    [HttpPost("/ModernWork/EditWorkTags/{id:int}")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> EditWorkTags(int id, int[]? workTagIds, CancellationToken cancellationToken = default)
+    {
+        var deny = await EnsureUserCanEditWorkAsync(id, cancellationToken);
+        if (deny != null)
+            return deny;
+
+        workTagIds ??= Array.Empty<int>();
+
+        var project = await _context.Projects
+            .Include(p => p.ProjectWorkItemTags)
+            .FirstOrDefaultAsync(p => p.Id == id && !p.IsDeleted, cancellationToken);
+        if (project == null)
+            return NotFound();
+
+        var now = DateTime.UtcNow;
+        project.UpdatedAt = now;
+
+        var validIds = await _context.WorkItemTagLookups.AsNoTracking()
+            .Where(t => t.IsActive && workTagIds.Contains(t.Id))
+            .Select(t => t.Id)
+            .ToListAsync(cancellationToken);
+
+        _context.ProjectWorkItemTags.RemoveRange(project.ProjectWorkItemTags);
+        foreach (var tagId in validIds.Distinct())
+        {
+            _context.ProjectWorkItemTags.Add(new ProjectWorkItemTag
+            {
+                ProjectId = id,
+                WorkItemTagLookupId = tagId
+            });
+        }
+
+        await _context.SaveChangesAsync(cancellationToken);
+        TempData["SuccessMessage"] = "Tags updated.";
+        return RedirectToAction(nameof(Detail), new { id, tab = "overview" });
+    }
+
+    [HttpPost("{id:int}/overview/title")]
+    [HttpPost("/ModernWork/UpdateWorkOverviewTitle/{id:int}")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdateWorkOverviewTitle(int id, [FromForm] string? title, CancellationToken cancellationToken = default)
+    {
+        var deny = await EnsureUserCanEditWorkAsync(id, cancellationToken);
+        if (deny != null)
+            return deny;
+
+        var t = (title ?? "").Trim();
+        if (string.IsNullOrEmpty(t))
+        {
+            TempData["ErrorMessage"] = "Enter a title.";
+            return RedirectToAction(nameof(Detail), new { id, tab = "overview" });
+        }
+
+        var project = await _context.Projects.FirstOrDefaultAsync(p => p.Id == id && !p.IsDeleted, cancellationToken);
+        if (project == null)
+            return NotFound();
+
+        project.Title = t;
+        project.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync(cancellationToken);
+        TempData["SuccessMessage"] = "Title updated.";
+        return RedirectToAction(nameof(Detail), new { id, tab = "overview" });
+    }
+
+    [HttpPost("{id:int}/overview/problem-statement")]
+    [HttpPost("/ModernWork/UpdateWorkOverviewProblemStatement/{id:int}")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdateWorkOverviewProblemStatement(int id, [FromForm] string? problemStatement, CancellationToken cancellationToken = default)
+    {
+        var deny = await EnsureUserCanEditWorkAsync(id, cancellationToken);
+        if (deny != null)
+            return deny;
+
+        var userEmail = User.Identity?.Name ?? "";
+        var currentUser = await _context.Users
+            .FirstOrDefaultAsync(u => u.Email.ToLower() == userEmail.ToLower(), cancellationToken);
+
+        var text = (problemStatement ?? "").Trim();
+        var project = await _context.Projects
+            .Include(p => p.ProblemStatements)
+            .FirstOrDefaultAsync(p => p.Id == id && !p.IsDeleted, cancellationToken);
+        if (project == null)
+            return NotFound();
+
+        var now = DateTime.UtcNow;
+        var latest = project.ProblemStatements.OrderByDescending(x => x.UpdatedAt).FirstOrDefault();
+        if (latest != null)
+        {
+            latest.ProblemStatement = text;
+            latest.UpdatedAt = now;
+        }
+        else
+        {
+            _context.ProjectProblemStatements.Add(new ProjectProblemStatement
+            {
+                ProjectId = id,
+                ProblemStatement = text,
+                CreatedByEmail = userEmail,
+                CreatedByName = currentUser?.Name,
+                CreatedAt = now,
+                UpdatedAt = now
+            });
+        }
+
+        project.UpdatedAt = now;
+        await _context.SaveChangesAsync(cancellationToken);
+        TempData["SuccessMessage"] = "Problem statement updated.";
+        return RedirectToAction(nameof(Detail), new { id, tab = "overview" });
+    }
+
+    [HttpPost("{id:int}/overview/aim")]
+    [HttpPost("/ModernWork/UpdateWorkOverviewAim/{id:int}")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdateWorkOverviewAim(int id, [FromForm] string? aim, CancellationToken cancellationToken = default)
+    {
+        var deny = await EnsureUserCanEditWorkAsync(id, cancellationToken);
+        if (deny != null)
+            return deny;
+
+        var project = await _context.Projects.FirstOrDefaultAsync(p => p.Id == id && !p.IsDeleted, cancellationToken);
+        if (project == null)
+            return NotFound();
+
+        project.Aim = string.IsNullOrWhiteSpace(aim) ? null : aim.Trim();
+        project.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync(cancellationToken);
+        TempData["SuccessMessage"] = "Aim updated.";
+        return RedirectToAction(nameof(Detail), new { id, tab = "overview" });
+    }
+
+    [HttpPost("{id:int}/overview/flagship")]
+    [HttpPost("/ModernWork/UpdateWorkOverviewFlagship/{id:int}")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdateWorkOverviewFlagship(int id, [FromForm] bool? flagshipProject, CancellationToken cancellationToken = default)
+    {
+        var deny = await EnsureUserCanEditWorkAsync(id, cancellationToken);
+        if (deny != null)
+            return deny;
+
+        var project = await _context.Projects.FirstOrDefaultAsync(p => p.Id == id && !p.IsDeleted, cancellationToken);
+        if (project == null)
+            return NotFound();
+
+        project.IsFlagship = flagshipProject == true;
+        project.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync(cancellationToken);
+        TempData["SuccessMessage"] = "Flagship setting updated.";
+        return RedirectToAction(nameof(Detail), new { id, tab = "overview" });
+    }
+
+    [HttpPost("{id:int}/overview/spend-control")]
+    [HttpPost("/ModernWork/UpdateWorkOverviewSpendControl/{id:int}")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdateWorkOverviewSpendControl(int id, [FromForm] bool? subjectToSpendControl, CancellationToken cancellationToken = default)
+    {
+        var deny = await EnsureUserCanEditWorkAsync(id, cancellationToken);
+        if (deny != null)
+            return deny;
+
+        var project = await _context.Projects.FirstOrDefaultAsync(p => p.Id == id && !p.IsDeleted, cancellationToken);
+        if (project == null)
+            return NotFound();
+
+        project.IsSubjectToSpendControl = subjectToSpendControl == true;
+        project.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync(cancellationToken);
+        TempData["SuccessMessage"] = "Spend control setting updated.";
+        return RedirectToAction(nameof(Detail), new { id, tab = "overview" });
+    }
+
+    [HttpPost("{id:int}/overview/risk-appetite")]
+    [HttpPost("/ModernWork/UpdateWorkOverviewRiskAppetite/{id:int}")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdateWorkOverviewRiskAppetite(int id, [FromForm] int? riskAppetiteId, CancellationToken cancellationToken = default)
+    {
+        var deny = await EnsureUserCanEditWorkAsync(id, cancellationToken);
+        if (deny != null)
+            return deny;
+
+        var project = await _context.Projects.FirstOrDefaultAsync(p => p.Id == id && !p.IsDeleted, cancellationToken);
+        if (project == null)
+            return NotFound();
+
+        project.RiskAppetiteLookupId = riskAppetiteId is > 0 ? riskAppetiteId : null;
+        project.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync(cancellationToken);
+        TempData["SuccessMessage"] = "Risk appetite updated.";
+        return RedirectToAction(nameof(Detail), new { id, tab = "overview" });
+    }
+
+    [HttpPost("{id:int}/overview/start-date")]
+    [HttpPost("/ModernWork/UpdateWorkOverviewStartDate/{id:int}")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdateWorkOverviewStartDate(int id, [FromForm] string? startDate, CancellationToken cancellationToken = default)
+    {
+        var deny = await EnsureUserCanEditWorkAsync(id, cancellationToken);
+        if (deny != null)
+            return deny;
+
+        var project = await _context.Projects.FirstOrDefaultAsync(p => p.Id == id && !p.IsDeleted, cancellationToken);
+        if (project == null)
+            return NotFound();
+
+        if (!string.IsNullOrWhiteSpace(startDate) && DateTime.TryParse(startDate, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var sd))
+            project.StartDate = sd.Date;
+        else
+            project.StartDate = null;
+
+        project.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync(cancellationToken);
+        TempData["SuccessMessage"] = "Start date updated.";
+        return RedirectToAction(nameof(Detail), new { id, tab = "overview" });
+    }
+
+    [HttpPost("{id:int}/overview/target-end-date")]
+    [HttpPost("/ModernWork/UpdateWorkOverviewTargetEndDate/{id:int}")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdateWorkOverviewTargetEndDate(int id, [FromForm] string? targetEndDate, CancellationToken cancellationToken = default)
+    {
+        var deny = await EnsureUserCanEditWorkAsync(id, cancellationToken);
+        if (deny != null)
+            return deny;
+
+        var project = await _context.Projects.FirstOrDefaultAsync(p => p.Id == id && !p.IsDeleted, cancellationToken);
+        if (project == null)
+            return NotFound();
+
+        if (!string.IsNullOrWhiteSpace(targetEndDate) && DateTime.TryParse(targetEndDate, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var ed))
+            project.TargetDeliveryDate = ed.Date;
+        else
+            project.TargetDeliveryDate = null;
+
+        project.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync(cancellationToken);
+        TempData["SuccessMessage"] = "Target end date updated.";
+        return RedirectToAction(nameof(Detail), new { id, tab = "overview" });
     }
 
     [HttpPost("{id:int}/watch")]
@@ -762,6 +1837,7 @@ public class ModernWorkController : Controller
     }
 
     [HttpGet("{id:int}/milestone/add")]
+    [HttpGet("/ModernWork/AddMilestone/{id:int}")]
     public async Task<IActionResult> AddMilestone(int id)
     {
         ViewBag.MainNavSection = "work";
@@ -784,6 +1860,7 @@ public class ModernWorkController : Controller
         ViewBag.PortfolioName = project.PrimaryOrganizationalGroup?.Name;
         ViewBag.DeliveryPhaseName = project.PhaseLookup?.Name;
         ViewBag.PriorityName = project.DeliveryPriority?.Name;
+        ViewBag.WorkIdShort = work.Id.ToString("D8");
 
         var milestone = new Milestone
         {
@@ -793,6 +1870,140 @@ public class ModernWorkController : Controller
         };
 
         return View("~/Views/Modern/Work/AddMilestone.cshtml", milestone);
+    }
+
+    /// <summary>Edit milestone (modern UI). Canonical path <c>/modern/work/{id}/milestone/{milestoneId}/edit</c>.</summary>
+    [HttpGet("{id:int}/milestone/{milestoneId:int}/edit")]
+    [HttpGet("/ModernWork/EditMilestone/{id:int}")]
+    public async Task<IActionResult> EditMilestone(int id, int milestoneId, CancellationToken cancellationToken = default)
+    {
+        ViewBag.MainNavSection = "work";
+
+        var project = await _context.Projects.AsNoTracking()
+            .Include(p => p.PrimaryOrganizationalGroup)
+            .Include(p => p.PhaseLookup)
+            .Include(p => p.DeliveryPriority)
+            .FirstOrDefaultAsync(p => p.Id == id && !p.IsDeleted, cancellationToken);
+        if (project == null)
+            return NotFound();
+
+        var milestone = await _context.Milestones
+            .AsNoTracking()
+            .FirstOrDefaultAsync(m => m.Id == milestoneId && m.ProjectId == id && !m.IsDeleted, cancellationToken);
+        if (milestone == null)
+            return NotFound();
+
+        var work = await _modernWork.GetWorkItemAsync(id);
+        if (work == null)
+            return NotFound();
+
+        ViewBag.WorkItem = work;
+        ViewBag.WorkChromeSection = "milestones";
+        ViewBag.WorkChromeSubPage = true;
+        ViewBag.PortfolioName = project.PrimaryOrganizationalGroup?.Name;
+        ViewBag.DeliveryPhaseName = project.PhaseLookup?.Name;
+        ViewBag.PriorityName = project.DeliveryPriority?.Name;
+        ViewBag.WorkIdShort = work.Id.ToString("X8").ToUpperInvariant();
+
+        return View("~/Views/Modern/Work/EditMilestone.cshtml", milestone);
+    }
+
+    [HttpPost("{id:int}/milestone/{milestoneId:int}/update")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdateMilestone(
+        int id,
+        int milestoneId,
+        [FromForm] string name,
+        [FromForm] string? Description,
+        [FromForm] DateTime dueDate,
+        [FromForm] string status,
+        CancellationToken cancellationToken = default)
+    {
+        var milestone = await _context.Milestones
+            .FirstOrDefaultAsync(m => m.Id == milestoneId && m.ProjectId == id && !m.IsDeleted, cancellationToken);
+        if (milestone == null)
+            return NotFound();
+
+        name = name?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(name))
+            ModelState.AddModelError("name", "Enter a milestone name.");
+
+        status = status?.Trim().ToLowerInvariant() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(status) || !ValidMilestoneStatuses.Contains(status))
+            ModelState.AddModelError("status", "Select a valid status.");
+
+        if (!ModelState.IsValid)
+        {
+            milestone.Name = name;
+            milestone.Description = string.IsNullOrWhiteSpace(Description) ? null : Description.Trim();
+            milestone.DueDate = dueDate.Date;
+            milestone.Status = status;
+            if (!await TryPopulateEditMilestoneViewBagsAsync(id, cancellationToken))
+                return NotFound();
+            return View("~/Views/Modern/Work/EditMilestone.cshtml", milestone);
+        }
+
+        milestone.Name = name;
+        milestone.Description = string.IsNullOrWhiteSpace(Description) ? null : Description.Trim();
+        milestone.DueDate = dueDate.Date;
+        milestone.Status = status;
+        milestone.UpdatedAt = DateTime.UtcNow;
+
+        await _context.SaveChangesAsync(cancellationToken);
+        TempData["SuccessMessage"] = "Milestone updated successfully.";
+        return RedirectToAction(nameof(Detail), new { id, tab = "milestones" });
+    }
+
+    [HttpPost("{id:int}/milestone/{milestoneId:int}/delete")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> DeleteMilestone(int id, int milestoneId, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var milestone = await _context.Milestones
+                .FirstOrDefaultAsync(m => m.Id == milestoneId && m.ProjectId == id, cancellationToken);
+
+            if (milestone == null)
+                return NotFound();
+
+            milestone.IsDeleted = true;
+            milestone.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync(cancellationToken);
+
+            TempData["SuccessMessage"] = "Milestone deleted successfully.";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting milestone {MilestoneId}", milestoneId);
+            TempData["ErrorMessage"] = "Error deleting milestone. Please try again.";
+        }
+
+        return RedirectToAction(nameof(Detail), new { id, tab = "milestones" });
+    }
+
+    private async Task<bool> TryPopulateEditMilestoneViewBagsAsync(int id, CancellationToken cancellationToken = default)
+    {
+        var project = await _context.Projects.AsNoTracking()
+            .Include(p => p.PrimaryOrganizationalGroup)
+            .Include(p => p.PhaseLookup)
+            .Include(p => p.DeliveryPriority)
+            .FirstOrDefaultAsync(p => p.Id == id && !p.IsDeleted, cancellationToken);
+        if (project == null)
+            return false;
+
+        var work = await _modernWork.GetWorkItemAsync(id);
+        if (work == null)
+            return false;
+
+        ViewBag.MainNavSection = "work";
+        ViewBag.WorkItem = work;
+        ViewBag.WorkChromeSection = "milestones";
+        ViewBag.WorkChromeSubPage = true;
+        ViewBag.PortfolioName = project.PrimaryOrganizationalGroup?.Name;
+        ViewBag.DeliveryPhaseName = project.PhaseLookup?.Name;
+        ViewBag.PriorityName = project.DeliveryPriority?.Name;
+        ViewBag.WorkIdShort = work.Id.ToString("X8").ToUpperInvariant();
+        return true;
     }
 
     [HttpGet("{id:int}/add-team-member")]
@@ -912,7 +2123,244 @@ public class ModernWorkController : Controller
         }
 
         TempData["SuccessMessage"] = "Team member added successfully.";
-        return Redirect((Url.Action(nameof(Detail), new { id, tab = "team" }) ?? "") + "#wd-team");
+        return Redirect((Url.Action(nameof(Detail), new { id }) ?? "") + "#wd-overview");
+    }
+
+    [HttpGet("{id:int}/dependency/add")]
+    [HttpGet("/ModernWork/AddDependency/{id:int}")]
+    public async Task<IActionResult> AddDependency(int id, CancellationToken cancellationToken = default)
+    {
+        var deny = await EnsureUserCanEditWorkAsync(id, cancellationToken);
+        if (deny != null)
+            return deny;
+
+        var prep = await PrepareAddDependencyPageAsync(id, cancellationToken);
+        if (prep != null)
+            return prep;
+
+        var model = new WorkItemDependency { WorkItemId = id, Direction = "In", IsInternal = true };
+        return View("~/Views/Modern/Work/AddDependency.cshtml", model);
+    }
+
+    [HttpPost("{id:int}/dependency/add")]
+    [HttpPost("/ModernWork/AddDependency/{id:int}")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> AddDependency(
+        int id,
+        [FromForm] string? Direction,
+        [FromForm] string? IsInternal,
+        [FromForm] int? TargetWorkItemId,
+        [FromForm] string? ExternalDescription,
+        CancellationToken cancellationToken = default)
+    {
+        var deny = await EnsureUserCanEditWorkAsync(id, cancellationToken);
+        if (deny != null)
+            return deny;
+
+        var prep = await PrepareAddDependencyPageAsync(id, cancellationToken);
+        if (prep != null)
+            return prep;
+
+        var internalDep = string.Equals(IsInternal, "true", StringComparison.OrdinalIgnoreCase);
+        var dir = (Direction ?? "In").Trim();
+        if (!string.Equals(dir, "In", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(dir, "Out", StringComparison.OrdinalIgnoreCase))
+        {
+            dir = "In";
+        }
+
+        var extDesc = (ExternalDescription ?? "").Trim();
+
+        if (internalDep)
+        {
+            if (!TargetWorkItemId.HasValue || TargetWorkItemId.Value <= 0)
+            {
+                ModelState.AddModelError(nameof(TargetWorkItemId), "Select a work item.");
+            }
+            else if (TargetWorkItemId.Value == id)
+            {
+                ModelState.AddModelError(nameof(TargetWorkItemId), "A work item cannot depend on itself.");
+            }
+            else if (!await _context.Projects.AsNoTracking()
+                         .AnyAsync(p => p.Id == TargetWorkItemId.Value && !p.IsDeleted, cancellationToken))
+            {
+                ModelState.AddModelError(nameof(TargetWorkItemId), "Select a valid work item.");
+            }
+        }
+        else if (string.IsNullOrEmpty(extDesc))
+        {
+            ModelState.AddModelError(nameof(ExternalDescription), "Enter a description for the external dependency.");
+        }
+
+        if (!ModelState.IsValid)
+        {
+            var invalid = new WorkItemDependency
+            {
+                WorkItemId = id,
+                Direction = dir,
+                IsInternal = internalDep,
+                ExternalDescription = extDesc
+            };
+            ViewBag.PostedTargetWorkItemId = TargetWorkItemId;
+            return View("~/Views/Modern/Work/AddDependency.cshtml", invalid);
+        }
+
+        string srcType;
+        int srcId;
+        string tgtType;
+        int tgtId;
+        string? desc = null;
+
+        if (internalDep)
+        {
+            var otherId = TargetWorkItemId!.Value;
+            if (string.Equals(dir, "Out", StringComparison.OrdinalIgnoreCase))
+            {
+                srcType = "Project";
+                srcId = otherId;
+                tgtType = "Project";
+                tgtId = id;
+            }
+            else
+            {
+                srcType = "Project";
+                srcId = id;
+                tgtType = "Project";
+                tgtId = otherId;
+            }
+        }
+        else if (string.Equals(dir, "Out", StringComparison.OrdinalIgnoreCase))
+        {
+            srcType = "External";
+            srcId = 0;
+            tgtType = "Project";
+            tgtId = id;
+            desc = extDesc;
+        }
+        else
+        {
+            srcType = "Project";
+            srcId = id;
+            tgtType = "External";
+            tgtId = 0;
+            desc = extDesc;
+        }
+
+        var duplicate = await _context.Dependencies.AnyAsync(d =>
+            d.SourceEntityType == srcType &&
+            d.SourceEntityId == srcId &&
+            d.TargetEntityType == tgtType &&
+            d.TargetEntityId == tgtId, cancellationToken);
+        if (duplicate)
+        {
+            ModelState.AddModelError(string.Empty, "This dependency relationship already exists.");
+            var dupModel = new WorkItemDependency
+            {
+                WorkItemId = id,
+                Direction = dir,
+                IsInternal = internalDep,
+                ExternalDescription = extDesc
+            };
+            ViewBag.PostedTargetWorkItemId = TargetWorkItemId;
+            return View("~/Views/Modern/Work/AddDependency.cshtml", dupModel);
+        }
+
+        var row = new Dependency
+        {
+            SourceEntityType = srcType,
+            SourceEntityId = srcId,
+            TargetEntityType = tgtType,
+            TargetEntityId = tgtId,
+            DependencyType = "Related",
+            Description = desc,
+            Status = "Active",
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        _context.Dependencies.Add(row);
+        await _context.SaveChangesAsync(cancellationToken);
+
+        TempData["SuccessMessage"] = "Dependency added.";
+        return Redirect((Url.Action(nameof(Detail), new { id, tab = "dependencies" }) ?? "") + "#wd-dependencies");
+    }
+
+    [HttpPost("{id:int}/dependency/remove")]
+    [HttpPost("/ModernWork/RemoveDependency/{id:int}")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> RemoveDependency(int id, [FromForm] int dependencyId, CancellationToken cancellationToken = default)
+    {
+        var deny = await EnsureUserCanEditWorkAsync(id, cancellationToken);
+        if (deny != null)
+            return deny;
+
+        var dep = await _context.Dependencies
+            .FirstOrDefaultAsync(d => d.Id == dependencyId, cancellationToken);
+        if (dep == null)
+            return NotFound();
+
+        var involves = (string.Equals(dep.SourceEntityType, "Project", StringComparison.OrdinalIgnoreCase) &&
+                        dep.SourceEntityId == id) ||
+                       (string.Equals(dep.TargetEntityType, "Project", StringComparison.OrdinalIgnoreCase) &&
+                        dep.TargetEntityId == id);
+        if (!involves)
+            return NotFound();
+
+        _context.Dependencies.Remove(dep);
+        await _context.SaveChangesAsync(cancellationToken);
+
+        TempData["SuccessMessage"] = "Dependency removed.";
+        return Redirect((Url.Action(nameof(Detail), new { id, tab = "dependencies" }) ?? "") + "#wd-dependencies");
+    }
+
+    private async Task<IActionResult?> PrepareAddDependencyPageAsync(int id, CancellationToken cancellationToken)
+    {
+        ViewBag.MainNavSection = "work";
+
+        var userEmail = User.Identity?.Name;
+        if (string.IsNullOrEmpty(userEmail))
+            return Unauthorized();
+
+        var currentUser = await _context.Users
+            .FirstOrDefaultAsync(u => u.Email.ToLower() == userEmail.ToLower(), cancellationToken);
+        if (currentUser == null)
+            return Unauthorized();
+
+        var projectExists = await _context.Projects.AsNoTracking()
+            .AnyAsync(p => p.Id == id && !p.IsDeleted, cancellationToken);
+        if (!projectExists)
+            return NotFound();
+
+        var work = await _modernWork.GetWorkItemAsync(id);
+        if (work == null)
+            return NotFound();
+
+        var project = await _context.Projects.AsNoTracking()
+            .Include(p => p.PrimaryOrganizationalGroup)
+            .Include(p => p.PhaseLookup)
+            .Include(p => p.DeliveryPriority)
+            .FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
+
+        var others = await _context.Projects.AsNoTracking()
+            .Where(p => !p.IsDeleted && p.Id != id)
+            .OrderBy(p => p.Title)
+            .Select(p => new { p.Id, p.Title })
+            .ToListAsync(cancellationToken);
+        ViewBag.WorkItemsSelectList = new SelectList(others, "Id", "Title");
+
+        ViewBag.WorkItem = work;
+        ViewBag.WorkChromeSection = "dependencies";
+        ViewBag.WorkChromeSubPage = true;
+        ViewBag.WorkChromeTabsAsLinks = true;
+        ViewBag.WorkIdShort = work.Id.ToString("X8").ToUpperInvariant();
+        if (project != null)
+        {
+            ViewBag.PortfolioName = project.PrimaryOrganizationalGroup?.Name;
+            ViewBag.DeliveryPhaseName = project.PhaseLookup?.Name;
+            ViewBag.PriorityName = project.DeliveryPriority?.Name;
+        }
+
+        return null;
     }
 
     private async Task PopulateUserPickerForTeamMemberAsync(int appUserId, CancellationToken cancellationToken)
@@ -957,7 +2405,7 @@ public class ModernWorkController : Controller
             .FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
 
         ViewBag.WorkItem = work;
-        ViewBag.WorkChromeSection = "team";
+        ViewBag.WorkChromeSection = "overview";
         ViewBag.WorkChromeSubPage = true;
         ViewBag.WorkChromeTabsAsLinks = true;
         ViewBag.WorkIdShort = work.Id.ToString("X8").ToUpperInvariant();
@@ -1000,8 +2448,496 @@ public class ModernWorkController : Controller
     }
 
     [HttpGet("{id:int}/edit")]
-    public IActionResult Edit(int id) =>
-        RedirectToAction("Edit", "Project", new { id });
+    [HttpGet("/ModernWork/Edit/{id:int}")]
+    public async Task<IActionResult> Edit(int id, CancellationToken cancellationToken = default)
+    {
+        var userEmail = User.Identity?.Name;
+        if (string.IsNullOrEmpty(userEmail))
+            return Unauthorized();
+
+        var currentUser = await _context.Users
+            .FirstOrDefaultAsync(u => u.Email.ToLower() == userEmail.ToLower(), cancellationToken);
+        if (currentUser == null)
+            return Unauthorized();
+
+        var deny = await EnsureUserCanEditWorkAsync(id, cancellationToken);
+        if (deny != null)
+            return deny;
+
+        var work = await _modernWork.PopulateWorkDetailAsync(
+            this, id, currentUser, userEmail, "overview", null, cancellationToken);
+        if (work == null)
+            return NotFound();
+
+        await PopulateWorkCreateViewBagAsync(null, cancellationToken);
+        ViewBag.WorkChromeSubPage = true;
+        ViewBag.SelectedDirectorateIds = work.Directorates?.Select(d => d.DirectorateId).Distinct().ToArray() ?? Array.Empty<int>();
+
+        return View("~/Views/Modern/Work/Edit.cshtml", work);
+    }
+
+    [HttpPost("{id:int}/edit")]
+    [HttpPost("/ModernWork/Edit/{id:int}")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Edit(int id, WorkItem model, int[]? directorateIds, CancellationToken cancellationToken = default)
+    {
+        var userEmail = User.Identity?.Name;
+        if (string.IsNullOrEmpty(userEmail))
+            return Unauthorized();
+
+        var currentUser = await _context.Users
+            .FirstOrDefaultAsync(u => u.Email.ToLower() == userEmail.ToLower(), cancellationToken);
+        if (currentUser == null)
+            return Unauthorized();
+
+        var deny = await EnsureUserCanEditWorkAsync(id, cancellationToken);
+        if (deny != null)
+            return deny;
+
+        if (string.IsNullOrWhiteSpace(model.Title))
+            ModelState.AddModelError(nameof(model.Title), "Enter a title.");
+
+        directorateIds ??= Array.Empty<int>();
+
+        if (!ModelState.IsValid)
+        {
+            model.Id = id;
+            await PopulateWorkCreateViewBagAsync(null, cancellationToken);
+            ViewBag.WorkChromeSubPage = true;
+            ViewBag.SelectedDirectorateIds = directorateIds;
+
+            var chrome = await _modernWork.PopulateWorkDetailAsync(
+                this, id, currentUser, userEmail, "overview", null, cancellationToken);
+            ViewBag.WorkItem = chrome;
+
+            return View("~/Views/Modern/Work/Edit.cshtml", model);
+        }
+
+        var project = await _context.Projects
+            .Include(p => p.ProblemStatements)
+            .Include(p => p.Directorates)
+            .FirstOrDefaultAsync(p => p.Id == id && !p.IsDeleted, cancellationToken);
+        if (project == null)
+            return NotFound();
+
+        var now = DateTime.UtcNow;
+        var oldPriorityId = project.DeliveryPriorityId;
+
+        project.Title = model.Title.Trim();
+        project.Aim = model.Aim?.Trim();
+        project.Status = model.Status?.Trim() ?? project.Status;
+        project.PrimaryOrganizationalGroupId = model.PortfolioId;
+        project.PhaseId = model.DeliveryPhaseId;
+        project.DeliveryPriorityId = model.PriorityId;
+        project.ActivityTypeLookupId = model.ActivityTypeId;
+        project.RiskAppetiteLookupId = model.RiskAppetiteId;
+        project.IsFlagship = model.FlagshipProject;
+        project.IsSubjectToSpendControl = model.SubjectToSpendControl;
+        project.StartDate = model.StartDate;
+        project.TargetDeliveryDate = model.TargetEndDate;
+        project.PrimaryContactUserId = model.PrimaryContactUserId;
+        project.UpdatedAt = now;
+
+        if (model.PriorityId != oldPriorityId && !string.IsNullOrWhiteSpace(model.PriorityChangeReason))
+            project.DeliveryPriorityChangeReason = model.PriorityChangeReason.Trim();
+
+        if (!string.IsNullOrWhiteSpace(model.ProblemStatement))
+        {
+            var latestPs = project.ProblemStatements?
+                .OrderByDescending(x => x.UpdatedAt).FirstOrDefault();
+            if (latestPs != null)
+            {
+                latestPs.ProblemStatement = model.ProblemStatement.Trim();
+                latestPs.UpdatedAt = now;
+            }
+            else
+            {
+                _context.ProjectProblemStatements.Add(new ProjectProblemStatement
+                {
+                    ProjectId = id,
+                    ProblemStatement = model.ProblemStatement.Trim(),
+                    CreatedByEmail = userEmail,
+                    CreatedByName = currentUser.Name,
+                    CreatedAt = now,
+                    UpdatedAt = now
+                });
+            }
+        }
+
+        _context.ProjectDirectorates.RemoveRange(project.Directorates);
+        foreach (var divId in directorateIds.Distinct())
+        {
+            _context.ProjectDirectorates.Add(new ProjectDirectorate
+            {
+                ProjectId = id,
+                DivisionId = divId,
+                CreatedAt = now
+            });
+        }
+
+        await _context.SaveChangesAsync(cancellationToken);
+
+        TempData["Message"] = "Work item updated.";
+        return RedirectToAction(nameof(Detail), new { id });
+    }
+
+    [HttpGet("{id:int}/people/edit")]
+    [HttpGet("/ModernWork/EditPeople/{id:int}")]
+    public async Task<IActionResult> EditPeople(int id, CancellationToken cancellationToken = default)
+    {
+        var userEmail = User.Identity?.Name;
+        if (string.IsNullOrEmpty(userEmail))
+            return Unauthorized();
+
+        var currentUser = await _context.Users
+            .FirstOrDefaultAsync(u => u.Email.ToLower() == userEmail.ToLower(), cancellationToken);
+        if (currentUser == null)
+            return Unauthorized();
+
+        var deny = await EnsureUserCanEditWorkAsync(id, cancellationToken);
+        if (deny != null)
+            return deny;
+
+        var work = await _modernWork.PopulateWorkDetailAsync(
+            this, id, currentUser, userEmail, "overview", null, cancellationToken);
+        if (work == null)
+            return NotFound();
+
+        var roleTypes = new List<ContactRoleType>
+        {
+            new() { Id = 1, Name = "SRO" },
+            new() { Id = 2, Name = "Service Owner" },
+            new() { Id = 3, Name = "PMO Contact" },
+            new() { Id = 4, Name = "Reporting contact" },
+            new() { Id = 5, Name = "Other (custom role)" }
+        };
+
+        var project = await _context.Projects.AsNoTracking()
+            .Include(p => p.PrimaryContactUser)
+            .Include(p => p.ProjectContacts).ThenInclude(pc => pc.User)
+            .Include(p => p.BudgetOwners)
+            .FirstOrDefaultAsync(p => p.Id == id && !p.IsDeleted, cancellationToken);
+
+        if (project != null)
+        {
+            work.Contacts.Clear();
+            foreach (var pc in project.ProjectContacts)
+            {
+                var matched = roleTypes.FirstOrDefault(r => r.Id != 5 && string.Equals(r.Name, pc.Role, StringComparison.OrdinalIgnoreCase));
+                work.Contacts.Add(new WorkItemContact
+                {
+                    Id = pc.Id,
+                    WorkItemId = id,
+                    ContactRoleTypeId = matched?.Id ?? 5,
+                    RoleName = matched == null ? pc.Role : null,
+                    AppUser = pc.User
+                });
+            }
+
+            var sroContact = project.ProjectContacts
+                .FirstOrDefault(c => string.Equals(c.Role, "SRO", StringComparison.OrdinalIgnoreCase));
+            ViewBag.FirstSroName = sroContact?.User?.Name ?? sroContact?.Name;
+            ViewBag.PrimaryContactSubtitle = project.PrimaryContactUser?.Email;
+            if (ViewBag.PrimaryContactName == null || ViewBag.PrimaryContactName == "—")
+                ViewBag.PrimaryContactName = project.PrimaryContactUser?.Name;
+            ViewBag.BudgetOwnerSameAsSro = !project.BudgetOwners.Any();
+        }
+        else
+        {
+            ViewBag.FirstSroName = (string?)null;
+            ViewBag.PrimaryContactSubtitle = (string?)null;
+            ViewBag.BudgetOwnerSameAsSro = true;
+        }
+
+        ViewBag.ContactRoleTypes = roleTypes;
+        ViewBag.WorkChromeSubPage = true;
+
+        return View("~/Views/Modern/Work/EditPeople.cshtml", work);
+    }
+
+    // ─── SetPrimaryContact ───────────────────────────────────────
+    [HttpGet("{id:int}/primary-contact/set")]
+    [HttpGet("/ModernWork/SetPrimaryContact/{id:int}")]
+    public async Task<IActionResult> SetPrimaryContact(int id, CancellationToken cancellationToken = default)
+    {
+        var deny = await EnsureUserCanEditWorkAsync(id, cancellationToken);
+        if (deny != null) return deny;
+
+        var userEmail = User.Identity?.Name;
+        var currentUser = await _context.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == userEmail!.ToLower(), cancellationToken);
+        if (currentUser == null) return Unauthorized();
+
+        var work = await _modernWork.PopulateWorkDetailAsync(this, id, currentUser, userEmail!, "overview", null, cancellationToken);
+        if (work == null) return NotFound();
+
+        var project = await _context.Projects.AsNoTracking()
+            .Include(p => p.PrimaryContactUser)
+            .FirstOrDefaultAsync(p => p.Id == id && !p.IsDeleted, cancellationToken);
+
+        var model = new SetPrimaryContactViewModel
+        {
+            WorkItemId = id,
+            AppUserId = project?.PrimaryContactUserId ?? 0
+        };
+        ViewBag.CurrentPrimaryName = project?.PrimaryContactUser?.Name;
+        ViewBag.PrimaryContactSubtitle = project?.PrimaryContactUser?.Email;
+        ViewBag.WorkChromeSubPage = true;
+        return View("~/Views/Modern/Work/SetPrimaryContact.cshtml", model);
+    }
+
+    [HttpPost("{id:int}/primary-contact/set")]
+    [HttpPost("/ModernWork/SetPrimaryContact/{id:int}")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> SetPrimaryContactPost(int id, [FromForm] int AppUserId, CancellationToken cancellationToken = default)
+    {
+        var deny = await EnsureUserCanEditWorkAsync(id, cancellationToken);
+        if (deny != null) return deny;
+
+        var project = await _context.Projects.FirstOrDefaultAsync(p => p.Id == id && !p.IsDeleted, cancellationToken);
+        if (project == null) return NotFound();
+
+        project.PrimaryContactUserId = AppUserId > 0 ? AppUserId : null;
+        project.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync(cancellationToken);
+
+        return RedirectToAction(nameof(EditPeople), new { id });
+    }
+
+    // ─── SetBudgetOwner ──────────────────────────────────────────
+    [HttpGet("{id:int}/budget-owner/set")]
+    [HttpGet("/ModernWork/SetBudgetOwner/{id:int}")]
+    public async Task<IActionResult> SetBudgetOwner(int id, CancellationToken cancellationToken = default)
+    {
+        var deny = await EnsureUserCanEditWorkAsync(id, cancellationToken);
+        if (deny != null) return deny;
+
+        var userEmail = User.Identity?.Name;
+        var currentUser = await _context.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == userEmail!.ToLower(), cancellationToken);
+        if (currentUser == null) return Unauthorized();
+
+        var work = await _modernWork.PopulateWorkDetailAsync(this, id, currentUser, userEmail!, "overview", null, cancellationToken);
+        if (work == null) return NotFound();
+
+        var project = await _context.Projects.AsNoTracking()
+            .Include(p => p.ProjectContacts).ThenInclude(pc => pc.User)
+            .FirstOrDefaultAsync(p => p.Id == id && !p.IsDeleted, cancellationToken);
+
+        var sro = project?.ProjectContacts.FirstOrDefault(c => string.Equals(c.Role, "SRO", StringComparison.OrdinalIgnoreCase));
+        ViewBag.FirstSroName = sro?.User?.Name ?? sro?.Name;
+
+        var model = new SetBudgetOwnerViewModel
+        {
+            WorkItemId = id,
+            SameAsSro = true,
+            AppUserId = 0
+        };
+        ViewBag.BudgetOwnerName = (string?)null;
+        ViewBag.WorkChromeSubPage = true;
+        return View("~/Views/Modern/Work/SetBudgetOwner.cshtml", model);
+    }
+
+    [HttpPost("{id:int}/budget-owner/set")]
+    [HttpPost("/ModernWork/SetBudgetOwner/{id:int}")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> SetBudgetOwnerPost(int id, [FromForm] bool SameAsSro, [FromForm] int AppUserId, CancellationToken cancellationToken = default)
+    {
+        var deny = await EnsureUserCanEditWorkAsync(id, cancellationToken);
+        if (deny != null) return deny;
+
+        return RedirectToAction(nameof(EditPeople), new { id });
+    }
+
+    // ─── RemoveContact ───────────────────────────────────────────
+    [HttpPost("{id:int}/contact/{contactId:int}/remove")]
+    [HttpPost("/ModernWork/RemoveContact/{id:int}")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> RemoveContact(int id, int contactId, CancellationToken cancellationToken = default)
+    {
+        var deny = await EnsureUserCanEditWorkAsync(id, cancellationToken);
+        if (deny != null) return deny;
+
+        var contact = await _context.Set<ProjectContact>()
+            .FirstOrDefaultAsync(c => c.Id == contactId && c.ProjectId == id, cancellationToken);
+        if (contact != null)
+        {
+            _context.Set<ProjectContact>().Remove(contact);
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+        return RedirectToAction(nameof(EditPeople), new { id });
+    }
+
+    // ─── AddContact ──────────────────────────────────────────────
+    [HttpGet("{id:int}/contact/add")]
+    [HttpGet("/ModernWork/AddContact/{id:int}")]
+    public async Task<IActionResult> AddContact(int id, int? contactRoleTypeId, string? returnTo, string? customRoleName, CancellationToken cancellationToken = default)
+    {
+        var deny = await EnsureUserCanEditWorkAsync(id, cancellationToken);
+        if (deny != null) return deny;
+
+        var userEmail = User.Identity?.Name;
+        var currentUser = await _context.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == userEmail!.ToLower(), cancellationToken);
+        if (currentUser == null) return Unauthorized();
+
+        var work = await _modernWork.PopulateWorkDetailAsync(this, id, currentUser, userEmail!, "overview", null, cancellationToken);
+        if (work == null) return NotFound();
+
+        var roleTypes = new List<ContactRoleType>
+        {
+            new() { Id = 1, Name = "SRO" },
+            new() { Id = 2, Name = "Service Owner" },
+            new() { Id = 3, Name = "PMO Contact" },
+            new() { Id = 4, Name = "Reporting contact" },
+            new() { Id = 5, Name = "Other (custom role)" }
+        };
+
+        var model = new WorkItemContact
+        {
+            WorkItemId = id,
+            ContactRoleTypeId = contactRoleTypeId
+        };
+        ViewBag.ContactRoleTypes = roleTypes;
+        ViewBag.ReturnToEditPeople = string.Equals(returnTo, "EditPeople", StringComparison.OrdinalIgnoreCase);
+        ViewBag.CustomRoleName = string.IsNullOrWhiteSpace(customRoleName) ? null : customRoleName.Trim();
+        ViewBag.WorkChromeSubPage = true;
+        return View("~/Views/Modern/Work/AddContact.cshtml", model);
+    }
+
+    [HttpPost("{id:int}/contact/add")]
+    [HttpPost("/ModernWork/AddContact/{id:int}")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> AddContactPost(int id, [FromForm] int? ContactRoleTypeId, [FromForm] int AppUserId, [FromForm] string? returnTo, [FromForm] string? CustomRole, CancellationToken cancellationToken = default)
+    {
+        var deny = await EnsureUserCanEditWorkAsync(id, cancellationToken);
+        if (deny != null) return deny;
+
+        if (AppUserId <= 0 || !ContactRoleTypeId.HasValue || ContactRoleTypeId == 0)
+        {
+            TempData["Error"] = "Select a contact role and a user before adding the contact.";
+            return RedirectToAction(nameof(AddContact), new { id, contactRoleTypeId = ContactRoleTypeId, returnTo, customRoleName = ContactRoleTypeId == 5 ? CustomRole?.Trim() : null });
+        }
+
+        var roleNames = new Dictionary<int, string>
+        {
+            { 1, "SRO" }, { 2, "Service Owner" }, { 3, "PMO Contact" }, { 4, "Reporting contact" }
+        };
+
+        string roleStr;
+        if (ContactRoleTypeId.Value == 5)
+        {
+            var cr = (CustomRole ?? "").Trim();
+            if (string.IsNullOrEmpty(cr) || cr.Length > 100)
+            {
+                TempData["Error"] = "Enter a custom role name of up to 100 characters.";
+                return RedirectToAction(nameof(AddContact), new { id, contactRoleTypeId = ContactRoleTypeId, returnTo, customRoleName = cr });
+            }
+            roleStr = cr;
+        }
+        else
+        {
+            if (!roleNames.TryGetValue(ContactRoleTypeId.Value, out var rn))
+            {
+                TempData["Error"] = "Select a valid contact role.";
+                return RedirectToAction(nameof(AddContact), new { id, contactRoleTypeId = ContactRoleTypeId, returnTo });
+            }
+            roleStr = rn;
+        }
+
+        var user = await _context.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == AppUserId, cancellationToken);
+        if (user == null)
+        {
+            TempData["Error"] = "Select a valid user from the user picker.";
+            return RedirectToAction(nameof(AddContact), new { id, contactRoleTypeId = ContactRoleTypeId, returnTo, customRoleName = ContactRoleTypeId == 5 ? CustomRole?.Trim() : null });
+        }
+
+        var contact = new ProjectContact
+        {
+            ProjectId = id,
+            UserId = AppUserId,
+            Role = roleStr,
+            Name = user.Name ?? user.Email ?? "—",
+            Email = user.Email ?? "",
+            SortOrder = 10,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+        _context.Set<ProjectContact>().Add(contact);
+        await _context.SaveChangesAsync(cancellationToken);
+
+        if (string.Equals(returnTo, "EditPeople", StringComparison.OrdinalIgnoreCase))
+            return RedirectToAction(nameof(EditPeople), new { id });
+
+        return RedirectToAction(nameof(Detail), new { id });
+    }
+
+    [HttpGet("{id:int}/change-status")]
+    [HttpGet("/ModernWork/ChangeStatus/{id:int}")]
+    public async Task<IActionResult> ChangeStatus(int id, CancellationToken cancellationToken = default)
+    {
+        var userEmail = User.Identity?.Name;
+        if (string.IsNullOrEmpty(userEmail))
+            return Unauthorized();
+
+        var currentUser = await _context.Users
+            .FirstOrDefaultAsync(u => u.Email.ToLower() == userEmail.ToLower(), cancellationToken);
+        if (currentUser == null)
+            return Unauthorized();
+
+        var deny = await EnsureUserCanEditWorkAsync(id, cancellationToken);
+        if (deny != null)
+            return deny;
+
+        var work = await _modernWork.PopulateWorkDetailAsync(
+            this, id, currentUser, userEmail, "overview", null, cancellationToken);
+        if (work == null)
+            return NotFound();
+
+        ViewBag.WorkChromeSubPage = true;
+        ViewBag.CurrentStatus = work.Status;
+        ViewBag.WorkStatusOptions = new List<SelectListItem>
+        {
+            new("Active", "Active"),
+            new("Paused", "Paused"),
+            new("Completed", "Completed"),
+            new("Cancelled", "Cancelled")
+        };
+
+        return View("~/Views/Modern/Work/ChangeStatus.cshtml", work);
+    }
+
+    [HttpPost("{id:int}/change-status")]
+    [HttpPost("/ModernWork/ChangeStatus/{id:int}")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ChangeStatus(int id, [FromForm] string status, [FromForm] string? action, CancellationToken cancellationToken = default)
+    {
+        var deny = await EnsureUserCanEditWorkAsync(id, cancellationToken);
+        if (deny != null)
+            return deny;
+
+        var project = await _context.Projects
+            .FirstOrDefaultAsync(p => p.Id == id && !p.IsDeleted, cancellationToken);
+        if (project == null)
+            return NotFound();
+
+        if (string.Equals(action, "delete", StringComparison.OrdinalIgnoreCase))
+        {
+            project.IsDeleted = true;
+            project.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync(cancellationToken);
+            TempData["Message"] = "Work item deleted.";
+            return RedirectToAction(nameof(AllWork));
+        }
+
+        var allowed = new[] { "Active", "Paused", "Completed", "Cancelled" };
+        if (!allowed.Contains(status, StringComparer.OrdinalIgnoreCase))
+            return BadRequest();
+
+        project.Status = status;
+        project.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync(cancellationToken);
+
+        TempData["Message"] = $"Status changed to {status}.";
+        return RedirectToAction(nameof(Detail), new { id });
+    }
 
     [HttpGet("{id:int}/log-issue")]
     [HttpGet("/ModernWork/LogIssue/{id:int}")]
@@ -1043,6 +2979,10 @@ public class ModernWorkController : Controller
             ModelState.AddModelError(nameof(form.DirectorateId), "Select a directorate.");
         if (string.IsNullOrEmpty(mitigation))
             ModelState.AddModelError(nameof(form.MitigationOrAction), "Enter an action plan.");
+        if (!form.IssueSeverityId.HasValue || form.IssueSeverityId.Value <= 0)
+            ModelState.AddModelError(nameof(form.IssueSeverityId), "Select severity.");
+        if (!form.IssuePriorityLookupId.HasValue || form.IssuePriorityLookupId.Value <= 0)
+            ModelState.AddModelError(nameof(form.IssuePriorityLookupId), "Select priority.");
 
         if (!ModelState.IsValid)
         {
@@ -1059,7 +2999,11 @@ public class ModernWorkController : Controller
                 OwnerUserId = form.OwnerUserId,
                 TargetResolutionDate = form.TargetResolutionDate,
                 MitigationOrAction = form.MitigationOrAction,
-                LinkedMilestoneId = form.LinkedMilestoneId
+                LinkedMilestoneId = form.LinkedMilestoneId,
+                IssueSeverityLookupId = form.IssueSeverityId,
+                IssuePriorityLookupId = form.IssuePriorityLookupId,
+                IssueStatusLookupId = form.IssueStatusLookupId,
+                IssueCategoryLookupId = form.IssueCategoryId
             };
             await PopulateOwnerDisplayForLogRaidAsync(form.OwnerUserId, cancellationToken);
             return View("~/Views/Modern/Work/LogIssue.cshtml", invalidModel);
@@ -1083,7 +3027,11 @@ public class ModernWorkController : Controller
                 OwnerUserId = form.OwnerUserId,
                 TargetResolutionDate = form.TargetResolutionDate,
                 MitigationOrAction = form.MitigationOrAction,
-                LinkedMilestoneId = form.LinkedMilestoneId
+                LinkedMilestoneId = form.LinkedMilestoneId,
+                IssueSeverityLookupId = form.IssueSeverityId,
+                IssuePriorityLookupId = form.IssuePriorityLookupId,
+                IssueStatusLookupId = form.IssueStatusLookupId,
+                IssueCategoryLookupId = form.IssueCategoryId
             };
             await PopulateOwnerDisplayForLogRaidAsync(form.OwnerUserId, cancellationToken);
             return View("~/Views/Modern/Work/LogIssue.cshtml", invalidModel);
@@ -1094,23 +3042,43 @@ public class ModernWorkController : Controller
             .Select(d => d.Name)
             .FirstOrDefaultAsync(cancellationToken);
 
-        var severity = MapPriorityToIssueSeverity(form.Priority);
         var fullDescription = description + "\n\nImpact on delivery:\n" + impact;
         if (!string.IsNullOrWhiteSpace(form.Tier))
             fullDescription += "\n\nTier: " + form.Tier.Trim();
 
+        var issueStatusId = form.IssueStatusLookupId is > 0
+            ? form.IssueStatusLookupId
+            : await GetDefaultIssueStatusIdAsync(cancellationToken);
+
+        var sevRow = await _context.IssueSeverities.AsNoTracking()
+            .FirstAsync(x => x.Id == form.IssueSeverityId!.Value, cancellationToken);
+        var priRow = await _context.IssuePriorities.AsNoTracking()
+            .FirstAsync(x => x.Id == form.IssuePriorityLookupId!.Value, cancellationToken);
+        var stRow = issueStatusId.HasValue
+            ? await _context.IssueStatuses.AsNoTracking().FirstOrDefaultAsync(x => x.Id == issueStatusId.Value, cancellationToken)
+            : null;
+
+        var legacySev = TruncateLower(sevRow.Label, 10);
+        var legacyPri = Truncate(priRow.Label, 10);
+        var legacyStatus = TruncateLower(stRow?.Label ?? "open", 20);
+
         var issue = new Issue
         {
             ProjectId = id,
+            RaidAssociationKind = RaidAssociationKinds.WorkItem,
             Title = title,
             Description = fullDescription,
-            Severity = severity,
-            Status = "open",
+            Severity = legacySev,
+            Status = legacyStatus,
+            StatusId = issueStatusId,
+            SeverityId = form.IssueSeverityId,
+            PriorityId = form.IssuePriorityLookupId,
+            IssueCategoryId = form.IssueCategoryId,
             DetectedDate = DateTime.UtcNow.Date,
             TargetResolutionDate = form.TargetResolutionDate,
             BusinessArea = directorateName,
             OwnerUserId = form.OwnerUserId > 0 ? form.OwnerUserId : null,
-            Priority = form.Priority?.Length <= 10 ? form.Priority : form.Priority![..10],
+            Priority = legacyPri,
             MilestoneId = form.LinkedMilestoneId,
             Workaround = mitigation,
             CreatedAt = DateTime.UtcNow,
@@ -1164,6 +3132,13 @@ public class ModernWorkController : Controller
             ModelState.AddModelError(nameof(form.DirectorateId), "Select a directorate.");
         if (string.IsNullOrEmpty(mitigation))
             ModelState.AddModelError(nameof(form.MitigationOrAction), "Enter a mitigation plan.");
+        if (!form.RiskLikelihoodId.HasValue || form.RiskLikelihoodId.Value <= 0)
+            ModelState.AddModelError(nameof(form.RiskLikelihoodId), "Select likelihood.");
+        if (!form.RiskImpactLevelId.HasValue || form.RiskImpactLevelId.Value <= 0)
+            ModelState.AddModelError(nameof(form.RiskImpactLevelId), "Select impact.");
+
+        if (!form.RiskPriorityLookupId.HasValue || form.RiskPriorityLookupId.Value <= 0)
+            ModelState.AddModelError(nameof(form.RiskPriorityLookupId), "Select priority.");
 
         if (!ModelState.IsValid)
         {
@@ -1180,7 +3155,12 @@ public class ModernWorkController : Controller
                 OwnerUserId = form.OwnerUserId,
                 TargetResolutionDate = form.TargetResolutionDate,
                 MitigationOrAction = form.MitigationOrAction,
-                LinkedMilestoneId = form.LinkedMilestoneId
+                LinkedMilestoneId = form.LinkedMilestoneId,
+                RiskLikelihoodLookupId = form.RiskLikelihoodId,
+                RiskImpactLookupId = form.RiskImpactLevelId,
+                RiskProximityLookupId = form.RiskProximityId,
+                RiskCategoryLookupId = form.RiskCategoryId,
+                RiskPriorityLookupId = form.RiskPriorityLookupId
             };
             await PopulateOwnerDisplayForLogRaidAsync(form.OwnerUserId, cancellationToken);
             return View("~/Views/Modern/Work/LogRisk.cshtml", invalidModel);
@@ -1204,7 +3184,12 @@ public class ModernWorkController : Controller
                 OwnerUserId = form.OwnerUserId,
                 TargetResolutionDate = form.TargetResolutionDate,
                 MitigationOrAction = form.MitigationOrAction,
-                LinkedMilestoneId = form.LinkedMilestoneId
+                LinkedMilestoneId = form.LinkedMilestoneId,
+                RiskLikelihoodLookupId = form.RiskLikelihoodId,
+                RiskImpactLookupId = form.RiskImpactLevelId,
+                RiskProximityLookupId = form.RiskProximityId,
+                RiskCategoryLookupId = form.RiskCategoryId,
+                RiskPriorityLookupId = form.RiskPriorityLookupId
             };
             await PopulateOwnerDisplayForLogRaidAsync(form.OwnerUserId, cancellationToken);
             return View("~/Views/Modern/Work/LogRisk.cshtml", invalidModel);
@@ -1215,8 +3200,16 @@ public class ModernWorkController : Controller
             .Select(d => d.Name)
             .FirstOrDefaultAsync(cancellationToken);
 
-        var riskPriorityId = await ResolveRiskPriorityIdAsync(form.Priority, cancellationToken);
+        var riskPriorityId = form.RiskPriorityLookupId;
         var riskTierId = await ResolveRiskTierIdAsync(form.Tier, cancellationToken);
+
+        var impactOrdered = await _context.RiskImpactLevels.AsNoTracking()
+            .Where(x => x.IsActive).OrderBy(x => x.SortOrder).Select(x => x.Id).ToListAsync(cancellationToken);
+        var likelihoodOrdered = await _context.RiskLikelihoods.AsNoTracking()
+            .Where(x => x.IsActive).OrderBy(x => x.SortOrder).Select(x => x.Id).ToListAsync(cancellationToken);
+        var impactRating = MapLookupOrderToFive(form.RiskImpactLevelId, impactOrdered);
+        var likelihoodRating = MapLookupOrderToFive(form.RiskLikelihoodId, likelihoodOrdered);
+        var riskScore = Math.Clamp(impactRating * likelihoodRating, 1, 25);
 
         var notes = mitigation;
         if (!string.IsNullOrWhiteSpace(impact))
@@ -1226,18 +3219,31 @@ public class ModernWorkController : Controller
         if (!string.IsNullOrWhiteSpace(form.Tier))
             fullDescription += "\n\nTier: " + form.Tier.Trim();
 
+        var riskStatusId = await GetDefaultRiskStatusIdAsync(cancellationToken);
+        var riskStatusRow = riskStatusId.HasValue
+            ? await _context.RiskStatuses.AsNoTracking()
+                .FirstOrDefaultAsync(x => x.Id == riskStatusId.Value, cancellationToken)
+            : null;
+
         var risk = new Risk
         {
             ProjectId = id,
+            RaidAssociationKind = RaidAssociationKinds.WorkItem,
             Title = title,
             Description = fullDescription,
             BusinessArea = directorateName,
             HowIdentified = "Logged from modern work UI",
             OwnerUserId = form.OwnerUserId > 0 ? form.OwnerUserId : null,
-            ImpactRating = 3,
-            LikelihoodRating = 3,
-            RiskScore = 9,
-            Status = "new",
+            ImpactRating = impactRating,
+            LikelihoodRating = likelihoodRating,
+            RiskScore = riskScore,
+            Status = TruncateLower(riskStatusRow?.Label ?? "new", 20),
+            RiskStatusId = riskStatusId,
+            RiskLikelihoodId = form.RiskLikelihoodId,
+            RiskImpactLevelId = form.RiskImpactLevelId,
+            RiskProximityId = form.RiskProximityId,
+            RiskCategoryId = form.RiskCategoryId,
+            ResponseStrategy = mitigation,
             Notes = notes,
             RiskPriorityId = riskPriorityId,
             RiskTierId = riskTierId,
@@ -1269,22 +3275,70 @@ public class ModernWorkController : Controller
         return Redirect((Url.Action(nameof(Detail), new { id, tab = "risks" }) ?? "") + "#wd-risks");
     }
 
-    private static string MapPriorityToIssueSeverity(string? priority) =>
-        priority?.Trim().ToLowerInvariant() switch
-        {
-            "high" => "high",
-            "low" => "low",
-            "medium" => "medium",
-            _ => "medium"
-        };
-
-    private async Task<int?> ResolveRiskPriorityIdAsync(string? priority, CancellationToken cancellationToken)
+    private static string Truncate(string? s, int max)
     {
-        var p = priority?.Trim().ToLowerInvariant();
-        if (string.IsNullOrEmpty(p))
-            return null;
-        return await _context.RiskPriorities.AsNoTracking()
-            .Where(x => x.IsActive && (x.Code.ToLower() == p || x.Label.ToLower().Contains(p)))
+        if (string.IsNullOrEmpty(s))
+            return "";
+        var t = s.Trim();
+        return t.Length <= max ? t : t[..max];
+    }
+
+    private static string TruncateLower(string? s, int max)
+    {
+        if (string.IsNullOrEmpty(s))
+            return "";
+        var t = s.Trim().ToLowerInvariant();
+        return t.Length <= max ? t : t[..max];
+    }
+
+    private static int MapLookupOrderToFive(int? selectedId, IReadOnlyList<int> orderedIds)
+    {
+        if (!selectedId.HasValue || orderedIds.Count == 0)
+            return 3;
+        var idx = -1;
+        for (var i = 0; i < orderedIds.Count; i++)
+        {
+            if (orderedIds[i] == selectedId.Value)
+            {
+                idx = i;
+                break;
+            }
+        }
+        if (idx < 0)
+            return 3;
+        if (orderedIds.Count == 1)
+            return 3;
+        var scaled = 1d + (double)idx / (orderedIds.Count - 1) * 4d;
+        return (int)Math.Round(Math.Clamp(scaled, 1, 5));
+    }
+
+    private async Task<int?> GetDefaultRiskStatusIdAsync(CancellationToken cancellationToken)
+    {
+        var id = await _context.RiskStatuses.AsNoTracking()
+            .Where(x => x.IsActive && x.Code.ToLower() == "new")
+            .OrderBy(x => x.SortOrder)
+            .Select(x => (int?)x.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+        if (id.HasValue)
+            return id;
+        return await _context.RiskStatuses.AsNoTracking()
+            .Where(x => x.IsActive)
+            .OrderBy(x => x.SortOrder)
+            .Select(x => (int?)x.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+    }
+
+    private async Task<int?> GetDefaultIssueStatusIdAsync(CancellationToken cancellationToken)
+    {
+        var id = await _context.IssueStatuses.AsNoTracking()
+            .Where(x => x.IsActive && x.Code.ToLower() == "open")
+            .OrderBy(x => x.SortOrder)
+            .Select(x => (int?)x.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+        if (id.HasValue)
+            return id;
+        return await _context.IssueStatuses.AsNoTracking()
+            .Where(x => x.IsActive)
             .OrderBy(x => x.SortOrder)
             .Select(x => (int?)x.Id)
             .FirstOrDefaultAsync(cancellationToken);
@@ -1296,7 +3350,8 @@ public class ModernWorkController : Controller
         if (string.IsNullOrEmpty(t))
             return null;
         return await _context.RiskTiers.AsNoTracking()
-            .Where(x => x.IsActive && (x.Name == t || x.Code.Replace(" ", "") == t.Replace(" ", "") || x.Name.Contains(t)))
+            .Where(x => x.IsActive && !x.IsProposedTier &&
+                (x.Name == t || x.Code.Replace(" ", "") == t.Replace(" ", "") || x.Name.Contains(t)))
             .OrderBy(x => x.SortOrder)
             .Select(x => (int?)x.Id)
             .FirstOrDefaultAsync(cancellationToken);
@@ -1357,6 +3412,36 @@ public class ModernWorkController : Controller
         ViewBag.WorkItem = work;
         ViewBag.Milestones = milestones;
         ViewBag.DirectorateOptions = directorates;
+        ViewBag.RiskTierOptions = await _context.RiskTiers.AsNoTracking()
+            .Where(x => x.IsActive && !x.IsProposedTier).OrderBy(x => x.SortOrder).ThenBy(x => x.Name)
+            .Select(x => new RiskIssueNamedIntOption { Id = x.Id, Name = x.Name }).ToListAsync(cancellationToken);
+        ViewBag.RiskPriorityOptions = await _context.RiskPriorities.AsNoTracking()
+            .Where(x => x.IsActive).OrderBy(x => x.SortOrder)
+            .Select(x => new RiskIssueNamedIntOption { Id = x.Id, Name = x.Label }).ToListAsync(cancellationToken);
+        ViewBag.RiskLikelihoodOptions = await _context.RiskLikelihoods.AsNoTracking()
+            .Where(x => x.IsActive).OrderBy(x => x.SortOrder)
+            .Select(x => new RiskIssueNamedIntOption { Id = x.Id, Name = x.Label }).ToListAsync(cancellationToken);
+        ViewBag.RiskImpactLevelOptions = await _context.RiskImpactLevels.AsNoTracking()
+            .Where(x => x.IsActive).OrderBy(x => x.SortOrder)
+            .Select(x => new RiskIssueNamedIntOption { Id = x.Id, Name = x.Label }).ToListAsync(cancellationToken);
+        ViewBag.RiskProximityOptions = await _context.RiskProximities.AsNoTracking()
+            .Where(x => x.IsActive).OrderBy(x => x.SortOrder)
+            .Select(x => new RiskIssueNamedIntOption { Id = x.Id, Name = x.Label }).ToListAsync(cancellationToken);
+        ViewBag.RiskCategoryOptions = await _context.RiskCategories.AsNoTracking()
+            .Where(x => x.IsActive).OrderBy(x => x.SortOrder)
+            .Select(x => new RiskIssueNamedIntOption { Id = x.Id, Name = x.Label }).ToListAsync(cancellationToken);
+        ViewBag.IssueSeverityOptions = await _context.IssueSeverities.AsNoTracking()
+            .Where(x => x.IsActive).OrderBy(x => x.SortOrder)
+            .Select(x => new RiskIssueNamedIntOption { Id = x.Id, Name = x.Label }).ToListAsync(cancellationToken);
+        ViewBag.IssuePriorityOptions = await _context.IssuePriorities.AsNoTracking()
+            .Where(x => x.IsActive).OrderBy(x => x.SortOrder)
+            .Select(x => new RiskIssueNamedIntOption { Id = x.Id, Name = x.Label }).ToListAsync(cancellationToken);
+        ViewBag.IssueStatusOptions = await _context.IssueStatuses.AsNoTracking()
+            .Where(x => x.IsActive).OrderBy(x => x.SortOrder)
+            .Select(x => new RiskIssueNamedIntOption { Id = x.Id, Name = x.Label }).ToListAsync(cancellationToken);
+        ViewBag.IssueCategoryOptions = await _context.IssueCategories.AsNoTracking()
+            .Where(x => x.IsActive).OrderBy(x => x.SortOrder)
+            .Select(x => new RiskIssueNamedIntOption { Id = x.Id, Name = x.Label }).ToListAsync(cancellationToken);
         ViewBag.WorkChromeSection = "risks";
         ViewBag.WorkChromeSubPage = true;
         ViewBag.WorkChromeTabsAsLinks = true;
@@ -1371,7 +3456,7 @@ public class ModernWorkController : Controller
         return (null, work);
     }
 
-    /// <summary>Bridge from modern work UI to legacy risk detail (project-scoped risk entity).</summary>
+    /// <summary>Bridge from modern work UI to RAID risk detail (core register).</summary>
     [HttpGet("{workId:int}/risk/{id:int}")]
     public async Task<IActionResult> RiskDetail(int workId, int id, CancellationToken cancellationToken = default)
     {
@@ -1380,10 +3465,10 @@ public class ModernWorkController : Controller
         if (!exists)
             return NotFound();
 
-        return RedirectToAction("Details", "Risk", new { id });
+        return RedirectToAction(nameof(ModernRaidController.RiskDetail), "ModernRaid", new { id });
     }
 
-    /// <summary>Bridge from modern work UI to legacy issue edit.</summary>
+    /// <summary>Bridge from modern work UI to RAID issue detail (core register).</summary>
     [HttpGet("{workId:int}/issue/{id:int}")]
     public async Task<IActionResult> IssueDetail(int workId, int id, CancellationToken cancellationToken = default)
     {
@@ -1392,7 +3477,7 @@ public class ModernWorkController : Controller
         if (!exists)
             return NotFound();
 
-        return RedirectToAction("EditIssue", "Project", new { projectId = workId, issueId = id });
+        return RedirectToAction(nameof(ModernRaidController.IssueDetail), "ModernRaid", new { id });
     }
 
     [HttpGet("watching")]
@@ -1450,6 +3535,29 @@ public class ModernWorkController : Controller
         ViewBag.PhaseNames = phaseNames;
         ViewBag.PriorityNames = priorityNames;
 
+        var watchItemIds = items.Select(w => w.Id).ToList();
+        var primaryContactById = watchItemIds.Count > 0
+            ? await _context.Projects.AsNoTracking()
+                .Where(p => watchItemIds.Contains(p.Id) && p.PrimaryContactUser != null)
+                .Select(p => new { p.Id, Name = p.PrimaryContactUser!.Name ?? p.PrimaryContactUser.Email })
+                .ToDictionaryAsync(x => x.Id, x => x.Name, cancellationToken)
+            : new Dictionary<int, string>();
+        ViewBag.PrimaryContactById = primaryContactById;
+
+        var businessAreaByProjectId = watchItemIds.Count > 0
+            ? await _context.Projects.AsNoTracking()
+                .Where(p => watchItemIds.Contains(p.Id))
+                .Select(p => new { p.Id, Name = p.BusinessAreaLookup != null ? p.BusinessAreaLookup.Name : null })
+                .ToDictionaryAsync(
+                    x => x.Id,
+                    x => string.IsNullOrWhiteSpace(x.Name) ? "—" : x.Name!,
+                    cancellationToken)
+            : new Dictionary<int, string>();
+        ViewBag.BusinessAreaByProjectId = businessAreaByProjectId;
+
+        var mrMonth = DateTime.UtcNow.ToString("MMM", System.Globalization.CultureInfo.GetCultureInfo("en-GB"));
+        ViewBag.WatchingMonthlyColumnHeader = $"{mrMonth} Update";
+
         return View("~/Views/Modern/Work/Watching.cshtml", items);
     }
 
@@ -1466,9 +3574,9 @@ public class ModernWorkController : Controller
         ViewBag.MainNavSection = "work";
         ViewBag.SubNavItem = "work-bypriority";
 
-        var tabKey = (tab ?? "mission").Trim().ToLowerInvariant();
-        if (tabKey != "mission" && tabKey != "outcomes")
-            tabKey = "mission";
+        var tabKey = (tab ?? "levels").Trim().ToLowerInvariant();
+        if (tabKey != "levels" && tabKey != "mission" && tabKey != "outcomes")
+            tabKey = "levels";
         ViewBag.ByPriorityTab = tabKey;
 
         var items = await _modernWork.GetByPriorityWorkItemsAsync(
@@ -1494,12 +3602,41 @@ public class ModernWorkController : Controller
             new() { Name = "Completed", Value = "Completed" },
             new() { Name = "Cancelled", Value = "Cancelled" }
         };
+        var phaseNames = await _context.PhaseLookups.AsNoTracking()
+            .Where(p => p.IsActive)
+            .ToDictionaryAsync(p => p.Id, p => p.Name ?? "", cancellationToken);
+        var priorityNames = await _context.DeliveryPriorities.AsNoTracking()
+            .ToDictionaryAsync(p => p.Id, p => p.Name ?? "", cancellationToken);
+        var bpItemIds = items.Select(w => w.Id).ToList();
+        var primaryContactById = bpItemIds.Count > 0
+            ? await _context.Projects.AsNoTracking()
+                .Where(p => bpItemIds.Contains(p.Id) && p.PrimaryContactUser != null)
+                .Select(p => new { p.Id, Name = p.PrimaryContactUser!.Name ?? p.PrimaryContactUser.Email })
+                .ToDictionaryAsync(x => x.Id, x => x.Name, cancellationToken)
+            : new Dictionary<int, string>();
+
         ViewBag.Search = search;
         ViewBag.FilterPortfolioId = portfolioId;
         ViewBag.FilterDirectorateId = directorateId;
         ViewBag.PriorityFilter = priorityId;
         ViewBag.StatusFilter = status;
         ViewBag.PortfolioNames = portfolioNames;
+        ViewBag.PhaseNames = phaseNames;
+        ViewBag.PriorityNames = priorityNames;
+        ViewBag.PrimaryContactById = primaryContactById;
+        var businessAreaById = bpItemIds.Count > 0
+            ? await _context.Projects.AsNoTracking()
+                .Where(p => bpItemIds.Contains(p.Id))
+                .Select(p => new
+                {
+                    p.Id,
+                    Name = p.BusinessAreaLookup != null
+                        ? p.BusinessAreaLookup.Name
+                        : (p.PrimaryOrganizationalGroup != null ? p.PrimaryOrganizationalGroup.Name : null)
+                })
+                .ToDictionaryAsync(x => x.Id, x => x.Name ?? "—", cancellationToken)
+            : new Dictionary<int, string>();
+        ViewBag.BusinessAreaNameByProjectId = businessAreaById;
 
         var missionPillarList = await _context.Missions.AsNoTracking()
             .Where(m => !m.IsDeleted)
@@ -1556,11 +3693,41 @@ public class ModernWorkController : Controller
             new() { Name = "Completed", Value = "Completed" },
             new() { Name = "Cancelled", Value = "Cancelled" }
         };
+        var phaseNames = await _context.PhaseLookups.AsNoTracking()
+            .Where(p => p.IsActive)
+            .ToDictionaryAsync(p => p.Id, p => p.Name ?? "", cancellationToken);
+        var priorityNames = await _context.DeliveryPriorities.AsNoTracking()
+            .ToDictionaryAsync(p => p.Id, p => p.Name ?? "", cancellationToken);
+
+        var flagItemIds = items.Select(w => w.Id).ToList();
+        var primaryContactById = flagItemIds.Count > 0
+            ? await _context.Projects.AsNoTracking()
+                .Where(p => flagItemIds.Contains(p.Id) && p.PrimaryContactUser != null)
+                .Select(p => new { p.Id, Name = p.PrimaryContactUser!.Name ?? p.PrimaryContactUser.Email })
+                .ToDictionaryAsync(x => x.Id, x => x.Name, cancellationToken)
+            : new Dictionary<int, string>();
+
         ViewBag.Search = search;
         ViewBag.FilterPortfolioId = portfolioId;
         ViewBag.FilterDirectorateId = directorateId;
         ViewBag.StatusFilter = status;
         ViewBag.PortfolioNames = portfolioNames;
+        ViewBag.PhaseNames = phaseNames;
+        ViewBag.PriorityNames = priorityNames;
+        ViewBag.PrimaryContactById = primaryContactById;
+        var businessAreaById = flagItemIds.Count > 0
+            ? await _context.Projects.AsNoTracking()
+                .Where(p => flagItemIds.Contains(p.Id))
+                .Select(p => new
+                {
+                    p.Id,
+                    Name = p.BusinessAreaLookup != null
+                        ? p.BusinessAreaLookup.Name
+                        : (p.PrimaryOrganizationalGroup != null ? p.PrimaryOrganizationalGroup.Name : null)
+                })
+                .ToDictionaryAsync(x => x.Id, x => x.Name ?? "—", cancellationToken)
+            : new Dictionary<int, string>();
+        ViewBag.BusinessAreaNameByProjectId = businessAreaById;
 
         return View("~/Views/Modern/Work/Flagship.cshtml", items);
     }
@@ -1623,11 +3790,16 @@ public class ModernWorkController : Controller
     }
 
     [HttpGet("directorates")]
-    public async Task<IActionResult> Directorates(string? search, CancellationToken cancellationToken = default)
+    public async Task<IActionResult> Directorates(string? search, string? workItems, CancellationToken cancellationToken = default)
     {
         ViewBag.MainNavSection = "work";
         ViewBag.SubNavItem = "work-directorates";
         ViewBag.Search = search;
+
+        var workItemsNorm = (workItems ?? "all").Trim().ToLowerInvariant();
+        if (workItemsNorm != "with" && workItemsNorm != "without")
+            workItemsNorm = "all";
+        ViewBag.WorkItemsFilter = workItemsNorm;
 
         var rows = await _context.Divisions.AsNoTracking()
             .Where(d => d.IsActive)
@@ -1640,6 +3812,23 @@ public class ModernWorkController : Controller
                 || (d.Description != null && d.Description.Contains(s, StringComparison.OrdinalIgnoreCase))).ToList();
         }
 
+        var allWorkItems = await _modernWork.GetByPriorityWorkItemsAsync(
+            null, null, null, null, null, cancellationToken);
+
+        var workItemsByDirectorateId = new Dictionary<int, List<WorkItem>>();
+        foreach (var wi in allWorkItems)
+        {
+            if (wi.Directorates == null) continue;
+            foreach (var d in wi.Directorates)
+            {
+                if (!workItemsByDirectorateId.ContainsKey(d.DirectorateId))
+                    workItemsByDirectorateId[d.DirectorateId] = new List<WorkItem>();
+                workItemsByDirectorateId[d.DirectorateId].Add(wi);
+            }
+        }
+
+        var counts = workItemsByDirectorateId.ToDictionary(kv => kv.Key, kv => kv.Value.Count);
+
         var directorates = rows.Select(d => new Directorate
         {
             Id = d.Id,
@@ -1648,20 +3837,251 @@ public class ModernWorkController : Controller
             IsActive = d.IsActive
         }).ToList();
 
-        var activeProjectIds = await _context.Projects.AsNoTracking()
-            .Where(p => !p.IsDeleted)
-            .Select(p => p.Id)
-            .ToListAsync(cancellationToken);
-        var counts = activeProjectIds.Count == 0
-            ? new Dictionary<int, int>()
-            : await _context.ProjectDirectorates.AsNoTracking()
-                .Where(pd => activeProjectIds.Contains(pd.ProjectId))
-                .GroupBy(pd => pd.DivisionId)
-                .Select(g => new { DivisionId = g.Key, Count = g.Count() })
-                .ToDictionaryAsync(x => x.DivisionId, x => x.Count, cancellationToken);
+        ViewBag.CountBeforeWorkFilter = directorates.Count;
+
+        if (workItemsNorm == "with")
+        {
+            directorates = directorates
+                .Where(d => counts.TryGetValue(d.Id, out var c) && c > 0)
+                .ToList();
+        }
+        else if (workItemsNorm == "without")
+        {
+            directorates = directorates
+                .Where(d => !counts.TryGetValue(d.Id, out var c) || c == 0)
+                .ToList();
+        }
+
+        var phaseNames = await _context.PhaseLookups.AsNoTracking()
+            .Where(p => p.IsActive)
+            .ToDictionaryAsync(p => p.Id, p => p.Name ?? "", cancellationToken);
+        var priorityNames = await _context.DeliveryPriorities.AsNoTracking()
+            .ToDictionaryAsync(p => p.Id, p => p.Name ?? "", cancellationToken);
+        var allItemIds = allWorkItems.Select(w => w.Id).ToList();
+        var primaryContactById = allItemIds.Count > 0
+            ? await _context.Projects.AsNoTracking()
+                .Where(p => allItemIds.Contains(p.Id) && p.PrimaryContactUser != null)
+                .Select(p => new { p.Id, Name = p.PrimaryContactUser!.Name ?? p.PrimaryContactUser.Email })
+                .ToDictionaryAsync(x => x.Id, x => x.Name, cancellationToken)
+            : new Dictionary<int, string>();
 
         ViewBag.Directorates = directorates;
         ViewBag.WorkCountByDirectorateId = counts;
+        ViewBag.WorkItemsByDirectorateId = workItemsByDirectorateId;
+        ViewBag.PhaseNames = phaseNames;
+        ViewBag.PriorityNames = priorityNames;
+        ViewBag.PrimaryContactById = primaryContactById;
+        var dirProjectIds = workItemsByDirectorateId.Values.SelectMany(w => w).Select(x => x.Id).Distinct().ToList();
+        var businessAreaByIdDir = dirProjectIds.Count > 0
+            ? await _context.Projects.AsNoTracking()
+                .Where(p => dirProjectIds.Contains(p.Id))
+                .Select(p => new
+                {
+                    p.Id,
+                    Name = p.BusinessAreaLookup != null
+                        ? p.BusinessAreaLookup.Name
+                        : (p.PrimaryOrganizationalGroup != null ? p.PrimaryOrganizationalGroup.Name : null)
+                })
+                .ToDictionaryAsync(x => x.Id, x => x.Name ?? "—", cancellationToken)
+            : new Dictionary<int, string>();
+        ViewBag.BusinessAreaNameByProjectId = businessAreaByIdDir;
+
         return View("~/Views/Modern/Work/Directorates.cshtml");
+    }
+
+    [HttpGet("business-areas")]
+    public async Task<IActionResult> BusinessAreas(string? search, string? workItems, CancellationToken cancellationToken = default)
+    {
+        ViewBag.MainNavSection = "work";
+        ViewBag.SubNavItem = "work-business-areas";
+        ViewBag.Search = search;
+
+        var workItemsNorm = (workItems ?? "all").Trim().ToLowerInvariant();
+        if (workItemsNorm != "with" && workItemsNorm != "without")
+            workItemsNorm = "all";
+        ViewBag.WorkItemsFilter = workItemsNorm;
+
+        var rows = await _context.BusinessAreaLookups.AsNoTracking()
+            .Where(b => b.IsActive)
+            .OrderBy(b => b.SortOrder)
+            .ThenBy(b => b.Name)
+            .ToListAsync(cancellationToken);
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var s = search.Trim();
+            rows = rows.Where(b => b.Name.Contains(s, StringComparison.OrdinalIgnoreCase)
+                || (b.Description != null && b.Description.Contains(s, StringComparison.OrdinalIgnoreCase))).ToList();
+        }
+
+        var allWorkItems = await _modernWork.GetByPriorityWorkItemsAsync(
+            null, null, null, null, null, cancellationToken);
+
+        var allItemIds = allWorkItems.Select(w => w.Id).ToList();
+        var businessAreaIdByProjectId = allItemIds.Count == 0
+            ? new Dictionary<int, int?>()
+            : await _context.Projects.AsNoTracking()
+                .Where(p => allItemIds.Contains(p.Id))
+                .Select(p => new { p.Id, p.BusinessAreaId })
+                .ToDictionaryAsync(x => x.Id, x => x.BusinessAreaId, cancellationToken);
+
+        var workItemsByBusinessAreaId = new Dictionary<int, List<WorkItem>>();
+        var unassignedItems = new List<WorkItem>();
+        foreach (var wi in allWorkItems)
+        {
+            if (!businessAreaIdByProjectId.TryGetValue(wi.Id, out var baId) || !baId.HasValue)
+            {
+                unassignedItems.Add(wi);
+                continue;
+            }
+
+            var id = baId.Value;
+            if (!workItemsByBusinessAreaId.TryGetValue(id, out var list))
+            {
+                list = new List<WorkItem>();
+                workItemsByBusinessAreaId[id] = list;
+            }
+
+            list.Add(wi);
+        }
+
+        var counts = workItemsByBusinessAreaId.ToDictionary(kv => kv.Key, kv => kv.Value.Count);
+        var unassignedCount = unassignedItems.Count;
+
+        var businessAreas = rows.ToList();
+        ViewBag.CountBeforeWorkFilter = businessAreas.Count;
+
+        if (workItemsNorm == "with")
+        {
+            businessAreas = businessAreas
+                .Where(b => counts.TryGetValue(b.Id, out var c) && c > 0)
+                .ToList();
+        }
+        else if (workItemsNorm == "without")
+        {
+            businessAreas = businessAreas
+                .Where(b => !counts.TryGetValue(b.Id, out var c) || c == 0)
+                .ToList();
+        }
+
+        var showUnassignedPanel = unassignedCount > 0 && workItemsNorm != "without";
+        ViewBag.ShowUnassignedPanel = showUnassignedPanel;
+
+        var phaseNames = await _context.PhaseLookups.AsNoTracking()
+            .Where(p => p.IsActive)
+            .ToDictionaryAsync(p => p.Id, p => p.Name ?? "", cancellationToken);
+        var priorityNames = await _context.DeliveryPriorities.AsNoTracking()
+            .ToDictionaryAsync(p => p.Id, p => p.Name ?? "", cancellationToken);
+        var primaryContactById = allItemIds.Count > 0
+            ? await _context.Projects.AsNoTracking()
+                .Where(p => allItemIds.Contains(p.Id) && p.PrimaryContactUser != null)
+                .Select(p => new { p.Id, Name = p.PrimaryContactUser!.Name ?? p.PrimaryContactUser.Email })
+                .ToDictionaryAsync(x => x.Id, x => x.Name, cancellationToken)
+            : new Dictionary<int, string>();
+
+        ViewBag.BusinessAreas = businessAreas;
+        ViewBag.WorkCountByBusinessAreaId = counts;
+        ViewBag.WorkItemsByBusinessAreaId = workItemsByBusinessAreaId;
+        ViewBag.UnassignedWorkItems = unassignedItems;
+        ViewBag.UnassignedCount = unassignedCount;
+        ViewBag.PhaseNames = phaseNames;
+        ViewBag.PriorityNames = priorityNames;
+        ViewBag.PrimaryContactById = primaryContactById;
+
+        var baProjectIds = workItemsByBusinessAreaId.Values.SelectMany(w => w).Select(x => x.Id)
+            .Concat(unassignedItems.Select(x => x.Id)).Distinct().ToList();
+        var businessAreaByIdFromProjects = baProjectIds.Count > 0
+            ? await _context.Projects.AsNoTracking()
+                .Where(p => baProjectIds.Contains(p.Id))
+                .Select(p => new
+                {
+                    p.Id,
+                    Name = p.BusinessAreaLookup != null
+                        ? p.BusinessAreaLookup.Name
+                        : (p.PrimaryOrganizationalGroup != null ? p.PrimaryOrganizationalGroup.Name : null)
+                })
+                .ToDictionaryAsync(x => x.Id, x => x.Name ?? "—", cancellationToken)
+            : new Dictionary<int, string>();
+        ViewBag.BusinessAreaNameByProjectId = businessAreaByIdFromProjects;
+
+        return View("~/Views/Modern/Work/BusinessAreas.cshtml");
+    }
+
+    [HttpGet("{id:int}/multi-dept/edit")]
+    [HttpGet("/ModernWork/EditMultiDeptCooperation/{id:int}")]
+    public async Task<IActionResult> EditMultiDeptCooperation(int id, CancellationToken cancellationToken = default)
+    {
+        var userEmail = User.Identity?.Name;
+        if (string.IsNullOrEmpty(userEmail))
+            return Unauthorized();
+
+        var currentUser = await _context.Users
+            .FirstOrDefaultAsync(u => u.Email.ToLower() == userEmail.ToLower(), cancellationToken);
+        if (currentUser == null)
+            return Unauthorized();
+
+        var deny = await EnsureUserCanEditWorkAsync(id, cancellationToken);
+        if (deny != null)
+            return deny;
+
+        var work = await _modernWork.PopulateWorkDetailAsync(
+            this, id, currentUser, userEmail, "overview", null, cancellationToken);
+        if (work == null)
+            return NotFound();
+
+        ViewBag.WorkChromeSubPage = true;
+        return View("~/Views/Modern/Work/EditMultiDeptCooperation.cshtml", work);
+    }
+
+    [HttpPost("{id:int}/multi-dept/edit")]
+    [HttpPost("/ModernWork/EditMultiDeptCooperation/{id:int}")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> EditMultiDeptCooperationPost(int id, [FromForm] int[]? GovernmentDepartmentIds, CancellationToken cancellationToken = default)
+    {
+        var deny = await EnsureUserCanEditWorkAsync(id, cancellationToken);
+        if (deny != null)
+            return deny;
+
+        var project = await _context.Projects
+            .FirstOrDefaultAsync(p => p.Id == id && !p.IsDeleted, cancellationToken);
+        if (project == null)
+            return NotFound();
+
+        if (GovernmentDepartmentIds != null && GovernmentDepartmentIds.Length > 0)
+        {
+            var validIds = await _context.GovernmentDepartments.AsNoTracking()
+                .Where(g => GovernmentDepartmentIds.Contains(g.Id))
+                .Select(g => g.Id)
+                .ToArrayAsync(cancellationToken);
+            project.OtherDepartments = JsonSerializer.Serialize(validIds);
+            project.IsMultiDepartmentProject = validIds.Length > 0;
+        }
+        else
+        {
+            project.OtherDepartments = null;
+            project.IsMultiDepartmentProject = false;
+        }
+
+        await _context.SaveChangesAsync(cancellationToken);
+        TempData["Message"] = "Multi-department cooperation updated.";
+        return RedirectToAction(nameof(Detail), new { id });
+    }
+
+    [HttpGet("search-government-departments")]
+    [HttpGet("/ModernWork/SearchGovernmentDepartments")]
+    public async Task<IActionResult> SearchGovernmentDepartments([FromQuery] string? q, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(q) || q.Length < 2)
+            return Json(Array.Empty<object>());
+
+        var term = q.Trim().ToLower();
+        var results = await _context.GovernmentDepartments.AsNoTracking()
+            .Where(g => g.Title.ToLower().Contains(term)
+                     || (g.Abbreviation != null && g.Abbreviation.ToLower().Contains(term)))
+            .OrderBy(g => g.Title)
+            .Take(20)
+            .Select(g => new { id = g.Id, name = g.Title })
+            .ToListAsync(cancellationToken);
+
+        return Json(results);
     }
 }

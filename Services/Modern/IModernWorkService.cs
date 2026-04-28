@@ -22,6 +22,14 @@ public interface IModernWorkService
         User currentUser,
         string userEmail,
         IUrlHelper url,
+        string? registerTab = null,
+        int? registerPage = null,
+        int registerPageSize = 20,
+        int? businessAreaId = null,
+        int? primaryContactUserId = null,
+        int[]? tagIds = null,
+        string? registerSort = null,
+        bool registerSortDesc = false,
         CancellationToken cancellationToken = default);
 
     /// <summary>Loads a work item for the modern detail page and populates <see cref="Controller.ViewBag"/>.</summary>
@@ -33,6 +41,9 @@ public interface IModernWorkService
         string? tab,
         string? milestonestab,
         CancellationToken cancellationToken = default);
+
+    /// <summary>Whether the user may edit work item fields (same rule as summary-list Change actions).</summary>
+    Task<bool> CanUserEditWorkItemAsync(int projectId, string userEmail, CancellationToken cancellationToken = default);
 
     /// <summary>Projects on the user&apos;s watchlist, with optional filters (maps to <see cref="ModernWorkController.Watching"/>).</summary>
     Task<List<WorkItem>> GetWatchingWorkItemsAsync(

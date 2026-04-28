@@ -1,0 +1,66 @@
+@{
+    var items = (IEnumerable<dynamic>)ViewData["Items"]!;
+    var addAction = (string)ViewData["AddAction"]!;
+    var toggleAction = (string)ViewData["ToggleAction"]!;
+    var entityLabel = (string)ViewData["EntityLabel"]!;
+}
+
+<h2 class="govuk-heading-m" style="text-transform:capitalize;">@entityLabel@("s")</h2>
+
+@if (!items.Any())
+{
+ <p class="govuk-body">No @(entityLabel)s configured.</p>
+}
+else
+{
+ <div class="dfe-c-table-wrap">
+        <table >
+            <thead>
+                <tr>
+ <th data-sort-bound="1" class="sortable">Name</th>
+                    <th>Description</th>
+ <th data-sort-bound="1" class="sortable">Order</th>
+ <th data-sort-bound="1" class="sortable">Status</th>
+ <th><span class="govuk-visually-hidden">Actions</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in items)
+                {
+                    <tr>
+                        <td><strong>@item.Name</strong></td>
+                        <td>@(item.Description ?? "—")</td>
+                        <td>@item.DisplayOrder</td>
+ <td><span class="dfe-c-tag @(item.Active ?"dfe-c-tag--green" : "dfe-c-tag--grey")">@(item.Active ? "Active" : "Inactive")</span></td>
+                        <td style="text-align:right;">
+                            <form method="post" action="@Url.Action(toggleAction, "ModernAdmin", new { id = item.Id })" style="display:inline;">
+                                @Html.AntiForgeryToken()
+ <button type="submit" class="govuk-button govuk-button--secondary govuk-button--small govuk-!-margin-bottom-0">@(item.Active ? "Deactivate" : "Activate")</button>
+                            </form>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+<details class="govuk-details" style="margin-top:1rem;">
+ <summary class="govuk-details__summary"><span class="govuk-details__summary-text">Add @entityLabel</span></summary>
+ <form method="post" action="@addAction" class="govuk-form-group">
+        @Html.AntiForgeryToken()
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="sl-name">Name</label>
+ <input class="govuk-input govuk-input--width-20" id="sl-name" name="name" required>
+        </div>
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="sl-desc">Description</label>
+ <input class="govuk-input govuk-input--width-30" id="sl-desc" name="description">
+        </div>
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="sl-order">Display order</label>
+ <input class="govuk-input govuk-input--width-5" id="sl-order" name="displayOrder" type="number" value="0">
+        </div>
+ <button type="submit" class="govuk-button">Add</button>
+    </form>
+</details>

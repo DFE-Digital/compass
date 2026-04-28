@@ -206,13 +206,20 @@ public class HomeDashboardViewModelBuilder : IHomeDashboardViewModelBuilder
             }
         }
 
-        // Calculate projects needing monthly updates (same applicable period as your-work)
-        var projectsNeedingMonthlyUpdates = new List<(Project Project, UpdateSubmissionStatus Status, DateTime DueDate)>();
+        // Monthly update status per project (same applicable period as your-work / tasks)
+        var monthlyUpdateStatusByProjectId = new Dictionary<int, UpdateSubmissionStatus>();
         foreach (var project in myProjects)
         {
             var update = project.MonthlyUpdates?.FirstOrDefault(u => u.Year == applicableYear && u.Month == applicableMonth);
             var updateStatus = _monthlyUpdateService.CalculateUpdateStatus(applicableYear, applicableMonth, update?.SubmittedAt);
-            
+            monthlyUpdateStatusByProjectId[project.Id] = updateStatus;
+        }
+
+        var projectsNeedingMonthlyUpdates = new List<(Project Project, UpdateSubmissionStatus Status, DateTime DueDate)>();
+        foreach (var project in myProjects)
+        {
+            if (!monthlyUpdateStatusByProjectId.TryGetValue(project.Id, out var updateStatus))
+                continue;
             if (updateStatus == UpdateSubmissionStatus.Due || updateStatus == UpdateSubmissionStatus.Late)
             {
                 var dueDate = _monthlyUpdateService.GetMonthlyUpdateDueDate(applicableYear, applicableMonth);
@@ -572,6 +579,9 @@ public class HomeDashboardViewModelBuilder : IHomeDashboardViewModelBuilder
             RecentSuccesses = recentSuccesses,
             ProductsNeedingReturns = productsNeedingReturns,
             ProjectsNeedingMonthlyUpdates = projectsNeedingMonthlyUpdates,
+            ApplicableMonthlyUpdateYear = applicableYear,
+            ApplicableMonthlyUpdateMonth = applicableMonth,
+            MonthlyUpdateStatusByProjectId = monthlyUpdateStatusByProjectId,
             ProductsNeedingCommissionReporting = productsNeedingCommissionReporting,
             LeadershipAssignments = leadershipAssignments,
             LeadershipBusinessAreas = leadershipBusinessAreas,

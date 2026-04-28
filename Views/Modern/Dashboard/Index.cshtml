@@ -1,5 +1,6 @@
 @model HomeDashboardViewModel
 @using System.Linq
+@using Compass.Services
 @{
   ViewData["Title"] = "Your dashboard";
 
@@ -40,261 +41,289 @@
   var actionCount = Model.AssignedActions.Count;
   var attentionCount = overdueCount + highIssueCount + atRiskCount + updatesDueCount + returnsDueCount + commissionCount + actionCount;
 
-  var updatesDueByProjectId = Model.ProjectsNeedingMonthlyUpdates.ToDictionary(t => t.Project.Id, t => t.Status);
+  var monthlyByProject = Model.MonthlyUpdateStatusByProjectId;
+  var monthlySubmittedCount = Model.MyProjects.Count(p =>
+    monthlyByProject.TryGetValue(p.Id, out var st) && st == UpdateSubmissionStatus.Submitted);
+  var monthlyActionableCount = Model.MyProjects.Count(p =>
+    monthlyByProject.TryGetValue(p.Id, out var st) &&
+    st is UpdateSubmissionStatus.Submitted or UpdateSubmissionStatus.Due or UpdateSubmissionStatus.Late);
+  var monthlyOutstandingCount = Model.MyProjects.Count(p =>
+    monthlyByProject.TryGetValue(p.Id, out var st) &&
+    st is UpdateSubmissionStatus.Due or UpdateSubmissionStatus.Late);
+  var pctSubmitted = monthlyActionableCount > 0
+    ? (int)Math.Round(100.0 * monthlySubmittedCount / monthlyActionableCount)
+    : 0;
+  var reportingPeriodLabel = new DateTime(Model.ApplicableMonthlyUpdateYear, Model.ApplicableMonthlyUpdateMonth, 1)
+    .ToString("MMMM yyyy");
 
-  var ragGroups = Model.MyProjects
-    .GroupBy(p => p.RagStatusLookup?.Name ?? "Not set")
-    .ToDictionary(g => g.Key, g => g.Count());
-  int RagCount(string k) => ragGroups.TryGetValue(k, out var v) ? v : 0;
-  var ragBarG = RagCount("Green") + RagCount("Amber-Green");
-  var ragBarA = RagCount("Amber");
-  var ragBarR = RagCount("Red") + RagCount("Amber-Red");
-  var ragBarO = RagCount("Not set");
-
-  var monthlySubmitted = Model.MyProjects.Count - updatesDueCount;
-  if (monthlySubmitted < 0) monthlySubmitted = 0;
-  var monthlyTotal = monthlySubmitted + updatesDueCount;
-  var pctSubmitted = monthlyTotal > 0 ? (int)Math.Round(100.0 * monthlySubmitted / monthlyTotal) : 0;
   string MonthlyPctColour() =>
     pctSubmitted >= 90 ? "var(--rag-g)" : pctSubmitted >= 60 ? "var(--rag-a)" : "var(--rag-r)";
-  string ProgressFillColour() => MonthlyPctColour();
 }
 
-<div class="dfe-c-flex--between dfe-c-mb-3" style="flex-wrap:wrap;gap:1rem;">
-  <div>
-    <div style="font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.7px;color:var(--grey-4);">DDT Central Operations</div>
-    <h1 style="margin-bottom:0.25rem;">@Greeting(), @Model.FirstName</h1>
-    <p class="dfe-c-text-muted">
-      @DateTime.Today.ToString("dddd d MMMM yyyy")
-      @if (attentionCount > 0)
-      {
-        <span> — <strong style="color:var(--black);">@attentionCount</strong> items need your attention</span>
-      }
-    </p>
-  </div>
-  <div class="dfe-c-export-group">
-    <a class="govuk-button govuk-button--outline-blue" href="@Url.Action("Index", "Reports")">Reports</a>
-  </div>
+<!-- ── Header ── -->
+<div class="dfe-c-mb-3">
+  <h1 style="margin-bottom:0.125rem;">@Greeting(), @Model.FirstName</h1>
+  <p class="dfe-c-text-muted" style="margin:0;">@DateTime.Today.ToString("dddd d MMMM yyyy")</p>
 </div>
 
-<div class="dfe-c-grid dfe-c-grid--4 dfe-c-mb-4">
-  <a class="dfe-c-metric @(updatesDueCount > 0 ? "dfe-c-metric--red" : "dfe-c-metric--grey")" href="@Url.Action("Index", "ModernWork")" title="View your projects">
-    <div class="dfe-c-metric__number" style="@(updatesDueCount > 0 ? "color:var(--rag-r);" : "")">@updatesDueCount</div>
-    <div class="dfe-c-metric__label">Project monthly updates due</div>
-    <div class="dfe-c-metric__note" style="color:var(--grey-4);">Projects →</div>
-  </a>
-  <a class="dfe-c-metric @(returnsDueCount > 0 ? "dfe-c-metric--amber" : "dfe-c-metric--grey")" href="@Url.Action("Index", "Products")" title="Product performance">
-    <div class="dfe-c-metric__number" style="@(returnsDueCount > 0 ? "color:var(--rag-a);" : "")">@returnsDueCount</div>
-    <div class="dfe-c-metric__label">Product returns due</div>
-    <div class="dfe-c-metric__note" style="color:var(--grey-4);">Products →</div>
-  </a>
-  <a class="dfe-c-metric @(Model.UnmonitoredRisks.Count > 0 ? "dfe-c-metric--red" : "dfe-c-metric--grey")" href="@Url.Action("Index", "Risk")" title="Risk register">
-    <div class="dfe-c-metric__number" style="@(Model.UnmonitoredRisks.Count > 0 ? "color:var(--rag-r);" : "")">@Model.UnmonitoredRisks.Count</div>
-    <div class="dfe-c-metric__label">Risks needing review</div>
-    <div class="dfe-c-metric__note" style="color:var(--grey-4);">Risks →</div>
-  </a>
-  <a class="dfe-c-metric @(highIssueCount > 0 ? "dfe-c-metric--red" : "dfe-c-metric--grey")" href="@Url.Action("Index", "Issue")" title="Issues">
-    <div class="dfe-c-metric__number" style="@(highIssueCount > 0 ? "color:var(--rag-r);" : "")">@highIssueCount</div>
-    <div class="dfe-c-metric__label">High / critical issues</div>
-    <div class="dfe-c-metric__note" style="color:var(--grey-4);">Issues →</div>
-  </a>
-</div>
-
-<div class="dfe-c-grid dfe-c-grid--content">
-  <div>
-    <div class="dfe-c-section-header">
-      <h2>Your work</h2>
-      <a class="dfe-c-button--link" style="font-size:0.875rem;" href="@Url.Action("Index", "ModernWork")">All projects →</a>
-    </div>
-    @if (Model.MyProjects.Any())
-    {
-      <div class="dfe-c-table-wrap dfe-c-mb-3">
-        <table>
-          <thead>
-            <tr>
-              <th scope="col">Project</th>
-              <th scope="col">Priority / area</th>
-              <th scope="col">Phase</th>
-              <th scope="col">RAG</th>
-              <th scope="col">Monthly update</th>
-            </tr>
-          </thead>
-          <tbody>
-            @foreach (var p in Model.MyProjects.OrderBy(x => x.Title).Take(25))
-            {
-              var ragName = p.RagStatusLookup?.Name;
-              var ragSuf = RagCssSuffix(ragName);
-              var phaseName = p.Phase ?? "—";
-              var phaseSuf = PhaseCssSuffix(p.Phase);
-              updatesDueByProjectId.TryGetValue(p.Id, out var updStatus);
-              string monthlyClass = "dfe-c-tag dfe-c-tag--grey";
-              string monthlyText = "Up to date";
-              if (updStatus == UpdateSubmissionStatus.Due)
-              {
-                monthlyClass = "dfe-c-tag dfe-c-tag--amber";
-                monthlyText = "Due";
-              }
-              else if (updStatus == UpdateSubmissionStatus.Late)
-              {
-                monthlyClass = "dfe-c-tag dfe-c-tag--red-strong";
-                monthlyText = "Late";
-              }
-              <tr>
-                <td>
-                  <a class="dfe-c-link" href="@Url.Action("Detail", "ModernWork", new { id = p.Id })">@Trunc(p.Title, 56)</a><span class="dfe-c-table-ref">@p.ProjectCode</span>
-                </td>
-                <td>@(p.DeliveryPriority?.Name ?? p.BusinessAreaLookup?.Name ?? "—")</td>
-                <td>
-                  @if (!string.IsNullOrEmpty(phaseSuf))
-                  {
-                    <span class="dfe-c-phase dfe-c-phase--@phaseSuf">@phaseName.ToUpperInvariant()</span>
-                  }
-                  else
-                  {
-                    <span class="dfe-c-phase">@(string.IsNullOrEmpty(phaseName) || phaseName == "—" ? "—" : phaseName.ToUpperInvariant())</span>
-                  }
-                </td>
-                <td>
-                  @if (!string.IsNullOrEmpty(ragSuf))
-                  {
-                    <span class="dfe-c-rag dfe-c-rag--@ragSuf">@ragName!.ToUpperInvariant()</span>
-                  }
-                  else
-                  {
-                    <span class="dfe-c-rag dfe-c-rag--tbc">@(string.IsNullOrEmpty(ragName) ? "TBC" : ragName.ToUpperInvariant())</span>
-                  }
-                </td>
-                <td><span class="@monthlyClass">@monthlyText</span></td>
-              </tr>
-            }
-          </tbody>
-        </table>
-      </div>
-    }
-    else
-    {
-      <p class="dfe-c-text-muted dfe-c-mb-3">No active projects are assigned to you yet. When you join a delivery team, projects appear here.</p>
-    }
-
-    <div class="dfe-c-section-header" id="priority-tasks">
-      <h2>Priority tasks</h2>
-    </div>
-    <div style="border:1px solid var(--grey-2);">
-      @if (Model.PriorityTasks.Any())
-      {
-        @foreach (var t in Model.PriorityTasks.Take(12))
+<!-- ── Attention banner ── -->
+@if (attentionCount > 0)
+{
+ <div class="dfe-c-callout dfe-c-callout--warning dfe-c-mb-3" style="display:flex;align-items:flex-start;gap:0.75rem;">
+    <div style="font-size:1.5rem;font-weight:700;color:var(--rag-r);line-height:1;">@attentionCount</div>
+    <div style="flex:1;min-width:0;">
+      <strong id="home-attention-heading">Items need your attention</strong>
+      <p class="dfe-c-text-muted" style="margin:0.25rem 0 0;font-size:0.875rem;">
+        The total adds every item across these categories — the same project can count more than once if it appears in multiple categories (for example monthly update due and at-risk).
+      </p>
+      <ul class="dfe-c-list-bare" style="margin:0.5rem 0 0;padding:0;list-style:none;font-size:0.875rem;">
+        @if (updatesDueCount > 0)
         {
-          <div class="dfe-c-notification">
-            <span class="dfe-c-notification__dot"></span>
-            <div>
+          <li style="margin-bottom:0.25rem;"><a class="dfe-c-link" href="#home-projects-heading">@updatesDueCount monthly project update@(updatesDueCount == 1 ? "" : "s")</a> due or late (@reportingPeriodLabel)</li>
+        }
+        @if (overdueCount > 0)
+        {
+          <li style="margin-bottom:0.25rem;"><a class="dfe-c-link" href="#home-milestones-heading">@overdueCount overdue milestone@(overdueCount == 1 ? "" : "s")</a></li>
+        }
+        @if (highIssueCount > 0)
+        {
+          <li style="margin-bottom:0.25rem;"><a class="dfe-c-link" href="#home-raid-heading">@highIssueCount high / critical issue@(highIssueCount == 1 ? "" : "s")</a></li>
+        }
+        @if (atRiskCount > 0)
+        {
+          <li style="margin-bottom:0.25rem;"><a class="dfe-c-link" href="#home-projects-heading">@atRiskCount at-risk project@(atRiskCount == 1 ? "" : "s")</a> (Red / Amber–Red)</li>
+        }
+        @if (returnsDueCount > 0)
+        {
+          <li style="margin-bottom:0.25rem;"><a class="dfe-c-link" href="@Url.Action("PerformanceMetrics", "ProductReporting", new { view = "mine" })">@returnsDueCount product performance return@(returnsDueCount == 1 ? "" : "s")</a> due or late</li>
+        }
+        @if (commissionCount > 0)
+        {
+          <li style="margin-bottom:0.25rem;"><a class="dfe-c-link" href="@Url.Action("Index", "ModernPerformance")">@commissionCount commission submission@(commissionCount == 1 ? "" : "s")</a> outstanding</li>
+        }
+        @if (actionCount > 0)
+        {
+          <li style="margin-bottom:0.25rem;"><a class="dfe-c-link" href="#home-actions-heading">@actionCount action@(actionCount == 1 ? "" : "s") assigned to you</a></li>
+        }
+      </ul>
+    </div>
+  </div>
+}
+
+<!-- ── Metrics ── -->
+<div class="dfe-c-grid dfe-c-grid--6 dfe-c-mb-4">
+ <a class="dfe-c-metric dfe-c-metric--navy" href="@Url.Action("Index", "ModernWork")">
+ <div class="dfe-c-metric__number">@Model.MyProjects.Count</div>
+ <div class="dfe-c-metric__label">Active projects</div>
+  </a>
+ <a class="dfe-c-metric @(updatesDueCount > 0 ? "dfe-c-metric--red" : "dfe-c-metric--grey")" href="@Url.Action("Index", "ModernWork")">
+ <div class="dfe-c-metric__number" style="@(updatesDueCount > 0 ? "color:var(--rag-r);" : "")">@updatesDueCount</div>
+ <div class="dfe-c-metric__label">Updates due</div>
+  </a>
+ <a class="dfe-c-metric @(overdueCount > 0 ? "dfe-c-metric--red" : "dfe-c-metric--grey")" href="#home-milestones-heading">
+ <div class="dfe-c-metric__number" style="@(overdueCount > 0 ? "color:var(--rag-r);" : "")">@overdueCount</div>
+ <div class="dfe-c-metric__label">Overdue milestones</div>
+  </a>
+ <a class="dfe-c-metric @(highIssueCount > 0 ? "dfe-c-metric--red" : "dfe-c-metric--grey")" href="@Url.Action("Index", "Issue")">
+ <div class="dfe-c-metric__number" style="@(highIssueCount > 0 ? "color:var(--rag-r);" : "")">@highIssueCount</div>
+ <div class="dfe-c-metric__label">High / critical issues</div>
+  </a>
+ <a class="dfe-c-metric @(Model.UnmonitoredRisks.Count > 0 ? "dfe-c-metric--amber" : "dfe-c-metric--grey")" href="@Url.Action("Index", "Risk")">
+ <div class="dfe-c-metric__number" style="@(Model.UnmonitoredRisks.Count > 0 ? "color:var(--rag-a);" : "")">@Model.UnmonitoredRisks.Count</div>
+ <div class="dfe-c-metric__label">Risks to review</div>
+  </a>
+ <a class="dfe-c-metric @(actionCount > 0 ? "dfe-c-metric--teal" : "dfe-c-metric--grey")" href="#home-actions-heading">
+ <div class="dfe-c-metric__number">@actionCount</div>
+ <div class="dfe-c-metric__label">Actions assigned</div>
+  </a>
+</div>
+
+<!-- ── Priority tasks (promoted) ── -->
+@if (Model.PriorityTasks.Any())
+{
+ <section class="dfe-c-mb-4" aria-labelledby="priority-tasks-heading">
+ <div class="dfe-c-section-header">
+      <h2 id="priority-tasks-heading">Priority tasks</h2>
+ <span class="dfe-c-text-muted" style="font-size:0.875rem;">@Model.PriorityTasks.Count items</span>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(22rem,1fr));gap:0.75rem;">
+      @foreach (var t in Model.PriorityTasks.Take(8))
+      {
+ <div class="dfe-c-card dfe-c-card--plain" style="padding:0.875rem 1rem;">
+          <div style="display:flex;gap:0.625rem;align-items:flex-start;">
+ <span class="dfe-c-notification__dot" style="margin-top:0.375rem;flex-shrink:0;"></span>
+            <div style="min-width:0;">
               @if (!string.IsNullOrEmpty(t.LinkUrl))
               {
-                <div style="font-size:0.875rem;font-weight:600;"><a class="dfe-c-link" href="@t.LinkUrl">@t.Title</a></div>
+ <div style="font-size:0.875rem;font-weight:600;"><a class="dfe-c-link" href="@t.LinkUrl">@Trunc(t.Title, 72)</a></div>
               }
               else
               {
-                <div style="font-size:0.875rem;font-weight:600;">@t.Title</div>
+                <div style="font-size:0.875rem;font-weight:600;">@Trunc(t.Title, 72)</div>
               }
-              <div class="dfe-c-text-muted">@t.Category · @t.Description</div>
+ <div class="dfe-c-text-muted" style="font-size:0.8125rem;">@t.Category · @Trunc(t.Description, 80)</div>
             </div>
           </div>
-        }
+        </div>
+      }
+    </div>
+  </section>
+}
+
+<!-- ── Monthly progress strip ── -->
+@if (Model.MyProjects.Any())
+{
+ <div class="dfe-c-mb-4">
+    <div style="background:var(--grey-1);border-radius:4px;padding:1rem 1.25rem;">
+      <div style="font-size:0.8125rem;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--grey-4);margin-bottom:0.25rem;">Monthly delivery updates</div>
+      <p class="dfe-c-text-muted" style="margin:0 0 0.5rem;font-size:0.8125rem;">Reporting period <strong>@reportingPeriodLabel</strong>. Progress counts only projects where the submission window is open or closed (excludes “not yet due”).</p>
+      @if (monthlyActionableCount > 0)
+      {
+ <div style="display:flex;align-items:baseline;gap:0.5rem;margin-bottom:0.5rem;">
+          <span style="font-size:1.75rem;font-weight:700;line-height:1;color:@MonthlyPctColour();">@pctSubmitted%</span>
+ <span class="dfe-c-text-muted">@monthlySubmittedCount of @monthlyActionableCount submitted (@monthlyOutstandingCount outstanding)</span>
+        </div>
+ <div class="dfe-c-progress"><div class="dfe-c-progress__fill" style="width:@pctSubmitted%;background:@MonthlyPctColour();"></div></div>
+      }
+      else if (Model.MyProjects.Any())
+      {
+ <span class="dfe-c-text-muted">No monthly updates are in scope yet for this reporting period — the submission window has not opened for all of your projects, or you have no active projects.</span>
       }
       else
       {
-        <div class="dfe-c-notification"><span class="dfe-c-notification__dot dfe-c-notification__dot--read"></span><div><div class="dfe-c-text-muted">No priority tasks right now.</div></div></div>
+ <span class="dfe-c-text-muted">No active projects to report.</span>
       }
     </div>
   </div>
+}
 
-  <aside class="dfe-c-sidebar" aria-label="Summary and quick actions">
-    <div class="dfe-c-scard">
-      <div class="dfe-c-scard__title">Portfolio snapshot</div>
-      <div style="margin-bottom:0.875rem;">
-        <div style="display:flex;justify-content:space-between;font-size:0.8125rem;margin-bottom:0.25rem;"><span>@Model.MyProjects.Count active projects</span></div>
-        <div style="display:flex;gap:2px;height:0.75rem;border-radius:1px;overflow:hidden;margin-bottom:0.375rem;">
-          <div style="flex:@Math.Max(ragBarG, 0.0001);background:var(--rag-g);min-width:2px;"></div>
-          <div style="flex:@Math.Max(ragBarA, 0.0001);background:var(--rag-a);min-width:2px;"></div>
-          <div style="flex:@Math.Max(ragBarR + ragBarO, 0.0001);background:var(--rag-r);min-width:2px;"></div>
-        </div>
-        <div style="display:flex;gap:0.875rem;font-size:0.75rem;color:var(--grey-4);flex-wrap:wrap;">
-          <span style="color:var(--rag-g);">■ @ragBarG Green</span>
-          <span style="color:var(--rag-a);">■ @ragBarA Amber</span>
-          <span style="color:var(--rag-r);">■ @(ragBarR + ragBarO) Red / not set</span>
-        </div>
-      </div>
-      <hr class="dfe-c-divider">
-      <div class="dfe-c-kv"><dt>Products</dt><dd><strong>@Model.MyProducts.Count</strong></dd></div>
-      <div class="dfe-c-kv"><dt>Actions assigned</dt><dd><strong>@actionCount</strong></dd></div>
-      <div class="dfe-c-kv"><dt>Milestones this week</dt><dd><strong>@Model.MilestonesDueThisWeek.Count</strong></dd></div>
-      <div class="dfe-c-kv"><dt>DDT standards</dt><dd><strong>@Model.MyDdtStandards.Count</strong></dd></div>
+<!-- ── Your projects ── -->
+<section class="dfe-c-mb-4" aria-labelledby="home-projects-heading">
+ <div class="dfe-c-section-header">
+    <div>
+      <h2 id="home-projects-heading" style="margin-bottom:0.25rem;">Delivery projects you work on</h2>
+      <p class="dfe-c-text-muted" style="margin:0;font-size:0.875rem;">Projects where you are a contact, primary contact, SRO, service owner, or PMO contact.</p>
     </div>
-
-    <div class="dfe-c-scard">
-      <div class="dfe-c-scard__title">Monthly project updates</div>
-      @if (monthlyTotal > 0)
-      {
-        <div style="text-align:center;padding:0.75rem 0;">
-          <div style="font-size:2.625rem;font-weight:700;line-height:1;color:@MonthlyPctColour();">@pctSubmitted%</div>
-          <div class="dfe-c-text-muted" style="margin-top:0.25rem;">@monthlySubmitted of @monthlyTotal up to date</div>
-        </div>
-        <div class="dfe-c-progress dfe-c-mb-2"><div class="dfe-c-progress__fill" style="width:@pctSubmitted%;background:@ProgressFillColour();"></div></div>
-        <div class="dfe-c-kv"><dt>Due or late</dt><dd style="color:var(--rag-r);font-weight:700;">@updatesDueCount</dd></div>
-      }
-      else
-      {
-        <p class="dfe-c-text-muted" style="font-size:0.875rem;margin:0;">No reporting scope for your projects this period.</p>
-      }
-    </div>
-
-    <div class="dfe-c-scard">
-      <div class="dfe-c-scard__title">Quick actions</div>
-      <div style="display:flex;flex-direction:column;gap:0.5rem;">
-        <a class="dfe-c-button dfe-c-button--primary dfe-c-button--sm" href="@Url.Action("Index", "ModernWork")">View projects</a>
-        <a class="dfe-c-button dfe-c-button--secondary dfe-c-button--sm" href="@Url.Action("Index", "Products")">Product performance</a>
-        <a class="dfe-c-button dfe-c-button--secondary dfe-c-button--sm" href="@Url.Action("Create", "Risk")">Log a risk</a>
-        <a class="dfe-c-button dfe-c-button--secondary dfe-c-button--sm" href="@Url.Action("Dashboard", "DdtStandards")">Standards</a>
-      </div>
-    </div>
-  </aside>
-</div>
-
-@if (Model.MilestonesDueThisWeek.Any() || Model.OverdueMilestones.Any())
-{
-  <section class="dfe-c-mb-3 dfe-c-mt-3" aria-labelledby="home-milestones-heading">
-    <div class="dfe-c-section-header"><h2 id="home-milestones-heading">Milestones</h2><a class="dfe-c-button--link" style="font-size:0.875rem;" href="@Url.Action("Index", "ModernWork")">Projects →</a></div>
-    <div class="dfe-c-table-wrap">
+ <a class="dfe-c-button--link" style="font-size:0.875rem;" href="@Url.Action("Index", "ModernWork")">All work →</a>
+  </div>
+  @if (Model.MyProjects.Any())
+  {
+ <div class="dfe-c-table-wrap">
       <table>
         <thead>
           <tr>
-            <th scope="col">Timing</th>
-            <th scope="col">Milestone</th>
             <th scope="col">Project</th>
-            <th scope="col">Due</th>
-            <th scope="col"><span class="compass2-visually-hidden">Open</span></th>
+            <th scope="col">Business area</th>
+            <th scope="col">Delivery priority</th>
+            <th scope="col">Phase</th>
+            <th scope="col">RAG</th>
+            <th scope="col">Monthly update (@reportingPeriodLabel)</th>
           </tr>
         </thead>
         <tbody>
-          @foreach (var m in Model.OverdueMilestones.Take(8))
+          @foreach (var p in Model.MyProjects.OrderBy(x => x.Title).Take(20))
           {
-            var proj = Model.MyProjects.FirstOrDefault(p => p.Id == m.ProjectId);
+            var ragName = p.RagStatusLookup?.Name;
+            var ragSuf = RagCssSuffix(ragName);
+            var phaseName = p.Phase ?? "—";
+            var phaseSuf = PhaseCssSuffix(p.Phase);
+            string monthlyClass = "dfe-c-tag dfe-c-tag--grey";
+            string monthlyText = "—";
+            if (monthlyByProject.TryGetValue(p.Id, out var updStatus))
+            {
+              switch (updStatus)
+              {
+                case UpdateSubmissionStatus.Submitted:
+                  monthlyClass = "dfe-c-tag dfe-c-tag--green";
+                  monthlyText = "Submitted";
+                  break;
+                case UpdateSubmissionStatus.Upcoming:
+                  monthlyClass = "dfe-c-tag dfe-c-tag--grey";
+                  monthlyText = "Not yet due";
+                  break;
+                case UpdateSubmissionStatus.Due:
+                  monthlyClass = "dfe-c-tag dfe-c-tag--amber";
+                  monthlyText = "Due";
+                  break;
+                case UpdateSubmissionStatus.Late:
+                  monthlyClass = "dfe-c-tag dfe-c-tag--red-strong";
+                  monthlyText = "Late";
+                  break;
+              }
+            }
             <tr>
-              <td><span class="dfe-c-tag dfe-c-tag--red-strong">OVERDUE</span></td>
-              <td><a class="dfe-c-link" href="@Url.Action("Detail", "ModernWork", new { id = m.ProjectId, tab = "milestones" })">@Trunc(m.Name, 56)</a></td>
-              <td class="dfe-c-text-muted">@Trunc(proj?.Title ?? "—", 48)</td>
-              <td style="white-space:nowrap;">@m.DueDate.ToString("d MMM yyyy")</td>
-              <td style="white-space:nowrap;"><a class="dfe-c-link" href="@Url.Action("Detail", "ModernWork", new { id = m.ProjectId, tab = "milestones" })">View</a></td>
+              <td>
+ <a class="dfe-c-link" href="@Url.Action("Detail", "ModernWork", new { id = p.Id })">@Trunc(p.Title, 56)</a><span class="dfe-c-table-ref">@p.ProjectCode</span>
+              </td>
+              <td>@(p.BusinessAreaLookup?.Name ?? "—")</td>
+              <td>@(p.DeliveryPriority?.Name ?? "—")</td>
+              <td>
+                @if (!string.IsNullOrEmpty(phaseSuf))
+                {
+ <span class="dfe-c-phase dfe-c-phase--@phaseSuf">@phaseName.ToUpperInvariant()</span>
+                }
+                else
+                {
+ <span class="dfe-c-phase">@(string.IsNullOrEmpty(phaseName) || phaseName == "—" ? "—" : phaseName.ToUpperInvariant())</span>
+                }
+              </td>
+              <td>
+                @if (!string.IsNullOrEmpty(ragSuf))
+                {
+ <span class="dfe-c-rag dfe-c-rag--@ragSuf">@ragName!.ToUpperInvariant()</span>
+                }
+                else
+                {
+ <span class="dfe-c-rag dfe-c-rag--tbc">@(string.IsNullOrEmpty(ragName) ? "TBC" : ragName.ToUpperInvariant())</span>
+                }
+              </td>
+ <td><span class="@monthlyClass">@monthlyText</span></td>
             </tr>
           }
-          @foreach (var m in Model.MilestonesDueThisWeek.Take(8))
+        </tbody>
+      </table>
+    </div>
+  }
+  else
+  {
+ <p class="dfe-c-text-muted">None yet. Projects appear here when you are recorded as a contact, primary contact, SRO, service owner, or PMO contact on an active delivery.</p>
+  }
+</section>
+
+<!-- ── Milestones ── -->
+@if (Model.MilestonesDueThisWeek.Any() || Model.OverdueMilestones.Any())
+{
+ <section class="dfe-c-mb-4" aria-labelledby="home-milestones-heading">
+ <div class="dfe-c-section-header"><h2 id="home-milestones-heading">Milestones</h2><a class="dfe-c-button--link" style="font-size:0.875rem;" href="@Url.Action("Index", "ModernWork")">Projects →</a></div>
+ <div class="dfe-c-table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Status</th>
+            <th scope="col">Milestone</th>
+            <th scope="col">Project</th>
+            <th scope="col">Due</th>
+          </tr>
+        </thead>
+        <tbody>
+          @foreach (var m in Model.OverdueMilestones.Take(6))
           {
             var proj = Model.MyProjects.FirstOrDefault(p => p.Id == m.ProjectId);
             <tr>
-              <td><span class="dfe-c-tag dfe-c-tag--grey">THIS WEEK</span></td>
-              <td><a class="dfe-c-link" href="@Url.Action("Detail", "ModernWork", new { id = m.ProjectId, tab = "milestones" })">@Trunc(m.Name, 56)</a></td>
-              <td class="dfe-c-text-muted">@Trunc(proj?.Title ?? "—", 48)</td>
+ <td><span class="dfe-c-tag dfe-c-tag--red-strong">OVERDUE</span></td>
+ <td><a class="dfe-c-link" href="@Url.Action("Detail", "ModernWork", new { id = m.ProjectId, tab = "milestones" })">@Trunc(m.Name, 56)</a></td>
+ <td class="dfe-c-text-muted">@Trunc(proj?.Title ?? "—", 48)</td>
               <td style="white-space:nowrap;">@m.DueDate.ToString("d MMM yyyy")</td>
-              <td style="white-space:nowrap;"><a class="dfe-c-link" href="@Url.Action("Detail", "ModernWork", new { id = m.ProjectId, tab = "milestones" })">View</a></td>
+            </tr>
+          }
+          @foreach (var m in Model.MilestonesDueThisWeek.Take(6))
+          {
+            var proj = Model.MyProjects.FirstOrDefault(p => p.Id == m.ProjectId);
+            <tr>
+ <td><span class="dfe-c-tag dfe-c-tag--grey">THIS WEEK</span></td>
+ <td><a class="dfe-c-link" href="@Url.Action("Detail", "ModernWork", new { id = m.ProjectId, tab = "milestones" })">@Trunc(m.Name, 56)</a></td>
+ <td class="dfe-c-text-muted">@Trunc(proj?.Title ?? "—", 48)</td>
+              <td style="white-space:nowrap;">@m.DueDate.ToString("d MMM yyyy")</td>
             </tr>
           }
         </tbody>
@@ -303,42 +332,40 @@
   </section>
 }
 
+<!-- ── Risks and issues ── -->
 @if (Model.HighPriorityIssues.Any() || Model.UnmonitoredRisks.Any())
 {
-  <section class="dfe-c-mb-3" aria-labelledby="home-raid-heading">
-    <div class="dfe-c-section-header">
+ <section class="dfe-c-mb-4" aria-labelledby="home-raid-heading">
+ <div class="dfe-c-section-header">
       <h2 id="home-raid-heading">Risks and issues</h2>
-      <a class="dfe-c-button--link" style="font-size:0.875rem;" href="@Url.Action("Index", "Raid")">RAID hub →</a>
+ <a class="dfe-c-button--link" style="font-size:0.875rem;" href="@Url.Action("Index", "Raid")">RAID hub →</a>
     </div>
-    <div class="dfe-c-table-wrap">
+ <div class="dfe-c-table-wrap">
       <table>
         <thead>
           <tr>
             <th scope="col">Type</th>
             <th scope="col">Title</th>
             <th scope="col">Project</th>
-            <th scope="col"><span class="compass2-visually-hidden">Open</span></th>
           </tr>
         </thead>
         <tbody>
-          @foreach (var r in Model.UnmonitoredRisks.Take(6))
+          @foreach (var r in Model.UnmonitoredRisks.Take(5))
           {
             var proj = Model.MyProjects.FirstOrDefault(p => p.Id == r.ProjectId);
             <tr>
-              <td><span class="dfe-c-tag dfe-c-tag--grey">RISK</span></td>
-              <td><a class="dfe-c-link" href="@Url.Action("Details", "Risk", new { id = r.Id })">@Trunc(r.Title, 48)</a></td>
-              <td class="dfe-c-text-muted">@Trunc(proj?.Title ?? "—", 40)</td>
-              <td style="white-space:nowrap;"><a class="dfe-c-link" href="@Url.Action("Details", "Risk", new { id = r.Id })">View</a></td>
+ <td><span class="dfe-c-tag dfe-c-tag--amber">RISK</span></td>
+ <td><a class="dfe-c-link" href="@Url.Action("Details", "Risk", new { id = r.Id })">@Trunc(r.Title, 56)</a></td>
+ <td class="dfe-c-text-muted">@Trunc(proj?.Title ?? "—", 40)</td>
             </tr>
           }
-          @foreach (var i in Model.HighPriorityIssues.Take(6))
+          @foreach (var i in Model.HighPriorityIssues.Take(5))
           {
             var proj = Model.MyProjects.FirstOrDefault(p => p.Id == i.ProjectId);
             <tr>
-              <td><span class="dfe-c-tag dfe-c-tag--grey">ISSUE</span></td>
-              <td><a class="dfe-c-link" href="@Url.Action("Details", "Issue", new { id = i.Id })">@Trunc(i.Title, 48)</a></td>
-              <td class="dfe-c-text-muted">@Trunc(proj?.Title ?? "—", 40)</td>
-              <td style="white-space:nowrap;"><a class="dfe-c-link" href="@Url.Action("Details", "Issue", new { id = i.Id })">View</a></td>
+ <td><span class="dfe-c-tag dfe-c-tag--red">ISSUE</span></td>
+ <td><a class="dfe-c-link" href="@Url.Action("Details", "Issue", new { id = i.Id })">@Trunc(i.Title, 56)</a></td>
+ <td class="dfe-c-text-muted">@Trunc(proj?.Title ?? "—", 40)</td>
             </tr>
           }
         </tbody>
@@ -347,13 +374,14 @@
   </section>
 }
 
+<!-- ── Actions ── -->
 @if (Model.AssignedActions.Any())
 {
-  <section class="dfe-c-mb-3" aria-labelledby="home-actions-heading">
-    <div class="dfe-c-section-header">
+ <section class="dfe-c-mb-4" aria-labelledby="home-actions-heading">
+ <div class="dfe-c-section-header">
       <h2 id="home-actions-heading">Actions assigned to you</h2>
     </div>
-    <div class="dfe-c-table-wrap">
+ <div class="dfe-c-table-wrap">
       <table>
         <thead>
           <tr>
@@ -366,9 +394,9 @@
           @foreach (var a in Model.AssignedActions)
           {
             <tr>
-              <td><a class="dfe-c-link" href="@Url.Action("Details", "Action", new { id = a.Id })">@Trunc(a.Title, 48)</a></td>
-              <td>@(a.DueDate.HasValue ? a.DueDate.Value.ToString("d MMM yyyy") : "—")</td>
-              <td><span class="dfe-c-tag dfe-c-tag--grey">@(a.Status ?? "—").ToUpperInvariant()</span></td>
+ <td><a class="dfe-c-link" href="@Url.Action("Details", "Action", new { id = a.Id })">@Trunc(a.Title, 56)</a></td>
+              <td style="white-space:nowrap;">@(a.DueDate.HasValue ? a.DueDate.Value.ToString("d MMM yyyy") : "—")</td>
+ <td><span class="dfe-c-tag dfe-c-tag--grey">@(a.Status ?? "—").ToUpperInvariant()</span></td>
             </tr>
           }
         </tbody>

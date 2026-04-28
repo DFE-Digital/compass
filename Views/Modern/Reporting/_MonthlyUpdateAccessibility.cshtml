@@ -1,0 +1,138 @@
+@using Compass.Services.Aiss
+@model Compass.ViewModels.ModernMonthlyReportDashboardViewModel
+@{
+  var m = Model;
+  var rows = m.AccessibilityAreaRows ?? Array.Empty<AissByBusinessAreaRow>();
+  var accOpen = rows.Sum(r => r.Open);
+  var filterBaName = m.FilterBusinessAreaId is int fId
+    ? m.BusinessAreas?.FirstOrDefault(b => b.Id == fId)?.Name
+    : null;
+  var isBaFiltered = m.FilterBusinessAreaId is not null;
+  var accCriteria = m.AccessibilityIssueCriteria;
+  var accCriteriaAria = isBaFiltered
+    ? "Accessibility issue criteria for selected business area"
+    : "Accessibility issue criteria, all in scope";
+  string CriterionLabel(string key) => key switch
+  {
+    "a" => "WCAG A",
+    "aa" => "WCAG AA",
+    "aaa" => "WCAG AAA",
+    "bp" => "Best practice",
+    "ux" => "Usability (UX)",
+    "other" => "Other",
+    _ => key
+  };
+}
+
+<div class="mr-report-section-panel dfe-c-collapsible govuk-!-margin-bottom-3" id="mr-p-accessibility">
+  <button type="button" class="dfe-c-collapsible__trigger" aria-expanded="false" aria-controls="d-mr-accessibility">
+    <span class="dfe-c-collapsible__icon">+</span>
+    <span>Accessibility</span>
+    <span class="dfe-c-collapsible__status"><span class="govuk-tag @(accOpen > 0 ? "govuk-tag--red" : "govuk-tag--grey")">@accOpen open</span></span>
+  </button>
+  <div class="dfe-c-collapsible__body" id="d-mr-accessibility" role="region" aria-label="Accessibility issues (AISS)">
+    <p class="dfe-c-body-s dfe-c-text-muted govuk-!-margin-top-0">
+      Data from the <a class="govuk-link" href="https://accessibility-statements.education.gov.uk" rel="noopener noreferrer" target="_blank">Accessibility issues and statement service (opens in new tab)</a>.
+    </p>
+    @if (!string.IsNullOrWhiteSpace(m.AccessibilitySummaryError))
+    {
+      <div class="govuk-inset-text govuk-!-margin-bottom-0" role="status">@m.AccessibilitySummaryError</div>
+    }
+    else if (m.AccessibilitySummary is { } sum)
+    {
+      <div class="mr-aiss-summary-strip govuk-!-margin-bottom-3">
+        <div class="dfe-c-metric dfe-c-metric--red" style="margin:0; border-left-width:4px; padding:0.75rem 0.5rem 0.75rem 0.6rem; background:#fafafa;">
+          <div class="dfe-c-metric__number">@(sum.Issues?.Open.ToString() ?? "—")</div>
+          <div class="dfe-c-metric__label">Open issues (total in scope)</div>
+        </div>
+        <div class="dfe-c-metric dfe-c-metric--navy" style="margin:0; border-left-width:4px; padding:0.75rem 0.5rem 0.75rem 0.6rem; background:#fafafa;">
+          <div class="dfe-c-metric__number">@(sum.Issues?.Overdue.ToString() ?? "—")</div>
+          <div class="dfe-c-metric__label">Overdue (open)</div>
+        </div>
+        <div class="dfe-c-metric dfe-c-metric--teal" style="margin:0; border-left-width:4px; padding:0.75rem 0.5rem 0.75rem 0.6rem; background:#fafafa;">
+          <div class="dfe-c-metric__number">@(sum.Services?.Onboarded.ToString() ?? "—")</div>
+          <div class="dfe-c-metric__label">Onboarded (AISS)</div>
+        </div>
+        <div class="dfe-c-metric dfe-c-metric--green" style="margin:0; border-left-width:4px; padding:0.75rem 0.5rem 0.75rem 0.6rem; background:#fafafa;">
+          <div class="dfe-c-metric__number">@(sum.Services?.Installed.ToString() ?? "—")</div>
+          <div class="dfe-c-metric__label">Statement installed</div>
+        </div>
+      </div>
+
+      <h3 class="govuk-heading-s govuk-!-margin-bottom-1">@(isBaFiltered && !string.IsNullOrWhiteSpace(filterBaName) ? "Accessibility for " + filterBaName : "By business area (AISS)")</h3>
+      @if (isBaFiltered && !string.IsNullOrWhiteSpace(filterBaName) && rows.Count == 0)
+      {
+        <p class="govuk-body dfe-c-text-muted govuk-!-margin-bottom-0">No AISS row matched business area <strong>@filterBaName</strong>. FIPS / register labels in COMPASS and AISS must use the same primary business area name for the product.</p>
+      }
+      else if (rows.Count == 0)
+      {
+        <p class="govuk-body dfe-c-text-muted govuk-!-margin-bottom-0">No per–business area breakdown in this response.</p>
+      }
+      else
+      {
+        <div class="mr-submission-ba-wrap dfe-c-table-wrap">
+          <table class="mr-ba-table" style="min-width:0;">
+            <thead>
+              <tr>
+                <th scope="col">Business area</th>
+                <th scope="col" class="mr-tx-r">Open</th>
+                <th scope="col" class="mr-tx-r">Overdue</th>
+                <th scope="col" class="mr-tx-r">Closed</th>
+                <th scope="col" class="mr-tx-r">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+            @foreach (var row in rows)
+            {
+              <tr>
+                <th scope="row" style="text-align: left; font-weight: 600;">@(string.IsNullOrWhiteSpace(row.BusinessArea) ? "—" : row.BusinessArea)</th>
+                <td class="mr-tx-r">@row.Open</td>
+                <td class="mr-tx-r">@row.Overdue</td>
+                <td class="mr-tx-r">@row.Closed</td>
+                <td class="mr-tx-r">@row.Total</td>
+              </tr>
+            }
+            </tbody>
+          </table>
+        </div>
+      }
+      @if (accCriteria is { } ic)
+      {
+        <h4 class="govuk-heading-s @((rows.Count > 0) ? "govuk-!-margin-top-3" : "govuk-!-margin-top-0") govuk-!-margin-bottom-1">By WCAG and category</h4>
+        <div class="dfe-c-table-wrap">
+          <table class="mr-change-tbl" aria-label="@accCriteriaAria">
+            <thead>
+              <tr>
+                <th scope="col">Criterion</th>
+                <th scope="col" class="mr-tx-r">Open</th>
+                <th scope="col" class="mr-tx-r">Closed</th>
+                <th scope="col" class="mr-tx-r">Overdue (open)</th>
+              </tr>
+            </thead>
+            <tbody>
+              @foreach (var ck in new (string k, AissCriterionTrio? t)[]
+              { ("a", ic.A), ("aa", ic.Aa), ("aaa", ic.Aaa), ("bp", ic.Bp), ("ux", ic.Ux), ("other", ic.Other) })
+              {
+                <tr>
+                  <td class="mr-tx-l">@CriterionLabel(ck.k)</td>
+                  <td class="mr-tx-r">@(ck.t?.Open.ToString() ?? "—")</td>
+                  <td class="mr-tx-r">@(ck.t?.Closed.ToString() ?? "—")</td>
+                  <td class="mr-tx-r">@(ck.t?.Overdue.ToString() ?? "—")</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    }
+  </div>
+</div>
+<style>
+  .mr-aiss-summary-strip {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(10.5rem, 1fr));
+    gap: 0.5rem 0.75rem;
+  }
+  .mr-tx-r { text-align: right !important; }
+  .mr-tx-l { text-align: left; }
+</style>

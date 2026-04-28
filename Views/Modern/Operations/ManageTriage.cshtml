@@ -1,0 +1,179 @@
+@using System.Collections.Generic
+@using Compass.Models.DemandPipeline
+@{
+    ViewData["Title"] = "Manage triage meetings";
+    var triageTab = ViewBag.TriageTab as string ?? "upcoming";
+    if (triageTab != "upcoming" && triageTab != "previous") { triageTab = "upcoming"; }
+    var upcoming = ViewBag.UpcomingMeetings as List<DemandPipelineTriageMeeting> ?? new();
+    var previous = ViewBag.PreviousMeetings as List<DemandPipelineTriageMeeting> ?? new();
+    var demandCounts = ViewBag.TriageMeetingAssignedDemandCounts as Dictionary<Guid, int> ?? new Dictionary<Guid, int>();
+    int DemandCount(Guid meetingId) => demandCounts.TryGetValue(meetingId, out var n) ? n : 0;
+
+    string TabUrl(string t) => Url.Action("ManageTriage", "ModernOperations", new { tab = t }) ?? "#";
+
+    string StatusTagClass(string? status) => status?.ToLowerInvariant() switch
+    {
+        "scheduled" => "dfe-c-tag dfe-c-tag--blue",
+        "completed" => "dfe-c-tag dfe-c-tag--green",
+        "cancelled" => "dfe-c-tag dfe-c-tag--red",
+        _ => "dfe-c-tag dfe-c-tag--grey"
+    };
+}
+
+@section Breadcrumbs {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernOperations")">Operations</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">Manage triage</li>
+}
+
+<div class="dfe-c-flex--between dfe-c-mb-3" style="flex-wrap:wrap;gap:1rem;">
+ <div class="dfe-c-page-title" style="margin:0;">
+ <div class="dfe-c-page-title__caption">Operations</div>
+ <h1 class="dfe-c-page-title__heading">Manage triage meetings</h1>
+ <p class="dfe-c-page-title__lede">Create and schedule triage meetings. Demands can be assigned from the demand request Triage tab.</p>
+    </div>
+ <div class="dfe-c-flex" style="gap:0.5rem;flex-wrap:wrap;">
+ <a href="@Url.Action("AddTriageMeeting", "ModernOperations")" class="govuk-button">Add meeting</a>
+    </div>
+</div>
+
+@if (TempData["Message"] != null)
+{
+ <div class="govuk-notification-banner govuk-notification-banner--success dfe-c-mb-3" role="region">
+ <div class="govuk-notification-banner__header">
+ <h2 class="govuk-notification-banner__title">Success</h2>
+        </div>
+ <div class="govuk-notification-banner__content">
+ <p class="govuk-notification-banner__heading">@TempData["Message"]</p>
+        </div>
+    </div>
+}
+@if (TempData["Error"] != null)
+{
+ <div class="govuk-error-summary dfe-c-mb-3" role="alert">
+ <h2 class="govuk-error-summary__title">There is a problem</h2>
+ <div class="govuk-error-summary__body">@TempData["Error"]</div>
+    </div>
+}
+
+<div class="tabs dfe-c-mb-3" role="tablist" aria-label="Triage meetings">
+ <a href="@TabUrl("upcoming")" class="tab @(triageTab =="upcoming" ? "on" : "")" role="tab" aria-selected="@(triageTab == "upcoming")" aria-controls="d-triage-upcoming" id="tab-triage-upcoming">Upcoming</a>
+ <a href="@TabUrl("previous")" class="tab @(triageTab =="previous" ? "on" : "")" role="tab" aria-selected="@(triageTab == "previous")" aria-controls="d-triage-previous" id="tab-triage-previous">Previous</a>
+</div>
+
+<div id="d-triage-upcoming" class="tab-pane @(triageTab =="upcoming" ? "on" : "")" role="tabpanel" aria-labelledby="tab-triage-upcoming">
+    @if (upcoming.Count == 0)
+    {
+ <p class="dfe-c-body dfe-c-text-muted">No upcoming meetings.</p>
+    }
+    else
+    {
+ <div class="dfe-c-table-wrap">
+            <table >
+                <thead>
+                    <tr>
+ <th data-sort-bound="1" class="sortable">Name</th>
+ <th data-sort-bound="1" class="sortable">Date</th>
+                        <th>Time</th>
+                        <th>Chair</th>
+ <th data-sort-bound="1" class="sortable">Demands</th>
+                        <th>Status</th>
+ <th><span class="govuk-visually-hidden">Actions</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var m in upcoming)
+                {
+                    var dc = DemandCount(m.Id);
+                    <tr>
+                        <td><a href="@Url.Action("EditTriageMeeting", "ModernOperations", new { id = m.Id, returnTab = "upcoming" })">@m.Name</a></td>
+                        <td>@(m.MeetingDate?.ToString("d MMM yyyy") ?? "—")</td>
+                        <td>@FormatTimeRange(m.StartTime, m.EndTime)</td>
+                        <td>@(ExtractChairName(m.Chair) ?? "—")</td>
+                        <td>@dc</td>
+ <td><span class="@StatusTagClass(m.Status)">@m.Status.ToUpperInvariant()</span></td>
+                        <td style="text-align:right;white-space:nowrap;">
+                            @if (dc == 0)
+                            {
+                                <form method="post" action="@Url.Action("DeleteTriageMeeting", "ModernOperations")" style="display:inline;">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="id" value="@m.Id" />
+                                    <input type="hidden" name="tab" value="upcoming" />
+ <button type="submit" class="govuk-link govuk-link--destructive" style="background:none;border:none;padding:0;cursor:pointer;font:inherit;" data-confirm="Are you sure you want to delete this meeting?">Delete</button>
+                                </form>
+                            }
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+<div id="d-triage-previous" class="tab-pane @(triageTab =="previous" ? "on" : "")" role="tabpanel" aria-labelledby="tab-triage-previous">
+    @if (previous.Count == 0)
+    {
+ <p class="dfe-c-body dfe-c-text-muted">No previous meetings.</p>
+    }
+    else
+    {
+ <div class="dfe-c-table-wrap">
+            <table >
+                <thead>
+                    <tr>
+ <th data-sort-bound="1" class="sortable">Name</th>
+ <th data-sort-bound="1" class="sortable">Date</th>
+                        <th>Time</th>
+                        <th>Chair</th>
+ <th data-sort-bound="1" class="sortable">Demands</th>
+                        <th>Status</th>
+ <th><span class="govuk-visually-hidden">Actions</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var m in previous)
+                {
+                    var dc = DemandCount(m.Id);
+                    <tr>
+                        <td><a href="@Url.Action("EditTriageMeeting", "ModernOperations", new { id = m.Id, returnTab = "previous" })">@m.Name</a></td>
+                        <td>@(m.MeetingDate?.ToString("d MMM yyyy") ?? "—")</td>
+                        <td>@FormatTimeRange(m.StartTime, m.EndTime)</td>
+                        <td>@(ExtractChairName(m.Chair) ?? "—")</td>
+                        <td>@dc</td>
+ <td><span class="@StatusTagClass(m.Status)">@m.Status.ToUpperInvariant()</span></td>
+                        <td style="text-align:right;white-space:nowrap;">
+                            @if (dc == 0)
+                            {
+                                <form method="post" action="@Url.Action("DeleteTriageMeeting", "ModernOperations")" style="display:inline;">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="id" value="@m.Id" />
+                                    <input type="hidden" name="tab" value="previous" />
+ <button type="submit" class="govuk-link govuk-link--destructive" style="background:none;border:none;padding:0;cursor:pointer;font:inherit;" data-confirm="Are you sure you want to delete this meeting?">Delete</button>
+                                </form>
+                            }
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@functions {
+    static string FormatTimeRange(string? start, string? end)
+    {
+        if (string.IsNullOrWhiteSpace(start) && string.IsNullOrWhiteSpace(end)) return "—";
+        if (string.IsNullOrWhiteSpace(end)) return start ?? "—";
+        if (string.IsNullOrWhiteSpace(start)) return end ?? "—";
+        return $"{start} – {end}";
+    }
+
+    static string? ExtractChairName(string? chair)
+    {
+        if (string.IsNullOrWhiteSpace(chair)) return null;
+        var idx = chair.IndexOf('(');
+        return idx > 0 ? chair[..idx].Trim() : chair.Trim();
+    }
+}

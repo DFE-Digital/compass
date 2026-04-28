@@ -1,0 +1,115 @@
+@using Compass.Models
+@using Compass.Models.DemandPipeline
+@{
+    var editing = ViewBag.EditingMeeting as DemandPipelineTriageMeeting;
+    var isEdit = editing != null;
+    ViewData["Title"] = isEdit ? $"Edit meeting — {editing!.Name}" : "Add triage meeting";
+    var returnTab = ViewBag.ReturnTab as string ?? "upcoming";
+    var editChairName = ViewBag.EditChairName as string;
+    var editChairEmail = ViewBag.EditChairEmail as string;
+}
+
+@section Breadcrumbs {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernOperations")">Operations</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("ManageTriage", "ModernOperations", new { tab = returnTab })">Manage triage</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">@(isEdit ? "Edit meeting" : "Add meeting")</li>
+}
+
+<div class="dfe-c-page-title dfe-c-mb-3">
+ <div class="dfe-c-page-title__caption">Operations</div>
+ <h1 class="dfe-c-page-title__heading">@(isEdit ? "Edit meeting" : "Add a triage meeting")</h1>
+</div>
+
+@if (TempData["Error"] != null)
+{
+ <div class="govuk-error-summary dfe-c-mb-3" role="alert">
+ <h2 class="govuk-error-summary__title">There is a problem</h2>
+ <div class="govuk-error-summary__body">@TempData["Error"]</div>
+    </div>
+}
+
+<div class="dfe-c-form-layout">
+ <div class="dfe-c-form-layout__main">
+ <div class="dfe-c-card dfe-c-card--plain">
+        <form method="post" action="@Url.Action("SaveTriageMeeting", "ModernOperations")" novalidate>
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="returnTab" value="@returnTab" />
+            @if (isEdit)
+            {
+                <input type="hidden" name="id" value="@editing!.Id" />
+            }
+
+ <fieldset class="govuk-fieldset govuk-!-margin-bottom-6">
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Meeting details</legend>
+
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="meeting-name">Meeting name</label>
+ <div class="govuk-hint" id="meeting-name-hint">For example: June triage</div>
+ <input class="govuk-input govuk-!-width-two-thirds" id="meeting-name" name="name" type="text" required value="@(editing?.Name)" aria-describedby="meeting-name-hint" autocomplete="off" />
+            </div>
+
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="meeting-date">Date</label>
+ <input class="govuk-input govuk-input--width-10" id="meeting-date" name="meetingDate" type="date" value="@(editing?.MeetingDate?.ToString("yyyy-MM-dd"))" />
+            </div>
+
+ <div class="dfe-c-flex" style="gap:1rem;">
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="start-time">Start time</label>
+ <input class="govuk-input govuk-input--width-5" id="start-time" name="startTime" type="time" value="@FormatTimeForInput(editing?.StartTime)" />
+                </div>
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="end-time">End time</label>
+ <input class="govuk-input govuk-input--width-5" id="end-time" name="endTime" type="time" value="@FormatTimeForInput(editing?.EndTime)" />
+                </div>
+            </div>
+      </fieldset>
+
+ <fieldset class="govuk-fieldset govuk-!-margin-bottom-6">
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Chair</legend>
+
+            @{
+                var chairPicker = new UserPickerViewModel
+                {
+                    FieldName = "ChairPickerUnused",
+                    Label = "Chair",
+                    Hint = "Optional. Search by name or email.",
+                    IncludeHiddenNameEmailFields = true,
+                    HiddenNameFieldName = "chairName",
+                    HiddenEmailFieldName = "chairEmail",
+                    DefaultName = editChairName,
+                    DefaultEmail = editChairEmail,
+                    InputIdSuffix = "triage-chair",
+                    DefaultSummaryText = "No chair selected."
+                };
+            }
+            @await Html.PartialAsync("~/Views/Modern/Shared/_UserPicker.cshtml", chairPicker)
+      </fieldset>
+
+ <div class="govuk-button-group">
+ <button type="submit" class="govuk-button">@(isEdit ? "Save changes" : "Create meeting")</button>
+ <a href="@Url.Action("ManageTriage", "ModernOperations", new { tab = returnTab })" class="govuk-button govuk-button--secondary">Cancel</a>
+            </div>
+        </form>
+    </div>
+    </div>
+ <div class="dfe-c-form-layout__aside">
+ <div class="dfe-c-sidebar">
+ <div class="dfe-c-scard">
+ <div class="dfe-c-scard__title">Assigning demands</div>
+ <p class="govuk-body govuk-!-margin-bottom-0">After you save this meeting, open a demand request, go to the <strong>Triage</strong> tab, and choose this meeting from the list.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+@functions {
+    static string FormatTimeForInput(string? t)
+    {
+        if (string.IsNullOrWhiteSpace(t)) return "";
+        t = t.Trim();
+        if (t.Length >= 5 && t[2] == ':') return t[..5];
+        return t;
+    }
+}

@@ -1,0 +1,1798 @@
+@using System.Text.Json
+@using System.Text.Json.Serialization
+@using Compass.Services
+@model Compass.ViewModels.ModernMonthlyReportDashboardViewModel
+@{
+    ViewData["Title"] = "Monthly report";
+    var m = Model ?? new Compass.ViewModels.ModernMonthlyReportDashboardViewModel();
+    var jsonOpts = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull };
+    var ragTrendJson = JsonSerializer.Serialize(m.RagTrend, jsonOpts);
+    var priTrendJson = JsonSerializer.Serialize(m.PriorityTrend, jsonOpts);
+    var ragDistJson = JsonSerializer.Serialize(m.RagDistribution, jsonOpts);
+    var priDistJson = JsonSerializer.Serialize(m.PriorityDistribution, jsonOpts);
+    var baProjectsJson = JsonSerializer.Serialize(
+        m.BusinessAreaRows.ToDictionary(r => r.BusinessArea, r => r.Projects),
+        jsonOpts);
+    var ptgNarrativeJson = JsonSerializer.Serialize(
+        m.ProjectsWithPathToGreen.ToDictionary(p => p.Id.ToString(), p => ProjectMonthlyUpdateNarrative.LatestSubmittedText(p) ?? ""),
+        jsonOpts);
+
+    // Int route is /modern/work/detail/{id}; non-integer ids in Url.Action fall back to /ModernWork/Detail/…
+    string MwDetailHref(int id, string? tab = null)
+    {
+        var path = Url.Content($"~/modern/work/detail/{id}") ?? $"/modern/work/detail/{id}";
+        return string.IsNullOrEmpty(tab) ? path : $"{path}?tab={Uri.EscapeDataString(tab)}";
+    }
+
+    var mwDetailPrefix = Url.Content("~/modern/work/detail/") ?? "/modern/work/detail/";
+    var mwDetailPrefixJson = JsonSerializer.Serialize(mwDetailPrefix);
+
+    string RagBadgeClass(string rag) => rag switch
+    {
+        "Red" => "rag-badge rag-red",
+        "Amber-Red" => "rag-badge rag-amber-red",
+        "Amber-Green" => "rag-badge rag-amber",
+        "Green" => "rag-badge rag-green",
+        _ => "rag-badge rag-none"
+    };
+
+    string PriBadgeClass(string pri) => pri switch
+    {
+        "Critical" => "dfe-c-tag dfe-c-tag--red",
+        "High" => "dfe-c-tag dfe-c-tag--red",
+        "Medium" => "dfe-c-tag dfe-c-tag--amber",
+        "Low" => "dfe-c-tag dfe-c-tag--green",
+        _ => "dfe-c-tag dfe-c-tag--grey"
+    };
+
+    int RagDelta(string key) =>
+        (m.RagDistribution.TryGetValue(key, out var cur) ? cur : 0) -
+        (m.PrevMonthRagDistribution.TryGetValue(key, out var prev) ? prev : 0);
+
+    int PriDelta(string key) =>
+        (m.PriorityDistribution.TryGetValue(key, out var cur) ? cur : 0) -
+        (m.PrevMonthPriorityDistribution.TryGetValue(key, out var prev) ? prev : 0);
+
+    string DeltaHtml(int d)
+    {
+        if (d == 0) return "<span class=\"mr-delta mr-delta--flat\">—</span>";
+        if (d > 0) return $"<span class=\"mr-delta mr-delta--up\">▲ +{d}</span>";
+        return $"<span class=\"mr-delta mr-delta--down\">▼ {d}</span>";
+    }
+
+    string MatrixCellClass(string rag, string pri, int count)
+    {
+        if (count == 0) return "mr-mx__cell mr-mx__cell--zero";
+        var severity = rag switch
+        {
+            "Red" => pri is "Critical" or "High" ? "mr-mx__cell mr-mx__cell--critical" : "mr-mx__cell mr-mx__cell--high",
+            "Amber-Red" => pri is "Critical" or "High" ? "mr-mx__cell mr-mx__cell--high" : "mr-mx__cell mr-mx__cell--medium",
+            "Amber-Green" => "mr-mx__cell mr-mx__cell--medium",
+            "Green" => "mr-mx__cell mr-mx__cell--low",
+            _ => "mr-mx__cell mr-mx__cell--neutral"
+        };
+        return severity;
+    }
+
+      int RagRank(string rag) => rag switch
+      {
+        "Green" => 1,
+        "Amber-Green" => 2,
+        "Amber-Red" => 3,
+        "Red" => 4,
+        _ => 0
+      };
+
+      string RagChangeMeta(string from, string to)
+      {
+        if (string.Equals(from, "Not Set", StringComparison.OrdinalIgnoreCase) && !string.Equals(to, "Not Set", StringComparison.OrdinalIgnoreCase))
+          return "New status";
+
+        var fromRank = RagRank(from);
+        var toRank = RagRank(to);
+
+        if (fromRank == 0 || toRank == 0 || fromRank == toRank)
+          return "Updated";
+
+        return toRank > fromRank ? "Worsening" : "Improving";
+      }
+
+      string RagChangeBucket(string from, string to)
+      {
+        var fr = RagRank(from);
+        var tr = RagRank(to);
+        if (fr > 0 && tr > 0 && tr > fr) return "worsening";
+        if (fr > 0 && tr > 0 && tr < fr) return "improving";
+        return "same";
+      }
+
+      var ragWorsening = m.RagChanges.Where(r => RagChangeBucket(r.From, r.To) == "worsening").ToList();
+      var ragSame = m.RagChanges.Where(r => RagChangeBucket(r.From, r.To) == "same").ToList();
+      var ragImproving = m.RagChanges.Where(r => RagChangeBucket(r.From, r.To) == "improving").ToList();
+
+      var ragChangeBuckets = new (string Title, string Hint, List<ProjectChangeRow> Rows)[]
+      {
+        ("Worsening", "RAG moved toward red or higher risk.", ragWorsening),
+        ("Same", "Same tier, moved from not set, or lateral change.", ragSame),
+        ("Improving", "RAG moved toward green or lower risk.", ragImproving)
+      };
+
+      var mrReportPanelBaCount = m.BusinessAreaRows.Count;
+      var mrReportPanelSubmissionTotal = m.MonthlyUpdateStats?.TotalProjects ?? 0;
+      var mrReportPanelChangesItems = m.ProjectsWithPathToGreen.Count + m.RagChanges.Count + m.PriorityChanges.Count;
+      var mrReportPanelTrendsTotal = m.TotalActiveProjects;
+      var mrReportPanelMilestonesTotal = m.NewProjectsThisMonth.Count + m.MilestonesAchieved.Count + m.UpcomingMilestonesNext30Days.Count + m.LateMilestones.Count;
+
+}
+
+@section Breadcrumbs {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernReporting")">Reporting</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">Monthly report</li>
+}
+
+<div class="mr-dash">
+
+ <div class="dfe-c-page-title" style="margin-bottom:0.75rem;">
+ <div class="dfe-c-page-title__caption">Reporting</div>
+ <h1 class="dfe-c-page-title__heading">Monthly report — @m.MonthName</h1>
+ <p class="dfe-c-body dfe-c-text-muted" style="margin:0;">Single monthly report: submission progress, narratives, RAG and priority flows, milestones, and business-area detail.</p>
+  </div>
+
+  @if (TempData["ErrorMessage"] != null)
+  {
+ <div class="dfe-c-error-summary" role="alert" style="margin-bottom:1.5rem;">
+ <p class="dfe-c-body" style="margin:0;">@TempData["ErrorMessage"]</p>
+    </div>
+  }
+
+  @* ══════════════════ Period + filters (compact) ══════════════════ *@
+ <div class="mr-toolbar mr-toolbar--compact">
+ <div class="mr-toolbar__row">
+ <div class="mr-toolbar__nav mr-toolbar__nav--compact">
+        @if (m.HasPreviousMonthNav && m.PreviousNavYear.HasValue && m.PreviousNavMonth.HasValue)
+        {
+ <a class="mr-toolbar__nav-link" href="@Url.Action("MonthlyUpdate", "ModernReporting", new { year = m.PreviousNavYear, month = m.PreviousNavMonth, businessAreaId = m.FilterBusinessAreaId, directorateId = m.FilterDirectorateId })">← @(new DateTime(m.PreviousNavYear.Value, m.PreviousNavMonth.Value, 1).ToString("MMM yy"))</a>
+        }
+ <span class="mr-toolbar__period">
+          @m.MonthName
+          @if (m.MonthlyUpdateStats != null)
+          {
+ <span class="dfe-c-text-muted"> · Due @m.MonthlyUpdateStats.DueDate.ToString("d MMM")</span>
+          }
+        </span>
+        @if (m.HasNextMonthNav && m.NextNavYear.HasValue && m.NextNavMonth.HasValue)
+        {
+ <a class="mr-toolbar__nav-link" href="@Url.Action("MonthlyUpdate", "ModernReporting", new { year = m.NextNavYear, month = m.NextNavMonth, businessAreaId = m.FilterBusinessAreaId, directorateId = m.FilterDirectorateId })">@(new DateTime(m.NextNavYear.Value, m.NextNavMonth.Value, 1).ToString("MMM yy")) →</a>
+        }
+      </div>
+ <form method="get" action="@Url.Action("MonthlyUpdate", "ModernReporting")" class="mr-toolbar__filters mr-toolbar__filters--compact" data-page-loading>
+ <select name="year" class="govuk-select" id="mr-filter-year" aria-label="Year">
+          @{
+            var maxY = m.MaxReportYear >= m.MinReportYear ? m.MaxReportYear : DateTime.UtcNow.Year;
+            var minY = m.MinReportYear;
+            if (maxY < minY) { maxY = minY; }
+          }
+          @for (var y = maxY; y >= minY; y--)
+          {
+            if (m.ReportYear == y) { <option value="@y" selected>@y</option> }
+            else { <option value="@y">@y</option> }
+          }
+        </select>
+ <select name="month" class="govuk-select" id="mr-filter-month" aria-label="Month">
+          @for (var mo = 1; mo <= 12; mo++)
+          {
+            if (m.ReportMonth == mo) { <option value="@mo" selected>@(new DateTime(2000, mo, 1).ToString("MMM"))</option> }
+            else { <option value="@mo">@(new DateTime(2000, mo, 1).ToString("MMM"))</option> }
+          }
+        </select>
+ <select name="businessAreaId" class="govuk-select" id="mr-filter-business-area" aria-label="Business area">
+          <option value="">All areas</option>
+          @foreach (var ba in m.BusinessAreas)
+          {
+            if (m.FilterBusinessAreaId == ba.Id) { <option value="@ba.Id" selected>@ba.Name</option> }
+            else { <option value="@ba.Id">@ba.Name</option> }
+          }
+        </select>
+ <select name="directorateId" class="govuk-select" id="mr-filter-directorate" aria-label="Directorate">
+          <option value="">All directorates</option>
+          @foreach (var d in m.Directorates)
+          {
+            if (m.FilterDirectorateId == d.Id) { <option value="@d.Id" selected>@d.Name</option> }
+            else { <option value="@d.Id">@d.Name</option> }
+          }
+        </select>
+ <button type="submit" class="govuk-button govuk-!-margin-bottom-0" id="mr-filter-apply">Apply</button>
+      </form>
+    </div>
+  </div>
+
+  @* ══════════ Summary (moved to top) ══════════ *@
+ <section class="mr-section" id="mr-s-summary-top" aria-labelledby="mr-h-summary-top">
+ <h2 id="mr-h-summary-top" class="mr-section__heading">Summary</h2>
+ <div class="dfe-c-grid dfe-c-grid--4">
+ <div class="dfe-c-metric">
+ <div class="dfe-c-metric__number">@m.TotalActiveProjects</div>
+ <div class="dfe-c-metric__label">Active work items</div>
+      </div>
+ <div class="dfe-c-metric">
+ <div class="dfe-c-metric__number">@m.NewProjectsCount</div>
+ <div class="dfe-c-metric__label">New this month</div>
+      </div>
+ <div class="dfe-c-metric">
+ <div class="dfe-c-metric__number">@m.MilestonesAchievedCount</div>
+ <div class="dfe-c-metric__label">Milestones achieved</div>
+      </div>
+      @if (m.MonthlyUpdateStats != null)
+      {
+ <div class="dfe-c-metric dfe-c-metric--green">
+ <div class="dfe-c-metric__number">@m.MonthlyUpdateStats.Submitted</div>
+ <div class="dfe-c-metric__label">Returns submitted</div>
+        </div>
+ <div class="dfe-c-metric">
+ <div class="dfe-c-metric__number">@m.MonthlyUpdateStats.InProgress</div>
+ <div class="dfe-c-metric__label">In progress</div>
+        </div>
+ <div class="dfe-c-metric dfe-c-metric--red">
+ <div class="dfe-c-metric__number">@m.MonthlyUpdateStats.Late</div>
+ <div class="dfe-c-metric__label">Late</div>
+        </div>
+      }
+ <div class="dfe-c-metric">
+ <div class="dfe-c-metric__number">@m.ProjectsWithRagChangeInPeriod</div>
+ <div class="dfe-c-metric__label">RAG changes</div>
+      </div>
+ <div class="dfe-c-metric">
+ <div class="dfe-c-metric__number">@m.ProjectsWithPriorityChangeInPeriod</div>
+ <div class="dfe-c-metric__label">Priority changes</div>
+      </div>
+    </div>
+    @if (!string.IsNullOrWhiteSpace(m.BusinessAreaSummaryNarrative))
+    {
+ <div class="govuk-inset-text govuk-!-margin-top-4 govuk-!-margin-bottom-0">
+ <h3 class="govuk-heading-s govuk-!-margin-top-0">Business area overview</h3>
+ <p class="govuk-body-s govuk-hint govuk-!-margin-bottom-3">This overview is <strong>generated automatically</strong> from Compass data shown on this page (and related history). It is intended as a gentle prompt for conversation—not a score, target, or formal assessment.</p>
+        @foreach (var para in m.BusinessAreaSummaryNarrative.Split("\n\n", StringSplitOptions.RemoveEmptyEntries))
+        {
+ <p class="govuk-body govuk-!-margin-bottom-2">@para</p>
+        }
+      </div>
+    }
+  </section>
+
+ <div class="mr-report-section-panel dfe-c-collapsible dfe-c-collapsible--open govuk-!-margin-bottom-3">
+ <button type="button" class="dfe-c-collapsible__trigger" aria-expanded="true">
+ <span class="dfe-c-collapsible__icon">−</span>
+ <span>Business area summary</span>
+ <span class="dfe-c-collapsible__status"><span class="govuk-tag govuk-tag--grey">@mrReportPanelBaCount</span></span>
+      </button>
+ <div class="dfe-c-collapsible__body">
+<div id="d-mr-areas" class="mr-single-page-block" role="region" aria-labelledby="mr-h-ba">
+
+  @* ══════════════════ Business area summary ══════════════════ *@
+ <section class="mr-section" id="mr-s-ba" aria-labelledby="mr-h-ba">
+ <h2 id="mr-h-ba" class="govuk-visually-hidden">Business area summary</h2>
+      <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
+ <div class="dfe-c-table-wrap">
+ <table class="mr-ba-table js-sortable-ba" id="mr-business-area-table">
+          <thead>
+            <tr>
+ <th scope="col" rowspan="2" class="mr-ba-table__fixed mr-ba-table__area-col">Business area</th>
+ <th scope="col" rowspan="2" class="mr-ba-table__num-hdr" data-sort-col="1" data-sort-type="num"><abbr title="Total active work items">Tot</abbr></th>
+ <th scope="col" rowspan="2" class="mr-ba-table__num-hdr" data-sort-col="2" data-sort-type="num"><abbr title="Submitted returns">Submitted</abbr></th>
+ <th scope="col" rowspan="2" class="mr-ba-table__num-hdr" data-sort-col="3" data-sort-type="num"><abbr title="New this month">New</abbr></th>
+ <th scope="col" colspan="3" class="mr-ba-table__group mr-ba-table__group--ms">Milestones</th>
+ <th scope="col" colspan="5" class="mr-ba-table__group mr-ba-table__group--rag">RAG status</th>
+ <th scope="col" colspan="5" class="mr-ba-table__group mr-ba-table__group--pri">Delivery priority</th>
+            </tr>
+            <tr>
+ <th class="mr-ba-table__sub mr-ba-table__sub--ms" data-sort-col="4" data-sort-type="num"><abbr title="Completed">Done</abbr></th><th class="mr-ba-table__sub mr-ba-table__sub--ms" data-sort-col="5" data-sort-type="num"><abbr title="Due in next 30 days">Soon</abbr></th><th class="mr-ba-table__sub mr-ba-table__sub--ms" data-sort-col="6" data-sort-type="num"><abbr title="Past due">Late</abbr></th>
+ <th class="mr-ba-table__sub mr-ba-table__sub--rag" data-sort-col="7" data-sort-type="num"><abbr title="Red">R</abbr></th><th class="mr-ba-table__sub mr-ba-table__sub--rag" data-sort-col="8" data-sort-type="num"><abbr title="Amber–Red">A-R</abbr></th><th class="mr-ba-table__sub mr-ba-table__sub--rag" data-sort-col="9" data-sort-type="num"><abbr title="Amber–Green">A-G</abbr></th><th class="mr-ba-table__sub mr-ba-table__sub--rag" data-sort-col="10" data-sort-type="num"><abbr title="Green">G</abbr></th><th class="mr-ba-table__sub mr-ba-table__sub--rag" data-sort-col="11" data-sort-type="num"><abbr title="Not set">N/S</abbr></th>
+ <th class="mr-ba-table__sub mr-ba-table__sub--pri" data-sort-col="12" data-sort-type="num"><abbr title="Critical">C</abbr></th><th class="mr-ba-table__sub mr-ba-table__sub--pri" data-sort-col="13" data-sort-type="num"><abbr title="High">H</abbr></th><th class="mr-ba-table__sub mr-ba-table__sub--pri" data-sort-col="14" data-sort-type="num"><abbr title="Medium">M</abbr></th><th class="mr-ba-table__sub mr-ba-table__sub--pri" data-sort-col="15" data-sort-type="num"><abbr title="Low">L</abbr></th><th class="mr-ba-table__sub mr-ba-table__sub--pri" data-sort-col="16" data-sort-type="num"><abbr title="Not set">N/S</abbr></th>
+            </tr>
+          </thead>
+          <tbody>
+          @{
+            var totalRow = new ModernBusinessAreaDashboardRow
+            {
+              BusinessArea = "Total",
+              TotalProjects = m.BusinessAreaRows.Sum(r => r.TotalProjects),
+              SubmittedCount = m.BusinessAreaRows.Sum(r => r.SubmittedCount),
+              NewThisMonth = m.BusinessAreaRows.Sum(r => r.NewThisMonth),
+              MilestonesCompleted = m.BusinessAreaRows.Sum(r => r.MilestonesCompleted),
+              MilestonesUpcoming30Days = m.BusinessAreaRows.Sum(r => r.MilestonesUpcoming30Days),
+              MilestonesLate = m.BusinessAreaRows.Sum(r => r.MilestonesLate),
+              RagRed = m.BusinessAreaRows.Sum(r => r.RagRed),
+              RagAmberRed = m.BusinessAreaRows.Sum(r => r.RagAmberRed),
+              RagAmberGreen = m.BusinessAreaRows.Sum(r => r.RagAmberGreen),
+              RagGreen = m.BusinessAreaRows.Sum(r => r.RagGreen),
+              RagNotSet = m.BusinessAreaRows.Sum(r => r.RagNotSet),
+              PriCritical = m.BusinessAreaRows.Sum(r => r.PriCritical),
+              PriHigh = m.BusinessAreaRows.Sum(r => r.PriHigh),
+              PriMedium = m.BusinessAreaRows.Sum(r => r.PriMedium),
+              PriLow = m.BusinessAreaRows.Sum(r => r.PriLow),
+              PriNotSet = m.BusinessAreaRows.Sum(r => r.PriNotSet)
+            };
+          }
+          @foreach (var row in m.BusinessAreaRows)
+          {
+            var ba = row.BusinessArea;
+            var baEnc = Html.Encode(ba);
+            string drillAttrs(string filter) => $"data-ba=\"{baEnc}\" data-filter=\"{filter}\" role=\"button\" tabindex=\"0\"";
+            <tr>
+ <th scope="row" class="mr-ba-table__fixed mr-ba-table__area-col">@ba</th>
+ <td class="mr-ba-table__num"><span class="mr-ba-num mr-ba-num--strong mr-ba-drill" @Html.Raw(drillAttrs("total"))>@row.TotalProjects</span></td>
+ <td class="mr-ba-table__num"><span class="mr-ba-num @(row.SubmittedCount > 0 ? "mr-ba-num--highlight mr-ba-drill" : "")" @(row.SubmittedCount > 0 ? Html.Raw(drillAttrs("submitted")) : Html.Raw(""))>@row.SubmittedCount</span></td>
+ <td class="mr-ba-table__num"><span class="mr-ba-num @(row.NewThisMonth > 0 ? "mr-ba-num--highlight mr-ba-drill" : "")" @(row.NewThisMonth > 0 ? Html.Raw(drillAttrs("new")) : Html.Raw(""))>@row.NewThisMonth</span></td>
+ <td class="mr-ba-table__cell--ms mr-ba-table__num"><span class="mr-ba-num @(row.MilestonesCompleted > 0 ? "mr-ba-drill" : "")" @(row.MilestonesCompleted > 0 ? Html.Raw(drillAttrs("ms-done")) : Html.Raw(""))>@row.MilestonesCompleted</span></td>
+ <td class="mr-ba-table__cell--ms mr-ba-table__num"><span class="mr-ba-num @(row.MilestonesUpcoming30Days > 0 ? "mr-ba-drill" : "")" @(row.MilestonesUpcoming30Days > 0 ? Html.Raw(drillAttrs("ms-soon")) : Html.Raw(""))>@row.MilestonesUpcoming30Days</span></td>
+ <td class="mr-ba-table__cell--ms mr-ba-table__num"><span class="mr-ba-num @(row.MilestonesLate > 0 ? "mr-ba-num--warn mr-ba-drill" : "")" @(row.MilestonesLate > 0 ? Html.Raw(drillAttrs("ms-late")) : Html.Raw(""))>@row.MilestonesLate</span></td>
+ <td class="mr-ba-table__cell--rag mr-ba-table__num"><span class="mr-ba-num mr-ba-num--rag @(row.RagRed > 0 ? "mr-ba-num--rag-red mr-ba-drill" : "mr-ba-num--muted")" @(row.RagRed > 0 ? Html.Raw(drillAttrs("rag-Red")) : Html.Raw(""))>@row.RagRed</span></td>
+ <td class="mr-ba-table__cell--rag mr-ba-table__num"><span class="mr-ba-num mr-ba-num--rag @(row.RagAmberRed > 0 ? "mr-ba-num--rag-amber-red mr-ba-drill" : "mr-ba-num--muted")" @(row.RagAmberRed > 0 ? Html.Raw(drillAttrs("rag-Amber-Red")) : Html.Raw(""))>@row.RagAmberRed</span></td>
+ <td class="mr-ba-table__cell--rag mr-ba-table__num"><span class="mr-ba-num mr-ba-num--rag @(row.RagAmberGreen > 0 ? "mr-ba-num--rag-amber-grn mr-ba-drill" : "mr-ba-num--muted")" @(row.RagAmberGreen > 0 ? Html.Raw(drillAttrs("rag-Amber-Green")) : Html.Raw(""))>@row.RagAmberGreen</span></td>
+ <td class="mr-ba-table__cell--rag mr-ba-table__num"><span class="mr-ba-num mr-ba-num--rag @(row.RagGreen > 0 ? "mr-ba-num--rag-green mr-ba-drill" : "mr-ba-num--muted")" @(row.RagGreen > 0 ? Html.Raw(drillAttrs("rag-Green")) : Html.Raw(""))>@row.RagGreen</span></td>
+ <td class="mr-ba-table__cell--rag mr-ba-table__num"><span class="mr-ba-num mr-ba-num--rag @(row.RagNotSet > 0 ? "mr-ba-num--rag-ns mr-ba-drill" : "mr-ba-num--muted")" @(row.RagNotSet > 0 ? Html.Raw(drillAttrs("rag-Not Set")) : Html.Raw(""))>@row.RagNotSet</span></td>
+ <td class="mr-ba-table__cell--pri mr-ba-table__num"><span class="mr-ba-num mr-ba-num--pri @(row.PriCritical > 0 ? "mr-ba-num--pri-crit mr-ba-drill" : "mr-ba-num--muted")" @(row.PriCritical > 0 ? Html.Raw(drillAttrs("pri-Critical")) : Html.Raw(""))>@row.PriCritical</span></td>
+ <td class="mr-ba-table__cell--pri mr-ba-table__num"><span class="mr-ba-num mr-ba-num--pri @(row.PriHigh > 0 ? "mr-ba-num--pri-high mr-ba-drill" : "mr-ba-num--muted")" @(row.PriHigh > 0 ? Html.Raw(drillAttrs("pri-High")) : Html.Raw(""))>@row.PriHigh</span></td>
+ <td class="mr-ba-table__cell--pri mr-ba-table__num"><span class="mr-ba-num mr-ba-num--pri @(row.PriMedium > 0 ? "mr-ba-num--pri-med mr-ba-drill" : "mr-ba-num--muted")" @(row.PriMedium > 0 ? Html.Raw(drillAttrs("pri-Medium")) : Html.Raw(""))>@row.PriMedium</span></td>
+ <td class="mr-ba-table__cell--pri mr-ba-table__num"><span class="mr-ba-num mr-ba-num--pri @(row.PriLow > 0 ? "mr-ba-num--pri-low mr-ba-drill" : "mr-ba-num--muted")" @(row.PriLow > 0 ? Html.Raw(drillAttrs("pri-Low")) : Html.Raw(""))>@row.PriLow</span></td>
+ <td class="mr-ba-table__cell--pri mr-ba-table__num"><span class="mr-ba-num mr-ba-num--pri @(row.PriNotSet > 0 ? "mr-ba-num--pri-ns mr-ba-drill" : "mr-ba-num--muted")" @(row.PriNotSet > 0 ? Html.Raw(drillAttrs("pri-Not Set")) : Html.Raw(""))>@row.PriNotSet</span></td>
+            </tr>
+          }
+          </tbody>
+          <tfoot>
+ <tr class="mr-ba-table__total-row">
+ <th scope="row" class="mr-ba-table__fixed mr-ba-table__area-col">Total</th>
+ <td class="mr-ba-table__num"><span class="mr-ba-num mr-ba-num--strong">@totalRow.TotalProjects</span></td>
+ <td class="mr-ba-table__num"><span class="mr-ba-num mr-ba-num--strong">@totalRow.SubmittedCount</span></td>
+ <td class="mr-ba-table__num"><span class="mr-ba-num mr-ba-num--strong">@totalRow.NewThisMonth</span></td>
+ <td class="mr-ba-table__cell--ms mr-ba-table__num"><span class="mr-ba-num mr-ba-num--strong">@totalRow.MilestonesCompleted</span></td>
+ <td class="mr-ba-table__cell--ms mr-ba-table__num"><span class="mr-ba-num mr-ba-num--strong">@totalRow.MilestonesUpcoming30Days</span></td>
+ <td class="mr-ba-table__cell--ms mr-ba-table__num"><span class="mr-ba-num mr-ba-num--strong">@totalRow.MilestonesLate</span></td>
+ <td class="mr-ba-table__cell--rag mr-ba-table__num"><span class="mr-ba-num mr-ba-num--rag mr-ba-num--rag-red">@totalRow.RagRed</span></td>
+ <td class="mr-ba-table__cell--rag mr-ba-table__num"><span class="mr-ba-num mr-ba-num--rag mr-ba-num--rag-amber-red">@totalRow.RagAmberRed</span></td>
+ <td class="mr-ba-table__cell--rag mr-ba-table__num"><span class="mr-ba-num mr-ba-num--rag mr-ba-num--rag-amber-grn">@totalRow.RagAmberGreen</span></td>
+ <td class="mr-ba-table__cell--rag mr-ba-table__num"><span class="mr-ba-num mr-ba-num--rag mr-ba-num--rag-green">@totalRow.RagGreen</span></td>
+ <td class="mr-ba-table__cell--rag mr-ba-table__num"><span class="mr-ba-num mr-ba-num--rag mr-ba-num--rag-ns">@totalRow.RagNotSet</span></td>
+ <td class="mr-ba-table__cell--pri mr-ba-table__num"><span class="mr-ba-num mr-ba-num--pri mr-ba-num--pri-crit">@totalRow.PriCritical</span></td>
+ <td class="mr-ba-table__cell--pri mr-ba-table__num"><span class="mr-ba-num mr-ba-num--pri mr-ba-num--pri-high">@totalRow.PriHigh</span></td>
+ <td class="mr-ba-table__cell--pri mr-ba-table__num"><span class="mr-ba-num mr-ba-num--pri mr-ba-num--pri-med">@totalRow.PriMedium</span></td>
+ <td class="mr-ba-table__cell--pri mr-ba-table__num"><span class="mr-ba-num mr-ba-num--pri mr-ba-num--pri-low">@totalRow.PriLow</span></td>
+ <td class="mr-ba-table__cell--pri mr-ba-table__num"><span class="mr-ba-num mr-ba-num--pri mr-ba-num--pri-ns">@totalRow.PriNotSet</span></td>
+            </tr>
+          </tfoot>
+        </table>
+ </div>
+      </div>
+
+      @* ── Drill-down panel ── *@
+      <div id="mr-ba-drilldown" class="mr-ba-drilldown" style="display:none;">
+        <div class="mr-ba-drilldown__header">
+          <h3 class="mr-ba-drilldown__title" id="mr-ba-drilldown-title"></h3>
+          <button type="button" class="mr-ba-drilldown__close" aria-label="Close drill-down">&times;</button>
+        </div>
+        <div class="dfe-c-table-wrap">
+          <table class="mr-ba-drilldown-table">
+            <thead>
+              <tr>
+                <th scope="col">Work item</th>
+                <th scope="col">RAG</th>
+                <th scope="col">Priority</th>
+              </tr>
+            </thead>
+            <tbody id="mr-ba-drilldown-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <style>
+        .mr-ba-drill { cursor: pointer; text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 2px; }
+        .mr-ba-drill:hover, .mr-ba-drill:focus { text-decoration-style: solid; outline: 2px solid #fd0; outline-offset: 1px; }
+        .mr-ba-drilldown-table { width: 100%; border-collapse: collapse; font-size: 0.8125rem; }
+        .mr-ba-drilldown-table th,
+        .mr-ba-drilldown-table td { padding: 0.5rem 0.6rem; border: 1px solid #b1b4b6; text-align: left; vertical-align: top; }
+        .mr-ba-drilldown-table thead th { background: #f3f2f1; font-weight: 700; }
+        .mr-ba-drilldown { margin-top: 1rem; border: 1px solid #b1b4b6; padding: 1rem 1.25rem; background: #fff; }
+        .mr-ba-drilldown__header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; }
+        .mr-ba-drilldown__title { margin: 0; font-size: 1.05rem; }
+        .mr-ba-drilldown__close { background: none; border: none; font-size: 1.5rem; cursor: pointer; padding: 0 0.25rem; line-height: 1; color: #505a5f; }
+        .mr-ba-drilldown__close:hover { color: #0b0c0c; }
+      </style>
+
+      <script nonce="@Context.Items["Nonce"]">
+      (function () {
+        var baProjects = @Html.Raw(baProjectsJson);
+        var detailUrlPrefix = @Html.Raw(mwDetailPrefixJson);
+
+        var filterLabels = {
+          'total': 'All work items',
+          'submitted': 'Submitted update',
+          'new': 'New this month',
+          'ms-done': 'Milestones completed',
+          'ms-soon': 'Milestones due soon',
+          'ms-late': 'Milestones late',
+          'rag-Red': 'RAG: Red',
+          'rag-Amber-Red': 'RAG: Amber-Red',
+          'rag-Amber-Green': 'RAG: Amber-Green',
+          'rag-Green': 'RAG: Green',
+          'rag-Not Set': 'RAG: Not set',
+          'pri-Critical': 'Priority: Critical',
+          'pri-High': 'Priority: High',
+          'pri-Medium': 'Priority: Medium',
+          'pri-Low': 'Priority: Low',
+          'pri-Not Set': 'Priority: Not set'
+        };
+
+        var ragBadge = { 'Red': 'rag-red', 'Amber-Red': 'rag-amber-red', 'Amber-Green': 'rag-amber', 'Green': 'rag-green', 'Not Set': 'rag-none' };
+        var priBadge = { 'Critical': 'govuk-tag--red', 'High': 'govuk-tag--orange', 'Medium': 'govuk-tag--yellow', 'Low': 'govuk-tag--green', 'Not Set': 'govuk-tag--grey' };
+
+        var panel = document.getElementById('mr-ba-drilldown');
+        var title = document.getElementById('mr-ba-drilldown-title');
+        var body = document.getElementById('mr-ba-drilldown-body');
+        var activeCell = null;
+
+        function filterItems(items, filter) {
+          if (filter === 'total') return items;
+          if (filter === 'submitted') return items.filter(function (p) { return p.submittedUpdate; });
+          if (filter === 'new') return items.filter(function (p) { return p.isNew; });
+          if (filter === 'ms-done') return items.filter(function (p) { return p.hasMilestoneCompletedInPeriod; });
+          if (filter === 'ms-soon') return items.filter(function (p) { return p.hasMilestoneUpcomingInWindow; });
+          if (filter === 'ms-late') return items.filter(function (p) { return p.hasLateMilestone; });
+          if (filter.indexOf('rag-') === 0) { var v = filter.substring(4); return items.filter(function (p) { return p.rag === v; }); }
+          if (filter.indexOf('pri-') === 0) { var v = filter.substring(4); return items.filter(function (p) { return p.priority === v; }); }
+          return items;
+        }
+
+        function renderRows(items) {
+          body.innerHTML = '';
+          items.forEach(function (p) {
+            var tr = document.createElement('tr');
+            tr.className = 'mr-ba-drilldown-table__row';
+            var href = detailUrlPrefix + p.id;
+            tr.innerHTML =
+              '<td class="mr-ba-drilldown-table__cell"><a class="dfe-c-link dfe-c-fw-bold" href="' + href + '">' + escHtml(p.title) + '</a></td>' +
+              '<td class="mr-ba-drilldown-table__cell"><span class="rag-badge ' + (ragBadge[p.rag] || 'rag-none') + '">' + escHtml(p.rag) + '</span></td>' +
+              '<td class="mr-ba-drilldown-table__cell"><span class="govuk-tag ' + (priBadge[p.priority] || 'govuk-tag--grey') + '">' + escHtml(p.priority) + '</span></td>';
+            body.appendChild(tr);
+          });
+        }
+
+        function escHtml(s) {
+          var d = document.createElement('div');
+          d.appendChild(document.createTextNode(s || ''));
+          return d.innerHTML;
+        }
+
+        function show(ba, filter) {
+          var items = filterItems(baProjects[ba] || [], filter);
+          title.textContent = ba + ' \u2014 ' + (filterLabels[filter] || filter) + ' (' + items.length + ')';
+          renderRows(items);
+          panel.style.display = '';
+          panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+        function hide() {
+          panel.style.display = 'none';
+          if (activeCell) { activeCell.classList.remove('mr-ba-drill--active'); activeCell = null; }
+        }
+
+        document.getElementById('mr-business-area-table').addEventListener('click', function (e) {
+          var cell = e.target.closest('.mr-ba-drill');
+          if (!cell) return;
+          var ba = cell.getAttribute('data-ba');
+          var filter = cell.getAttribute('data-filter');
+          if (!ba || !filter) return;
+          if (activeCell === cell) { hide(); return; }
+          if (activeCell) activeCell.classList.remove('mr-ba-drill--active');
+          activeCell = cell;
+          cell.classList.add('mr-ba-drill--active');
+          show(ba, filter);
+        });
+
+        document.getElementById('mr-business-area-table').addEventListener('keydown', function (e) {
+          if (e.key === 'Enter' || e.key === ' ') {
+            var cell = e.target.closest('.mr-ba-drill');
+            if (cell) { e.preventDefault(); cell.click(); }
+          }
+        });
+
+        panel.querySelector('.mr-ba-drilldown__close').addEventListener('click', hide);
+      })();
+      </script>
+
+  </section>
+  </div>
+
+ </div>
+ </div>
+
+
+
+  <div class="mr-section-controls govuk-!-margin-bottom-3" style="display:flex;gap:0.75rem;flex-wrap:wrap;align-items:center;">
+ <button type="button" class="govuk-button govuk-button--secondary" id="mr-expand-all">Expand all sections</button>
+ <button type="button" class="govuk-button govuk-button--secondary" id="mr-collapse-all">Collapse all sections</button>
+  </div>
+
+  @* ══════════ Submission progress (current reporting period) ══════════ *@
+ <div class="mr-report-section-panel dfe-c-collapsible dfe-c-collapsible--open govuk-!-margin-bottom-3">
+ <button type="button" class="dfe-c-collapsible__trigger" aria-expanded="true">
+ <span class="dfe-c-collapsible__icon">−</span>
+ <span>Submission progress</span>
+ <span class="dfe-c-collapsible__status"><span class="govuk-tag govuk-tag--grey">@mrReportPanelSubmissionTotal</span></span>
+      </button>
+ <div class="dfe-c-collapsible__body">
+  <section class="mr-section" id="mr-s-submission" aria-labelledby="mr-h-submission" style="margin-top:0.75rem;">
+ <h2 id="mr-h-submission" class="govuk-visually-hidden">Submission progress</h2>
+ <p class="dfe-c-body-s dfe-c-text-muted" style="margin-top:-0.5rem;margin-bottom:1rem;">Monthly return completion for <strong>@m.MonthName</strong>@if (m.MonthlyUpdateStats != null) { <span class="dfe-c-text-muted"> — due @m.MonthlyUpdateStats.DueDate.ToString("d MMMM yyyy")</span> }.</p>
+    @if (m.MonthlyUpdateStats != null)
+    {
+      var st = m.MonthlyUpdateStats;
+      var overallPct = st.TotalProjects == 0 ? 0 : Math.Round(100m * st.Submitted / st.TotalProjects, 1);
+ <div class="mr-submission-summary govuk-!-margin-bottom-4">
+ <div class="dfe-c-grid dfe-c-grid--4">
+ <div class="dfe-c-metric">
+ <div class="dfe-c-metric__number">@st.Submitted</div>
+ <div class="dfe-c-metric__label">Submitted</div>
+        </div>
+ <div class="dfe-c-metric">
+ <div class="dfe-c-metric__number">@st.InProgress</div>
+ <div class="dfe-c-metric__label">In progress</div>
+        </div>
+ <div class="dfe-c-metric">
+ <div class="dfe-c-metric__number">@st.Late</div>
+ <div class="dfe-c-metric__label">Late</div>
+        </div>
+ <div class="dfe-c-metric">
+ <div class="dfe-c-metric__number">@st.NotStarted</div>
+ <div class="dfe-c-metric__label">Not started</div>
+        </div>
+      </div>
+ <div class="mr-progress-bar govuk-!-margin-top-3" role="group" aria-label="Overall submission completion">
+ <div class="mr-progress-bar__label govuk-body-s govuk-!-margin-bottom-1">Overall completion rate: <strong>@overallPct%</strong> (@st.Submitted of @st.TotalProjects work items)</div>
+ <div class="mr-progress-bar__track" aria-hidden="true"><div class="mr-progress-bar__fill" style="width:@(overallPct.ToString(System.Globalization.CultureInfo.InvariantCulture))%;"></div></div>
+      </div>
+    </div>
+    }
+  </section>
+ </div>
+ </div>
+
+ 
+<div class="mr-report-section-panel dfe-c-collapsible dfe-c-collapsible--open govuk-!-margin-bottom-3">
+<button type="button" class="dfe-c-collapsible__trigger" aria-expanded="true">
+<span class="dfe-c-collapsible__icon">−</span>
+<span>Path to green and priority changes</span>
+<span class="dfe-c-collapsible__status"><span class="govuk-tag govuk-tag--grey">@mrReportPanelChangesItems</span></span>
+      </button>
+<div class="dfe-c-collapsible__body">
+<div id="d-mr-narratives" class="mr-single-page-block" role="region" aria-labelledby="mr-h-ptg">
+  @* ══════════════════ Path to green (narrative-first cards) ══════════════════ *@
+ <section class="mr-section" id="mr-s-ptg" aria-labelledby="mr-h-ptg">
+ <h2 id="mr-h-ptg" class="mr-section__heading">Path to green</h2>
+ <p class="dfe-c-body-s dfe-c-text-muted" style="margin-top:-0.5rem;margin-bottom:1rem;">Narratives for work that is not green and has a path-to-green statement.</p>
+    @if (m.ProjectsWithPathToGreen.Count == 0)
+    {
+ <p class="dfe-c-body-s dfe-c-text-muted">No non-green work items have a path-to-green narrative.</p>
+    }
+    else
+    {
+ <div class="dfe-c-table-wrap">
+ <table class="mr-change-tbl">
+ <thead>
+ <tr>
+ <th scope="col">Work item</th>
+ <th scope="col">Business area</th>
+ <th scope="col">RAG</th>
+ <th scope="col">Priority</th>
+ <th scope="col" style="width:35%">Path to green</th>
+ <th scope="col" style="width:4rem">Info</th>
+            </tr>
+          </thead>
+ <tbody>
+          @foreach (var p in m.ProjectsWithPathToGreen)
+          {
+            var ragName = p.RagStatusLookup?.Name ?? "Not Set";
+            var priName = p.DeliveryPriority?.Name ?? "Not Set";
+            <tr>
+ <td><a class="dfe-c-link dfe-c-fw-bold" href="@MwDetailHref(p.Id)">@p.Title</a></td>
+ <td>@(p.BusinessAreaLookup?.Name ?? "—")</td>
+ <td><span class="@RagBadgeClass(ragName)">@ragName</span></td>
+ <td><span class="@PriBadgeClass(priName)">@priName</span></td>
+ <td class="mr-change-justification">@(string.IsNullOrWhiteSpace(p.PathToGreen) ? "—" : p.PathToGreen)</td>
+ <td><button type="button" class="mr-info-btn" data-mr-ptg-id="@p.Id" data-mr-rag-just="@(p.RagJustification ?? "")" data-mr-title="@p.Title" aria-label="Info for @p.Title">ℹ</button></td>
+            </tr>
+          }
+          </tbody>
+        </table>
+ </div>
+    }
+  </section>
+
+  @* ══════════════════ RAG & Priority changes (justification prominent) ══════════════════ *@
+ <section class="mr-section" id="mr-s-changes" aria-labelledby="mr-h-changes">
+ <h2 id="mr-h-changes" class="mr-section__heading">RAG and priority changes</h2>
+
+ <h3 class="govuk-heading-s govuk-!-margin-bottom-2">RAG changes <span class="mr-card__count">@m.RagChanges.Count</span></h3>
+      @if (m.RagChanges.Count == 0)
+      {
+ <p class="dfe-c-body-s dfe-c-text-muted">No RAG changes recorded in this period.</p>
+      }
+      else
+      {
+        @foreach (var bucket in ragChangeBuckets)
+        {
+ <h4 class="govuk-heading-s govuk-!-margin-bottom-2 @(bucket.Title == "Worsening" ? "" : "govuk-!-margin-top-4")">@bucket.Title <span class="mr-card__count">@bucket.Rows.Count</span></h4>
+ <p class="dfe-c-body-s dfe-c-text-muted govuk-!-margin-bottom-2">@bucket.Hint</p>
+          @if (bucket.Rows.Count == 0)
+          {
+ <p class="dfe-c-body-s dfe-c-text-muted govuk-!-margin-bottom-4">None in this category.</p>
+          }
+          else
+          {
+ <div class="dfe-c-table-wrap govuk-!-margin-bottom-4">
+ <table class="mr-change-tbl mr-change-tbl--narrative-first">
+ <thead>
+ <tr>
+ <th scope="col">Work item</th>
+ <th scope="col">Change</th>
+ <th scope="col" style="width:35%">Justification</th>
+ <th scope="col" style="width:4rem">Info</th>
+              </tr>
+            </thead>
+ <tbody>
+            @foreach (var row in bucket.Rows)
+            {
+              var meta = RagChangeMeta(row.From, row.To);
+ <tr>
+ <td>
+ <a class="dfe-c-link dfe-c-fw-bold" href="@MwDetailHref(row.ProjectId)">@row.Title</a>
+ <div class="dfe-c-body-s dfe-c-text-muted" style="margin-top:0.15rem;">@(row.BusinessArea ?? "—")</div>
+                </td>
+ <td class="mr-change-shift">
+ <span class="@RagBadgeClass(row.From)">@row.From</span>
+ <span class="mr-change-arrow" aria-hidden="true">→</span>
+ <span class="@RagBadgeClass(row.To)">@row.To</span>
+ <div class="dfe-c-body-s dfe-c-text-muted" style="margin-top:0.2rem;">@meta</div>
+                </td>
+ <td class="mr-change-justification mr-change-justification--lead">@(string.IsNullOrWhiteSpace(row.Justification) ? "—" : row.Justification)</td>
+ <td><button type="button" class="mr-info-btn" data-mr-rag-just="@(row.RagJustification ?? "")" data-mr-narrative="@(row.LatestNarrative ?? "")" data-mr-title="@row.Title" aria-label="Info for @row.Title">ℹ</button></td>
+              </tr>
+            }
+            </tbody>
+          </table>
+        </div>
+          }
+        }
+      }
+
+ <h3 class="govuk-heading-s govuk-!-margin-bottom-2 govuk-!-margin-top-6">Priority changes <span class="mr-card__count">@m.PriorityChanges.Count</span></h3>
+      @if (m.PriorityChanges.Count == 0)
+      {
+ <p class="dfe-c-body-s dfe-c-text-muted">No priority changes recorded in this period.</p>
+      }
+      else
+      {
+ <div class="dfe-c-table-wrap">
+ <table class="mr-change-tbl mr-change-tbl--narrative-first">
+ <thead>
+ <tr>
+ <th scope="col" style="width:35%">Reason</th>
+ <th scope="col">Work item</th>
+ <th scope="col">Change</th>
+ <th scope="col">Date</th>
+ <th scope="col" style="width:4rem">Info</th>
+              </tr>
+            </thead>
+ <tbody>
+            @foreach (var row in m.PriorityChanges)
+            {
+ <tr>
+ <td class="mr-change-justification mr-change-justification--lead">@(string.IsNullOrWhiteSpace(row.Justification) ? "—" : row.Justification)</td>
+ <td>
+ <a class="dfe-c-link dfe-c-fw-bold" href="@MwDetailHref(row.ProjectId)">@row.Title</a>
+ <div class="dfe-c-body-s dfe-c-text-muted" style="margin-top:0.15rem;">@(row.BusinessArea ?? "—")</div>
+                </td>
+ <td class="mr-change-shift">
+ <span class="@PriBadgeClass(row.From)">@row.From</span>
+ <span class="mr-change-arrow" aria-hidden="true">→</span>
+ <span class="@PriBadgeClass(row.To)">@row.To</span>
+                </td>
+ <td style="white-space:nowrap;">@row.ChangedAt.ToString("d MMM")</td>
+ <td><button type="button" class="mr-info-btn" data-mr-rag-just="@(row.RagJustification ?? "")" data-mr-narrative="@(row.LatestNarrative ?? "")" data-mr-title="@row.Title" aria-label="Info for @row.Title">ℹ</button></td>
+              </tr>
+            }
+            </tbody>
+          </table>
+        </div>
+      }
+  </section>
+
+  <script type="application/json" id="mr-ptg-narratives-json">@Html.Raw(ptgNarrativeJson)</script>
+
+  @* ══════════════════ Info modal ══════════════════ *@
+  <div id="mr-info-modal" class="mr-info-modal" role="dialog" aria-modal="true" aria-labelledby="mr-info-modal-title" style="display:none;">
+    <div class="mr-info-modal__backdrop"></div>
+    <div class="mr-info-modal__panel">
+      <div class="mr-info-modal__header">
+        <h3 id="mr-info-modal-title" class="govuk-heading-s govuk-!-margin-bottom-0"></h3>
+        <button type="button" class="mr-info-modal__close" aria-label="Close">&times;</button>
+      </div>
+      <div class="mr-info-modal__body">
+        <h4 class="govuk-heading-xs govuk-!-margin-bottom-1">RAG justification</h4>
+        <p id="mr-info-modal-rag" class="dfe-c-body-s" style="white-space:pre-line;"></p>
+        <h4 class="govuk-heading-xs govuk-!-margin-bottom-1 govuk-!-margin-top-4">Latest monthly update narrative</h4>
+        <p id="mr-info-modal-narrative" class="dfe-c-body-s" style="white-space:pre-line;"></p>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    .mr-info-btn { background:none; border:1px solid #b1b4b6; border-radius:4px; cursor:pointer; padding:0.2rem 0.5rem; font-size:0.95rem; line-height:1; color:#1d70b8; }
+    .mr-info-btn:hover { background:#f3f2f1; }
+    .mr-info-modal__backdrop { position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:9998; }
+    .mr-info-modal__panel { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:#fff; border-radius:8px; width:90%; max-width:640px; max-height:80vh; overflow-y:auto; z-index:9999; box-shadow:0 4px 24px rgba(0,0,0,.25); }
+    .mr-info-modal__header { display:flex; justify-content:space-between; align-items:flex-start; padding:1rem 1.25rem 0.5rem; border-bottom:1px solid #b1b4b6; }
+    .mr-info-modal__close { background:none; border:none; font-size:1.5rem; cursor:pointer; color:#505a5f; padding:0 0.25rem; }
+    .mr-info-modal__close:hover { color:#0b0c0c; }
+    .mr-info-modal__body { padding:1rem 1.25rem 1.5rem; }
+  </style>
+
+  <script nonce="@Context.Items["Nonce"]">
+  (function(){
+    var modal = document.getElementById('mr-info-modal');
+    var titleEl = document.getElementById('mr-info-modal-title');
+    var ragEl = document.getElementById('mr-info-modal-rag');
+    var narrativeEl = document.getElementById('mr-info-modal-narrative');
+    var closeBtn = modal.querySelector('.mr-info-modal__close');
+    var backdrop = modal.querySelector('.mr-info-modal__backdrop');
+
+    var ptgNarratives = {};
+    try {
+      var ptgEl = document.getElementById('mr-ptg-narratives-json');
+      if (ptgEl && ptgEl.textContent) ptgNarratives = JSON.parse(ptgEl.textContent);
+    } catch (e) { ptgNarratives = {}; }
+
+    function openModal(btn) {
+      titleEl.textContent = btn.getAttribute('data-mr-title') || '';
+      ragEl.textContent = btn.getAttribute('data-mr-rag-just') || '—';
+      var ptgId = btn.getAttribute('data-mr-ptg-id');
+      var narrative = '';
+      if (ptgId && Object.prototype.hasOwnProperty.call(ptgNarratives, ptgId))
+        narrative = ptgNarratives[ptgId] || '';
+      else
+        narrative = btn.getAttribute('data-mr-narrative') || '';
+      narrativeEl.textContent = narrative || '—';
+      if (!ragEl.textContent.trim()) ragEl.textContent = '—';
+      if (!narrativeEl.textContent.trim()) narrativeEl.textContent = '—';
+      modal.style.display = '';
+      closeBtn.focus();
+    }
+
+    function closeModal() {
+      modal.style.display = 'none';
+    }
+
+    document.addEventListener('click', function(e) {
+      var btn = e.target.closest('.mr-info-btn');
+      if (btn) { openModal(btn); return; }
+    });
+    closeBtn.addEventListener('click', closeModal);
+    backdrop.addEventListener('click', closeModal);
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape' && modal.style.display !== 'none') closeModal();
+    });
+  })();
+  </script>
+
+  </div>
+
+ </div>
+ </div>
+
+
+<div class="mr-report-section-panel dfe-c-collapsible dfe-c-collapsible--open govuk-!-margin-bottom-3">
+<button type="button" class="dfe-c-collapsible__trigger" aria-expanded="true">
+<span class="dfe-c-collapsible__icon">−</span>
+<span>RAG, priority, and trends</span>
+<span class="dfe-c-collapsible__status"><span class="govuk-tag govuk-tag--grey">@mrReportPanelTrendsTotal</span></span>
+      </button>
+<div class="dfe-c-collapsible__body">
+<div id="d-mr-rag-priority" class="mr-single-page-block" role="region" aria-labelledby="mr-h-dist">
+
+  @* ══════════════════ RAG + Priority distribution ══════════════════ *@
+ <section class="mr-section" id="mr-s-distribution" aria-labelledby="mr-h-dist">
+ <h2 id="mr-h-dist" class="mr-section__heading">RAG and priority distribution</h2>
+ <div class="mr-dist-grid">
+ <div class="mr-card">
+ <h3 class="mr-card__title">RAG status</h3>
+ <div class="mr-chart-wrap">
+          <canvas id="chart-rag" aria-label="RAG distribution chart"></canvas>
+        </div>
+ <div class="dfe-c-table-wrap">
+ <table class="mr-dist-table">
+ <thead>
+ <tr>
+ <th scope="col">RAG</th>
+ <th scope="col">Count</th>
+ <th scope="col">vs @m.PrevMonthName</th>
+            </tr>
+          </thead>
+ <tbody>
+          @foreach (var key in new[] { "Red", "Amber-Red", "Amber-Green", "Green", "Not Set" })
+          {
+            var val = m.RagDistribution.TryGetValue(key, out var v) ? v : 0;
+ <tr>
+ <td><span class="@RagBadgeClass(key)">@key</span></td>
+ <td><strong>@val</strong></td>
+ <td>@Html.Raw(DeltaHtml(RagDelta(key)))</td>
+            </tr>
+          }
+          </tbody>
+        </table>
+ </div>
+      </div>
+ <div class="mr-card">
+ <h3 class="mr-card__title">Delivery priority</h3>
+ <div class="mr-chart-wrap">
+          <canvas id="chart-priority" aria-label="Priority distribution chart"></canvas>
+        </div>
+ <div class="dfe-c-table-wrap">
+ <table class="mr-dist-table">
+ <thead>
+ <tr>
+ <th scope="col">Priority</th>
+ <th scope="col">Count</th>
+ <th scope="col">vs @m.PrevMonthName</th>
+            </tr>
+          </thead>
+ <tbody>
+          @foreach (var key in new[] { "Critical", "High", "Medium", "Low", "Not Set" })
+          {
+            var val = m.PriorityDistribution.TryGetValue(key, out var v) ? v : 0;
+ <tr>
+ <td><span class="@PriBadgeClass(key)">@key</span></td>
+ <td><strong>@val</strong></td>
+ <td>@Html.Raw(DeltaHtml(PriDelta(key)))</td>
+            </tr>
+          }
+          </tbody>
+        </table>
+ </div>
+      </div>
+    </div>
+  </section>
+
+  @* ══════════════════ RAG × Priority matrix ══════════════════ *@
+ <section class="mr-section" id="mr-s-matrix" aria-labelledby="mr-h-matrix">
+ <h2 id="mr-h-matrix" class="mr-section__heading">RAG × Priority matrix</h2>
+ <p class="dfe-c-body-s dfe-c-text-muted" style="margin-bottom:1rem;">Heat map showing concentration of work items by RAG status and delivery priority. Darker shading indicates higher-risk combinations.</p>
+ <div class="mr-card" style="overflow-x:auto;">
+      @{
+        var ragKeys = new[] { "Red", "Amber-Red", "Amber-Green", "Green", "Not Set" };
+        var priKeys = new[] { "Critical", "High", "Medium", "Low", "Not Set" };
+        var matrixLookup = m.RagPriorityMatrix.ToDictionary(c => c.Rag + "|" + c.Priority, c => c.Count);
+      }
+ <div class="dfe-c-table-wrap">
+ <table class="mr-mx" aria-label="RAG by Priority matrix">
+ <caption class="govuk-visually-hidden">Cross-tabulation of RAG status against delivery priority</caption>
+        <thead>
+          <tr>
+ <th class="mr-mx__corner" scope="col">
+ <span class="mr-mx__corner-label mr-mx__corner-label--col">Priority →</span>
+ <span class="mr-mx__corner-label mr-mx__corner-label--row">RAG ↓</span>
+            </th>
+ @foreach (var pk in priKeys) { <th scope="col" class="mr-mx__col-hdr"><span class="@PriBadgeClass(pk)">@pk</span></th> }
+ <th scope="col" class="mr-mx__col-hdr mr-mx__col-hdr--total">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+        @foreach (var rk in ragKeys)
+        {
+          var rowTotal = priKeys.Sum(pk => matrixLookup.TryGetValue(rk + "|" + pk, out var cv) ? cv : 0);
+          <tr>
+ <th scope="row" class="mr-mx__row-hdr"><span class="@RagBadgeClass(rk)">@rk</span></th>
+            @foreach (var pk in priKeys)
+            {
+              var c = matrixLookup.TryGetValue(rk + "|" + pk, out var cv) ? cv : 0;
+ <td class="@MatrixCellClass(rk, pk, c)">
+                @if (c > 0)
+                {
+ <span class="mr-mx__count">@c</span>
+                }
+                else
+                {
+ <span class="mr-mx__empty">–</span>
+                }
+              </td>
+            }
+ <td class="mr-mx__cell mr-mx__cell--total"><strong>@rowTotal</strong></td>
+          </tr>
+        }
+        </tbody>
+        <tfoot>
+          <tr>
+ <th scope="row" class="mr-mx__row-hdr mr-mx__row-hdr--total">Total</th>
+            @foreach (var pk in priKeys)
+            {
+              var colTotal = ragKeys.Sum(rk => matrixLookup.TryGetValue(rk + "|" + pk, out var cv) ? cv : 0);
+ <td class="mr-mx__cell mr-mx__cell--total"><strong>@colTotal</strong></td>
+            }
+ <td class="mr-mx__cell mr-mx__cell--grand"><strong>@m.TotalActiveProjects</strong></td>
+          </tr>
+        </tfoot>
+      </table>
+ </div>
+    </div>
+  </section>
+
+  @* ══════════════════ Trend charts ══════════════════ *@
+ <section class="mr-section" id="mr-s-trends" aria-labelledby="mr-h-trends">
+ <h2 id="mr-h-trends" class="mr-section__heading">Trends</h2>
+ <div class="mr-dist-grid">
+ <div class="mr-card">
+ <h3 class="mr-card__title">RAG over time</h3>
+ <div class="mr-trend-wrap">
+          <canvas id="chart-rag-trend" aria-label="RAG trend chart"></canvas>
+        </div>
+ <div class="dfe-c-table-wrap">
+ <table class="mr-dist-table">
+ <thead>
+ <tr>
+ <th scope="col">Month</th>
+ <th scope="col">Red</th>
+ <th scope="col">A-R</th>
+ <th scope="col">A-G</th>
+ <th scope="col">Green</th>
+ <th scope="col">Not set</th>
+            </tr>
+          </thead>
+ <tbody>
+          @foreach (var p in m.RagTrend)
+          {
+            <tr>
+ <td>@p.Label</td>
+ <td>@p.Red</td>
+ <td>@p.AmberRed</td>
+ <td>@p.AmberGreen</td>
+ <td>@p.Green</td>
+ <td>@p.NotSet</td>
+            </tr>
+          }
+          </tbody>
+        </table>
+ </div>
+      </div>
+ <div class="mr-card">
+ <h3 class="mr-card__title">Priority over time</h3>
+ <div class="mr-trend-wrap">
+          <canvas id="chart-pri-trend" aria-label="Priority trend chart"></canvas>
+        </div>
+ <div class="dfe-c-table-wrap">
+ <table class="mr-dist-table">
+ <thead>
+ <tr>
+ <th scope="col">Month</th>
+ <th scope="col">Critical</th>
+ <th scope="col">High</th>
+ <th scope="col">Medium</th>
+ <th scope="col">Low</th>
+ <th scope="col">Not set</th>
+            </tr>
+          </thead>
+ <tbody>
+          @foreach (var p in m.PriorityTrend)
+          {
+            <tr>
+ <td>@p.Label</td>
+ <td>@p.Critical</td>
+ <td>@p.High</td>
+ <td>@p.Medium</td>
+ <td>@p.Low</td>
+ <td>@p.NotSet</td>
+            </tr>
+          }
+          </tbody>
+        </table>
+ </div>
+      </div>
+    </div>
+  </section>
+  </div>
+
+ </div>
+ </div>
+
+
+<div class="mr-report-section-panel dfe-c-collapsible dfe-c-collapsible--open govuk-!-margin-bottom-3">
+<button type="button" class="dfe-c-collapsible__trigger" aria-expanded="true">
+<span class="dfe-c-collapsible__icon">−</span>
+<span>Milestones and new work</span>
+<span class="dfe-c-collapsible__status"><span class="govuk-tag govuk-tag--grey">@mrReportPanelMilestonesTotal</span></span>
+      </button>
+<div class="dfe-c-collapsible__body">
+<div id="d-mr-milestones" class="mr-single-page-block" role="region" aria-labelledby="mr-h-lists">
+
+  @* ══════════════════ Projects & milestones ══════════════════ *@
+ <section class="mr-section" id="mr-s-projects" aria-labelledby="mr-h-lists">
+ <h2 id="mr-h-lists" class="govuk-visually-hidden">Milestones and new work</h2>
+ <p class="dfe-c-body-s dfe-c-text-muted" style="margin:-0.35rem 0 1rem 0;">Use the sections below to expand and review milestone details.</p>
+
+ <div class="mr-milestone-groups">
+ @{
+   var openNewThisMonth = m.NewProjectsThisMonth.Count > 0;
+ }
+ <div class="dfe-c-collapsible @(openNewThisMonth ? "dfe-c-collapsible--open" : "")">
+ <button type="button" class="dfe-c-collapsible__trigger" aria-expanded="@(openNewThisMonth ? "true" : "false")">
+ <span class="dfe-c-collapsible__icon">@(openNewThisMonth ? "−" : "+")</span>
+ <span>New this month</span>
+ <span class="dfe-c-collapsible__status"><span class="govuk-tag govuk-tag--grey">@m.NewProjectsThisMonth.Count</span></span>
+      </button>
+ <div class="dfe-c-collapsible__body">
+        @if (m.NewProjectsThisMonth.Count == 0)
+        {
+ <p class="dfe-c-body-s dfe-c-text-muted">None in this period.</p>
+        }
+        else
+        {
+ <div class="dfe-c-table-wrap">
+ <table class="mr-change-tbl">
+ <thead>
+ <tr>
+ <th scope="col">Work item</th>
+ <th scope="col">Milestone</th>
+ <th scope="col">Due (date)</th>
+ <th scope="col">Completed (date)</th>
+ <th scope="col">Work RAG</th>
+ <th scope="col">Work Priority</th>
+              </tr>
+            </thead>
+ <tbody>
+            @foreach (var p in m.NewProjectsThisMonth)
+            {
+              var ragName = p.RagStatusLookup?.Name ?? "Not Set";
+              var priName = p.DeliveryPriority?.Name ?? "Not Set";
+              <tr>
+ <td>
+ <a class="dfe-c-link dfe-c-fw-bold" href="@MwDetailHref(p.Id)">@p.Title</a>
+ <div class="dfe-c-body-s dfe-c-text-muted">@(p.BusinessAreaLookup?.Name ?? "—")</div>
+                </td>
+ <td>—</td>
+ <td>@p.CreatedAt.ToString("d MMM yyyy")</td>
+ <td>—</td>
+ <td><span class="@RagBadgeClass(ragName)">@ragName</span></td>
+ <td><span class="@PriBadgeClass(priName)">@priName</span></td>
+              </tr>
+            }
+            </tbody>
+          </table>
+ </div>
+        }
+      </div>
+    </div>
+
+ @{
+   var openMsAchieved = m.MilestonesAchieved.Count > 0;
+ }
+ <div class="dfe-c-collapsible @(openMsAchieved ? "dfe-c-collapsible--open" : "")">
+ <button type="button" class="dfe-c-collapsible__trigger" aria-expanded="@(openMsAchieved ? "true" : "false")">
+ <span class="dfe-c-collapsible__icon">@(openMsAchieved ? "−" : "+")</span>
+ <span>Milestones completed</span>
+ <span class="dfe-c-collapsible__status"><span class="govuk-tag govuk-tag--grey">@m.MilestonesAchieved.Count</span></span>
+      </button>
+ <div class="dfe-c-collapsible__body">
+        @if (m.MilestonesAchieved.Count == 0)
+        {
+ <p class="dfe-c-body-s dfe-c-text-muted">None recorded.</p>
+        }
+        else
+        {
+ <div class="dfe-c-table-wrap">
+ <table class="mr-change-tbl">
+ <thead>
+ <tr>
+ <th scope="col">Work item</th>
+ <th scope="col">Milestone</th>
+ <th scope="col">Due (date)</th>
+ <th scope="col">Completed (date)</th>
+ <th scope="col">Work RAG</th>
+ <th scope="col">Work Priority</th>
+              </tr>
+            </thead>
+ <tbody>
+            @foreach (var x in m.MilestonesAchieved)
+            {
+              var ragName = x.Project.RagStatusLookup?.Name ?? "Not Set";
+              var priName = x.Project.DeliveryPriority?.Name ?? "Not Set";
+              <tr>
+ <td>
+ <a class="dfe-c-link dfe-c-fw-bold" href="@MwDetailHref(x.Project.Id, "milestones")">@x.Project.Title</a>
+ <div class="dfe-c-body-s dfe-c-text-muted">@(x.Project.BusinessAreaLookup?.Name ?? "—")</div>
+                </td>
+ <td>@x.Milestone.Name</td>
+ <td>@x.Milestone.DueDate.ToString("d MMM yyyy")</td>
+ <td>@(x.Milestone.ActualDate.HasValue ? x.Milestone.ActualDate.Value.ToString("d MMM yyyy") : "—")</td>
+ <td><span class="@RagBadgeClass(ragName)">@ragName</span></td>
+ <td><span class="@PriBadgeClass(priName)">@priName</span></td>
+              </tr>
+            }
+            </tbody>
+          </table>
+ </div>
+        }
+      </div>
+    </div>
+
+ @{
+   var openMsUpcoming = m.UpcomingMilestonesNext30Days.Count > 0;
+ }
+ <div class="dfe-c-collapsible @(openMsUpcoming ? "dfe-c-collapsible--open" : "")">
+ <button type="button" class="dfe-c-collapsible__trigger" aria-expanded="@(openMsUpcoming ? "true" : "false")">
+ <span class="dfe-c-collapsible__icon">@(openMsUpcoming ? "−" : "+")</span>
+ <span>Upcoming milestones — 30 days</span>
+ <span class="dfe-c-collapsible__status"><span class="govuk-tag govuk-tag--grey">@m.UpcomingMilestonesNext30Days.Count</span></span>
+      </button>
+ <div class="dfe-c-collapsible__body">
+        @if (m.UpcomingMilestonesNext30Days.Count == 0)
+        {
+ <p class="dfe-c-body-s dfe-c-text-muted">None in window.</p>
+        }
+        else
+        {
+ <div class="dfe-c-table-wrap">
+ <table class="mr-change-tbl">
+ <thead>
+ <tr>
+ <th scope="col">Work item</th>
+ <th scope="col">Milestone</th>
+ <th scope="col">Due (date)</th>
+ <th scope="col">Completed (date)</th>
+ <th scope="col">Work RAG</th>
+ <th scope="col">Work Priority</th>
+              </tr>
+            </thead>
+ <tbody>
+            @foreach (var x in m.UpcomingMilestonesNext30Days)
+            {
+              var ragName = x.Project.RagStatusLookup?.Name ?? "Not Set";
+              var priName = x.Project.DeliveryPriority?.Name ?? "Not Set";
+              <tr>
+ <td>
+ <a class="dfe-c-link dfe-c-fw-bold" href="@MwDetailHref(x.Project.Id, "milestones")">@x.Project.Title</a>
+ <div class="dfe-c-body-s dfe-c-text-muted">@(x.Project.BusinessAreaLookup?.Name ?? "—")</div>
+                </td>
+ <td>@x.Milestone.Name</td>
+ <td>@x.Milestone.DueDate.ToString("d MMM yyyy")</td>
+ <td>@(x.Milestone.ActualDate.HasValue ? x.Milestone.ActualDate.Value.ToString("d MMM yyyy") : "—")</td>
+ <td><span class="@RagBadgeClass(ragName)">@ragName</span></td>
+ <td><span class="@PriBadgeClass(priName)">@priName</span></td>
+              </tr>
+            }
+            </tbody>
+          </table>
+ </div>
+        }
+      </div>
+    </div>
+
+ @{
+   var openMsLate = m.LateMilestones.Count > 0;
+ }
+ <div class="dfe-c-collapsible @(openMsLate ? "dfe-c-collapsible--open" : "")">
+ <button type="button" class="dfe-c-collapsible__trigger" aria-expanded="@(openMsLate ? "true" : "false")">
+ <span class="dfe-c-collapsible__icon">@(openMsLate ? "−" : "+")</span>
+ <span>Late milestones</span>
+ <span class="dfe-c-collapsible__status"><span class="govuk-tag @(m.LateMilestones.Count > 0 ? "govuk-tag--red" : "govuk-tag--grey")">@m.LateMilestones.Count</span></span>
+      </button>
+ <div class="dfe-c-collapsible__body">
+        @if (m.LateMilestones.Count == 0)
+        {
+ <p class="dfe-c-body-s dfe-c-text-muted">None.</p>
+        }
+        else
+        {
+ <div class="dfe-c-table-wrap">
+ <table class="mr-change-tbl">
+ <thead>
+ <tr>
+ <th scope="col">Work item</th>
+ <th scope="col">Milestone</th>
+ <th scope="col">Due (date)</th>
+ <th scope="col">Completed (date)</th>
+ <th scope="col">Work RAG</th>
+ <th scope="col">Work Priority</th>
+              </tr>
+            </thead>
+ <tbody>
+            @foreach (var x in m.LateMilestones)
+            {
+              var ragName = x.Project.RagStatusLookup?.Name ?? "Not Set";
+              var priName = x.Project.DeliveryPriority?.Name ?? "Not Set";
+              <tr>
+ <td>
+ <a class="dfe-c-link dfe-c-fw-bold" href="@MwDetailHref(x.Project.Id, "milestones")">@x.Project.Title</a>
+ <div class="dfe-c-body-s dfe-c-text-muted">@(x.Project.BusinessAreaLookup?.Name ?? "—")</div>
+                </td>
+ <td>@x.Milestone.Name</td>
+ <td class="mr-text-danger">@x.Milestone.DueDate.ToString("d MMM yyyy")</td>
+ <td>@(x.Milestone.ActualDate.HasValue ? x.Milestone.ActualDate.Value.ToString("d MMM yyyy") : "—")</td>
+ <td><span class="@RagBadgeClass(ragName)">@ragName</span></td>
+ <td><span class="@PriBadgeClass(priName)">@priName</span></td>
+              </tr>
+            }
+            </tbody>
+          </table>
+ </div>
+        }
+      </div>
+    </div>
+    </div>
+  </section>
+  </div>
+ </div>
+ </div>
+
+@await Html.PartialAsync("~/Views/Modern/Reporting/_MonthlyUpdateAccessibility.cshtml", m)
+
+</div>
+
+
+@section Styles {
+<style>
+  /* Square corners across this report (overrides nested GOV.UK / Compass2 radius tokens). */
+  .mr-dash,
+  .mr-dash * {
+    border-radius: 0 !important;
+  }
+
+  .mr-dash { margin-bottom: 3rem; }
+
+  .mr-report-tabs { margin-bottom: 1.25rem; flex-wrap: wrap; }
+
+  /* ── Compact toolbar (single row where space allows) ── */
+  .mr-toolbar {
+    background: var(--rpt-bg-card, #fff);
+    border: 1px solid var(--rpt-border, #e5e7eb);
+    border-radius: var(--rpt-radius, 8px);
+    padding: 0.65rem 0.85rem;
+    box-shadow: var(--rpt-shadow, 0 1px 3px rgba(0,0,0,0.06));
+    margin-bottom: 1rem;
+  }
+  .mr-toolbar--compact .mr-toolbar__row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 1rem;
+    justify-content: space-between;
+  }
+  .mr-toolbar__nav {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    flex: 0 1 auto;
+    min-width: 0;
+  }
+  .mr-toolbar__nav--compact { flex-wrap: wrap; }
+  .mr-toolbar__nav-link { font-size: 0.8125rem; font-weight: 600; white-space: nowrap; }
+  .mr-toolbar__period { font-weight: 700; font-size: 0.9375rem; white-space: nowrap; }
+  /* One horizontal row: do not cap width (old min(100%,20rem) forced stacked controls). */
+  .mr-toolbar__filters {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+    overflow: visible;
+    max-width: 100%;
+  }
+  .mr-toolbar__filters--compact {
+    flex: 1 1 auto;
+    justify-content: flex-end;
+    min-width: 0;
+  }
+  .mr-toolbar__filters .govuk-select,
+  .mr-toolbar__filters .govuk-button {
+    flex: 0 0 auto;
+  }
+  .mr-toolbar__filters .govuk-select { max-width: 100%; }
+  .mr-toolbar__filters .govuk-button { margin-bottom: 0; }
+  #mr-filter-year { width: 6.5rem; min-width: 6.5rem; }
+  #mr-filter-month { width: 7.5rem; min-width: 7.5rem; }
+  #mr-filter-business-area,
+  #mr-filter-directorate { width: 18rem; min-width: 16rem; max-width: 24rem; }
+  #mr-filter-apply { min-width: 5.5rem; }
+
+  /* ── Path to green cards ── */
+  .mr-ptg-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr));
+    gap: 1rem;
+    align-items: stretch;
+  }
+  .mr-ptg-card {
+    border: 1px solid var(--rpt-border, #e5e7eb);
+    border-radius: 8px;
+    padding: 1rem 1.1rem;
+    background: #fff;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  .mr-ptg-card__title-row { line-height: 1.35; }
+  .mr-ptg-card__badges { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.35rem; }
+  .mr-ptg-card__narrative {
+    font-size: 0.9375rem;
+    line-height: 1.5;
+    color: #0b0c0c;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--grey-2, #dee0e2);
+    flex: 1 1 auto;
+  }
+
+  /* ── Milestone board ── */
+  .mr-milestone-board { display: flex; flex-direction: column; gap: 1rem; }
+  .mr-milestone-board__row { margin-top: 0; }
+  .mr-milestone-board .mr-list li {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.5rem 0.75rem;
+    align-items: baseline;
+    padding: 0.5rem 0;
+  }
+  .mr-milestone-board .mr-list li > .mr-milestone-date {
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    font-size: 0.8125rem;
+    color: var(--grey-4, #505a5f);
+    min-width: 4.5rem;
+  }
+  .mr-milestone-board .mr-list li > .mr-milestone-body { min-width: 0; }
+
+  /* Stack Compass2 collapsibles — spacing matches .dfe-c-collapsible margin */
+  .mr-milestone-groups {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  /* ── Sections ── */
+  .mr-section { margin-bottom: 2.5rem; scroll-margin-top: 1rem; }
+  .mr-section__heading {
+    font-size: 1.25rem;
+    font-weight: 700;
+    margin: 0 0 1rem 0;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid var(--navy, #1d70b8);
+  }
+
+  /* Submission "By business area" — scroll on small screens, no dfe-c-table-wrap card border */
+  .mr-submission-ba-wrap {
+    overflow-x: auto;
+  }
+
+  /* ── Cards ── */
+  .mr-card {
+    background: var(--rpt-bg-card, #fff);
+    border: 1px solid var(--rpt-border, #e5e7eb);
+    border-radius: var(--rpt-radius, 8px);
+    padding: 1.25rem;
+    box-shadow: var(--rpt-shadow, 0 1px 3px rgba(0,0,0,0.06));
+  }
+  .mr-card--full { grid-column: 1 / -1; }
+  .mr-card__title { font-size: 0.9375rem; font-weight: 700; margin: 0 0 0.75rem 0; }
+  .mr-card__count {
+    display: inline-block;
+    font-size: 0.75rem;
+    font-weight: 700;
+    background: var(--grey-1, #f3f2f1);
+    color: var(--grey-4, #505a5f);
+    padding: 0.1rem 0.45rem;
+    border-radius: 10px;
+    margin-left: 0.25rem;
+    vertical-align: middle;
+  }
+  .mr-card__count--danger { background: var(--t-red-bg, #fde8e4); color: var(--t-red-fg, #942514); }
+
+  /* ── Distribution grid (two-col) ── */
+  .mr-dist-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.25rem;
+    align-items: start;
+  }
+  .mr-dist-grid > .mr-card {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+  .mr-chart-wrap { max-height: 220px; margin-bottom: 1rem; }
+  .mr-trend-wrap { min-height: 280px; }
+
+  /* ── Distribution tables ── */
+  .mr-dist-table { margin-top: 0.5rem; }
+  .mr-dist-table th,
+  .mr-dist-table td { padding: 0.4rem 0.5rem; font-size: 0.8125rem; }
+  .mr-delta { font-size: 0.75rem; font-weight: 700; }
+  .mr-delta--up { color: #d4351c; }
+  .mr-delta--down { color: #00703c; }
+  .mr-delta--flat { color: var(--grey-4, #505a5f); }
+
+  /* ── Improved matrix ── */
+  .mr-mx { border-collapse: separate; border-spacing: 3px; width: 100%; font-size: 0.875rem; }
+  .mr-mx th, .mr-mx td { padding: 0.55rem 0.7rem; text-align: center; vertical-align: middle; }
+
+  .mr-mx__corner {
+    background: transparent;
+    position: relative;
+    min-width: 80px;
+    min-height: 48px;
+  }
+  .mr-mx__corner-label {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    color: var(--grey-4, #505a5f);
+    position: absolute;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+  .mr-mx__corner-label--col { top: 4px; right: 6px; }
+  .mr-mx__corner-label--row { bottom: 4px; left: 6px; }
+
+  .mr-mx__col-hdr { background: #f8f8f8; font-weight: 600; border-radius: 4px; }
+  .mr-mx__col-hdr--total { background: #eee; }
+  .mr-mx__row-hdr, th.mr-mx__row-hdr { background: #f8f8f8; font-weight: 600; text-align: left; border-radius: 4px; padding-left: 0.5rem; }
+  .mr-mx__row-hdr--total { background: #eee; }
+
+  .mr-mx__cell { border-radius: 6px; transition: transform 0.1s; min-width: 48px; }
+  .mr-mx__cell:hover { transform: scale(1.08); z-index: 1; }
+
+  .mr-mx__cell--zero { background: #f8f8f8; }
+  .mr-mx__cell--critical { background: #f8d7da; color: #721c24; font-weight: 700; border: 1px solid rgba(114,28,36,0.15); }
+  .mr-mx__cell--high { background: #fff0e0; color: #80340a; font-weight: 700; border: 1px solid rgba(128,52,10,0.15); }
+  .mr-mx__cell--medium { background: #fff7e0; color: #6e4900; font-weight: 600; border: 1px solid rgba(110,73,0,0.12); }
+  .mr-mx__cell--low { background: #e3f5eb; color: #00703c; font-weight: 600; border: 1px solid rgba(0,112,60,0.12); }
+  .mr-mx__cell--neutral { background: #f3f2f1; color: #505a5f; }
+  .mr-mx__cell--total { background: #eee; font-weight: 700; border-radius: 4px; }
+  .mr-mx__cell--grand { background: #ddd; font-weight: 700; font-size: 1rem; border-radius: 4px; }
+
+  .mr-mx__count { font-size: 1.125rem; font-weight: 700; }
+  .mr-mx__empty { color: #ccc; font-size: 0.875rem; }
+
+  .mr-mx tfoot th, .mr-mx tfoot td { font-weight: 700; }
+
+  /* ── Change tables ── */
+  .mr-change-tbl th,
+  .mr-change-tbl td { font-size: 0.8125rem; vertical-align: top; }
+  .mr-change-arrow { color: var(--grey-4, #505a5f); font-size: 0.875rem; padding: 0 0.35rem; white-space: nowrap; }
+  .mr-change-justification { max-width: 28rem; font-size: 0.8125rem; color: #333; line-height: 1.4; }
+  .mr-change-tbl--narrative-first .mr-change-justification--lead {
+    min-width: 14rem;
+    max-width: 36rem;
+    font-size: 0.875rem;
+    line-height: 1.45;
+  }
+  .mr-change-shift { white-space: nowrap; }
+  .mr-change-shift .rag-badge, .mr-change-shift .dfe-c-tag { vertical-align: middle; }
+
+  /* ── BA summary table ── */
+  .mr-ba-table { border-collapse: collapse; font-size: 0.8125rem; width: 100%; min-width: 52rem; }
+  .mr-ba-table th, .mr-ba-table td { padding: 0.4rem 0.35rem; border: 1px solid var(--rpt-border, #e5e7eb); vertical-align: middle; }
+  .mr-ba-table thead th { background: #f3f2f1; font-weight: 700; position: sticky; top: 0; z-index: 1; text-align: center; }
+  .mr-ba-table thead th[data-sort-type="num"] { cursor: pointer; }
+  .mr-ba-table thead th[data-sort-type="num"]:hover { background: #e8eaed; }
+  .mr-ba-table__area-col {
+    text-align: left !important;
+    white-space: normal;
+    min-width: 10rem;
+    max-width: 22rem;
+    font-weight: 600;
+    hyphens: auto;
+  }
+  .mr-ba-table__num-hdr { font-variant-numeric: tabular-nums; }
+  .mr-ba-table__num { text-align: center; font-variant-numeric: tabular-nums; }
+  .mr-ba-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.75rem;
+    padding: 0.2rem 0.45rem;
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 0.8125rem;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.2;
+    background: #f3f2f1;
+    color: #505a5f;
+  }
+  .mr-ba-num--strong { background: #e8eaed; color: #0b0c0c; font-weight: 700; }
+  .mr-ba-num--muted { opacity: 0.45; font-weight: 500; }
+  .mr-ba-num--highlight { background: #e8f5e9; color: #005a30; }
+  .mr-ba-num--warn { background: #fff3cd; color: #6e4900; }
+  .mr-ba-num--rag-red { background: #fde8e5; color: #942514; }
+  .mr-ba-num--rag-amber-red { background: #ffeee5; color: #80340a; }
+  .mr-ba-num--rag-amber-grn { background: #fff8e6; color: #6e4900; }
+  .mr-ba-num--rag-green { background: #e3f5eb; color: #005a30; }
+  .mr-ba-num--rag-ns { background: #ececec; color: #454a4d; }
+  .mr-ba-num--pri-crit { background: #fde8e5; color: #942514; }
+  .mr-ba-num--pri-high { background: #ffeee5; color: #80340a; }
+  .mr-ba-num--pri-med { background: #fff8e6; color: #6e4900; }
+  .mr-ba-num--pri-low { background: #e3f5eb; color: #005a30; }
+  .mr-ba-num--pri-ns { background: #ececec; color: #454a4d; }
+  .mr-ba-table__group { font-weight: 700; }
+  .mr-ba-table__group--ms { background: #f0f4f5; border-bottom: 3px solid #5694ca; }
+  .mr-ba-table__group--rag { background: #fef7f0; border-bottom: 3px solid #f47738; }
+  .mr-ba-table__group--pri { background: #f0f5ef; border-bottom: 3px solid #00703c; }
+  .mr-ba-table__sub { font-weight: 600; font-size: 0.6875rem; }
+  .mr-ba-table__sub--ms { background: #f7fafb; }
+  .mr-ba-table__sub--rag { background: #fffcf8; }
+  .mr-ba-table__sub--pri { background: #f7faf6; }
+  .mr-ba-table__cell--ms { background: rgba(86, 148, 202, 0.04); }
+  .mr-ba-table__cell--rag { background: rgba(244, 119, 56, 0.04); }
+  .mr-ba-table__cell--pri { background: rgba(0, 112, 60, 0.04); }
+  .mr-ba-table__fixed { position: sticky; left: 0; background: #fff; z-index: 1; box-shadow: 2px 0 4px rgba(0,0,0,0.04); }
+  .mr-ba-table thead .mr-ba-table__fixed { background: #f3f2f1; z-index: 2; }
+  .mr-ba-table tfoot .mr-ba-table__fixed { background: #f3f2f1; z-index: 2; }
+  .mr-ba-table tbody tr:nth-child(even) { background: #fafafa; }
+  .mr-ba-table tbody tr:nth-child(even) .mr-ba-table__fixed { background: #fafafa; }
+  .mr-ba-table__total-row th, .mr-ba-table__total-row td { background: #ebecef; font-weight: 700; border-top: 2px solid #333; }
+
+  /* ── Lists ── */
+  .mr-list { list-style: none; padding: 0; margin: 0; font-size: 0.875rem; }
+  .mr-list li { padding: 0.4rem 0; border-bottom: 1px solid var(--rpt-border, #e5e7eb); }
+  .mr-list li:last-child { border-bottom: none; }
+  .mr-text-danger { color: #d4351c; }
+
+  .mr-progress-bar__track {
+    height: 0.75rem;
+    background: #f3f2f1;
+    border-radius: 999px;
+    overflow: hidden;
+    border: 1px solid #b1b4b6;
+  }
+  .mr-progress-bar__fill {
+    height: 100%;
+    background: linear-gradient(90deg, #5694ca, #1d70b8);
+    border-radius: 999px;
+    min-width: 2px;
+    transition: width 0.35s ease;
+  }
+  .mr-progress-bar--compact .mr-progress-bar__track { height: 0.55rem; }
+  .mr-completion-inline {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
+  .mr-completion-inline .mr-progress-bar {
+    flex: 1 1 5rem;
+    min-width: 4rem;
+    max-width: 12rem;
+    margin-top: 0;
+  }
+  .mr-completion-inline__pct {
+    font-weight: 600;
+    min-width: 3rem;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .mr-completion-cell { white-space: nowrap; }
+
+  @@media (max-width: 768px) {
+    .mr-dist-grid { grid-template-columns: 1fr; }
+    .mr-toolbar__row {
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .mr-toolbar__filters--compact { justify-content: flex-start; }
+    #mr-filter-business-area,
+    #mr-filter-directorate { width: min(100%, 24rem); min-width: 14rem; }
+    .mr-ptg-grid { grid-template-columns: 1fr; }
+  }
+</style>
+}
+
+@section Scripts {
+  <script nonce="@Context.Items["Nonce"]">
+    document.addEventListener('DOMContentLoaded', function () {
+      function milestoneCollapsiblesSetExpanded(expanded) {
+        document.querySelectorAll('.mr-milestone-groups .dfe-c-collapsible').forEach(function (panel) {
+          var icon = panel.querySelector('.dfe-c-collapsible__icon');
+          var btn = panel.querySelector('.dfe-c-collapsible__trigger');
+          if (expanded) {
+            panel.classList.add('dfe-c-collapsible--open');
+            if (icon) icon.textContent = '\u2212';
+            if (btn) btn.setAttribute('aria-expanded', 'true');
+          } else {
+            panel.classList.remove('dfe-c-collapsible--open');
+            if (icon) icon.textContent = '+';
+            if (btn) btn.setAttribute('aria-expanded', 'false');
+          }
+        });
+      }
+      function reportSectionPanelsSetExpanded(expanded) {
+        document.querySelectorAll('.mr-report-section-panel').forEach(function (panel) {
+          var btn = panel.querySelector('.dfe-c-collapsible__trigger');
+          var icon = btn ? btn.querySelector('.dfe-c-collapsible__icon') : null;
+          if (expanded) {
+            panel.classList.add('dfe-c-collapsible--open');
+            if (icon) icon.textContent = '\u2212';
+            if (btn) btn.setAttribute('aria-expanded', 'true');
+          } else {
+            panel.classList.remove('dfe-c-collapsible--open');
+            if (icon) icon.textContent = '+';
+            if (btn) btn.setAttribute('aria-expanded', 'false');
+          }
+        });
+      }
+      var mg = document.querySelector('.mr-milestone-groups');
+      if (mg) {
+        mg.addEventListener('click', function (e) {
+          var btn = e.target.closest('.dfe-c-collapsible__trigger');
+          if (!btn || !mg.contains(btn)) return;
+          requestAnimationFrame(function () {
+            var panel = btn.closest('.dfe-c-collapsible');
+            var isOpen = panel && panel.classList.contains('dfe-c-collapsible--open');
+            btn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+          });
+        });
+      }
+      var ex = document.getElementById('mr-expand-all');
+      var cl = document.getElementById('mr-collapse-all');
+      if (ex) ex.addEventListener('click', function () {
+        reportSectionPanelsSetExpanded(true);
+        milestoneCollapsiblesSetExpanded(true);
+      });
+      if (cl) cl.addEventListener('click', function () {
+        reportSectionPanelsSetExpanded(false);
+        milestoneCollapsiblesSetExpanded(false);
+      });
+    });
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" nonce="@Context.Items["Nonce"]"></script>
+  <script nonce="@Context.Items["Nonce"]">
+    (function () {
+      var ragDist = @Html.Raw(ragDistJson);
+      var priDist = @Html.Raw(priDistJson);
+      var ragTrend = @Html.Raw(ragTrendJson);
+      var priTrend = @Html.Raw(priTrendJson);
+
+      var ragOrder = ['Red', 'Amber-Red', 'Amber-Green', 'Green', 'Not Set'];
+      var ragColors = {
+        'Red':         '#d4351c',
+        'Amber-Red':   '#f47738',
+        'Amber-Green': '#f8a100',
+        'Green':       '#00703c',
+        'Not Set':     '#b1b4b6'
+      };
+
+      var priOrder = ['Critical', 'High', 'Medium', 'Low', 'Not Set'];
+      var priColors = {
+        'Critical': '#d4351c',
+        'High':     '#f47738',
+        'Medium':   '#f8a100',
+        'Low':      '#00703c',
+        'Not Set':  '#b1b4b6'
+      };
+
+      var chartFont = { family: "'Inter', system-ui, -apple-system, sans-serif" };
+      var chartDefaults = {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: {
+              boxWidth: 14,
+              boxHeight: 14,
+              useBorderRadius: true,
+              borderRadius: 3,
+              font: Object.assign({ size: 12, weight: '600' }, chartFont),
+              padding: 12
+            }
+          },
+          tooltip: {
+            backgroundColor: 'rgba(11,12,12,0.92)',
+            titleFont: Object.assign({ size: 13, weight: '700' }, chartFont),
+            bodyFont: Object.assign({ size: 12 }, chartFont),
+            padding: 10,
+            cornerRadius: 6,
+            displayColors: true,
+            boxWidth: 10,
+            boxHeight: 10,
+            boxPadding: 4
+          }
+        }
+      };
+
+      function doughnut(id, keys, dist, colorMap) {
+        var el = document.getElementById(id);
+        if (!el || typeof Chart === 'undefined') return;
+        var labels = keys.filter(function(k) { return (dist[k] || 0) > 0; });
+        if (!labels.length) return;
+        new Chart(el.getContext('2d'), {
+          type: 'doughnut',
+          data: {
+            labels: labels,
+            datasets: [{
+              data: labels.map(function(k) { return dist[k] || 0; }),
+              backgroundColor: labels.map(function(k) { return colorMap[k] || '#b1b4b6'; }),
+              borderWidth: 3,
+              borderColor: '#fff',
+              hoverBorderWidth: 1,
+              hoverBorderColor: '#0b0c0c'
+            }]
+          },
+          options: Object.assign({}, chartDefaults, {
+            cutout: '58%',
+            plugins: Object.assign({}, chartDefaults.plugins, {
+              tooltip: Object.assign({}, chartDefaults.plugins.tooltip, {
+                callbacks: {
+                  label: function(ctx) {
+                    var total = ctx.dataset.data.reduce(function(a, b) { return a + b; }, 0);
+                    var pct = total ? Math.round((ctx.parsed / total) * 100) : 0;
+                    return ' ' + ctx.label + ': ' + ctx.parsed + ' (' + pct + '%)';
+                  }
+                }
+              })
+            })
+          })
+        });
+      }
+
+      doughnut('chart-rag', ragOrder, ragDist, ragColors);
+      doughnut('chart-priority', priOrder, priDist, priColors);
+
+      function stackedArea(id, trendData, datasets) {
+        var el = document.getElementById(id);
+        if (!el || typeof Chart === 'undefined' || !trendData || !trendData.length) return;
+        new Chart(el.getContext('2d'), {
+          type: 'line',
+          data: {
+            labels: trendData.map(function(t) { return t.label; }),
+            datasets: datasets.map(function(ds) {
+              return {
+                label: ds.label,
+                data: trendData.map(ds.accessor),
+                borderColor: ds.color,
+                backgroundColor: ds.bg,
+                tension: 0.3,
+                fill: true,
+                pointRadius: 3,
+                pointHoverRadius: 6,
+                borderWidth: 2.5,
+                pointBackgroundColor: ds.color,
+                pointBorderColor: '#fff',
+                pointBorderWidth: 1.5
+              };
+            })
+          },
+          options: Object.assign({}, chartDefaults, {
+            interaction: { mode: 'index', intersect: false },
+            scales: {
+              x: { stacked: true, ticks: { maxRotation: 45, minRotation: 0, font: Object.assign({ size: 11 }, chartFont) }, grid: { display: false } },
+              y: { stacked: true, beginAtZero: true, ticks: { precision: 0, font: Object.assign({ size: 11 }, chartFont) } }
+            }
+          })
+        });
+      }
+
+      stackedArea('chart-rag-trend', ragTrend, [
+        { label: 'Red',         accessor: function(t) { return t.red; },        color: '#d4351c', bg: 'rgba(212,53,28,0.18)' },
+        { label: 'Amber-Red',   accessor: function(t) { return t.amberRed; },   color: '#f47738', bg: 'rgba(244,119,56,0.18)' },
+        { label: 'Amber-Green', accessor: function(t) { return t.amberGreen; }, color: '#f8a100', bg: 'rgba(248,161,0,0.18)' },
+        { label: 'Green',       accessor: function(t) { return t.green; },      color: '#00703c', bg: 'rgba(0,112,60,0.18)' },
+        { label: 'Not set',     accessor: function(t) { return t.notSet; },     color: '#b1b4b6', bg: 'rgba(177,180,182,0.12)' }
+      ]);
+
+      stackedArea('chart-pri-trend', priTrend, [
+        { label: 'Critical', accessor: function(t) { return t.critical; }, color: '#d4351c', bg: 'rgba(212,53,28,0.18)' },
+        { label: 'High',     accessor: function(t) { return t.high; },     color: '#f47738', bg: 'rgba(244,119,56,0.18)' },
+        { label: 'Medium',   accessor: function(t) { return t.medium; },   color: '#f8a100', bg: 'rgba(248,161,0,0.18)' },
+        { label: 'Low',      accessor: function(t) { return t.low; },      color: '#00703c', bg: 'rgba(0,112,60,0.18)' },
+        { label: 'Not set',  accessor: function(t) { return t.notSet; },   color: '#b1b4b6', bg: 'rgba(177,180,182,0.12)' }
+      ]);
+    })();
+  </script>
+}

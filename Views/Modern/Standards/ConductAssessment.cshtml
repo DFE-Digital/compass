@@ -1,0 +1,524 @@
+@model Compass.Models.FunctionalStandardAssessment
+@using Compass.Models
+@{
+    ViewData["Title"] = Model.AssessmentName;
+    var isReadOnly = ViewBag.IsReadOnly as bool? ?? false;
+    var isSubmitted = Model.SubmittedAt.HasValue;
+
+    var totalCriteriaCount = Model.FunctionalStandard?.Themes?
+        .Sum(t => t.PracticeAreas?.Sum(pa => pa.Criteria?.Count ?? 0) ?? 0) ?? 0;
+    var completedCriteriaCount = Model.CriteriaResponses.Count(r => r.Attainment.HasValue);
+    var allCriteriaComplete = completedCriteriaCount == totalCriteriaCount && totalCriteriaCount > 0;
+    var progressPct = totalCriteriaCount > 0 ? (int)Math.Round(100.0 * completedCriteriaCount / totalCriteriaCount) : 0;
+
+    var fullyMetCount = Model.CriteriaResponses.Count(r => r.Attainment == AttainmentLevel.FullyMet);
+    var partiallyMetCount = Model.CriteriaResponses.Count(r => r.Attainment == AttainmentLevel.PartiallyMet);
+    var notMetCount = Model.CriteriaResponses.Count(r => r.Attainment == AttainmentLevel.NotOrSeldomMet);
+
+    string RatingLabel(CriteriaRating r) => r switch { CriteriaRating.Good => "Good", CriteriaRating.Better => "Better", CriteriaRating.Best => "Best", _ => r.ToString() };
+    string RatingClass(CriteriaRating r) => r switch { CriteriaRating.Good => "rating-good", CriteriaRating.Better => "rating-better", CriteriaRating.Best => "rating-best", _ => "rating-unknown" };
+    string RatingLede(CriteriaRating r) => r switch
+    {
+        CriteriaRating.Good => "Baseline practice you would expect to be in place.",
+        CriteriaRating.Better => "Stronger practice that goes beyond the minimum.",
+        CriteriaRating.Best => "Exemplar or leading practice.",
+        _ => ""
+    };
+    var ratingDisplayOrder = new[] { CriteriaRating.Good, CriteriaRating.Better, CriteriaRating.Best };
+}
+
+@section Breadcrumbs {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernStandards")">Standards</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("FunctionalStandards", "ModernStandards")">Functional standards</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("FunctionalStandardDashboard", "ModernStandards", new { id = Model.FunctionalStandardId })">@(Model.FunctionalStandard?.Title ?? "Standard")</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">@Model.AssessmentName</li>
+}
+
+<div id="sc-standards-conduct"
+     @if (!isReadOnly && !isSubmitted)
+     {
+         <text>data-conduct-editable="true" data-save-url="@Url.Action("SaveCriteriaResponse", "ModernStandards")"</text>
+     }>
+
+ <a class="govuk-back-link" href="@Url.Action("FunctionalStandardDashboard", "ModernStandards", new { id = Model.FunctionalStandardId })">Back to standard</a>
+
+ <div class="dfe-c-flex--between dfe-c-mb-3" style="flex-wrap:wrap;gap:1rem;align-items:flex-start;">
+ <div class="dfe-c-page-title" style="margin:0;">
+ <div class="dfe-c-page-title__caption">@(Model.FunctionalStandard?.Title ?? "Functional standard assessment")</div>
+ <h1 class="dfe-c-page-title__heading">@Model.AssessmentName</h1>
+ <p class="dfe-c-page-title__lede">
+                @if (isSubmitted)
+                {
+ <span class="dfe-c-tag dfe-c-tag--green">SUBMITTED</span>
+                    <span style="margin-left:0.5rem;">@Model.SubmittedAt!.Value.ToString("d MMM yyyy HH:mm")</span>
+                }
+                else
+                {
+ <span class="dfe-c-tag dfe-c-tag--blue">IN PROGRESS</span>
+ <span id="fsa-save-status" class="fsa-save-status" aria-live="polite"></span>
+                }
+            </p>
+        </div>
+    </div>
+
+ <div class="fsa-progress-bar dfe-c-mb-3">
+ <div class="fsa-progress-bar__track">
+ <div class="fsa-progress-bar__fill" style="width:@(progressPct)%"></div>
+        </div>
+        <div style="font-size:0.875rem;color:var(--grey-4);margin-top:0.375rem;">@completedCriteriaCount of @totalCriteriaCount criteria assessed (@(progressPct)%)</div>
+ <div class="fsa-progress-bar__stats">
+ <span class="fsa-stat fsa-stat--green">@fullyMetCount fully met</span>
+ <span class="fsa-stat fsa-stat--amber">@partiallyMetCount partially met</span>
+ <span class="fsa-stat fsa-stat--red">@notMetCount not met</span>
+ <span class="fsa-stat fsa-stat--grey">@(totalCriteriaCount - completedCriteriaCount) unanswered</span>
+        </div>
+    </div>
+
+    @if (!isReadOnly && !isSubmitted)
+    {
+ <p class="dfe-c-body dfe-c-text-muted dfe-c-mb-3">Outcomes and narrative save automatically. Choosing an outcome saves immediately; narrative saves shortly after you stop typing.</p>
+    }
+
+    @if (Model.FunctionalStandard?.Themes != null)
+    {
+        foreach (var theme in Model.FunctionalStandard.Themes.OrderBy(t => t.ThemeId))
+        {
+            var themeResponses = Model.CriteriaResponses.Where(cr => cr.ThemeId == theme.ThemeId).ToList();
+            var themeTotal = theme.PracticeAreas?.SelectMany(pa => pa.Criteria ?? new List<Criterion>()).Count() ?? 0;
+            var themeCompleted = themeResponses.Count(r => r.Attainment.HasValue);
+
+ <div class="dfe-c-collapsible dfe-c-mb-2" id="theme-@theme.ThemeId">
+ <button type="button" class="dfe-c-collapsible__trigger">
+ <span class="dfe-c-collapsible__icon">+</span>
+                    <span>Theme @theme.ThemeId: @theme.Title</span>
+ <div class="dfe-c-collapsible__status">
+ <span class="fsa-theme-progress" data-theme="@theme.ThemeId">@themeCompleted / @themeTotal</span>
+                    </div>
+                </button>
+ <div class="dfe-c-collapsible__body">
+                    @if (!string.IsNullOrWhiteSpace(theme.Description))
+                    {
+ <p class="dfe-c-body dfe-c-text-muted" style="margin-bottom:1rem;">@theme.Description</p>
+                    }
+
+                    @if (theme.PracticeAreas != null)
+                    {
+                        foreach (var pa in theme.PracticeAreas.OrderBy(p => p.PracticeAreaId))
+                        {
+                            var paCriteria = pa.Criteria?.OrderBy(c => c.CriteriaCode).ToList() ?? new List<Criterion>();
+                            var paResponses = Model.CriteriaResponses
+                                .Where(cr => cr.ThemeId == theme.ThemeId && cr.PracticeAreaId == pa.PracticeAreaId)
+                                .ToList();
+                            var paTotal = paCriteria.Count;
+                            var paCompleted = paResponses.Count(r => r.Attainment.HasValue);
+
+<div class="dfe-c-collapsible dfe-c-mb-2" id="pa-@theme.ThemeId-@pa.PracticeAreaId">
+ <button type="button" class="dfe-c-collapsible__trigger">
+ <span class="dfe-c-collapsible__icon">+</span>
+ <span>Practice area @pa.PracticeAreaId: @pa.Title</span>
+ <div class="dfe-c-collapsible__status">
+ <span class="fsa-pa-progress" data-pa-id="@(theme.ThemeId)-@(pa.PracticeAreaId)">@paCompleted / @paTotal assessed</span>
+                                    </div>
+                                </button>
+ <div class="dfe-c-collapsible__body">
+                                    @if (!string.IsNullOrWhiteSpace(pa.Description))
+                                    {
+ <p class="dfe-c-body dfe-c-text-muted" style="margin-bottom:1rem;">@pa.Description</p>
+                                    }
+                                @foreach (var ratingTier in ratingDisplayOrder)
+                                {
+                                    var tierCriteria = paCriteria.Where(c => c.Rating == ratingTier).ToList();
+                                    if (tierCriteria.Count == 0)
+                                    {
+                                        continue;
+                                    }
+
+                                    var tierSlug = RatingClass(ratingTier).Replace("rating-", "");
+                                    var tierHeadingId = $"fsa-tier-{theme.ThemeId}-{pa.PracticeAreaId}-{tierSlug}";
+
+ <section class="fsa-rating-card fsa-rating-card--@tierSlug" data-rating="@ratingTier" aria-labelledby="@tierHeadingId">
+ <div class="fsa-rating-card__head" id="@tierHeadingId">
+ <div class="fsa-rating-card__head-main">
+ <span class="fsa-rating-group__label @RatingClass(ratingTier)">@RatingLabel(ratingTier)</span>
+ <span class="fsa-rating-card__count">@tierCriteria.Count criterion@(tierCriteria.Count == 1 ? "" : "s")</span>
+                                            </div>
+                                            @if (!string.IsNullOrEmpty(RatingLede(ratingTier)))
+                                            {
+ <p class="fsa-rating-card__lede">@RatingLede(ratingTier)</p>
+                                            }
+                                        </div>
+ <ol class="fsa-rating-card__list" aria-label="@RatingLabel(ratingTier) criteria for @pa.Title">
+                                            @foreach (var criterion in tierCriteria)
+                                            {
+                                                var response = paResponses.FirstOrDefault(r => r.CriteriaCode == criterion.CriteriaCode);
+ <li class="fsa-criterion" data-theme="@theme.ThemeId" data-pa="@pa.PracticeAreaId" data-rating="@criterion.Rating">
+ <div class="fsa-criterion__code">
+ <span class="fsa-criterion__code-num">@criterion.CriteriaCode</span>
+                                                    </div>
+ <div class="fsa-criterion__text">
+ <p class="fsa-criterion__criterion-body govuk-body">@criterion.Criteria</p>
+                                                    </div>
+ <div class="fsa-criterion__response">
+                                                        @if (response != null)
+                                                        {
+                                                            @if (!isReadOnly && !isSubmitted)
+                                                            {
+ <div class="govuk-form-group fsa-criterion__field-group fsa-criterion__field-group--outcome">
+ <label class="govuk-label govuk-label--s" for="fsa-outcome-@response.Id">Outcome</label>
+ <select id="fsa-outcome-@response.Id" class="govuk-select fsa-attainment-select" data-response-id="@response.Id">
+                                                                        <option value="">Select outcome</option>
+                                                                        @if (response.Attainment == AttainmentLevel.FullyMet)
+                                                                        {
+                                                                            <option value="2" selected>Fully met</option>
+                                                                        }
+                                                                        else
+                                                                        {
+                                                                            <option value="2">Fully met</option>
+                                                                        }
+                                                                        @if (response.Attainment == AttainmentLevel.PartiallyMet)
+                                                                        {
+                                                                            <option value="1" selected>Partially met</option>
+                                                                        }
+                                                                        else
+                                                                        {
+                                                                            <option value="1">Partially met</option>
+                                                                        }
+                                                                        @if (response.Attainment == AttainmentLevel.NotOrSeldomMet)
+                                                                        {
+                                                                            <option value="0" selected>Not met</option>
+                                                                        }
+                                                                        else
+                                                                        {
+                                                                            <option value="0">Not met</option>
+                                                                        }
+                                                                    </select>
+                                                                </div>
+ <div class="govuk-form-group fsa-criterion__field-group fsa-criterion__field-group--narrative">
+ <label class="govuk-label govuk-label--s" for="fsa-narrative-@response.Id">Narrative</label>
+ <div id="fsa-narrative-hint-@response.Id" class="govuk-hint govuk-!-margin-bottom-1">Evidence, context, or examples for this criterion.</div>
+ <textarea id="fsa-narrative-@response.Id" class="govuk-textarea fsa-notes-input" rows="3" placeholder="Add narrative…" data-response-id="@response.Id" aria-describedby="fsa-narrative-hint-@response.Id">@response.Notes</textarea>
+                                                                </div>
+ <div class="fsa-criterion__save-row">
+ <span class="fsa-criterion__save-slot" aria-live="polite"></span>
+                                                                </div>
+                                                            }
+                                                            else
+                                                            {
+ <div class="fsa-criterion__readonly-outcome">
+                                                                    @switch (response.Attainment)
+                                                                    {
+                                                                        case AttainmentLevel.FullyMet:
+ <span class="dfe-c-tag dfe-c-tag--green">FULLY MET</span>
+                                                                            break;
+                                                                        case AttainmentLevel.PartiallyMet:
+ <span class="dfe-c-tag dfe-c-tag--amber">PARTIALLY MET</span>
+                                                                            break;
+                                                                        case AttainmentLevel.NotOrSeldomMet:
+ <span class="dfe-c-tag dfe-c-tag--red">NOT MET</span>
+                                                                            break;
+                                                                        default:
+ <span class="dfe-c-text-muted">—</span>
+                                                                            break;
+                                                                    }
+                                                                </div>
+                                                                @if (!string.IsNullOrWhiteSpace(response.Notes))
+                                                                {
+ <div class="fsa-criterion__readonly-narrative">
+ <span class="fsa-criterion__narrative-label govuk-body-s">Narrative</span>
+ <p class="fsa-criterion__notes govuk-body-s">@response.Notes</p>
+                                                                    </div>
+                                                                }
+                                                            }
+                                                        }
+                                                        else
+                                                        {
+ <span class="dfe-c-text-muted govuk-body-s">No response record — contact an administrator.</span>
+                                                        }
+                                                    </div>
+                                                </li>
+                                            }
+                                        </ol>
+                                    </section>
+                                }
+                                </div>
+                            </div>
+                        }
+                    }
+                </div>
+            </div>
+        }
+    }
+
+ <div class="fsa-footer dfe-c-mb-4">
+        @if (!isReadOnly && !isSubmitted && allCriteriaComplete)
+        {
+            <form method="post" action="@Url.Action("SubmitAssessment", "ModernStandards")" style="display:inline;">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="assessmentId" value="@Model.Id" />
+ <button type="submit" class="govuk-button">Submit assessment</button>
+            </form>
+        }
+    </div>
+</div>
+
+@if (!isReadOnly && !isSubmitted)
+{
+ <dialog id="dlg-delete-assessment" class="dfe-c-dialog">
+ <div class="dfe-c-dialog__content">
+            <h2>Delete assessment</h2>
+            <p>Are you sure you want to delete <strong>@Model.AssessmentName</strong>? This action cannot be undone.</p>
+ <div class="dfe-c-dialog__actions">
+                <form method="post" action="@Url.Action("DeleteAssessment", "ModernStandards")" style="display:inline;">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="assessmentId" value="@Model.Id" />
+                    <input type="hidden" name="standardId" value="@Model.FunctionalStandardId" />
+ <button type="submit" class="govuk-button govuk-button--warning">Delete</button>
+                </form>
+ <button type="button" class="govuk-button govuk-button--secondary" data-modal-close="dlg-delete-assessment">Cancel</button>
+            </div>
+        </div>
+    </dialog>
+}
+
+<style>
+    .fsa-progress-bar__track {
+        height: 8px;
+        background: #f3f2f1;
+        border-radius: 4px;
+        overflow: hidden;
+        margin-bottom: 0.5rem;
+    }
+    .fsa-progress-bar__fill {
+        height: 100%;
+        background: #1d70b8;
+        border-radius: 4px;
+        transition: width 0.3s;
+    }
+    .fsa-progress-bar__stats {
+        display: flex;
+        gap: 1rem;
+        flex-wrap: wrap;
+        font-size: 0.875rem;
+    }
+    .fsa-stat { font-weight: 600; }
+    .fsa-stat::before { content: ''; display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 0.25rem; vertical-align: middle; }
+    .fsa-stat--green::before { background: #00703c; }
+    .fsa-stat--amber::before { background: #f47738; }
+    .fsa-stat--red::before { background: #d4351c; }
+    .fsa-stat--grey::before { background: #b1b4b6; }
+
+    .fsa-theme-progress {
+        font-size: 0.8125rem;
+        font-weight: 600;
+        color: var(--grey-4, #505a5f);
+    }
+
+    .fsa-pa-progress {
+        flex-shrink: 0;
+        font-size: 0.8125rem;
+        font-weight: 700;
+        white-space: nowrap;
+        color: #0b0c0c;
+        padding: 0.35rem 0.65rem;
+        background: #f3f2f1;
+        border-radius: 4px;
+        border: 1px solid #b1b4b6;
+    }
+    .fsa-save-status {
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: #00703c;
+        margin-left: 0.25rem;
+    }
+
+    .fsa-rating-card {
+        border: 1px solid #b1b4b6;
+        border-radius: 4px;
+        background: #fff;
+        overflow: hidden;
+    }
+    .fsa-rating-card--good {
+        border-top: 3px solid #00703c;
+        background: linear-gradient(180deg, #f4faf6 0%, #fff 2.5rem);
+    }
+    .fsa-rating-card--better {
+        border-top: 3px solid #f47738;
+        background: linear-gradient(180deg, #fff8f3 0%, #fff 2.5rem);
+    }
+    .fsa-rating-card--best {
+        border-top: 3px solid #4c2c92;
+        background: linear-gradient(180deg, #f6f4fa 0%, #fff 2.5rem);
+    }
+    .fsa-rating-card--unknown {
+        border-top: 3px solid #505a5f;
+        background: #fff;
+    }
+    .fsa-rating-card__head {
+        padding: 0.85rem 1rem 0.65rem;
+        border-bottom: 1px solid #e5e5e5;
+        background: rgba(255, 255, 255, 0.92);
+    }
+    .fsa-rating-card__head-main {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.5rem 0.75rem;
+    }
+    .fsa-rating-card__count {
+        font-size: 0.8125rem;
+        font-weight: 600;
+        color: #505a5f;
+    }
+    .fsa-rating-card__lede {
+        font-size: 0.875rem;
+        color: #505a5f;
+        margin: 0.5rem 0 0 0;
+        max-width: 48rem;
+        line-height: 1.45;
+    }
+    .fsa-rating-card__list {
+        list-style: none;
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.65rem;
+        padding: 0.75rem 1rem 1rem;
+    }
+
+    .fsa-rating-group__label {
+        font-size: 0.75rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+        padding: 0.25rem 0.5rem;
+        display: inline-block;
+    }
+    .rating-good { background: #cce2d8; color: #00552e; }
+    .rating-better { background: #fcd6c3; color: #6e3619; }
+    .rating-best { background: #d4d5e7; color: #28286e; }
+    .rating-unknown { background: #f3f2f1; color: #505a5f; }
+
+    .fsa-criterion {
+        display: grid;
+        grid-template-columns: 3.25rem 1fr minmax(260px, 34%);
+        gap: 0.75rem 1.25rem;
+        padding: 0.85rem 1rem;
+        align-items: start;
+        background: #fff;
+        border: 1px solid #e5e5e5;
+        border-radius: 4px;
+        box-shadow: 0 1px 0 rgba(11, 12, 12, 0.04);
+    }
+    .fsa-criterion__code {
+        padding-top: 0.15rem;
+    }
+    .fsa-criterion__code-num {
+        display: inline-block;
+        font-weight: 700;
+        font-size: 0.8125rem;
+        color: #0b0c0c;
+        padding: 0.2rem 0.45rem;
+        background: #f3f2f1;
+        border-radius: 4px;
+        border: 1px solid #b1b4b6;
+    }
+    .fsa-criterion__criterion-body {
+        margin: 0;
+        font-size: 0.9375rem;
+        line-height: 1.5;
+    }
+    .fsa-criterion__response {
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+    }
+    .fsa-criterion__field-group {
+        margin-bottom: 0.75rem;
+    }
+    .fsa-criterion__field-group:last-of-type {
+        margin-bottom: 0.5rem;
+    }
+    .fsa-criterion__field-group .govuk-label {
+        margin-bottom: 0.25rem;
+    }
+    .fsa-criterion__save-row {
+        min-height: 1.25rem;
+    }
+    .fsa-criterion__save-slot {
+        display: inline-block;
+        min-height: 1.25rem;
+    }
+    .fsa-criterion__readonly-outcome {
+        margin-bottom: 0.5rem;
+    }
+    .fsa-criterion__readonly-narrative .fsa-criterion__narrative-label {
+        display: block;
+        font-weight: 700;
+        color: #505a5f;
+        margin-bottom: 0.25rem;
+    }
+    .fsa-criterion__notes {
+        font-size: 0.875rem;
+        color: #0b0c0c;
+        margin: 0;
+        white-space: pre-wrap;
+    }
+    .fsa-attainment-select {
+        font-size: 0.875rem;
+        padding: 0.375rem 0.5rem;
+        width: 100%;
+        max-width: 100%;
+    }
+    .fsa-notes-input {
+        font-size: 0.875rem;
+        padding: 0.5rem;
+        min-height: unset;
+        resize: vertical;
+    }
+
+    .fsa-footer {
+        display: flex;
+        gap: 0.75rem;
+        align-items: center;
+        padding-top: 1rem;
+        border-top: 2px solid #b1b4b6;
+    }
+
+    .dfe-c-dialog {
+        border: none;
+        border-radius: 4px;
+        padding: 1.5rem;
+        max-width: 480px;
+        box-shadow: 0 4px 24px rgba(0,0,0,0.25);
+    }
+    .dfe-c-dialog::backdrop { background: rgba(0,0,0,0.5); }
+    .dfe-c-dialog__actions { display: flex; gap: 0.5rem; margin-top: 1rem; }
+
+    @@media (max-width: 768px) {
+        .fsa-criterion {
+            grid-template-columns: 1fr;
+        }
+        .fsa-criterion__code {
+            padding-top: 0;
+        }
+    }
+
+    .fsa-saved-indicator {
+        display: inline-block;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: #00703c;
+        margin-left: 0.25rem;
+        animation: fsaFadeIn 0.2s;
+    }
+    @@keyframes fsaFadeIn { from { opacity: 0; } to { opacity: 1; } }
+</style>
+
+@section Scripts {
+    @if (!isReadOnly && !isSubmitted)
+    {
+        var cspNonce = Context.Items["Nonce"]?.ToString() ?? "";
+        <script src="~/modern/js/functional-assessment-conduct.js" asp-append-version="true" nonce="@cspNonce"></script>
+    }
+}

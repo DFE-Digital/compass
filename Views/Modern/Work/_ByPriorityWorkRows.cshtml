@@ -1,29 +1,52 @@
 @model IEnumerable<Compass.Models.Modern.Work.WorkItem>
 @using Compass.Models.Modern.Work
 @{
-    var portfolioNames = ViewBag.PortfolioNames as Dictionary<int, string> ?? new Dictionary<int, string>();
-    var priorityOptions = (List<LookupOption>)ViewBag.PriorityOptions ?? new List<LookupOption>();
+    var phaseNames = ViewBag.PhaseNames as Dictionary<int, string> ?? new Dictionary<int, string>();
+    var priorityNames = ViewBag.PriorityNames as Dictionary<int, string> ?? new Dictionary<int, string>();
+    var businessAreaById = ViewBag.BusinessAreaNameByProjectId as Dictionary<int, string> ?? new Dictionary<int, string>();
+    string PriorityTagClass(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "dfe-c-tag dfe-c-tag--grey";
+        var s = name.ToLowerInvariant();
+        if (s.Contains("high") || s.Contains("critical")) return "dfe-c-tag dfe-c-tag--red";
+        if (s.Contains("medium")) return "dfe-c-tag dfe-c-tag--amber";
+        if (s.Contains("low")) return "dfe-c-tag dfe-c-tag--green";
+        return "dfe-c-tag dfe-c-tag--grey";
+    }
+    string DirSummary(WorkItem w) =>
+        w.Directorates?.Any() == true
+            ? string.Join(", ", w.Directorates.Select(d => d.Division?.Name).Where(n => !string.IsNullOrEmpty(n)).Distinct().OrderBy(n => n))
+            : "—";
+    string BusinessAreaCell(WorkItem w) =>
+        businessAreaById.TryGetValue(w.Id, out var n) && !string.IsNullOrWhiteSpace(n) ? n : "—";
 }
 @foreach (var w in Model)
 {
-    var priorityName = "—";
-    if (w.PriorityId.HasValue)
-    {
-        var po = priorityOptions.FirstOrDefault(o => o.Id == w.PriorityId.Value);
-        if (po != null) { priorityName = po.Name; }
-    }
     var latestRag = w.RagHistory?.OrderByDescending(r => r.UpdatedAt).FirstOrDefault();
-    var ragName = latestRag?.RagStatus?.Name ?? "";
-    var rowSearchable = (w.Title ?? "") + " " + (w.PortfolioId.HasValue && portfolioNames.TryGetValue(w.PortfolioId.Value, out var pn) ? pn : "") + " " + priorityName + " " + ragName + " " + (w.Status ?? "") + " " + w.Id.ToString("D8");
-    <tr class="wreg-row bypriority-work-row" data-searchable="@rowSearchable">
+    var phaseName = w.DeliveryPhaseId.HasValue && phaseNames.TryGetValue(w.DeliveryPhaseId.Value, out var ph) ? ph : null;
+    var priorityName = w.PriorityId.HasValue && priorityNames.TryGetValue(w.PriorityId.Value, out var pr) ? pr : null;
+    var pcName = ViewBag.PrimaryContactById is Dictionary<int, string> pcMap && pcMap.TryGetValue(w.Id, out var pc) ? pc : "—";
+ <tr class="bypriority-work-row">
         <td>
-            <a href="@Url.Action("Detail", "ModernWork", new { id = w.Id })" class="dfe-c-link dfe-c-link--muted">@w.Title</a>
-            <p class="dfe-c-body-s demand-register__meta dfe-c-m-0 dfe-c-mt-1">@w.Id.ToString("D8")</p>
+ <a href="@Url.Action("Detail", "ModernWork", new { id = w.Id })" class="dfe-c-link dfe-c-fw-bold">@w.Title</a>
+ <div class="dfe-c-body-s dfe-c-text-muted" style="margin-top:0.25rem;line-height:1.3;">
+ WI-@w.Id.ToString("D8")@if (!string.IsNullOrEmpty(phaseName)) { <span aria-hidden="true"> · </span><span class="dfe-c-text-muted">@phaseName</span> }
+            </div>
         </td>
-        <td>@(w.PortfolioId.HasValue && portfolioNames.TryGetValue(w.PortfolioId.Value, out var pname) ? pname : "—")</td>
-        <td>@priorityName</td>
+        <td class="dfe-c-body-s">@BusinessAreaCell(w)</td>
+        <td class="dfe-c-body-s">@DirSummary(w)</td>
+        <td>
+            @if (!string.IsNullOrEmpty(priorityName))
+            {
+ <span class="@PriorityTagClass(priorityName)">@priorityName.ToUpperInvariant()</span>
+            }
+            else
+            {
+ <span class="dfe-c-text-muted">—</span>
+            }
+        </td>
         <td>@await Html.PartialAsync("_WorkRagBadge", latestRag)</td>
-        <td><span class="tag">@w.Status</span></td>
-        <td>@w.UpdatedAt.ToString("d MMM yyyy")</td>
+        <td>@pcName</td>
+ <td><span class="@WorkBadgeCss.StatusDfeTagClass(w.Status)">@w.Status</span></td>
     </tr>
 }

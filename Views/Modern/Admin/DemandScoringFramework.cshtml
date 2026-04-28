@@ -1,0 +1,53 @@
+@using Compass.Models.DemandPipeline
+@{
+  ViewData["Title"] = "Demand scoring framework";
+  var bands = ViewBag.DemandScoringBands as List<DemandScoringBandDefinition> ?? new();
+  var sections = ViewBag.DemandScoringSections as List<DemandScoringFrameworkSection> ?? new();
+  var scoringTab = ViewBag.ScoringTab as string ?? "sections";
+  var totalSections = ViewBag.TotalSections as int? ?? 0;
+  var activeSectionCount = ViewBag.ActiveSectionCount as int? ?? 0;
+  var totalQuestions = ViewBag.TotalQuestions as int? ?? 0;
+  var totalRawMax = ViewBag.TotalRawMax as int? ?? 0;
+  string TabUrl(string t) => Url.Action("DemandScoringFramework", "ModernAdmin", new { tab = t }) ?? "#";
+}
+@section Breadcrumbs {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernAdmin")">Admin</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">Demand scoring framework</li>
+}
+
+<div class="admin-dsf">
+ <p class="govuk-body govuk-!-margin-bottom-2"><a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("Index", "ModernAdmin", new { panel = "scoring-fw" })">← Back to admin hub</a></p>
+ <div class="dfe-c-page-title admin-dsf__title">
+ <div class="dfe-c-page-title__caption">Pipeline configuration</div>
+ <h1 class="dfe-c-page-title__heading">Demand prioritisation scoring framework</h1>
+ <p class="dfe-c-page-title__lede">Define bands (0–100), sections, questions, and answer options for the scorecard used when a demand is in the <strong>Scoring</strong> stage. Legacy columns map section totals to Strategic, Urgency, Funding, and RICE for reporting.</p>
+  </div>
+
+  @if (ViewBag.AdminMessage != null)
+  {
+ <div class="govuk-inset-text admin-dsf__message govuk-!-margin-bottom-4" role="status">
+ <p class="govuk-body govuk-!-margin-bottom-0">@ViewBag.AdminMessage</p>
+    </div>
+  }
+
+ <div class="admin-dsf__stats" aria-label="Framework summary">
+ <div class="admin-dsf__stat"><span class="admin-dsf__stat-value">@totalSections</span><span class="admin-dsf__stat-label">Sections</span></div>
+ <div class="admin-dsf__stat"><span class="admin-dsf__stat-value">@activeSectionCount</span><span class="admin-dsf__stat-label">Active</span></div>
+ <div class="admin-dsf__stat"><span class="admin-dsf__stat-value">@totalQuestions</span><span class="admin-dsf__stat-label">Questions</span></div>
+ <div class="admin-dsf__stat"><span class="admin-dsf__stat-value">@totalRawMax</span><span class="admin-dsf__stat-label">Raw points (max)</span></div>
+ <div class="admin-dsf__stat"><span class="admin-dsf__stat-value">@bands.Count</span><span class="admin-dsf__stat-label">Bands</span></div>
+  </div>
+
+ <div class="tabs admin-dsf__tabs" role="tablist" aria-label="Framework configuration">
+ <a href="@TabUrl("bands")" class="tab @(scoringTab =="bands" ? "on" : "")" role="tab" aria-selected="@(scoringTab == "bands")" aria-controls="d-dsf-bands" id="tab-dsf-bands">Bands (0–100)</a>
+ <a href="@TabUrl("sections")" class="tab @(scoringTab =="sections" ? "on" : "")" role="tab" aria-selected="@(scoringTab == "sections")" aria-controls="d-dsf-sections" id="tab-dsf-sections">Sections &amp; questions</a>
+  </div>
+
+ <div id="d-dsf-bands" class="tab-pane @(scoringTab =="bands" ? "on" : "")" role="tabpanel" aria-labelledby="tab-dsf-bands">
+    @await Html.PartialAsync("~/Views/Modern/Admin/_DemandScoringFrameworkBands.cshtml", bands)
+  </div>
+
+ <div id="d-dsf-sections" class="tab-pane @(scoringTab =="sections" ? "on" : "")" role="tabpanel" aria-labelledby="tab-dsf-sections">
+    @await Html.PartialAsync("~/Views/Modern/Admin/_DemandScoringFrameworkSections.cshtml", sections)
+  </div>
+</div>

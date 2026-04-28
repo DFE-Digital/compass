@@ -109,8 +109,8 @@ if (args.Length > 0 && args[0] == "--apply-custom-course-fields")
 // Check for data seeding command
 if (args.Length > 0 && args[0] == "--seed-from-sqlite")
 {
-    var environment = args.Length > 1 && args[1] == "--environment" && args.Length > 2 
-        ? args[2] 
+    var environment = args.Length > 1 && args[1] == "--environment" && args.Length > 2
+        ? args[2]
         : "Development";
     await Compass.SeedFromSQLite.RunAsync(environment);
     return;
@@ -160,20 +160,20 @@ if (args.Length > 0 && args[0] == "--export-migration-workbook")
 if (args.Length > 0 && args[0] == "--query-gdd-roles")
 {
     var environment = args.Length > 2 && args[1] == "--environment" ? args[2] : "Development";
-    
+
     var builder2 = new Microsoft.Extensions.Configuration.ConfigurationBuilder();
     builder2.AddJsonFile("appsettings.json", optional: false);
     builder2.AddJsonFile($"appsettings.{environment}.json", optional: true);
     var config = builder2.Build();
-    
+
     var options = new DbContextOptionsBuilder<CompassDbContext>()
         .UseSqlServer(config.GetConnectionString("DefaultConnection"))
         .Options;
     using var db = new CompassDbContext(options);
-    
+
     var roles = await db.GddRoles.OrderBy(r => r.RoleFamily).ThenBy(r => r.RoleName).ThenBy(r => r.RoleLevel).ToListAsync();
     Console.WriteLine($"Total GDD Roles: {roles.Count}\n");
-    
+
     Console.WriteLine("By Role Family:\n");
     foreach (var family in roles.GroupBy(r => r.RoleFamily))
     {
@@ -185,7 +185,7 @@ if (args.Length > 0 && args[0] == "--query-gdd-roles")
         if (family.Count() > 8) Console.WriteLine($"  ... and {family.Count() - 8} more");
         Console.WriteLine();
     }
-    
+
     Console.WriteLine("\nUnique Role Levels:");
     var uniqueLevels = roles.Select(r => r.RoleLevel).Where(r => !string.IsNullOrEmpty(r)).Distinct().OrderBy(l => l).ToList();
     Console.WriteLine($"Total unique levels: {uniqueLevels.Count}");
@@ -193,7 +193,7 @@ if (args.Length > 0 && args[0] == "--query-gdd-roles")
     {
         Console.WriteLine($"  - {level}");
     }
-    
+
     return;
 }
 
@@ -201,26 +201,26 @@ if (args.Length > 0 && args[0] == "--query-gdd-roles")
 if (args.Length > 0 && args[0] == "--query-skills")
 {
     var environment = args.Length > 2 && args[1] == "--environment" ? args[2] : "Development";
-    
+
     var builder2 = new Microsoft.Extensions.Configuration.ConfigurationBuilder();
     builder2.AddJsonFile("appsettings.json", optional: false);
     builder2.AddJsonFile($"appsettings.{environment}.json", optional: true);
     var config = builder2.Build();
-    
+
     var options = new DbContextOptionsBuilder<CompassDbContext>()
         .UseSqlServer(config.GetConnectionString("DefaultConnection"))
         .Options;
     using var db = new CompassDbContext(options);
-    
+
     var skills = await db.Skills.OrderBy(s => s.SkillName).ToListAsync();
     Console.WriteLine($"Total Skills: {skills.Count}\n");
-    
+
     Console.WriteLine("First 20 Skills:\n");
     foreach (var skill in skills.Take(20))
     {
         Console.WriteLine($"  - {skill.SkillName}");
     }
-    
+
     return;
 }
 
@@ -234,8 +234,8 @@ if (args.Length > 0 && args[0] == "--migrate-data")
 // Check for populate product document IDs command
 if (args.Length > 0 && args[0] == "--populate-product-document-ids")
 {
-    var environment = args.Length > 1 && args[1] == "--environment" && args.Length > 2 
-        ? args[2] 
+    var environment = args.Length > 1 && args[1] == "--environment" && args.Length > 2
+        ? args[2]
         : "Development";
     await Compass.PopulateProductDocumentId.RunAsync(environment);
     return;
@@ -273,7 +273,10 @@ builder.Services.AddAuthentication(OpenIdConnectDefaults.AuthenticationScheme)
     .AddMicrosoftIdentityWebApp(builder.Configuration.GetSection("AzureAd"));
 
 // Add Controllers with Views
-builder.Services.AddControllersWithViews()
+builder.Services.AddControllersWithViews(options =>
+{
+    options.Filters.Add<Compass.Filters.NavigationViewFilter>();
+})
     .AddMicrosoftIdentityUI();
 
 builder.Services.Configure<RazorViewEngineOptions>(options =>
@@ -344,12 +347,12 @@ builder.Services.AddHttpClient<IProductsApiService, ProductsApiService>(client =
 {
     var baseUrl = builder.Configuration["CmsApi:BaseUrl"];
     var apiKey = builder.Configuration["CmsApi:ReadApiKey"];
-    
+
     if (!string.IsNullOrEmpty(baseUrl))
     {
         client.BaseAddress = new Uri(baseUrl);
     }
-    
+
     if (!string.IsNullOrEmpty(apiKey))
     {
         client.DefaultRequestHeaders.Add("Authorization", $"Bearer {apiKey}");
@@ -364,18 +367,20 @@ builder.Services.AddHttpClient<IServiceAssessmentApiService, ServiceAssessmentAp
 {
     var configuration = sp.GetRequiredService<IConfiguration>();
     var logger = sp.GetRequiredService<ILogger<ServiceAssessmentApiService>>();
-    var baseUrl = configuration["ServiceAssessments:ApiUrl"] ?? "https://service-assessments.education.gov.uk/api/";
-    
+    var baseUrl = configuration["FipsSync:Sas:Endpoint"]
+        ?? configuration["ServiceAssessments:ApiUrl"]
+        ?? "https://service-assessments.education.gov.uk/api/";
+
     // Ensure base URL ends with /
     if (!baseUrl.EndsWith("/"))
     {
         baseUrl += "/";
     }
-    
+
     client.BaseAddress = new Uri(baseUrl);
     client.Timeout = TimeSpan.FromSeconds(30);
     client.DefaultRequestHeaders.Add("User-Agent", "COMPASS-Analysis/1.0");
-    
+
     return new ServiceAssessmentApiService(client, configuration, logger);
 });
 
@@ -387,6 +392,14 @@ builder.Services.AddScoped<IGraphService, GraphService>();
 builder.Services.AddScoped<IApiTokenService, ApiTokenService>();
 builder.Services.AddScoped<IAuditLogger, AuditLogger>();
 builder.Services.AddScoped<IPermissionService, PermissionService>();
+builder.Services.AddScoped<IBusinessAreaAdminService, BusinessAreaAdminService>();
+builder.Services.AddScoped<IBusinessAreaLeadershipService, BusinessAreaLeadershipService>();
+builder.Services.AddScoped<IDirectorateLeadershipService, DirectorateLeadershipService>();
+builder.Services.AddScoped<ICompassNotificationEmailLogService, CompassNotificationEmailLogService>();
+builder.Services.AddScoped<ICompassNotificationSettingsService, CompassNotificationSettingsService>();
+builder.Services.AddScoped<IGlobalFeatureToggleService, GlobalFeatureToggleService>();
+builder.Services.AddScoped<Compass.Filters.DemandFeatureGateFilter>();
+builder.Services.AddScoped<Compass.Filters.StandardsFeatureGateFilter>();
 builder.Services.AddScoped<IUserDirectoryService, UserDirectoryService>();
 builder.Services.AddScoped<IProjectImportService, ProjectImportService>();
 builder.Services.AddScoped<IAuditContextProvider, HttpAuditContextProvider>();
@@ -397,6 +410,11 @@ builder.Services.AddScoped<IAccessibilityTrainingService, AccessibilityTrainingS
 builder.Services.AddScoped<Compass.Services.DemandTriage.IDemandTriageService, Compass.Services.DemandTriage.DemandTriageService>();
 builder.Services.AddScoped<Compass.Services.Dashboard.IHomeDashboardViewModelBuilder, Compass.Services.Dashboard.HomeDashboardViewModelBuilder>();
 builder.Services.AddScoped<Compass.Services.Modern.IModernWorkService, Compass.Services.Modern.ModernWorkService>();
+builder.Services.AddScoped<ModernMonthlyReportService>();
+builder.Services.AddScoped<ModernRaidReportingService>();
+builder.Services.AddScoped<Compass.Services.Raid.IOperationsRiskEditService, Compass.Services.Raid.OperationsRiskEditService>();
+builder.Services.AddScoped<CommissionReportingAnalyticsService>();
+builder.Services.AddScoped<Compass.Services.DemandPipeline.IDemandScoringFrameworkService, Compass.Services.DemandPipeline.DemandScoringFrameworkService>();
 
 // Register HttpClientFactory for PerformanceReportingManagementController
 builder.Services.AddHttpClient();
@@ -409,18 +427,11 @@ builder.Services.AddHttpClient<Compass.Services.Fips.ICmdbService, Compass.Servi
 builder.Services.AddHttpClient<Compass.Services.Fips.IStrapiService, Compass.Services.Fips.StrapiService>()
     .SetHandlerLifetime(TimeSpan.FromMinutes(5));
 builder.Services.AddScoped<Compass.Services.Fips.IFipsSyncOrchestrator, Compass.Services.Fips.FipsSyncOrchestrator>();
-
-// FIPS Sync Configuration and Services
-builder.Services.Configure<Compass.Models.Fips.FipsSyncConfiguration>(
-    builder.Configuration.GetSection("FipsSync"));
-
-builder.Services.AddHttpClient<Compass.Services.Fips.ICmdbService, Compass.Services.Fips.CmdbService>()
+builder.Services.AddScoped<Compass.Services.Fips.IFipsCmdbProductSyncService, Compass.Services.Fips.FipsCmdbProductSyncService>();
+builder.Services.AddScoped<Compass.Services.Fips.IFipsProductWriteService, Compass.Services.Fips.FipsProductWriteService>();
+builder.Services.AddScoped<Compass.Services.Fips.IFipsBusinessAreaLookupSyncService, Compass.Services.Fips.FipsBusinessAreaLookupSyncService>();
+builder.Services.AddHttpClient<Compass.Services.Aiss.IAissSummaryService, Compass.Services.Aiss.AissSummaryService>()
     .SetHandlerLifetime(TimeSpan.FromMinutes(5));
-
-builder.Services.AddHttpClient<Compass.Services.Fips.IStrapiService, Compass.Services.Fips.StrapiService>()
-    .SetHandlerLifetime(TimeSpan.FromMinutes(5));
-
-builder.Services.AddScoped<Compass.Services.Fips.IFipsSyncOrchestrator, Compass.Services.Fips.FipsSyncOrchestrator>();
 
 builder.Services.AddHttpContextAccessor();
 
@@ -534,28 +545,58 @@ app.Use(async (context, next) =>
     {
         context.Response.Headers["Strict-Transport-Security"] = "max-age=300; includeSubDomains";
     }
-    
+
     var nonce = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(16));
     context.Items["Nonce"] = nonce;
-    
-    context.Response.Headers["Content-Security-Policy"] = 
-        $"default-src 'self'; " +
+
+    // connect-src: note CSP host wildcards match one subdomain label only — e.g.
+    // *.applicationinsights.azure.com does NOT match region.in.applicationinsights.azure.com.
+    var connectSrc =
+        "'self' " +
+        "https://cdnjs.cloudflare.com https://cdn.jsdelivr.net " +
+        "https://www.clarity.ms https://*.clarity.ms https://c.bing.com https://*.bing.com " +
+        "https://login.microsoftonline.com https://login.live.com " +
+        "https://fonts.googleapis.com https://fonts.gstatic.com " +
+        "https://dc.services.visualstudio.com https://rt.services.visualstudio.com " +
+        "https://*.applicationinsights.azure.com https://*.in.applicationinsights.azure.com " +
+        "https://*.applicationinsights.microsoft.com " +
+        "https://*.monitor.azure.com https://js.monitor.azure.com " +
+        "https://browser.events.data.microsoft.com https://*.events.data.microsoft.com " +
+        "https://web.vortex.data.microsoft.com " +
+        "https://*.livediagnostics.monitor.azure.com wss://*.livediagnostics.monitor.azure.com";
+    if (app.Environment.IsDevelopment())
+    {
+        connectSrc += " ws://localhost:* ws://127.0.0.1:* wss://localhost:* wss://127.0.0.1:*";
+        // Development-only: allow external telemetry/tooling endpoints that vary by region/tenant.
+        // Keep production CSP strict and explicitly allow-listed.
+        connectSrc += " https: http: wss: ws:";
+    }
+    // Broader default-src helps preconnect / directives that fall back to default-src (e.g. Clarity load-balancing).
+    var defaultSrc =
+        "'self' https://fonts.googleapis.com https://fonts.gstatic.com " +
+        "https://www.clarity.ms https://*.clarity.ms https://c.bing.com";
+    var csp =
+        $"default-src {defaultSrc}; " +
         $"script-src 'self' 'nonce-{nonce}' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://cdn.datatables.net https://www.clarity.ms https://*.clarity.ms; " +
-        $"style-src 'self' 'unsafe-inline' https://rsms.me https://fonts.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://cdn.datatables.net; " +
-        $"img-src 'self' data: https:; " +
-        $"font-src 'self' data: https://rsms.me https://fonts.gstatic.com https://cdnjs.cloudflare.com; " +
-        $"connect-src 'self' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://www.clarity.ms https://*.clarity.ms; " +
-        $"frame-ancestors 'none'; " +
-        $"base-uri 'self'; " +
-        $"form-action 'self'; " +
-        $"object-src 'none'; " +
-        $"upgrade-insecure-requests";
-    
+        "style-src 'self' 'unsafe-inline' https://rsms.me https://fonts.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://cdn.datatables.net; " +
+        "img-src 'self' data: https:; " +
+        "font-src 'self' data: https://rsms.me https://fonts.gstatic.com https://cdnjs.cloudflare.com; " +
+        $"connect-src {connectSrc}; " +
+        "frame-ancestors 'none'; " +
+        "base-uri 'self'; " +
+        "form-action 'self'; " +
+        "object-src 'none'";
+    if (!app.Environment.IsDevelopment())
+    {
+        csp += "; upgrade-insecure-requests";
+    }
+    context.Response.Headers["Content-Security-Policy"] = csp;
+
     context.Response.Headers["X-Frame-Options"] = "DENY";
     context.Response.Headers["X-Content-Type-Options"] = "nosniff";
     context.Response.Headers["X-XSS-Protection"] = "1; mode=block";
     context.Response.Headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
-    
+
     await next();
 });
 
@@ -589,7 +630,7 @@ app.MapControllerRoute(
 app.MapControllerRoute(
     name: "performanceRoot",
     pattern: "Performance",
-    defaults: new { controller = "ProductReporting", action = "PerformanceMetrics" });
+    defaults: new { controller = "ModernPerformance", action = "Index" });
 
 // Default MVC routes — register BEFORE the api/ prefix route so Url.Action / tag helpers
 // generate /Controller/Action/... instead of /api/Controller/Action/... for conventional controllers.
@@ -615,7 +656,7 @@ using (var scope = app.Services.CreateScope())
     try
     {
         logger.LogInformation("Starting database initialization...");
-        
+
         // Test database connection first
         if (!await context.Database.CanConnectAsync())
         {
@@ -624,30 +665,39 @@ using (var scope = app.Services.CreateScope())
             throw new InvalidOperationException(errorMsg);
         }
         logger.LogInformation("Database connection successful");
-        
+
         // Apply any pending migrations
         logger.LogInformation("Applying database migrations...");
         await context.Database.MigrateAsync();
         logger.LogInformation("Database migrations applied successfully");
-        
+
+        // Repair: notification tables when migration was not applied (e.g. migration metadata out of sync)
+        await EnsureCompassNotificationTablesAsync(context, logger);
+
+        // Repair: MatrixScore on RAID likelihood / impact lookups (migration sometimes skipped vs. model snapshot)
+        await EnsureRaidLikelihoodImpactMatrixScoreColumnsAsync(context, logger);
+
+        // Repair: Feature.AccessMode + FeatureUserAllows when history says applied but objects are missing (restored DB, etc.)
+        await EnsureFeatureAccessModeAndUserAllowAsync(context, logger);
+
         // Seed statement templates if they don't exist
         await SeedStatementTemplatesAsync(context);
-        
+
         // Seed RBAC initial data (groups, features, super admin) - super admin email from config only
         await SeedRbacInitialDataAsync(context, superAdminEmail);
-        
+
         // Seed Service Standards (GOV.UK Service Standards 1-14)
         await SeedServiceStandardsAsync(context);
-        
+
         // Seed DDaT Professions
         await SeedDdatProfessionsAsync(context);
-        
+
         // Seed Technology Code of Practice
         await SeedTechnologyCodeOfPracticeAsync(context);
-        
+
         // Seed Grades
         await SeedGradesAsync(context);
-        
+
         logger.LogInformation("Compass database initialized successfully");
         Console.WriteLine("Compass database initialized successfully");
     }
@@ -666,6 +716,155 @@ using (var scope = app.Services.CreateScope())
 
 app.Run();
 
+/// <summary>
+/// Ensures <c>MatrixScore</c> exists on lookup tables when the DB predates migration
+/// <see cref="Compass.Migrations.AddRiskLikelihoodImpactMatrixScore"/> or history is out of sync (restored DB, etc.).
+/// </summary>
+/// <summary>
+/// Ensures Compass notification settings / email log tables exist when <see cref="Compass.Migrations.AddCompassNotificationManagement"/>
+/// did not run (missing from migration history, restored DB, etc.).
+/// </summary>
+static async Task EnsureCompassNotificationTablesAsync(
+    CompassDbContext context,
+    ILogger logger)
+{
+    try
+    {
+        await context.Database.ExecuteSqlRawAsync("""
+            IF OBJECT_ID(N'dbo.CompassNotificationSettings', N'U') IS NULL
+            BEGIN
+                CREATE TABLE [dbo].[CompassNotificationSettings] (
+                    [Id] int NOT NULL IDENTITY(1,1),
+                    [EventKey] nvarchar(100) NOT NULL,
+                    [IsEnabled] bit NOT NULL,
+                    [RecipientFlags] int NOT NULL,
+                    [UpdatedAtUtc] datetime2 NOT NULL,
+                    CONSTRAINT [PK_CompassNotificationSettings] PRIMARY KEY CLUSTERED ([Id])
+                );
+            END
+            IF OBJECT_ID(N'dbo.CompassNotificationSettings', N'U') IS NOT NULL
+               AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_CompassNotificationSettings_EventKey' AND object_id = OBJECT_ID(N'dbo.CompassNotificationSettings'))
+                CREATE UNIQUE INDEX [IX_CompassNotificationSettings_EventKey] ON [dbo].[CompassNotificationSettings]([EventKey]);
+
+            IF OBJECT_ID(N'dbo.CompassNotificationEmailLogs', N'U') IS NULL
+            BEGIN
+                CREATE TABLE [dbo].[CompassNotificationEmailLogs] (
+                    [Id] bigint NOT NULL IDENTITY(1,1),
+                    [SentAtUtc] datetime2 NOT NULL,
+                    [RecipientEmail] nvarchar(256) NOT NULL,
+                    [RecipientName] nvarchar(256) NULL,
+                    [EventKey] nvarchar(100) NOT NULL,
+                    [Subject] nvarchar(500) NOT NULL,
+                    [Body] nvarchar(max) NOT NULL,
+                    [ContextReference] nvarchar(200) NULL,
+                    [SendSucceeded] bit NOT NULL,
+                    [ErrorMessage] nvarchar(2000) NULL,
+                    CONSTRAINT [PK_CompassNotificationEmailLogs] PRIMARY KEY CLUSTERED ([Id])
+                );
+            END
+            IF OBJECT_ID(N'dbo.CompassNotificationEmailLogs', N'U') IS NOT NULL
+               AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_CompassNotificationEmailLogs_EventKey' AND object_id = OBJECT_ID(N'dbo.CompassNotificationEmailLogs'))
+                CREATE NONCLUSTERED INDEX [IX_CompassNotificationEmailLogs_EventKey] ON [dbo].[CompassNotificationEmailLogs]([EventKey]);
+            IF OBJECT_ID(N'dbo.CompassNotificationEmailLogs', N'U') IS NOT NULL
+               AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_CompassNotificationEmailLogs_SentAtUtc' AND object_id = OBJECT_ID(N'dbo.CompassNotificationEmailLogs'))
+                CREATE NONCLUSTERED INDEX [IX_CompassNotificationEmailLogs_SentAtUtc] ON [dbo].[CompassNotificationEmailLogs]([SentAtUtc]);
+            """);
+        logger.LogInformation("Ensured CompassNotificationSettings / CompassNotificationEmailLogs tables (if missing).");
+    }
+    catch (Microsoft.Data.SqlClient.SqlException ex)
+    {
+        logger.LogWarning(ex,
+            "Could not ensure Compass notification tables (non-fatal if already exist): {Message}",
+            ex.Message);
+    }
+}
+
+static async Task EnsureRaidLikelihoodImpactMatrixScoreColumnsAsync(
+    CompassDbContext context,
+    ILogger logger)
+{
+    try
+    {
+        await context.Database.ExecuteSqlRawAsync("""
+            IF COL_LENGTH(N'dbo.RiskLikelihoods', N'MatrixScore') IS NULL
+                ALTER TABLE [dbo].[RiskLikelihoods] ADD [MatrixScore] int NOT NULL CONSTRAINT DF_RiskLikelihoods_MatrixScore DEFAULT (3);
+            IF COL_LENGTH(N'dbo.RiskImpactLevels', N'MatrixScore') IS NULL
+                ALTER TABLE [dbo].[RiskImpactLevels] ADD [MatrixScore] int NOT NULL CONSTRAINT DF_RiskImpactLevels_MatrixScore DEFAULT (3);
+            """);
+        logger.LogInformation("Ensured MatrixScore columns on RiskLikelihoods / RiskImpactLevels (if missing).");
+    }
+    catch (Microsoft.Data.SqlClient.SqlException ex)
+    {
+        logger.LogWarning(ex,
+            "Could not ensure MatrixScore columns on RAID lookup tables (non-fatal if columns already exist): {Message}",
+            ex.Message);
+    }
+}
+
+/// <summary>
+/// Ensures <c>AccessMode</c> on <c>Features</c> and the <c>FeatureUserAllows</c> table when
+/// the AddFeatureAccessModeAndUserAllow migration is in history but objects are missing (e.g. restored DB).
+/// </summary>
+static async Task EnsureFeatureAccessModeAndUserAllowAsync(CompassDbContext context, ILogger logger)
+{
+    // SQL Server: a column added with ALTER in a batch is not visible to other statements in the
+    // same batch (parse/compile), so add and backfill must be separate round-trips.
+    try
+    {
+        await context.Database.ExecuteSqlRawAsync("""
+            IF COL_LENGTH(N'dbo.Features', N'AccessMode') IS NULL
+                ALTER TABLE [dbo].[Features] ADD [AccessMode] int NOT NULL CONSTRAINT [DF_Features_AccessMode] DEFAULT (1);
+            """);
+        await context.Database.ExecuteSqlRawAsync("""
+            IF COL_LENGTH(N'dbo.Features', N'AccessMode') IS NOT NULL
+                UPDATE [dbo].[Features] SET [AccessMode] = CASE WHEN [IsActive] = 1 THEN 1 ELSE 0 END;
+            """);
+        await context.Database.ExecuteSqlRawAsync("""
+            IF OBJECT_ID(N'dbo.FeatureUserAllows', N'U') IS NULL
+            BEGIN
+                CREATE TABLE [dbo].[FeatureUserAllows] (
+                    [Id] int NOT NULL IDENTITY(1,1),
+                    [FeatureId] int NOT NULL,
+                    [UserId] int NOT NULL,
+                    [CreatedAt] datetime2 NOT NULL,
+                    CONSTRAINT [PK_FeatureUserAllows] PRIMARY KEY CLUSTERED ([Id]),
+                    CONSTRAINT [FK_FeatureUserAllows_Features_FeatureId] FOREIGN KEY ([FeatureId]) REFERENCES [dbo].[Features] ([Id]) ON DELETE CASCADE,
+                    CONSTRAINT [FK_FeatureUserAllows_Users_UserId] FOREIGN KEY ([UserId]) REFERENCES [dbo].[Users] ([Id]) ON DELETE CASCADE
+                );
+                CREATE UNIQUE NONCLUSTERED INDEX [IX_FeatureUserAllows_FeatureId_UserId]
+                    ON [dbo].[FeatureUserAllows] ([FeatureId], [UserId]);
+                CREATE NONCLUSTERED INDEX [IX_FeatureUserAllows_UserId]
+                    ON [dbo].[FeatureUserAllows] ([UserId]);
+            END
+            """);
+        await context.Database.ExecuteSqlRawAsync("""
+            IF OBJECT_ID(N'dbo.FeatureGroupAllows', N'U') IS NULL
+            BEGIN
+                CREATE TABLE [dbo].[FeatureGroupAllows] (
+                    [Id] int NOT NULL IDENTITY(1,1),
+                    [FeatureId] int NOT NULL,
+                    [GroupId] int NOT NULL,
+                    [CreatedAt] datetime2 NOT NULL,
+                    CONSTRAINT [PK_FeatureGroupAllows] PRIMARY KEY CLUSTERED ([Id]),
+                    CONSTRAINT [FK_FeatureGroupAllows_Features_FeatureId] FOREIGN KEY ([FeatureId]) REFERENCES [dbo].[Features] ([Id]) ON DELETE CASCADE,
+                    CONSTRAINT [FK_FeatureGroupAllows_Groups_GroupId] FOREIGN KEY ([GroupId]) REFERENCES [dbo].[Groups] ([Id]) ON DELETE CASCADE
+                );
+                CREATE UNIQUE NONCLUSTERED INDEX [IX_FeatureGroupAllows_FeatureId_GroupId]
+                    ON [dbo].[FeatureGroupAllows] ([FeatureId], [GroupId]);
+                CREATE NONCLUSTERED INDEX [IX_FeatureGroupAllows_GroupId]
+                    ON [dbo].[FeatureGroupAllows] ([GroupId]);
+            END
+            """);
+        logger.LogInformation("Ensured Features.AccessMode, FeatureUserAllows, and FeatureGroupAllows (if missing).");
+    }
+    catch (Microsoft.Data.SqlClient.SqlException ex)
+    {
+        logger.LogWarning(ex,
+            "Could not ensure Features.AccessMode / FeatureUserAllows (non-fatal if already in sync): {Message}",
+            ex.Message);
+    }
+}
+
 static async Task SeedRbacInitialDataAsync(Compass.Data.CompassDbContext context, string? superAdminEmail)
 {
     const string superAdminGroupName = "Super admin";
@@ -674,9 +873,9 @@ static async Task SeedRbacInitialDataAsync(Compass.Data.CompassDbContext context
     // Check if initial seeding has been done (check for Super admin group)
     var superAdminGroup = await context.Groups
         .FirstOrDefaultAsync(g => g.Name == superAdminGroupName);
-    
+
     var needsInitialSeeding = superAdminGroup == null;
-    
+
     if (needsInitialSeeding)
     {
         Console.WriteLine("Seeding RBAC initial data...");
@@ -702,10 +901,10 @@ static async Task SeedRbacInitialDataAsync(Compass.Data.CompassDbContext context
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
             };
-        context.Users.Add(superAdmin);
-        await context.SaveChangesAsync();
-        Console.WriteLine($"✓ Created super admin user");
-    }
+            context.Users.Add(superAdmin);
+            await context.SaveChangesAsync();
+            Console.WriteLine($"✓ Created super admin user");
+        }
     }
     else
     {
@@ -736,7 +935,7 @@ static async Task SeedRbacInitialDataAsync(Compass.Data.CompassDbContext context
     {
         var superAdminUserGroup = await context.UserGroups
             .FirstOrDefaultAsync(ug => ug.UserId == superAdmin.Id && ug.GroupId == superAdminGroup.Id);
-        
+
         if (superAdminUserGroup == null)
         {
             superAdminUserGroup = new Compass.Models.UserGroup
@@ -755,7 +954,7 @@ static async Task SeedRbacInitialDataAsync(Compass.Data.CompassDbContext context
     // Create Central Operations Admin group (if it doesn't exist)
     var centralOpsGroup = await context.Groups
         .FirstOrDefaultAsync(g => g.Name == centralOpsAdminGroupName);
-    
+
     if (centralOpsGroup == null)
     {
         centralOpsGroup = new Compass.Models.Group
@@ -815,10 +1014,10 @@ static async Task SeedRbacInitialDataAsync(Compass.Data.CompassDbContext context
         {
             // Check if permission already exists
             var exists = await context.GroupFeaturePermissions
-                .AnyAsync(gfp => gfp.GroupId == centralOpsGroup.Id && 
-                                gfp.FeatureId == feature.Id && 
+                .AnyAsync(gfp => gfp.GroupId == centralOpsGroup.Id &&
+                                gfp.FeatureId == feature.Id &&
                                 gfp.Permission == permission);
-            
+
             if (!exists)
             {
                 var groupFeaturePermission = new Compass.Models.GroupFeaturePermission
@@ -841,7 +1040,7 @@ static async Task SeedRbacInitialDataAsync(Compass.Data.CompassDbContext context
     {
         var existingUserGroup = await context.UserGroups
             .FirstOrDefaultAsync(ug => ug.UserId == superAdmin.Id && ug.GroupId == centralOpsGroup.Id);
-        
+
         if (existingUserGroup == null)
         {
             var userGroup = new Compass.Models.UserGroup
@@ -881,10 +1080,10 @@ static async Task SeedRbacInitialDataAsync(Compass.Data.CompassDbContext context
     foreach (Compass.Models.PermissionType permission in Enum.GetValues<Compass.Models.PermissionType>())
     {
         var exists = await context.GroupFeaturePermissions
-            .AnyAsync(gfp => gfp.GroupId == centralOpsGroup.Id && 
-                            gfp.FeatureId == standardsFeature.Id && 
+            .AnyAsync(gfp => gfp.GroupId == centralOpsGroup.Id &&
+                            gfp.FeatureId == standardsFeature.Id &&
                             gfp.Permission == permission);
-        
+
         if (!exists)
         {
             var groupFeaturePermission = new Compass.Models.GroupFeaturePermission
@@ -899,6 +1098,106 @@ static async Task SeedRbacInitialDataAsync(Compass.Data.CompassDbContext context
         }
     }
 
+    // Demand product feature — global on/off from Admin → System → Feature settings
+    var demandFeature = await context.Features
+        .FirstOrDefaultAsync(f => f.Code == Compass.Models.FeatureCodes.Demand);
+
+    if (demandFeature == null)
+    {
+        demandFeature = new Compass.Models.Feature
+        {
+            Name = "Demand",
+            Code = Compass.Models.FeatureCodes.Demand,
+            Description = "Demand pipeline, triage, and related product areas",
+            IsActive = true,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+        context.Features.Add(demandFeature);
+        await context.SaveChangesAsync();
+        Console.WriteLine("✓ Created feature: Demand");
+    }
+
+    foreach (Compass.Models.PermissionType permission in Enum.GetValues<Compass.Models.PermissionType>())
+    {
+        var exists = await context.GroupFeaturePermissions
+            .AnyAsync(gfp => gfp.GroupId == centralOpsGroup.Id &&
+                            gfp.FeatureId == demandFeature.Id &&
+                            gfp.Permission == permission);
+
+        if (!exists)
+        {
+            context.GroupFeaturePermissions.Add(new Compass.Models.GroupFeaturePermission
+            {
+                GroupId = centralOpsGroup.Id,
+                FeatureId = demandFeature.Id,
+                Permission = permission,
+                CreatedAt = DateTime.UtcNow,
+                CreatedBy = "System"
+            });
+        }
+    }
+
+    // Standards modern UI — global on/off from Admin → System → Feature settings
+    var standardsToggleFeature = await context.Features
+        .FirstOrDefaultAsync(f => f.Code == Compass.Models.FeatureCodes.Standards);
+
+    if (standardsToggleFeature == null)
+    {
+        standardsToggleFeature = new Compass.Models.Feature
+        {
+            Name = "Standards",
+            Code = Compass.Models.FeatureCodes.Standards,
+            Description = "Modern Standards area (/modern/standards), DDT Standards, Functional Standards",
+            IsActive = true,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+        context.Features.Add(standardsToggleFeature);
+        await context.SaveChangesAsync();
+        Console.WriteLine("✓ Created feature: Standards (global toggle)");
+    }
+
+    // FIPS service register — global on/off from Admin → Feature settings (database CMDB vs CMS products)
+    var fipsToggleFeature = await context.Features
+        .FirstOrDefaultAsync(f => f.Code == Compass.Models.FeatureCodes.Fips);
+
+    if (fipsToggleFeature == null)
+    {
+        fipsToggleFeature = new Compass.Models.Feature
+        {
+            Name = "FIPS service register",
+            Code = Compass.Models.FeatureCodes.Fips,
+            Description = "Service register / CMDB-synced products in Compass vs CMS products",
+            IsActive = true,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+        context.Features.Add(fipsToggleFeature);
+        await context.SaveChangesAsync();
+        Console.WriteLine("✓ Created feature: FIPS service register (global toggle)");
+    }
+
+    foreach (Compass.Models.PermissionType permission in Enum.GetValues<Compass.Models.PermissionType>())
+    {
+        var exists = await context.GroupFeaturePermissions
+            .AnyAsync(gfp => gfp.GroupId == centralOpsGroup.Id &&
+                            gfp.FeatureId == fipsToggleFeature.Id &&
+                            gfp.Permission == permission);
+
+        if (!exists)
+        {
+            context.GroupFeaturePermissions.Add(new Compass.Models.GroupFeaturePermission
+            {
+                GroupId = centralOpsGroup.Id,
+                FeatureId = fipsToggleFeature.Id,
+                Permission = permission,
+                CreatedAt = DateTime.UtcNow,
+                CreatedBy = "System"
+            });
+        }
+    }
+
     // Create Standards role groups
     var standardOwnerGroupName = "Standard Owners";
     var standardApproverGroupName = "Standard Approvers";
@@ -907,7 +1206,7 @@ static async Task SeedRbacInitialDataAsync(Compass.Data.CompassDbContext context
     // Standard Owners - can draft and submit standards
     var standardOwnerGroup = await context.Groups
         .FirstOrDefaultAsync(g => g.Name == standardOwnerGroupName);
-    
+
     if (standardOwnerGroup == null)
     {
         standardOwnerGroup = new Compass.Models.Group
@@ -946,7 +1245,7 @@ static async Task SeedRbacInitialDataAsync(Compass.Data.CompassDbContext context
     // Standard Approvers - can approve/reject standards
     var standardApproverGroup = await context.Groups
         .FirstOrDefaultAsync(g => g.Name == standardApproverGroupName);
-    
+
     if (standardApproverGroup == null)
     {
         standardApproverGroup = new Compass.Models.Group
@@ -985,7 +1284,7 @@ static async Task SeedRbacInitialDataAsync(Compass.Data.CompassDbContext context
     // Standard Publishers - can publish approved standards
     var standardPublisherGroup = await context.Groups
         .FirstOrDefaultAsync(g => g.Name == standardPublisherGroupName);
-    
+
     if (standardPublisherGroup == null)
     {
         standardPublisherGroup = new Compass.Models.Group
@@ -1268,11 +1567,11 @@ static async Task SeedTechnologyCodeOfPracticeAsync(Compass.Data.CompassDbContex
 static async Task RunDataMigration(WebApplicationBuilder builder)
 {
     Console.WriteLine("=== Compass Data Migration Utility ===\n");
-    
+
     // Build minimal services needed for migration
     builder.Services.AddDbContext<CompassDbContext>(options =>
         options.UseSqlite("Data Source=compass.db"), ServiceLifetime.Transient);
-    
+
     var sqlConnectionString = builder.Configuration.GetConnectionString("DefaultConnection");
     if (string.IsNullOrEmpty(sqlConnectionString))
     {
@@ -1280,27 +1579,27 @@ static async Task RunDataMigration(WebApplicationBuilder builder)
         Console.WriteLine("Please ensure appsettings.Production.json has the Azure SQL connection string.");
         return;
     }
-    
+
     builder.Services.AddDbContext<CompassDbContext>(options =>
         options.UseSqlServer(sqlConnectionString), ServiceLifetime.Transient);
-    
+
     var app = builder.Build();
-    
+
     using var scope = app.Services.CreateScope();
     var serviceProvider = scope.ServiceProvider;
-    
+
     // Create SQLite context (source)
     var sqliteOptions = new DbContextOptionsBuilder<CompassDbContext>()
         .UseSqlite("Data Source=compass.db")
         .Options;
     using var sourceDb = new CompassDbContext(sqliteOptions);
-    
+
     // Create Azure SQL context (target)
     var sqlServerOptions = new DbContextOptionsBuilder<CompassDbContext>()
         .UseSqlServer(sqlConnectionString)
         .Options;
     using var targetDb = new CompassDbContext(sqlServerOptions);
-    
+
     // Test connections
     Console.WriteLine("Testing database connections...");
     try
@@ -1313,7 +1612,7 @@ static async Task RunDataMigration(WebApplicationBuilder builder)
         Console.WriteLine($"✗ Failed to connect to SQLite: {ex.Message}");
         return;
     }
-    
+
     try
     {
         await targetDb.Database.CanConnectAsync();
@@ -1325,7 +1624,7 @@ static async Task RunDataMigration(WebApplicationBuilder builder)
         Console.WriteLine("Please verify the connection string and ensure the Azure SQL firewall allows your IP.");
         return;
     }
-    
+
     Console.WriteLine("\nStarting migration...\n");
     await Compass.DataMigrationUtility.MigrateDataAsync(sourceDb, targetDb);
 }

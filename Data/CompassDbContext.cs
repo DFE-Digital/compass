@@ -4,7 +4,9 @@ using Microsoft.EntityFrameworkCore.ChangeTracking;
 using System.Data;
 using System.Text.Json;
 using Compass.Models;
+using Compass.Models.DemandPipeline;
 using Compass.Models.DemandTriage;
+using Compass.Models.Fips;
 using Compass.Services;
 
 namespace Compass.Data;
@@ -30,10 +32,10 @@ public partial class CompassDbContext : DbContext
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
         // Suppress pending model changes warning for now
-        optionsBuilder.ConfigureWarnings(warnings => 
+        optionsBuilder.ConfigureWarnings(warnings =>
             warnings.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning));
     }
-    
+
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
         // Configure default string length for SQL Server (to avoid nvarchar(max) for indexed columns)
@@ -44,43 +46,53 @@ public partial class CompassDbContext : DbContext
     // User management
     public DbSet<User> Users { get; set; }
     public DbSet<UserBusinessAreaRoleAssignment> UserBusinessAreaRoleAssignments { get; set; }
+    public DbSet<BusinessAreaAdminMember> BusinessAreaAdminMembers { get; set; }
+    public DbSet<BusinessAreaLeadershipMember> BusinessAreaLeadershipMembers { get; set; }
+    public DbSet<CompassNotificationSetting> CompassNotificationSettings { get; set; }
+    public DbSet<CompassNotificationEmailLog> CompassNotificationEmailLogs { get; set; }
     public DbSet<UserPreference> UserPreferences { get; set; }
-    
+
     // Role-based access control
     public DbSet<Group> Groups { get; set; }
     public DbSet<Feature> Features { get; set; }
+    public DbSet<FeatureUserAllow> FeatureUserAllows { get; set; }
+    public DbSet<FeatureGroupAllow> FeatureGroupAllows { get; set; }
     public DbSet<UserGroup> UserGroups { get; set; }
     public DbSet<GroupFeaturePermission> GroupFeaturePermissions { get; set; }
-    
+
     // API Management
     public DbSet<ApiToken> ApiTokens { get; set; }
     public DbSet<ApiTokenPermission> ApiTokenPermissions { get; set; }
     public DbSet<ApiRequestLog> ApiRequestLogs { get; set; }
-    
+
     // Operational reports
     public DbSet<PerformanceMetric> PerformanceMetrics { get; set; }
-    
+
     // Functional standards
     public DbSet<FunctionalStandard> FunctionalStandards { get; set; }
     public DbSet<FunctionalStandardTheme> FunctionalStandardThemes { get; set; }
     public DbSet<PracticeArea> PracticeAreas { get; set; }
     public DbSet<Criterion> Criteria { get; set; }
-    
+
     // Delivery reporting
     public DbSet<ProductReturn> ProductReturns { get; set; }
     public DbSet<ProductMetricValue> ProductMetricValues { get; set; }
-    
+
     // Commission reporting
     public DbSet<Commission> Commissions { get; set; }
     public DbSet<CommissionSubmission> CommissionSubmissions { get; set; }
     public DbSet<CommissionMetricValue> CommissionMetricValues { get; set; }
-    
+
+    // Custom report library
+    public DbSet<CustomReport> CustomReports { get; set; }
+    public DbSet<CustomReportShare> CustomReportShares { get; set; }
+
     // Performance reporting management
     public DbSet<PerformanceReportingDueDateOverride> PerformanceReportingDueDateOverrides { get; set; }
     public DbSet<PerformanceReportingBusinessAreaConfig> PerformanceReportingBusinessAreaConfigs { get; set; }
     public DbSet<PerformanceReportingProductExclusion> PerformanceReportingProductExclusions { get; set; }
     public DbSet<PerformanceReportingPeriodExclusion> PerformanceReportingPeriodExclusions { get; set; }
-    
+
     // KPI management
     public DbSet<Kpi> Kpis { get; set; }
     public DbSet<KpiDataPoint> KpiDataPoints { get; set; }
@@ -88,12 +100,12 @@ public partial class CompassDbContext : DbContext
     // Enterprise reporting - Functional Standard Assessments
     public DbSet<FunctionalStandardAssessment> FunctionalStandardAssessments { get; set; }
     public DbSet<AssessmentCriteriaResponse> AssessmentCriteriaResponses { get; set; }
-    
+
     // Organizational structure
     public DbSet<OrganizationalGroup> OrganizationalGroups { get; set; }
     public DbSet<OrganizationalRole> OrganizationalRoles { get; set; }
     public DbSet<GovernmentDepartment> GovernmentDepartments { get; set; }
-    
+
     // Accessibility Management (Apps)
     public DbSet<ProductAccessibility> ProductAccessibilities { get; set; }
     public DbSet<ContactMethod> ContactMethods { get; set; }
@@ -107,23 +119,23 @@ public partial class CompassDbContext : DbContext
     public DbSet<StatementVerificationRequest> StatementVerificationRequests { get; set; }
     public DbSet<AccessibilityEmailConfiguration> AccessibilityEmailConfigurations { get; set; }
     public DbSet<StatementTemplate> StatementTemplates { get; set; }
-    
+
     // Notifications
     public DbSet<NotificationTemplate> NotificationTemplates { get; set; }
     public DbSet<NotificationRule> NotificationRules { get; set; }
     public DbSet<NotificationLog> NotificationLogs { get; set; }
-    
+
     // Enterprise reporting - Enterprise Metrics
     public DbSet<EnterpriseMetric> EnterpriseMetrics { get; set; }
     public DbSet<EnterpriseReturn> EnterpriseReturns { get; set; }
     public DbSet<EnterpriseMetricValue> EnterpriseMetricValues { get; set; }
-    
+
     // Staff Role Return
     public DbSet<StaffRoleReturn> StaffRoleReturns { get; set; }
     public DbSet<StaffRoleReturnSkill> StaffRoleReturnSkills { get; set; }
     public DbSet<GddRole> GddRoles { get; set; }
     public DbSet<Skill> Skills { get; set; }
-    
+
     // Learning & Development (L&D)
     public DbSet<TrainingCourse> TrainingCourses { get; set; }
     public DbSet<TrainingRecord> TrainingRecords { get; set; }
@@ -133,7 +145,7 @@ public partial class CompassDbContext : DbContext
     public DbSet<HOPS> HOPS { get; set; }
     public DbSet<TrainingNudge> TrainingNudges { get; set; }
     public DbSet<LearningBudget> LearningBudgets { get; set; }
-    
+
     // DDAT Framework
     public DbSet<DdatFrameworkVersion> DdatFrameworkVersions { get; set; }
     public DbSet<DdatFrameworkSkill> DdatFrameworkSkills { get; set; }
@@ -143,11 +155,12 @@ public partial class CompassDbContext : DbContext
     public DbSet<DdatFrameworkChangeNote> DdatFrameworkChangeNotes { get; set; }
     public DbSet<UserDdatFrameworkSkill> UserDdatFrameworkSkills { get; set; }
     public DbSet<Grade> Grades { get; set; }
-    
+
     // Product Governance
     public DbSet<Objective> Objectives { get; set; }
     public DbSet<Risk> Risks { get; set; }
     public DbSet<Issue> Issues { get; set; }
+    public DbSet<IssueAssuranceEvent> IssueAssuranceEvents { get; set; }
     public DbSet<Milestone> Milestones { get; set; }
     public DbSet<Models.Action> Actions { get; set; }
     public DbSet<Decision> Decisions { get; set; }
@@ -166,7 +179,7 @@ public partial class CompassDbContext : DbContext
     public DbSet<ResponseAnswer> ResponseAnswers { get; set; }
     public DbSet<ScoreSnapshot> ScoreSnapshots { get; set; }
     public DbSet<AuditLog> AuditLogs { get; set; }
-    
+
     // Project Management
     public DbSet<Project> Projects { get; set; }
     public DbSet<Mission> Missions { get; set; }
@@ -184,21 +197,22 @@ public partial class CompassDbContext : DbContext
     public DbSet<ProjectContact> ProjectContacts { get; set; }
     public DbSet<ProjectObjective> ProjectObjectives { get; set; }
     public DbSet<Dependency> Dependencies { get; set; }
+    public DbSet<Assumption> Assumptions { get; set; }
     public DbSet<ProjectProduct> ProjectProducts { get; set; }
     public DbSet<ProjectDraft> ProjectDrafts { get; set; }
-    
+
     // RAID Lookups
     public DbSet<RiskType> RiskTypes { get; set; }
     public DbSet<RiskTier> RiskTiers { get; set; }
     public DbSet<ActionSource> ActionSources { get; set; }
-    
+
     // Help Chatbot
     public DbSet<ChatConversation> ChatConversations { get; set; }
-    
+
     // Project Lookups
     public DbSet<BusinessAreaLookup> BusinessAreaLookups { get; set; }
     public DbSet<PhaseLookup> PhaseLookups { get; set; }
-    
+
     // Division and Business Area Management
     public DbSet<Division> Divisions { get; set; }
     public DbSet<DivisionBusinessArea> DivisionBusinessAreas { get; set; }
@@ -207,10 +221,12 @@ public partial class CompassDbContext : DbContext
     public DbSet<DeliveryPriority> DeliveryPriorities { get; set; }
     public DbSet<KpiCategory> KpiCategories { get; set; }
     public DbSet<ActivityTypeLookup> ActivityTypeLookups { get; set; }
+    public DbSet<WorkItemTagLookup> WorkItemTagLookups { get; set; }
+    public DbSet<ProjectWorkItemTag> ProjectWorkItemTags { get; set; }
     public DbSet<DirectorateLookup> DirectorateLookups { get; set; }
     public DbSet<RiskAppetiteLookup> RiskAppetiteLookups { get; set; }
     public DbSet<RagStatusLookup> RagStatusLookups { get; set; }
-    
+
     // Project relationships
     public DbSet<ProjectStatusUpdate> ProjectStatusUpdates { get; set; }
     public DbSet<ProjectMonthlyUpdate> ProjectMonthlyUpdates { get; set; }
@@ -219,6 +235,8 @@ public partial class CompassDbContext : DbContext
     public DbSet<MonthlyStatusReport> MonthlyStatusReports { get; set; }
     public DbSet<MonthlyStatusReportTimescaleConfig> MonthlyStatusReportTimescaleConfigs { get; set; }
     public DbSet<MonthlyUpdateDeadlineConfig> MonthlyUpdateDeadlineConfigs { get; set; }
+    public DbSet<WorkReportingCycle> WorkReportingCycles { get; set; }
+    public DbSet<WorkReportingCyclePeriod> WorkReportingCyclePeriods { get; set; }
     public DbSet<ProjectSeniorResponsibleOfficer> ProjectSeniorResponsibleOfficers { get; set; }
     public DbSet<ProjectServiceOwner> ProjectServiceOwners { get; set; }
     public DbSet<ProjectDirectorate> ProjectDirectorates { get; set; }
@@ -226,10 +244,10 @@ public partial class CompassDbContext : DbContext
     public DbSet<ProjectBudgetOwner> ProjectBudgetOwners { get; set; }
     public DbSet<ProjectPmoContact> ProjectPmoContacts { get; set; }
     public DbSet<ProjectWatchlist> ProjectWatchlists { get; set; }
-    
+
     // Product DQ Reviews
     public DbSet<ProductDqReview> ProductDqReviews { get; set; }
-    
+
     // RAID Junction Tables
     public DbSet<RiskAction> RiskActions { get; set; }
     public DbSet<RiskRiskType> RiskRiskTypes { get; set; }
@@ -237,12 +255,22 @@ public partial class CompassDbContext : DbContext
     public DbSet<RiskDecision> RiskDecisions { get; set; }
     public DbSet<IssueDecision> IssueDecisions { get; set; }
     public DbSet<IssueRisk> IssueRisks { get; set; }
+    public DbSet<RiskKeyRiskIndicator> RiskKeyRiskIndicators { get; set; }
+    public DbSet<RiskRiskCategory> RiskRiskCategories { get; set; }
+    public DbSet<IssueIssueCategory> IssueIssueCategories { get; set; }
+    public DbSet<RiskDivision> RiskDivisions { get; set; }
+    public DbSet<RiskBusinessArea> RiskBusinessAreas { get; set; }
+    public DbSet<IssueDivision> IssueDivisions { get; set; }
+    public DbSet<IssueBusinessArea> IssueBusinessAreas { get; set; }
+    public DbSet<AssumptionDivision> AssumptionDivisions { get; set; }
+    public DbSet<AssumptionBusinessArea> AssumptionBusinessAreas { get; set; }
+    public DbSet<RaidEscalationTierChangeRequest> RaidEscalationTierChangeRequests { get; set; }
     public DbSet<ActionDecision> ActionDecisions { get; set; }
     public DbSet<MilestoneAction> MilestoneActions { get; set; }
     public DbSet<MilestoneRisk> MilestoneRisks { get; set; }
     public DbSet<MilestoneIssue> MilestoneIssues { get; set; }
     public DbSet<MilestoneUpdate> MilestoneUpdates { get; set; }
-    
+
     // Demand Triage (spec-aligned v3)
     public DbSet<DemandTriageRequest> DemandTriageRequests { get; set; }
     public DbSet<DemandExploratoryReview> DemandExploratoryReviews { get; set; }
@@ -250,7 +278,7 @@ public partial class CompassDbContext : DbContext
     public DbSet<DemandAnswer> DemandAnswers { get; set; }
     public DbSet<DemandTriageOutcome> DemandTriageOutcomes { get; set; }
     public DbSet<DemandTriageAuditEvent> DemandTriageAuditEvents { get; set; }
-    
+
     // Business Cases
     public DbSet<BusinessCase> BusinessCases { get; set; }
     public DbSet<BusinessCaseDdtFeedback> BusinessCaseDdtFeedbacks { get; set; }
@@ -258,7 +286,20 @@ public partial class CompassDbContext : DbContext
     public DbSet<BusinessCaseProject> BusinessCaseProjects { get; set; }
     public DbSet<BusinessCaseProduct> BusinessCaseProducts { get; set; }
     public DbSet<BusinessCaseStatusLookup> BusinessCaseStatusLookups { get; set; }
-    
+
+    // Demand pipeline (Compass2 lifecycle — separate from legacy BusinessCases / demand triage)
+    public DbSet<DemandPipelineBusinessCase> DemandPipelineBusinessCases { get; set; }
+    public DbSet<DemandPipelineRequest> DemandPipelineRequests { get; set; }
+    public DbSet<UniversalBarrierLookup> UniversalBarrierLookups { get; set; }
+    public DbSet<DemandPipelineRequestUniversalBarrier> DemandPipelineRequestUniversalBarriers { get; set; }
+    public DbSet<DemandPipelineRiskIssue> DemandPipelineRiskIssues { get; set; }
+    public DbSet<DemandPipelineStage> DemandPipelineStages { get; set; }
+    public DbSet<DemandPipelineTriageMeeting> DemandPipelineTriageMeetings { get; set; }
+    public DbSet<DemandScoringFrameworkSection> DemandScoringFrameworkSections { get; set; }
+    public DbSet<DemandScoringFrameworkQuestion> DemandScoringFrameworkQuestions { get; set; }
+    public DbSet<DemandScoringFrameworkOption> DemandScoringFrameworkOptions { get; set; }
+    public DbSet<DemandScoringBandDefinition> DemandScoringBandDefinitions { get; set; }
+
     // DDT Standards Management
     public DbSet<DdtStandard> DdtStandards { get; set; }
     public DbSet<DdtStandardOwner> DdtStandardOwners { get; set; }
@@ -272,18 +313,18 @@ public partial class CompassDbContext : DbContext
     public DbSet<DdtStandardProduct> DdtStandardProducts { get; set; }
     public DbSet<DdtStandardException> DdtStandardExceptions { get; set; }
     public DbSet<DdtStandardUnpublishAudit> DdtStandardUnpublishAudits { get; set; }
-    
+
     // Standards Configuration
     public DbSet<StandardCategory> StandardCategories { get; set; }
     public DbSet<StandardSubCategory> StandardSubCategories { get; set; }
     public DbSet<StandardProduct> StandardProducts { get; set; }
-    
+
     // Service Standards (GOV.UK Service Standards)
     public DbSet<ServiceStandard> ServiceStandards { get; set; }
     public DbSet<ServiceStandardPhaseGuidance> ServiceStandardPhaseGuidance { get; set; }
     public DbSet<DdatProfession> DdatProfessions { get; set; }
     public DbSet<ServiceStandardProfession> ServiceStandardProfessions { get; set; }
-    
+
     // Technology Code of Practice
     public DbSet<TechnologyCodeOfPractice> TechnologyCodeOfPractice { get; set; }
     public DbSet<TechnologyCodeOfPracticeProfession> TechnologyCodeOfPracticeProfessions { get; set; }
@@ -292,9 +333,36 @@ public partial class CompassDbContext : DbContext
     // Profession and Skills Management
     public DbSet<ProfessionSkill> ProfessionSkills { get; set; }
     public DbSet<UserProfessionalProfileSkill> UserProfessionalProfileSkills { get; set; }
-    
+
     // FIPS Sync Management
     public DbSet<FipsSyncHistory> FipsSyncHistories { get; set; }
+
+    // FIPS CMDB products
+    public DbSet<CMDBProduct> CMDBProducts { get; set; }
+    public DbSet<CMDBProductBusinessArea> CMDBProductBusinessAreas { get; set; }
+    public DbSet<CMDBProductChannel> CMDBProductChannels { get; set; }
+    public DbSet<CMDBProductUserGroup> CMDBProductUserGroups { get; set; }
+    public DbSet<CMDBProductType> CMDBProductTypes { get; set; }
+    public DbSet<CMDBProductFipsCategorisationItem> CMDBProductFipsCategorisationItems { get; set; }
+    public DbSet<CMDBProductContact> CMDBProductContacts { get; set; }
+    public DbSet<FipsCmdbSyncRule> FipsCmdbSyncRules { get; set; }
+
+    // FIPS configuration
+    public DbSet<FipsBusinessArea> FipsBusinessAreas { get; set; }
+    public DbSet<FipsChannel> FipsChannels { get; set; }
+    public DbSet<FipsType> FipsTypes { get; set; }
+    public DbSet<FipsUserGroup> FipsUserGroups { get; set; }
+    public DbSet<FipsUserGroupSynonym> FipsUserGroupSynonyms { get; set; }
+    public DbSet<FipsContactRole> FipsContactRoles { get; set; }
+    public DbSet<FipsCategorisationGroup> FipsCategorisationGroups { get; set; }
+    public DbSet<FipsCategorisationItem> FipsCategorisationItems { get; set; }
+
+    // Service lines (FIPS / service register)
+    public DbSet<ServiceLine> ServiceLines { get; set; }
+    public DbSet<ServiceLineDivision> ServiceLineDivisions { get; set; }
+    public DbSet<ServiceLineBusinessArea> ServiceLineBusinessAreas { get; set; }
+    public DbSet<ServiceLineProduct> ServiceLineProducts { get; set; }
+    public DbSet<ServiceLineProject> ServiceLineProjects { get; set; }
 
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
@@ -577,6 +645,52 @@ public partial class CompassDbContext : DbContext
             .HasForeignKey(a => a.UserId)
             .OnDelete(DeleteBehavior.Cascade);
 
+        modelBuilder.Entity<BusinessAreaAdminMember>()
+            .HasIndex(m => new { m.UserId, m.BusinessAreaLookupId })
+            .IsUnique();
+        modelBuilder.Entity<BusinessAreaAdminMember>()
+            .HasOne(m => m.User)
+            .WithMany()
+            .HasForeignKey(m => m.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+        modelBuilder.Entity<BusinessAreaAdminMember>()
+            .HasOne(m => m.BusinessAreaLookup)
+            .WithMany()
+            .HasForeignKey(m => m.BusinessAreaLookupId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<BusinessAreaLeadershipMember>()
+            .HasIndex(m => new { m.UserId, m.BusinessAreaLookupId })
+            .IsUnique();
+        modelBuilder.Entity<BusinessAreaLeadershipMember>()
+            .HasOne(m => m.User)
+            .WithMany()
+            .HasForeignKey(m => m.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+        modelBuilder.Entity<BusinessAreaLeadershipMember>()
+            .HasOne(m => m.BusinessAreaLookup)
+            .WithMany()
+            .HasForeignKey(m => m.BusinessAreaLookupId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<DivisionUser>()
+            .HasIndex(m => new { m.UserId, m.DivisionId })
+            .IsUnique();
+
+        modelBuilder.Entity<DivisionBusinessArea>()
+            .HasIndex(m => new { m.DivisionId, m.BusinessAreaLookupId })
+            .IsUnique();
+
+        modelBuilder.Entity<CompassNotificationSetting>()
+            .HasIndex(x => x.EventKey)
+            .IsUnique();
+
+        modelBuilder.Entity<CompassNotificationEmailLog>()
+            .HasIndex(x => x.SentAtUtc);
+
+        modelBuilder.Entity<CompassNotificationEmailLog>()
+            .HasIndex(x => x.EventKey);
+
         modelBuilder.Entity<User>()
             .HasIndex(u => u.AzureObjectId)
             .IsUnique()
@@ -773,6 +887,47 @@ public partial class CompassDbContext : DbContext
             .HasIndex(cmv => new { cmv.CommissionSubmissionId, cmv.PerformanceMetricId })
             .IsUnique();
 
+        modelBuilder.Entity<CustomReport>()
+            .Property(r => r.Name)
+            .HasMaxLength(200);
+        modelBuilder.Entity<CustomReport>()
+            .Property(r => r.Description)
+            .HasMaxLength(2000);
+        modelBuilder.Entity<CustomReport>()
+            .Property(r => r.DefaultFilterJson)
+            .HasMaxLength(8000);
+        modelBuilder.Entity<CustomReport>()
+            .Property(r => r.DefinitionJson)
+            .HasMaxLength(32000);
+        modelBuilder.Entity<CustomReport>()
+            .Property(r => r.DataSource)
+            .HasConversion<int>();
+        modelBuilder.Entity<CustomReport>()
+            .Property(r => r.Visibility)
+            .HasConversion<int>();
+        modelBuilder.Entity<CustomReport>()
+            .HasOne(r => r.Owner)
+            .WithMany()
+            .HasForeignKey(r => r.OwnerUserId)
+            .OnDelete(DeleteBehavior.Restrict);
+        modelBuilder.Entity<CustomReport>()
+            .HasIndex(r => r.OwnerUserId);
+        modelBuilder.Entity<CustomReport>()
+            .HasIndex(r => r.Visibility);
+        modelBuilder.Entity<CustomReport>()
+            .HasMany(r => r.Shares)
+            .WithOne(s => s.CustomReport)
+            .HasForeignKey(s => s.CustomReportId)
+            .OnDelete(DeleteBehavior.Cascade);
+        modelBuilder.Entity<CustomReportShare>()
+            .HasIndex(s => new { s.CustomReportId, s.UserId })
+            .IsUnique();
+        modelBuilder.Entity<CustomReportShare>()
+            .HasOne(s => s.User)
+            .WithMany()
+            .HasForeignKey(s => s.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+
         // Configure PerformanceReportingDueDateOverride
         modelBuilder.Entity<PerformanceReportingDueDateOverride>()
             .HasIndex(prdo => new { prdo.ReportingYear, prdo.ReportingMonth })
@@ -864,14 +1019,14 @@ public partial class CompassDbContext : DbContext
             .IsUnique();
 
         // Configure RAID entities
-        
+
         // Objective indexes
         modelBuilder.Entity<Objective>()
             .HasIndex(o => o.Status);
-        
+
         modelBuilder.Entity<Objective>()
             .HasIndex(o => o.RagStatus);
-        
+
         modelBuilder.Entity<Objective>()
             .HasIndex(o => o.OwnerUserId);
 
@@ -890,7 +1045,7 @@ public partial class CompassDbContext : DbContext
 
         modelBuilder.Entity<Risk>()
             .HasIndex(r => r.ObjectiveId);
-        
+
         modelBuilder.Entity<Risk>()
             .HasIndex(r => r.RiskTierId);
 
@@ -910,6 +1065,16 @@ public partial class CompassDbContext : DbContext
         modelBuilder.Entity<Risk>()
             .HasIndex(r => r.ProximityDate);
 
+        modelBuilder.Entity<RiskKeyRiskIndicator>(e =>
+        {
+            e.HasOne(x => x.Risk)
+                .WithMany(r => r.KeyRiskIndicators)
+                .HasForeignKey(x => x.RiskId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(x => x.RiskId);
+            e.HasIndex(x => new { x.RiskId, x.SortOrder });
+        });
+
         // Issue configuration
         modelBuilder.Entity<Issue>()
             .HasOne(i => i.Objective)
@@ -923,6 +1088,142 @@ public partial class CompassDbContext : DbContext
         modelBuilder.Entity<Issue>()
             .HasIndex(i => i.FipsId);
 
+        modelBuilder.Entity<RiskRiskCategory>(e =>
+        {
+            e.HasKey(x => new { x.RiskId, x.RiskCategoryId });
+            e.HasOne(x => x.Risk)
+                .WithMany(r => r.RiskRiskCategories)
+                .HasForeignKey(x => x.RiskId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.RiskCategory)
+                .WithMany()
+                .HasForeignKey(x => x.RiskCategoryId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<IssueIssueCategory>(e =>
+        {
+            e.HasKey(x => new { x.IssueId, x.IssueCategoryId });
+            e.HasOne(x => x.Issue)
+                .WithMany(i => i.IssueIssueCategories)
+                .HasForeignKey(x => x.IssueId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.IssueCategory)
+                .WithMany()
+                .HasForeignKey(x => x.IssueCategoryId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<RiskDivision>(e =>
+        {
+            e.HasKey(x => new { x.RiskId, x.DivisionId });
+            e.HasOne(x => x.Risk)
+                .WithMany(r => r.RiskDivisions)
+                .HasForeignKey(x => x.RiskId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Division)
+                .WithMany()
+                .HasForeignKey(x => x.DivisionId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<RiskBusinessArea>(e =>
+        {
+            e.HasKey(x => new { x.RiskId, x.BusinessAreaLookupId });
+            e.HasOne(x => x.Risk)
+                .WithMany(r => r.RiskBusinessAreas)
+                .HasForeignKey(x => x.RiskId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.BusinessAreaLookup)
+                .WithMany()
+                .HasForeignKey(x => x.BusinessAreaLookupId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<IssueDivision>(e =>
+        {
+            e.HasKey(x => new { x.IssueId, x.DivisionId });
+            e.HasOne(x => x.Issue)
+                .WithMany(i => i.IssueDivisions)
+                .HasForeignKey(x => x.IssueId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Division)
+                .WithMany()
+                .HasForeignKey(x => x.DivisionId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<IssueBusinessArea>(e =>
+        {
+            e.HasKey(x => new { x.IssueId, x.BusinessAreaLookupId });
+            e.HasOne(x => x.Issue)
+                .WithMany(i => i.IssueBusinessAreas)
+                .HasForeignKey(x => x.IssueId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.BusinessAreaLookup)
+                .WithMany()
+                .HasForeignKey(x => x.BusinessAreaLookupId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<AssumptionDivision>(e =>
+        {
+            e.HasKey(x => new { x.AssumptionId, x.DivisionId });
+            e.HasOne(x => x.Assumption)
+                .WithMany(a => a.AssumptionDivisions)
+                .HasForeignKey(x => x.AssumptionId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Division)
+                .WithMany()
+                .HasForeignKey(x => x.DivisionId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<RaidEscalationTierChangeRequest>(e =>
+        {
+            e.Property(x => x.RecordType).HasMaxLength(20).IsRequired();
+            e.Property(x => x.Status).HasMaxLength(20).IsRequired();
+            e.Property(x => x.Rationale).HasMaxLength(2000);
+            e.Property(x => x.DecisionNote).HasMaxLength(500);
+            e.HasOne(x => x.Risk)
+                .WithMany()
+                .HasForeignKey(x => x.RiskId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Issue)
+                .WithMany()
+                .HasForeignKey(x => x.IssueId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.FromRiskTier)
+                .WithMany()
+                .HasForeignKey(x => x.FromRiskTierId)
+                .OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.ToRiskTier)
+                .WithMany()
+                .HasForeignKey(x => x.ToRiskTierId)
+                .OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.SubmittedByUser)
+                .WithMany()
+                .HasForeignKey(x => x.SubmittedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.DecidedByUser)
+                .WithMany()
+                .HasForeignKey(x => x.DecidedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<AssumptionBusinessArea>(e =>
+        {
+            e.HasKey(x => new { x.AssumptionId, x.BusinessAreaLookupId });
+            e.HasOne(x => x.Assumption)
+                .WithMany(a => a.AssumptionBusinessAreas)
+                .HasForeignKey(x => x.AssumptionId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.BusinessAreaLookup)
+                .WithMany()
+                .HasForeignKey(x => x.BusinessAreaLookupId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
         modelBuilder.Entity<Issue>()
             .HasIndex(i => i.ProductDocumentId);
 
@@ -934,6 +1235,27 @@ public partial class CompassDbContext : DbContext
 
         modelBuilder.Entity<Issue>()
             .HasIndex(i => i.TargetResolutionDate);
+
+        modelBuilder.Entity<IssueAssuranceEvent>(e =>
+        {
+            e.Property(x => x.Title).HasMaxLength(500);
+            e.Property(x => x.EventKind).HasMaxLength(50);
+            e.Property(x => x.DecisionSummary).HasColumnType("nvarchar(max)");
+            e.HasOne(x => x.Issue)
+                .WithMany(i => i.AssuranceEvents)
+                .HasForeignKey(x => x.IssueId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(x => x.IssueId);
+            e.HasIndex(x => new { x.IssueId, x.SortOrder });
+        });
+
+        modelBuilder.Entity<Issue>()
+            .Property(i => i.DetailedCause)
+            .HasColumnType("nvarchar(max)");
+
+        modelBuilder.Entity<Issue>()
+            .Property(i => i.AssuranceArrangements)
+            .HasColumnType("nvarchar(max)");
 
         // Milestone configuration
         modelBuilder.Entity<Milestone>()
@@ -1109,7 +1431,7 @@ public partial class CompassDbContext : DbContext
         modelBuilder.Entity<KpiDataPoint>()
             .Property(dp => dp.Value)
             .HasPrecision(20, 4);
- 
+
         // Action configuration
         modelBuilder.Entity<Models.Action>()
             .HasOne(a => a.Objective)
@@ -1131,7 +1453,7 @@ public partial class CompassDbContext : DbContext
 
         modelBuilder.Entity<Models.Action>()
             .HasIndex(a => a.ObjectiveId);
-        
+
         modelBuilder.Entity<Models.Action>()
             .HasIndex(a => a.ActionSourceId);
 
@@ -1197,7 +1519,7 @@ public partial class CompassDbContext : DbContext
             .HasIndex(d => d.DecisionDate);
 
         // Junction table configurations
-        
+
         // RiskAction
         modelBuilder.Entity<RiskAction>()
             .HasKey(ra => new { ra.RiskId, ra.ActionId });
@@ -1402,7 +1724,7 @@ public partial class CompassDbContext : DbContext
 
         modelBuilder.Entity<RiskTier>()
             .HasIndex(rt => rt.IsActive);
-        
+
         modelBuilder.Entity<RiskTier>()
             .HasIndex(rt => rt.SortOrder);
 
@@ -1412,7 +1734,7 @@ public partial class CompassDbContext : DbContext
 
         modelBuilder.Entity<ActionSource>()
             .HasIndex(a_s => a_s.IsActive);
-        
+
         modelBuilder.Entity<ActionSource>()
             .HasIndex(a_s => a_s.SortOrder);
 
@@ -1463,6 +1785,16 @@ public partial class CompassDbContext : DbContext
             .WithOne()
             .HasForeignKey<UserPreference>(up => up.UserId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<UserPreference>()
+            .HasIndex(up => up.RaidRegisterBusinessAreaLookupId);
+
+        modelBuilder.Entity<UserPreference>()
+            .HasOne<BusinessAreaLookup>()
+            .WithMany()
+            .HasForeignKey(up => up.RaidRegisterBusinessAreaLookupId)
+            .IsRequired(false)
+            .OnDelete(DeleteBehavior.SetNull);
 
         // API Token configuration
         modelBuilder.Entity<ApiToken>()
@@ -1615,6 +1947,15 @@ public partial class CompassDbContext : DbContext
         modelBuilder.Entity<Project>()
             .Property(p => p.Aim)
             .HasColumnType("nvarchar(max)");
+
+        modelBuilder.Entity<Project>()
+            .HasIndex(p => p.PipelineDemandRequestId);
+
+        modelBuilder.Entity<Project>()
+            .HasOne(p => p.PipelineDemandRequest)
+            .WithMany()
+            .HasForeignKey(p => p.PipelineDemandRequestId)
+            .OnDelete(DeleteBehavior.SetNull);
 
         // ProjectRagHistory configuration
         modelBuilder.Entity<ProjectRagHistory>()
@@ -1945,6 +2286,34 @@ public partial class CompassDbContext : DbContext
         modelBuilder.Entity<ActivityTypeLookup>()
             .HasIndex(at => at.IsActive);
 
+        modelBuilder.Entity<WorkItemTagLookup>()
+            .HasIndex(t => t.Name)
+            .IsUnique();
+
+        modelBuilder.Entity<WorkItemTagLookup>()
+            .HasIndex(t => t.IsActive);
+
+        modelBuilder.Entity<ProjectWorkItemTag>()
+            .HasKey(x => new { x.ProjectId, x.WorkItemTagLookupId });
+
+        modelBuilder.Entity<ProjectWorkItemTag>()
+            .HasOne(x => x.Project)
+            .WithMany(p => p.ProjectWorkItemTags)
+            .HasForeignKey(x => x.ProjectId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<ProjectWorkItemTag>()
+            .HasOne(x => x.WorkItemTagLookup)
+            .WithMany(t => t.ProjectLinks)
+            .HasForeignKey(x => x.WorkItemTagLookupId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<ProjectWorkItemTag>()
+            .HasIndex(x => x.ProjectId);
+
+        modelBuilder.Entity<ProjectWorkItemTag>()
+            .HasIndex(x => x.WorkItemTagLookupId);
+
         // DirectorateLookup configuration
         modelBuilder.Entity<DirectorateLookup>()
             .HasIndex(dl => dl.Name)
@@ -1992,6 +2361,21 @@ public partial class CompassDbContext : DbContext
 
         modelBuilder.Entity<Dependency>()
             .HasIndex(d => d.DependencyType);
+
+        modelBuilder.Entity<Dependency>()
+            .HasIndex(d => d.DependencyCriticalityId);
+
+        modelBuilder.Entity<Dependency>()
+            .HasIndex(d => d.DependencyLinkTypeId);
+
+        modelBuilder.Entity<Assumption>()
+            .HasOne(a => a.Project)
+            .WithMany(p => p.Assumptions)
+            .HasForeignKey(a => a.ProjectId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<Assumption>()
+            .HasIndex(a => new { a.ProjectId, a.IsDeleted });
 
         // ProjectProduct configuration
         modelBuilder.Entity<ProjectProduct>()
@@ -2088,60 +2472,60 @@ public partial class CompassDbContext : DbContext
 
         modelBuilder.Entity<Objective>()
             .HasIndex(o => o.MissionId);
-        
+
         // Configure StaffRoleReturn
         modelBuilder.Entity<StaffRoleReturn>()
             .HasOne(srr => srr.User)
             .WithMany()
             .HasForeignKey(srr => srr.UserId)
             .OnDelete(DeleteBehavior.Restrict);
-        
+
         modelBuilder.Entity<StaffRoleReturn>()
             .HasOne(srr => srr.GddRole)
             .WithMany(role => role.StaffRoleReturns)
             .HasForeignKey(srr => srr.GddRoleId)
             .OnDelete(DeleteBehavior.Restrict);
-        
+
         modelBuilder.Entity<StaffRoleReturn>()
             .HasIndex(srr => srr.UserId);
-        
+
         modelBuilder.Entity<StaffRoleReturn>()
             .HasIndex(srr => new { srr.UserId, srr.Year })
             .IsUnique();
-        
+
         modelBuilder.Entity<StaffRoleReturn>()
             .HasMany(srr => srr.SecondarySkills)
             .WithOne(srr => srr.StaffRoleReturn)
             .HasForeignKey(srr => srr.StaffRoleReturnId)
             .OnDelete(DeleteBehavior.Cascade);
-        
+
         // Configure StaffRoleReturnSkill
         modelBuilder.Entity<StaffRoleReturnSkill>()
             .HasOne(srs => srs.Skill)
             .WithMany(s => s.StaffRoleReturns)
             .HasForeignKey(srs => srs.SkillId)
             .OnDelete(DeleteBehavior.Restrict);
-        
+
         modelBuilder.Entity<StaffRoleReturnSkill>()
             .HasIndex(srs => new { srs.StaffRoleReturnId, srs.SkillId })
             .IsUnique();
-        
+
         // Configure GddRole
         modelBuilder.Entity<GddRole>()
             .HasIndex(role => new { role.RoleFamily, role.RoleName, role.RoleLevel })
             .IsUnique();
-        
+
         // GddRole.Description needs to be unlimited (nvarchar(max)) for long descriptions from CSV
         modelBuilder.Entity<GddRole>()
             .Property(r => r.Description)
             .HasMaxLength(int.MaxValue) // Override default MaxLength(450)
             .HasColumnType("nvarchar(max)");
-        
+
         // Configure Skill
         modelBuilder.Entity<Skill>()
             .HasIndex(s => s.SkillName)
             .IsUnique();
-        
+
         // Skill.Description needs to be unlimited (nvarchar(max)) for long descriptions from CSV
         modelBuilder.Entity<Skill>()
             .Property(s => s.Description)
@@ -2173,6 +2557,36 @@ public partial class CompassDbContext : DbContext
 
         modelBuilder.Entity<Feature>()
             .HasIndex(f => f.IsActive);
+
+        modelBuilder.Entity<Feature>()
+            .Property(f => f.AccessMode)
+            .HasConversion<int>();
+
+        modelBuilder.Entity<Feature>()
+            .HasMany(f => f.UserAllows)
+            .WithOne(a => a.Feature)
+            .HasForeignKey(a => a.FeatureId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<FeatureUserAllow>()
+            .HasIndex(a => new { a.FeatureId, a.UserId })
+            .IsUnique();
+
+        modelBuilder.Entity<Feature>()
+            .HasMany(f => f.GroupAllows)
+            .WithOne(a => a.Feature)
+            .HasForeignKey(a => a.FeatureId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<FeatureGroupAllow>()
+            .HasIndex(a => new { a.FeatureId, a.GroupId })
+            .IsUnique();
+
+        modelBuilder.Entity<FeatureGroupAllow>()
+            .HasOne(a => a.Group)
+            .WithMany()
+            .HasForeignKey(a => a.GroupId)
+            .OnDelete(DeleteBehavior.Cascade);
 
         // UserGroup configuration (many-to-many: User ↔ Group)
         modelBuilder.Entity<UserGroup>()
@@ -2231,69 +2645,69 @@ public partial class CompassDbContext : DbContext
 
         modelBuilder.Entity<GroupFeaturePermission>()
             .HasIndex(gfp => gfp.Permission);
-        
+
         // BUSINESS CASE CONFIGURATION
         // ========================================
-        
+
         // BusinessCase configuration
         modelBuilder.Entity<BusinessCase>()
             .HasIndex(bc => bc.BusinessCaseId)
             .IsUnique();
-        
+
         modelBuilder.Entity<BusinessCase>()
             .HasIndex(bc => bc.RequestorEmail);
-        
+
         modelBuilder.Entity<BusinessCase>()
             .HasIndex(bc => bc.BusinessArea);
-        
+
         // BusinessCaseDdtFeedback configuration
         modelBuilder.Entity<BusinessCaseDdtFeedback>()
             .HasOne(f => f.BusinessCase)
             .WithMany(bc => bc.DdtFeedbacks)
             .HasForeignKey(f => f.BusinessCaseId)
             .OnDelete(DeleteBehavior.Cascade);
-        
+
         modelBuilder.Entity<BusinessCaseDdtFeedback>()
             .HasIndex(f => f.BusinessCaseId);
-        
+
         // BusinessCaseReviewer configuration
         modelBuilder.Entity<BusinessCaseReviewer>()
             .HasOne(r => r.BusinessCase)
             .WithMany(bc => bc.Reviewers)
             .HasForeignKey(r => r.BusinessCaseId)
             .OnDelete(DeleteBehavior.Cascade);
-        
+
         modelBuilder.Entity<BusinessCaseReviewer>()
             .HasIndex(r => r.BusinessCaseId);
-        
+
         // BusinessCaseProject configuration
         modelBuilder.Entity<BusinessCaseProject>()
             .HasOne(bcp => bcp.BusinessCase)
             .WithMany(bc => bc.BusinessCaseProjects)
             .HasForeignKey(bcp => bcp.BusinessCaseId)
             .OnDelete(DeleteBehavior.Cascade);
-        
+
         modelBuilder.Entity<BusinessCaseProject>()
             .HasOne(bcp => bcp.Project)
             .WithMany()
             .HasForeignKey(bcp => bcp.ProjectId)
             .OnDelete(DeleteBehavior.Restrict);
-        
+
         modelBuilder.Entity<BusinessCaseProject>()
             .HasIndex(bcp => new { bcp.BusinessCaseId, bcp.ProjectId })
             .IsUnique();
-        
+
         // BusinessCaseProduct configuration
         modelBuilder.Entity<BusinessCaseProduct>()
             .HasOne(bcp => bcp.BusinessCase)
             .WithMany(bc => bc.BusinessCaseProducts)
             .HasForeignKey(bcp => bcp.BusinessCaseId)
             .OnDelete(DeleteBehavior.Cascade);
-        
+
         modelBuilder.Entity<BusinessCaseProduct>()
             .HasIndex(bcp => new { bcp.BusinessCaseId, bcp.ProductFipsId })
             .IsUnique();
-        
+
         // DdatProfession configuration - ignore RoleGroup property until migration is created
         modelBuilder.Entity<DdatProfession>()
             .Ignore(d => d.RoleGroup);
@@ -2674,6 +3088,314 @@ public partial class CompassDbContext : DbContext
             .HasIndex(e => e.DemandTriageRequestId);
         modelBuilder.Entity<DemandTriageAuditEvent>()
             .HasIndex(e => e.OccurredAt);
+
+        // Demand pipeline (Compass2)
+        modelBuilder.Entity<DemandPipelineRequest>(e =>
+        {
+            e.HasIndex(x => x.Reference).IsUnique();
+            e.HasIndex(x => x.BusinessCaseId);
+            e.HasIndex(x => x.Status);
+            e.Property(x => x.Description).HasMaxLength(-1);
+            e.Property(x => x.PointsOfContact).HasMaxLength(-1);
+            e.Property(x => x.PreviousResearch).HasMaxLength(-1);
+            e.Property(x => x.ManifestoCommitment).HasMaxLength(-1);
+            e.Property(x => x.ExpectedBenefits).HasMaxLength(-1);
+            e.Property(x => x.RiskIfNotDelivered).HasMaxLength(-1);
+            e.Property(x => x.PriorityOutcomeIds).HasMaxLength(500);
+            e.Property(x => x.MissionPillarIds).HasMaxLength(500);
+            e.Property(x => x.FundingProvidedDetails).HasMaxLength(-1);
+            e.Property(x => x.HeadcountProvidedDetails).HasMaxLength(-1);
+            e.Property(x => x.DigitalServiceChangeDetails).HasMaxLength(-1);
+            e.Property(x => x.ExploreNotes).HasMaxLength(-1);
+            e.Property(x => x.ExploreRelatedLinksJson).HasMaxLength(-1);
+            e.Property(x => x.ExploreLinksToExistingWork).HasMaxLength(-1);
+            e.Property(x => x.ExploreResearchAndInsights).HasMaxLength(-1);
+            e.Property(x => x.ExploreAimClarification).HasMaxLength(-1);
+            e.Property(x => x.ExplorePolicies).HasMaxLength(-1);
+            e.Property(x => x.ExploreUserGroups).HasMaxLength(-1);
+            e.Property(x => x.ScoringAssessmentNotes).HasMaxLength(-1);
+            e.Property(x => x.ScoringConcernsNotes).HasMaxLength(-1);
+            e.Property(x => x.ScoringAnswersJson).HasMaxLength(-1);
+            e.Property(x => x.TriageOutcomeNarrative).HasMaxLength(-1);
+            e.HasIndex(x => x.TriageMeetingId);
+            e.HasIndex(x => x.TriageCreatedProjectId);
+            e.HasOne<DemandPipelineTriageMeeting>()
+                .WithMany()
+                .HasForeignKey(x => x.TriageMeetingId)
+                .OnDelete(DeleteBehavior.SetNull);
+            e.HasOne<Project>()
+                .WithMany()
+                .HasForeignKey(x => x.TriageCreatedProjectId)
+                .OnDelete(DeleteBehavior.SetNull);
+            e.HasIndex(x => x.TriageStageLookupId);
+            e.HasIndex(x => x.TriageAssignedBusinessAreaId);
+            e.HasIndex(x => x.TriagePrimaryContactUserId);
+            e.HasOne<DemandTriageOutcomeStage>()
+                .WithMany()
+                .HasForeignKey(x => x.TriageStageLookupId)
+                .OnDelete(DeleteBehavior.SetNull);
+            e.HasOne<BusinessAreaLookup>()
+                .WithMany()
+                .HasForeignKey(x => x.TriageAssignedBusinessAreaId)
+                .OnDelete(DeleteBehavior.SetNull);
+            e.HasOne<User>()
+                .WithMany()
+                .HasForeignKey(x => x.TriagePrimaryContactUserId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<UniversalBarrierLookup>(e =>
+        {
+            e.HasIndex(x => x.SortOrder);
+            e.Property(x => x.Description).HasMaxLength(-1);
+        });
+
+        modelBuilder.Entity<DemandPipelineRequestUniversalBarrier>(e =>
+        {
+            e.HasKey(x => new { x.DemandPipelineRequestId, x.UniversalBarrierLookupId });
+            e.HasOne(x => x.DemandPipelineRequest)
+                .WithMany()
+                .HasForeignKey(x => x.DemandPipelineRequestId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.UniversalBarrierLookup)
+                .WithMany()
+                .HasForeignKey(x => x.UniversalBarrierLookupId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<DemandPipelineRiskIssue>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => x.DemandPipelineRequestId);
+            e.Property(x => x.Details).HasMaxLength(-1);
+            e.Property(x => x.Description).HasMaxLength(-1);
+            e.Property(x => x.ImpactOnDelivery).HasMaxLength(-1);
+            e.Property(x => x.MitigationOrAction).HasMaxLength(-1);
+            e.HasOne(x => x.DemandPipelineRequest)
+                .WithMany()
+                .HasForeignKey(x => x.DemandPipelineRequestId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<DemandPipelineBusinessCase>(e =>
+        {
+            e.HasIndex(x => x.Reference).IsUnique();
+            e.Property(x => x.ProblemStatement).HasMaxLength(-1);
+            e.Property(x => x.ProposedSolution).HasMaxLength(-1);
+            e.Property(x => x.Evidence).HasMaxLength(-1);
+            e.Property(x => x.Benefits).HasMaxLength(-1);
+            e.Property(x => x.StatutoryDriverComments).HasMaxLength(-1);
+            e.Property(x => x.StatutoryReference).HasMaxLength(-1);
+            e.Property(x => x.FundingComments).HasMaxLength(-1);
+            e.Property(x => x.LinkedWorkAndDemands).HasMaxLength(-1);
+        });
+
+        modelBuilder.Entity<DemandPipelineStage>(e =>
+        {
+            e.HasIndex(x => x.DisplayOrder);
+        });
+
+        modelBuilder.Entity<DemandPipelineTriageMeeting>(e =>
+        {
+            e.HasIndex(x => x.Status);
+            e.HasIndex(x => x.MeetingDate);
+            e.Property(x => x.Notes).HasMaxLength(-1);
+            e.Property(x => x.CopilotSummaryNotes).HasMaxLength(-1);
+            e.Property(x => x.AgendaJson).HasMaxLength(-1);
+            e.Property(x => x.Attendees).HasMaxLength(-1);
+        });
+
+        modelBuilder.Entity<DemandScoringFrameworkSection>(e =>
+        {
+            e.HasIndex(x => x.Key);
+            e.HasMany(x => x.Questions)
+                .WithOne(q => q.Section)
+                .HasForeignKey(q => q.SectionId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.Property(x => x.Description).HasMaxLength(-1);
+        });
+
+        modelBuilder.Entity<DemandScoringFrameworkQuestion>(e =>
+        {
+            e.HasIndex(x => x.Code).IsUnique();
+            e.HasMany(x => x.Options)
+                .WithOne(o => o.Question)
+                .HasForeignKey(o => o.QuestionId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.Property(x => x.Hint).HasMaxLength(-1);
+        });
+
+        modelBuilder.Entity<DemandScoringFrameworkOption>(e =>
+        {
+            e.HasIndex(x => new { x.QuestionId, x.SortOrder });
+        });
+
+        modelBuilder.Entity<DemandScoringBandDefinition>(e =>
+        {
+            e.HasIndex(x => x.SortOrder);
+        });
+
+        modelBuilder.Entity<WorkReportingCycle>(e =>
+        {
+            e.ToTable("ReportingCycles");
+            e.HasIndex(x => x.Code).IsUnique();
+        });
+        modelBuilder.Entity<WorkReportingCyclePeriod>(e =>
+        {
+            e.ToTable("ReportingCyclePeriods");
+            e.HasOne(p => p.ReportingCycle)
+                .WithMany(c => c.Periods)
+                .HasForeignKey(p => p.ReportingCycleId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(p => new { p.ReportingCycleId, p.PeriodKey }).IsUnique();
+        });
+
+        // ----- FIPS CMDB products -----
+        modelBuilder.Entity<CMDBProduct>(e =>
+        {
+            e.HasIndex(x => x.UniqueID).IsUnique();
+            e.HasIndex(x => x.Status);
+            e.Property(x => x.UniqueID).ValueGeneratedOnAdd();
+            e.Property(x => x.CMDBDescription).HasColumnType("nvarchar(max)");
+            e.Property(x => x.UserDescription).HasColumnType("nvarchar(max)");
+            e.Property(x => x.LastCmdbSnapshotJson).HasColumnType("nvarchar(max)");
+            e.HasOne(x => x.Phase).WithMany().HasForeignKey(x => x.PhaseId).OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<FipsCmdbSyncRule>(e =>
+        {
+            e.Property(x => x.Name).HasMaxLength(200);
+            e.Property(x => x.FieldScope).HasMaxLength(40);
+            e.Property(x => x.MatchKind).HasMaxLength(20);
+            e.Property(x => x.Pattern).HasMaxLength(2000);
+            e.HasIndex(x => new { x.IsActive, x.SortOrder });
+        });
+
+        modelBuilder.Entity<FipsBusinessArea>(e =>
+        {
+            e.HasIndex(x => x.BusinessAreaLookupId)
+                .IsUnique()
+                .HasFilter("[BusinessAreaLookupId] IS NOT NULL");
+            e.HasOne(x => x.BusinessAreaLookup)
+                .WithMany()
+                .HasForeignKey(x => x.BusinessAreaLookupId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<CMDBProductBusinessArea>(e =>
+        {
+            e.HasOne(x => x.CMDBProduct).WithMany(p => p.BusinessAreas).HasForeignKey(x => x.CMDBProductId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.FipsBusinessArea).WithMany().HasForeignKey(x => x.FipsBusinessAreaId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<CMDBProductChannel>(e =>
+        {
+            e.HasOne(x => x.CMDBProduct).WithMany(p => p.Channels).HasForeignKey(x => x.CMDBProductId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.FipsChannel).WithMany().HasForeignKey(x => x.FipsChannelId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<CMDBProductUserGroup>(e =>
+        {
+            e.HasOne(x => x.CMDBProduct).WithMany(p => p.UserGroups).HasForeignKey(x => x.CMDBProductId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.FipsUserGroup).WithMany().HasForeignKey(x => x.FipsUserGroupId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<CMDBProductType>(e =>
+        {
+            e.HasOne(x => x.CMDBProduct).WithMany(p => p.Types).HasForeignKey(x => x.CMDBProductId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.FipsType).WithMany().HasForeignKey(x => x.FipsTypeId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<CMDBProductFipsCategorisationItem>(e =>
+        {
+            e.HasOne(x => x.CMDBProduct).WithMany(p => p.CategorisationItems).HasForeignKey(x => x.CMDBProductId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.FipsCategorisationItem).WithMany().HasForeignKey(x => x.FipsCategorisationItemId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<FipsCategorisationItem>(e =>
+        {
+            e.HasOne(x => x.Group).WithMany(g => g.Items).HasForeignKey(x => x.FipsCategorisationGroupId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<CMDBProductContact>(e =>
+        {
+            e.HasOne(x => x.CMDBProduct).WithMany(p => p.Contacts).HasForeignKey(x => x.CMDBProductId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.FipsContactRole).WithMany().HasForeignKey(x => x.FipsContactRoleId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<FipsUserGroup>(e =>
+        {
+            e.HasOne(x => x.Parent).WithMany(x => x.Children).HasForeignKey(x => x.ParentId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<FipsUserGroupSynonym>(e =>
+        {
+            e.HasOne(x => x.FipsUserGroup).WithMany(g => g.Synonyms).HasForeignKey(x => x.FipsUserGroupId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ----- Service lines (portfolio groupings) -----
+        modelBuilder.Entity<ServiceLine>(e =>
+        {
+            e.Property(x => x.Name).HasMaxLength(200);
+            e.Property(x => x.Slug).HasMaxLength(200);
+            e.HasIndex(x => x.Slug).IsUnique();
+            e.Property(x => x.Description).HasColumnType("nvarchar(max)");
+        });
+
+        modelBuilder.Entity<ServiceLineDivision>(e =>
+        {
+            e.HasKey(x => new { x.ServiceLineId, x.DivisionId });
+            e.HasOne(x => x.ServiceLine)
+                .WithMany(s => s.ServiceLineDivisions)
+                .HasForeignKey(x => x.ServiceLineId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Division)
+                .WithMany()
+                .HasForeignKey(x => x.DivisionId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ServiceLineBusinessArea>(e =>
+        {
+            e.HasKey(x => new { x.ServiceLineId, x.BusinessAreaLookupId });
+            e.HasOne(x => x.ServiceLine)
+                .WithMany(s => s.ServiceLineBusinessAreas)
+                .HasForeignKey(x => x.ServiceLineId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.BusinessAreaLookup)
+                .WithMany()
+                .HasForeignKey(x => x.BusinessAreaLookupId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ServiceLineProduct>(e =>
+        {
+            e.HasKey(x => new { x.ServiceLineId, x.CMDBProductId });
+            e.HasOne(x => x.ServiceLine)
+                .WithMany(s => s.ServiceLineProducts)
+                .HasForeignKey(x => x.ServiceLineId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.CMDBProduct)
+                .WithMany()
+                .HasForeignKey(x => x.CMDBProductId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ServiceLineProject>(e =>
+        {
+            e.HasKey(x => new { x.ServiceLineId, x.ProjectId });
+            e.HasOne(x => x.ServiceLine)
+                .WithMany(s => s.ServiceLineProjects)
+                .HasForeignKey(x => x.ServiceLineId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Project)
+                .WithMany()
+                .HasForeignKey(x => x.ProjectId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
 
     }
 }

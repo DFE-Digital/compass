@@ -1,0 +1,83 @@
+using Compass.Models;
+using Compass.Services;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Filters;
+using System.Security.Claims;
+
+namespace Compass.Filters;
+
+/// <summary>
+/// Global action filter that populates ViewBag flags used by the shared
+/// navigation partials (_Navigation, _SubNavigation) so they can
+/// conditionally show/hide nav items based on the signed-in user's groups.
+/// </summary>
+public class NavigationViewFilter : IAsyncActionFilter
+{
+    private readonly IPermissionService _permissionService;
+    private readonly IGlobalFeatureToggleService _globalFeatures;
+
+    public NavigationViewFilter(
+        IPermissionService permissionService,
+        IGlobalFeatureToggleService globalFeatures)
+    {
+        _permissionService = permissionService;
+        _globalFeatures = globalFeatures;
+    }
+
+    public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
+    {
+        if (context.Controller is Controller controller)
+        {
+            var userEmail = GetUserEmail(context.HttpContext);
+            if (!string.IsNullOrEmpty(userEmail))
+            {
+                try
+                {
+                    var isSuperAdmin = await _permissionService.IsSuperAdminAsync(userEmail);
+                    var canUseOperations = await _permissionService.IsOperationConsoleUserAsync(userEmail);
+
+                    controller.ViewBag.CanAccessOperations = canUseOperations;
+
+                    controller.ViewBag.ShowDemandNavigation =
+                        await _globalFeatures.IsFeatureEnabledForPrincipalAsync(
+                            FeatureCodes.Demand, context.HttpContext.User);
+
+                    controller.ViewBag.ShowStandardsNavigation =
+                        await _globalFeatures.IsFeatureEnabledForPrincipalAsync(
+                            FeatureCodes.Standards, context.HttpContext.User);
+
+                    controller.ViewBag.ShowFipsDatabaseServiceRegister =
+                        await _globalFeatures.IsFeatureEnabledForPrincipalAsync(
+                            FeatureCodes.Fips, context.HttpContext.User);
+
+                    var canManageStandards = isSuperAdmin ||
+                        await _permissionService.IsInGroupAsync(userEmail, "Standards Manager");
+                    controller.ViewBag.CanAccessStandardsManagement = canManageStandards;
+                }
+                catch
+                {
+                    controller.ViewBag.CanAccessOperations = false;
+                    controller.ViewBag.CanAccessStandardsManagement = false;
+                    controller.ViewBag.ShowDemandNavigation = false;
+                    controller.ViewBag.ShowStandardsNavigation = false;
+                    controller.ViewBag.ShowFipsDatabaseServiceRegister = false;
+                }
+            }
+        }
+
+        await next();
+    }
+
+    private static string GetUserEmail(HttpContext httpContext)
+    {
+        var user = httpContext.User;
+        if (user?.Identity?.IsAuthenticated != true)
+            return string.Empty;
+
+        return user.Identity?.Name
+            ?? user.FindFirst(ClaimTypes.Email)?.Value
+            ?? user.FindFirst("preferred_username")?.Value
+            ?? user.FindFirst("email")?.Value
+            ?? string.Empty;
+    }
+}

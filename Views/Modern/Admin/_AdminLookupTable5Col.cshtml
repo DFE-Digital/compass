@@ -1,0 +1,61 @@
+@model Compass.ViewModels.Modern.AdminLookupTable5ColModel
+@{
+  var panel = Model.Panel;
+  string Hub() => Url.Action("Index", "ModernAdmin", new { panel }) ?? "#";
+  string Edit(int id) => Url.Action("LookupEdit", "ModernAdmin", new { panel, id }) ?? "#";
+  string Create() => Url.Action("LookupCreate", "ModernAdmin", new { panel }) ?? "#";
+}
+<div id="panel-@panel" class="admin-panel">
+ <div class="dfe-c-flex--between dfe-c-mb-2">
+ <h2 class="govuk-heading-m" style="margin:0;">@Model.Heading</h2>
+ <a class="govuk-button" href="@Create()">@Model.AddButtonLabel</a>
+  </div>
+  @if (!string.IsNullOrEmpty(Model.IntroHtml))
+  {
+ <div class="govuk-body dfe-c-text-muted dfe-c-mb-2">@Html.Raw(Model.IntroHtml)</div>
+  }
+ <div class="dfe-c-table-wrap">
+    <table >
+      <thead>
+        <tr>
+ <th data-sort-bound="1" class="sortable">Name</th>
+          <th>Description</th>
+ <th data-sort-bound="1" class="sortable">Order</th>
+ <th data-sort-bound="1" class="sortable">Active</th>
+ <th><span class="govuk-visually-hidden">Actions</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        @if (Model.Rows.Count == 0)
+        {
+ <tr><td colspan="5" class="dfe-c-text-muted">No items yet.</td></tr>
+        }
+        else
+        {
+          foreach (var row in Model.Rows)
+          {
+            var desc = row.Description;
+            if (Model.ShowCodeInDescription && !string.IsNullOrEmpty(row.Code))
+            {
+              desc = string.IsNullOrEmpty(desc) ? $"Code: {row.Code}" : $"Code: {row.Code} — {desc}";
+            }
+            <tr>
+              <td><strong>@row.Name</strong></td>
+              <td>@(string.IsNullOrEmpty(desc) ? "—" : desc)</td>
+              <td>@row.SortOrder</td>
+              <td>
+                @if (row.IsActive)
+ { <span class="dfe-c-tag dfe-c-tag--green">Yes</span> }
+                else
+ { <span class="dfe-c-tag dfe-c-tag--grey">No</span> }
+              </td>
+              <td style="text-align:right;">
+ <a class="govuk-link govuk-link--no-visited-state" href="@Edit(row.Id)">Edit</a>
+              </td>
+            </tr>
+          }
+        }
+      </tbody>
+    </table>
+  </div>
+</div>

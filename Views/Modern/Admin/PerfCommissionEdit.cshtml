@@ -1,0 +1,107 @@
+@model Compass.ViewModels.Modern.PerfCommissionRow
+@{
+    ViewData["Title"] = "Edit commission — " + Model.Name;
+    var id = Model.Id;
+}
+
+@section Breadcrumbs {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernAdmin")">Admin</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("PerformanceReporting", "ModernAdmin", new { panel = "commissions" })">Performance reporting</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">Edit commission</li>
+}
+
+<div class="admin-hub">
+ <div class="dfe-c-page-title dfe-c-mb-3">
+ <div class="dfe-c-page-title__caption">Administration</div>
+ <h1 class="dfe-c-page-title__heading">Edit commission</h1>
+ <p class="dfe-c-page-title__lede"><a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("PerformanceReporting", "ModernAdmin", new { panel = "commissions" })">Back to Commissions</a></p>
+  </div>
+
+  @if (ViewBag.PerfError != null)
+  {
+ <div class="govuk-error-summary" role="alert" data-module="govuk-error-summary" style="margin-bottom:1.5rem;">
+ <h2 class="govuk-error-summary__title">There is a problem</h2>
+ <div class="govuk-error-summary__body">@ViewBag.PerfError</div>
+    </div>
+  }
+  @if (ViewBag.AdminMessage != null)
+  {
+ <div class="govuk-notification-banner govuk-notification-banner--success dfe-c-mb-3" role="region">
+ <div class="govuk-notification-banner__content"><p class="govuk-notification-banner__heading">@ViewBag.AdminMessage</p></div>
+    </div>
+  }
+
+ <div class="dfe-c-card dfe-c-mb-4" style="border:1px solid var(--grey-2);border-left:4px solid var(--blue);padding:1.25rem 1.5rem;background:var(--white);max-width:56rem;">
+ <h2 class="govuk-heading-m govuk-!-margin-top-0">@Model.Name</h2>
+ <p class="govuk-hint govuk-!-margin-bottom-4"><strong>@Model.SubmissionCount</strong> submission(s) recorded for this commission.</p>
+    <form method="post" action="@Url.Action("PerfCommissionEdit", "ModernAdmin", new { id })" novalidate>
+      @Html.AntiForgeryToken()
+ <fieldset class="govuk-fieldset">
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Details</legend>
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="ec-name">Name</label>
+ <input class="govuk-input govuk-!-width-two-thirds" type="text" name="name" id="ec-name" required maxlength="200" value="@Model.Name" />
+        </div>
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="ec-desc">Description <span class="govuk-hint govuk-!-display-inline">(optional)</span></label>
+ <textarea class="govuk-textarea govuk-!-width-two-thirds" name="description" id="ec-desc" rows="3" maxlength="1000">@Model.Description</textarea>
+        </div>
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="ec-quarter">Quarter <span class="govuk-hint govuk-!-display-inline">(optional)</span></label>
+ <input class="govuk-input govuk-input--width-10" type="text" name="quarter" id="ec-quarter" maxlength="10" value="@Model.Quarter" />
+        </div>
+ <div class="govuk-grid-row">
+ <div class="govuk-grid-column-one-half-from-desktop">
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="ec-start">Period start</label>
+ <input class="govuk-input" type="date" name="startDate" id="ec-start" required value="@Model.StartDate.ToString("yyyy-MM-dd")" />
+            </div>
+          </div>
+ <div class="govuk-grid-column-one-half-from-desktop">
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="ec-end">Period end</label>
+ <input class="govuk-input" type="date" name="endDate" id="ec-end" required value="@Model.EndDate.ToString("yyyy-MM-dd")" />
+            </div>
+          </div>
+        </div>
+ <div class="govuk-grid-row">
+ <div class="govuk-grid-column-one-half-from-desktop">
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="ec-open">Submission opens</label>
+ <input class="govuk-input" type="date" name="openDate" id="ec-open" required value="@Model.OpenDate.ToString("yyyy-MM-dd")" />
+            </div>
+          </div>
+ <div class="govuk-grid-column-one-half-from-desktop">
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="ec-due">Submission due</label>
+ <input class="govuk-input" type="date" name="dueDate" id="ec-due" required value="@Model.DueDate.ToString("yyyy-MM-dd")" />
+            </div>
+          </div>
+        </div>
+      </fieldset>
+
+ <fieldset class="govuk-fieldset govuk-!-margin-top-6">
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Status</legend>
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="ec-active">Active</label>
+ <select class="govuk-select govuk-!-width-one-third" name="isActive" id="ec-active" aria-describedby="ec-active-hint">
+            @if (Model.IsActive) { <option value="true" selected>Yes — accepting submissions</option><option value="false">No — deactivated</option> }
+            else { <option value="true">Yes — accepting submissions</option><option value="false" selected>No — deactivated</option> }
+          </select>
+ <p class="govuk-hint govuk-!-margin-bottom-0" id="ec-active-hint">Choose <strong>No — deactivated</strong> to stop this commission accepting new submissions, then save changes.</p>
+        </div>
+      </fieldset>
+
+      @{
+        ViewBag.CommissionFieldPrefix = "ec";
+      }
+      @await Html.PartialAsync("~/Views/Modern/Admin/_PerfCommissionScopeAndMetrics.cshtml", Model)
+
+ <div class="govuk-button-group govuk-!-margin-top-6">
+ <button type="submit" class="govuk-button" data-module="govuk-button">Save changes</button>
+ <a href="@Url.Action("PerformanceReporting", "ModernAdmin", new { panel = "commissions" })" class="govuk-link govuk-link--no-visited-state">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>

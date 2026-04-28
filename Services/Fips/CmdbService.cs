@@ -11,6 +11,10 @@ public class CmdbService : ICmdbService
     private readonly HttpClient _httpClient;
     private readonly FipsSyncConfiguration _config;
     private readonly ILogger<CmdbService> _logger;
+    /// <summary>Trimmed table API URL (no trailing slash), e.g. https://instance.service-now.com/api/now/table/service_offering</summary>
+    private readonly string _serviceOfferingTableUrl;
+    private readonly string _cmdbUsername;
+    private readonly string _cmdbPassword;
 
     public CmdbService(
         HttpClient httpClient,
@@ -21,14 +25,65 @@ public class CmdbService : ICmdbService
         _config = config.Value;
         _logger = logger;
 
-        // Configure HTTP client with basic auth
-        var credentials = Convert.ToBase64String(
-            Encoding.UTF8.GetBytes($"{_config.Cmdb.Username}:{_config.Cmdb.Password}"));
-        _httpClient.DefaultRequestHeaders.Authorization = 
+        _cmdbUsername = _config.Cmdb.Username?.Trim() ?? "";
+        _cmdbPassword = _config.Cmdb.Password?.Trim() ?? "";
+        _serviceOfferingTableUrl = (_config.Cmdb.Endpoint ?? "").Trim().TrimEnd('/');
+
+        if (string.IsNullOrEmpty(_cmdbUsername) || string.IsNullOrEmpty(_cmdbPassword))
+            _logger.LogWarning("CMDB Username or Password is missing; ServiceNow requests will return 401.");
+
+        // Do not set BaseAddress: combining it with a query-only relative URI (?sysparm_...) is unreliable
+        // when the configured endpoint has no trailing slash. Use absolute URLs per request instead.
+        var credentials = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{_cmdbUsername}:{_cmdbPassword}"));
+        _httpClient.DefaultRequestHeaders.Authorization =
             new AuthenticationHeaderValue("Basic", credentials);
         _httpClient.DefaultRequestHeaders.Accept.Add(
             new MediaTypeWithQualityHeaderValue("application/json"));
-        _httpClient.BaseAddress = new Uri(_config.Cmdb.Endpoint);
+    }
+
+    private string ServiceOfferingRequestUrl(string queryWithoutQuestionPrefix)
+    {
+        var q = queryWithoutQuestionPrefix.TrimStart('?');
+        return string.IsNullOrEmpty(q) ? _serviceOfferingTableUrl : $"{_serviceOfferingTableUrl}?{q}";
+    }
+
+    private static List<CmdbEntry> DeserializeServiceOfferingResultRows(string content)
+    {
+        using var doc = JsonDocument.Parse(content);
+        if (!doc.RootElement.TryGetProperty("result", out var resultEl))
+            return new List<CmdbEntry>();
+
+        var list = new List<CmdbEntry>();
+        if (resultEl.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var row in resultEl.EnumerateArray())
+            {
+                var raw = row.GetRawText();
+                var entry = JsonSerializer.Deserialize<CmdbEntry>(raw);
+                if (entry != null)
+                {
+                    entry.RecordJson = raw;
+                    list.Add(entry);
+                }
+            }
+        }
+
+        return list;
+    }
+
+    private static CmdbEntry? DeserializeServiceOfferingResultSingle(string content)
+    {
+        using var doc = JsonDocument.Parse(content);
+        if (!doc.RootElement.TryGetProperty("result", out var resultEl))
+            return null;
+        if (resultEl.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+            return null;
+
+        var raw = resultEl.GetRawText();
+        var entry = JsonSerializer.Deserialize<CmdbEntry>(raw);
+        if (entry != null)
+            entry.RecordJson = raw;
+        return entry;
     }
 
     public async Task<List<CmdbEntry>> GetAllCmdbEntriesAsync()
@@ -36,22 +91,20 @@ public class CmdbService : ICmdbService
         try
         {
             _logger.LogInformation("Fetching CMDB entries from ServiceNow...");
-            _logger.LogInformation("CMDB Endpoint: {Endpoint}", _config.Cmdb.Endpoint);
-            _logger.LogInformation("CMDB Username: {Username}", _config.Cmdb.Username);
+            _logger.LogInformation("CMDB Endpoint: {Endpoint}", _serviceOfferingTableUrl);
+            _logger.LogInformation("CMDB Username: {Username}", _cmdbUsername);
 
             var queryParams = new Dictionary<string, string>
             {
                 ["sysparm_query"] = "active=true",
-                ["sysparm_fields"] = "name,sys_id,parent.name,description,owned_by,delivery_manager,u_product_manager,u_information_asset_owner,u_senior_responsible_owner",
                 ["sysparm_limit"] = "5000"
             };
 
             var query = string.Join("&", queryParams.Select(kvp => $"{kvp.Key}={Uri.EscapeDataString(kvp.Value)}"));
-            var requestUri = $"?{query}";
-            
-            _logger.LogInformation("Request URI: {BaseAddress}{RequestUri}", _httpClient.BaseAddress, requestUri);
-            
-            var response = await _httpClient.GetAsync(requestUri);
+            var requestUrl = ServiceOfferingRequestUrl(query);
+            _logger.LogInformation("CMDB request URL: {Url}", requestUrl);
+
+            var response = await _httpClient.GetAsync(requestUrl);
             
             if (!response.IsSuccessStatusCode)
             {
@@ -64,9 +117,7 @@ public class CmdbService : ICmdbService
             response.EnsureSuccessStatusCode();
 
             var content = await response.Content.ReadAsStringAsync();
-            var result = JsonSerializer.Deserialize<ServiceNowResponse<List<CmdbEntry>>>(content);
-
-            var entries = result?.Result ?? new List<CmdbEntry>();
+            var entries = DeserializeServiceOfferingResultRows(content);
             _logger.LogInformation("Successfully fetched {Count} CMDB entries", entries.Count);
 
             return entries;
@@ -92,7 +143,7 @@ public class CmdbService : ICmdbService
             };
 
             var query = string.Join("&", queryParams.Select(kvp => $"{kvp.Key}={Uri.EscapeDataString(kvp.Value)}"));
-            var response = await _httpClient.GetAsync($"?{query}");
+            var response = await _httpClient.GetAsync(ServiceOfferingRequestUrl(query));
             response.EnsureSuccessStatusCode();
 
             // Try to get count from headers
@@ -124,19 +175,16 @@ public class CmdbService : ICmdbService
             var queryParams = new Dictionary<string, string>
             {
                 ["sysparm_query"] = "active=true",
-                ["sysparm_fields"] = "name,sys_id,parent.name,description,owned_by,delivery_manager,u_product_manager,u_information_asset_owner,u_senior_responsible_owner",
                 ["sysparm_limit"] = limit.ToString(),
                 ["sysparm_offset"] = offset.ToString()
             };
 
             var query = string.Join("&", queryParams.Select(kvp => $"{kvp.Key}={Uri.EscapeDataString(kvp.Value)}"));
-            var response = await _httpClient.GetAsync($"?{query}");
+            var response = await _httpClient.GetAsync(ServiceOfferingRequestUrl(query));
             response.EnsureSuccessStatusCode();
 
             var content = await response.Content.ReadAsStringAsync();
-            var result = JsonSerializer.Deserialize<ServiceNowResponse<List<CmdbEntry>>>(content);
-
-            var entries = result?.Result ?? new List<CmdbEntry>();
+            var entries = DeserializeServiceOfferingResultRows(content);
 
             // Try to get total count from headers
             int total = 0;
@@ -166,8 +214,8 @@ public class CmdbService : ICmdbService
 
         try
         {
-            // Change endpoint to sys_user table
-            var userEndpoint = _config.Cmdb.Endpoint.Replace("/service_offering", "/sys_user");
+            // Change endpoint to sys_user table (same instance / API prefix as service_offering)
+            var userEndpoint = _serviceOfferingTableUrl.Replace("/service_offering", "/sys_user", StringComparison.Ordinal);
             
             var queryParams = new Dictionary<string, string>
             {
@@ -349,21 +397,12 @@ public class CmdbService : ICmdbService
             // ServiceNow API format: GET /api/now/table/{table_name}/{sys_id}
             // The endpoint is already configured as service_offering (e.g., https://dfe.service-now.com/api/now/table/service_offering)
             // We just need to append /{sys_id} to get the specific record
-            var baseAddress = _config.Cmdb.Endpoint.TrimEnd('/');
-            var requestUri = $"{baseAddress}/{sysId}";
-            
-            var queryParams = new Dictionary<string, string>
-            {
-                ["sysparm_fields"] = "name,sys_id,parent.name,description,owned_by,delivery_manager,u_product_manager,u_information_asset_owner,u_senior_responsible_owner"
-            };
-
-            var query = string.Join("&", queryParams.Select(kvp => $"{kvp.Key}={Uri.EscapeDataString(kvp.Value)}"));
-            requestUri = $"{requestUri}?{query}";
+            var requestUri = $"{_serviceOfferingTableUrl}/{sysId}";
             
             // Create a temporary HttpClient for this request since we're using a different base URI
             using var tempClient = new HttpClient();
             var credentials = Convert.ToBase64String(
-                Encoding.UTF8.GetBytes($"{_config.Cmdb.Username}:{_config.Cmdb.Password}"));
+                Encoding.UTF8.GetBytes($"{_cmdbUsername}:{_cmdbPassword}"));
             tempClient.DefaultRequestHeaders.Authorization = 
                 new AuthenticationHeaderValue("Basic", credentials);
             tempClient.DefaultRequestHeaders.Accept.Add(
@@ -382,9 +421,7 @@ public class CmdbService : ICmdbService
             response.EnsureSuccessStatusCode();
 
             var content = await response.Content.ReadAsStringAsync();
-            var result = JsonSerializer.Deserialize<ServiceNowResponse<CmdbEntry>>(content);
-
-            return result?.Result;
+            return DeserializeServiceOfferingResultSingle(content);
         }
         catch (Exception ex)
         {

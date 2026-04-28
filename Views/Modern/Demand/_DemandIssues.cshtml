@@ -1,0 +1,67 @@
+@model Compass.Models.DemandPipeline.DemandPipelineRequest
+@{
+  var rows = ViewBag.DemandRiskIssues as IList<Compass.Models.DemandPipeline.DemandPipelineRiskIssue> ?? new List<Compass.Models.DemandPipeline.DemandPipelineRiskIssue>();
+  var canEdit = ViewBag.DemandCanEditRisksIssues as bool? ?? false;
+  var formError = TempData["RiskIssueError"] as string;
+  var issues = rows.Where(r => string.Equals(r.EntryType, "Issue", StringComparison.OrdinalIgnoreCase)).ToList();
+}
+
+<div id="demand-issues">
+ <h2 class="govuk-heading-m">Issues</h2>
+ <p class="govuk-body">Record issues identified for this demand at any point in the pipeline.</p>
+
+  @if (!string.IsNullOrWhiteSpace(formError))
+  {
+ <div class="govuk-error-summary" data-module="govuk-error-summary" role="alert">
+ <h2 class="govuk-error-summary__title">There is a problem</h2>
+ <div class="govuk-error-summary__body">
+ <ul class="govuk-list govuk-error-summary__list">
+          <li>@formError</li>
+        </ul>
+      </div>
+    </div>
+  }
+
+  @if (issues.Count == 0)
+  {
+ <p class="govuk-body dfe-c-text-muted">No issues recorded.</p>
+  }
+  else
+  {
+ <div class="dfe-c-table-wrap">
+      <table>
+        <thead><tr><th>Issue</th><th>Updated</th>@if (canEdit) {<th></th>}</tr></thead>
+        <tbody>
+          @foreach (var r in issues)
+          {
+            <tr>
+              <td>
+                <strong>@r.Title</strong>
+                @if (!string.IsNullOrWhiteSpace(r.Details))
+ {<span class="dfe-c-table-ref">@r.Details</span>}
+              </td>
+              <td style="white-space:nowrap;">@r.UpdatedAt.ToString("d MMM yyyy")</td>
+              @if (canEdit)
+              {
+                <td style="white-space:nowrap;text-align:right;">
+ <a href="@Url.Action("RequestEditRiskIssue", "ModernDemand", new { id = Model.Id, riskIssueId = r.Id })" class="govuk-link govuk-link--no-visited-state govuk-!-margin-right-3">Edit</a>
+                  <form method="post" action="@Url.Action("RequestDeleteRiskIssue", "ModernDemand", new { id = Model.Id, riskIssueId = r.Id })" style="display:inline;">
+                    @Html.AntiForgeryToken()
+ <button type="submit" class="govuk-link" style="padding:0;border:0;background:none;cursor:pointer;font:inherit;color:#d4351c;" data-confirm="Remove this issue? This cannot be undone.">Delete</button>
+                  </form>
+                </td>
+              }
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+
+  @if (!canEdit && issues.Count > 0)
+  {
+ <div class="govuk-inset-text govuk-!-margin-bottom-0">
+ <p class="govuk-body govuk-!-margin-bottom-0">This demand is closed — issues are read-only.</p>
+    </div>
+  }
+</div>

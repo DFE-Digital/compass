@@ -1,0 +1,43 @@
+@model ModernPerformanceBulkUploadViewModel
+@{
+  ViewData["Title"] = "Bulk upload — " + Model.CommissionName;
+}
+
+@section Breadcrumbs {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernPerformance")">Performance</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Commission", "ModernPerformance", new { commissionId = Model.CommissionId, tab = Model.Tab })">@Model.CommissionName</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">Bulk upload</li>
+}
+
+<div class="dfe-c-page-title dfe-c-mb-4">
+ <div class="dfe-c-page-title__caption">Commission</div>
+ <h1 class="dfe-c-page-title__heading">Bulk upload metrics</h1>
+ <p class="govuk-body">Upload an Excel file (.xlsx) that matches the <strong>Download Excel</strong> template for this commission (same scope tab as when you exported). UTF-8 CSV with the same columns is also accepted.</p>
+</div>
+
+@if (TempData["ErrorMessage"] != null)
+{
+ <div class="govuk-error-summary dfe-c-mb-3" role="alert"><p class="govuk-body">@TempData["ErrorMessage"]</p></div>
+}
+
+<div class="govuk-inset-text dfe-c-mb-4">
+ <ol class="govuk-list govuk-list--number">
+    <li>Download the Excel template from the commission page for the scope you need (My products, Business area, Directorate, or All products).</li>
+    <li>Edit metric columns only (keep <code>DocumentId</code> and <code>FipsId</code> as text — do not let Excel turn them into numbers).</li>
+    <li>Upload here to verify; fix any errors, then apply.</li>
+  </ol>
+</div>
+
+<form asp-controller="ModernPerformance" asp-action="BulkVerify" asp-route-commissionId="@Model.CommissionId" method="post" enctype="multipart/form-data" class="govuk-form-group">
+  @Html.AntiForgeryToken()
+  <input type="hidden" name="tab" value="@Model.Tab" />
+
+ <label class="govuk-label govuk-label--m" for="file">Excel or CSV file</label>
+ <input class="govuk-file-upload" id="file" name="file" type="file" accept=".xlsx,.xlsm,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" required />
+
+ <div class="govuk-button-group dfe-c-mt-3">
+ <button type="submit" class="govuk-button">Verify upload</button>
+ <a class="govuk-button govuk-button--secondary" href="@Url.Action("Commission", "ModernPerformance", new { commissionId = Model.CommissionId, tab = Model.Tab })">Cancel</a>
+  </div>
+</form>

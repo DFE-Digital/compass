@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using Compass.Models.DemandPipeline;
 
 namespace Compass.Models;
 
@@ -97,6 +98,9 @@ public class Project
 
     public bool IsDeleted { get; set; } = false;
 
+    /// <summary>Optional link to a pipeline demand request (<see cref="DemandPipeline.DemandPipelineRequest"/>).</summary>
+    public Guid? PipelineDemandRequestId { get; set; }
+
     [Required]
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
@@ -129,6 +133,7 @@ public class Project
     public ICollection<Milestone> Milestones { get; set; } = new List<Milestone>();
     public ICollection<Risk> Risks { get; set; } = new List<Risk>();
     public ICollection<Issue> Issues { get; set; } = new List<Issue>();
+    public ICollection<Assumption> Assumptions { get; set; } = new List<Assumption>();
     public ICollection<Models.Action> Actions { get; set; } = new List<Models.Action>();
     public ICollection<Decision> Decisions { get; set; } = new List<Decision>();
     public ICollection<Kpi> Kpis { get; set; } = new List<Kpi>();
@@ -143,6 +148,12 @@ public class Project
     public ICollection<ProjectBudgetOwner> BudgetOwners { get; set; } = new List<ProjectBudgetOwner>();
     public ICollection<ProjectPmoContact> PmoContacts { get; set; } = new List<ProjectPmoContact>();
     public ICollection<ProjectArtefact> Artefacts { get; set; } = new List<ProjectArtefact>();
+
+    /// <summary>Custom work tags (<see cref="WorkItemTagLookup"/>), managed in Admin → Work → Tagging.</summary>
+    public ICollection<ProjectWorkItemTag> ProjectWorkItemTags { get; set; } = new List<ProjectWorkItemTag>();
+
+    [ForeignKey(nameof(PipelineDemandRequestId))]
+    public DemandPipelineRequest? PipelineDemandRequest { get; set; }
 
     // Activity Type
     public int? ActivityTypeLookupId { get; set; }

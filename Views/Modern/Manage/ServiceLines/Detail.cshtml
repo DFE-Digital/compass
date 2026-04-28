@@ -1,0 +1,139 @@
+@model Compass.ViewModels.Modern.ServiceLineDetailViewModel
+@{
+    ViewData["Title"] = Model.ServiceLine.Name + " — Service line";
+    var sl = Model.ServiceLine;
+}
+
+@section Breadcrumbs {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Fips", "ModernManage")">Service Register</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("ServiceLines", "ModernManage")">Service lines</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">@sl.Name</li>
+}
+
+@if (TempData["Success"] != null)
+{
+ <div class="govuk-notification-banner govuk-notification-banner--success" role="region" aria-labelledby="sl-detail-success-title">
+ <div class="govuk-notification-banner__header">
+ <h2 class="govuk-notification-banner__title" id="sl-detail-success-title">Success</h2>
+        </div>
+ <div class="govuk-notification-banner__content">
+ <p class="govuk-notification-banner__heading">@TempData["Success"]</p>
+        </div>
+    </div>
+}
+
+<div class="dfe-c-flex--between dfe-c-mb-3" style="flex-wrap:wrap;gap:1rem;align-items:flex-end;">
+ <div class="dfe-c-page-title" style="margin:0;">
+ <div class="dfe-c-page-title__caption">Service Register</div>
+ <h1 class="dfe-c-page-title__heading">@sl.Name</h1>
+    </div>
+ @if (Model.CanEdit)
+ {
+ <a class="govuk-button govuk-button--secondary" href="@Url.Action("ServiceLineEdit", "ModernManage", new { slug = sl.Slug })">Edit</a>
+    }
+</div>
+
+<div class="govuk-grid-row">
+  <div class="govuk-grid-column-two-thirds-from-desktop">
+    @if (!string.IsNullOrWhiteSpace(sl.Description))
+    {
+ <p class="govuk-body-l govuk-!-margin-bottom-6">@sl.Description</p>
+    }
+    <section class="govuk-!-margin-bottom-6" aria-labelledby="sl-sec-dir">
+      <h2 class="govuk-heading-m" id="sl-sec-dir">Directorates</h2>
+    @if (Model.Divisions.Count == 0)
+    {
+ <p class="govuk-body">None selected.</p>
+    }
+    else
+    {
+ <ul class="govuk-list govuk-list--bullet">
+ @foreach (var d in Model.Divisions)
+ {
+ <li>@d.Name</li>
+ }
+    </ul>
+    }
+    </section>
+
+    <section class="govuk-!-margin-bottom-6" aria-labelledby="sl-sec-ba">
+      <h2 class="govuk-heading-m" id="sl-sec-ba">Business areas</h2>
+    @if (Model.BusinessAreas.Count == 0)
+    {
+ <p class="govuk-body">None selected.</p>
+    }
+    else
+    {
+ <ul class="govuk-list govuk-list--bullet">
+ @foreach (var b in Model.BusinessAreas)
+ {
+ <li>@b.Name</li>
+ }
+    </ul>
+    }
+    </section>
+
+    <section class="govuk-!-margin-bottom-6" aria-labelledby="sl-sec-prd">
+      <h2 class="govuk-heading-m" id="sl-sec-prd">Service register products</h2>
+    @if (Model.Products.Count == 0)
+    {
+ <p class="govuk-body">None linked.</p>
+    }
+    else
+    {
+ <ul class="govuk-list">
+ @foreach (var p in Model.Products)
+ {
+ <li class="govuk-!-margin-bottom-1"><a class="govuk-link" href="@Url.Action("FipsProduct", "ModernManage", new { id = p.Id })">@p.Title</a></li>
+ }
+    </ul>
+    }
+    </section>
+
+    <section class="govuk-!-margin-bottom-2" aria-labelledby="sl-sec-wrk">
+      <h2 class="govuk-heading-m" id="sl-sec-wrk">Work items</h2>
+    @if (Model.Projects.Count == 0)
+    {
+ <p class="govuk-body">None linked.</p>
+    }
+    else
+    {
+ <ul class="govuk-list">
+ @foreach (var p in Model.Projects)
+ {
+ <li class="govuk-!-margin-bottom-1"><a class="govuk-link" href="@Url.Action("Detail", "ModernWork", new { id = p.Id })">@p.ProjectCode — @p.Title</a></li>
+ }
+    </ul>
+    }
+    </section>
+  </div>
+  <div class="govuk-grid-column-one-third-from-desktop">
+  <aside class="govuk-inset-text dfe-c-mb-0 govuk-!-margin-top-0" aria-labelledby="sl-meta-title">
+  <h2 class="govuk-heading-s" id="sl-meta-title">In this line</h2>
+  <dl class="govuk-summary-list">
+   <div class="govuk-summary-list__row">
+   <dt class="govuk-summary-list__key">Reporting</dt>
+   <dd class="govuk-summary-list__value">@Model.Divisions.Count directorate@(Model.Divisions.Count == 1 ? "" : "s"), @Model.BusinessAreas.Count business area@(Model.BusinessAreas.Count == 1 ? "" : "s")</dd>
+   </div>
+   <div class="govuk-summary-list__row">
+   <dt class="govuk-summary-list__key">FIPS &amp; work</dt>
+   <dd class="govuk-summary-list__value">@Model.Products.Count product@(Model.Products.Count == 1 ? "" : "s"), @Model.Projects.Count work item@(Model.Projects.Count == 1 ? "" : "s")</dd>
+   </div>
+  </dl>
+  <h3 class="govuk-heading-s govuk-!-margin-top-4" id="sl-mta-dates">Activity</h3>
+  <dl class="govuk-summary-list">
+   <div class="govuk-summary-list__row">
+   <dt class="govuk-summary-list__key">Created</dt>
+   <dd class="govuk-summary-list__value">@sl.CreatedAt.ToString("d MMM yyyy") (UTC)</dd>
+   </div>
+   <div class="govuk-summary-list__row">
+   <dt class="govuk-summary-list__key">Last updated</dt>
+   <dd class="govuk-summary-list__value">@sl.UpdatedAt.ToString("d MMM yyyy HH:mm") (UTC)</dd>
+   </div>
+  </dl>
+  </aside>
+  </div>
+</div>
+
+<p class="govuk-body govuk-!-margin-top-6"><a class="govuk-link" href="@Url.Action("ServiceLines", "ModernManage")">Back to service lines</a></p>

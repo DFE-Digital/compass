@@ -1,0 +1,111 @@
+@model IEnumerable<Compass.Models.DemandPipeline.DemandPipelineBusinessCase>
+@{
+    var list = Model?.ToList() ?? new List<Compass.Models.DemandPipeline.DemandPipelineBusinessCase>();
+    var count = list.Count;
+    var tableMode = ViewBag.TableMode as string ?? "";
+    var isSubmitted = string.Equals(tableMode, "submitted", StringComparison.OrdinalIgnoreCase);
+    var isMine = string.Equals(tableMode, "mine", StringComparison.OrdinalIgnoreCase);
+    var totalForFooter = isMine
+        ? (ViewBag.MineCasesCount as int? ?? count)
+        : (ViewBag.PipelineTotal as int? ?? count);
+}
+
+@functions {
+  (string Label, string Css) StageTag(string? stage)
+  {
+    return stage switch
+    {
+      "Ready" => ("READY TO SUBMIT", "dfe-c-tag--green"),
+      "Developing" => ("DEVELOPING", "dfe-c-tag--amber"),
+      "Idea" => ("IDEA / CONCEPT", "dfe-c-tag--blue"),
+      _ => ((stage ?? "—").ToUpperInvariant(), "dfe-c-tag--grey")
+    };
+  }
+
+  (string Label, string Css) FundingTag(string? fp)
+  {
+    if (string.IsNullOrWhiteSpace(fp)) return ("UNKNOWN", "dfe-c-tag--grey");
+    if (string.Equals(fp, "Confirmed", StringComparison.OrdinalIgnoreCase)) return ("CONFIRMED", "dfe-c-tag--green");
+    if (string.Equals(fp, "Not yet confirmed", StringComparison.OrdinalIgnoreCase)) return ("NOT CONFIRMED", "dfe-c-tag--red");
+    if (string.Equals(fp, "Not applicable", StringComparison.OrdinalIgnoreCase)) return ("N/A", "dfe-c-tag--grey");
+    return (fp.ToUpperInvariant(), "dfe-c-tag--amber");
+  }
+
+  string EstSubmit(Compass.Models.DemandPipeline.DemandPipelineBusinessCase bc)
+  {
+    if (!bc.TargetSubmissionDate.HasValue) return "TBC";
+    return bc.TargetSubmissionDate.Value.ToString("d MMM yyyy");
+  }
+}
+
+@if (count == 0)
+{
+ <p class="dfe-c-body muted dfe-c-mb-0">No business cases found.</p>
+}
+else if (isSubmitted)
+{
+ <div class="dfe-c-table-wrap">
+    <table>
+      <thead><tr><th>Business case</th><th>Business area</th><th>Lead</th><th>SRO</th><th>Stage</th><th>Submitted</th><th></th></tr></thead>
+      <tbody>
+        @foreach (var bc in list)
+        {
+          var st = StageTag(bc.Stage);
+          <tr>
+            <td>
+              <a href="@Url.Action("BusinessCaseDetail", "ModernDemand", new { id = bc.Id })">@bc.Title</a>
+ <span class="dfe-c-table-ref">@bc.Reference</span>
+            </td>
+            <td>@(bc.DepartmentGroup ?? "—")</td>
+            <td>@(bc.Lead ?? "—")</td>
+            <td>@(bc.Sro ?? "—")</td>
+ <td><span class="dfe-c-tag @st.Css">@st.Label</span></td>
+            <td>@(bc.SubmittedDate?.ToString("d MMM yyyy") ?? bc.UpdatedAt.ToString("d MMM yyyy"))</td>
+            <td>
+              @if (bc.LinkedDemandRequestId.HasValue)
+              {
+                <a href="@Url.Action("RequestDetail", "ModernDemand", new { id = bc.LinkedDemandRequestId.Value })">View demand</a>
+              }
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+ <p class="dfe-c-text-muted dfe-c-mt-1 dfe-c-mb-0" id="bc-showing">Showing @count business case@(count == 1 ? "" : "s")</p>
+}
+else
+{
+ <div class="dfe-c-table-wrap">
+    <table>
+      <thead><tr><th>Business case</th><th>Business area</th><th>Lead</th><th>SRO</th><th>Stage</th><th>Funding</th><th>Est. submit</th><th></th></tr></thead>
+      <tbody>
+        @foreach (var bc in list)
+        {
+          var st = StageTag(bc.Stage);
+          var fu = FundingTag(bc.FundingPosition);
+          var demandSubmitted = bc.LinkedDemandRequestId.HasValue;
+          <tr>
+            <td>
+              <a href="@Url.Action("BusinessCaseDetail", "ModernDemand", new { id = bc.Id })">@bc.Title</a>
+ <span class="dfe-c-table-ref">@bc.Reference</span>
+            </td>
+            <td>@(bc.DepartmentGroup ?? "—")</td>
+            <td>@(bc.Lead ?? "—")</td>
+            <td>@(bc.Sro ?? "—")</td>
+ <td><span class="dfe-c-tag @st.Css">@st.Label</span></td>
+ <td><span class="dfe-c-tag @fu.Css">@fu.Label</span></td>
+            <td>@EstSubmit(bc)</td>
+            <td>
+              @if (demandSubmitted)
+              {
+ <span class="dfe-c-tag dfe-c-tag--green">SUBMITTED</span>
+              }
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+ <p class="dfe-c-text-muted dfe-c-mt-1 dfe-c-mb-0" id="bc-showing">Showing @count of @totalForFooter business case@(totalForFooter == 1 ? "" : "s")</p>
+}

@@ -1,0 +1,231 @@
+@model IEnumerable<DemandPipelineRequest>
+@{
+  var list = Model?.ToList() ?? new List<DemandPipelineRequest>();
+  var count = list.Count;
+  var actionName = ViewBag.RegisterActionName as string ?? "Register";
+  var currentTab = ViewBag.DemandTab as string ?? "all";
+  var cAll = ViewBag.DemandTabCountAll as int? ?? 0;
+  var cDrafts = ViewBag.DemandTabCountDrafts as int? ?? 0;
+  var cIndel = ViewBag.DemandTabCountIndelivery as int? ?? 0;
+  var cRej = ViewBag.DemandTabCountRejected as int? ?? 0;
+  var cPaused = ViewBag.DemandTabCountPaused as int? ?? 0;
+  var totalInTab = ViewBag.TotalInTab as int? ?? count;
+  var stageF = ViewBag.StageFilter as string ?? "all";
+  var bandF = ViewBag.BandFilter as string;
+  var deptF = ViewBag.DepartmentFilter as string;
+  var searchF = ViewBag.Search as string;
+  var departmentGroups = ViewBag.DepartmentGroups as List<string> ?? new List<string>();
+  var stageParam = stageF == "all" ? null : stageF;
+
+  string? TabQ() => currentTab != "all" ? currentTab : null;
+}
+@functions {
+  string StatusTagMod(string? s) => s switch {
+    "Draft" => "dfe-c-tag--grey",
+    "Submitted" => "dfe-c-tag--grey",
+    "ExploratoryReview" => "dfe-c-tag--amber",
+    "Scoring" => "dfe-c-tag--blue",
+    "Scored" => "dfe-c-tag--teal",
+    "TriagePending" => "dfe-c-tag--red",
+    "Triaged" => "dfe-c-tag--green",
+    "Closed" => "dfe-c-tag--grey",
+    "Returned" => "dfe-c-tag--amber",
+    "Progressed to delivery" => "dfe-c-tag--green",
+    "Closed - Progressed to delivery" => "dfe-c-tag--green",
+    "Rejected" => "dfe-c-tag--red",
+    "Active" => "dfe-c-tag--blue",
+    "Paused" => "dfe-c-tag--grey",
+    _ => "dfe-c-tag--grey"
+  };
+  string StatusTagLabel(string? s) => s switch {
+    "Draft" => "DRAFT", "Submitted" => "SUBMITTED", "Active" => "ACTIVE", "ExploratoryReview" => "EXPLORE",
+    "Scoring" => "SCORING", "Scored" => "SCORED", "TriagePending" => "TRIAGE PENDING",
+    "Triaged" => "TRIAGED", "Closed" => "CLOSED", "Returned" => "RETURNED",
+    "Progressed to delivery" => "PROGRESSED", "Closed - Progressed to delivery" => "CLOSED",
+    "Rejected" => "REJECTED", "Paused" => "PAUSED", _ => (s ?? "—").ToUpperInvariant()
+  };
+  string BandClass(string? b) => b switch {
+    "MustDo" => "dfe-c-band--must",
+    "CouldDo" => "dfe-c-band--could",
+    "DoNotDo" => "dfe-c-band--not",
+    _ => ""
+  };
+  string BandDisplay(string? b) => b switch {
+    "MustDo" => "MUST DO", "CouldDo" => "COULD DO", "DoNotDo" => "DO NOT DO", _ => ""
+  };
+  string ScoreColour(int? score) {
+    if (score == null) return "inherit";
+    if (score >= 57) return "var(--green)";
+    if (score >= 21) return "var(--rag-a)";
+    return "var(--rag-r)";
+  }
+  string OutcomeTagMod(string? o) => o switch {
+    "Progress" => "dfe-c-tag--blue",
+    "Reject" => "dfe-c-tag--red",
+    "Pause" => "dfe-c-tag--amber",
+    "FurtherInvestigation" => "dfe-c-tag--grey",
+    _ => "dfe-c-tag--grey"
+  };
+  string OutcomeTagLabel(string? o) => o switch {
+    "Progress" => "PROGRESSED", "Reject" => "REJECTED", "Pause" => "PAUSED",
+    "FurtherInvestigation" => "FURTHER INVESTIGATION", _ => ""
+  };
+}
+
+<div id="sc-demand-index">
+ <div class="dfe-c-flex--between dfe-c-mb-3" style="flex-wrap:wrap;gap:1rem;">
+ <div class="dfe-c-page-title" style="margin:0;">
+ <div class="dfe-c-page-title__caption">Demand pipeline</div>
+ <h1 class="dfe-c-page-title__heading">Demand register</h1>
+ <p class="dfe-c-page-title__lede">@totalInTab request@(totalInTab == 1 ? "" : "s") across @(
+        currentTab == "all" ? "active stages" :
+        currentTab == "drafts" ? "drafts" :
+        currentTab == "indelivery" ? "in delivery" :
+        currentTab == "rejected" ? "rejected" :
+        currentTab == "paused" ? "paused" : "this view")</p>
+    </div>
+ <div class="dfe-c-flex" style="gap:0.5rem;flex-wrap:wrap;">
+ <a href="@Url.Action("BusinessCaseNew", "ModernDemand")" class="govuk-button govuk-button--secondary">Add business case</a>
+ <a href="@Url.Action("Submit", "ModernDemand")" class="govuk-button">Add demand</a>
+    </div>
+  </div>
+
+ <div class="tabs dfe-c-mb-3" role="tablist" aria-label="Demand register sections">
+ <a href="@Url.Action(actionName, "ModernDemand", new { tab = (string?)null })" class="tab @(currentTab =="all" ? "on" : "")" role="tab" aria-selected="@(currentTab == "all")" aria-controls="d-demand-panel" id="tab-demand-all">Active demand (@cAll)</a>
+ <a href="@Url.Action(actionName, "ModernDemand", new { tab = "drafts" })" class="tab @(currentTab =="drafts" ? "on" : "")" role="tab" aria-selected="@(currentTab == "drafts")" aria-controls="d-demand-panel" id="tab-demand-drafts">Drafts (@cDrafts)</a>
+ <a href="@Url.Action(actionName, "ModernDemand", new { tab = "indelivery" })" class="tab @(currentTab =="indelivery" ? "on" : "")" role="tab" aria-selected="@(currentTab == "indelivery")" aria-controls="d-demand-panel" id="tab-demand-indelivery">In delivery (@cIndel)</a>
+ <a href="@Url.Action(actionName, "ModernDemand", new { tab = "rejected" })" class="tab @(currentTab =="rejected" ? "on" : "")" role="tab" aria-selected="@(currentTab == "rejected")" aria-controls="d-demand-panel" id="tab-demand-rejected">Rejected (@cRej)</a>
+ <a href="@Url.Action(actionName, "ModernDemand", new { tab = "paused" })" class="tab @(currentTab =="paused" ? "on" : "")" role="tab" aria-selected="@(currentTab == "paused")" aria-controls="d-demand-panel" id="tab-demand-paused">Paused (@cPaused)</a>
+  </div>
+
+ <form method="get" action="@Url.Action(actionName, "ModernDemand")" id="demand-register-filter-form" class="dfe-c-mb-3">
+    @if (currentTab != "all") { <input type="hidden" name="tab" value="@currentTab" /> }
+    <div id="search-and-filter">
+ <div class="filter-toolbar">
+ <div class="filter-toolbar__search-wrap">
+ <input type="search" name="search" id="dr-register-search" value="@searchF" placeholder="Search demand requests…" class="filter-search" autocomplete="off" aria-label="Search demand requests" />
+ <button type="submit" class="govuk-button govuk-button--secondary filter-toolbar__search-submit" id="dr-search-submit">Search</button>
+        </div>
+ <button type="button" class="filter-toggle-btn" id="dr-filter-btn" aria-expanded="false" aria-controls="dr-filter-panel">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="flex-shrink:0;" aria-hidden="true"><path d="M1 3h14v1.5l-5 5V14l-4-2V9.5L1 4.5V3z"></path></svg>
+ <span class="filter-toggle-label">Filter</span>
+        </button>
+      </div>
+ <div class="filter-panel" id="dr-filter-panel">
+ <div class="filter-panel__grid">
+          <div>
+            <label for="dr-filter-stage">Status</label>
+ <select name="stage" id="dr-filter-stage" class="govuk-select">
+              @{ var stageOpts = new[] { ("", "All", "all"), ("submitted", "Submitted", "submitted"), ("in-review", "Explore", "in-review"), ("scoring", "Scoring", "scoring"), ("scored", "Scored", "scored"), ("triaged", "Triaged", "triaged") }; }
+              @foreach (var (val, label, matchKey) in stageOpts)
+              {
+                if (stageF == matchKey) { <option value="@val" selected>@label</option> }
+                else { <option value="@val">@label</option> }
+              }
+            </select>
+          </div>
+          <div>
+            <label for="dr-filter-band">Band</label>
+ <select name="band" id="dr-filter-band" class="govuk-select">
+              @{ var bandOpts = new[] { ("", "All"), ("MustDo", "Must do"), ("CouldDo", "Could do"), ("DoNotDo", "Do not do") }; }
+              @foreach (var (val, label) in bandOpts)
+              {
+                if ((string.IsNullOrEmpty(val) && string.IsNullOrEmpty(bandF)) || val == bandF) { <option value="@val" selected>@label</option> }
+                else { <option value="@val">@label</option> }
+              }
+            </select>
+          </div>
+          <div>
+            <label for="dr-filter-dept">Business area</label>
+ <select name="department" id="dr-filter-dept" class="govuk-select">
+              <option value="">All departments</option>
+              @foreach (var g in departmentGroups)
+              {
+                if (deptF == g) { <option value="@g" selected>@g</option> }
+                else { <option value="@g">@g</option> }
+              }
+            </select>
+          </div>
+        </div>
+ <div class="filter-panel__actions">
+ <button type="submit" class="govuk-button">Apply filters</button>
+ <a href="@Url.Action(actionName, "ModernDemand", new { tab = TabQ() })" class="govuk-link">Clear filters</a>
+        </div>
+      </div>
+    </div>
+  </form>
+
+ <div id="d-demand-panel" class="tab-pane on" role="tabpanel">
+
+  @if (!list.Any())
+  {
+ <p class="dfe-c-body dfe-c-text-muted">@(currentTab == "all" ? "No active demand requests match your filters." : currentTab == "indelivery" ? "No demands in delivery." : "No demand requests found.")</p>
+  }
+  else
+  {
+ <div class="dfe-c-table-wrap">
+      <table>
+        <thead><tr><th>Request</th><th>Business area</th><th>SRO</th><th>Status</th><th>Score</th><th>Band</th><th>Outcome</th><th>Submitted by</th><th>Submitted</th></tr></thead>
+        <tbody>
+          @foreach (var d in list)
+          {
+            var rowHref = d.Status == "Draft"
+              ? Url.Action("Submit", "ModernDemand", new { id = d.Id })
+              : Url.Action("RequestDetail", "ModernDemand", new { id = d.Id });
+            <tr>
+              <td>
+                @if (d.Status == "Draft")
+                {
+                  <a href="@Url.Action("Submit", "ModernDemand", new { id = d.Id })">@(string.IsNullOrEmpty(d.Title) ? "Untitled draft" : d.Title)</a>
+ <span class="dfe-c-table-ref">@d.Reference · <a href="@Url.Action("Submit", "ModernDemand", new { id = d.Id })" onclick="event.stopPropagation();">Continue editing</a></span>
+                }
+                else
+                {
+                  <a href="@Url.Action("RequestDetail", "ModernDemand", new { id = d.Id })"><strong>@d.Title</strong></a>
+ <span class="dfe-c-table-ref">@d.Reference</span>
+                }
+              </td>
+              <td>@(d.DepartmentGroup ?? "—")</td>
+              <td>@(d.Sro ?? "—")</td>
+ <td><span class="dfe-c-tag @StatusTagMod(d.Status)">@StatusTagLabel(d.Status)</span></td>
+              <td>
+                @if (d.TotalScore.HasValue)
+                {
+                  <strong style="color:@ScoreColour(d.TotalScore)">@d.TotalScore</strong>
+                }
+                else
+                {
+ <span class="dfe-c-text-muted">—</span>
+                }
+              </td>
+              <td>
+                @if (!string.IsNullOrEmpty(d.SuggestedBand) && !string.IsNullOrEmpty(BandClass(d.SuggestedBand)))
+                {
+ <span class="@BandClass(d.SuggestedBand)">@BandDisplay(d.SuggestedBand)</span>
+                }
+                else
+                {
+ <span class="dfe-c-text-muted">—</span>
+                }
+              </td>
+              <td>
+                @if (!string.IsNullOrEmpty(d.TriageOutcome) && !string.IsNullOrEmpty(OutcomeTagLabel(d.TriageOutcome)))
+                {
+ <span class="dfe-c-tag @OutcomeTagMod(d.TriageOutcome)">@OutcomeTagLabel(d.TriageOutcome)</span>
+                }
+                else
+                {
+ <span class="dfe-c-text-muted">—</span>
+                }
+              </td>
+              <td>@(d.SubmittedBy ?? "—")</td>
+              <td>@(d.SubmittedDate?.ToString("d MMM yyyy") ?? "—")</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+ <p class="dfe-c-text-muted dfe-c-mt-1" id="dr-showing">Showing @count of @totalInTab demand@(totalInTab == 1 ? "" : "s")</p>
+  }
+  </div>
+</div>

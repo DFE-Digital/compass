@@ -1,0 +1,110 @@
+@model Compass.ViewModels.Modern.DemandTriageHubViewModel
+@using Compass.Models.DemandPipeline
+@{
+  ViewData["Title"] = "Triage";
+  ViewBag.QueueEmptyMessage = "No demands are currently queued for triage (scored or triage pending).";
+  var selectedId = Model.SelectedMeetingId;
+}
+@section Breadcrumbs {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernDemand")">Demand</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">Triage</li>
+}
+
+<div id="sc-demand-triage">
+ <div class="dfe-c-flex--between dfe-c-mb-3" style="flex-wrap:wrap;gap:1rem;">
+ <div class="dfe-c-page-title" style="margin:0;">
+ <div class="dfe-c-page-title__caption">Demand pipeline</div>
+ <h1 class="dfe-c-page-title__heading">Triage</h1>
+ <p class="dfe-c-page-title__lede">Triage meetings, items per meeting, and the full triage queue</p>
+    </div>
+  </div>
+
+ <h2 class="dfe-c-heading-m dfe-c-mb-2">Triage meetings</h2>
+ <p class="govuk-body govuk-!-margin-bottom-3">Select a meeting to see demands assigned to it. Open a demand to record the outcome on the <strong>Triage</strong> tab.</p>
+
+ <div class="dfe-c-table-wrap dfe-c-mb-4">
+    <table>
+      <thead><tr><th>Meeting</th><th>When</th><th>Items in queue</th><th></th></tr></thead>
+      <tbody>
+        @if (Model.Meetings.Count == 0)
+        {
+          <tr>
+            <td colspan="4">No triage meetings have been set up yet. Central Operations can add meetings under <a href="@Url.Action("ManageTriage", "ModernOperations")">Operations → Manage triage</a>.</td>
+          </tr>
+        }
+        else
+        {
+          @foreach (var row in Model.Meetings)
+          {
+            var m = row.Meeting;
+            var isSelected = selectedId == m.Id;
+            <tr>
+              <td>
+                <strong>@(string.IsNullOrWhiteSpace(m.Name) ? "Triage meeting" : m.Name)</strong>
+                @if (!string.IsNullOrWhiteSpace(m.Location))
+                {
+ <span class="dfe-c-table-ref">@m.Location</span>
+                }
+              </td>
+              <td>@FormatTriageWhen(m)</td>
+              <td>@row.DemandCount</td>
+              <td>
+                @if (isSelected)
+                {
+                  <a href="@Url.Action("Triage", "ModernDemand")">Clear selection</a>
+                }
+                else
+                {
+                  <a href="@Url.Action("Triage", "ModernDemand", new { meetingId = m.Id })">View items</a>
+                }
+              </td>
+            </tr>
+          }
+        }
+      </tbody>
+    </table>
+  </div>
+
+  @if (selectedId.HasValue && Model.MeetingDemands != null)
+  {
+    var meetingName = Model.Meetings.FirstOrDefault(r => r.Meeting.Id == selectedId.Value)?.Meeting.Name ?? "Meeting";
+ <h2 class="dfe-c-heading-m dfe-c-mb-2">Demands in this meeting</h2>
+ <p class="govuk-body govuk-!-margin-bottom-3">Showing queued demands assigned to <strong>@(string.IsNullOrWhiteSpace(meetingName) ? "the selected meeting" : meetingName)</strong>.</p>
+    @if (Model.MeetingDemands.Count == 0)
+    {
+ <p class="govuk-body">No queued demands are assigned to this meeting.</p>
+    }
+    else
+    {
+ <div class="dfe-c-table-wrap dfe-c-mb-4">
+        <table>
+          <thead><tr><th>Reference</th><th>Title</th><th>Status</th><th></th></tr></thead>
+          <tbody>
+            @foreach (var d in Model.MeetingDemands)
+            {
+              <tr>
+                <td>@d.Reference</td>
+                <td><a href="@Url.Action("RequestDetail", "ModernDemand", new { id = d.Id, tab = "triage" })">@d.Title</a></td>
+                <td>@d.Status</td>
+                <td><a href="@Url.Action("RequestDetail", "ModernDemand", new { id = d.Id, tab = "triage" })">Open triage</a></td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  }
+
+ <h2 class="dfe-c-heading-m dfe-c-mb-2">Full triage queue</h2>
+  @await Html.PartialAsync("~/Views/Modern/Demand/_DemandQueueTable.cshtml", Model.TriageQueue)
+</div>
+
+@functions {
+  private static string FormatTriageWhen(DemandPipelineTriageMeeting tm)
+  {
+    var datePart = tm.MeetingDate?.ToString("dddd d MMMM yyyy") ?? "Date TBC";
+    if (!string.IsNullOrWhiteSpace(tm.StartTime) || !string.IsNullOrWhiteSpace(tm.EndTime))
+      return $"{datePart} · {(tm.StartTime ?? "").Trim()}–{(tm.EndTime ?? "").Trim()}";
+    return datePart;
+  }
+}

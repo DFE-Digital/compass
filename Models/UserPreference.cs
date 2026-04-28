@@ -37,6 +37,9 @@ public class UserPreference
     [Column(TypeName = "nvarchar(max)")]
     public string? DashboardLayout { get; set; }
 
+    /// <summary>Optional default filter for RAID risks/issues registers (<see cref="BusinessAreaLookup"/>).</summary>
+    public int? RaidRegisterBusinessAreaLookupId { get; set; }
+
     [Required]
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 

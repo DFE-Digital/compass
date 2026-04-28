@@ -1,0 +1,496 @@
+@model ModernPerformanceCommissionSubmitViewModel
+@using Compass.Models
+@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
+@{
+  ViewData["Title"] = "Enter metrics — " + Model.Product.Title;
+  var c = Model.Commission;
+  var sub = Model.Submission;
+  var fipsBaseUrl = Configuration["fipsProduct:baseUrl"] ?? "https://fips.education.gov.uk";
+  string? fipsProductUrl = null;
+  if (!string.IsNullOrEmpty(Model.Product.DocumentId))
+    fipsProductUrl = $"{fipsBaseUrl.TrimEnd('/')}/product/{Model.Product.DocumentId}";
+  else if (!string.IsNullOrEmpty(Model.Product.FipsId))
+    fipsProductUrl = $"{fipsBaseUrl.TrimEnd('/')}/product/{Model.Product.FipsId}";
+
+  bool IsSubmittedView(CommissionSubmissionStatus s) =>
+    s == CommissionSubmissionStatus.Submitted || s == CommissionSubmissionStatus.Late;
+
+  var metricsLocked = Model.IsReadOnly || IsSubmittedView(sub.Status);
+  var saveMetricUrl = Url.Action("SaveCommissionMetricValue", "ModernPerformance") ?? "";
+}
+
+@section Breadcrumbs {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernPerformance")">Performance</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Commission", "ModernPerformance", new { commissionId = c.Id, tab = Model.ReturnTab })">@c.Name</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">Enter metrics</li>
+}
+
+@if (TempData["ErrorMessage"] != null)
+{
+ <div class="govuk-error-summary dfe-c-mb-4" role="alert" tabindex="-1">
+ <h2 class="govuk-error-summary__title">There is a problem</h2>
+ <div class="govuk-error-summary__body"><p class="govuk-body govuk-!-margin-bottom-0">@TempData["ErrorMessage"]</p></div>
+  </div>
+}
+@if (TempData["SuccessMessage"] != null)
+{
+ <div class="govuk-notification-banner govuk-notification-banner--success dfe-c-mb-4" role="region">
+ <div class="govuk-notification-banner__content"><p class="govuk-body govuk-!-margin-bottom-0">@TempData["SuccessMessage"]</p></div>
+  </div>
+}
+@if (TempData["WarningMessage"] != null)
+{
+ <div class="govuk-warning-text dfe-c-mb-4">
+ <span class="govuk-warning-text__icon" aria-hidden="true">!</span>
+ <strong class="govuk-warning-text__text"><span class="govuk-warning-text__assistive">Warning</span>@TempData["WarningMessage"]</strong>
+  </div>
+}
+
+<a class="govuk-back-link" href="@Url.Action("Commission", "ModernPerformance", new { commissionId = c.Id, tab = Model.ReturnTab })">Back to @c.Name</a>
+
+<div class="dfe-c-page-title dfe-c-mb-4">
+ <div class="dfe-c-page-title__caption">Commission</div>
+ <h1 class="dfe-c-page-title__heading govuk-!-margin-bottom-2">@Model.Product.Title</h1>
+ <p class="govuk-body dfe-c-mb-1"><strong>Reporting period:</strong> @CommissionDisplay.FormatPeriod(c.StartDate, c.EndDate)</p>
+ <p class="govuk-body dfe-c-mb-1"><strong>Due date:</strong> @CommissionDisplay.FormatDueDate(c.DueDate)</p>
+  @if (Model.IsPastDue)
+  {
+ <p class="govuk-body-s dfe-c-text-muted">This commission is past due — returns are read-only.</p>
+  }
+</div>
+
+@if (Model.HasNoProductTypes)
+{
+ <div class="govuk-warning-text">
+ <span class="govuk-warning-text__icon" aria-hidden="true">!</span>
+ <strong class="govuk-warning-text__text">
+ <span class="govuk-warning-text__assistive">Warning</span>
+      This product does not have any types assigned.
+      @if (!string.IsNullOrEmpty(fipsProductUrl))
+      {
+ <span class="govuk-body"><a class="govuk-link" href="@fipsProductUrl" target="_blank" rel="noopener noreferrer">Visit the FIPS entry</a> and request categories to be updated via &quot;Propose a change&quot;.</span>
+      }
+    </strong>
+  </div>
+}
+else
+{
+ <div class="dfe-c-table-wrap dfe-c-mb-4">
+    <table>
+      <thead>
+        <tr>
+          <th scope="col">Metric</th>
+          <th scope="col">Value</th>
+          <th scope="col">Status</th>
+        </tr>
+      </thead>
+      <tbody>
+      @foreach (var metricValue in Model.MetricValues)
+      {
+        <tr id="row-@metricValue.Id">
+          <td>
+            <button type="button"
+ class="govuk-link govuk-link--no-visited-state dfe-c-metric-edit-btn"
+                    style="background:none;border:none;padding:0;cursor:pointer;text-align:left;font:inherit;color:#1d70b8;"
+                    data-id="@metricValue.Id"
+                    data-identifier="@metricValue.PerformanceMetric?.Identifier"
+                    data-title="@metricValue.PerformanceMetric?.Title"
+                    data-value="@metricValue.Value"
+                    data-is-not-captured="@metricValue.IsNotCaptured.ToString().ToLowerInvariant()"
+                    data-not-captured-reason="@metricValue.NotCapturedReason"
+                    data-type="@((int)(metricValue.PerformanceMetric?.ValueType ?? Compass.Models.ValueType.Text))"
+                    data-rules="@metricValue.PerformanceMetric?.ValidationRules"
+                    data-hint="@metricValue.PerformanceMetric?.HintText"
+                    data-read-only="@metricsLocked.ToString().ToLowerInvariant()">
+              <strong>@metricValue.PerformanceMetric?.Title</strong>
+            </button>
+            @if (!string.IsNullOrWhiteSpace(metricValue.PerformanceMetric?.Description))
+            {
+ <div class="govuk-body-s dfe-c-text-muted govuk-!-margin-top-1">@metricValue.PerformanceMetric.Description</div>
+            }
+          </td>
+          <td>
+ <span id="display-@metricValue.Id" class="govuk-body">
+              @if (metricValue.IsNotCaptured)
+              {
+ <span class="dfe-c-text-muted">Not captured</span>
+              }
+              else if (!string.IsNullOrEmpty(metricValue.Value))
+              {
+                @metricValue.Value
+              }
+              else if (metricValue.IsComplete && string.IsNullOrEmpty(metricValue.Value))
+              {
+ <span class="dfe-c-text-muted">Unreported</span>
+              }
+              else
+              {
+ <span class="dfe-c-text-muted">Not entered</span>
+              }
+            </span>
+          </td>
+          <td>
+            @if (metricValue.IsComplete)
+            {
+ <span class="dfe-c-tag dfe-c-tag--green">Complete</span>
+            }
+            else
+            {
+ <span class="dfe-c-tag dfe-c-tag--grey">Pending</span>
+            }
+          </td>
+        </tr>
+      }
+      </tbody>
+    </table>
+  </div>
+
+  @if (IsSubmittedView(sub.Status))
+  {
+ <h3 class="govuk-heading-s">Comments or notes</h3>
+    @if (Model.IsPastDue)
+    {
+      if (!string.IsNullOrWhiteSpace(sub.Comments))
+      {
+ <p class="govuk-body" style="white-space: pre-wrap;">@sub.Comments</p>
+      }
+      else
+      {
+ <p class="govuk-body dfe-c-text-muted">No comments provided.</p>
+      }
+    }
+    else
+    {
+ <form method="post" asp-controller="ModernPerformance" asp-action="CommissionUpdateComments" class="govuk-!-margin-bottom-4">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="id" value="@sub.Id" />
+        <input type="hidden" name="returnTab" value="@Model.ReturnTab" />
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="comments-submitted">Optional notes for reviewers</label>
+ <textarea class="govuk-textarea" id="comments-submitted" name="comments" rows="4">@sub.Comments</textarea>
+        </div>
+ <button type="submit" class="govuk-button govuk-button--secondary">Update comments</button>
+      </form>
+    }
+
+ <div class="govuk-button-group">
+      @if (Model.IsPastDue)
+      {
+ <p class="govuk-body dfe-c-text-muted govuk-!-margin-bottom-0">This submission is locked because the commission due date has passed.</p>
+      }
+      else
+      {
+        <form method="post" asp-controller="ModernPerformance" asp-action="CommissionUnsubmit"
+              data-confirm-title="Unsubmit this return?"
+              data-confirm-message="You will be able to edit metrics and submit again.">
+          @Html.AntiForgeryToken()
+          <input type="hidden" name="id" value="@sub.Id" />
+          <input type="hidden" name="returnTab" value="@Model.ReturnTab" />
+ <button type="submit" class="govuk-button govuk-button--warning">Unsubmit</button>
+        </form>
+      }
+      @if (sub.SubmittedDate.HasValue)
+      {
+ <p class="govuk-body-s dfe-c-text-muted govuk-!-margin-bottom-0">Submitted @sub.SubmittedDate.Value.ToString("dd MMM yyyy HH:mm")</p>
+      }
+    </div>
+  }
+  else if (!Model.IsReadOnly && Model.MetricValues.All(m => m.IsComplete))
+  {
+ <form method="post" asp-controller="ModernPerformance" asp-action="CommissionSubmitConfirm" asp-route-commissionId="@c.Id" class="govuk-!-margin-top-4">
+      @Html.AntiForgeryToken()
+      <input type="hidden" name="id" value="@sub.Id" />
+      <input type="hidden" name="returnTab" value="@Model.ReturnTab" />
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="comments-draft">Comments or notes (optional)</label>
+ <div class="govuk-hint" id="comments-draft-hint">Context for reviewers, for example how a figure was calculated.</div>
+ <textarea class="govuk-textarea" id="comments-draft" name="comments" rows="4" aria-describedby="comments-draft-hint">@sub.Comments</textarea>
+      </div>
+ <div class="govuk-button-group">
+ <button type="submit" class="govuk-button">Submit and confirm</button>
+ <a class="govuk-button govuk-button--secondary" href="@Url.Action("Commission", "ModernPerformance", new { commissionId = c.Id, tab = Model.ReturnTab })">Cancel</a>
+      </div>
+    </form>
+  }
+  else if (!Model.IsReadOnly)
+  {
+ <p class="govuk-body dfe-c-text-muted">Complete all metrics to enable submission.</p>
+  }
+}
+
+@Html.AntiForgeryToken()
+
+<div id="metric-edit-overlay" class="confirm-modal-overlay" role="presentation" aria-hidden="true" style="display: none;">
+ <div id="metric-edit-dialog" class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="metric-edit-title" style="display: none; max-width: 40rem;">
+ <h2 id="metric-edit-title" class="confirm-modal__title">Edit metric</h2>
+ <div id="metric-readonly-notice" class="govuk-inset-text govuk-!-margin-bottom-3" hidden>
+ <p class="govuk-body govuk-!-margin-bottom-0">This return cannot be edited.</p>
+    </div>
+ <div class="govuk-form-group">
+ <label class="govuk-label" id="metric-edit-label" for="metric-edit-value"></label>
+ <input class="govuk-input" id="metric-edit-value" name="metric-edit-value" type="text" autocomplete="off" />
+ <div class="govuk-hint" id="metric-edit-hint"></div>
+ <p id="metric-edit-error" class="govuk-error-message" hidden></p>
+    </div>
+ <div class="govuk-form-group" id="metric-not-captured-group" hidden>
+ <div class="govuk-checkboxes" data-module="govuk-checkboxes">
+ <div class="govuk-checkboxes__item">
+ <input class="govuk-checkboxes__input" id="metric-not-captured" type="checkbox" />
+ <label class="govuk-label govuk-checkboxes__label" for="metric-not-captured">Metric not captured</label>
+        </div>
+      </div>
+    </div>
+ <div class="govuk-form-group" id="metric-not-captured-reason-group" hidden>
+ <label class="govuk-label" for="metric-not-captured-reason">Reason for not capturing</label>
+ <textarea class="govuk-textarea" id="metric-not-captured-reason" rows="3"></textarea>
+ <p id="metric-not-captured-reason-error" class="govuk-error-message" hidden></p>
+    </div>
+ <div class="confirm-modal__actions">
+ <button type="button" class="govuk-button" id="metric-edit-save">Save</button>
+ <button type="button" class="govuk-button govuk-button--secondary" id="metric-edit-cancel">Cancel</button>
+    </div>
+  </div>
+</div>
+
+@section Scripts {
+  <script nonce="@Context.Items["Nonce"]">
+    (function () {
+      var saveUrl = @Json.Serialize(saveMetricUrl);
+      var tokenEl = document.querySelector('input[name="__RequestVerificationToken"]');
+      var token = tokenEl ? tokenEl.value : '';
+      var overlay = document.getElementById('metric-edit-overlay');
+      var dialog = document.getElementById('metric-edit-dialog');
+      var currentMetricId = null;
+      var currentRowBtn = null;
+
+      function showOverlay() {
+        overlay.style.display = 'flex';
+        overlay.setAttribute('aria-hidden', 'false');
+        dialog.style.display = 'block';
+        document.getElementById('metric-edit-value').focus();
+      }
+      function hideOverlay() {
+        overlay.style.display = 'none';
+        overlay.setAttribute('aria-hidden', 'true');
+        dialog.style.display = 'none';
+        currentMetricId = null;
+        currentRowBtn = null;
+      }
+
+      function parseRules(rulesJson) {
+        if (!rulesJson) return null;
+        try {
+          return typeof rulesJson === 'string' ? JSON.parse(rulesJson) : rulesJson;
+        } catch (e) { return null; }
+      }
+
+      function validateValue(value, valueType, rules) {
+        var isEmpty = !value || String(value).trim() === '';
+        if (rules && rules.required && isEmpty && !rules.allowNull)
+          return 'This field is required';
+        if (isEmpty) return null;
+        value = String(value).trim();
+        if (valueType === 1) {
+          if (!/^-?\d+$/.test(value)) return 'Value must be a whole number';
+          var numValue = parseInt(value, 10);
+          if (rules && rules.minimumValue !== undefined && numValue < rules.minimumValue)
+            return 'Value must be at least ' + rules.minimumValue;
+          if (rules && rules.maximumValue !== undefined && numValue > rules.maximumValue)
+            return 'Value must be at most ' + rules.maximumValue;
+        } else if (valueType === 2) {
+          if (!/^-?\d*\.?\d+$/.test(value)) return 'Value must be a decimal number';
+          var decValue = parseFloat(value);
+          if (rules && rules.minimumValue !== undefined && decValue < rules.minimumValue)
+            return 'Value must be at least ' + rules.minimumValue;
+          if (rules && rules.maximumValue !== undefined && decValue > rules.maximumValue)
+            return 'Value must be at most ' + rules.maximumValue;
+          if (rules && rules.decimalPlaces !== undefined) {
+            var parts = value.split('.');
+            var decimalPart = parts[1];
+            if (decimalPart && decimalPart.length > rules.decimalPlaces)
+              return 'Value must have at most ' + rules.decimalPlaces + ' decimal places';
+          }
+        } else if (valueType === 3) {
+          if (!/^\d*\.?\d+$/.test(value)) return 'Value must be a valid percentage';
+          var percValue = parseFloat(value);
+          if (percValue < 0 || percValue > 100) return 'Percentage must be between 0 and 100';
+          if (rules && rules.minimumValue !== undefined && percValue < rules.minimumValue)
+            return 'Value must be at least ' + rules.minimumValue;
+          if (rules && rules.maximumValue !== undefined && percValue > rules.maximumValue)
+            return 'Value must be at most ' + rules.maximumValue;
+          if (rules && rules.decimalPlaces !== undefined) {
+            var p = value.split('.')[1];
+            if (p && p.length > rules.decimalPlaces)
+              return 'Value must have at most ' + rules.decimalPlaces + ' decimal places';
+          }
+        }
+        return null;
+      }
+
+      document.querySelectorAll('.dfe-c-metric-edit-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          currentRowBtn = btn;
+          currentMetricId = btn.getAttribute('data-id');
+          var title = btn.getAttribute('data-title') || '';
+          var value = btn.getAttribute('data-value') || '';
+          var isNotCaptured = btn.getAttribute('data-is-not-captured') === 'true';
+          var notCapturedReason = btn.getAttribute('data-not-captured-reason') || '';
+          var isReadOnly = btn.getAttribute('data-read-only') === 'true';
+          var type = parseInt(btn.getAttribute('data-type') || '0', 10);
+          var rules = parseRules(btn.getAttribute('data-rules'));
+          var hint = btn.getAttribute('data-hint') || '';
+
+          document.getElementById('metric-edit-label').textContent = title;
+          document.getElementById('metric-edit-hint').textContent = hint || 'Enter value';
+          var input = document.getElementById('metric-edit-value');
+          input.value = value;
+          input.disabled = false;
+          document.getElementById('metric-edit-error').hidden = true;
+          document.getElementById('metric-edit-error').textContent = '';
+          document.getElementById('metric-not-captured-reason-error').hidden = true;
+
+          var ro = document.getElementById('metric-readonly-notice');
+          var saveBtn = document.getElementById('metric-edit-save');
+          if (isReadOnly) {
+            ro.hidden = false;
+            saveBtn.hidden = true;
+            input.disabled = true;
+          } else {
+            ro.hidden = true;
+            saveBtn.hidden = false;
+          }
+
+          if (type === 1) {
+            input.type = 'number';
+            input.step = '1';
+            if (rules && rules.minimumValue !== undefined) input.min = rules.minimumValue;
+            if (rules && rules.maximumValue !== undefined) input.max = rules.maximumValue;
+          } else if (type === 2) {
+            input.type = 'number';
+            input.step = 'any';
+            if (rules && rules.minimumValue !== undefined) input.min = rules.minimumValue;
+            if (rules && rules.maximumValue !== undefined) input.max = rules.maximumValue;
+          } else if (type === 3) {
+            input.type = 'number';
+            input.step = 'any';
+            input.min = '0';
+            input.max = '100';
+            if (rules && rules.minimumValue !== undefined) input.min = rules.minimumValue;
+            if (rules && rules.maximumValue !== undefined) input.max = rules.maximumValue;
+          } else {
+            input.type = 'text';
+            input.removeAttribute('min');
+            input.removeAttribute('max');
+            input.removeAttribute('step');
+          }
+
+          var ncGroup = document.getElementById('metric-not-captured-group');
+          var ncReasonGroup = document.getElementById('metric-not-captured-reason-group');
+          var nc = document.getElementById('metric-not-captured');
+          var ncr = document.getElementById('metric-not-captured-reason');
+          if (rules && rules.allowNull === true && !isReadOnly) {
+            ncGroup.hidden = false;
+            nc.checked = isNotCaptured;
+            if (isNotCaptured) {
+              ncReasonGroup.hidden = false;
+              ncr.value = notCapturedReason;
+              input.disabled = true;
+            } else {
+              ncReasonGroup.hidden = true;
+              ncr.value = '';
+            }
+          } else {
+            ncGroup.hidden = true;
+            ncReasonGroup.hidden = true;
+            nc.checked = false;
+            ncr.value = '';
+          }
+
+          nc.onchange = function () {
+            if (nc.checked) {
+              ncReasonGroup.hidden = false;
+              input.disabled = true;
+            } else {
+              ncReasonGroup.hidden = true;
+              ncr.value = '';
+              if (!isReadOnly) input.disabled = false;
+            }
+          };
+
+          showOverlay();
+        });
+      });
+
+      document.getElementById('metric-edit-cancel').addEventListener('click', hideOverlay);
+      overlay.addEventListener('click', function (e) {
+        if (e.target === overlay) hideOverlay();
+      });
+      document.addEventListener('keydown', function (e) {
+        if (overlay.style.display === 'flex' && e.key === 'Escape') hideOverlay();
+      });
+
+      document.getElementById('metric-edit-save').addEventListener('click', function () {
+        if (!currentMetricId || !saveUrl) return;
+        var nc = document.getElementById('metric-not-captured');
+        var ncGrp = document.getElementById('metric-not-captured-group');
+        var isNotCaptured = ncGrp && !ncGrp.hidden && nc.checked;
+        var input = document.getElementById('metric-edit-value');
+        var val = isNotCaptured ? '' : (input.value || '').trim();
+        var rules = currentRowBtn ? parseRules(currentRowBtn.getAttribute('data-rules')) : null;
+        var valueType = currentRowBtn ? parseInt(currentRowBtn.getAttribute('data-type') || '0', 10) : 0;
+
+        var errEl = document.getElementById('metric-edit-error');
+        var ncrEl = document.getElementById('metric-not-captured-reason');
+        var ncrErr = document.getElementById('metric-not-captured-reason-error');
+
+        if (isNotCaptured) {
+          var nr = (ncrEl.value || '').trim();
+          if (!nr) {
+            ncrErr.textContent = 'Please provide a reason for not capturing this metric';
+            ncrErr.hidden = false;
+            return;
+          }
+          ncrErr.hidden = true;
+        } else {
+          var verr = validateValue(val, valueType, rules);
+          if (verr) {
+            errEl.textContent = verr;
+            errEl.hidden = false;
+            return;
+          }
+          errEl.hidden = true;
+        }
+
+        var body = new URLSearchParams();
+        body.append('id', currentMetricId);
+        body.append('value', val);
+        body.append('isNotCaptured', isNotCaptured ? 'true' : 'false');
+        body.append('notCapturedReason', isNotCaptured ? (ncrEl.value || '').trim() : '');
+        body.append('__RequestVerificationToken', token);
+
+        fetch(saveUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'RequestVerificationToken': token
+          },
+          body: body.toString()
+        })
+          .then(function (r) { return r.json(); })
+          .then(function (data) {
+            if (data && data.success) {
+              window.location.reload();
+            } else {
+              errEl.textContent = (data && data.message) ? data.message : 'Error saving value';
+              errEl.hidden = false;
+            }
+          })
+          .catch(function () {
+            errEl.textContent = 'An error occurred while saving';
+            errEl.hidden = false;
+          });
+      });
+    })();
+  </script>
+}

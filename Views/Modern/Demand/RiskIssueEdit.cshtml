@@ -1,0 +1,160 @@
+@model Compass.Models.DemandPipeline.DemandPipelineRiskIssue
+@using Compass.Models.Modern.Work
+@using Compass.Models
+@{
+  var demandId = (Guid)ViewBag.DemandRequestId;
+  var isIssue = string.Equals(Model.EntryType, "Issue", StringComparison.OrdinalIgnoreCase);
+  var noun = isIssue ? "issue" : "risk";
+  ViewData["Title"] = $"Edit {noun} — {ViewBag.DemandReference}";
+  var backUrl = Url.Action("RequestDetail", "ModernDemand", new { id = demandId, tab = isIssue ? "issues" : "risks" }) ?? "#";
+  var directorates = ViewBag.DirectorateOptions as List<RiskIssueNamedIntOption> ?? new List<RiskIssueNamedIntOption>();
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernDemand")">Demand</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Register", "ModernDemand")">Register</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@backUrl">@(ViewBag.DemandReference as string)</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">Edit @noun</li>
+}
+
+<div class="dfe-c-mb-4">
+  <div class="dfe-c-page-title govuk-!-margin-bottom-4">
+    <div class="dfe-c-page-title__caption">@(ViewBag.DemandReference as string)</div>
+    <h1 class="dfe-c-page-title__heading">Edit @noun</h1>
+    <p class="dfe-c-page-title__lede govuk-!-margin-bottom-0">@(isIssue ? "Update the details of this issue." : "Update the details of this risk.")</p>
+  </div>
+
+  <div class="dfe-c-form-layout">
+    <div class="dfe-c-form-layout__main">
+      <div class="dfe-c-card dfe-c-card--plain">
+        <form method="post" action="@Url.Action("RequestEditRiskIssue", "ModernDemand", new { id = demandId, riskIssueId = Model.Id })" novalidate>
+          @Html.AntiForgeryToken()
+          <input type="hidden" name="entryType" value="@Model.EntryType" />
+
+          @if (!ViewData.ModelState.IsValid)
+          {
+            <div class="dfe-c-error-summary" aria-labelledby="error-summary-title" role="alert" data-module="dfe-c-error-summary">
+              <h2 class="dfe-c-error-summary__title" id="error-summary-title">There is a problem</h2>
+              <div class="dfe-c-error-summary__body">
+                <ul class="dfe-c-list dfe-c-error-summary__list">
+                  @foreach (var kv in ViewData.ModelState)
+                  {
+                    @if (kv.Value?.Errors?.Count > 0)
+                    {
+                      @foreach (var err in kv.Value.Errors)
+                      {
+                        <li>@err.ErrorMessage</li>
+                      }
+                    }
+                  }
+                </ul>
+              </div>
+            </div>
+          }
+
+          <div class="form-layout" style="margin-bottom:0">
+            <fieldset>
+              <legend>@(isIssue ? "Issue" : "Risk") details</legend>
+
+              <div class="dfe-c-form__group">
+                <label class="dfe-c-form__label" for="Title">Title <span style="color:var(--red)">*</span></label>
+                <span class="dfe-c-form__hint">A short, clear description — e.g. &quot;@(isIssue ? "Data migration failed on staging" : "External vendor delivery delayed")&quot;</span>
+                <input class="dfe-c-width-full" id="Title" name="title" type="text" maxlength="500" autocomplete="off" required value="@Model.Title" />
+              </div>
+
+              <div class="dfe-c-form__group">
+                <label class="dfe-c-form__label" for="Description">Description <span style="color:var(--red)">*</span></label>
+                <span class="dfe-c-form__hint">@(isIssue ? "What is it? Why has it arisen? What is the context?" : "What might happen? Why has it arisen? What is the context?")</span>
+                <textarea class="dfe-c-width-full" id="Description" name="description" rows="4" required>@Model.Description</textarea>
+              </div>
+
+              <div class="dfe-c-form__group">
+                <label class="dfe-c-form__label" for="ImpactOnDelivery">Impact on delivery <span style="color:var(--red)">*</span></label>
+                <span class="dfe-c-form__hint">@(isIssue ? "What effect does this have on timeline, scope, budget or quality?" : "What effect could this have on timeline, scope, budget or quality?")</span>
+                <textarea class="dfe-c-width-full" id="ImpactOnDelivery" name="impactOnDelivery" rows="3" required>@Model.ImpactOnDelivery</textarea>
+              </div>
+
+              <div class="dfe-c-form__group">
+                <label class="dfe-c-form__label" for="Priority">Priority <span style="color:var(--red)">*</span></label>
+                <select class="dfe-c-width-full" id="Priority" name="priority" required>
+                  <option value="">— Select —</option>
+                  <option value="High" selected="@(string.Equals(Model.Priority, "High", StringComparison.OrdinalIgnoreCase))">High</option>
+                  <option value="Medium" selected="@(string.Equals(Model.Priority, "Medium", StringComparison.OrdinalIgnoreCase))">Medium</option>
+                  <option value="Low" selected="@(string.Equals(Model.Priority, "Low", StringComparison.OrdinalIgnoreCase))">Low</option>
+                </select>
+              </div>
+
+              <div class="dfe-c-form__group">
+                <label class="dfe-c-form__label" for="Tier">Tier</label>
+                <select class="dfe-c-width-full" id="Tier" name="tier">
+                  <option value="">— Select tier —</option>
+                  <option value="Tier 1" selected="@(string.Equals(Model.Tier, "Tier 1", StringComparison.OrdinalIgnoreCase))">Tier 1</option>
+                  <option value="Tier 2" selected="@(string.Equals(Model.Tier, "Tier 2", StringComparison.OrdinalIgnoreCase))">Tier 2</option>
+                  <option value="Tier 3" selected="@(string.Equals(Model.Tier, "Tier 3", StringComparison.OrdinalIgnoreCase))">Tier 3</option>
+                </select>
+              </div>
+
+              <div class="dfe-c-form__group">
+                <label class="dfe-c-form__label" for="DirectorateId">Directorate <span style="color:var(--red)">*</span></label>
+                <span class="dfe-c-form__hint">DDT directorate for reporting.</span>
+                <select class="dfe-c-width-full" id="DirectorateId" name="directorateId" required>
+                  <option value="">— Select directorate —</option>
+                  @foreach (var d in directorates)
+                  {
+                    <option value="@d.Id" selected="@(Model.DirectorateId == d.Id)">@d.Name</option>
+                  }
+                </select>
+              </div>
+
+              <div class="dfe-c-form__group user-picker-wrapper user-picker-wrapper--full-width">
+                @await Html.PartialAsync("_UserPicker", new UserPickerViewModel
+                {
+                  FieldName = "OwnerUserId",
+                  Label = "Owner",
+                  Hint = isIssue ? "Who is responsible for resolving this issue? Search by name or email." : "Who is responsible for managing this risk? Search by name or email.",
+                  DefaultSummaryText = "No user selected.",
+                  DefaultUserId = Model.OwnerUserId,
+                  DefaultName = ViewBag.OwnerName as string,
+                  DefaultEmail = ViewBag.OwnerEmail as string
+                })
+              </div>
+
+              <div class="dfe-c-form__group">
+                <label class="dfe-c-form__label" for="TargetResolutionDate">@(isIssue ? "Target resolution date" : "Target review date")</label>
+                <input class="dfe-c-width-full" id="TargetResolutionDate" name="targetResolutionDate" type="date" value="@(Model.TargetResolutionDate?.ToString("yyyy-MM-dd"))" />
+              </div>
+
+              <div class="dfe-c-form__group">
+                <label class="dfe-c-form__label" for="MitigationOrAction">@(isIssue ? "Action plan" : "Mitigation plan") <span style="color:var(--red)">*</span></label>
+                <span class="dfe-c-form__hint">@(isIssue ? "What is being done to resolve this issue?" : "What is being done to prevent this risk or reduce its impact?")</span>
+                <textarea class="dfe-c-width-full" id="MitigationOrAction" name="mitigationOrAction" rows="3" required>@Model.MitigationOrAction</textarea>
+              </div>
+            </fieldset>
+          </div>
+
+          <div class="dfe-c-button-group">
+            <button type="submit" class="govuk-button">Save changes</button>
+            <a href="@backUrl" class="govuk-button govuk-button--secondary">Cancel</a>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div class="dfe-c-form-layout__aside">
+      <div class="dfe-c-sidebar">
+        <div class="dfe-c-scard">
+          <div class="dfe-c-scard__title">Risk vs issue</div>
+          <div style="font-size:0.8125rem;color:var(--grey-4);">@(isIssue ? "An <strong>issue</strong> is something that has happened or is happening now and needs resolution. A <strong>risk</strong> is a potential future problem you are monitoring." : "A <strong>risk</strong> is something that might happen — you monitor and mitigate before it occurs. An <strong>issue</strong> is something that has happened or is occurring now.")</div>
+        </div>
+        <div class="dfe-c-scard">
+          <div class="dfe-c-scard__title">Priority guidance</div>
+          <div style="font-size:0.8125rem;color:var(--grey-4);">@(isIssue ? "Use High when delivery, compliance or reputation is at immediate risk. Medium when milestones or quality are affected. Low when impact is limited and a plan is in place." : "Use High for risks that could affect statutory deadlines, funding or programme delivery. Medium for significant milestone or quality impact. Low for manageable risks with clear mitigations.")</div>
+        </div>
+        <div class="dfe-c-scard">
+          <div class="dfe-c-scard__title">@(isIssue ? "Action plan" : "Directorate")</div>
+          <div style="font-size:0.8125rem;color:var(--grey-4);">@(isIssue ? "Be specific about owners, dates and dependencies. This helps portfolio reviews and escalation." : "The directorate supports reporting and escalation. Pick the group that owns accountability for this risk.")</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

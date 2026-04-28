@@ -1,0 +1,228 @@
+@model Compass.Models.DemandPipeline.DemandPipelineBusinessCase
+@{
+  ViewData["Title"] = Model.Title;
+  var linked = ViewBag.LinkedDemand as Compass.Models.DemandPipeline.DemandPipelineRequest;
+  var poNames = ViewBag.PriorityOutcomeNames as List<string> ?? new();
+  var mpNames = ViewBag.MissionPillarNames as List<string> ?? new();
+  var stages = ViewBag.PipelineStages as List<Compass.Models.DemandPipeline.DemandPipelineStage> ?? new();
+  var pidx = ViewBag.PipelineStageIndex as int? ?? 0;
+
+  string StageTagClass(string? stage) => stage switch
+  {
+    "Ready" => "dfe-c-tag--green",
+    "Developing" => "dfe-c-tag--amber",
+    "Idea" => "dfe-c-tag--blue",
+    _ => "dfe-c-tag--grey"
+  };
+  string StageLabel(string? stage) => stage switch
+  {
+    "Ready" => "READY TO SUBMIT",
+    "Developing" => "DEVELOPING",
+    "Idea" => "IDEA / CONCEPT",
+    _ => (stage ?? "—").ToUpperInvariant()
+  };
+}
+@section Breadcrumbs {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernDemand")">Demand</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("BusinessCase", "ModernDemand")">Business cases</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">@Model.Reference</li>
+}
+
+<div class="dfe-c-mb-4">
+ <div class="dfe-c-flex--between dfe-c-mb-3" style="flex-wrap:wrap;gap:1rem;">
+ <div class="dfe-c-page-title" style="margin:0;">
+ <div class="dfe-c-page-title__caption">@Model.Reference</div>
+ <h1 class="dfe-c-page-title__heading">@Model.Title</h1>
+    </div>
+ <div class="dfe-c-flex" style="gap:0.5rem;flex-wrap:wrap;">
+ <a href="@Url.Action("BusinessCaseEdit", "ModernDemand", new { id = Model.Id })" class="govuk-button govuk-button--secondary">Edit</a>
+      @if (!Model.LinkedDemandRequestId.HasValue)
+      {
+ <a href="@Url.Action("Submit", "ModernDemand", new { businessCaseId = Model.Id })" class="govuk-button">Create demand from business case</a>
+      }
+    </div>
+  </div>
+
+  @if (linked != null)
+  {
+ <div class="govuk-notification-banner govuk-notification-banner--success" role="alert" data-module="govuk-notification-banner">
+ <div class="govuk-notification-banner__content">
+ <p class="govuk-body">This business case is linked to demand request <a href="@Url.Action("RequestDetail", "ModernDemand", new { id = linked.Id })" class="govuk-notification-banner__link">@linked.Reference — @linked.Title</a></p>
+      </div>
+    </div>
+  }
+
+ <div class="dfe-c-form-layout">
+ <div class="dfe-c-form-layout__main">
+
+ <h2 class="govuk-heading-m">Business case details</h2>
+ <dl class="govuk-summary-list">
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">Title</dt>
+ <dd class="govuk-summary-list__value">@Model.Title</dd>
+        </div>
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">Business area</dt>
+ <dd class="govuk-summary-list__value">@(Model.DepartmentGroup ?? "—")</dd>
+        </div>
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">Lead</dt>
+ <dd class="govuk-summary-list__value">@(Model.Lead ?? "—")</dd>
+        </div>
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">SRO</dt>
+ <dd class="govuk-summary-list__value">@(Model.Sro ?? "—")</dd>
+        </div>
+      </dl>
+
+ <hr class="govuk-section-break govuk-section-break--l govuk-section-break--visible" />
+
+ <h2 class="govuk-heading-m">Stage and description</h2>
+ <dl class="govuk-summary-list">
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">Stage</dt>
+ <dd class="govuk-summary-list__value"><span class="dfe-c-tag @StageTagClass(Model.Stage)">@StageLabel(Model.Stage)</span></dd>
+        </div>
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">Brief description</dt>
+ <dd class="govuk-summary-list__value" style="white-space:pre-line;">@(Model.ProblemStatement ?? "—")</dd>
+        </div>
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">Target submission date</dt>
+ <dd class="govuk-summary-list__value">@(Model.TargetSubmissionDate?.ToString("d MMM yyyy") ?? "—")</dd>
+        </div>
+      </dl>
+
+ <hr class="govuk-section-break govuk-section-break--l govuk-section-break--visible" />
+
+ <h2 class="govuk-heading-m">Strategic alignment</h2>
+ <dl class="govuk-summary-list">
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">Priority outcomes</dt>
+ <dd class="govuk-summary-list__value">
+            @if (poNames.Count > 0)
+            {
+ <ul class="govuk-list govuk-list--bullet govuk-!-margin-bottom-0">
+                @foreach (var name in poNames)
+                {
+                  <li>@name</li>
+                }
+              </ul>
+            }
+            else
+            {
+              <text>—</text>
+            }
+          </dd>
+        </div>
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">Mission pillars</dt>
+ <dd class="govuk-summary-list__value">
+            @if (mpNames.Count > 0)
+            {
+ <ul class="govuk-list govuk-list--bullet govuk-!-margin-bottom-0">
+                @foreach (var name in mpNames)
+                {
+                  <li>@name</li>
+                }
+              </ul>
+            }
+            else
+            {
+              <text>—</text>
+            }
+          </dd>
+        </div>
+      </dl>
+
+ <hr class="govuk-section-break govuk-section-break--l govuk-section-break--visible" />
+
+ <h2 class="govuk-heading-m">Value, funding, and readiness</h2>
+ <dl class="govuk-summary-list">
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">Expected value / benefits</dt>
+ <dd class="govuk-summary-list__value" style="white-space:pre-line;">@(Model.Benefits ?? "—")</dd>
+        </div>
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">Legal or statutory requirement</dt>
+ <dd class="govuk-summary-list__value">@(Model.StatutoryDriver.HasValue ? (Model.StatutoryDriver.Value ? "Yes" : "No") : "—")</dd>
+        </div>
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">Funding confirmed</dt>
+ <dd class="govuk-summary-list__value">@(Model.FundingPosition ?? "—")</dd>
+        </div>
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">Comes with headcount</dt>
+ <dd class="govuk-summary-list__value">@(Model.HeadcountIdentified.HasValue ? (Model.HeadcountIdentified.Value ? "Yes" : "No") : "—")</dd>
+        </div>
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">Subject to investco</dt>
+ <dd class="govuk-summary-list__value">@(Model.SubjectToInvestco ?? "—")</dd>
+        </div>
+      </dl>
+
+    </div>
+
+ <div class="dfe-c-form-layout__aside">
+ <div class="dfe-c-sidebar">
+ <div class="dfe-c-scard">
+ <div class="dfe-c-scard__title">Status</div>
+          <dl style="font-size:0.8125rem;margin:0;">
+            <div style="display:flex;justify-content:space-between;margin-bottom:0.5rem;">
+              <dt style="color:var(--grey-4);">Stage</dt>
+ <dd style="margin:0;"><span class="dfe-c-tag @StageTagClass(Model.Stage)" style="font-size:0.75rem;">@StageLabel(Model.Stage)</span></dd>
+            </div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:0.5rem;">
+              <dt style="color:var(--grey-4);">Created</dt>
+              <dd style="margin:0;">@Model.CreatedAt.ToString("d MMM yyyy")</dd>
+            </div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:0.5rem;">
+              <dt style="color:var(--grey-4);">Last updated</dt>
+              <dd style="margin:0;">@Model.UpdatedAt.ToString("d MMM yyyy")</dd>
+            </div>
+            @if (!string.IsNullOrWhiteSpace(Model.CreatedBy))
+            {
+              <div style="display:flex;justify-content:space-between;margin-bottom:0.5rem;">
+                <dt style="color:var(--grey-4);">Created by</dt>
+                <dd style="margin:0;">@Model.CreatedBy</dd>
+              </div>
+            }
+            @if (linked != null)
+            {
+              <div style="display:flex;justify-content:space-between;">
+                <dt style="color:var(--grey-4);">Demand</dt>
+ <dd style="margin:0;"><a href="@Url.Action("RequestDetail", "ModernDemand", new { id = linked.Id })" class="dfe-c-link">@linked.Reference</a></dd>
+              </div>
+            }
+          </dl>
+        </div>
+        @if (stages.Count > 0)
+        {
+ <div class="dfe-c-scard">
+ <div class="dfe-c-scard__title">Pipeline stage</div>
+            <div style="font-size:0.8125rem;display:flex;flex-direction:column;gap:0.5rem;">
+              @for (var i = 0; i < stages.Count; i++)
+              {
+                var isCurrent = i == pidx;
+                <div style="display:flex;align-items:center;gap:0.5rem;">
+                  <span style="width:8px;height:8px;border-radius:50%;background:@(isCurrent ? "var(--green)" : "var(--grey-3)");flex-shrink:0;"></span>
+                  <span style="@(isCurrent ? "font-weight:700;" : "color:var(--grey-4);")">@stages[i].Title</span>
+                </div>
+              }
+            </div>
+          </div>
+        }
+ <div class="dfe-c-scard">
+ <div class="dfe-c-scard__title">Actions</div>
+          <div style="display:flex;flex-direction:column;gap:0.5rem;">
+ <a href="@Url.Action("BusinessCaseEdit", "ModernDemand", new { id = Model.Id })" class="dfe-c-link">Edit business case</a>
+            @if (!Model.LinkedDemandRequestId.HasValue)
+            {
+ <a href="@Url.Action("Submit", "ModernDemand", new { businessCaseId = Model.Id })" class="dfe-c-link">Create demand from this case</a>
+            }
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

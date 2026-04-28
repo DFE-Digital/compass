@@ -5,108 +5,200 @@
     ViewData["Title"] = "Edit multi-dept cooperation";
 }
 @section Breadcrumbs {
-    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="/">Home</a></li>
-    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="@Url.Action("Index", "ModernWork")">Work</a></li>
-    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="@Url.Action("Detail", "ModernWork", new { id = Model.Id })">@work.Title</a></li>
-    <li class="dfe-c-breadcrumb__item" aria-current="page">Edit multi-dept cooperation</li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="/">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernWork")">Work</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Detail", "ModernWork", new { id = Model.Id })">@work.Title</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">Edit multi-dept cooperation</li>
 }
 
-<div id="sc-work-editmultideptcooperation">
+<div id="sc-work-editmultideptcooperation" class="modern-work-page">
   @await Html.PartialAsync("_WorkItemChrome", ViewBag.WorkItem as Compass.Models.Modern.Work.WorkItem ?? Model)
-  <h2 class="dfe-c-heading-m dfe-c-mt-0">Edit multi-dept cooperation</h2>
-  <p class="dfe-c-body muted dfe-c-mb-3">Add or remove government departments that are cooperating on this work.</p>
 
-  <form asp-action="EditMultiDeptCooperation" asp-route-id="@Model.Id" method="post" class="dfe-c-mb-4" id="multi-dept-form">
-    @Html.AntiForgeryToken()
-    <div id="GovernmentDepartmentIdsContainer">
-      @foreach (var g in currentDepts.Where(x => x.GovernmentDepartment != null))
-      {
-        <input type="hidden" name="GovernmentDepartmentIds" value="@g.GovernmentDepartmentId" data-name="@(g.GovernmentDepartment!.Title)" />
-      }
-    </div>
+ <div class="dfe-c-page-title">
+ <h2 class="dfe-c-heading-l dfe-c-mt-0 dfe-c-mb-1">Edit multi-dept cooperation</h2>
+ <p class="dfe-c-body muted dfe-c-mb-0">Add or remove government departments that are cooperating on this work.</p>
+  </div>
 
-    <div class="dfe-c-form__group">
-      <label class="dfe-c-form__label dfe-c-form__label--s" for="gov-dept-search">Add department</label>
-      <div class="dfe-c-form__hint">Type to search by name or abbreviation. Select from the list to add.</div>
-      <div class="linked-entities-autocomplete" style="position:relative;">
-        <input type="text" id="gov-dept-search" placeholder="Type to search departments…" class="dfe-c-width-30" autocomplete="off" aria-label="Search government departments" aria-autocomplete="list" aria-expanded="false" aria-controls="gov-dept-results" role="combobox" aria-haspopup="listbox" />
-        <div id="gov-dept-results" class="dfe-c-mt-0" style="display:none;position:absolute;top:100%;left:0;width:100%;max-width:30em;z-index:100;max-height:280px;overflow-y:auto;background:#fff;border:1px solid #0b0c0c;border-top:none;box-shadow:0 4px 12px rgba(0,0,0,0.15);" role="listbox" aria-label="Search results"></div>
+ <div class="dfe-c-form-layout">
+ <div class="dfe-c-form-layout__main">
+ <div class="dfe-c-card dfe-c-card--plain">
+ <form asp-action="EditMultiDeptCooperationPost" asp-controller="ModernWork" asp-route-id="@Model.Id" method="post" class="dfe-c-mb-0" id="multi-dept-form">
+          @Html.AntiForgeryToken()
+          <div id="GovernmentDepartmentIdsContainer">
+            @foreach (var g in currentDepts.Where(x => x.GovernmentDepartment != null))
+            {
+              <input type="hidden" name="GovernmentDepartmentIds" value="@g.GovernmentDepartmentId" data-name="@(g.GovernmentDepartment!.Title)" />
+            }
+          </div>
+
+ <div class="dfe-c-form__group">
+ <label class="dfe-c-form__label dfe-c-form__label--s" for="gov-dept-search">Add department</label>
+ <div class="dfe-c-form__hint">Type to search by name or abbreviation. Select from the list to add.</div>
+ <div class="linked-entities-autocomplete" style="position:relative;">
+ <input type="text" id="gov-dept-search" placeholder="Type to search departments…" class="dfe-c-width-30" autocomplete="off" aria-label="Search government departments" aria-autocomplete="list" aria-expanded="false" aria-controls="gov-dept-results" role="combobox" aria-haspopup="listbox" />
+ <div id="gov-dept-results" class="dfe-c-mt-0" style="display:none;position:absolute;top:100%;left:0;width:100%;max-width:30em;z-index:100;max-height:280px;overflow-y:auto;background:#fff;border:1px solid #0b0c0c;border-top:none;box-shadow:0 4px 12px rgba(0,0,0,0.15);" role="listbox" aria-label="Search results"></div>
+            </div>
+          </div>
+
+ <div class="dfe-c-form__group">
+ <label class="dfe-c-form__label dfe-c-form__label--s" id="gov-dept-table-label">Cooperating departments</label>
+ <div class="dfe-c-table-wrap ep-multidept-tablewrap">
+ <table class="ep-multidept-table" id="gov-dept-table" aria-labelledby="gov-dept-table-label">
+ <thead>
+ <tr>
+ <th scope="col">Department</th>
+ <th scope="col" class="ep-multidept-table__action-head">Remove</th>
+                  </tr>
+                </thead>
+ <tbody id="gov-dept-table-body">
+                  @if (!currentDepts.Any(x => x.GovernmentDepartment != null))
+                  {
+ <tr id="gov-dept-empty-row">
+ <td colspan="2" class="dfe-c-text-muted">No departments added. Use the search above to add.</td>
+                    </tr>
+                  }
+                  else
+                  {
+                    @foreach (var g in currentDepts.Where(x => x.GovernmentDepartment != null))
+                    {
+ <tr data-id="@g.GovernmentDepartmentId">
+ <td class="ep-multidept-table__name">@g.GovernmentDepartment!.Title</td>
+ <td class="ep-multidept-table__action">
+ <a href="#" class="govuk-link ep-multidept-remove-link remove-dept" data-id="@g.GovernmentDepartmentId" data-name="@g.GovernmentDepartment.Title" aria-label="Remove @g.GovernmentDepartment.Title from list">Remove</a>
+                        </td>
+                      </tr>
+                    }
+                  }
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+ <div class="dfe-c-button-row" style="margin-top:1.5rem;">
+ <button type="submit" class="govuk-button">Save changes</button>
+ <a href="@Url.Action("Detail", "ModernWork", new { id = Model.Id })#wd-overview" class="govuk-button govuk-button--secondary">Cancel</a>
+          </div>
+        </form>
       </div>
     </div>
 
-    <div class="dfe-c-form__group">
-      <label class="dfe-c-form__label dfe-c-form__label--s">Cooperating departments</label>
-      <ul id="gov-dept-list" class="dfe-c-mt-2" aria-label="Added departments">
-        @if (!currentDepts.Any())
-        {
-          <li class="dfe-c-body-s" style="color:#505a5f;">No departments added. Use the search above to add.</li>
-        }
-        else
-        {
-          @foreach (var g in currentDepts.Where(x => x.GovernmentDepartment != null))
-          {
-            <li class="dfe-c-mb-1" data-id="@g.GovernmentDepartmentId">
-              <span class="dfe-c-body">@g.GovernmentDepartment!.Title</span>
-              <button type="button" class="dfe-c-link dfe-c-ms-2 remove-dept" data-id="@g.GovernmentDepartmentId" aria-label="Remove @g.GovernmentDepartment.Title from list">Remove</button>
-            </li>
-          }
-        }
-      </ul>
+ <div class="dfe-c-form-layout__aside">
+ <div class="dfe-c-sidebar">
+ <div class="dfe-c-scard">
+ <h3 class="dfe-c-scard__heading">Multi-department cooperation</h3>
+ <p class="dfe-c-scard__body">List departments that work with you on this item outside the lead organisation. This supports reporting and governance.</p>
+        </div>
+ <div class="dfe-c-scard">
+ <h3 class="dfe-c-scard__heading">Saving</h3>
+ <p class="dfe-c-scard__body">Changes apply when you select <strong>Save changes</strong>. Use <strong>Cancel</strong> to return without saving.</p>
+        </div>
+ <div class="dfe-c-scard">
+ <h3 class="dfe-c-scard__heading">Removing a department</h3>
+ <p class="dfe-c-scard__body">You will be asked to confirm before a department is removed from the list.</p>
+        </div>
+      </div>
     </div>
-
-    <div class="dfe-c-button dfe-c-button--primary-group">
-      <button type="submit" class="dfe-c-button dfe-c-button--primary">Save</button>
-      <a href="@Url.Action("Detail", "ModernWork", new { id = Model.Id })#wd-overview" class="dfe-c-button dfe-c-button--secondary">Cancel</a>
-    </div>
-  </form>
+  </div>
 </div>
 
+<dialog class="risk-detail-dialog" id="dlg-remove-gov-dept" aria-labelledby="dlg-remove-gov-dept-h">
+ <div class="wo-dialog__header">
+    <h2 id="dlg-remove-gov-dept-h">Remove department</h2>
+ <button type="button" class="wo-dialog__close" id="dlg-remove-gov-dept-close" aria-label="Close">&times;</button>
+  </div>
+ <div class="wo-dialog__body">
+ <p class="govuk-body govuk-!-margin-bottom-0">
+      Remove <strong id="dlg-remove-gov-dept-name"></strong> from cooperating departments? This list will not be saved until you click <strong>Save changes</strong>.
+    </p>
+  </div>
+ <div class="wo-dialog__footer">
+ <button type="button" class="govuk-button govuk-button--warning" id="dlg-remove-gov-dept-confirm">Remove department</button>
+ <button type="button" class="govuk-button govuk-button--secondary" id="dlg-remove-gov-dept-cancel">Cancel</button>
+  </div>
+</dialog>
+
 @section Scripts {
-  <script>
+  <script nonce="@Context.Items["Nonce"]">
     (function() {
       var container = document.getElementById('GovernmentDepartmentIdsContainer');
-      var listEl = document.getElementById('gov-dept-list');
+      var tableBody = document.getElementById('gov-dept-table-body');
       var searchInput = document.getElementById('gov-dept-search');
       var resultsEl = document.getElementById('gov-dept-results');
       var searchTimeout = null;
       var highlightedIdx = -1;
       var lastOptions = [];
+      var dialog = document.getElementById('dlg-remove-gov-dept');
+      var dlgName = document.getElementById('dlg-remove-gov-dept-name');
+      var pendingRemoveId = null;
+      var dlgConfirm = document.getElementById('dlg-remove-gov-dept-confirm');
+      var dlgCancel = document.getElementById('dlg-remove-gov-dept-cancel');
+      var dlgClose = document.getElementById('dlg-remove-gov-dept-close');
 
       function getSelectedIds() {
         return Array.from(container.querySelectorAll('input[name="GovernmentDepartmentIds"]')).map(function(inp) { return parseInt(inp.value, 10); });
       }
 
-      function renderList() {
-        if (!listEl) return;
+      function renderTable() {
+        if (!tableBody) return;
         var items = Array.from(container.querySelectorAll('input[name="GovernmentDepartmentIds"]'));
-        listEl.innerHTML = '';
+        tableBody.innerHTML = '';
         if (items.length === 0) {
-          var empty = document.createElement('li');
-          empty.className = 'dfe-c-body-s';
-          empty.style.color = '#505a5f';
-          empty.textContent = 'No departments added. Use the search above to add.';
-          listEl.appendChild(empty);
+          var tr = document.createElement('tr');
+          tr.className = 'govuk-table__row';
+          tr.id = 'gov-dept-empty-row';
+          var td = document.createElement('td');
+          td.colSpan = 2;
+          td.className = 'govuk-table__cell dfe-c-text-muted';
+          td.textContent = 'No departments added. Use the search above to add.';
+          tr.appendChild(td);
+          tableBody.appendChild(tr);
           return;
         }
         items.forEach(function(inp) {
           var id = parseInt(inp.value, 10);
-          var li = document.createElement('li');
-          li.className = 'dfe-c-mb-1';
-          li.setAttribute('data-id', id);
-          var nameEl = document.createElement('span');
-          nameEl.className = 'dfe-c-body';
-          nameEl.textContent = inp.getAttribute('data-name') || 'Department ' + id;
-          var btn = document.createElement('button');
-          btn.type = 'button';
-          btn.className = 'dfe-c-link dfe-c-ms-2 remove-dept';
-          btn.setAttribute('data-id', id);
-          btn.setAttribute('aria-label', 'Remove from list');
-          btn.textContent = 'Remove';
-          btn.addEventListener('click', function() { removeId(id); });
-          li.appendChild(nameEl);
-          li.appendChild(btn);
-          listEl.appendChild(li);
+          var name = inp.getAttribute('data-name') || ('Department ' + id);
+          var tr = document.createElement('tr');
+          tr.className = 'govuk-table__row';
+          tr.setAttribute('data-id', id);
+          var tdName = document.createElement('td');
+          tdName.className = 'govuk-table__cell ep-multidept-table__name';
+          tdName.textContent = name;
+          var tdAct = document.createElement('td');
+          tdAct.className = 'govuk-table__cell govuk-table__cell--numeric ep-multidept-table__action';
+          var link = document.createElement('a');
+          link.href = '#';
+          link.className = 'govuk-link ep-multidept-remove-link remove-dept';
+          link.setAttribute('data-id', id);
+          link.setAttribute('data-name', name);
+          link.setAttribute('aria-label', 'Remove ' + name + ' from list');
+          link.textContent = 'Remove';
+          tdAct.appendChild(link);
+          tr.appendChild(tdName);
+          tr.appendChild(tdAct);
+          tableBody.appendChild(tr);
         });
+      }
+
+      function openRemoveDialog(id, name) {
+        pendingRemoveId = id;
+        if (dlgName) dlgName.textContent = name;
+        if (dialog && typeof dialog.showModal === 'function') {
+          dialog.showModal();
+          dlgConfirm && dlgConfirm.focus();
+        }
+      }
+
+      function closeRemoveDialog() {
+        pendingRemoveId = null;
+        if (dialog && typeof dialog.close === 'function') dialog.close();
+      }
+
+      function confirmRemove() {
+        if (pendingRemoveId == null) return;
+        var inp = container.querySelector('input[name="GovernmentDepartmentIds"][value="' + pendingRemoveId + '"]');
+        if (inp) inp.remove();
+        renderTable();
+        closeRemoveDialog();
       }
 
       function addId(id, name) {
@@ -117,15 +209,9 @@
         inp.value = String(id);
         inp.setAttribute('data-name', name || '');
         container.appendChild(inp);
-        renderList();
+        renderTable();
         if (searchInput) searchInput.value = '';
         closeResults();
-      }
-
-      function removeId(id) {
-        var inp = container.querySelector('input[name="GovernmentDepartmentIds"][value="' + id + '"]');
-        if (inp) inp.remove();
-        renderList();
       }
 
       function closeResults() {
@@ -212,14 +298,21 @@
         if (resultsEl && searchInput && !resultsEl.contains(e.target) && e.target !== searchInput) closeResults();
       });
 
-      listEl.querySelectorAll('.remove-dept').forEach(function(btn) {
-        btn.addEventListener('click', function() {
-          var id = parseInt(btn.getAttribute('data-id'), 10);
-          removeId(id);
+      if (tableBody) {
+        tableBody.addEventListener('click', function(e) {
+          var el = e.target && e.target.closest ? e.target.closest('a.remove-dept') : null;
+          if (!el || !tableBody.contains(el)) return;
+          e.preventDefault();
+          var id = parseInt(el.getAttribute('data-id'), 10);
+          var name = el.getAttribute('data-name') || '';
+          openRemoveDialog(id, name);
         });
-      });
+      }
 
-      renderList();
+      if (dlgConfirm) dlgConfirm.addEventListener('click', confirmRemove);
+      if (dlgCancel) dlgCancel.addEventListener('click', closeRemoveDialog);
+      if (dlgClose) dlgClose.addEventListener('click', closeRemoveDialog);
+      if (dialog) dialog.addEventListener('close', function() { pendingRemoveId = null; });
     })();
   </script>
 }

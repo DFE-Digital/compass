@@ -1,0 +1,145 @@
+@model Compass.ViewModels.Modern.PerfMetricRow
+@{
+  ViewData["Title"] = "Create metric";
+  var perfError = ViewBag.PerfError as string;
+  var metricValueTypes = new (int Val, string Label)[] { (0, "Text"), (1, "Number"), (2, "Decimal"), (3, "Percentage") };
+}
+@section Breadcrumbs {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernAdmin")">Admin</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("PerformanceReporting", "ModernAdmin", new { panel = "metrics" })">Performance reporting</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">Create metric</li>
+}
+
+<div id="sc-admin-pm-create" class="dfe-c-mb-4">
+ <div class="dfe-c-page-title dfe-c-mb-3">
+ <div class="dfe-c-page-title__caption">Admin</div>
+ <h1 class="dfe-c-page-title__heading">Create metric</h1>
+ <p class="dfe-c-page-title__lede">Add a new performance metric that products will report against.</p>
+  </div>
+
+ <div class="dfe-c-form-layout">
+ <div class="dfe-c-form-layout__main">
+ <div class="dfe-c-card dfe-c-card--plain">
+        <form method="post" action="@Url.Action("PerfMetricCreate", "ModernAdmin")" id="pm-create-form" novalidate>
+          @Html.AntiForgeryToken()
+
+          @if (!string.IsNullOrWhiteSpace(perfError))
+          {
+ <div class="govuk-error-summary" data-module="govuk-error-summary" role="alert">
+ <h2 class="govuk-error-summary__title">There is a problem</h2>
+ <div class="govuk-error-summary__body">
+ <ul class="govuk-list govuk-error-summary__list">
+                  <li><a href="#identifier">@perfError</a></li>
+                </ul>
+              </div>
+            </div>
+          }
+
+ <h2 class="govuk-heading-m">Metric identity</h2>
+
+ <div class="govuk-form-group @(!string.IsNullOrWhiteSpace(perfError) ?"govuk-form-group--error" : "")">
+ <label class="govuk-label govuk-label--s" for="identifier">Identifier <span style="color:#d4351c">*</span></label>
+ <div id="identifier-hint" class="govuk-hint">A stable, unique code for this metric. Use lowercase with hyphens, e.g. <code>perf-monthly-active-users</code>. This cannot be changed once submissions reference it.</div>
+            @if (!string.IsNullOrWhiteSpace(perfError))
+            {
+ <p id="identifier-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @perfError</p>
+            }
+ <input class="govuk-input govuk-!-width-two-thirds @(!string.IsNullOrWhiteSpace(perfError) ?"govuk-input--error" : "")" id="identifier" name="identifier" type="text" value="@Model.Identifier" maxlength="120" autocomplete="off" aria-describedby="identifier-hint" />
+          </div>
+
+ <div class="govuk-form-group">
+ <label class="govuk-label govuk-label--s" for="title">Title <span style="color:#d4351c">*</span></label>
+ <div id="title-hint" class="govuk-hint">A human-readable name shown to product owners when they submit data.</div>
+ <input class="govuk-input" id="title" name="title" type="text" value="@Model.Title" maxlength="200" aria-describedby="title-hint" />
+          </div>
+
+ <div class="govuk-form-group">
+ <label class="govuk-label govuk-label--s" for="description">Description <span class="govuk-hint" style="display:inline;font-size:inherit;">(optional)</span></label>
+ <div id="description-hint" class="govuk-hint">Explain what this metric measures and how product teams should calculate their value.</div>
+ <textarea class="govuk-textarea" id="description" name="description" rows="4" maxlength="2000" aria-describedby="description-hint">@Model.Description</textarea>
+          </div>
+
+ <hr class="govuk-section-break govuk-section-break--l govuk-section-break--visible" />
+
+ <h2 class="govuk-heading-m">Data type and validity</h2>
+
+ <div class="govuk-form-group">
+ <label class="govuk-label govuk-label--s" for="valueType">Value type</label>
+ <div id="valueType-hint" class="govuk-hint">The data format expected when teams submit this metric.</div>
+ <select class="govuk-select" name="valueType" id="valueType" aria-describedby="valueType-hint">
+              @foreach (var vt in metricValueTypes)
+              {
+                if (vt.Val == 0)
+                { <option value="@vt.Val" selected>@vt.Label</option> }
+                else
+                { <option value="@vt.Val">@vt.Label</option> }
+              }
+            </select>
+          </div>
+
+ <div class="govuk-form-group">
+ <label class="govuk-label govuk-label--s" for="validFromYear">Valid from year</label>
+ <div id="validFromYear-hint" class="govuk-hint">The first reporting period (year) this metric applies to.</div>
+ <input class="govuk-input govuk-input--width-4" id="validFromYear" name="validFromYear" type="number" min="2000" max="2100" value="@Model.ValidFromYear" aria-describedby="validFromYear-hint" />
+          </div>
+
+ <div class="govuk-form-group">
+ <label class="govuk-label govuk-label--s" for="validFromMonth">Valid from month</label>
+ <div id="validFromMonth-hint" class="govuk-hint">The first reporting period (month, 1–12) this metric applies to.</div>
+ <input class="govuk-input govuk-input--width-4" id="validFromMonth" name="validFromMonth" type="number" min="1" max="12" value="@Model.ValidFromMonth" aria-describedby="validFromMonth-hint" />
+          </div>
+
+ <hr class="govuk-section-break govuk-section-break--l govuk-section-break--visible" />
+
+ <h2 class="govuk-heading-m">Applicability</h2>
+
+ <div class="govuk-form-group">
+ <label class="govuk-label govuk-label--s" for="applicablePhases">Applicable phases <span class="govuk-hint" style="display:inline;font-size:inherit;">(optional)</span></label>
+ <div id="applicablePhases-hint" class="govuk-hint">Comma-separated list of phases this metric applies to, e.g. <code>Live, Beta</code>. Leave blank to apply to all phases.</div>
+ <input class="govuk-input" id="applicablePhases" name="applicablePhases" type="text" value="@Model.ApplicablePhases" maxlength="500" aria-describedby="applicablePhases-hint" />
+          </div>
+
+ <div class="govuk-form-group">
+ <label class="govuk-label govuk-label--s" for="applicableTypes">Applicable product types <span class="govuk-hint" style="display:inline;font-size:inherit;">(optional)</span></label>
+ <div id="applicableTypes-hint" class="govuk-hint">Comma-separated list of product types, e.g. <code>Service, Platform</code>. Leave blank to apply to all types.</div>
+ <input class="govuk-input" id="applicableTypes" name="applicableTypes" type="text" value="@Model.ApplicableTypes" maxlength="500" aria-describedby="applicableTypes-hint" />
+          </div>
+
+ <div class="govuk-button-group">
+ <button type="submit" class="govuk-button" data-module="govuk-button">Create metric</button>
+ <a class="govuk-link" href="@Url.Action("PerformanceReporting", "ModernAdmin", new { panel = "metrics" })">Cancel</a>
+          </div>
+        </form>
+      </div>
+    </div>
+
+ <div class="dfe-c-form-layout__aside">
+ <div class="dfe-c-sidebar">
+ <div class="dfe-c-scard">
+ <div class="dfe-c-scard__title">Identifiers</div>
+          <div style="font-size:0.8125rem;color:var(--grey-4);line-height:1.6;">
+            <p style="margin:0 0 0.5rem;">The identifier is the stable key used in submissions and exports. Once products have submitted data against this metric, changing the identifier can break historical data.</p>
+            <p style="margin:0;"><strong style="color:var(--black);">Convention:</strong> use lowercase with hyphens, e.g. <code>perf-monthly-active-users</code>.</p>
+          </div>
+        </div>
+ <div class="dfe-c-scard">
+ <div class="dfe-c-scard__title">Value types</div>
+          <div style="font-size:0.8125rem;display:flex;flex-direction:column;gap:0.5rem;">
+            <div><strong style="color:var(--black);">Text</strong><span style="color:var(--grey-4);margin-left:0.5rem;">Free-text responses (e.g. narrative updates).</span></div>
+            <div><strong style="color:var(--black);">Number</strong><span style="color:var(--grey-4);margin-left:0.5rem;">Whole numbers (e.g. user count, transactions).</span></div>
+            <div><strong style="color:var(--black);">Decimal</strong><span style="color:var(--grey-4);margin-left:0.5rem;">Numbers with decimals (e.g. response time).</span></div>
+            <div><strong style="color:var(--black);">Percentage</strong><span style="color:var(--grey-4);margin-left:0.5rem;">0–100% (e.g. uptime, satisfaction).</span></div>
+          </div>
+        </div>
+ <div class="dfe-c-scard">
+ <div class="dfe-c-scard__title">Tips</div>
+          <ul style="font-size:0.8125rem;color:var(--grey-4);padding-left:1.25rem;margin:0;line-height:1.6;">
+            <li style="margin-bottom:0.25rem;">New metrics are <strong style="color:var(--black);">active</strong> by default. You can disable them later from the edit page.</li>
+            <li style="margin-bottom:0.25rem;">Phase and type filters restrict which products see this metric during submission.</li>
+            <li>If unsure, leave phase and type fields blank to apply to all products.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

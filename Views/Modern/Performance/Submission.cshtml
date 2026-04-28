@@ -1,0 +1,116 @@
+@model ModernPerformanceSubmissionViewModel
+@using Compass.Models
+@{
+  ViewData["Title"] = "Submission — " + Model.Product.Title;
+  var c = Model.Commission;
+  var sub = Model.Submission;
+  string StatusLabel(CommissionSubmissionStatus s) => s switch
+  {
+    CommissionSubmissionStatus.Submitted => "Submitted",
+    CommissionSubmissionStatus.Late => "Late",
+    CommissionSubmissionStatus.InProgress => "In progress",
+    CommissionSubmissionStatus.NotStarted => "Not started",
+    _ => s.ToString()
+  };
+  string StatusTagClass(CommissionSubmissionStatus s) => s switch
+  {
+    CommissionSubmissionStatus.Submitted => "dfe-c-tag--green",
+    CommissionSubmissionStatus.Late => "dfe-c-tag--red",
+    CommissionSubmissionStatus.InProgress => "dfe-c-tag--amber",
+    _ => "dfe-c-tag--grey"
+  };
+}
+
+@section Breadcrumbs {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernPerformance")">Performance</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Commission", "ModernPerformance", new { commissionId = c.Id, tab = Model.ReturnTab })">@c.Name</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">Submission</li>
+}
+
+<div class="dfe-c-page-title dfe-c-mb-4">
+ <div class="dfe-c-page-title__caption">Commission submission</div>
+ <h1 class="dfe-c-page-title__heading govuk-!-margin-bottom-2">@Model.Product.Title</h1>
+ <p class="govuk-body dfe-c-mb-1"><strong>Commission:</strong> @c.Name</p>
+ <p class="govuk-body dfe-c-mb-1"><strong>Reporting period:</strong> @CommissionDisplay.FormatPeriod(c.StartDate, c.EndDate)</p>
+ <p class="govuk-body dfe-c-mb-2">
+ <span class="dfe-c-tag @StatusTagClass(sub.Status)">@StatusLabel(sub.Status)</span>
+    @if (sub.SubmittedDate.HasValue)
+    {
+ <span class="govuk-body-s dfe-c-text-muted govuk-!-margin-left-2">Submitted @sub.SubmittedDate.Value.ToString("d MMM yyyy HH:mm")@(string.IsNullOrEmpty(sub.SubmittedBy) ? "" : $" — {sub.SubmittedBy}")</span>
+    }
+  </p>
+</div>
+
+<div class="govuk-button-group dfe-c-mb-4">
+ <a class="govuk-button govuk-button--secondary" href="@Url.Action("Commission", "ModernPerformance", new { commissionId = c.Id, tab = Model.ReturnTab })">Back to commission</a>
+</div>
+
+<h2 class="govuk-heading-m">Metrics</h2>
+@if (Model.MetricRows.Count == 0)
+{
+ <p class="govuk-body">No applicable metrics are recorded for this product in this commission.</p>
+}
+else
+{
+ <div class="dfe-c-table-wrap dfe-c-mb-4">
+    <table>
+      <thead>
+        <tr>
+          <th scope="col">Metric</th>
+          <th scope="col">Value</th>
+          <th scope="col">Status</th>
+        </tr>
+      </thead>
+      <tbody>
+      @foreach (var row in Model.MetricRows)
+      {
+        <tr>
+          <td>
+ <strong class="govuk-body">@row.Title</strong>
+            @if (!string.IsNullOrWhiteSpace(row.Description))
+            {
+ <div class="govuk-body-s dfe-c-text-muted govuk-!-margin-top-1">@row.Description</div>
+            }
+            @if (!string.IsNullOrWhiteSpace(row.Identifier))
+            {
+ <div class="govuk-body-s dfe-c-text-muted">@row.Identifier</div>
+            }
+          </td>
+ <td class="govuk-body">
+            @row.ValueDisplay
+            @if (row.IsNotCaptured && !string.IsNullOrWhiteSpace(row.NotCapturedReason))
+            {
+ <div class="govuk-body-s dfe-c-text-muted govuk-!-margin-top-1">@row.NotCapturedReason</div>
+            }
+            @if (!string.IsNullOrWhiteSpace(row.ReasonForDifference))
+            {
+ <div class="govuk-body-s govuk-!-margin-top-1"><strong>Reason for difference:</strong> @row.ReasonForDifference</div>
+            }
+          </td>
+          <td>
+            @if (row.IsComplete)
+            {
+ <span class="dfe-c-tag dfe-c-tag--green">Complete</span>
+            }
+            else
+            {
+ <span class="dfe-c-tag dfe-c-tag--grey">Pending</span>
+            }
+          </td>
+        </tr>
+      }
+      </tbody>
+    </table>
+  </div>
+}
+
+<h2 class="govuk-heading-m">Comments or notes</h2>
+@if (string.IsNullOrWhiteSpace(sub.Comments))
+{
+ <p class="govuk-body dfe-c-text-muted">No comments provided.</p>
+}
+else
+{
+ <div class="govuk-inset-text govuk-!-margin-top-2" style="white-space: pre-wrap;">@sub.Comments</div>
+}

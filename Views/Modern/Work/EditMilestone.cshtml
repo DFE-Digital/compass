@@ -1,86 +1,138 @@
 @model Compass.Models.Milestone
 @{
     var work = ViewBag.WorkItem as Compass.Models.Modern.Work.WorkItem;
+    var wiRef = ViewBag.WorkIdShort as string ?? (Model.ProjectId.HasValue ? Model.ProjectId.Value.ToString("D8") : "");
     ViewData["Title"] = "Edit milestone";
 }
 @section Breadcrumbs {
-    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="/">Home</a></li>
-    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="@Url.Action("Index", "ModernWork")">Work</a></li>
-    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="@Url.Action("Detail", "ModernWork", new { id = Model.ProjectId })">@(work?.Title ?? "Work")</a></li>
-    <li class="dfe-c-breadcrumb__item" aria-current="page">Edit milestone</li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="/">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernWork")">Work</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Detail", "ModernWork", new { id = Model.ProjectId })">@(work?.Title ?? "Work")</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">Edit milestone</li>
 }
 
-<div id="sc-work-editmilestone">
+<div id="sc-work-edit-milestone">
   @await Html.PartialAsync("_WorkItemChrome", work)
 
-  <div class="dfe-c-page-title">
-    <div class="dfe-c-page-title__caption">WI-@(ViewBag.WorkIdShort ?? (Model.ProjectId.HasValue ? Model.ProjectId.Value.ToString("X8") : "")) · @(work?.Title)</div>
-    <h1>Edit milestone</h1>
+ <div class="dfe-c-page-title">
+ <div class="dfe-c-page-title__caption">WI-@wiRef · @(work?.Title)</div>
+ <h1 class="dfe-c-page-title__heading">Edit milestone</h1>
+ <p class="dfe-c-page-title__lede">Update the title, dates, or status. Changes appear on the work item and in monthly reporting.</p>
   </div>
 
-  <div class="dfe-c-grid-row">
-    <div class="dfe-c-grid-col dfe-c-grid-col--two-thirds">
-  <form asp-controller="Project" asp-action="UpdateMilestone" asp-route-projectId="@Model.ProjectId" asp-route-milestoneId="@Model.Id" method="post" class="dfe-c-mb-4">
-    @Html.AntiForgeryToken()
+ <div class="dfe-c-form-layout">
+ <div class="dfe-c-form-layout__main">
+ <div class="dfe-c-card dfe-c-card--plain">
+ <form asp-controller="ModernWork" asp-action="UpdateMilestone" asp-route-id="@Model.ProjectId" asp-route-milestoneId="@Model.Id" method="post" class="dfe-c-mb-0">
+          @Html.AntiForgeryToken()
 
-    <div class="dfe-c-form__group @(ViewData.ModelState["name"]?.Errors?.Any() == true ? "dfe-c-form__group--error" : "")">
-      <label class="dfe-c-form__label" for="name">Title *</label>
-      @if (ViewData.ModelState["name"]?.Errors?.Any() == true)
-      {
-        <span class="dfe-c-form__error">@ViewData.ModelState["name"]?.Errors?.FirstOrDefault()?.ErrorMessage</span>
-      }
-      <input class="dfe-c-width-full" id="name" name="name" type="text" value="@Model.Name" maxlength="200" />
-    </div>
-
-    <div class="dfe-c-form__group">
-      <label class="dfe-c-form__label" for="Description">Description</label>
-      <textarea class="dfe-c-width-full" id="Description" name="Description" rows="3">@Model.Description</textarea>
-    </div>
-
-    <div class="dfe-c-form__group">
-      <label class="dfe-c-form__label" for="dueDate">Due date *</label>
-      <input class="dfe-c-width-full" id="dueDate" name="dueDate" type="date" value="@Model.DueDate.ToString("yyyy-MM-dd")" required />
-    </div>
-
-    <div class="dfe-c-form__group">
-      <label class="dfe-c-form__label" for="status">Status</label>
-      <!select class="dfe-c-width-full" id="status" name="status">
-        @{
-          var statusOpts = new (string Value, string Label)[]
+          @if (!ViewData.ModelState.IsValid)
           {
-            ("not_started", "Not started"),
-            ("in_progress", "In progress"),
-            ("on_track", "On track"),
-            ("at_risk", "At risk"),
-            ("delayed", "Delayed"),
-            ("complete", "Complete"),
-            ("cancelled", "Cancelled")
-          };
-        }
-        @foreach (var o in statusOpts)
-        {
-          if (string.Equals(Model.Status, o.Value, StringComparison.OrdinalIgnoreCase))
-          {
-            <option value="@o.Value" selected>@o.Label</option>
+ <div class="dfe-c-error-summary" aria-labelledby="error-summary-title" role="alert" data-module="dfe-c-error-summary">
+ <h2 class="dfe-c-error-summary__title" id="error-summary-title">There is a problem</h2>
+ <div class="dfe-c-error-summary__body">
+ <ul class="dfe-c-list dfe-c-error-summary__list">
+                  @foreach (var kv in ViewData.ModelState)
+                  {
+                    @if (kv.Value?.Errors?.Count > 0)
+                    {
+                      var fieldId = string.IsNullOrEmpty(kv.Key) ? "name" : kv.Key;
+                      @foreach (var err in kv.Value.Errors)
+                      {
+                        <li><a href="#@fieldId">@err.ErrorMessage</a></li>
+                      }
+                    }
+                  }
+                </ul>
+              </div>
+            </div>
           }
-          else
-          {
-            <option value="@o.Value">@o.Label</option>
-          }
-        }
-      </select>
+
+ <div class="form-layout" style="margin-bottom:0">
+            <fieldset>
+              <legend>Milestone details</legend>
+
+ <div class="dfe-c-form__group @(ViewData.ModelState["name"]?.Errors?.Any() == true ? "dfe-c-form__group--error" : "")">
+ <label class="dfe-c-form__label" for="name">Title <span style="color:var(--red)">*</span></label>
+                @if (ViewData.ModelState["name"]?.Errors?.Any() == true)
+                {
+ <span class="dfe-c-form__error">@ViewData.ModelState["name"]?.Errors?.FirstOrDefault()?.ErrorMessage</span>
+                }
+ <input class="dfe-c-width-full" id="name" name="name" type="text" value="@Model.Name" maxlength="200" />
+              </div>
+
+ <div class="dfe-c-form__group">
+ <label class="dfe-c-form__label" for="Description">Description</label>
+ <textarea class="dfe-c-width-full" id="Description" name="Description" rows="3">@Model.Description</textarea>
+              </div>
+
+ <div class="dfe-c-form__group">
+ <label class="dfe-c-form__label" for="dueDate">Due date <span style="color:var(--red)">*</span></label>
+ <input class="dfe-c-width-full" id="dueDate" name="dueDate" type="date" value="@Model.DueDate.ToString("yyyy-MM-dd")" required />
+              </div>
+
+ <div class="dfe-c-form__group">
+ <label class="dfe-c-form__label" for="status">Status</label>
+ <select class="dfe-c-width-full" id="status" name="status">
+                  @{
+                    var statusOpts = new (string Value, string Label)[]
+                    {
+                      ("not_started", "Not started"),
+                      ("in_progress", "In progress"),
+                      ("on_track", "On track"),
+                      ("at_risk", "At risk"),
+                      ("delayed", "Delayed"),
+                      ("complete", "Complete"),
+                      ("cancelled", "Cancelled")
+                    };
+                  }
+                  @foreach (var o in statusOpts)
+                  {
+                    if (string.Equals(Model.Status, o.Value, StringComparison.OrdinalIgnoreCase))
+                    {
+                      <option value="@o.Value" selected>@o.Label</option>
+                    }
+                    else
+                    {
+                      <option value="@o.Value">@o.Label</option>
+                    }
+                  }
+                </select>
+              </div>
+            </fieldset>
+          </div>
+
+ <div class="dfe-c-button-group dfe-c-mt-3">
+ <button type="submit" class="govuk-button">Save changes</button>
+ <a href="@Url.Action("Detail", "ModernWork", new { id = Model.ProjectId })#wd-milestones" class="govuk-button govuk-button--secondary">Cancel</a>
+          </div>
+        </form>
+
+ <div class="dfe-c-mt-4 govuk-!-padding-top-4" style="border-top:1px solid var(--grey-2, #dee0e2);">
+          <form asp-controller="ModernWork" asp-action="DeleteMilestone" asp-route-id="@Model.ProjectId" asp-route-milestoneId="@Model.Id" method="post" data-confirm-title="Delete milestone" data-confirm-message="Delete this milestone? Any risks or issues linked to it will be unlinked. This cannot be undone.">
+            @Html.AntiForgeryToken()
+ <button type="submit" class="govuk-button govuk-button--warning">Delete milestone</button>
+          </form>
+        </div>
+      </div>
     </div>
 
-    <button type="submit" class="dfe-c-button dfe-c-button--primary">Save changes</button>
-    <a href="@Url.Action("Detail", "ModernWork", new { id = Model.ProjectId })#wd-milestones" class="dfe-c-button dfe-c-button--secondary dfe-c-ms-2">Cancel</a>
-  </form>
-
-  <div class="dfe-c-mt-3 govuk-!-padding-top-6 dfe-c-body" style="border-top:1px solid #b1b4b6;">
-    <form method="post" action="@Url.Action("DeleteMilestone", "Project", new { projectId = Model.ProjectId, milestoneId = Model.Id })" class="dfe-c-mt-3" data-confirm-title="Delete milestone" data-confirm-message="Delete this milestone? Any risks or issues linked to it will be unlinked. This cannot be undone.">
-      @Html.AntiForgeryToken()
-      <button type="submit" class="dfe-c-button dfe-c-button--warning">Delete milestone</button>
-    </form>
-  </div>
+ <div class="dfe-c-form-layout__aside">
+ <div class="dfe-c-sidebar">
+ <div class="dfe-c-scard">
+ <div class="dfe-c-scard__title">Milestones</div>
+          <div style="font-size:0.8125rem;color:var(--grey-4);">Milestones track key delivery points on this work item. Link risks and issues to a milestone when they affect a specific date or deliverable.</div>
+        </div>
+ <div class="dfe-c-scard">
+ <div class="dfe-c-scard__title">Status</div>
+          <div style="font-size:0.8125rem;color:var(--grey-4);">Keep status up to date so portfolio views and monthly updates reflect reality — especially if a milestone slips or completes early.</div>
+        </div>
+ <div class="dfe-c-scard">
+ <div class="dfe-c-scard__title">Back to work item</div>
+ <p class="dfe-c-body-s dfe-c-mb-2" style="font-size:0.8125rem;color:var(--grey-4);">Return to the full milestone list without saving.</p>
+ <a href="@Url.Action("Detail", "ModernWork", new { id = Model.ProjectId })#wd-milestones" class="govuk-link">View milestones on work item</a>
+        </div>
+      </div>
     </div>
   </div>
 </div>

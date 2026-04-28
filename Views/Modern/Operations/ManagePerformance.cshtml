@@ -1,0 +1,449 @@
+@model Compass.ViewModels.Modern.OperationsManagePerformanceViewModel
+@using System.Globalization
+@{
+    ViewData["Title"] = "Manage performance";
+    var c = Model.Commission;
+    var returnRate = Model.EligibleProductCount > 0
+        ? Math.Round(100m * Model.ActualReturnCount / Model.EligibleProductCount, 1)
+        : 0m;
+    var ci = CultureInfo.GetCultureInfo("en-GB");
+    var baTop = Model.BusinessAreaRows.OrderByDescending(x => x.PotentialSubmissions).Take(16).ToList();
+}
+
+@section Breadcrumbs {
+    <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+    <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernOperations")">Operations</a></li>
+    <li class="govuk-breadcrumbs__list-item" aria-current="page">Manage performance</li>
+}
+
+<div class="mr-dash ops-mp">
+    <div class="dfe-c-page-title" style="margin-bottom: 0.75rem;">
+        <div class="dfe-c-page-title__caption">Operations</div>
+        <h1 class="dfe-c-page-title__heading">Manage performance</h1>
+        <p class="dfe-c-body dfe-c-text-muted" style="margin: 0;">Commission reporting coverage — eligible catalogue products, submission status, and breakdown by business area and directorate (same scope as the performance hub).</p>
+    </div>
+
+    @if (TempData["Error"] != null)
+    {
+        <div class="dfe-c-error-summary" role="alert" style="margin-bottom: 1rem;">
+            <p class="dfe-c-body" style="margin: 0;">@TempData["Error"]</p>
+        </div>
+    }
+
+    @if (!Model.CommissionOptions.Any())
+    {
+        <p class="govuk-body dfe-c-text-muted">No commissions are defined yet. Add commission periods in Admin (performance settings) to see reporting here.</p>
+    }
+    else
+    {
+        <div class="mr-toolbar mr-toolbar--compact govuk-!-margin-bottom-3">
+            <div class="mr-toolbar__row">
+                <div class="mr-toolbar__nav mr-toolbar__nav--compact">
+                    @if (Model.HasCommission && c != null)
+                    {
+                        <span class="mr-toolbar__period">@c.Name</span>
+                        <span class="dfe-c-text-muted">· @c.StartDate.ToString("d MMM yyyy", ci) – @c.EndDate.ToString("d MMM yyyy", ci)</span>
+                        <span class="dfe-c-text-muted"> · Due @c.DueDate.ToString("d MMM yyyy", ci)</span>
+                        @if (c.IsActive)
+                        {
+                            <strong class="govuk-tag govuk-tag--green govuk-!-margin-left-1">Active</strong>
+                        }
+                        else
+                        {
+                            <strong class="govuk-tag govuk-tag--grey govuk-!-margin-left-1">Inactive</strong>
+                        }
+                    }
+                    else
+                    {
+                        <span class="mr-toolbar__period">Choose a commission period</span>
+                        <span class="dfe-c-text-muted">· Select below and apply to load coverage</span>
+                    }
+                </div>
+                <form method="get" action="@Url.Action("ManagePerformance", "ModernOperations")" class="mr-toolbar__filters mr-toolbar__filters--compact" id="ops-mp-filters">
+                    <label class="govuk-visually-hidden" for="ops-mp-commission">Commission period</label>
+                    <select class="govuk-select" id="ops-mp-commission" name="commissionId" aria-label="Commission period">
+                        @foreach (var opt in Model.CommissionOptions)
+                        {
+                            var suffix = opt.IsActive ? "" : " (inactive)";
+                            var dueStr = opt.DueDate.ToString("d MMM yyyy", ci);
+                            var label = $"{opt.Name} — due {dueStr}{suffix}";
+                            if (Model.SelectedCommissionId == opt.Id)
+                            {
+                                <option value="@opt.Id" selected>@label</option>
+                            }
+                            else
+                            {
+                                <option value="@opt.Id">@label</option>
+                            }
+                        }
+                    </select>
+                    <button type="submit" class="govuk-button govuk-button--secondary mr-toolbar__btn" id="ops-mp-apply">Apply</button>
+                </form>
+            </div>
+        </div>
+
+        @if (Model.HasCommission && c != null)
+        {
+            <div class="govuk-inset-text govuk-!-margin-bottom-4">
+                <div class="dfe-c-flex--between" style="flex-wrap: wrap; gap: 0.75rem; align-items: flex-start;">
+                    <dl class="govuk-summary-list govuk-summary-list--no-border govuk-!-margin-bottom-0" style="flex: 1 1 18rem; min-width: 0;">
+                        <div class="govuk-summary-list__row">
+                            <dt class="govuk-summary-list__key">Quarter</dt>
+                            <dd class="govuk-summary-list__value">@(string.IsNullOrEmpty(c.Quarter) ? "—" : c.Quarter)</dd>
+                        </div>
+                        <div class="govuk-summary-list__row">
+                            <dt class="govuk-summary-list__key">Reporting window</dt>
+                            <dd class="govuk-summary-list__value">@c.OpenDate.ToString("d MMM yyyy", ci) — @c.DueDate.ToString("d MMM yyyy", ci)</dd>
+                        </div>
+                    </dl>
+                    <a class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0" href="@Url.Action("Commission", "ModernPerformance", new { commissionId = c.Id, tab = "all" })">Open commission workspace</a>
+                </div>
+            </div>
+
+            @if (!Model.HasEligibleProducts)
+            {
+                <div class="dfe-c-callout dfe-c-callout--warning govuk-!-margin-bottom-4">
+                    <div class="dfe-c-callout__heading">No in-scope products</div>
+                    <p class="dfe-c-callout__body govuk-!-margin-bottom-0">No active published products match this commission’s phase and type rules (or the catalogue could not be loaded). Adjust commission scope or check product categories.</p>
+                </div>
+            }
+
+            <section class="mr-section" aria-labelledby="ops-mp-h-summary">
+                <h2 id="ops-mp-h-summary" class="mr-section__heading">Coverage summary</h2>
+                <div class="dfe-c-grid dfe-c-grid--4" role="region" aria-label="Commission summary counts">
+                    <div class="dfe-c-metric dfe-c-metric--navy">
+                        <div class="dfe-c-metric__number">@Model.EligibleProductCount</div>
+                        <div class="dfe-c-metric__label">Potential returns</div>
+                        <div class="dfe-c-metric__note dfe-c-text-muted">In-scope products</div>
+                    </div>
+                    <div class="dfe-c-metric dfe-c-metric--green">
+                        <div class="dfe-c-metric__number">@Model.SubmittedCount</div>
+                        <div class="dfe-c-metric__label">Submitted</div>
+                    </div>
+                    <div class="dfe-c-metric dfe-c-metric--red">
+                        <div class="dfe-c-metric__number">@Model.LateCount</div>
+                        <div class="dfe-c-metric__label">Late</div>
+                    </div>
+                    <div class="dfe-c-metric dfe-c-metric--amber">
+                        <div class="dfe-c-metric__number">@Model.InProgressCount</div>
+                        <div class="dfe-c-metric__label">In progress</div>
+                    </div>
+                    <div class="dfe-c-metric dfe-c-metric--grey">
+                        <div class="dfe-c-metric__number">@Model.NotStartedCount</div>
+                        <div class="dfe-c-metric__label">Not started</div>
+                    </div>
+                    <div class="dfe-c-metric dfe-c-metric--teal">
+                        <div class="dfe-c-metric__number">@returnRate%</div>
+                        <div class="dfe-c-metric__label">Return rate</div>
+                        <div class="dfe-c-metric__note dfe-c-text-muted">Submitted + late ÷ potential</div>
+                    </div>
+                </div>
+            </section>
+
+            @if (Model.HasEligibleProducts)
+            {
+                <section class="mr-section" aria-labelledby="ops-mp-h-charts">
+                    <h2 id="ops-mp-h-charts" class="mr-section__heading">Submission and returns</h2>
+                    <div class="ops-mp__chart-stack">
+                        <div class="ops-mp__chart-panel">
+                            <h3 class="govuk-heading-s govuk-!-margin-top-0">Submission status</h3>
+                            <div class="mr-chart-wrap ops-mp__chart">
+                                <canvas id="chart-status-doughnut" aria-label="Status breakdown chart"></canvas>
+                            </div>
+                        </div>
+                        <div class="ops-mp__chart-panel">
+                            <h3 class="govuk-heading-s govuk-!-margin-top-0">Cumulative returns over time</h3>
+                            <p class="dfe-c-body-s dfe-c-text-muted govuk-!-margin-bottom-2">Submitted and late returns by submission date.</p>
+                            <div class="mr-chart-wrap ops-mp__chart">
+                                <canvas id="chart-timeline" aria-label="Cumulative returns chart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <div class="mr-report-section-panel dfe-c-collapsible dfe-c-collapsible--open govuk-!-margin-bottom-3">
+                    <button type="button" class="dfe-c-collapsible__trigger" aria-expanded="true">
+                        <span class="dfe-c-collapsible__icon" aria-hidden="true">−</span>
+                        <span>Business area completion (top @baTop.Count)</span>
+                        <span class="dfe-c-collapsible__status"><span class="govuk-tag govuk-tag--grey">@baTop.Count</span></span>
+                    </button>
+                    <div class="dfe-c-collapsible__body">
+                        <p class="dfe-c-body-s dfe-c-text-muted govuk-!-margin-bottom-3">Progress by in-scope product count (submitted + late as “complete”).</p>
+                        <div class="ops-mp__ba-bars" role="list">
+                            @foreach (var row in baTop)
+                            {
+                                var pct = row.CompletionPercent < 0m ? 0m : (row.CompletionPercent > 100m ? 100m : row.CompletionPercent);
+                                <div class="ops-mp__ba-bar-row" role="listitem">
+                                    <div class="ops-mp__ba-bar-name govuk-body-s"><strong>@row.Name</strong></div>
+                                    <div class="ops-mp__ba-bar-track" aria-hidden="true">
+                                        <div class="ops-mp__ba-bar-fill" style="width: @pct.ToString("0.#", CultureInfo.InvariantCulture)%"></div>
+                                    </div>
+                                    <div class="ops-mp__ba-bar-pct govuk-body-s"><strong>@row.CompletionPercent%</strong></div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+
+            <section class="mr-section" aria-labelledby="ops-mp-h-ba-table">
+                <h2 id="ops-mp-h-ba-table" class="mr-section__heading">Business areas</h2>
+                <p class="dfe-c-body-s dfe-c-text-muted govuk-!-margin-bottom-2">All business areas with in-scope products for this commission.</p>
+                <div style="overflow-x: auto; -webkit-overflow-scrolling: touch;">
+                    <div class="dfe-c-table-wrap">
+                        <table class="mr-ba-table ops-mp__table" id="ops-mp-ba">
+                            <caption class="govuk-visually-hidden">Completion by business area</caption>
+                            <thead>
+                                <tr>
+                                    <th scope="col" class="mr-ba-table__fixed mr-ba-table__area-col">Business area</th>
+                                    <th scope="col" class="mr-ba-table__num-hdr">Potential</th>
+                                    <th scope="col" class="mr-ba-table__num-hdr">Submitted</th>
+                                    <th scope="col" class="mr-ba-table__num-hdr">Late</th>
+                                    <th scope="col" class="mr-ba-table__num-hdr">In progress</th>
+                                    <th scope="col" class="mr-ba-table__num-hdr">Not started</th>
+                                    <th scope="col" class="mr-ba-table__num-hdr">% complete</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var row in Model.BusinessAreaRows)
+                                {
+                                    <tr>
+                                        <th scope="row" class="mr-ba-table__fixed mr-ba-table__area-col">@row.Name</th>
+                                        <td class="mr-ba-table__num"><span class="mr-ba-num mr-ba-num--strong">@row.PotentialSubmissions</span></td>
+                                        <td class="mr-ba-table__num"><span class="mr-ba-num @(row.ActualSubmitted > 0 ? "mr-ba-num--pri-low" : "mr-ba-num--muted")">@row.ActualSubmitted</span></td>
+                                        <td class="mr-ba-table__num"><span class="mr-ba-num @(row.ActualLate > 0 ? "mr-ba-num--pri-crit" : "mr-ba-num--muted")">@row.ActualLate</span></td>
+                                        <td class="mr-ba-table__num"><span class="mr-ba-num @(row.InProgress > 0 ? "" : "mr-ba-num--muted")">@row.InProgress</span></td>
+                                        <td class="mr-ba-table__num"><span class="mr-ba-num @(row.NotStarted > 0 ? "" : "mr-ba-num--muted")">@row.NotStarted</span></td>
+                                        <td class="mr-ba-table__num"><span class="mr-ba-num">@row.CompletionPercent%</span></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <section class="mr-section" aria-labelledby="ops-mp-h-dir">
+                <h2 id="ops-mp-h-dir" class="mr-section__heading">Directorates</h2>
+                <p class="dfe-c-body-s dfe-c-text-muted govuk-!-margin-bottom-2">Directorate is taken from product category values (same source as the performance hub).</p>
+                <div style="overflow-x: auto; -webkit-overflow-scrolling: touch;">
+                    <div class="dfe-c-table-wrap">
+                        <table class="mr-ba-table ops-mp__table" id="ops-mp-dir">
+                            <caption class="govuk-visually-hidden">Completion by directorate</caption>
+                            <thead>
+                                <tr>
+                                    <th scope="col" class="mr-ba-table__fixed mr-ba-table__area-col">Directorate</th>
+                                    <th scope="col" class="mr-ba-table__num-hdr">Potential</th>
+                                    <th scope="col" class="mr-ba-table__num-hdr">Submitted</th>
+                                    <th scope="col" class="mr-ba-table__num-hdr">Late</th>
+                                    <th scope="col" class="mr-ba-table__num-hdr">In progress</th>
+                                    <th scope="col" class="mr-ba-table__num-hdr">Not started</th>
+                                    <th scope="col" class="mr-ba-table__num-hdr">% complete</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var row in Model.DirectorateRows)
+                                {
+                                    <tr>
+                                        <th scope="row" class="mr-ba-table__fixed mr-ba-table__area-col">@row.Name</th>
+                                        <td class="mr-ba-table__num"><span class="mr-ba-num mr-ba-num--strong">@row.PotentialSubmissions</span></td>
+                                        <td class="mr-ba-table__num"><span class="mr-ba-num @(row.ActualSubmitted > 0 ? "mr-ba-num--pri-low" : "mr-ba-num--muted")">@row.ActualSubmitted</span></td>
+                                        <td class="mr-ba-table__num"><span class="mr-ba-num @(row.ActualLate > 0 ? "mr-ba-num--pri-crit" : "mr-ba-num--muted")">@row.ActualLate</span></td>
+                                        <td class="mr-ba-table__num"><span class="mr-ba-num @(row.InProgress > 0 ? "" : "mr-ba-num--muted")">@row.InProgress</span></td>
+                                        <td class="mr-ba-table__num"><span class="mr-ba-num @(row.NotStarted > 0 ? "" : "mr-ba-num--muted")">@row.NotStarted</span></td>
+                                        <td class="mr-ba-table__num"><span class="mr-ba-num">@row.CompletionPercent%</span></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+        }
+    }
+</div>
+
+@section Styles {
+<style>
+  .ops-mp { margin-bottom: 3rem; }
+  .ops-mp .mr-toolbar {
+    background: var(--rpt-bg-card, #fff);
+    border: 1px solid var(--rpt-border, #e5e7eb);
+    border-radius: 8px;
+    padding: 0.65rem 0.85rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  }
+  .ops-mp .mr-toolbar--compact .mr-toolbar__row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 1rem;
+    justify-content: space-between;
+  }
+  .ops-mp .mr-toolbar__nav { display: flex; align-items: center; gap: 0.65rem; flex: 0 1 auto; min-width: 0; flex-wrap: wrap; }
+  .ops-mp .mr-toolbar__period { font-weight: 700; font-size: 0.9375rem; }
+  .ops-mp .mr-toolbar__filters {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+    max-width: 100%;
+  }
+  .ops-mp .mr-toolbar__filters--compact { flex: 1 1 auto; justify-content: flex-end; min-width: 0; }
+  .ops-mp .mr-toolbar__filters .govuk-button { margin-bottom: 0; }
+  .ops-mp #ops-mp-commission { flex: 1 1 22rem; min-width: 16rem; max-width: 40rem; }
+  .ops-mp .mr-section { margin-bottom: 2.25rem; scroll-margin-top: 1rem; }
+  .ops-mp .mr-section__heading {
+    font-size: 1.25rem;
+    font-weight: 700;
+    margin: 0 0 1rem 0;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid var(--navy, #1d70b8);
+  }
+  .ops-mp__chart-stack { display: flex; flex-direction: column; gap: 2rem; }
+  .ops-mp__chart { min-height: 280px; max-height: 360px; }
+  .ops-mp .mr-chart-wrap { position: relative; width: 100%; margin-bottom: 0.25rem; }
+  .ops-mp__ba-bars { display: flex; flex-direction: column; gap: 0.75rem; }
+  .ops-mp__ba-bar-row {
+    display: grid;
+    grid-template-columns: minmax(8rem, 20rem) 1fr 4.5rem;
+    gap: 0.75rem;
+    align-items: center;
+  }
+  @@media (max-width: 40em) {
+    .ops-mp__ba-bar-row { grid-template-columns: 1fr; gap: 0.35rem; }
+    .ops-mp__ba-bar-pct { text-align: left; }
+  }
+  .ops-mp__ba-bar-track {
+    height: 0.85rem;
+    background: #f3f2f1;
+    border: 1px solid #b1b4b6;
+    border-radius: 999px;
+    overflow: hidden;
+  }
+  .ops-mp__ba-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #5694ca, #1d70b8);
+    border-radius: 999px;
+    min-width: 2px;
+  }
+  .ops-mp__ba-bar-pct { text-align: right; font-variant-numeric: tabular-nums; }
+  .ops-mp .mr-ba-table { border-collapse: collapse; font-size: 0.8125rem; width: 100%; min-width: 44rem; }
+  .ops-mp .mr-ba-table th, .ops-mp .mr-ba-table td { padding: 0.4rem 0.35rem; border: 1px solid var(--rpt-border, #e5e7eb); vertical-align: middle; }
+  .ops-mp .mr-ba-table thead th { background: #f3f2f1; font-weight: 700; text-align: center; }
+  .ops-mp .mr-ba-table__area-col {
+    text-align: left !important;
+    white-space: normal;
+    min-width: 10rem;
+    max-width: 22rem;
+    font-weight: 600;
+    hyphens: auto;
+  }
+  .ops-mp .mr-ba-table__num-hdr { font-variant-numeric: tabular-nums; }
+  .ops-mp .mr-ba-table__num { text-align: center; font-variant-numeric: tabular-nums; }
+  .ops-mp .mr-ba-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.75rem;
+    padding: 0.2rem 0.45rem;
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 0.8125rem;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.2;
+    background: #f3f2f1;
+    color: #505a5f;
+  }
+  .ops-mp .mr-ba-num--strong { background: #e8eaed; color: #0b0c0c; font-weight: 700; }
+  .ops-mp .mr-ba-num--muted { opacity: 0.45; font-weight: 500; }
+  .ops-mp .mr-ba-num--pri-crit { background: #fde8e5; color: #942514; }
+  .ops-mp .mr-ba-num--pri-low { background: #e3f5eb; color: #005a30; }
+  .ops-mp .mr-ba-table__fixed { position: sticky; left: 0; background: #fff; z-index: 1; box-shadow: 2px 0 4px rgba(0,0,0,0.04); }
+  .ops-mp .mr-ba-table thead .mr-ba-table__fixed { background: #f3f2f1; z-index: 2; }
+  .ops-mp .mr-ba-table tbody tr:nth-child(even) { background: #fafafa; }
+  .ops-mp .mr-ba-table tbody tr:nth-child(even) .mr-ba-table__fixed { background: #fafafa; }
+  @@media (max-width: 768px) {
+    .ops-mp .mr-toolbar__filters--compact { justify-content: flex-start; }
+    .ops-mp #ops-mp-commission { width: min(100%, 32rem); min-width: 12rem; }
+  }
+</style>
+}
+
+@section Scripts {
+    @if (Model.HasCommission && Model.HasEligibleProducts)
+    {
+        <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" nonce="@Context.Items["Nonce"]"></script>
+        <script nonce="@Context.Items["Nonce"]">
+(function () {
+  var chartFont = { family: "'Inter', system-ui, -apple-system, sans-serif" };
+  var doughnutJson = @Html.Raw(Model.StatusDoughnutJson);
+  var tlJson = @Html.Raw(Model.SubmissionTimelineJson);
+
+  if (typeof Chart === 'undefined') return;
+
+  var dEl = document.getElementById('chart-status-doughnut');
+  if (dEl && doughnutJson && doughnutJson.labels && doughnutJson.labels.length) {
+    new Chart(dEl.getContext('2d'), {
+      type: 'doughnut',
+      data: {
+        labels: doughnutJson.labels,
+        datasets: [{
+          data: doughnutJson.values,
+          backgroundColor: doughnutJson.colors,
+          borderWidth: 1,
+          borderColor: '#fff'
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'bottom', labels: { font: chartFont, boxWidth: 12 } }
+        }
+      }
+    });
+  }
+
+  var tEl = document.getElementById('chart-timeline');
+  if (tEl && tlJson && tlJson.labels && tlJson.labels.length) {
+    new Chart(tEl.getContext('2d'), {
+      type: 'line',
+      data: {
+        labels: tlJson.labels,
+        datasets: [{
+          label: 'Cumulative returns',
+          data: tlJson.cumulative,
+          borderColor: '#1d70b8',
+          backgroundColor: 'rgba(29, 112, 184, 0.12)',
+          fill: true,
+          tension: 0.2,
+          pointRadius: 3
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { font: chartFont, maxRotation: 45, minRotation: 0 } },
+          y: { ticks: { font: chartFont }, beginAtZero: true }
+        }
+      }
+    });
+  } else if (tEl) {
+    var p = tEl.parentElement;
+    if (p) {
+      var m = document.createElement('p');
+      m.className = 'govuk-body-s dfe-c-text-muted';
+      m.textContent = 'No submitted returns yet — cumulative chart will appear once returns are submitted.';
+      p.appendChild(m);
+    }
+  }
+
+})();
+        </script>
+    }
+}

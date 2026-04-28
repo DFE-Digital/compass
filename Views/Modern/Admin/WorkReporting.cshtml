@@ -1,0 +1,99 @@
+@model Compass.ViewModels.Modern.WorkReportingViewModel
+@{
+    ViewData["Title"] = "Work reporting";
+}
+
+@section Breadcrumbs {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernAdmin")">Admin</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">Work reporting</li>
+}
+
+<div class="admin-hub" id="sc-admin-workreporting">
+  <div class="dfe-c-flex--between dfe-c-mb-3" style="flex-wrap:wrap;gap:1rem;align-items:flex-start;">
+    <div class="dfe-c-page-title" style="margin:0;flex:1 1 20rem;min-width:0;">
+      <div class="dfe-c-page-title__caption">Administration</div>
+      <h1 class="dfe-c-page-title__heading">Work reporting</h1>
+      <p class="dfe-c-page-title__lede">Define each reporting month’s calendar bounds and submission window (same pattern as performance commissions). Work items use these dates to decide when monthly returns can be submitted.</p>
+    </div>
+    <div class="dfe-c-flex" style="gap:0.5rem;flex-wrap:wrap;align-items:center;flex-shrink:0;">
+      <a class="govuk-button" href="@Url.Action("WorkReportingCreate", "ModernAdmin")" id="btn-create-reporting-period">Create reporting period</a>
+    </div>
+  </div>
+
+  @if (ViewBag.AdminError != null)
+  {
+ <div class="govuk-error-summary" role="alert" data-module="govuk-error-summary" style="margin-bottom:1.5rem;">
+ <h2 class="govuk-error-summary__title">There is a problem</h2>
+ <div class="govuk-error-summary__body">@ViewBag.AdminError</div>
+    </div>
+  }
+  @if (ViewBag.AdminMessage != null)
+  {
+ <div class="govuk-notification-banner govuk-notification-banner--success dfe-c-mb-3" role="region" aria-labelledby="wr-notif-title">
+ <div class="govuk-notification-banner__header">
+ <h2 class="govuk-notification-banner__title" id="wr-notif-title">Success</h2>
+      </div>
+ <div class="govuk-notification-banner__content">
+ <p class="govuk-notification-banner__heading">@ViewBag.AdminMessage</p>
+      </div>
+    </div>
+  }
+
+ <div class="dfe-c-mb-2">
+ <h2 class="govuk-heading-m" style="margin:0;">Reporting periods</h2>
+ <p class="govuk-body govuk-hint govuk-!-margin-bottom-0 govuk-!-margin-top-1">Each row is one reporting month. When a period is active and today falls between submission opens and closes, teams can submit returns for that month. Months without a row still use legacy deadline rules from <strong>MonthlyUpdateDeadlineConfigs</strong> if configured.</p>
+  </div>
+
+ <div class="dfe-c-table-wrap">
+    <table >
+      <thead>
+        <tr>
+ <th data-sort-bound="1" class="sortable">Name</th>
+ <th data-sort-bound="1" class="sortable">Period</th>
+ <th data-sort-bound="1" class="sortable">Submission opens</th>
+ <th data-sort-bound="1" class="sortable">Submission closes</th>
+ <th data-sort-bound="1" class="sortable">Status</th>
+ <th><span class="govuk-visually-hidden">Actions</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        @if (Model.ReportingPeriods.Count == 0)
+        {
+          <tr>
+ <td colspan="6"><span class="dfe-c-text-muted">No reporting periods yet. Use <strong>Create reporting period</strong> — for example April 2026 with period 1 Apr–30 Apr, submission opens 26 Apr, closes 3 May.</span></td>
+          </tr>
+        }
+        else
+        {
+          foreach (var p in Model.ReportingPeriods)
+          {
+            <tr>
+              <td><strong>@p.PeriodLabel</strong></td>
+              <td>@p.PeriodStart.ToString("d MMM yyyy") – @p.PeriodEnd.ToString("d MMM yyyy")</td>
+              <td>@p.SubmissionOpens.ToString("d MMM yyyy")</td>
+              <td>@p.SubmissionCloses.ToString("d MMM yyyy")</td>
+              <td>
+                @if (!p.IsActive)
+                {
+ <span class="dfe-c-tag dfe-c-tag--grey">Inactive</span>
+                }
+                else if (p.IsSubmissionWindowLive)
+                {
+ <span class="dfe-c-tag dfe-c-tag--green">Submission open</span>
+                }
+                else
+                {
+ <span class="dfe-c-tag dfe-c-tag--blue">Active</span>
+                }
+              </td>
+              <td style="text-align:right;white-space:nowrap;">
+ <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("WorkReportingPeriodEdit", "ModernAdmin", new { id = p.Id })">Edit</a>
+              </td>
+            </tr>
+          }
+        }
+      </tbody>
+    </table>
+  </div>
+</div>

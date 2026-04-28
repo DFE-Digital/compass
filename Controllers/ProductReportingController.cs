@@ -892,6 +892,12 @@ public class ProductReportingController : Controller
             return NotFound();
         }
 
+        if (!CommissionReportingProductScope.ProductMatchesCommissionInScopeRules(commission, product))
+        {
+            TempData["ErrorMessage"] = "This product is not in scope for this commission.";
+            return RedirectToAction("Commission", new { commissionId });
+        }
+
         // Use DocumentId for database operations (primary identifier)
         var productDocumentId = product.DocumentId ?? documentId;
 
@@ -919,11 +925,18 @@ public class ProductReportingController : Controller
 
         // Allow viewing submitted submissions - they can be unsubmitted if before due date
 
-        // Get all active performance metrics
+        var year = commission.EndDate.Year;
+        var month = commission.EndDate.Month;
         var allMetrics = await _context.PerformanceMetrics
-            .Where(m => !m.IsDisabled)
+            .Where(m => !m.IsDisabled &&
+                        (m.ValidFromYear < year ||
+                         (m.ValidFromYear == year && m.ValidFromMonth <= month)))
             .OrderBy(m => m.Identifier)
             .ToListAsync();
+
+        var included = CommissionReportingMetricsHelper.ParseIncludedMetricIds(commission.IncludedPerformanceMetricIds);
+        if (included != null)
+            allMetrics = allMetrics.Where(m => included.Contains(m.Id)).ToList();
 
         // Filter by phase
         var phaseFilteredMetrics = allMetrics.Where(m => 
@@ -2500,196 +2513,11 @@ public class ProductReportingController : Controller
         };
     }
 
-    /// <summary>
-    /// Gets all applicable performance metrics for a product based on its phase and type categories.
-    /// This method filters metrics by phase, type, and conditional dependencies.
-    /// </summary>
-    private async Task<List<PerformanceMetric>> GetApplicableMetricsForProductAsync(ProductDto product, int commissionId)
-    {
-        // Get commission to determine the reporting period
-        var commission = await _context.Commissions.FindAsync(commissionId);
-        if (commission == null)
-        {
-            return new List<PerformanceMetric>();
-        }
+    private Task<List<PerformanceMetric>> GetApplicableMetricsForProductAsync(ProductDto product, int commissionId) =>
+        CommissionReportingMetricsHelper.GetApplicableMetricsForProductAsync(_context, product, commissionId);
 
-        // Determine the reporting period (use commission end date)
-        var year = commission.EndDate.Year;
-        var month = commission.EndDate.Month;
-
-        // Get all active performance metrics that are valid for this reporting period
-        var allMetrics = await _context.PerformanceMetrics
-            .Where(m => !m.IsDisabled && 
-                   (m.ValidFromYear < year || 
-                   (m.ValidFromYear == year && m.ValidFromMonth <= month)))
-            .OrderBy(m => m.Identifier)
-            .ToListAsync();
-
-        // Filter by phase
-        var phaseFilteredMetrics = allMetrics.Where(m => 
-        {
-            if (string.IsNullOrEmpty(m.ApplicablePhases))
-                return true;
-            if (string.IsNullOrEmpty(product.Phase))
-                return true;
-            var applicablePhases = m.ApplicablePhases.Split(',', StringSplitOptions.RemoveEmptyEntries)
-                .Select(p => p.Trim())
-                .ToList();
-            return applicablePhases.Contains(product.Phase, StringComparer.OrdinalIgnoreCase);
-        }).ToList();
-
-        // Filter by type
-        var productTypes = new List<string>();
-        if (product.CategoryValues != null)
-        {
-            productTypes = product.CategoryValues
-                .Where(cv => cv.CategoryType?.Name?.Equals("Type", StringComparison.OrdinalIgnoreCase) == true)
-                .Select(cv => cv.Name)
-                .ToList();
-        }
-
-        var typeFilteredMetrics = phaseFilteredMetrics.Where(m => 
-        {
-            if (string.IsNullOrEmpty(m.ApplicableTypes))
-                return true;
-            if (!productTypes.Any())
-                return true;
-            var applicableTypes = m.ApplicableTypes.Split(',', StringSplitOptions.RemoveEmptyEntries)
-                .Select(t => t.Trim())
-                .ToList();
-            return productTypes.Any(pt => applicableTypes.Contains(pt, StringComparer.OrdinalIgnoreCase));
-        }).ToList();
-
-        // Get existing metric values to check conditional dependencies
-        var submission = await _context.CommissionSubmissions
-            .Include(cs => cs.MetricValues)
-            .FirstOrDefaultAsync(cs => cs.CommissionId == commissionId && 
-                                      (cs.ProductDocumentId == product.DocumentId || cs.FipsId == product.FipsId));
-
-        var existingMetricValues = submission?.MetricValues?.ToList() ?? new List<CommissionMetricValue>();
-
-        // Filter by conditional dependencies
-        var metrics = typeFilteredMetrics.Where(m => 
-        {
-            if (!m.ConditionalOnMetricId.HasValue)
-                return true;
-            var parentMetricValue = existingMetricValues
-                .FirstOrDefault(mv => mv.PerformanceMetricId == m.ConditionalOnMetricId.Value);
-            return parentMetricValue != null && !string.IsNullOrWhiteSpace(parentMetricValue.Value);
-        }).ToList();
-
-        return metrics;
-    }
-
-    private (bool IsValid, string? ErrorMessage) ValidateMetricValue(string value, PerformanceMetric metric)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            // Check if null is allowed
-            try
-            {
-                var rules = JsonSerializer.Deserialize<ValidationRules>(metric.ValidationRules);
-                // Only return error if required AND allowNull is not true
-                if (rules?.Required == true && rules?.AllowNull != true)
-                {
-                    return (false, "This field is required");
-                }
-                return (true, null);
-            }
-            catch
-            {
-                return (true, null);
-            }
-        }
-
-        try
-        {
-            var rules = JsonSerializer.Deserialize<ValidationRules>(metric.ValidationRules);
-            
-            switch (metric.ValueType)
-            {
-                case Models.ValueType.Number:
-                    if (!int.TryParse(value, out var intValue))
-                    {
-                        return (false, "Value must be a whole number");
-                    }
-                    
-                    // Check new format first
-                    if (rules?.MinimumValue.HasValue == true && intValue < rules.MinimumValue.Value)
-                    {
-                        return (false, $"Value must be at least {rules.MinimumValue.Value}");
-                    }
-                    if (rules?.MaximumValue.HasValue == true && intValue > rules.MaximumValue.Value)
-                    {
-                        return (false, $"Value must be at most {rules.MaximumValue.Value}");
-                    }
-                    
-                    // Legacy format support
-                    if (rules?.Range != null)
-                    {
-                        if (rules.Range.Min.HasValue && intValue < rules.Range.Min.Value)
-                        {
-                            return (false, $"Value must be at least {rules.Range.Min.Value}");
-                        }
-                        if (rules.Range.Max.HasValue && intValue > rules.Range.Max.Value)
-                        {
-                            return (false, $"Value must be at most {rules.Range.Max.Value}");
-                        }
-                    }
-                    break;
-
-                case Models.ValueType.Decimal:
-                    if (!decimal.TryParse(value, out var decimalValue))
-                    {
-                        return (false, "Value must be a decimal number");
-                    }
-                    
-                    // Check new format first
-                    if (rules?.MinimumValue.HasValue == true && decimalValue < rules.MinimumValue.Value)
-                    {
-                        return (false, $"Value must be at least {rules.MinimumValue.Value}");
-                    }
-                    if (rules?.MaximumValue.HasValue == true && decimalValue > rules.MaximumValue.Value)
-                    {
-                        return (false, $"Value must be at most {rules.MaximumValue.Value}");
-                    }
-                    
-                    // Legacy format support
-                    if (rules?.Range != null)
-                    {
-                        if (rules.Range.Min.HasValue && decimalValue < rules.Range.Min.Value)
-                        {
-                            return (false, $"Value must be at least {rules.Range.Min.Value}");
-                        }
-                        if (rules.Range.Max.HasValue && decimalValue > rules.Range.Max.Value)
-                        {
-                            return (false, $"Value must be at most {rules.Range.Max.Value}");
-                        }
-                    }
-                    
-                    if (rules?.DecimalPlaces.HasValue == true)
-                    {
-                        var decimalPart = value.Split('.').Skip(1).FirstOrDefault();
-                        if (!string.IsNullOrEmpty(decimalPart) && decimalPart.Length > rules.DecimalPlaces.Value)
-                        {
-                            return (false, $"Value must have at most {rules.DecimalPlaces.Value} decimal places");
-                        }
-                    }
-                    break;
-
-                case Models.ValueType.Text:
-                    // Text doesn't need special validation beyond required check
-                    break;
-            }
-
-            return (true, null);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error validating metric value");
-            return (true, null); // Allow if validation rules can't be parsed
-        }
-    }
+    private (bool IsValid, string? ErrorMessage) ValidateMetricValue(string value, PerformanceMetric metric) =>
+        CommissionReportingMetricsHelper.ValidateMetricValue(value, metric);
 
     // GET: ProductReporting/ReportingDates
     public async Task<IActionResult> ReportingDates()

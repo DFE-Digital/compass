@@ -1,0 +1,113 @@
+@model ModernPerformanceCommissionsViewModel
+@using Compass.Models
+@{
+  ViewData["Title"] = "Performance commissions";
+  var active = Model.ActiveTab == "completed" ? "completed" : "active";
+  string RowHref(ModernPerformanceCommissionListRow r) =>
+    Url.Action("Commission", "ModernPerformance", new { commissionId = r.Commission.Id }) ?? "#";
+  string TabUrl(string t) => Url.Action("Index", "ModernPerformance", new { tab = t }) ?? "#";
+}
+
+@section Breadcrumbs {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">Performance</li>
+}
+
+<div class="dfe-c-page-title dfe-c-mb-4">
+ <div class="dfe-c-page-title__caption">Performance</div>
+ <h1 class="dfe-c-page-title__heading">Commission reporting</h1>
+ <p class="dfe-c-page-title__lede govuk-body">Select a commission to report metrics by product. Active commissions accept submissions until the due date.</p>
+</div>
+
+@if (TempData["ErrorMessage"] != null)
+{
+ <div class="govuk-error-summary" role="alert" data-module="govuk-error-summary">
+ <h2 class="govuk-error-summary__title">There is a problem</h2>
+ <p class="govuk-body">@TempData["ErrorMessage"]</p>
+  </div>
+}
+@if (TempData["SuccessMessage"] != null)
+{
+ <div class="govuk-notification-banner govuk-notification-banner--success" role="region">
+ <div class="govuk-notification-banner__header">
+ <h2 class="govuk-notification-banner__title">Success</h2>
+    </div>
+ <div class="govuk-notification-banner__content">
+ <p class="govuk-notification-banner__heading">@TempData["SuccessMessage"]</p>
+    </div>
+  </div>
+}
+
+<div class="tabs" role="tablist" aria-label="Commission submissions">
+ <a href="@TabUrl("active")" class="tab @(active =="active" ? "on" : "")" role="tab" aria-selected="@(active == "active")" aria-controls="d-active" id="tab-active">Active (@Model.OpenForSubmission.Count)</a>
+ <a href="@TabUrl("completed")" class="tab @(active =="completed" ? "on" : "")" role="tab" aria-selected="@(active == "completed")" aria-controls="d-completed" id="tab-completed">Completed (@Model.ClosedOrOther.Count)</a>
+</div>
+
+<div id="d-active" class="tab-pane @(active =="active" ? "on" : "")" role="tabpanel">
+ <div class="dfe-c-table-wrap dfe-c-mt-3">
+    <table>
+      <thead>
+        <tr>
+          <th scope="col">Commission</th>
+          <th scope="col">Reporting period</th>
+          <th scope="col">Due date</th>
+          <th scope="col">Status</th>
+        </tr>
+      </thead>
+      <tbody>
+      @if (Model.OpenForSubmission.Count == 0)
+      {
+ <tr><td colspan="4" class="dfe-c-body muted">No commissions are currently active for submission.</td></tr>
+      }
+      else
+      {
+        foreach (var r in Model.OpenForSubmission)
+        {
+          <tr>
+            <td><a href="@RowHref(r)"><strong>@r.Commission.Name</strong></a></td>
+            <td>@CommissionDisplay.FormatPeriod(r.Commission.StartDate, r.Commission.EndDate)</td>
+            <td>@CommissionDisplay.FormatDueDate(r.Commission.DueDate)</td>
+ <td><span class="dfe-c-tag dfe-c-tag--green">Active</span></td>
+          </tr>
+        }
+      }
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div id="d-completed" class="tab-pane @(active =="completed" ? "on" : "")" role="tabpanel">
+ <p class="govuk-body dfe-c-mt-3">Past due, not yet open, and inactive commissions.</p>
+ <div class="dfe-c-table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th scope="col">Commission</th>
+          <th scope="col">Reporting period</th>
+          <th scope="col">Due date</th>
+          <th scope="col">Status</th>
+        </tr>
+      </thead>
+      <tbody>
+      @if (Model.ClosedOrOther.Count == 0)
+      {
+ <tr><td colspan="4" class="dfe-c-body muted">No completed or other commissions.</td></tr>
+      }
+      else
+      {
+        foreach (var r in Model.ClosedOrOther)
+        {
+          string label = !r.Commission.IsActive ? "Inactive" : r.IsNotYetOpen ? "Not yet open" : r.IsPastDue ? "Completed" : "—";
+          string tag = !r.Commission.IsActive ? "dfe-c-tag--grey" : r.IsNotYetOpen ? "dfe-c-tag--blue" : r.IsPastDue ? "dfe-c-tag--green dfe-c-tag--work-completed" : "dfe-c-tag--grey";
+          <tr>
+            <td><a href="@RowHref(r)"><strong>@r.Commission.Name</strong></a></td>
+            <td>@CommissionDisplay.FormatPeriod(r.Commission.StartDate, r.Commission.EndDate)</td>
+            <td>@CommissionDisplay.FormatDueDate(r.Commission.DueDate)</td>
+ <td><span class="dfe-c-tag @tag">@label</span></td>
+          </tr>
+        }
+      }
+      </tbody>
+    </table>
+  </div>
+</div>

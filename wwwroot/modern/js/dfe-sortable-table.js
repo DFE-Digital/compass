@@ -1,8 +1,9 @@
 /**
  * DfE Sortable Table
  *
- * Progressively enhances any <table> inside a
- * <div data-module="dfe-sortable-table"> with accessible column sorting.
+ * Initialise any element with data-module="dfe-sortable-table" that is either:
+ *  - a <table> (recommended — matches compass2-app.css sortable header styles), or
+ *  - a wrapper containing a single <table> (legacy pattern).
  *
  * Accessibility features:
  *  - Each sortable column header becomes a <button> inside the <th>
@@ -80,7 +81,10 @@
   // ── Initialise a single table ─────────────────────────────────────────────────
 
   function initTable(wrapper) {
-    var table = wrapper.querySelector('table');
+    var table =
+      wrapper.tagName === 'TABLE'
+        ? wrapper
+        : wrapper.querySelector('table');
     if (!table || table.dataset.dfeSortableInit) return;
     table.dataset.dfeSortableInit = 'true';
 
@@ -99,13 +103,19 @@
     liveRegion.setAttribute('aria-atomic', 'true');
     liveRegion.className = 'govuk-visually-hidden';
     liveRegion.id = 'dfe-sort-announce-' + Math.random().toString(36).slice(2);
-    wrapper.insertBefore(liveRegion, table);
+    if (table.parentNode) {
+      table.parentNode.insertBefore(liveRegion, table);
+    }
 
     // Track current sort state
     var currentCol = -1;
     var currentAsc = true;
 
     headers.forEach(function (th, colIndex) {
+      if (th.getAttribute('data-dfe-sortable') === 'false') {
+        return;
+      }
+
       // Mark all headers as sortable
       th.setAttribute('aria-sort', 'none');
       th.classList.add('dfe-sortable-table__header');
@@ -141,8 +151,9 @@
           ascending = true;
         }
 
-        // Reset all headers
+        // Reset all sortable headers
         headers.forEach(function (h) {
+          if (h.getAttribute('data-dfe-sortable') === 'false') return;
           h.setAttribute('aria-sort', 'none');
           h.classList.remove('dfe-sortable-table__header--asc', 'dfe-sortable-table__header--desc');
         });

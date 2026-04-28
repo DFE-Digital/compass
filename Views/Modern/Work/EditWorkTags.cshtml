@@ -1,0 +1,56 @@
+@model Compass.Models.Modern.Work.WorkItem
+@{
+    var work = Model;
+    var tagOptions = (List<Compass.Models.Modern.Work.WorkLookupOption>)ViewBag.WorkTagOptions ?? new List<Compass.Models.Modern.Work.WorkLookupOption>();
+    var selected = work.Tags?.Select(t => t.Id).ToHashSet() ?? new HashSet<int>();
+    ViewData["Title"] = "Edit tags";
+}
+@section Breadcrumbs {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="/">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernWork")">Work</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Detail", "ModernWork", new { id = Model.Id })">@work.Title</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">Edit tags</li>
+}
+
+<div id="sc-work-edittags">
+  @await Html.PartialAsync("_WorkItemChrome", ViewBag.WorkItem as Compass.Models.Modern.Work.WorkItem ?? Model)
+
+ <div class="dfe-c-page-title">
+ <div class="dfe-c-page-title__caption">@work.Title</div>
+ <h1 class="dfe-c-page-title__heading">Edit tags</h1>
+ <p class="dfe-c-page-title__lede">Choose which custom tags apply to this work item. Tags are configured in Admin → Work → Tagging.</p>
+  </div>
+
+ <div class="dfe-c-form-layout">
+ <div class="dfe-c-form-layout__main">
+ <div class="dfe-c-card dfe-c-card--plain">
+        <form asp-action="EditWorkTags" asp-route-id="@Model.Id" method="post">
+          @Html.AntiForgeryToken()
+
+ <fieldset class="dfe-c-form__group" style="border:0;padding:0;margin:0;">
+ <legend class="dfe-c-form__label dfe-c-form__label--s">Tags</legend>
+ <span class="dfe-c-form__hint">Select all that apply.</span>
+ <div class="dfe-c-form__check-group">
+              @foreach (var t in tagOptions)
+              {
+ <label class="dfe-c-form__check-item" for="wt_@t.Id">
+                  <input id="wt_@t.Id" name="workTagIds" type="checkbox" value="@t.Id" @(selected.Contains(t.Id) ? "checked" : "") />
+                  <div><span class="dfe-c-fw-bold">@t.Name</span>@if (!string.IsNullOrWhiteSpace(t.Value)) { <div class="dfe-c-body-s dfe-c-text-muted" style="margin-top:0.15rem;">@t.Value</div> }</div>
+                </label>
+              }
+            </div>
+            @if (!tagOptions.Any())
+            {
+ <p class="dfe-c-body-s" style="color:var(--grey-4);">No tags configured. Ask an administrator to add tags under Admin → Work → Tagging.</p>
+            }
+          </fieldset>
+
+ <div class="dfe-c-button-group">
+ <button type="submit" class="govuk-button">Save tags</button>
+ <a href="@Url.Action("Detail", "ModernWork", new { id = Model.Id })#wd-overview" class="govuk-button govuk-button--secondary">Cancel</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>

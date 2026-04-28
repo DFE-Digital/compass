@@ -51,6 +51,10 @@ public class WorkItem
 
     public ICollection<WorkItemPriorityOutcome> PriorityOutcomes { get; set; } = new List<WorkItemPriorityOutcome>();
     public ICollection<WorkItemMissionPillar> MissionPillars { get; set; } = new List<WorkItemMissionPillar>();
+
+    /// <summary>Custom tags from admin (<see cref="Compass.Models.WorkItemTagLookup"/>).</summary>
+    public List<WorkItemTagRef> Tags { get; set; } = new();
+
     public ICollection<WorkItemContact> Contacts { get; set; } = new List<WorkItemContact>();
     public ICollection<WorkItemTeamMember> TeamMembers { get; set; } = new List<WorkItemTeamMember>();
     public ICollection<WorkItemDependency> Dependencies { get; set; } = new List<WorkItemDependency>();
@@ -76,6 +80,13 @@ public class WorkItemMissionPillar
     public WorkLookupOption? MissionPillar { get; set; }
 }
 
+public class WorkItemTagRef
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string? Description { get; set; }
+}
+
 public class ContactRoleType
 {
     public int Id { get; set; }
@@ -87,6 +98,8 @@ public class WorkItemContact
     public int Id { get; set; }
     public int WorkItemId { get; set; }
     public int? ContactRoleTypeId { get; set; }
+    /// <summary>When <see cref="ContactRoleTypeId"/> is custom (5), the label stored in <see cref="ProjectContact.Role"/>.</summary>
+    public string? RoleName { get; set; }
     public User? AppUser { get; set; }
 }
 
@@ -145,12 +158,19 @@ public class AuditLog
     public string? NewValue { get; set; }
 }
 
-/// <summary>Reporting period row for work detail monthly updates tab (stub for compass-2 shape).</summary>
+/// <summary>Reporting period row for work detail monthly updates tab.</summary>
 public class ReportingCyclePeriod
 {
     public string PeriodKey { get; set; } = string.Empty;
     public string? PeriodLabel { get; set; }
+    /// <summary>Submission deadline (explicit period closes date, or legacy-calculated due date).</summary>
     public DateTime DueDate { get; set; }
+    public DateTime? SubmissionOpens { get; set; }
+    public DateTime? SubmissionCloses { get; set; }
+    /// <summary>Rollup matching UpdateSubmissionStatus (Upcoming, Due, Late, Submitted).</summary>
+    public string UpdateStatus { get; set; } = "Upcoming";
+    /// <summary>False when an explicit period exists and the current date is outside the submission window.</summary>
+    public bool WindowAllowsEditing { get; set; } = true;
 }
 
 /// <summary>Monthly update block for modern work views (aligned with <see cref="ProjectMonthlyUpdate"/> fields used in UI).</summary>
@@ -166,6 +186,8 @@ public class MonthlyUpdate
     public string? SubmittedBy { get; set; }
     public DateTime? SubmittedAt { get; set; }
     public int? SubmittedByUserId { get; set; }
+    public decimal? PermFte { get; set; }
+    public decimal? MspFte { get; set; }
 }
 
 public class WorkAppUser

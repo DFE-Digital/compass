@@ -2,39 +2,116 @@
 @{
     var work = ViewBag.WorkItem as Compass.Models.Modern.Work.WorkItem;
     var roleTypes = (List<Compass.Models.Modern.Work.ContactRoleType>)ViewBag.ContactRoleTypes ?? new List<Compass.Models.Modern.Work.ContactRoleType>();
+    var customRolePrefill = ViewBag.CustomRoleName as string;
+    var showCustomRole = Model.ContactRoleTypeId == 5 || !string.IsNullOrWhiteSpace(customRolePrefill);
     ViewData["Title"] = "Add contact";
-    var userPicker = new Compass.Models.UserPickerViewModel { FieldName = "AppUserId", Label = "User", DefaultSummaryText = "No user selected." };
+    var userPicker = new Compass.Models.UserPickerViewModel
+    {
+        FieldName = "AppUserId",
+        Label = "Contact user",
+        Hint = "Search by name or email and choose one person.",
+        DefaultSummaryText = "No user selected.",
+        UseGovUkStyling = true
+    };
+    var returnToEdit = ViewBag.ReturnToEditPeople as bool? == true;
+    var cancelUrl = returnToEdit
+        ? Url.Action("EditPeople", "ModernWork", new { id = Model.WorkItemId })
+        : Url.Action("Detail", "ModernWork", new { id = Model.WorkItemId });
 }
 @section Breadcrumbs {
-    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="/">Home</a></li>
-    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="@Url.Action("Index", "ModernWork")">Work</a></li>
-    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="@Url.Action("Detail", "ModernWork", new { id = Model.WorkItemId })">@(work?.Title ?? "Work")</a></li>
-    <li class="dfe-c-breadcrumb__item" aria-current="page">Add contact</li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="/">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernWork")">Work</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Detail", "ModernWork", new { id = Model.WorkItemId })">@(work?.Title ?? "Work")</a></li>
+    @if (returnToEdit)
+    {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("EditPeople", "ModernWork", new { id = Model.WorkItemId })">Edit key people</a></li>
+    }
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">Add contact</li>
 }
 
 <div id="sc-work-addcontact">
   @await Html.PartialAsync("_WorkItemChrome", ViewBag.WorkItem as Compass.Models.Modern.Work.WorkItem)
-  <h2 class="dfe-c-heading-m dfe-c-mt-0">Add contact</h2>
-    <p class="dfe-c-body muted dfe-c-mb-3">Add a contact with a role (SRO, Service Owner, etc.) for this work item.</p>
 
-<form asp-action="AddContact" asp-route-id="@Model.WorkItemId" method="post" class="dfe-c-mb-4">
-  @Html.AntiForgeryToken()
-  @if (ViewBag.ReturnToEditPeople == true) { <input type="hidden" name="returnTo" value="EditPeople" /> }
-
-  <div class="dfe-c-form__group">
-    <label class="dfe-c-form__label" asp-for="ContactRoleTypeId">Contact role</label>
-    <select class="dfe-c-width-20" asp-for="ContactRoleTypeId">
-      <option value="0">— Select role —</option>
-      @foreach (var rt in roleTypes)
-      {
-        <option value="@rt.Id">@rt.Name</option>
-      }
-    </select>
+ <div class="dfe-c-page-title govuk-!-margin-bottom-5">
+ <div class="dfe-c-page-title__caption">Work</div>
+ <h1 class="dfe-c-page-title__heading">Add contact</h1>
+ <p class="dfe-c-page-title__lede">@((work?.Title ?? "Work item"))</p>
   </div>
 
-  @await Html.PartialAsync("_UserPicker", userPicker)
+  @if (TempData["Error"] is string err && !string.IsNullOrWhiteSpace(err))
+  {
+ <div class="govuk-error-summary" role="alert" data-module="govuk-error-summary">
+ <h2 class="govuk-error-summary__title">There is a problem</h2>
+ <div class="govuk-error-summary__body">
+ <ul class="govuk-list govuk-error-summary__list">
+          <li><a href="#addcontact-role-type">@err</a></li>
+        </ul>
+      </div>
+    </div>
+  }
 
-  <button type="submit" class="dfe-c-button dfe-c-button--primary">Add contact</button>
-  <a href="@Url.Action("Detail", "ModernWork", new { id = Model.WorkItemId })" class="dfe-c-button dfe-c-button--secondary">Cancel</a>
-</form>
+ <div class="dfe-c-form-layout">
+ <div class="dfe-c-form-layout__main">
+ <div class="dfe-c-card dfe-c-card--plain">
+ <p class="govuk-body">Add a contact and role for this work item. Select <strong>Other (custom role)</strong> to type a bespoke role title.</p>
+
+ <form asp-controller="ModernWork" asp-action="AddContactPost" asp-route-id="@Model.WorkItemId" method="post" class="dfe-c-mb-0" novalidate>
+          @Html.AntiForgeryToken()
+          @if (returnToEdit) { <input type="hidden" name="returnTo" value="EditPeople" /> }
+
+ <div class="govuk-form-group">
+ <label class="govuk-label govuk-label--m" asp-for="ContactRoleTypeId">Contact role</label>
+ <div class="govuk-hint">Choose a standard role, or select <strong>Other</strong> to enter a custom one.</div>
+ <select class="govuk-select govuk-!-width-one-half" asp-for="ContactRoleTypeId" id="addcontact-role-type">
+              <option value="0">Select role</option>
+              @foreach (var rt in roleTypes)
+              {
+                <option value="@rt.Id">@rt.Name</option>
+              }
+            </select>
+          </div>
+
+ <div class="govuk-form-group" id="addcontact-custom-role-wrap" style="@(showCustomRole ? "" : "display:none;")">
+ <label class="govuk-label govuk-label--m" for="CustomRole">Custom role name</label>
+ <div id="addcontact-custom-hint" class="govuk-hint">Enter the exact title to display, for example “Design lead”.</div>
+ <input class="govuk-input govuk-!-width-one-half" type="text" name="CustomRole" id="CustomRole" value="@customRolePrefill" maxlength="100" autocomplete="off" />
+          </div>
+
+          @await Html.PartialAsync("_UserPicker", userPicker)
+
+ <div class="dfe-c-button-group">
+ <button type="submit" class="govuk-button" data-module="govuk-button">Add contact</button>
+ <a href="@cancelUrl" class="govuk-link">Cancel</a>
+          </div>
+        </form>
+      </div>
+    </div>
+
+ <div class="dfe-c-form-layout__aside">
+ <div class="dfe-c-sidebar">
+ <div class="dfe-c-scard">
+ <div class="dfe-c-scard__title">Guidance</div>
+ <p class="govuk-body govuk-!-font-size-16 govuk-!-margin-bottom-1"><strong>Use custom roles sparingly</strong></p>
+ <p class="govuk-body-s govuk-!-margin-bottom-0">Prefer standard roles where possible so reports and ownership views stay consistent across work items.</p>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
+
+@section Scripts {
+<script>
+(function(){
+  var sel = document.getElementById('addcontact-role-type');
+  var wrap = document.getElementById('addcontact-custom-role-wrap');
+  var customRole = document.getElementById('CustomRole');
+  function toggle() {
+    if (!sel || !wrap) return;
+    var v = sel.value;
+    wrap.style.display = (v === '5') ? 'block' : 'none';
+    if (customRole) customRole.required = (v === '5');
+  }
+  if (sel) { sel.addEventListener('change', toggle); toggle(); }
+})();
+</script>
+}

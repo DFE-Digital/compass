@@ -1,0 +1,450 @@
+@model Compass.ViewModels.Modern.ModernRaidIssueEditorForm
+@using Compass.Models
+@using Compass.Models.Modern.Work
+@using Compass.ViewModels.Modern
+@{
+  ViewData["Title"] = ViewBag.EditorTitle as string ?? "Issue";
+  var st = ViewBag.IssueStatusOptions as List<RiskIssueNamedIntOption> ?? new List<RiskIssueNamedIntOption>();
+  var sev = ViewBag.IssueSeverityOptions as List<RiskIssueNamedIntOption> ?? new List<RiskIssueNamedIntOption>();
+  var pr = ViewBag.IssuePriorityOptions as List<RiskIssueNamedIntOption> ?? new List<RiskIssueNamedIntOption>();
+  var cat = ViewBag.IssueCategoryOptions as List<RiskIssueNamedIntOption> ?? new List<RiskIssueNamedIntOption>();
+  var divs = ViewBag.DivisionOptions as List<RiskIssueNamedIntOption> ?? new List<RiskIssueNamedIntOption>();
+  var baOpts = ViewBag.BusinessAreaOptions as List<RiskIssueNamedIntOption> ?? new List<RiskIssueNamedIntOption>();
+  var pj = ViewBag.ProjectOptions as List<RiskIssueNamedIntOption> ?? new List<RiskIssueNamedIntOption>();
+  var fp = ViewBag.FipsProductOptions as List<RiskIssueNamedIntOption> ?? new List<RiskIssueNamedIntOption>();
+  var assoc = Model.AssociationKind ?? "work";
+  var isEdit = Model.Id.HasValue;
+  var ms = ViewData.ModelState;
+
+  string? RaidErr(string key) =>
+      ms.TryGetValue(key, out var stErr) && stErr!.Errors.Count > 0 ? stErr.Errors[0].ErrorMessage : null;
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernRaid")">RAID</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Issues", "ModernRaid")">Issues</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">@ViewData["Title"]</li>
+}
+
+<div id="sc-raid-issue-editor" class="modern-work-page">
+<p class="dfe-c-body dfe-c-mb-3">
+  <a href="@(isEdit ? Url.Action("IssueDetail", "ModernRaid", new { id = Model.Id }) : Url.Action("Issues", "ModernRaid"))" class="dfe-c-link">← @(isEdit ? "Back to issue" : "Back to issues")</a>
+</p>
+
+<div class="dfe-c-page-title">
+  <div class="dfe-c-page-title__caption">RAID</div>
+  <h1 class="dfe-c-page-title__heading">@ViewBag.EditorTitle</h1>
+  <p class="dfe-c-page-title__lede">Record or update an issue for the RAID register. Associate it with a work item, FIPS product, or organisation-wide scope.</p>
+</div>
+
+<div class="dfe-c-form-layout">
+  <div class="dfe-c-form-layout__main">
+    <div class="dfe-c-card dfe-c-card--plain">
+      <form method="post" novalidate action="@(isEdit ? Url.Action("IssueEditPost", "ModernRaid", new { id = Model!.Id!.Value }) : Url.Action("IssueCreatePost", "ModernRaid"))">
+        @Html.AntiForgeryToken()
+
+        @if (!ViewData.ModelState.IsValid)
+        {
+        <div class="govuk-error-summary" data-module="govuk-error-summary" role="alert" aria-labelledby="error-summary-title">
+          <h2 class="govuk-error-summary__title" id="error-summary-title">There is a problem</h2>
+          <div class="govuk-error-summary__body">
+            <ul class="govuk-list govuk-error-summary__list">
+              @foreach (var kv in ViewData.ModelState)
+              {
+                if (kv.Value?.Errors?.Count > 0)
+                {
+                  <li><a href="#@kv.Key">@kv.Value.Errors[0].ErrorMessage</a></li>
+                }
+              }
+            </ul>
+          </div>
+        </div>
+        }
+
+        <div class="govuk-form-group govuk-!-margin-bottom-6" data-raid-field="association" id="raid-issue-edit-association">
+          <fieldset class="govuk-fieldset" aria-describedby="raid-issue-association-hint">
+            <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Associated with</legend>
+            <div id="raid-issue-association-hint" class="govuk-hint">Select one option.</div>
+            <div class="govuk-radios" data-module="govuk-radios">
+            <div class="govuk-radios__item">
+              <input class="govuk-radios__input" id="raid-issue-assoc-work" name="AssociationKind" type="radio" value="work" data-aria-controls="conditional-raid-issue-assoc-work" @(assoc == "work" ? "checked" : null) />
+              <label class="govuk-label govuk-radios__label" for="raid-issue-assoc-work">Work item</label>
+            </div>
+            <div class="govuk-radios__conditional@(assoc != "work" ? " govuk-radios__conditional--hidden" : null)" id="conditional-raid-issue-assoc-work">
+              <div class="govuk-form-group govuk-!-margin-bottom-0">
+                <label class="govuk-label" for="ProjectId">Work item</label>
+                <select class="govuk-select govuk-!-width-full" id="ProjectId" name="ProjectId">
+                  <option value="">— Select —</option>
+                  @foreach (var o in pj)
+                  {
+                    if (Model.ProjectId == o.Id) { <option value="@o.Id" selected>@o.Name</option> }
+                    else { <option value="@o.Id">@o.Name</option> }
+                  }
+                </select>
+              </div>
+            </div>
+
+            <div class="govuk-radios__item">
+              <input class="govuk-radios__input" id="raid-issue-assoc-product" name="AssociationKind" type="radio" value="product" data-aria-controls="conditional-raid-issue-assoc-product" @(assoc == "product" ? "checked" : null) />
+              <label class="govuk-label govuk-radios__label" for="raid-issue-assoc-product">Product (FIPS)</label>
+            </div>
+            <div class="govuk-radios__conditional@(assoc != "product" ? " govuk-radios__conditional--hidden" : null)" id="conditional-raid-issue-assoc-product">
+              <div class="govuk-form-group govuk-!-margin-bottom-0">
+                <label class="govuk-label" for="PrimaryProductId">FIPS product</label>
+                <select class="govuk-select govuk-!-width-full" id="PrimaryProductId" name="PrimaryProductId">
+                  <option value="">— Select —</option>
+                  @foreach (var o in fp)
+                  {
+                    if (Model.PrimaryProductId == o.Id) { <option value="@o.Id" selected>@o.Name</option> }
+                    else { <option value="@o.Id">@o.Name</option> }
+                  }
+                </select>
+              </div>
+            </div>
+
+            <div class="govuk-radios__item">
+              <input class="govuk-radios__input" id="raid-issue-assoc-org" name="AssociationKind" type="radio" value="organisation" data-aria-controls="conditional-raid-issue-assoc-org" @(assoc == "organisation" ? "checked" : null) />
+              <label class="govuk-label govuk-radios__label" for="raid-issue-assoc-org">Organisation</label>
+            </div>
+            <div class="govuk-radios__conditional@(assoc != "organisation" ? " govuk-radios__conditional--hidden" : null)" id="conditional-raid-issue-assoc-org">
+              <div class="govuk-form-group govuk-!-margin-bottom-0">
+                <div class="govuk-inset-text govuk-!-margin-bottom-0">
+                  This is an issue which is not associated with any specific product or work item. This could relate to people or funding for example.
+                </div>
+              </div>
+            </div>
+            </div>
+          </fieldset>
+        </div>
+
+        @if (isEdit)
+        {
+          <input type="hidden" name="Title" value="@Model.Title" />
+          <div class="govuk-form-group" data-raid-field="title">
+            <span class="govuk-label">Title</span>
+            <p class="govuk-body govuk-!-margin-bottom-1 govuk-!-font-weight-bold" id="raid-issue-title-readonly">@Model.Title</p>
+            <p class="govuk-hint govuk-!-margin-bottom-0">Issue titles cannot be amended once created to retain immutability for audit purposes.</p>
+          </div>
+        }
+        else
+        {
+          <div class="govuk-form-group" data-raid-field="title">
+            <label class="govuk-label" for="Title">Title</label>
+            <div class="govuk-hint">Issue titles cannot be amended once created to retain immutability for audit purposes.</div>
+            <input class="govuk-input" id="Title" name="Title" type="text" value="@Model.Title" required maxlength="200" />
+          </div>
+        }
+
+        <div class="govuk-form-group" data-raid-field="description" id="raid-issue-edit-description">
+          <label class="govuk-label" for="Description">Description</label>
+          <textarea class="govuk-textarea" id="Description" name="Description" rows="5">@Model.Description</textarea>
+        </div>
+
+        <fieldset class="govuk-fieldset govuk-!-margin-bottom-4" data-raid-field="status" id="raid-issue-edit-status">
+          <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Status</legend>
+          <div class="govuk-radios govuk-radios--small">
+            @foreach (var o in st)
+            {
+              <div class="govuk-radios__item">
+                @if (Model.StatusId == o.Id)
+                {<input class="govuk-radios__input" id="raid-issue-status-@o.Id" name="StatusId" type="radio" value="@o.Id" checked />}
+                else
+                {<input class="govuk-radios__input" id="raid-issue-status-@o.Id" name="StatusId" type="radio" value="@o.Id" />}
+                <label class="govuk-label govuk-radios__label" for="raid-issue-status-@o.Id">@o.Name</label>
+              </div>
+            }
+          </div>
+        </fieldset>
+
+        <fieldset class="govuk-fieldset govuk-!-margin-bottom-4" data-raid-field="severity" id="raid-issue-edit-severity">
+          <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Severity</legend>
+          <div class="govuk-radios govuk-radios--small">
+            @foreach (var o in sev)
+            {
+              <div class="govuk-radios__item">
+                @if (Model.SeverityId == o.Id)
+                {<input class="govuk-radios__input" id="raid-issue-sev-@o.Id" name="SeverityId" type="radio" value="@o.Id" checked />}
+                else
+                {<input class="govuk-radios__input" id="raid-issue-sev-@o.Id" name="SeverityId" type="radio" value="@o.Id" />}
+                <label class="govuk-label govuk-radios__label" for="raid-issue-sev-@o.Id">@o.Name</label>
+              </div>
+            }
+          </div>
+        </fieldset>
+
+        <fieldset class="govuk-fieldset govuk-!-margin-bottom-4" data-raid-field="priority" id="raid-issue-edit-priority">
+          <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Priority</legend>
+          <div class="govuk-radios govuk-radios--small">
+            @foreach (var o in pr)
+            {
+              <div class="govuk-radios__item">
+                @if (Model.PriorityId == o.Id)
+                {<input class="govuk-radios__input" id="raid-issue-pri-@o.Id" name="PriorityId" type="radio" value="@o.Id" checked />}
+                else
+                {<input class="govuk-radios__input" id="raid-issue-pri-@o.Id" name="PriorityId" type="radio" value="@o.Id" />}
+                <label class="govuk-label govuk-radios__label" for="raid-issue-pri-@o.Id">@o.Name</label>
+              </div>
+            }
+          </div>
+        </fieldset>
+
+        <fieldset class="govuk-fieldset govuk-!-margin-bottom-6" data-raid-field="categories" id="raid-issue-edit-categories">
+          <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Categories</legend>
+          <div class="govuk-hint">Select all that apply.</div>
+          <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes">
+            @foreach (var o in cat)
+            {
+              var chk = Model.IssueCategoryIds != null && Model.IssueCategoryIds.Contains(o.Id);
+              <div class="govuk-checkboxes__item">
+                @if (chk)
+                {<input class="govuk-checkboxes__input" id="raid-issue-cat-@o.Id" name="IssueCategoryIds" type="checkbox" value="@o.Id" checked />}
+                else
+                {<input class="govuk-checkboxes__input" id="raid-issue-cat-@o.Id" name="IssueCategoryIds" type="checkbox" value="@o.Id" />}
+                <label class="govuk-label govuk-checkboxes__label" for="raid-issue-cat-@o.Id">@o.Name</label>
+              </div>
+            }
+          </div>
+        </fieldset>
+
+        <fieldset class="govuk-fieldset govuk-!-margin-bottom-4" data-raid-field="divisions">
+          <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Divisions</legend>
+          <div class="govuk-hint">Select all that apply.</div>
+          <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes">
+            @foreach (var o in divs)
+            {
+              var dChk = Model.DivisionIds != null && Model.DivisionIds.Contains(o.Id);
+              <div class="govuk-checkboxes__item">
+                @if (dChk)
+                {<input class="govuk-checkboxes__input" id="raid-issue-div-@o.Id" name="DivisionIds" type="checkbox" value="@o.Id" checked />}
+                else
+                {<input class="govuk-checkboxes__input" id="raid-issue-div-@o.Id" name="DivisionIds" type="checkbox" value="@o.Id" />}
+                <label class="govuk-label govuk-checkboxes__label" for="raid-issue-div-@o.Id">@o.Name</label>
+              </div>
+            }
+          </div>
+        </fieldset>
+
+        <fieldset class="govuk-fieldset govuk-!-margin-bottom-4" data-raid-field="business-areas">
+          <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Business areas</legend>
+          <div class="govuk-hint">From admin settings — select all that apply.</div>
+          <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes">
+            @foreach (var o in baOpts)
+            {
+              var baChk = Model.BusinessAreaLookupIds != null && Model.BusinessAreaLookupIds.Contains(o.Id);
+              <div class="govuk-checkboxes__item">
+                @if (baChk)
+                {<input class="govuk-checkboxes__input" id="raid-issue-ba-@o.Id" name="BusinessAreaLookupIds" type="checkbox" value="@o.Id" checked />}
+                else
+                {<input class="govuk-checkboxes__input" id="raid-issue-ba-@o.Id" name="BusinessAreaLookupIds" type="checkbox" value="@o.Id" />}
+                <label class="govuk-label govuk-checkboxes__label" for="raid-issue-ba-@o.Id">@o.Name</label>
+              </div>
+            }
+          </div>
+        </fieldset>
+
+        <div data-raid-field="owner">
+          @await Html.PartialAsync("~/Views/Shared/_UserPicker.cshtml", ViewBag.OwnerUserPicker as UserPickerViewModel)
+        </div>
+        <div data-raid-field="sro">
+          @await Html.PartialAsync("~/Views/Shared/_UserPicker.cshtml", ViewBag.SroUserPicker as UserPickerViewModel)
+        </div>
+
+        @{
+          var targetErr = RaidErr("TargetResolution");
+        }
+        <div data-raid-field="targetResolution" id="raid-issue-edit-target-resolution">
+        @await Html.PartialAsync("~/Views/Modern/Raid/_RaidGovUkDateInput.cshtml", new RaidGovUkDateFieldVm
+        {
+          NamePrefix = "TargetResolution",
+          Legend = "Target resolution date",
+          Hint = "Optional.",
+          Day = Model.TargetResolutionDay,
+          Month = Model.TargetResolutionMonth,
+          Year = Model.TargetResolutionYear,
+          FieldIdPrefix = "raid-issue-target",
+          HasError = targetErr != null,
+          ErrorMessage = targetErr,
+        })
+        </div>
+
+        <div class="govuk-form-group" data-raid-field="workaround" id="raid-issue-edit-workaround">
+          <label class="govuk-label" for="Workaround">Workaround / mitigation</label>
+          <textarea class="govuk-textarea" id="Workaround" name="Workaround" rows="4">@Model.Workaround</textarea>
+        </div>
+
+        <h2 class="govuk-heading-m govuk-!-margin-top-6 govuk-!-margin-bottom-3">Detailed cause</h2>
+        <div class="govuk-form-group" data-raid-field="detailedCause">
+          <label class="govuk-label" for="DetailedCause">Detailed cause</label>
+          <div class="govuk-hint">Explain the underlying cause of the issue.</div>
+          <textarea class="govuk-textarea" id="DetailedCause" name="DetailedCause" rows="5">@Model.DetailedCause</textarea>
+        </div>
+
+        <h2 class="govuk-heading-m govuk-!-margin-bottom-3">Assurance arrangements</h2>
+        <div class="govuk-form-group" data-raid-field="assuranceArrangements">
+          <label class="govuk-label" for="AssuranceArrangements">Assurance arrangements</label>
+          <div class="govuk-hint">List all significant assurance arrangements (boards, checkpoints, mandated reviews).</div>
+          <textarea class="govuk-textarea" id="AssuranceArrangements" name="AssuranceArrangements" rows="5">@Model.AssuranceArrangements</textarea>
+        </div>
+
+        <h3 class="govuk-heading-s govuk-!-margin-bottom-2">Assurance events</h3>
+        <p class="govuk-body govuk-hint govuk-!-margin-bottom-3">Boards, reviews or other events — include dates and decisions taken or expected.</p>
+        <div id="issue-assurance-rows" data-next-index="@Model.AssuranceItems.Count">
+          @for (var i = 0; i < Model.AssuranceItems.Count; i++)
+          {
+            var row = Model.AssuranceItems[i];
+            <div class="issue-assurance-row govuk-!-margin-bottom-4 govuk-!-padding-left-4" data-issue-assurance-row style="border-left:4px solid #b1b4b6;">
+              <fieldset class="govuk-fieldset">
+                <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Assurance event @(i + 1)</legend>
+                <div class="govuk-form-group govuk-!-margin-bottom-3">
+                  <label class="govuk-label" for="assurance-kind-@i">Type</label>
+                  <select class="govuk-select govuk-!-width-full" id="assurance-kind-@i" name="AssuranceItems[@i].EventKind">
+                    <option value="">— Select —</option>
+                    @if (string.Equals(row.EventKind, "board", StringComparison.OrdinalIgnoreCase))
+                    { <option value="board" selected>Board</option> }
+                    else
+                    { <option value="board">Board</option> }
+                    @if (string.Equals(row.EventKind, "review", StringComparison.OrdinalIgnoreCase))
+                    { <option value="review" selected>Review</option> }
+                    else
+                    { <option value="review">Review</option> }
+                    @if (string.Equals(row.EventKind, "event", StringComparison.OrdinalIgnoreCase))
+                    { <option value="event" selected>Event</option> }
+                    else
+                    { <option value="event">Event</option> }
+                  </select>
+                </div>
+                <div class="govuk-form-group govuk-!-margin-bottom-3">
+                  <label class="govuk-label" for="assurance-title-@i">Name</label>
+                  <input class="govuk-input" id="assurance-title-@i" name="AssuranceItems[@i].Title" type="text" maxlength="500" value="@row.Title" />
+                </div>
+                @await Html.PartialAsync("~/Views/Modern/Raid/_RaidGovUkDateInput.cshtml", new RaidGovUkDateFieldVm
+                {
+                  NamePrefix = $"AssuranceItems[{i}].Event",
+                  Legend = "Date (optional)",
+                  Hint = "Day, month and year.",
+                  Day = row.EventDay,
+                  Month = row.EventMonth,
+                  Year = row.EventYear,
+                  FieldIdPrefix = $"raid-issue-assurance-{i}",
+                  HasError = false,
+                  ErrorMessage = null,
+                  FormGroupId = $"raid-issue-assurance-date-{i}",
+                })
+                <div class="govuk-form-group govuk-!-margin-bottom-0">
+                  <label class="govuk-label" for="assurance-decision-@i">Decision taken or expected</label>
+                  <textarea class="govuk-textarea" id="assurance-decision-@i" name="AssuranceItems[@i].DecisionSummary" rows="3">@row.DecisionSummary</textarea>
+                </div>
+              </fieldset>
+            </div>
+          }
+        </div>
+        <button type="button" class="govuk-button govuk-button--secondary govuk-!-margin-bottom-6" id="issue-assurance-add">Add another assurance event</button>
+
+        <template id="issue-assurance-row-template">
+          <div class="issue-assurance-row govuk-!-margin-bottom-4 govuk-!-padding-left-4" data-issue-assurance-row style="border-left:4px solid #b1b4b6;">
+            <fieldset class="govuk-fieldset">
+              <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Assurance event</legend>
+              <div class="govuk-form-group govuk-!-margin-bottom-3">
+                <label class="govuk-label" for="assurance-kind-__IX__">Type</label>
+                <select class="govuk-select govuk-!-width-full" id="assurance-kind-__IX__" name="AssuranceItems[__IX__].EventKind">
+                  <option value="">— Select —</option>
+                  <option value="board">Board</option>
+                  <option value="review">Review</option>
+                  <option value="event">Event</option>
+                </select>
+              </div>
+              <div class="govuk-form-group govuk-!-margin-bottom-3">
+                <label class="govuk-label" for="assurance-title-__IX__">Name</label>
+                <input class="govuk-input" id="assurance-title-__IX__" name="AssuranceItems[__IX__].Title" type="text" maxlength="500" value="" />
+              </div>
+              <div class="govuk-form-group @(false ? "govuk-form-group--error" : "")" id="raid-issue-assurance-date-__IX__">
+                <fieldset class="govuk-fieldset" role="group" aria-describedby="raid-issue-assurance-__IX__-hint ">
+                  <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Date (optional)</legend>
+                  <div id="raid-issue-assurance-__IX__-hint" class="govuk-hint">Day, month and year.</div>
+                  <div class="govuk-date-input" id="raid-issue-assurance-__IX__">
+                    <div class="govuk-date-input__item">
+                      <div class="govuk-form-group">
+                        <label class="govuk-label govuk-date-input__label" for="raid-issue-assurance-__IX__-day">Day</label>
+                        <input class="govuk-input govuk-date-input__input govuk-input--width-2" id="raid-issue-assurance-__IX__-day" name="AssuranceItems[__IX__].EventDay" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" value="" autocomplete="off" />
+                      </div>
+                    </div>
+                    <div class="govuk-date-input__item">
+                      <div class="govuk-form-group">
+                        <label class="govuk-label govuk-date-input__label" for="raid-issue-assurance-__IX__-month">Month</label>
+                        <input class="govuk-input govuk-date-input__input govuk-input--width-2" id="raid-issue-assurance-__IX__-month" name="AssuranceItems[__IX__].EventMonth" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" value="" autocomplete="off" />
+                      </div>
+                    </div>
+                    <div class="govuk-date-input__item">
+                      <div class="govuk-form-group">
+                        <label class="govuk-label govuk-date-input__label" for="raid-issue-assurance-__IX__-year">Year</label>
+                        <input class="govuk-input govuk-date-input__input govuk-input--width-4" id="raid-issue-assurance-__IX__-year" name="AssuranceItems[__IX__].EventYear" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" value="" autocomplete="off" />
+                      </div>
+                    </div>
+                  </div>
+                </fieldset>
+              </div>
+              <div class="govuk-form-group govuk-!-margin-bottom-0">
+                <label class="govuk-label" for="assurance-decision-__IX__">Decision taken or expected</label>
+                <textarea class="govuk-textarea" id="assurance-decision-__IX__" name="AssuranceItems[__IX__].DecisionSummary" rows="3"></textarea>
+              </div>
+            </fieldset>
+          </div>
+        </template>
+
+        <div class="govuk-button-group">
+          <button type="submit" class="govuk-button" data-module="govuk-button">@(isEdit ? "Save changes" : "Create issue")</button>
+          @if (isEdit)
+          {
+            <a class="govuk-button govuk-button--secondary" href="@Url.Action("IssueDetail", "ModernRaid", new { id = Model.Id })">Cancel</a>
+          }
+          else
+          {
+            <a class="govuk-button govuk-button--secondary" href="@Url.Action("Issues", "ModernRaid")">Cancel</a>
+          }
+        </div>
+      </form>
+    </div>
+  </div>
+  <div class="dfe-c-form-layout__aside">
+    @await Html.PartialAsync("~/Views/Modern/Raid/_RaidEditorGuidanceAside.cshtml", new RaidEditorGuidanceAsideVm { Mode = "issue" })
+  </div>
+</div>
+</div>
+
+@section Scripts {
+@{
+  var cspNonce = Context.Items["Nonce"]?.ToString() ?? "";
+}
+<script nonce="@cspNonce">
+(function () {
+  var form = document.querySelector('#sc-raid-issue-editor form[method="post"]');
+  var wrap = document.getElementById('issue-assurance-rows');
+  var addBtn = document.getElementById('issue-assurance-add');
+  var tpl = document.getElementById('issue-assurance-row-template');
+  if (addBtn && wrap && tpl) {
+    addBtn.addEventListener('click', function () {
+      var next = parseInt(wrap.getAttribute('data-next-index') || '0', 10);
+      var html = tpl.innerHTML.replace(/__IX__/g, String(next));
+      var d = document.createElement('div');
+      d.innerHTML = html.trim();
+      var node = d.firstElementChild;
+      if (node) {
+        wrap.appendChild(node);
+        wrap.setAttribute('data-next-index', String(next + 1));
+      }
+    });
+  }
+  if (form && wrap) {
+    form.addEventListener('submit', function () {
+      var rows = wrap.querySelectorAll('[data-issue-assurance-row]');
+      rows.forEach(function (row, idx) {
+        row.querySelectorAll('[name*="AssuranceItems"]').forEach(function (inp) {
+          inp.name = inp.name.replace(/AssuranceItems\[\d+\]/g, 'AssuranceItems[' + idx + ']');
+        });
+      });
+    });
+  }
+})();
+</script>
+}

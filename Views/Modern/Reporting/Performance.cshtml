@@ -1,0 +1,491 @@
+@using System
+@using System.Collections.Generic
+@using System.Linq
+@using Compass.Models
+@using Compass.ViewModels
+@model ModernReportingPerformancePageViewModel
+@{
+  ViewData["Title"] = "Performance report";
+  var m = Model ?? new ModernReportingPerformancePageViewModel();
+  var d = m.Detail;
+  var c = d?.Commission;
+  var hasData = d != null && string.IsNullOrEmpty(d.LoadError);
+  var baRows = m.FilteredBusinessAreas;
+  var hasActiveFilters = m.FilterBusinessAreaId.HasValue || m.FilterDirectorateId.HasValue;
+  var filterBaName = m.FilterBusinessAreaId is { } fba
+    ? m.BusinessAreaOptions.FirstOrDefault(x => x.Id == fba)?.Name
+    : null;
+  var filterDirName = m.FilterDirectorateId is { } fd
+    ? m.DirectorateOptions.FirstOrDefault(x => x.Id == fd)?.Name
+    : null;
+  var commissionTitle = c?.Name ?? (m.SelectedCommissionId.HasValue ? $"Commission #{m.SelectedCommissionId.Value}" : "this round");
+  var panelBaCount = baRows.Count;
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernReporting")">Reporting</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">Performance</li>
+}
+
+<div class="mr-dash">
+  <div class="dfe-c-page-title" style="margin-bottom:0.75rem;">
+    <div class="dfe-c-page-title__caption">Reporting</div>
+    <h1 class="dfe-c-page-title__heading">Performance report</h1>
+    <p class="dfe-c-body dfe-c-text-muted" style="margin:0;">Closed commission rounds: return and metric completion for the product catalogue, with a business area breakdown (same scope as <em>All products</em> in the commission workspace).</p>
+  </div>
+
+  @if (TempData["ErrorMessage"] != null)
+  {
+    <div class="dfe-c-error-summary" role="alert" style="margin-bottom:1.5rem;">
+      <p class="dfe-c-body" style="margin:0;">@TempData["ErrorMessage"]</p>
+    </div>
+  }
+  @if (!string.IsNullOrEmpty(m.LoadError))
+  {
+    <div class="dfe-c-error-summary" role="alert" style="margin-bottom:1.5rem;">
+      <p class="dfe-c-body" style="margin:0;">@m.LoadError</p>
+    </div>
+  }
+  else if (m.Commissions.Count == 0)
+  {
+    <p class="govuk-body dfe-c-text-muted">No completed commission rounds yet. When a round is past its submission window (or inactive), it will appear here.</p>
+  }
+  else
+  {
+    <div class="mr-toolbar mr-toolbar--compact govuk-!-margin-bottom-3">
+      <div class="mr-toolbar__row">
+        <div class="mr-toolbar__nav mr-toolbar__nav--compact">
+          @if (c != null)
+          {
+            <span class="mr-toolbar__period">@c.Name</span>
+            <span class="dfe-c-text-muted">· @CommissionDisplay.FormatPeriod(c.StartDate, c.EndDate)</span>
+            <span class="dfe-c-text-muted"> · Due @CommissionDisplay.FormatDueDate(c.DueDate)</span>
+          }
+          else if (m.SelectedCommissionId.HasValue)
+          {
+            <span class="mr-toolbar__period">Commission #@m.SelectedCommissionId.Value</span>
+          }
+        </div>
+        <form method="get" action="@Url.Action("Performance", "ModernReporting")" class="mr-toolbar__filters mr-toolbar__filters--compact" id="perf-report-filters" data-page-loading>
+          <select name="commissionId" id="perf-report-commission" class="govuk-select" aria-label="Commission round">
+            @foreach (var row in m.Commissions)
+            {
+              if (m.SelectedCommissionId == row.CommissionId)
+              {
+                <option value="@row.CommissionId" selected>@row.Name — @CommissionDisplay.FormatPeriod(row.StartDate, row.EndDate)</option>
+              }
+              else
+              {
+                <option value="@row.CommissionId">@row.Name — @CommissionDisplay.FormatPeriod(row.StartDate, row.EndDate)</option>
+              }
+            }
+          </select>
+          <select name="businessAreaId" id="perf-report-ba" class="govuk-select" aria-label="Business area">
+            <option value="">All areas</option>
+            @foreach (var ba in m.BusinessAreaOptions)
+            {
+              if (m.FilterBusinessAreaId == ba.Id)
+              {
+                <option value="@ba.Id" selected>@ba.Name</option>
+              }
+              else
+              {
+                <option value="@ba.Id">@ba.Name</option>
+              }
+            }
+          </select>
+          <select name="directorateId" id="perf-report-directorate" class="govuk-select" aria-label="Directorate">
+            <option value="">All directorates</option>
+            @foreach (var dir in m.DirectorateOptions)
+            {
+              if (m.FilterDirectorateId == dir.Id)
+              {
+                <option value="@dir.Id" selected>@dir.Name</option>
+              }
+              else
+              {
+                <option value="@dir.Id">@dir.Name</option>
+              }
+            }
+          </select>
+          <button type="submit" class="govuk-button govuk-!-margin-bottom-0" id="perf-filter-apply">Apply</button>
+        </form>
+      </div>
+    </div>
+
+    @if (d == null && m.SelectedCommissionId.HasValue)
+    {
+      <p class="govuk-body dfe-c-text-muted govuk-!-margin-bottom-4">Reporting could not be loaded for this commission round.</p>
+    }
+    else if (!string.IsNullOrEmpty(d?.LoadError))
+    {
+      <div class="dfe-c-error-summary" role="alert" style="margin-bottom:1.5rem;">
+        <p class="dfe-c-body" style="margin:0;">@d!.LoadError</p>
+      </div>
+      @if (c != null)
+      {
+        <div class="govuk-button-group govuk-!-margin-top-4">
+          <a class="govuk-button govuk-button--secondary" href="@Url.Action("Commission", "ModernPerformance", new { commissionId = c.Id, tab = "all" })">Open commission workspace (all products)</a>
+        </div>
+      }
+    }
+    else if (hasData)
+    {
+      var overviewLines = new List<string>();
+      if (hasActiveFilters)
+      {
+        overviewLines.Add("Figures on this page reflect the selected business area and/or directorate filter.");
+      }
+      overviewLines.Add($"This round ({commissionTitle}) includes {d!.ProductsInScope:N0} in-scope products from the FIPS product catalogue.");
+      overviewLines.Add($"{d.Returned:N0} products returned metrics ({d.ReturnRatePercent:0.#}% return rate), with {d.Submitted:N0} submitted on time and {d.Late:N0} late.");
+      overviewLines.Add($"Metric completion is {d.MetricCompletionPercent:0.#}% across the applicable reporting grid ({d.CompletedMetricCells:N0} of {d.ApplicableMetricCells:N0} cells).");
+      var totP = baRows.Sum(x => x.Total);
+      var totRet = baRows.Sum(x => x.Returned);
+      var totNs = baRows.Sum(x => x.NotStarted);
+      var totIp = baRows.Sum(x => x.InProgress);
+      var totSub = baRows.Sum(x => x.Submitted);
+      var totLate = baRows.Sum(x => x.Late);
+
+  <section class="mr-section" id="perf-s-summary" aria-labelledby="perf-h-summary">
+    <h2 id="perf-h-summary" class="mr-section__heading">Summary</h2>
+    <div class="dfe-c-grid dfe-c-grid--4">
+      <div class="dfe-c-metric">
+        <div class="dfe-c-metric__number">@d.ProductsInScope</div>
+        <div class="dfe-c-metric__label">Products in scope</div>
+      </div>
+      <div class="dfe-c-metric">
+        <div class="dfe-c-metric__number">@d.Returned</div>
+        <div class="dfe-c-metric__label">Returned (submitted + late)</div>
+      </div>
+      <div class="dfe-c-metric">
+        <div class="dfe-c-metric__number">@d.ReturnRatePercent%</div>
+        <div class="dfe-c-metric__label">Return rate</div>
+      </div>
+      <div class="dfe-c-metric">
+        <div class="dfe-c-metric__number">@d.MetricCompletionPercent%</div>
+        <div class="dfe-c-metric__label">Metric completion</div>
+      </div>
+      <div class="dfe-c-metric">
+        <div class="dfe-c-metric__number">@d.NotStarted</div>
+        <div class="dfe-c-metric__label">Not started</div>
+      </div>
+      <div class="dfe-c-metric">
+        <div class="dfe-c-metric__number">@d.InProgress</div>
+        <div class="dfe-c-metric__label">In progress</div>
+      </div>
+      <div class="dfe-c-metric dfe-c-metric--green">
+        <div class="dfe-c-metric__number">@d.Submitted</div>
+        <div class="dfe-c-metric__label">Submitted on time</div>
+      </div>
+      <div class="dfe-c-metric dfe-c-metric--red">
+        <div class="dfe-c-metric__number">@d.Late</div>
+        <div class="dfe-c-metric__label">Late</div>
+      </div>
+    </div>
+    <div class="govuk-inset-text govuk-!-margin-top-4 govuk-!-margin-bottom-0">
+      <h3 class="govuk-heading-s govuk-!-margin-top-0">Data summary</h3>
+      @foreach (var line in overviewLines)
+      {
+        <p class="govuk-body govuk-!-margin-bottom-2">@line</p>
+      }
+    </div>
+  </section>
+
+  <div class="mr-section-controls govuk-!-margin-bottom-3" style="display:flex;gap:0.75rem;flex-wrap:wrap;align-items:center;">
+    <button type="button" class="govuk-button govuk-button--secondary" id="perf-expand-all">Expand all sections</button>
+    <button type="button" class="govuk-button govuk-button--secondary" id="perf-collapse-all">Collapse all sections</button>
+  </div>
+
+  <div class="mr-report-section-panel dfe-c-collapsible dfe-c-collapsible--open govuk-!-margin-bottom-3">
+    <button type="button" class="dfe-c-collapsible__trigger" aria-expanded="true">
+      <span class="dfe-c-collapsible__icon">−</span>
+      <span>Business area summary</span>
+      <span class="dfe-c-collapsible__status"><span class="govuk-tag govuk-tag--grey">@panelBaCount</span></span>
+    </button>
+    <div class="dfe-c-collapsible__body">
+      <div class="mr-single-page-block" role="region" aria-labelledby="perf-h-ba">
+        <h2 id="perf-h-ba" class="govuk-visually-hidden">Business area summary</h2>
+        @if (hasActiveFilters)
+        {
+          <p class="dfe-c-body-s dfe-c-text-muted govuk-!-margin-bottom-2" style="margin-top:-0.25rem;">
+            Filtered
+            @if (!string.IsNullOrEmpty(filterBaName))
+            {
+              <span> to business area <strong>@filterBaName</strong></span>
+            }
+            @if (!string.IsNullOrEmpty(filterDirName))
+            {
+              <span>@(string.IsNullOrEmpty(filterBaName) ? " to " : " and ") directorate <strong>@filterDirName</strong></span>
+            }
+            . <a class="dfe-c-link" href="@Url.Action("Performance", "ModernReporting", new { commissionId = m.SelectedCommissionId })">Clear filters</a>
+          </p>
+        }
+        else
+        {
+          <p class="dfe-c-body-s dfe-c-text-muted govuk-!-margin-bottom-2" style="margin-top:-0.25rem;">Business area and directorate come from the FIPS product categories (same catalogue as the commission reporting grid).</p>
+        }
+        @if (d.BusinessAreas.Count == 0)
+        {
+          <p class="dfe-c-body-s dfe-c-text-muted">No in-scope products for this commission.</p>
+        }
+        else if (baRows.Count == 0)
+        {
+          <p class="dfe-c-body-s dfe-c-text-muted">No rows match this filter.</p>
+        }
+        else
+        {
+          <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
+            <div class="dfe-c-table-wrap">
+              <table class="mr-ba-table" id="perf-business-area-table">
+                <caption class="govuk-visually-hidden">Completion by business area</caption>
+                <thead>
+                  <tr>
+                    <th scope="col" rowspan="2" class="mr-ba-table__fixed mr-ba-table__area-col">Business area</th>
+                    <th scope="col" rowspan="2" class="mr-ba-table__num-hdr">Prod</th>
+                    <th scope="col" colspan="3" class="mr-ba-table__group mr-ba-table__group--ms">Return &amp; completion</th>
+                    <th scope="col" colspan="4" class="mr-ba-table__group mr-ba-table__group--pri">Submission status</th>
+                  </tr>
+                  <tr>
+                    <th class="mr-ba-table__sub mr-ba-table__sub--ms" scope="col">Ret</th>
+                    <th class="mr-ba-table__sub mr-ba-table__sub--ms" scope="col">Ret %</th>
+                    <th class="mr-ba-table__sub mr-ba-table__sub--ms" scope="col">Met %</th>
+                    <th class="mr-ba-table__sub mr-ba-table__sub--pri" scope="col">N/S</th>
+                    <th class="mr-ba-table__sub mr-ba-table__sub--pri" scope="col">I/P</th>
+                    <th class="mr-ba-table__sub mr-ba-table__sub--pri" scope="col">Sub</th>
+                    <th class="mr-ba-table__sub mr-ba-table__sub--pri" scope="col">Late</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @foreach (var row in baRows)
+                  {
+                    <tr>
+                      <th scope="row" class="mr-ba-table__fixed mr-ba-table__area-col">@row.BusinessArea</th>
+                      <td class="mr-ba-table__num"><span class="mr-ba-num mr-ba-num--strong">@row.Total</span></td>
+                      <td class="mr-ba-table__cell--ms mr-ba-table__num"><span class="mr-ba-num @(row.Returned > 0 ? "mr-ba-num--highlight" : "mr-ba-num--muted")">@row.Returned</span></td>
+                      <td class="mr-ba-table__cell--ms mr-ba-table__num"><span class="mr-ba-num">@row.ReturnRatePercent%</span></td>
+                      <td class="mr-ba-table__cell--ms mr-ba-table__num"><span class="mr-ba-num">@row.MetricCompletionPercent%</span></td>
+                      <td class="mr-ba-table__cell--pri mr-ba-table__num"><span class="mr-ba-num @(row.NotStarted > 0 ? "" : "mr-ba-num--muted")">@row.NotStarted</span></td>
+                      <td class="mr-ba-table__cell--pri mr-ba-table__num"><span class="mr-ba-num @(row.InProgress > 0 ? "" : "mr-ba-num--muted")">@row.InProgress</span></td>
+                      <td class="mr-ba-table__cell--pri mr-ba-table__num"><span class="mr-ba-num mr-ba-num--pri @(row.Submitted > 0 ? "mr-ba-num--pri-low" : "mr-ba-num--muted")">@row.Submitted</span></td>
+                      <td class="mr-ba-table__cell--pri mr-ba-table__num"><span class="mr-ba-num mr-ba-num--pri @(row.Late > 0 ? "mr-ba-num--pri-crit" : "mr-ba-num--muted")">@row.Late</span></td>
+                    </tr>
+                  }
+                </tbody>
+                <tfoot>
+                  <tr class="mr-ba-table__total-row">
+                    <th scope="row" class="mr-ba-table__fixed mr-ba-table__area-col">Total</th>
+                    <td class="mr-ba-table__num"><span class="mr-ba-num mr-ba-num--strong">@totP</span></td>
+                    <td class="mr-ba-table__cell--ms mr-ba-table__num"><span class="mr-ba-num mr-ba-num--strong">@totRet</span></td>
+                    <td class="mr-ba-table__cell--ms mr-ba-table__num"><span class="mr-ba-num mr-ba-num--strong">@d.ReturnRatePercent%</span></td>
+                    <td class="mr-ba-table__cell--ms mr-ba-table__num"><span class="mr-ba-num mr-ba-num--strong">@d.MetricCompletionPercent%</span></td>
+                    <td class="mr-ba-table__cell--pri mr-ba-table__num"><span class="mr-ba-num mr-ba-num--strong">@totNs</span></td>
+                    <td class="mr-ba-table__cell--pri mr-ba-table__num"><span class="mr-ba-num mr-ba-num--strong">@totIp</span></td>
+                    <td class="mr-ba-table__cell--pri mr-ba-table__num"><span class="mr-ba-num mr-ba-num--pri mr-ba-num--pri-low">@totSub</span></td>
+                    <td class="mr-ba-table__cell--pri mr-ba-table__num"><span class="mr-ba-num mr-ba-num--pri mr-ba-num--pri-crit">@totLate</span></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        }
+      </div>
+    </div>
+  </div>
+
+  <div class="mr-report-section-panel dfe-c-collapsible dfe-c-collapsible--open govuk-!-margin-bottom-3">
+    <button type="button" class="dfe-c-collapsible__trigger" aria-expanded="true">
+      <span class="dfe-c-collapsible__icon">−</span>
+      <span>Return and completion detail</span>
+      <span class="dfe-c-collapsible__status"><span class="govuk-tag govuk-tag--grey">@d.ProductsInScope</span></span>
+    </button>
+    <div class="dfe-c-collapsible__body">
+      <section class="mr-section" style="margin-top:0.5rem;" aria-labelledby="perf-h-returns" id="perf-s-returns">
+        <h2 id="perf-h-returns" class="govuk-visually-hidden">Return and completion detail</h2>
+        <p class="dfe-c-body-s dfe-c-text-muted" style="margin-top:-0.5rem;margin-bottom:1rem;">Status breakdown for <strong>@commissionTitle</strong>.</p>
+        <div class="mr-submission-summary">
+          <div class="dfe-c-grid dfe-c-grid--4">
+            <div class="dfe-c-metric dfe-c-metric--green">
+              <div class="dfe-c-metric__number">@d.Submitted</div>
+              <div class="dfe-c-metric__label">Submitted on time</div>
+            </div>
+            <div class="dfe-c-metric">
+              <div class="dfe-c-metric__number">@d.InProgress</div>
+              <div class="dfe-c-metric__label">In progress</div>
+            </div>
+            <div class="dfe-c-metric dfe-c-metric--red">
+              <div class="dfe-c-metric__number">@d.Late</div>
+              <div class="dfe-c-metric__label">Late</div>
+            </div>
+            <div class="dfe-c-metric">
+              <div class="dfe-c-metric__number">@d.NotStarted</div>
+              <div class="dfe-c-metric__label">Not started</div>
+            </div>
+          </div>
+          <div class="mr-progress-bar govuk-!-margin-top-3" role="group" aria-label="Return rate — share of in-scope products that returned metrics">
+            <div class="mr-progress-bar__label govuk-body-s govuk-!-margin-bottom-1">Return rate: <strong>@d.ReturnRatePercent%</strong> (@d.Returned of @d.ProductsInScope products returned)</div>
+            <div class="mr-progress-bar__track" aria-hidden="true"><div class="mr-progress-bar__fill" style="width:@(d.ReturnRatePercent.ToString(System.Globalization.CultureInfo.InvariantCulture))%;"></div></div>
+          </div>
+          <div class="mr-progress-bar govuk-!-margin-top-2" role="group" aria-label="Metric completion across applicable cells">
+            <div class="mr-progress-bar__label govuk-body-s govuk-!-margin-bottom-1">Metric completion: <strong>@d.MetricCompletionPercent%</strong> (@d.CompletedMetricCells of @d.ApplicableMetricCells cells)</div>
+            <div class="mr-progress-bar__track" aria-hidden="true"><div class="mr-progress-bar__fill" style="width:@(d.MetricCompletionPercent.ToString(System.Globalization.CultureInfo.InvariantCulture))%;"></div></div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <div class="govuk-button-group govuk-!-margin-top-6">
+    <a class="govuk-button govuk-button--secondary" href="@Url.Action("Commission", "ModernPerformance", new { commissionId = c!.Id, tab = "all" })">Open commission workspace (all products)</a>
+    <a class="dfe-c-link" href="@Url.Action("Index", "ModernPerformance")">Performance — Commissions</a>
+  </div>
+    }
+  }
+</div>
+
+@section Styles {
+<style>
+  .mr-dash,
+  .mr-dash * {
+    border-radius: 0 !important;
+  }
+  .mr-dash { margin-bottom: 3rem; }
+  .mr-toolbar {
+    background: var(--rpt-bg-card, #fff);
+    border: 1px solid var(--rpt-border, #e5e7eb);
+    border-radius: var(--rpt-radius, 8px);
+    padding: 0.65rem 0.85rem;
+    box-shadow: var(--rpt-shadow, 0 1px 3px rgba(0,0,0,0.06));
+    margin-bottom: 1rem;
+  }
+  .mr-toolbar--compact .mr-toolbar__row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 1rem;
+    justify-content: space-between;
+  }
+  .mr-toolbar__nav { display: flex; align-items: center; gap: 0.65rem; flex: 0 1 auto; min-width: 0; }
+  .mr-toolbar__nav--compact { flex-wrap: wrap; }
+  .mr-toolbar__period { font-weight: 700; font-size: 0.9375rem; white-space: nowrap; }
+  /* One horizontal row: avoid min(100%, 20rem) cap that stacked controls. */
+  .mr-toolbar__filters {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+    overflow: visible;
+    max-width: 100%;
+  }
+  .mr-toolbar__filters--compact { flex: 1 1 auto; justify-content: flex-end; min-width: 0; }
+  .mr-toolbar__filters .govuk-select,
+  .mr-toolbar__filters .govuk-button { flex: 0 0 auto; }
+  .mr-toolbar__filters .govuk-select { max-width: 100%; }
+  .mr-toolbar__filters .govuk-button { margin-bottom: 0; }
+  #perf-report-commission { flex: 1 1 26rem; min-width: 22rem; max-width: 36rem; }
+  #perf-report-ba, #perf-report-directorate { width: 18rem; min-width: 15rem; max-width: 24rem; }
+  #perf-filter-apply { min-width: 5.5rem; }
+  .mr-section { margin-bottom: 2.5rem; scroll-margin-top: 1rem; }
+  .mr-section__heading {
+    font-size: 1.25rem;
+    font-weight: 700;
+    margin: 0 0 1rem 0;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid var(--navy, #1d70b8);
+  }
+  .mr-progress-bar__track {
+    height: 0.75rem;
+    background: #f3f2f1;
+    border-radius: 999px;
+    overflow: hidden;
+    border: 1px solid #b1b4b6;
+  }
+  .mr-progress-bar__fill {
+    height: 100%;
+    background: linear-gradient(90deg, #5694ca, #1d70b8);
+    border-radius: 999px;
+    min-width: 2px;
+    transition: width 0.35s ease;
+  }
+  .mr-ba-table { border-collapse: collapse; font-size: 0.8125rem; width: 100%; min-width: 44rem; }
+  .mr-ba-table th, .mr-ba-table td { padding: 0.4rem 0.35rem; border: 1px solid var(--rpt-border, #e5e7eb); vertical-align: middle; }
+  .mr-ba-table thead th { background: #f3f2f1; font-weight: 700; position: sticky; top: 0; z-index: 1; text-align: center; }
+  .mr-ba-table__area-col {
+    text-align: left !important;
+    white-space: normal;
+    min-width: 10rem;
+    max-width: 22rem;
+    font-weight: 600;
+    hyphens: auto;
+  }
+  .mr-ba-table__num-hdr { font-variant-numeric: tabular-nums; }
+  .mr-ba-table__num { text-align: center; font-variant-numeric: tabular-nums; }
+  .mr-ba-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.75rem;
+    padding: 0.2rem 0.45rem;
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 0.8125rem;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.2;
+    background: #f3f2f1;
+    color: #505a5f;
+  }
+  .mr-ba-num--strong { background: #e8eaed; color: #0b0c0c; font-weight: 700; }
+  .mr-ba-num--muted { opacity: 0.45; font-weight: 500; }
+  .mr-ba-num--highlight { background: #e8f5e9; color: #005a30; }
+  .mr-ba-num--pri-crit { background: #fde8e5; color: #942514; }
+  .mr-ba-num--pri-low { background: #e3f5eb; color: #005a30; }
+  .mr-ba-table__group { font-weight: 700; }
+  .mr-ba-table__group--ms { background: #f0f4f5; border-bottom: 3px solid #5694ca; }
+  .mr-ba-table__group--pri { background: #f0f5ef; border-bottom: 3px solid #00703c; }
+  .mr-ba-table__sub { font-weight: 600; font-size: 0.6875rem; }
+  .mr-ba-table__sub--ms { background: #f7fafb; }
+  .mr-ba-table__sub--pri { background: #f7faf6; }
+  .mr-ba-table__cell--ms { background: rgba(86, 148, 202, 0.04); }
+  .mr-ba-table__cell--pri { background: rgba(0, 112, 60, 0.04); }
+  .mr-ba-table__fixed { position: sticky; left: 0; background: #fff; z-index: 1; box-shadow: 2px 0 4px rgba(0,0,0,0.04); }
+  .mr-ba-table thead .mr-ba-table__fixed { background: #f3f2f1; z-index: 2; }
+  .mr-ba-table tfoot .mr-ba-table__fixed { background: #f3f2f1; z-index: 2; }
+  .mr-ba-table tbody tr:nth-child(even) { background: #fafafa; }
+  .mr-ba-table tbody tr:nth-child(even) .mr-ba-table__fixed { background: #fafafa; }
+  .mr-ba-table__total-row th, .mr-ba-table__total-row td { background: #ebecef; font-weight: 700; border-top: 2px solid #333; }
+  @@media (max-width: 768px) {
+    .mr-toolbar__row { flex-wrap: wrap; align-items: center; }
+    .mr-toolbar__filters--compact { justify-content: flex-start; }
+    #perf-report-commission { width: min(100%, 32rem); min-width: 16rem; }
+    #perf-report-ba, #perf-report-directorate { width: min(100%, 24rem); min-width: 14rem; }
+  }
+</style>
+}
+
+@section Scripts {
+  <script nonce="@Context.Items["Nonce"]">
+    document.addEventListener('DOMContentLoaded', function () {
+      function reportSectionPanelsSetExpanded(expanded) {
+        document.querySelectorAll('.mr-report-section-panel').forEach(function (panel) {
+          var btn = panel.querySelector('.dfe-c-collapsible__trigger');
+          var icon = btn ? btn.querySelector('.dfe-c-collapsible__icon') : null;
+          if (expanded) {
+            panel.classList.add('dfe-c-collapsible--open');
+            if (icon) icon.textContent = '\u2212';
+            if (btn) btn.setAttribute('aria-expanded', 'true');
+          } else {
+            panel.classList.remove('dfe-c-collapsible--open');
+            if (icon) icon.textContent = '+';
+            if (btn) btn.setAttribute('aria-expanded', 'false');
+          }
+        });
+      }
+      var ex = document.getElementById('perf-expand-all');
+      var cl = document.getElementById('perf-collapse-all');
+      if (ex) ex.addEventListener('click', function () { reportSectionPanelsSetExpanded(true); });
+      if (cl) cl.addEventListener('click', function () { reportSectionPanelsSetExpanded(false); });
+    });
+  </script>
+}

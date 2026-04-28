@@ -1,0 +1,155 @@
+@model Compass.Models.Action
+@using Compass.Models
+@using Compass.ViewModels.Modern
+@{
+  ViewData["Title"] = "Edit mitigation action";
+  var riskId = (int)(ViewBag.RiskId ?? 0);
+  var riskTitle = ViewBag.RiskTitle as string ?? "Risk";
+  var backUrl = ViewBag.BackUrl as string ?? Url.Action("RiskDetail", "ModernRaid", new { id = riskId, tab = "mitigations" })!;
+  var effectiveStatus = ViewBag.EffectiveStatus as string ?? "Not started";
+  var ownerPicker = ViewBag.MitigationOwnerUserPicker as UserPickerViewModel;
+  var mitTargetDateVm = ViewBag.MitigationTargetDate as RaidGovUkDateFieldVm;
+  var statusOpts = new[] { "Not started", "In progress", "Complete", "Overdue" };
+  var ms = ViewData.ModelState;
+  if (mitTargetDateVm == null)
+  {
+    RaidDateFormHelper.SplitDateParts(Model.DueDate, out var d0, out var m0, out var y0);
+    mitTargetDateVm = new RaidGovUkDateFieldVm
+    {
+      NamePrefix = "TargetDate",
+      Legend = "Target date",
+      FormGroupId = "targetDate",
+      FieldIdPrefix = "raid-mit-edit-targetdate",
+      Day = d0, Month = m0, Year = y0
+    };
+  }
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernRaid")">RAID</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Risks", "ModernRaid")">Risks</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("RiskDetail", "ModernRaid", new { id = riskId, tab = "mitigations" })">@riskTitle</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">Edit mitigation</li>
+}
+
+<div id="sc-raid-mitigation-edit" class="dfe-c-screen dfe-c-screen--active">
+<div class="dfe-c-page modern-work-page govuk-!-width-full">
+  <p class="govuk-body govuk-!-margin-bottom-4">
+    <a href="@backUrl" class="govuk-link govuk-link--no-visited-state">← Back to mitigations</a>
+  </p>
+
+  @if (!ViewData.ModelState.IsValid)
+  {
+    <div class="govuk-error-summary govuk-!-margin-bottom-6" data-module="govuk-error-summary" aria-labelledby="error-summary-title" role="alert">
+      <h2 class="govuk-error-summary__title" id="error-summary-title">There is a problem</h2>
+      <div class="govuk-error-summary__body">
+        <ul class="govuk-list govuk-error-summary__list">
+          @foreach (var kv in ms)
+          {
+            foreach (var err in kv.Value!.Errors)
+            {
+              if (!string.IsNullOrEmpty(err.ErrorMessage))
+              {
+                <li><a href="#@kv.Key">@err.ErrorMessage</a></li>
+              }
+            }
+          }
+        </ul>
+      </div>
+    </div>
+  }
+
+  @if (TempData["Message"] is string tm)
+  {
+    <div class="govuk-notification-banner govuk-notification-banner--success govuk-!-margin-bottom-4" role="region">
+      <div class="govuk-notification-banner__header"><h2 class="govuk-notification-banner__title">Success</h2></div>
+      <div class="govuk-notification-banner__content"><p class="govuk-notification-banner__heading">@tm</p></div>
+    </div>
+  }
+
+  <div class="dfe-c-page-title govuk-!-margin-bottom-6">
+    <div class="dfe-c-page-title__caption">Mitigation · A-@(Model.Id.ToString("D4"))</div>
+    <h1 class="dfe-c-page-title__heading govuk-heading-l">Edit mitigation action</h1>
+    <p class="dfe-c-page-title__lede govuk-body">Update the action plan, ownership, dates, and status for this mitigation.</p>
+  </div>
+
+  <div class="dfe-c-form-layout">
+    <div class="dfe-c-form-layout__main govuk-!-width-full">
+      <form method="post" action="@Url.Action("MitigationEdit", "ModernRaid", new { riskId, actionId = Model.Id })" novalidate>
+        @Html.AntiForgeryToken()
+
+        <div class="govuk-form-group@(ms["title"]?.Errors?.Any() == true ? " govuk-form-group--error" : "")" id="title">
+          <label class="govuk-label govuk-label--s" for="raid-mit-edit-title">Action</label>
+          @if (ms["title"]?.Errors?.Any() == true)
+          {
+            <span class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span>@ms["title"]?.Errors?.FirstOrDefault()?.ErrorMessage</span>
+          }
+          else
+          {
+            <div id="raid-mit-edit-title-hint" class="govuk-hint">Use “We are” or “We will” language. Maximum 450 characters.</div>
+          }
+          <textarea class="govuk-textarea@(ms["title"]?.Errors?.Any() == true ? " govuk-textarea--error" : "")"
+                    id="raid-mit-edit-title"
+                    name="title"
+                    rows="8"
+                    maxlength="450"
+                    aria-describedby="raid-mit-edit-title-hint">@Model.Title</textarea>
+        </div>
+
+        @if (ownerPicker != null)
+        {
+          <div class="govuk-form-group user-picker-wrapper user-picker-wrapper--full-width@(ms["AssignedToUserId"]?.Errors?.Any() == true ? " govuk-form-group--error" : "")">
+            @if (ms["AssignedToUserId"]?.Errors?.Any() == true)
+            {
+              <span class="govuk-error-message govuk-!-margin-bottom-2"><span class="govuk-visually-hidden">Error:</span>@ms["AssignedToUserId"]?.Errors?.FirstOrDefault()?.ErrorMessage</span>
+            }
+            @await Html.PartialAsync("~/Views/Shared/_UserPicker.cshtml", ownerPicker)
+          </div>
+        }
+
+        @await Html.PartialAsync("~/Views/Modern/Raid/_RaidGovUkDateInput.cshtml", mitTargetDateVm)
+
+        <div class="govuk-form-group@(ms["status"]?.Errors?.Any() == true ? " govuk-form-group--error" : "")" id="status">
+          <fieldset class="govuk-fieldset" aria-describedby="raid-mit-edit-status-hint @(ms["status"]?.Errors?.Any() == true ? "raid-mit-status-error" : "")">
+            <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Status</legend>
+            <div id="raid-mit-edit-status-hint" class="govuk-hint">Choose the current state of this mitigation action.</div>
+            @if (ms["status"]?.Errors?.Any() == true)
+            {
+              <p id="raid-mit-status-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error: </span>@ms["status"]?.Errors?.FirstOrDefault()?.ErrorMessage</p>
+            }
+            <div class="govuk-radios" data-module="govuk-radios">
+            @{ var sidx = 0; }
+            @foreach (var opt in statusOpts)
+            {
+              sidx++;
+              var id = "raid-mit-status-" + sidx;
+              <div class="govuk-radios__item">
+                <input class="govuk-radios__input" type="radio" name="status" value="@opt" id="@id" @((string.Equals(effectiveStatus, opt, StringComparison.Ordinal) ? "checked" : null)) />
+                <label class="govuk-label govuk-radios__label" for="@id">@opt</label>
+              </div>
+            }
+            </div>
+          </fieldset>
+        </div>
+
+        <div class="govuk-form-group">
+          <label class="govuk-label govuk-label--s" for="raid-mit-edit-note">Update note (optional)</label>
+          <div id="raid-mit-edit-note-hint" class="govuk-hint">Brief note of what changed — appended to update history.</div>
+          <textarea class="govuk-textarea govuk-!-width-full" rows="4"
+                 id="raid-mit-edit-note"
+                 name="updateNote"
+                 maxlength="280"
+                 aria-describedby="raid-mit-edit-note-hint"
+                 autocomplete="off"></textarea>
+        </div>
+
+        <div class="govuk-button-group govuk-!-margin-top-6">
+          <button type="submit" class="govuk-button" data-module="govuk-button">Save mitigation</button>
+          <a href="@backUrl" class="govuk-link govuk-link--no-visited-state govuk-!-margin-left-3 govuk-font-weight-bold">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+</div>
