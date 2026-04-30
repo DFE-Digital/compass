@@ -28,6 +28,7 @@ public sealed class FipsProductWriteService : IFipsProductWriteService
         int[]? typeIds,
         int[]? categorisationItemIds = null,
         int? reportingContactUserId = null,
+        bool isEnterpriseService = false,
         CancellationToken cancellationToken = default)
     {
         var product = await _db.CMDBProducts
@@ -68,6 +69,14 @@ public sealed class FipsProductWriteService : IFipsProductWriteService
             LogAudit(product.Id, actorEmail, changedBy, "update", "ProductURL", product.ProductURL, productURL);
             product.ProductURL = productURL;
             changes.Add("Product URL");
+        }
+
+        if (product.IsEnterpriseService != isEnterpriseService)
+        {
+            LogAudit(product.Id, actorEmail, changedBy, "update", "IsEnterpriseService",
+                product.IsEnterpriseService.ToString(), isEnterpriseService.ToString());
+            product.IsEnterpriseService = isEnterpriseService;
+            changes.Add("Enterprise service");
         }
 
         SyncJoinTable(product.BusinessAreas, businessAreaIds ?? Array.Empty<int>(),

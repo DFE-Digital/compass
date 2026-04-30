@@ -1,0 +1,163 @@
+@model Compass.ViewModels.Modern.CmsAccessRequestDetailViewModel
+@{
+  ViewData["Title"] = "CMS request — " + Model.RequestorDisplayName;
+  var returnTab = Model.ReturnTab ?? "new";
+  var draftOutcome = Model.DraftOutcome ?? Model.Outcome;
+  var draftToken = Model.DraftRegistrationToken ?? Model.RegistrationToken;
+}
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernOperations")">Operations</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("CmsRequests", "ModernOperations", new { tab = returnTab })">CMS requests</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">@Model.RequestorDisplayName</li>
+}
+
+<div class="modern-work-page" style="max-width: 48rem; box-sizing: border-box;">
+  <div class="dfe-c-mb-4">
+    <div class="dfe-c-page-title" style="margin:0;">
+      <div class="dfe-c-page-title__caption">Operations · CMS request</div>
+      <h1 class="dfe-c-page-title__heading">@Model.RequestorDisplayName</h1>
+    </div>
+  </div>
+
+  @if (TempData["ErrorMessage"] is string err && !string.IsNullOrWhiteSpace(err))
+  {
+    <div class="govuk-error-summary" role="alert" data-module="govuk-error-summary">
+      <h2 class="govuk-error-summary__title">There is a problem</h2>
+      <div class="govuk-error-summary__body"><p>@err</p></div>
+    </div>
+  }
+
+  <dl class="govuk-summary-list govuk-!-margin-bottom-6">
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Email</dt>
+      <dd class="govuk-summary-list__value">@Model.RequestorEmail</dd>
+    </div>
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">CMS</dt>
+      <dd class="govuk-summary-list__value">@Model.CmsName</dd>
+    </div>
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Sign-in page</dt>
+      <dd class="govuk-summary-list__value"><a class="govuk-link" href="@Model.SignInPageUrl" target="_blank" rel="noopener noreferrer">@Model.SignInPageUrl</a></dd>
+    </div>
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Publisher access</dt>
+      <dd class="govuk-summary-list__value">@(Model.PublisherAccessRequired ? "Yes" : "No")</dd>
+    </div>
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Comments</dt>
+      <dd class="govuk-summary-list__value">@(string.IsNullOrWhiteSpace(Model.Comments) ? "—" : Model.Comments)</dd>
+    </div>
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Date requested</dt>
+      <dd class="govuk-summary-list__value">@Model.DateRequested.ToString("dd MMM yyyy HH:mm")</dd>
+    </div>
+    @if (!Model.CanProcess)
+    {
+      <div class="govuk-summary-list__row">
+        <dt class="govuk-summary-list__key">Status</dt>
+        <dd class="govuk-summary-list__value">@Model.Status</dd>
+      </div>
+      <div class="govuk-summary-list__row">
+        <dt class="govuk-summary-list__key">Outcome</dt>
+        <dd class="govuk-summary-list__value">@(Model.Outcome ?? "—")</dd>
+      </div>
+      @if (!string.IsNullOrWhiteSpace(Model.RegistrationToken))
+      {
+        <div class="govuk-summary-list__row">
+          <dt class="govuk-summary-list__key">Registration</dt>
+          <dd class="govuk-summary-list__value" style="word-break: break-all;">@Model.RegistrationToken</dd>
+        </div>
+      }
+    }
+  </dl>
+
+  @if (Model.CanProcess)
+  {
+    <form method="post" action="@Url.Action("CmsRequestProcess", "ModernOperations", new { id = Model.Id, returnTab = returnTab })">
+      @Html.AntiForgeryToken()
+
+      <div class="govuk-form-group @(ViewData.ModelState[nameof(Compass.ViewModels.Modern.CmsAccessRequestProcessForm.Outcome)]?.Errors.Count > 0 ? "govuk-form-group--error" : "")">
+        <fieldset class="govuk-fieldset">
+          <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Outcome</legend>
+          @if (ViewData.ModelState[nameof(Compass.ViewModels.Modern.CmsAccessRequestProcessForm.Outcome)]?.Errors.Count > 0)
+          {
+            <p id="outcome-error" class="govuk-error-message">
+              <span class="govuk-visually-hidden">Error:</span>
+              @string.Join(" ", ViewData.ModelState[nameof(Compass.ViewModels.Modern.CmsAccessRequestProcessForm.Outcome)]!.Errors.Select(e => e.ErrorMessage))
+            </p>
+          }
+          <div class="govuk-radios" data-module="govuk-radios">
+            <div class="govuk-radios__item">
+              <input class="govuk-radios__input" id="outcome-granted" name="Outcome" type="radio" value="Granted" @(string.Equals(draftOutcome, "Granted", StringComparison.OrdinalIgnoreCase) ? "checked" : null) />
+              <label class="govuk-label govuk-radios__label" for="outcome-granted">Granted</label>
+            </div>
+            <div class="govuk-radios__item">
+              <input class="govuk-radios__input" id="outcome-rejected" name="Outcome" type="radio" value="Rejected" @(string.Equals(draftOutcome, "Rejected", StringComparison.OrdinalIgnoreCase) ? "checked" : null) />
+              <label class="govuk-label govuk-radios__label" for="outcome-rejected">Rejected</label>
+            </div>
+          </div>
+        </fieldset>
+      </div>
+
+      <div class="govuk-form-group @(ViewData.ModelState[nameof(Compass.ViewModels.Modern.CmsAccessRequestProcessForm.RegistrationToken)]?.Errors.Count > 0 ? "govuk-form-group--error" : "")">
+        <label class="govuk-label govuk-label--m" for="RegistrationToken">Registration link or token</label>
+        <div id="RegistrationToken-hint" class="govuk-hint">Required when access is granted (included in the Notify email). For rejected requests this is optional.</div>
+        @if (ViewData.ModelState[nameof(Compass.ViewModels.Modern.CmsAccessRequestProcessForm.RegistrationToken)]?.Errors.Count > 0)
+        {
+          <p id="token-error" class="govuk-error-message">
+            <span class="govuk-visually-hidden">Error:</span>
+            @string.Join(" ", ViewData.ModelState[nameof(Compass.ViewModels.Modern.CmsAccessRequestProcessForm.RegistrationToken)]!.Errors.Select(e => e.ErrorMessage))
+          </p>
+        }
+        <input class="govuk-input @(ViewData.ModelState[nameof(Compass.ViewModels.Modern.CmsAccessRequestProcessForm.RegistrationToken)]?.Errors.Count > 0 ? "govuk-input--error" : "")"
+               id="RegistrationToken"
+               name="RegistrationToken"
+               type="text"
+               value="@draftToken"
+               aria-describedby="RegistrationToken-hint@(ViewData.ModelState[nameof(Compass.ViewModels.Modern.CmsAccessRequestProcessForm.RegistrationToken)]?.Errors.Count > 0 ? " token-error" : "")" />
+      </div>
+
+      @if (ViewData.ModelState[""]?.Errors.Count > 0)
+      {
+        <div class="govuk-error-summary govuk-!-margin-bottom-4" role="alert">
+          <h2 class="govuk-error-summary__title">There is a problem</h2>
+          <ul class="govuk-list govuk-error-summary__list">
+            @foreach (var e in ViewData.ModelState[""]!.Errors)
+            {
+              <li>@e.ErrorMessage</li>
+            }
+          </ul>
+        </div>
+      }
+
+      <div class="govuk-button-group">
+        <button type="submit" class="govuk-button" data-module="govuk-button">Submit</button>
+        <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("CmsRequests", "ModernOperations", new { tab = returnTab })">Cancel</a>
+      </div>
+    </form>
+  }
+  else
+  {
+    <p class="govuk-body">
+      <a class="govuk-link" href="@Url.Action("CmsRequests", "ModernOperations", new { tab = returnTab })">Back to CMS requests</a>
+    </p>
+  }
+
+  <hr class="govuk-section-break govuk-section-break--l govuk-section-break--visible" />
+
+  <form method="post"
+        action="@Url.Action("CmsRequestDelete", "ModernOperations", new { id = Model.Id })"
+        class="govuk-!-margin-top-2">
+    @Html.AntiForgeryToken()
+    <h2 class="govuk-heading-m">Remove this request</h2>
+    <p class="govuk-body">Permanently delete this record from the queue. This cannot be undone.</p>
+    <button type="submit"
+            class="govuk-button govuk-button--warning"
+            data-module="govuk-button"
+            onclick="return confirm('Delete this CMS access request? This cannot be undone.');">
+      Delete request
+    </button>
+  </form>
+</div>

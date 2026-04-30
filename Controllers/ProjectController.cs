@@ -232,8 +232,8 @@ namespace Compass.Controllers
         }
 
         // GET: Project/All
-        [HttpGet]
-        [Route("api/project/all")]
+     [HttpGet("api/project/all")]
+     
         public async Task<IActionResult> All(string search, string ragStatus, string businessArea, string phase, string flagship, int? priority, string status, int? primaryContactId, int page = 1, bool clearFilters = false)
         {
             return await GetProjectsView("all", search, ragStatus, businessArea, phase, flagship, priority, status, page, clearFilters, null, primaryContactId);

@@ -33,7 +33,7 @@ public partial class ModernAdminController : Controller
         "risk-categories", "issue-categories",
         "product-types", "rag-defns", "departments", "compliance",
         "scoring-fw", "perf-cycles", "assess-cycles",
-        "groups", "api-tokens", "business-area-admins", "business-area-leadership", "directorate-leadership",
+        "groups", "api-tokens", "cms-access-products", "business-area-admins", "business-area-leadership", "directorate-leadership",
         "audit", "migration", "feature-settings", "universal-barriers",
         "activity-types", "work-tagging", "mission-pillars", "priority-outcomes",
         "fips-channels", "fips-types", "fips-business-areas", "fips-user-groups", "fips-contact-roles", "fips-categorisation",
@@ -369,6 +369,24 @@ public partial class ModernAdminController : Controller
                         IsActive = t.IsActive
                     })
                     .ToListAsync();
+                break;
+
+            case "cms-access-products":
+                vm.CmsAccessProductRows = await _context.CmsAccessRequestProducts.AsNoTracking()
+                    .OrderBy(x => x.SortOrder).ThenBy(x => x.Name)
+                    .Select(x => new AdminCmsAccessProductRow
+                    {
+                        Id = x.Id,
+                        Name = x.Name,
+                        SignInPageUrl = x.SignInPageUrl,
+                        SortOrder = x.SortOrder,
+                        IsActive = x.IsActive
+                    })
+                    .ToListAsync();
+                if (TempData["AdminMessage"] is string cmsMsg)
+                    ViewBag.AdminMessage = cmsMsg;
+                if (TempData["AdminError"] is string cmsErr)
+                    ViewBag.AdminError = cmsErr;
                 break;
 
             case "audit":
@@ -3118,7 +3136,8 @@ public partial class ModernAdminController : Controller
         "Risks", "Issues", "Actions", "Milestones", "PerformanceMetrics",
         "EnterpriseMetrics", "FunctionalStandards", "AccessibilityIssues",
         "SurveysAdmin", "UserSatisfactionQuestions", "UserSatisfactionResponses", "DdtStandards",
-        "ServiceRegister"
+        "ServiceRegister",
+        "CmsAccessRequests"
     };
 
     [HttpGet("api-tokens/new")]
@@ -3284,6 +3303,116 @@ public partial class ModernAdminController : Controller
             TempData["AdminError"] = "An error occurred while deleting the token.";
             return RedirectToAction(nameof(ApiTokenDetail), new { id });
         }
+    }
+
+    [HttpPost("cms-access-products/add")]
+    [ValidateAntiForgeryToken]
+    [RequireSuperAdmin]
+    public async Task<IActionResult> CmsAccessProductAdd(string name, string signInPageUrl, int sortOrder = 0)
+    {
+        name = name?.Trim() ?? "";
+        signInPageUrl = signInPageUrl?.Trim() ?? "";
+        if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(signInPageUrl))
+        {
+            TempData["AdminError"] = "CMS product name and sign-in URL are required.";
+            return RedirectToAction(nameof(Index), new { panel = "cms-access-products" });
+        }
+
+        var exists = await _context.CmsAccessRequestProducts
+            .AnyAsync(p => p.Name.ToLower() == name.ToLower());
+        if (exists)
+        {
+            TempData["AdminError"] = "A product with that name already exists.";
+            return RedirectToAction(nameof(Index), new { panel = "cms-access-products" });
+        }
+
+        var now = DateTime.UtcNow;
+        _context.CmsAccessRequestProducts.Add(new CmsAccessRequestProduct
+        {
+            Name = name,
+            SignInPageUrl = signInPageUrl,
+            SortOrder = sortOrder,
+            IsActive = true,
+            CreatedAt = now,
+            UpdatedAt = now
+        });
+        await _context.SaveChangesAsync();
+        TempData["AdminMessage"] = "CMS access product added.";
+        return RedirectToAction(nameof(Index), new { panel = "cms-access-products" });
+    }
+
+    [HttpGet("cms-access-products/{id:int}/edit")]
+    [RequireSuperAdmin]
+    public async Task<IActionResult> CmsAccessProductEdit(int id)
+    {
+        var row = await _context.CmsAccessRequestProducts.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id);
+        if (row == null)
+        {
+            TempData["AdminError"] = "Product not found.";
+            return RedirectToAction(nameof(Index), new { panel = "cms-access-products" });
+        }
+
+        SetAdminChrome("admin-index");
+        ViewBag.Product = row;
+        if (TempData["AdminError"] is string editErr)
+            ViewBag.AdminError = editErr;
+        return View("~/Views/Modern/Admin/CmsAccessProductEdit.cshtml");
+    }
+
+    [HttpPost("cms-access-products/{id:int}/save")]
+    [ValidateAntiForgeryToken]
+    [RequireSuperAdmin]
+    public async Task<IActionResult> CmsAccessProductSave(int id, string name, string signInPageUrl, int sortOrder, bool isActive)
+    {
+        name = name?.Trim() ?? "";
+        signInPageUrl = signInPageUrl?.Trim() ?? "";
+        if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(signInPageUrl))
+        {
+            TempData["AdminError"] = "CMS product name and sign-in URL are required.";
+            return RedirectToAction(nameof(CmsAccessProductEdit), new { id });
+        }
+
+        var entity = await _context.CmsAccessRequestProducts.FirstOrDefaultAsync(x => x.Id == id);
+        if (entity == null)
+        {
+            TempData["AdminError"] = "Product not found.";
+            return RedirectToAction(nameof(Index), new { panel = "cms-access-products" });
+        }
+
+        var dup = await _context.CmsAccessRequestProducts
+            .AnyAsync(p => p.Id != id && p.Name.ToLower() == name.ToLower());
+        if (dup)
+        {
+            TempData["AdminError"] = "Another product already uses that name.";
+            return RedirectToAction(nameof(CmsAccessProductEdit), new { id });
+        }
+
+        entity.Name = name;
+        entity.SignInPageUrl = signInPageUrl;
+        entity.SortOrder = sortOrder;
+        entity.IsActive = isActive;
+        entity.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
+        TempData["AdminMessage"] = "CMS access product saved.";
+        return RedirectToAction(nameof(Index), new { panel = "cms-access-products" });
+    }
+
+    [HttpPost("cms-access-products/{id:int}/delete")]
+    [ValidateAntiForgeryToken]
+    [RequireSuperAdmin]
+    public async Task<IActionResult> CmsAccessProductDelete(int id)
+    {
+        var entity = await _context.CmsAccessRequestProducts.FirstOrDefaultAsync(x => x.Id == id);
+        if (entity == null)
+        {
+            TempData["AdminError"] = "Product not found.";
+            return RedirectToAction(nameof(Index), new { panel = "cms-access-products" });
+        }
+
+        _context.CmsAccessRequestProducts.Remove(entity);
+        await _context.SaveChangesAsync();
+        TempData["AdminMessage"] = "CMS access product removed.";
+        return RedirectToAction(nameof(Index), new { panel = "cms-access-products" });
     }
 
 }

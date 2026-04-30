@@ -88,7 +88,7 @@
    <div class="dfe-c-card dfe-c-card--plain" style="margin-bottom:1.5rem;">
     <h2 class="govuk-heading-m">Permissions</h2>
 
-    <div class="govuk-inset-text">Follow the principle of least privilege — only grant the minimum permissions the token needs.</div>
+    <div class="govuk-inset-text">Follow the principle of least privilege — only grant the minimum permissions the token needs. <strong>Cms access requests</strong> uses <strong>Create</strong> only (submit new requests via POST).</div>
 
     <form method="post" action="@Url.Action("ApiTokenSavePermissions", "ModernAdmin", new { id = token?.Id })" id="permissionsForm">
      @Html.AntiForgeryToken()
@@ -109,6 +109,28 @@
         {
          var hasPermissions = permissions?.ContainsKey(resource) ?? false;
          var perm = hasPermissions ? permissions![resource] : (read: false, create: false, update: false, delete: false);
+         @if (string.Equals(resource, "CmsAccessRequests", StringComparison.Ordinal))
+         {
+         <tr>
+          <td>
+           <strong>@FormatResource(resource)</strong>
+           <div class="dfe-c-body-s dfe-c-text-muted govuk-!-margin-top-1 govuk-!-margin-bottom-0">Only the Create permission is used (POST <code class="govuk-body-s">/api/v1/cms-access-requests</code>).</div>
+          </td>
+          <td class="dfe-c-text-centre" title="Not used"><span class="dfe-c-text-muted" aria-hidden="true">—</span><span class="govuk-visually-hidden">Read not used</span></td>
+          <td class="dfe-c-text-centre">
+           <div class="govuk-checkboxes govuk-checkboxes--small" style="display:inline-block;">
+            <div class="govuk-checkboxes__item" style="min-height:auto;padding-left:24px;">
+             <input class="govuk-checkboxes__input" type="checkbox" name="@(resource)_create" id="@(resource)_create" @(perm.create ? "checked" : "") />
+             <label class="govuk-label govuk-checkboxes__label" for="@(resource)_create"><span class="govuk-visually-hidden">Create @FormatResource(resource)</span></label>
+            </div>
+           </div>
+          </td>
+          <td class="dfe-c-text-centre" title="Not used"><span class="dfe-c-text-muted" aria-hidden="true">—</span><span class="govuk-visually-hidden">Update not used</span></td>
+          <td class="dfe-c-text-centre" title="Not used"><span class="dfe-c-text-muted" aria-hidden="true">—</span><span class="govuk-visually-hidden">Delete not used</span></td>
+         </tr>
+         }
+         else
+         {
          <tr>
           <td><strong>@FormatResource(resource)</strong></td>
           <td class="dfe-c-text-centre">
@@ -144,6 +166,7 @@
            </div>
           </td>
          </tr>
+         }
         }
        </tbody>
       </table>

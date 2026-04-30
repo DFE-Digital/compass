@@ -30,6 +30,7 @@ public interface IFipsProductWriteService
         int[]? typeIds,
         int[]? categorisationItemIds = null,
         int? reportingContactUserId = null,
+        bool isEnterpriseService = false,
         CancellationToken cancellationToken = default);
 
     /// <summary>Changes product status with the same permission rule as <see cref="TryUpdateAsync"/>.</summary>

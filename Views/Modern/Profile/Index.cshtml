@@ -1,0 +1,73 @@
+@model Compass.ViewModels.Modern.ModernProfileViewModel
+@{
+  ViewData["Title"] = "Your profile";
+}
+
+<div class="dfe-c-mb-3">
+  <h1 class="govuk-heading-l" style="margin-bottom:0.25rem;">Your profile</h1>
+  <p class="dfe-c-text-muted govuk-body" style="margin:0;">Details for the account you are signed in with.</p>
+</div>
+
+@if (!Model.HasCompassUserRecord)
+{
+ <div class="govuk-warning-text govuk-!-margin-bottom-4">
+ <span class="govuk-warning-text__icon" aria-hidden="true">!</span>
+ <strong class="govuk-warning-text__text">
+ <span class="govuk-warning-text__assistive govuk-visually-hidden">Warning</span>
+ You are signed in, but there is no matching Compass user record for this email. Some features may be unavailable until an administrator adds your account.
+    </strong>
+  </div>
+}
+
+<dl class="govuk-summary-list govuk-!-margin-bottom-6">
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">Email (sign-in)</dt>
+ <dd class="govuk-summary-list__value">@(string.IsNullOrEmpty(Model.Email) ? "—" : Model.Email)</dd>
+  </div>
+ @if (!string.IsNullOrEmpty(Model.SignInName) && !string.Equals(Model.SignInName, Model.Email, StringComparison.OrdinalIgnoreCase))
+ {
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">Sign-in identity</dt>
+ <dd class="govuk-summary-list__value">@Model.SignInName</dd>
+  </div>
+ }
+ @if (Model.HasCompassUserRecord)
+ {
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">Name (Compass)</dt>
+ <dd class="govuk-summary-list__value">@(string.IsNullOrEmpty(Model.DatabaseName) ? "—" : Model.DatabaseName)</dd>
+  </div>
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">First / last name</dt>
+ <dd class="govuk-summary-list__value">@($"{Model.FirstName ?? "—"} / {Model.LastName ?? "—"}")</dd>
+  </div>
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">Job title</dt>
+ <dd class="govuk-summary-list__value">@(string.IsNullOrEmpty(Model.JobTitle) ? "—" : Model.JobTitle)</dd>
+  </div>
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">User principal name</dt>
+ <dd class="govuk-summary-list__value">@(string.IsNullOrEmpty(Model.UserPrincipalName) ? "—" : Model.UserPrincipalName)</dd>
+  </div>
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">Azure object ID</dt>
+ <dd class="govuk-summary-list__value dfe-c-mono">@(string.IsNullOrEmpty(Model.AzureObjectId) ? "—" : Model.AzureObjectId)</dd>
+  </div>
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">Application role</dt>
+ <dd class="govuk-summary-list__value">@(string.IsNullOrEmpty(Model.ApplicationRole) ? "—" : Model.ApplicationRole)</dd>
+  </div>
+ }
+</dl>
+
+@if (Model.DirectoryGroups.Count > 0)
+{
+ <h2 class="govuk-heading-m">Directory groups</h2>
+ <p class="govuk-body dfe-c-text-muted govuk-!-margin-bottom-2">Groups from Entra ID used for Compass access.</p>
+ <ul class="govuk-list govuk-list--bullet">
+ @foreach (var g in Model.DirectoryGroups.OrderBy(x => x, StringComparer.OrdinalIgnoreCase))
+ {
+ <li>@g</li>
+ }
+  </ul>
+}

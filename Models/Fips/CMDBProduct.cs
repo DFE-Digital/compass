@@ -35,6 +35,9 @@ public class CMDBProduct
 
     public CMDBProductStatus Status { get; set; } = CMDBProductStatus.New;
 
+    /// <summary>Compass-only flag: counts this entry as an enterprise service for reporting and API extracts.</summary>
+    public bool IsEnterpriseService { get; set; }
+
     /// <summary>Last JSON snapshot of the CMDB service-offering row (used for rules and future reporting).</summary>
     public string? LastCmdbSnapshotJson { get; set; }
 

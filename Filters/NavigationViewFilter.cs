@@ -53,6 +53,10 @@ public class NavigationViewFilter : IAsyncActionFilter
                     var canManageStandards = isSuperAdmin ||
                         await _permissionService.IsInGroupAsync(userEmail, "Standards Manager");
                     controller.ViewBag.CanAccessStandardsManagement = canManageStandards;
+
+                    // Same gate as <see cref="Attributes.RequireAdminAttribute"/> (modern admin hub).
+                    controller.ViewBag.CanAccessModernAdmin =
+                        await _permissionService.IsCentralOperationsAdminOrSuperAdminAsync(userEmail);
                 }
                 catch
                 {
@@ -61,6 +65,7 @@ public class NavigationViewFilter : IAsyncActionFilter
                     controller.ViewBag.ShowDemandNavigation = false;
                     controller.ViewBag.ShowStandardsNavigation = false;
                     controller.ViewBag.ShowFipsDatabaseServiceRegister = false;
+                    controller.ViewBag.CanAccessModernAdmin = false;
                 }
             }
         }

@@ -55,6 +55,9 @@ public class AdminHubViewModel
     // ── API tokens ──
     public List<AdminApiTokenRow> ApiTokenRows { get; set; } = new();
 
+    /// <summary><c>cms-access-products</c> — CMS names for the external CMS access request API.</summary>
+    public List<AdminCmsAccessProductRow> CmsAccessProductRows { get; set; } = new();
+
     // ── Audit log ──
     public List<AdminAuditRow> AuditRows { get; set; } = new();
 
@@ -101,6 +104,15 @@ public class AdminApiTokenRow
     public string? Description { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? ExpiresAt { get; set; }
+    public bool IsActive { get; set; }
+}
+
+public sealed class AdminCmsAccessProductRow
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string SignInPageUrl { get; set; } = string.Empty;
+    public int SortOrder { get; set; }
     public bool IsActive { get; set; }
 }
 

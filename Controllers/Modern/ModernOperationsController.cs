@@ -17,6 +17,7 @@ using Compass.ViewModels.Modern;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 
 namespace Compass.Controllers.Modern;
 
@@ -41,6 +42,8 @@ public class ModernOperationsController : Controller
     private readonly IProductsApiService _productsApi;
     private readonly IFipsBusinessAreaLookupSyncService _fipsBusinessAreaLookupSync;
     private readonly IOperationsRiskEditService _operationsRiskEdit;
+    private readonly INotificationService _notificationService;
+    private readonly IConfiguration _configuration;
 
     public ModernOperationsController(
         CompassDbContext db,
@@ -51,7 +54,9 @@ public class ModernOperationsController : Controller
         IModernWorkService modernWork,
         IProductsApiService productsApi,
         IFipsBusinessAreaLookupSyncService fipsBusinessAreaLookupSync,
-        IOperationsRiskEditService operationsRiskEdit)
+        IOperationsRiskEditService operationsRiskEdit,
+        INotificationService notificationService,
+        IConfiguration configuration)
     {
         _db = db;
         _fipsCmdbProductSync = fipsCmdbProductSync;
@@ -62,6 +67,8 @@ public class ModernOperationsController : Controller
         _productsApi = productsApi;
         _fipsBusinessAreaLookupSync = fipsBusinessAreaLookupSync;
         _operationsRiskEdit = operationsRiskEdit;
+        _notificationService = notificationService;
+        _configuration = configuration;
     }
 
     private async Task<IActionResult?> DemandDisabledRedirectAsync()
@@ -154,6 +161,243 @@ public class ModernOperationsController : Controller
             CurrentlyEscalatedCount = raid.CurrentlyEscalatedCount
         };
         return View("~/Views/Modern/Operations/OperationsDashboard.cshtml", vm);
+    }
+
+    private static string NormalizeCmsAccessRequestTab(string? tab) =>
+        (tab ?? "new").Trim().ToLowerInvariant() switch
+        {
+            "completed" => "completed",
+            "rejected" => "rejected",
+            _ => "new"
+        };
+
+    [HttpGet("cms-requests")]
+    public async Task<IActionResult> CmsRequests(string? tab, CancellationToken ct)
+    {
+        SetNav("operations-cms-requests");
+
+        var t = NormalizeCmsAccessRequestTab(tab);
+
+        var newCount = await _db.CmsAccessRequests.AsNoTracking().CountAsync(x => x.Status == "New", ct);
+        var completedCount = await _db.CmsAccessRequests.AsNoTracking().CountAsync(x => x.Status == "Completed", ct);
+        var rejectedCount = await _db.CmsAccessRequests.AsNoTracking().CountAsync(x => x.Status == "Rejected", ct);
+
+        var filtered = _db.CmsAccessRequests.AsNoTracking().AsQueryable();
+        filtered = t switch
+        {
+            "completed" => filtered.Where(x => x.Status == "Completed"),
+            "rejected" => filtered.Where(x => x.Status == "Rejected"),
+            _ => filtered.Where(x => x.Status == "New")
+        };
+
+        var rows = await filtered
+            .OrderByDescending(x => x.DateRequested)
+            .Select(x => new CmsAccessRequestRowViewModel
+            {
+                Id = x.Id,
+                RequestorDisplayName = (x.RequestorFirstName + " " + x.RequestorLastName).Trim(),
+                CmsName = x.CmsName,
+                DateRequested = x.DateRequested,
+                Status = x.Status,
+                Outcome = x.Outcome
+            })
+            .ToListAsync(ct);
+
+        var vm = new CmsAccessRequestListViewModel
+        {
+            ActiveTab = t,
+            NewCount = newCount,
+            CompletedCount = completedCount,
+            RejectedCount = rejectedCount,
+            Rows = rows
+        };
+
+        return View("~/Views/Modern/Operations/CmsAccessRequests.cshtml", vm);
+    }
+
+    [HttpGet("cms-requests/{id:int}")]
+    public async Task<IActionResult> CmsRequestDetail(int id, string? returnTab, CancellationToken ct)
+    {
+        SetNav("operations-cms-requests");
+
+        var row = await _db.CmsAccessRequests.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, ct);
+        if (row == null)
+            return NotFound();
+
+        var displayName = $"{row.RequestorFirstName} {row.RequestorLastName}".Trim();
+        var vm = new CmsAccessRequestDetailViewModel
+        {
+            Id = row.Id,
+            CmsName = row.CmsName,
+            SignInPageUrl = row.SignInPageUrl,
+            RequestorEmail = row.RequestorEmail,
+            RequestorFirstName = row.RequestorFirstName,
+            RequestorLastName = row.RequestorLastName,
+            RequestorDisplayName = string.IsNullOrEmpty(displayName) ? row.RequestorEmail : displayName,
+            DateRequested = row.DateRequested,
+            PublisherAccessRequired = row.PublisherAccessRequired,
+            Comments = row.Comments,
+            Status = row.Status,
+            Outcome = row.Outcome,
+            RegistrationToken = row.RegistrationToken,
+            CanProcess = string.Equals(row.Status, "New", StringComparison.OrdinalIgnoreCase),
+            ReturnTab = NormalizeCmsAccessRequestTab(returnTab)
+        };
+
+        return View("~/Views/Modern/Operations/CmsAccessRequestDetail.cshtml", vm);
+    }
+
+    [HttpPost("cms-requests/{id:int}/process")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> CmsRequestProcess(
+        int id,
+        [FromForm] CmsAccessRequestProcessForm form,
+        string? returnTab,
+        CancellationToken ct)
+    {
+        SetNav("operations-cms-requests");
+
+        var listTab = NormalizeCmsAccessRequestTab(returnTab);
+        var entity = await _db.CmsAccessRequests.FirstOrDefaultAsync(x => x.Id == id, ct);
+        if (entity == null)
+            return NotFound();
+
+        if (!string.Equals(entity.Status, "New", StringComparison.OrdinalIgnoreCase))
+        {
+            TempData["ErrorMessage"] = "This request has already been processed.";
+            return RedirectToAction(nameof(CmsRequests), new { tab = listTab });
+        }
+
+        var outcomeKey = form.Outcome?.Trim();
+        if (!string.Equals(outcomeKey, "Granted", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(outcomeKey, "Rejected", StringComparison.OrdinalIgnoreCase))
+        {
+            ModelState.AddModelError(nameof(form.Outcome), "Select granted or rejected.");
+        }
+
+        var tokenTrimmed = form.RegistrationToken?.Trim();
+        if (string.Equals(outcomeKey, "Granted", StringComparison.OrdinalIgnoreCase)
+            && string.IsNullOrWhiteSpace(tokenTrimmed))
+        {
+            ModelState.AddModelError(nameof(form.RegistrationToken), "Enter the registration link or token for a granted request.");
+        }
+
+        var actorId = await ResolveCurrentUserIdForOperationsAsync(ct);
+        if (!actorId.HasValue)
+        {
+            ModelState.AddModelError("", "Your signed-in user could not be resolved.");
+        }
+
+        if (!ModelState.IsValid)
+        {
+            var displayName = $"{entity.RequestorFirstName} {entity.RequestorLastName}".Trim();
+            var vm = new CmsAccessRequestDetailViewModel
+            {
+                Id = entity.Id,
+                CmsName = entity.CmsName,
+                SignInPageUrl = entity.SignInPageUrl,
+                RequestorEmail = entity.RequestorEmail,
+                RequestorFirstName = entity.RequestorFirstName,
+                RequestorLastName = entity.RequestorLastName,
+                RequestorDisplayName = string.IsNullOrEmpty(displayName) ? entity.RequestorEmail : displayName,
+                DateRequested = entity.DateRequested,
+                PublisherAccessRequired = entity.PublisherAccessRequired,
+                Comments = entity.Comments,
+                Status = entity.Status,
+                Outcome = entity.Outcome,
+                RegistrationToken = entity.RegistrationToken,
+                CanProcess = true,
+                ReturnTab = listTab,
+                DraftOutcome = form.Outcome,
+                DraftRegistrationToken = form.RegistrationToken
+            };
+            return View("~/Views/Modern/Operations/CmsAccessRequestDetail.cshtml", vm);
+        }
+
+        var outcomeStored = string.Equals(outcomeKey, "Granted", StringComparison.OrdinalIgnoreCase) ? "Granted" : "Rejected";
+        entity.Outcome = outcomeStored;
+
+        if (outcomeStored == "Granted")
+        {
+            var linkText = tokenTrimmed!;
+            var subject = $"Access to {entity.CmsName} granted";
+            var body =
+                "You will need to set up a password to access the CMS, use this link to set your password:\n\n"
+                + linkText
+                + "\n\nIf you have any problems, reply to this email, or contact design.ops@education.gov.uk";
+
+            var cmsTemplateId = _configuration["GovUkNotify:CmsAccessRequestTemplateId"]?.Trim();
+            var templateOverride = string.IsNullOrWhiteSpace(cmsTemplateId) ? null : cmsTemplateId;
+            var notifyExtras = new Dictionary<string, object>(StringComparer.Ordinal)
+            {
+                ["cms_name"] = entity.CmsName ?? "",
+                ["registration_link"] = linkText,
+                ["requestor_first_name"] = entity.RequestorFirstName ?? ""
+            };
+
+            var send = await _notificationService.SendEmailAsync(
+                entity.RequestorEmail,
+                subject,
+                body,
+                triggerCode: "cms_access_request",
+                notifyTemplateId: templateOverride,
+                notifyPersonalisationExtras: notifyExtras,
+                cancellationToken: ct);
+
+            if (!send.Success)
+            {
+                _logger.LogWarning(
+                    "CMS access granted email failed for request {Id}: {Error}",
+                    id,
+                    send.ErrorMessage);
+                TempData["ErrorMessage"] = send.ErrorMessage != null
+                    ? $"The email could not be sent: {send.ErrorMessage}"
+                    : "The email could not be sent.";
+                return RedirectToAction(nameof(CmsRequestDetail), new { id, returnTab = listTab });
+            }
+
+            entity.Status = "Completed";
+            entity.RegistrationToken = linkText;
+        }
+        else
+        {
+            entity.Status = "Rejected";
+            if (!string.IsNullOrWhiteSpace(tokenTrimmed))
+                entity.RegistrationToken = tokenTrimmed;
+        }
+
+        entity.ActionedByUserId = actorId;
+        await _db.SaveChangesAsync(ct);
+
+        TempData["SuccessMessage"] = outcomeStored == "Granted"
+            ? "Access granted and the requester has been emailed."
+            : "The request has been rejected.";
+        var destinationTab = outcomeStored == "Granted" ? "completed" : "rejected";
+        return RedirectToAction(nameof(CmsRequests), new { tab = destinationTab });
+    }
+
+    [HttpPost("cms-requests/{id:int}/delete")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> CmsRequestDelete(int id, CancellationToken ct)
+    {
+        SetNav("operations-cms-requests");
+
+        var entity = await _db.CmsAccessRequests.FirstOrDefaultAsync(x => x.Id == id, ct);
+        if (entity == null)
+            return NotFound();
+
+        var destinationTab = entity.Status switch
+        {
+            "Completed" => "completed",
+            "Rejected" => "rejected",
+            _ => "new"
+        };
+
+        _db.CmsAccessRequests.Remove(entity);
+        await _db.SaveChangesAsync(ct);
+
+        TempData["SuccessMessage"] = "The CMS access request has been deleted.";
+        return RedirectToAction(nameof(CmsRequests), new { tab = destinationTab });
     }
 
     [HttpGet("accessibility")]
@@ -974,7 +1218,7 @@ public class ModernOperationsController : Controller
         var email = CurrentUserEmail;
 
         var vm = await FipsProductListingHelper.BuildProductsViewModelAsync(
-            _db, _fipsBusinessAreaLookupSync, activeTab, email, search, businessAreaId, channelId, userGroupId, typeId, phaseId, ct);
+            _db, activeTab, email, search, businessAreaId, channelId, userGroupId, typeId, phaseId, ct);
         vm.CanSyncFromCmdb = true;
 
         var baseUrl = Url.Action(nameof(ServiceRegister), "ModernOperations", new { tab = activeTab })
@@ -1100,6 +1344,7 @@ public class ModernOperationsController : Controller
                         ty,
                         cat,
                         null,
+                        p.IsEnterpriseService,
                         ct);
 
                     if (u.NotFound || u.Forbidden)
@@ -1352,6 +1597,7 @@ public class ModernOperationsController : Controller
         int[]? businessAreaLookupIds, int[]? channelIds, int[]? userGroupIds, int[]? typeIds,
         int[]? categorisationItemIds,
         int? reportingContactUserId,
+        bool isEnterpriseService,
         CancellationToken ct)
     {
         var blocked = await FipsDatabaseDisabledRedirectAsync();
@@ -1377,6 +1623,7 @@ public class ModernOperationsController : Controller
             typeIds,
             categorisationItemIds,
             reportingContactUserId,
+            isEnterpriseService,
             ct);
 
         if (outcome.NotFound)

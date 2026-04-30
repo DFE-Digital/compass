@@ -673,6 +673,86 @@
     </div>
     break;
 
+  case "cms-access-products":
+ <div id="panel-cms-access-products" class="admin-panel">
+ <div class="dfe-c-flex--between dfe-c-mb-2">
+ <h2 class="govuk-heading-m" style="margin:0;">CMS access products</h2>
+      </div>
+ <p class="govuk-body dfe-c-text-muted dfe-c-mb-2">
+      Names and sign-in URLs used when external services call <code class="govuk-body-s">POST /api/v1/cms-access-requests</code> (<code class="govuk-body-s">cmsName</code>). Database entries take precedence over <code class="govuk-body-s">CmsAccessRequest</code> in application settings.
+    </p>
+  @if (ViewBag.AdminError != null)
+  {
+ <div class="govuk-error-summary govuk-!-margin-bottom-4" role="alert"><h2 class="govuk-error-summary__title">There is a problem</h2><div class="govuk-error-summary__body">@ViewBag.AdminError</div></div>
+  }
+  @if (ViewBag.AdminMessage != null)
+  {
+ <div class="govuk-notification-banner govuk-notification-banner--success govuk-!-margin-bottom-4" role="region"><div class="govuk-notification-banner__header"><h2 class="govuk-notification-banner__title">Success</h2></div><div class="govuk-notification-banner__content"><p class="govuk-notification-banner__heading">@ViewBag.AdminMessage</p></div></div>
+  }
+ <div class="dfe-c-table-wrap govuk-!-margin-bottom-4">
+        <table>
+          <thead>
+            <tr>
+ <th>CMS product name</th>
+              <th>Sign-in URL</th>
+ <th class="dfe-c-text-centre">Sort</th>
+ <th class="dfe-c-text-centre">Active</th>
+ <th><span class="govuk-visually-hidden">Actions</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            @if (Model.CmsAccessProductRows.Count == 0)
+            {
+ <tr><td colspan="5" class="dfe-c-text-muted">No products yet. Add one below — integrations must send a <code class="govuk-body-s">cmsName</code> that matches the name exactly (case-insensitive).</td></tr>
+            }
+            else
+            {
+              foreach (var p in Model.CmsAccessProductRows)
+              {
+                <tr>
+                  <td><strong>@p.Name</strong></td>
+                  <td style="word-break:break-all;max-width:28rem;"><a class="govuk-link" href="@p.SignInPageUrl" target="_blank" rel="noopener noreferrer">@p.SignInPageUrl</a></td>
+                  <td class="dfe-c-text-centre">@p.SortOrder</td>
+                  <td class="dfe-c-text-centre">
+ @if (p.IsActive) { <span class="dfe-c-tag dfe-c-tag--green">Yes</span> }
+ else { <span class="dfe-c-tag dfe-c-tag--grey">No</span> }
+                  </td>
+                  <td style="text-align:right;white-space:nowrap;">
+ <a class="govuk-link govuk-link--no-visited-state govuk-!-margin-right-2" href="@Url.Action("CmsAccessProductEdit", "ModernAdmin", new { id = p.Id })">Edit</a>
+                    <form method="post" action="@Url.Action("CmsAccessProductDelete", "ModernAdmin", new { id = p.Id })" style="display:inline;">
+                      @Html.AntiForgeryToken()
+ <button type="submit" class="govuk-link govuk-link--no-visited-state" style="background:none;border:none;padding:0;cursor:pointer;font:inherit;color:#d4351c;" data-confirm="Remove this CMS product? Integrations using this cmsName will get unknown_cms until you add it again.">Remove</button>
+                    </form>
+                  </td>
+                </tr>
+              }
+            }
+          </tbody>
+        </table>
+      </div>
+
+ <h3 class="govuk-heading-s">Add product</h3>
+ <form method="post" action="@Url.Action("CmsAccessProductAdd", "ModernAdmin")" class="govuk-!-margin-bottom-0">
+        @Html.AntiForgeryToken()
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="cmsProdName">CMS product name</label>
+ <div class="govuk-hint" id="cmsProdName-hint">Must match the <code class="govuk-body-s">cmsName</code> value sent by the integrating service (e.g. Design histories).</div>
+ <input class="govuk-input" id="cmsProdName" name="name" type="text" aria-describedby="cmsProdName-hint" required maxlength="200" />
+        </div>
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="cmsProdUrl">Sign-in page URL</label>
+ <input class="govuk-input" id="cmsProdUrl" name="signInPageUrl" type="url" required maxlength="2000" />
+        </div>
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="cmsProdSort">Sort order</label>
+ <input class="govuk-input govuk-input--width-5" id="cmsProdSort" name="sortOrder" type="number" value="0" />
+        </div>
+ <p class="govuk-body-s dfe-c-text-muted govuk-!-margin-bottom-4">New products are active by default. Use <strong>Edit</strong> to deactivate.</p>
+ <button type="submit" class="govuk-button">Add product</button>
+      </form>
+    </div>
+    break;
+
   case "audit":
  <div id="panel-audit" class="admin-panel">
  <div class="dfe-c-flex--between dfe-c-mb-2">

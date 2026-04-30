@@ -99,11 +99,12 @@ public partial class ModernManageController : Controller
 
         SetNav("manage-fips");
 
-        var activeTab = string.IsNullOrWhiteSpace(tab) ? "my" : tab;
+        // Default to full catalogue. "Your products" only lists rows where your email matches a CMDB contact.
+        var activeTab = string.IsNullOrWhiteSpace(tab) ? "all" : tab;
         var email = CurrentUserEmail;
 
         var vm = await FipsProductListingHelper.BuildProductsViewModelAsync(
-            _context, _fipsBusinessAreaLookupSync, activeTab, email, search, businessAreaId, channelId, userGroupId, typeId, phaseId, ct);
+            _context, activeTab, email, search, businessAreaId, channelId, userGroupId, typeId, phaseId, ct);
         vm.CanSyncFromCmdb = false;
 
         var baseUrl = Url.Action(nameof(Fips), "ModernManage", new { tab = activeTab }) ?? "/modern/manage/fips";
@@ -220,6 +221,7 @@ public partial class ModernManageController : Controller
         int? phaseId, string? productURL,
         int[]? businessAreaLookupIds, int[]? channelIds, int[]? userGroupIds, int[]? typeIds,
         int[]? categorisationItemIds,
+        bool isEnterpriseService,
         CancellationToken ct)
     {
         var disabled = await RequireFipsDatabaseAsync();
@@ -258,6 +260,7 @@ public partial class ModernManageController : Controller
             typeIds,
             categorisationItemIds,
             null,
+            isEnterpriseService,
             ct);
 
         if (outcome.NotFound)

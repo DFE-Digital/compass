@@ -11,6 +11,8 @@ public interface INotificationService
         string? triggerCode = null,
         int? notificationRuleId = null,
         Dictionary<string, object>? contextData = null,
+        string? notifyTemplateId = null,
+        IReadOnlyDictionary<string, object>? notifyPersonalisationExtras = null,
         CancellationToken cancellationToken = default);
 
     Task<NotificationResult> SendEmailWithTemplateAsync(

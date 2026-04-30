@@ -265,6 +265,13 @@ public partial class CompassDbContext : DbContext
     public DbSet<AssumptionDivision> AssumptionDivisions { get; set; }
     public DbSet<AssumptionBusinessArea> AssumptionBusinessAreas { get; set; }
     public DbSet<RaidEscalationTierChangeRequest> RaidEscalationTierChangeRequests { get; set; }
+
+    /// <summary>CMS access requests (Design histories, DDT manual, etc.) for Operations.</summary>
+    public DbSet<CmsAccessRequest> CmsAccessRequests { get; set; }
+
+    /// <summary>Allowed CMS product names and sign-in URLs for the CMS access request API (Admin-managed).</summary>
+    public DbSet<CmsAccessRequestProduct> CmsAccessRequestProducts { get; set; }
+
     public DbSet<ActionDecision> ActionDecisions { get; set; }
     public DbSet<MilestoneAction> MilestoneActions { get; set; }
     public DbSet<MilestoneRisk> MilestoneRisks { get; set; }
@@ -783,6 +790,24 @@ public partial class CompassDbContext : DbContext
 
         modelBuilder.Entity<UserPreference>()
             .Property(p => p.DashboardLayout)
+            .HasColumnType("nvarchar(max)");
+
+        modelBuilder.Entity<CmsAccessRequest>()
+            .Property(x => x.SignInPageUrl)
+            .HasColumnType("nvarchar(max)");
+        modelBuilder.Entity<CmsAccessRequest>()
+            .Property(x => x.Comments)
+            .HasColumnType("nvarchar(max)");
+        modelBuilder.Entity<CmsAccessRequest>()
+            .Property(x => x.RegistrationToken)
+            .HasColumnType("nvarchar(max)");
+
+        modelBuilder.Entity<CmsAccessRequestProduct>()
+            .HasIndex(x => x.Name)
+            .IsUnique();
+
+        modelBuilder.Entity<CmsAccessRequestProduct>()
+            .Property(x => x.SignInPageUrl)
             .HasColumnType("nvarchar(max)");
 
         modelBuilder.Entity<AuditLog>()

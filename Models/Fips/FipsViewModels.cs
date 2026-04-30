@@ -10,6 +10,8 @@ public class FipsProductsViewModel
     public List<FipsProductRow> Products { get; set; } = new();
 
     public int AllProductsCount { get; set; }
+    /// <summary>Total rows in <c>CMDBProducts</c> (cheap COUNT); helps diagnose empty lists vs filters.</summary>
+    public int TotalProductsInDatabase { get; set; }
     public int MyProductsCount { get; set; }
     public int NewProductsCount { get; set; }
     /// <summary>Count of <see cref="CMDBProductStatus.Rejected"/> — excluded from the FIPS register (e.g. sync rules).</summary>

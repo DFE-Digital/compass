@@ -50,7 +50,7 @@
 
 <div class="tabs dfe-c-mb-3" role="tablist" aria-label="Product sections">
  <a href="@Url.Action("Fips", "ModernManage", new { tab = "my" })" class="tab @(tab =="my" ? "on" : "")" role="tab" aria-selected="@(tab == "my")" aria-controls="d-my" id="tab-my">Your products@(TabCount(Model.MyProductsCount))</a>
- <a href="@Url.Action("Fips", "ModernManage", new { tab = "all" })" class="tab @(tab =="all" ? "on" : "")" role="tab" aria-selected="@(tab == "all")" aria-controls="d-all" id="tab-all">Active products@(TabCount(Model.AllProductsCount))</a>
+ <a href="@Url.Action("Fips", "ModernManage", new { tab = "all" })" class="tab @(tab =="all" ? "on" : "")" role="tab" aria-selected="@(tab == "all")" aria-controls="d-all" id="tab-all">All products@(TabCount(Model.AllProductsCount))</a>
  <a href="@Url.Action("Fips", "ModernManage", new { tab = "new" })" class="tab @(tab =="new" ? "on" : "")" role="tab" aria-selected="@(tab == "new")" aria-controls="d-new" id="tab-new">New products@(TabCount(Model.NewProductsCount))</a>
  <a href="@Url.Action("Fips", "ModernManage", new { tab = "inactive" })" class="tab @(tab =="inactive" ? "on" : "")" role="tab" aria-selected="@(tab == "inactive")" aria-controls="d-inactive" id="tab-inactive">Inactive products@(TabCount(Model.InactiveProductsCount))</a>
  <a href="@Url.Action("Fips", "ModernManage", new { tab = "retired" })" class="tab @(tab =="retired" ? "on" : "")" role="tab" aria-selected="@(tab == "retired")" aria-controls="d-retired" id="tab-retired">Retired@(TabCount(Model.RetiredCount))</a>
@@ -70,7 +70,21 @@ else if (tab == "retired")
 <div id="d-@tab" class="tab-pane on" role="tabpanel">
     @if (Model.Products.Count == 0)
     {
- <p class="govuk-body">No products found.</p>
+        <div class="govuk-inset-text">
+            <p class="govuk-body govuk-!-margin-bottom-1">No products in this list.</p>
+            @if (string.Equals(tab, "my", StringComparison.OrdinalIgnoreCase))
+            {
+                <p class="govuk-body-s govuk-!-margin-bottom-2">“Your products” only includes records where <strong>your sign-in email</strong> matches a <strong>CMDB contact email</strong> on the product, and the product is not retired or rejected. If the list is empty, open the <a class="govuk-link" href="@Url.Action("Fips", "ModernManage", new { tab = "all" })">All products</a> tab or check which email is on your CMDB contacts.</p>
+            }
+            @if (Model.TotalProductsInDatabase > 0)
+            {
+                <p class="govuk-body-s govuk-!-margin-bottom-0">The database has <strong>@Model.TotalProductsInDatabase.ToString("N0")</strong> row(s) in CMDBProducts — try clearing filters and search, or ask an administrator to confirm the latest migration has been applied if you still see nothing on <strong>All products</strong>.</p>
+            }
+            else
+            {
+                <p class="govuk-body-s govuk-!-margin-bottom-0">There are no rows in CMDBProducts yet, or the app cannot read that table.</p>
+            }
+        </div>
     }
     else
     {

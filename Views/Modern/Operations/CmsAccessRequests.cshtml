@@ -1,0 +1,91 @@
+@model Compass.ViewModels.Modern.CmsAccessRequestListViewModel
+@{
+  ViewData["Title"] = "CMS requests";
+  var tab = Model.ActiveTab;
+  var newOn = tab == "new" ? "on" : null;
+  var doneOn = tab == "completed" ? "on" : null;
+  var rejOn = tab == "rejected" ? "on" : null;
+}
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernOperations")">Operations</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">CMS requests</li>
+}
+
+<div class="modern-work-page" style="max-width: 100%; box-sizing: border-box;">
+  <div class="dfe-c-mb-4 dfe-c-flex--between" style="flex-wrap:wrap;align-items:flex-start;gap:1rem;">
+    <div class="dfe-c-page-title" style="margin:0;min-width:0;flex:1;max-width: 100%;">
+      <div class="dfe-c-page-title__caption">Operations</div>
+      <h1 class="dfe-c-page-title__heading">CMS requests</h1>
+      <p class="dfe-c-page-title__lede" style="margin:0.25rem 0 0 0;max-width: 40rem;">
+        Review access requests for departmental CMS products. Open a request by the requestor's name to grant access (Notify email) or reject.
+      </p>
+    </div>
+  </div>
+
+  @if (TempData["ErrorMessage"] is string errorMessage && !string.IsNullOrWhiteSpace(errorMessage))
+  {
+    <div class="govuk-error-summary" role="alert" data-module="govuk-error-summary">
+      <h2 class="govuk-error-summary__title">There is a problem</h2>
+      <div class="govuk-error-summary__body"><p>@errorMessage</p></div>
+    </div>
+  }
+  @if (TempData["SuccessMessage"] is string successMessage && !string.IsNullOrWhiteSpace(successMessage))
+  {
+    <div class="govuk-notification-banner govuk-notification-banner--success" role="region">
+      <div class="govuk-notification-banner__header"><h2 class="govuk-notification-banner__title">Success</h2></div>
+      <div class="govuk-notification-banner__content"><p class="govuk-notification-banner__heading">@successMessage</p></div>
+    </div>
+  }
+
+  <div class="tabs govuk-!-margin-bottom-4" role="tablist" aria-label="CMS request status">
+    <a class="tab @newOn"
+       role="tab"
+       aria-selected="@(tab == "new" ? "true" : "false")"
+       @if (tab == "new") { <text>aria-current="page" </text> }
+       href="@Url.Action("CmsRequests", "ModernOperations", new { tab = "new" })">New <span class="dfe-c-fw-regular">(@Model.NewCount)</span></a>
+    <a class="tab @doneOn"
+       role="tab"
+       aria-selected="@(tab == "completed" ? "true" : "false")"
+       @if (tab == "completed") { <text>aria-current="page" </text> }
+       href="@Url.Action("CmsRequests", "ModernOperations", new { tab = "completed" })">Completed <span class="dfe-c-fw-regular">(@Model.CompletedCount)</span></a>
+    <a class="tab @rejOn"
+       role="tab"
+       aria-selected="@(tab == "rejected" ? "true" : "false")"
+       @if (tab == "rejected") { <text>aria-current="page" </text> }
+       href="@Url.Action("CmsRequests", "ModernOperations", new { tab = "rejected" })">Rejected <span class="dfe-c-fw-regular">(@Model.RejectedCount)</span></a>
+  </div>
+
+  @if (!Model.Rows.Any())
+  {
+    <p class="govuk-body dfe-c-text-muted govuk-!-margin-bottom-0">No requests in this queue.</p>
+  }
+  else
+  {
+    <table>
+      <thead>
+        <tr>
+          <th scope="col">Requestor</th>
+          <th scope="col">CMS</th>
+          <th scope="col">Date requested</th>
+          <th scope="col">Status</th>
+          <th scope="col">Outcome</th>
+        </tr>
+      </thead>
+      <tbody>
+      @foreach (var row in Model.Rows)
+      {
+        <tr>
+          <td>
+            <a href="@Url.Action("CmsRequestDetail", "ModernOperations", new { id = row.Id, returnTab = tab })">@row.RequestorDisplayName</a>
+          </td>
+          <td>@row.CmsName</td>
+          <td>@row.DateRequested.ToString("dd MMM yyyy HH:mm")</td>
+          <td>@row.Status</td>
+          <td>@(row.Outcome ?? "—")</td>
+        </tr>
+      }
+      </tbody>
+    </table>
+  }
+</div>

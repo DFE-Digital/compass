@@ -422,6 +422,8 @@ builder.Services.AddHttpClient();
 // FIPS Sync Services
 builder.Services.Configure<Compass.Models.Fips.FipsSyncConfiguration>(
     builder.Configuration.GetSection("FipsSync"));
+builder.Services.Configure<Compass.Configuration.CmsAccessRequestApiOptions>(
+    builder.Configuration.GetSection(Compass.Configuration.CmsAccessRequestApiOptions.SectionName));
 builder.Services.AddHttpClient<Compass.Services.Fips.ICmdbService, Compass.Services.Fips.CmdbService>()
     .SetHandlerLifetime(TimeSpan.FromMinutes(5));
 builder.Services.AddHttpClient<Compass.Services.Fips.IStrapiService, Compass.Services.Fips.StrapiService>()
@@ -491,6 +493,16 @@ builder.Services.AddRateLimiter(options =>
             {
                 AutoReplenishment = true,
                 PermitLimit = 60,
+                Window = TimeSpan.FromMinutes(1)
+            }));
+
+    options.AddPolicy("CmsAccessRequestsCreatePolicy", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: GetFipsPartitionKey(httpContext) ?? httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: partition => new FixedWindowRateLimiterOptions
+            {
+                AutoReplenishment = true,
+                PermitLimit = 15,
                 Window = TimeSpan.FromMinutes(1)
             }));
 
@@ -671,6 +683,9 @@ using (var scope = app.Services.CreateScope())
         await context.Database.MigrateAsync();
         logger.LogInformation("Database migrations applied successfully");
 
+        // Repair: CMDBProducts.IsEnterpriseService when history exists but column missing (restored DB, partial deploy).
+        await EnsureCMDBProductIsEnterpriseServiceColumnAsync(context, logger);
+
         // Repair: notification tables when migration was not applied (e.g. migration metadata out of sync)
         await EnsureCompassNotificationTablesAsync(context, logger);
 
@@ -798,6 +813,48 @@ static async Task EnsureRaidLikelihoodImpactMatrixScoreColumnsAsync(
         logger.LogWarning(ex,
             "Could not ensure MatrixScore columns on RAID lookup tables (non-fatal if columns already exist): {Message}",
             ex.Message);
+    }
+}
+
+/// <summary>
+/// Ensures <c>IsEnterpriseService</c> on <c>CMDBProducts</c> when the migration row exists but the column does not (restored DB, etc.).
+/// Without this, EF queries against <see cref="Compass.Models.Fips.CMDBProduct"/> fail (invalid column) and service register lists break.
+/// Uses <c>sys.columns</c> — <c>COL_LENGTH('dbo.Table', ...)</c> is unreliable for schema-qualified names on some servers.
+/// </summary>
+static async Task EnsureCMDBProductIsEnterpriseServiceColumnAsync(
+    CompassDbContext context,
+    ILogger logger)
+{
+    var provider = context.Database.ProviderName ?? "";
+    if (!provider.Contains("SqlServer", StringComparison.OrdinalIgnoreCase))
+    {
+        logger.LogInformation(
+            "Skipping CMDBProducts.IsEnterpriseService DDL repair for provider {Provider}; rely on EF migrations for this database.",
+            provider);
+        return;
+    }
+
+    try
+    {
+        await context.Database.ExecuteSqlRawAsync("""
+            IF OBJECT_ID(N'dbo.CMDBProducts', N'U') IS NOT NULL
+               AND NOT EXISTS (
+                   SELECT 1
+                   FROM sys.columns c
+                   WHERE c.object_id = OBJECT_ID(N'dbo.CMDBProducts', N'U')
+                     AND c.name = N'IsEnterpriseService')
+            BEGIN
+                ALTER TABLE [dbo].[CMDBProducts] ADD [IsEnterpriseService] bit NOT NULL
+                    CONSTRAINT [DF_CMDBProducts_IsEnterpriseService] DEFAULT (0);
+            END
+            """);
+        logger.LogInformation("Ensured CMDBProducts.IsEnterpriseService column exists (if it was missing).");
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex,
+            "Could not add CMDBProducts.IsEnterpriseService. Apply EF migration {Migration} or add the column manually; CMDB product queries will fail until then.",
+            "20260429151249_AddCMDBProductIsEnterpriseService");
     }
 }
 

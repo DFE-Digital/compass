@@ -29,6 +29,8 @@ public class ServiceRegisterController : ControllerBase
 
     /// <summary>
     /// List FIPS / service register (CMDB) products. Grant <c>read</c> on resource <c>ServiceRegister</c> for the API token.
+    /// Use <c>status=Active</c> and <c>enterpriseOnly=true</c> to filter by status; <c>GET .../products/enterprise-active</c>
+    /// lists enterprise-flagged products excluding retired/rejected (includes New and Active).
     /// </summary>
     [HttpGet("products")]
     [RequireApiPermission("ServiceRegister", "read")]
@@ -36,6 +38,7 @@ public class ServiceRegisterController : ControllerBase
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 100,
         [FromQuery] string[]? status = null,
+        [FromQuery] bool? enterpriseOnly = null,
         CancellationToken cancellationToken = default)
     {
         if (pageSize > 1000) pageSize = 1000;
@@ -67,6 +70,8 @@ public class ServiceRegisterController : ControllerBase
         var baseQuery = _context.CMDBProducts.AsNoTracking();
         if (statusFilter is { Count: > 0 })
             baseQuery = baseQuery.Where(p => statusFilter.Contains(p.Status));
+        if (enterpriseOnly == true)
+            baseQuery = baseQuery.Where(p => p.IsEnterpriseService);
 
         var totalRecords = await baseQuery.CountAsync(cancellationToken);
         var totalPages = (int)Math.Ceiling(totalRecords / (double)pageSize);
@@ -82,30 +87,57 @@ public class ServiceRegisterController : ControllerBase
             .ThenInclude(c => c.FipsContactRole)
             .ToListAsync(cancellationToken);
 
-        var rows = products.Select(p => new
+        var rows = products.Select(MapProductListRow).ToList();
+
+        return Ok(new
         {
-            id = p.Id,
-            uniqueId = p.UniqueID,
-            productName = p.Title,
-            phase = p.Phase?.Name,
-            businessArea = string.Join(", ", p.BusinessAreas
-                .OrderBy(ba => ba.FipsBusinessArea.Name)
-                .Select(ba => ba.FipsBusinessArea.Name)),
-            productUrl = p.ProductURL,
-            status = p.Status.ToString(),
-            contacts = p.Contacts
-                .OrderBy(c => c.FipsContactRole != null ? c.FipsContactRole.Name : "")
-                .ThenBy(c => c.UserEmail)
-                .Select(c => new
-                {
-                    role = c.FipsContactRole != null ? c.FipsContactRole.Name : null,
-                    roleId = c.FipsContactRoleId,
-                    email = c.UserEmail,
-                    name = c.UserName,
-                    canManage = c.CanManage
-                })
-                .ToList()
-        }).ToList();
+            data = rows,
+            pagination = new
+            {
+                currentPage = page,
+                pageSize,
+                totalPages,
+                totalRecords
+            }
+        });
+    }
+
+    /// <summary>
+    /// Service register products flagged as enterprise (<see cref="CMDBProduct.IsEnterpriseService"/>), excluding retired (Inactive)
+    /// and excluded (Rejected). Includes <see cref="CMDBProductStatus.New"/> and <see cref="CMDBProductStatus.Active"/> — CMDB sync
+    /// often leaves rows as New. Grant <c>read</c> on <c>ServiceRegister</c> for the API token.
+    /// </summary>
+    [HttpGet("products/enterprise-active")]
+    [RequireApiPermission("ServiceRegister", "read")]
+    public async Task<IActionResult> GetEnterpriseActiveProducts(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 100,
+        CancellationToken cancellationToken = default)
+    {
+        if (pageSize > 1000) pageSize = 1000;
+        if (pageSize < 1) pageSize = 50;
+        if (page < 1) page = 1;
+
+        var baseQuery = _context.CMDBProducts.AsNoTracking()
+            .Where(p => p.IsEnterpriseService
+                        && p.Status != CMDBProductStatus.Inactive
+                        && p.Status != CMDBProductStatus.Rejected);
+
+        var totalRecords = await baseQuery.CountAsync(cancellationToken);
+        var totalPages = (int)Math.Ceiling(totalRecords / (double)pageSize);
+
+        var products = await baseQuery
+            .OrderBy(p => p.Title)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Include(p => p.Phase)
+            .Include(p => p.BusinessAreas)
+            .ThenInclude(ba => ba.FipsBusinessArea)
+            .Include(p => p.Contacts)
+            .ThenInclude(c => c.FipsContactRole)
+            .ToListAsync(cancellationToken);
+
+        var rows = products.Select(MapProductListRow).ToList();
 
         return Ok(new
         {
@@ -148,30 +180,7 @@ public class ServiceRegisterController : ControllerBase
             });
         }
 
-        var row = new
-        {
-            id = p.Id,
-            uniqueId = p.UniqueID,
-            productName = p.Title,
-            phase = p.Phase?.Name,
-            businessArea = string.Join(", ", p.BusinessAreas
-                .OrderBy(ba => ba.FipsBusinessArea.Name)
-                .Select(ba => ba.FipsBusinessArea.Name)),
-            productUrl = p.ProductURL,
-            status = p.Status.ToString(),
-            contacts = p.Contacts
-                .OrderBy(c => c.FipsContactRole != null ? c.FipsContactRole.Name : "")
-                .ThenBy(c => c.UserEmail)
-                .Select(c => new
-                {
-                    role = c.FipsContactRole != null ? c.FipsContactRole.Name : null,
-                    roleId = c.FipsContactRoleId,
-                    email = c.UserEmail,
-                    name = c.UserName,
-                    canManage = c.CanManage
-                })
-                .ToList()
-        };
+        var row = MapProductListRow(p);
 
         return Ok(new { data = row });
     }
@@ -246,6 +255,33 @@ public class ServiceRegisterController : ControllerBase
     }
 
     private static string TruncateForAudit(string s) => s.Length > 200 ? s[..200] : s;
+
+    private static object MapProductListRow(CMDBProduct p) =>
+        new
+        {
+            id = p.Id,
+            uniqueId = p.UniqueID,
+            productName = p.Title,
+            phase = p.Phase?.Name,
+            businessArea = string.Join(", ", p.BusinessAreas
+                .OrderBy(ba => ba.FipsBusinessArea.Name)
+                .Select(ba => ba.FipsBusinessArea.Name)),
+            productUrl = p.ProductURL,
+            status = p.Status.ToString(),
+            isEnterpriseService = p.IsEnterpriseService,
+            contacts = p.Contacts
+                .OrderBy(c => c.FipsContactRole != null ? c.FipsContactRole.Name : "")
+                .ThenBy(c => c.UserEmail)
+                .Select(c => new
+                {
+                    role = c.FipsContactRole != null ? c.FipsContactRole.Name : null,
+                    roleId = c.FipsContactRoleId,
+                    email = c.UserEmail,
+                    name = c.UserName,
+                    canManage = c.CanManage
+                })
+                .ToList()
+        };
 }
 
 public class ServiceRegisterProductUrlRequest
