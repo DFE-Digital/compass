@@ -747,6 +747,133 @@
             </div>
         }
 
+ <!-- Active Projects for Selected Business Area -->
+        @if (businessAreaId.HasValue && selectedBusinessArea != null)
+        {
+            <div class="card mb-4 shadow-sm">
+                <div class="card-header bg-white">
+                    <h3 class="card-title mb-0">Active Projects - @selectedBusinessArea.Name</h3>
+                    <div class="card-tools">
+                        <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                            <i class="fas fa-minus" aria-hidden="true"></i>
+                            <span class="sr-only">Toggle active projects</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    @if (businessAreaActiveProjects.Any())
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Project</th>
+                                        <th>RAG Status</th>
+                                        <th>Priority</th>
+                                        <th>Status</th>
+                                        <th>Primary Contact</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var project in businessAreaActiveProjects)
+                                    {
+                                        var ragStatusRaw = project.RagStatusLookup?.Name ?? project.RagStatus ?? "";
+                                        var currentRag = ragStatusRaw;
+                                        // Normalize RAG status
+                                        if (!string.IsNullOrWhiteSpace(ragStatusRaw))
+                                        {
+                                            var ragLower = ragStatusRaw.ToLower();
+                                            if (ragLower.Contains("red") && ragLower.Contains("amber")) currentRag = "Amber-Red";
+                                            else if (ragLower.Contains("amber") && ragLower.Contains("green")) currentRag = "Amber-Green";
+                                            else if (ragLower.Contains("red")) currentRag = "Red";
+                                            else if (ragLower.Contains("amber")) currentRag = "Amber";
+                                            else if (ragLower.Contains("green")) currentRag = "Green";
+                                        }
+                                        else
+                                        {
+                                            currentRag = "Not Set";
+                                        }
+                                        var ragBadgeClass = currentRag switch {
+                                            "Red" => "badge-danger",
+                                            "Amber-Red" => "badge",
+                                            "Amber" => "badge-warning",
+                                            "Amber-Green" => "badge",
+                                            "Green" => "badge-success",
+                                            "Not Set" => "badge-light",
+                                            "Not started" => "badge-light",
+                                            "On hold" => "badge-light",
+                                            _ => "badge-light"
+                                        };
+                                        var ragBadgeStyle = currentRag switch {
+                                            "Amber-Red" => "background-color: #fd7e14;",
+                                            "Amber" => "color: #000;",
+                                            "Amber-Green" => "background-color: #ffeb3b; color: #000;",
+                                            "Not Set" => "background-color: #e9ecef; color: #000;",
+                                            "Not started" => "background-color: #e9ecef; color: #000;",
+                                            "On hold" => "background-color: #e9ecef; color: #000;",
+                                            _ => ""
+                                        };
+                                        var priorityName = project.DeliveryPriority?.Name ?? "Not Set";
+                                        var priorityBadgeClass = priorityName.ToLower() switch {
+                                            var p when p.Contains("critical") => "badge-danger",
+                                            var p when p.Contains("high") => "badge-warning",
+                                            var p when p.Contains("medium") => "badge-info",
+                                            var p when p.Contains("low") => "badge-success",
+                                            _ => "badge-light"
+                                        };
+                                        var priorityBadgeStyle = priorityName.ToLower() switch {
+                                            var p when p.Contains("medium") => "background-color: #ffc107; color: #000;",
+                                            _ => ""
+                                        };
+                                        var latestProblemStatement = project.ProblemStatements?.OrderByDescending(ps => ps.CreatedAt).FirstOrDefault();
+                                        var problemStatementText = latestProblemStatement?.ProblemStatement ?? "Not provided";
+                                        var aimText = project.Aim ?? "Not provided";
+                                        var aimEncoded = aimText.Replace("\"", "&quot;").Replace("'", "&#39;");
+                                        var problemStatementEncoded = problemStatementText.Replace("\"", "&quot;").Replace("'", "&#39;");
+                                        var latestMonthlyNarrative = LatestMonthlyNarrative(project);
+                                        var latestMonthlyNarrativeEncoded = EncodeForDataAttr(latestMonthlyNarrative);
+                                        <tr>
+                                            <td>
+                                                <a href="#" class="project-detail-link" 
+                                                   data-project-id="@project.Id" 
+                                                   data-project-title="@project.Title" 
+                                                   data-project-code="DFE-DDT-@project.Id"
+                                                   data-business-area="@(project.BusinessAreaLookup?.Name ?? "-")"
+                                                   data-rag-status="@currentRag"
+                                                   data-priority="@priorityName"
+                                                   data-status="@project.Status"
+                                                   data-primary-contact="@(project.PrimaryContactUser?.Name ?? "-")"
+                                                   data-aim="@aimEncoded"
+                                                   data-problem-statement="@problemStatementEncoded"
+                                                   data-monthly-narrative="@latestMonthlyNarrativeEncoded"
+                                                   style="color: #005ea5; text-decoration: none; font-weight: 600; cursor: pointer;">
+                                                    @project.Title
+                                                </a>
+                                                <br />
+                                                <small class="text-muted">DFE-DDT-@project.Id</small>
+                                            </td>
+                                            <td>
+                                                <span class="badge @ragBadgeClass" style="@ragBadgeStyle">@currentRag</span>
+                                            </td>
+                                            <td>
+                                                <span class="badge @priorityBadgeClass" style="@priorityBadgeStyle">@priorityName</span>
+                                            </td>
+                                            <td>@project.Status</td>
+                                            <td>@(project.PrimaryContactUser?.Name ?? "-")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="p-4 text-center text-muted">No active projects found for this business area</div>
+                    }
+                </div>
+            </div>
+        }
+
         <!-- Resource Summary -->
         @if (totalFte > 0 || resourceByBusinessArea.Any() || (businessAreaId.HasValue && businessAreaActiveProjects.Any()))
         {
@@ -1663,132 +1790,7 @@
             </div>
         </div>
 
-        <!-- Active Projects for Selected Business Area -->
-        @if (businessAreaId.HasValue && selectedBusinessArea != null)
-        {
-            <div class="card mb-4 shadow-sm">
-                <div class="card-header bg-white">
-                    <h3 class="card-title mb-0">Active Projects - @selectedBusinessArea.Name</h3>
-                    <div class="card-tools">
-                        <button type="button" class="btn btn-tool" data-card-widget="collapse">
-                            <i class="fas fa-minus" aria-hidden="true"></i>
-                            <span class="sr-only">Toggle active projects</span>
-                        </button>
-                    </div>
-                </div>
-                <div class="card-body p-0">
-                    @if (businessAreaActiveProjects.Any())
-                    {
-                        <div class="table-responsive">
-                            <table class="table table-hover mb-0">
-                                <thead>
-                                    <tr>
-                                        <th>Project</th>
-                                        <th>RAG Status</th>
-                                        <th>Priority</th>
-                                        <th>Status</th>
-                                        <th>Primary Contact</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach (var project in businessAreaActiveProjects)
-                                    {
-                                        var ragStatusRaw = project.RagStatusLookup?.Name ?? project.RagStatus ?? "";
-                                        var currentRag = ragStatusRaw;
-                                        // Normalize RAG status
-                                        if (!string.IsNullOrWhiteSpace(ragStatusRaw))
-                                        {
-                                            var ragLower = ragStatusRaw.ToLower();
-                                            if (ragLower.Contains("red") && ragLower.Contains("amber")) currentRag = "Amber-Red";
-                                            else if (ragLower.Contains("amber") && ragLower.Contains("green")) currentRag = "Amber-Green";
-                                            else if (ragLower.Contains("red")) currentRag = "Red";
-                                            else if (ragLower.Contains("amber")) currentRag = "Amber";
-                                            else if (ragLower.Contains("green")) currentRag = "Green";
-                                        }
-                                        else
-                                        {
-                                            currentRag = "Not Set";
-                                        }
-                                        var ragBadgeClass = currentRag switch {
-                                            "Red" => "badge-danger",
-                                            "Amber-Red" => "badge",
-                                            "Amber" => "badge-warning",
-                                            "Amber-Green" => "badge",
-                                            "Green" => "badge-success",
-                                            "Not Set" => "badge-light",
-                                            "Not started" => "badge-light",
-                                            "On hold" => "badge-light",
-                                            _ => "badge-light"
-                                        };
-                                        var ragBadgeStyle = currentRag switch {
-                                            "Amber-Red" => "background-color: #fd7e14;",
-                                            "Amber" => "color: #000;",
-                                            "Amber-Green" => "background-color: #ffeb3b; color: #000;",
-                                            "Not Set" => "background-color: #e9ecef; color: #000;",
-                                            "Not started" => "background-color: #e9ecef; color: #000;",
-                                            "On hold" => "background-color: #e9ecef; color: #000;",
-                                            _ => ""
-                                        };
-                                        var priorityName = project.DeliveryPriority?.Name ?? "Not Set";
-                                        var priorityBadgeClass = priorityName.ToLower() switch {
-                                            var p when p.Contains("critical") => "badge-danger",
-                                            var p when p.Contains("high") => "badge-warning",
-                                            var p when p.Contains("medium") => "badge-info",
-                                            var p when p.Contains("low") => "badge-success",
-                                            _ => "badge-light"
-                                        };
-                                        var priorityBadgeStyle = priorityName.ToLower() switch {
-                                            var p when p.Contains("medium") => "background-color: #ffc107; color: #000;",
-                                            _ => ""
-                                        };
-                                        var latestProblemStatement = project.ProblemStatements?.OrderByDescending(ps => ps.CreatedAt).FirstOrDefault();
-                                        var problemStatementText = latestProblemStatement?.ProblemStatement ?? "Not provided";
-                                        var aimText = project.Aim ?? "Not provided";
-                                        var aimEncoded = aimText.Replace("\"", "&quot;").Replace("'", "&#39;");
-                                        var problemStatementEncoded = problemStatementText.Replace("\"", "&quot;").Replace("'", "&#39;");
-                                        var latestMonthlyNarrative = LatestMonthlyNarrative(project);
-                                        var latestMonthlyNarrativeEncoded = EncodeForDataAttr(latestMonthlyNarrative);
-                                        <tr>
-                                            <td>
-                                                <a href="#" class="project-detail-link" 
-                                                   data-project-id="@project.Id" 
-                                                   data-project-title="@project.Title" 
-                                                   data-project-code="DFE-DDT-@project.Id"
-                                                   data-business-area="@(project.BusinessAreaLookup?.Name ?? "-")"
-                                                   data-rag-status="@currentRag"
-                                                   data-priority="@priorityName"
-                                                   data-status="@project.Status"
-                                                   data-primary-contact="@(project.PrimaryContactUser?.Name ?? "-")"
-                                                   data-aim="@aimEncoded"
-                                                   data-problem-statement="@problemStatementEncoded"
-                                                   data-monthly-narrative="@latestMonthlyNarrativeEncoded"
-                                                   style="color: #005ea5; text-decoration: none; font-weight: 600; cursor: pointer;">
-                                                    @project.Title
-                                                </a>
-                                                <br />
-                                                <small class="text-muted">DFE-DDT-@project.Id</small>
-                                            </td>
-                                            <td>
-                                                <span class="badge @ragBadgeClass" style="@ragBadgeStyle">@currentRag</span>
-                                            </td>
-                                            <td>
-                                                <span class="badge @priorityBadgeClass" style="@priorityBadgeStyle">@priorityName</span>
-                                            </td>
-                                            <td>@project.Status</td>
-                                            <td>@(project.PrimaryContactUser?.Name ?? "-")</td>
-                                        </tr>
-                                    }
-                                </tbody>
-                            </table>
-                        </div>
-                    }
-                    else
-                    {
-                        <div class="p-4 text-center text-muted">No active projects found for this business area</div>
-                    }
-                </div>
-            </div>
-        }
+       
 
         <!-- Business Area Summary (shown when NOT in business area view) -->
         @if (!businessAreaId.HasValue)
