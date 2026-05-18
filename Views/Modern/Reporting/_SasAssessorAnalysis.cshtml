@@ -1,0 +1,263 @@
+@using Compass.ViewModels.Modern
+@model ModernServiceAssessmentsReportViewModel
+@{
+  var aa = Model.AssessorAnalysis;
+  var hasData = !aa.LoadFailed && aa.TotalAssessors > 0;
+
+  string OutcomeBadge(string? o) => o switch
+  {
+    "Green" => "dfe-f-badge--green",
+    "Amber" => "dfe-f-badge--orange",
+    "Red" => "dfe-f-badge--red",
+    _ => "dfe-f-badge--grey"
+  };
+}
+
+<section class="sas-rpt__block" id="sas-assessor-analysis" aria-labelledby="sas-assessor-analysis-h">
+  <h2 class="sas-rpt__h2" id="sas-assessor-analysis-h">Assessor analysis</h2>
+  <p class="govuk-hint govuk-!-margin-bottom-4 sas-rpt__h2-hint">
+  Panel membership and outcomes from SAS assessor summary data. Panel assignments are counted per assessor role on an assessment; published counts use assessment status.
+  </p>
+
+  @if (aa.LoadFailed)
+  {
+    <p class="govuk-body dfe-c-text-muted">Assessor data is not available. Check SAS API connectivity and the <code>/api/assessors/summary</code> endpoint.</p>
+  }
+  else if (!hasData)
+  {
+    <p class="govuk-body dfe-c-text-muted">No assessors returned from the summary endpoint.</p>
+  }
+  else
+  {
+    <div class="dfe-f-card-grid dfe-c-mb-4" >
+      <div class="dfe-f-stat-card dfe-f-stat-card--tint-teal" >
+        <p class="govuk-body-s dfe-f-stat-card__label">Assessors</p>
+        <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@aa.TotalAssessors.ToString("N0")</p>
+      </div>
+      <div class="dfe-f-stat-card dfe-f-stat-card--tint-blue" >
+        <p class="govuk-body-s dfe-f-stat-card__label">Panel assignments</p>
+        <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@aa.TotalPanelAssignments.ToString("N0")</p>
+      </div>
+      <div class="dfe-f-stat-card dfe-f-stat-card--tint-green" >
+        <p class="govuk-body-s dfe-f-stat-card__label">Published panels</p>
+        <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@aa.PublishedAssignments.ToString("N0")</p>
+      </div>
+      <div class="dfe-f-stat-card dfe-f-stat-card--tint-orange" >
+        <p class="govuk-body-s dfe-f-stat-card__label">Primary roles</p>
+        <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@aa.ByPrimaryRole.Count.ToString("N0")</p>
+      </div>
+    </div>
+
+    <div class="sas-rpt__summary-grid govuk-!-margin-bottom-6">
+      <article class="sas-panel" data-sas-panel="assessor-period">
+        <header class="sas-panel__head">
+          <div class="sas-panel__title-wrap">
+            <h3 class="sas-rpt__h3">Assignments by reporting period</h3>
+            <p class="sas-rpt__cell-hint govuk-!-margin-bottom-0">Panel assignments per UK financial quarter (last six quarters)</p>
+          </div>
+          <div class="sas-panel__tools">
+            <div class="sas-panel__view" role="group" aria-label="Assignments by period view">
+              <button type="button" class="sas-panel__view-btn is-active" data-sas-view="chart" aria-pressed="true">Chart</button>
+              <button type="button" class="sas-panel__view-btn" data-sas-view="table" aria-pressed="false">Table</button>
+            </div>
+            <button type="button" class="govuk-button govuk-button--secondary govuk-button--small sas-panel__expand" aria-expanded="false">Expand</button>
+          </div>
+        </header>
+        <div class="sas-panel__body">
+          <div class="sas-panel__pane sas-panel__pane--chart">
+            <div class="sas-panel__chart-wrap">
+              <canvas id="sas-chart-assessor-period" role="img" aria-label="Panel assignments by financial quarter"></canvas>
+            </div>
+          </div>
+          <div class="sas-panel__pane sas-panel__pane--table" hidden>
+            <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+              <table class="govuk-table mr-ba-table">
+                <thead class="govuk-table__head">
+                  <tr class="govuk-table__row">
+                    <th scope="col" class="govuk-table__header">Quarter</th>
+                    <th scope="col" class="govuk-table__header mr-ba-table__num-hdr">Assignments</th>
+                  </tr>
+                </thead>
+                <tbody class="govuk-table__body">
+                  @for (var i = 0; i < aa.PeriodLabels.Count; i++)
+                  {
+                    var total = i < aa.PeriodTotals.Count ? aa.PeriodTotals[i] : 0;
+                    <tr class="govuk-table__row">
+                      <th scope="row">@aa.PeriodLabels[i]</th>
+                      <td class="mr-ba-table__num"><span class="mr-ba-num">@total.ToString("N0")</span></td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="sas-panel" data-sas-panel="assessor-outcome">
+        <header class="sas-panel__head">
+          <div class="sas-panel__title-wrap">
+            <h3 class="sas-rpt__h3">Ratings given</h3>
+            <p class="sas-rpt__cell-hint govuk-!-margin-bottom-0">Assessment outcomes across all panel assignments</p>
+          </div>
+          <div class="sas-panel__tools">
+            <div class="sas-panel__view" role="group" aria-label="Ratings given view">
+              <button type="button" class="sas-panel__view-btn is-active" data-sas-view="chart" aria-pressed="true">Chart</button>
+              <button type="button" class="sas-panel__view-btn" data-sas-view="table" aria-pressed="false">Table</button>
+            </div>
+            <button type="button" class="govuk-button govuk-button--secondary govuk-button--small sas-panel__expand" aria-expanded="false">Expand</button>
+          </div>
+        </header>
+        <div class="sas-panel__body">
+          <div class="sas-panel__pane sas-panel__pane--chart">
+            <div class="sas-panel__chart-wrap sas-panel__chart-wrap--doughnut">
+              <canvas id="sas-chart-assessor-outcome" role="img" aria-label="Panel assignment outcomes"></canvas>
+            </div>
+          </div>
+          <div class="sas-panel__pane sas-panel__pane--table" hidden>
+            <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+              <table class="govuk-table mr-ba-table">
+                <thead class="govuk-table__head">
+                  <tr class="govuk-table__row">
+                    <th scope="col" class="govuk-table__header">Outcome</th>
+                    <th scope="col" class="govuk-table__header mr-ba-table__num-hdr">Count</th>
+                  </tr>
+                </thead>
+                <tbody class="govuk-table__body">
+                  @foreach (var row in aa.ByOutcome)
+                  {
+                    <tr class="govuk-table__row">
+                      <th scope="row"><span class="dfe-f-badge dfe-f-badge--small @OutcomeBadge(row.Key)">@row.Key</span></th>
+                      <td class="mr-ba-table__num"><span class="mr-ba-num">@row.Value.ToString("N0")</span></td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="sas-panel" data-sas-panel="assessor-role">
+        <header class="sas-panel__head">
+          <div class="sas-panel__title-wrap">
+            <h3 class="sas-rpt__h3">By primary role</h3>
+            <p class="sas-rpt__cell-hint govuk-!-margin-bottom-0">Number of assessors per primary role</p>
+          </div>
+          <div class="sas-panel__tools">
+            <div class="sas-panel__view" role="group" aria-label="By primary role view">
+              <button type="button" class="sas-panel__view-btn is-active" data-sas-view="chart" aria-pressed="true">Chart</button>
+              <button type="button" class="sas-panel__view-btn" data-sas-view="table" aria-pressed="false">Table</button>
+            </div>
+            <button type="button" class="govuk-button govuk-button--secondary govuk-button--small sas-panel__expand" aria-expanded="false">Expand</button>
+          </div>
+        </header>
+        <div class="sas-panel__body">
+          <div class="sas-panel__pane sas-panel__pane--chart">
+            <div class="sas-panel__chart-wrap">
+              <canvas id="sas-chart-assessor-role" role="img" aria-label="Assessors by primary role"></canvas>
+            </div>
+          </div>
+          <div class="sas-panel__pane sas-panel__pane--table" hidden>
+            <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+              <table class="govuk-table mr-ba-table">
+                <thead class="govuk-table__head">
+                  <tr class="govuk-table__row">
+                    <th scope="col" class="govuk-table__header">Role</th>
+                    <th scope="col" class="govuk-table__header mr-ba-table__num-hdr">Assessors</th>
+                  </tr>
+                </thead>
+                <tbody class="govuk-table__body">
+                  @foreach (var row in aa.ByPrimaryRole)
+                  {
+                    <tr class="govuk-table__row">
+                      <th scope="row">@row.Key</th>
+                      <td class="mr-ba-table__num"><span class="mr-ba-num">@row.Value.ToString("N0")</span></td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="sas-panel" data-sas-panel="assessor-status">
+        <header class="sas-panel__head">
+          <div class="sas-panel__title-wrap">
+            <h3 class="sas-rpt__h3">By assessment status</h3>
+            <p class="sas-rpt__cell-hint govuk-!-margin-bottom-0">Panel assignments grouped by parent assessment status</p>
+          </div>
+          <div class="sas-panel__tools">
+            <div class="sas-panel__view" role="group" aria-label="By assessment status view">
+              <button type="button" class="sas-panel__view-btn is-active" data-sas-view="chart" aria-pressed="true">Chart</button>
+              <button type="button" class="sas-panel__view-btn" data-sas-view="table" aria-pressed="false">Table</button>
+            </div>
+            <button type="button" class="govuk-button govuk-button--secondary govuk-button--small sas-panel__expand" aria-expanded="false">Expand</button>
+          </div>
+        </header>
+        <div class="sas-panel__body">
+          <div class="sas-panel__pane sas-panel__pane--chart">
+            <div class="sas-panel__chart-wrap">
+              <canvas id="sas-chart-assessor-status" role="img" aria-label="Panel assignments by assessment status"></canvas>
+            </div>
+          </div>
+          <div class="sas-panel__pane sas-panel__pane--table" hidden>
+            <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+              <table class="govuk-table mr-ba-table">
+                <thead class="govuk-table__head">
+                  <tr class="govuk-table__row">
+                    <th scope="col" class="govuk-table__header">Status</th>
+                    <th scope="col" class="govuk-table__header mr-ba-table__num-hdr">Assignments</th>
+                  </tr>
+                </thead>
+                <tbody class="govuk-table__body">
+                  @foreach (var row in aa.ByStatus)
+                  {
+                    <tr class="govuk-table__row">
+                      <th scope="row">@row.Key</th>
+                      <td class="mr-ba-table__num"><span class="mr-ba-num">@row.Value.ToString("N0")</span></td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </article>
+    </div>
+
+    <h3 class="govuk-heading-m" id="sas-assessor-league-h">Assessor league table</h3>
+    <p class="govuk-hint govuk-!-margin-bottom-3">Ranked by panel assignments in the selected year (calendar year from assessment date). Assessments and peer reviews are counts by assessment type. Red, amber, and green are panel assignment outcomes in that period.</p>
+
+    <div id="sas-assessor-league" class="govuk-!-margin-bottom-6">
+      @if (aa.LeagueYearTabs.Count > 1)
+      {
+        <nav class="dfe-f-sub-navigation sas-league-year-nav govuk-!-margin-bottom-3" aria-label="League table year">
+          <ul class="dfe-f-sub-navigation__list">
+            @foreach (var yearTab in aa.LeagueYearTabs)
+            {
+              <li class="dfe-f-sub-navigation__item@(yearTab.IsDefault ? " dfe-f-sub-navigation__item--active" : "")">
+                <button type="button"
+                        class="dfe-f-sub-navigation__link govuk-link tab@(yearTab.IsDefault ? " on" : "")"
+                        id="sas-league-btn-@yearTab.Key"
+                        data-sas-league-year="@yearTab.Key"
+                        aria-controls="sas-league-panel-@yearTab.Key">@yearTab.Label</button>
+              </li>
+            }
+          </ul>
+        </nav>
+      }
+
+      @foreach (var yearTab in aa.LeagueYearTabs)
+      {
+        <div id="sas-league-panel-@yearTab.Key"
+             class="sas-assessor-league-panel tab-pane@(yearTab.IsDefault ? " on" : "")"
+             role="tabpanel"
+             aria-labelledby="sas-league-btn-@yearTab.Key">
+          @await Html.PartialAsync("_SasAssessorLeagueTable", yearTab.Rows)
+        </div>
+      }
+    </div>
+  }
+</section>

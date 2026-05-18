@@ -1,4 +1,6 @@
 @model ModernPerformanceBulkVerifyViewModel
+@using Compass.ViewModels.Modern
+@using Microsoft.AspNetCore.Html
 @{
   ViewData["Title"] = "Verify bulk upload — " + Model.CommissionName;
 }
@@ -10,10 +12,15 @@
  <li class="govuk-breadcrumbs__list-item" aria-current="page">Verify upload</li>
 }
 
-<div class="dfe-c-page-title dfe-c-mb-4">
- <h1 class="dfe-c-page-title__heading">Verify bulk upload</h1>
- <p class="govuk-body dfe-c-mb-0">@Model.StagedRowCount data row(s) in file.</p>
-</div>
+@await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+  Title = "Verify bulk upload",
+  Lede = new HtmlString($"<p class=\"govuk-body govuk-!-margin-bottom-0\">{Model.StagedRowCount} data row(s) in file.</p>")
+})
+
+@await Html.PartialAsync("_PerformanceCommissionScopeSubNav", new PerformanceCommissionScopeNavViewModel {
+  CommissionId = Model.CommissionId,
+  Tab = Model.Tab
+})
 
 @if (Model.CanApply)
 {
@@ -38,29 +45,38 @@ else
  <p class="govuk-body">Correct the file and run verify again. Nothing was saved.</p>
   </div>
  <p class="govuk-body">
- <a class="govuk-link" href="@Url.Action("BulkUpload", "ModernPerformance", new { commissionId = Model.CommissionId, tab = Model.Tab })">Back to bulk upload</a>
+ <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("BulkUpload", "ModernPerformance", new { commissionId = Model.CommissionId, tab = Model.Tab })">Back to bulk upload</a>
   </p>
 }
 
 <h2 class="govuk-heading-m dfe-c-mt-4">Row results</h2>
-<div class="dfe-c-table-wrap">
-  <table>
-    <thead>
-      <tr>
-        <th scope="col">Row</th>
-        <th scope="col">DocumentId</th>
-        <th scope="col">Product</th>
-        <th scope="col">Errors</th>
+<div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+  <table class="govuk-table">
+    <thead class="govuk-table__head">
+      <tr class="govuk-table__row">
+        <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Row</button>
+        </th>
+        <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">DocumentId</button>
+        </th>
+        <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Product</button>
+        </th>
+        <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Errors</button>
+        </th>
       </tr>
     </thead>
-    <tbody>
+    <tbody class="govuk-table__body">
     @foreach (var line in Model.Lines)
     {
-      <tr>
-        <td>@line.RowNumber</td>
+      <tr class="govuk-table__row">
+        <td class="govuk-table__cell">@line.RowNumber</td>
  <td class="govuk-body-s">@line.DocumentId</td>
-        <td>@(line.ProductTitle ?? "—")</td>
-        <td>
+        <td class="govuk-table__cell">@(line.ProductTitle ?? "—")</td>
+        <td class="govuk-table__cell">
           @if (line.Errors.Count == 0)
           {
  <span class="dfe-c-tag dfe-c-tag--green">OK</span>

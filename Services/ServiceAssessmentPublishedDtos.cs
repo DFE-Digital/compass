@@ -41,3 +41,22 @@ public class SasActionByStandardRow
     public string? ActionCount { get; set; }
     public string? AssessmentCount { get; set; }
 }
+
+/// <summary>Response from <c>GET /product/{fipsId}</c>.</summary>
+public class SasProductAssessmentsResponse
+{
+    public string? Fips_Id { get; set; }
+    public List<SasProductAssessmentRow>? Assessments { get; set; }
+    public int Count { get; set; }
+}
+
+public class SasProductAssessmentRow
+{
+    public int AssessmentID { get; set; }
+    public string? FIPS_ID { get; set; }
+    public string? Name { get; set; }
+    public string? Type { get; set; }
+    public string? Phase { get; set; }
+    public string? Outcome { get; set; }
+    public DateTime? AssessmentDateTime { get; set; }
+}

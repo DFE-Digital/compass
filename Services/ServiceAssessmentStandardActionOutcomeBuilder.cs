@@ -149,7 +149,7 @@ public static class ServiceAssessmentStandardActionOutcomeBuilder
                 });
         }
 
-        return SortByProblematicness(list);
+        return AssignRanksAndOrderByStandard(list);
     }
 
     private static IReadOnlyList<SasStandardActionRow> MapFromApiOnly(
@@ -186,22 +186,34 @@ public static class ServiceAssessmentStandardActionOutcomeBuilder
         return ordered;
     }
 
-    private static List<SasStandardActionRow> SortByProblematicness(
+    /// <summary>
+    /// Ranks rows by Red/Amber pressure for the # column, then returns rows in <strong>Government Service Standard number order</strong> (1, 2, …) for every chart and table.
+    /// </summary>
+    private static List<SasStandardActionRow> AssignRanksAndOrderByStandard(
         IReadOnlyList<SasStandardActionRow> list)
     {
-        var ordered = list
+        var rankOrder = list
             .OrderByDescending(r => r.PctOnAmberOrRed is { } p ? p : -1.0)
             .ThenByDescending(r => r.ActionsFromRedOutcome + r.ActionsFromAmberOutcome)
             .ThenByDescending(r => r.ActionCount)
             .ThenBy(r => r.Standard, Comparer<int>.Default)
             .ToList();
+        var rankByStandard = new Dictionary<int, int>();
         var n = 1;
-        foreach (var row in ordered)
+        foreach (var row in rankOrder)
         {
-            row.MostProblematicRank = n++;
+            rankByStandard[row.Standard] = n++;
         }
 
-        return ordered;
+        var displayOrder = list
+            .OrderBy(r => r.Standard, Comparer<int>.Default)
+            .ToList();
+        foreach (var row in displayOrder)
+        {
+            row.MostProblematicRank = rankByStandard[row.Standard];
+        }
+
+        return displayOrder;
     }
 
     /// <summary>1=Red, 2=Amber, 3=Green, 0=unclassified. Prefer a clear RAG from the published list, then the detail API string.</summary>

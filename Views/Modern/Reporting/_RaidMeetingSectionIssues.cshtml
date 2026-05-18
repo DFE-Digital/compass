@@ -1,0 +1,57 @@
+@model Compass.ViewModels.ModernRaidMeetingReportViewModel
+@{
+  var m = Model.Reporting;
+  var i = m.IssueKpis;
+  var focus = m.Intel.FocusIssues.Take(10).ToList();
+}
+<section class="mr-report-section-panel dfe-f-toggle govuk-!-margin-bottom-3" data-module="dfe-f-toggle" data-mr-section-id="issues" data-mr-section-title="Issues">
+  <header class="dfe-f-toggle__title-wrapper">
+    <h2 class="dfe-f-toggle__heading">
+      <button type="button" class="dfe-f-toggle__button" aria-expanded="false" aria-controls="rr-toggle-issues-content" id="rr-toggle-issues-button">
+        <span class="dfe-f-toggle__icon" aria-hidden="true"></span>
+        <span class="dfe-f-toggle__title">Issues</span>
+        <span class="mr-toggle-panel__meta"><span class="govuk-tag @(i.OpenIssues > 0 ? "govuk-tag--red" : "govuk-tag--grey")">@i.OpenIssues open</span></span>
+      </button>
+    </h2>
+  </header>
+  <section id="rr-toggle-issues-content" class="dfe-f-toggle__content" hidden>
+    <section class="dfe-f-toggle__body govuk-body">
+      <section class="dfe-f-card-grid govuk-!-margin-bottom-4">
+        <article class="dfe-f-stat-card dfe-f-stat-card--tint-grey"><p class="govuk-body-s dfe-f-stat-card__label">Open</p><p class="dfe-f-stat-card__value govuk-body-l">@i.OpenIssues</p></article>
+        <article class="dfe-f-stat-card dfe-f-stat-card--tint-red"><p class="govuk-body-s dfe-f-stat-card__label">Blocked</p><p class="dfe-f-stat-card__value govuk-body-l">@i.BlockedIssues</p></article>
+        <article class="dfe-f-stat-card dfe-f-stat-card--tint-red"><p class="govuk-body-s dfe-f-stat-card__label">Highest severities</p><p class="dfe-f-stat-card__value govuk-body-l">@i.SevereOpenCount</p></article>
+        <article class="dfe-f-stat-card dfe-f-stat-card--tint-grey"><p class="govuk-body-s dfe-f-stat-card__label">Raised (30d)</p><p class="dfe-f-stat-card__value govuk-body-l">@i.RaisedLast30Days</p></article>
+      </section>
+
+      <h3 class="govuk-heading-s">Severity × priority</h3>
+      @await Html.PartialAsync("_RaidMeetingIssueMatrix", m)
+
+      @if (m.OpenIssueSeverityCounts.Count > 0)
+      {
+        <h3 class="govuk-heading-s govuk-!-margin-top-4">By severity</h3>
+        <ul class="govuk-list govuk-list--bullet">
+          @foreach (var kv in m.OpenIssueSeverityCounts.OrderByDescending(x => x.Value))
+          {
+            <li><strong>@kv.Key</strong> — @kv.Value</li>
+          }
+        </ul>
+      }
+
+      @if (focus.Count > 0)
+      {
+        <h3 class="govuk-heading-s govuk-!-margin-top-4">Priority focus (blocked &amp; critical)</h3>
+        <ul class="govuk-list">
+          @foreach (var row in focus)
+          {
+            <li class="govuk-!-margin-bottom-2">
+              <a class="govuk-link" href="@Url.Action("IssueDetail", "ModernRaid", new { id = row.Id })">@row.ReferenceLabel</a>
+              — @row.SeverityLabel
+              @if (row.Blocked) { <span class="govuk-tag govuk-tag--red">Blocked</span> }
+              <p class="govuk-body-s govuk-!-margin-bottom-0">@row.Insight · @row.DaysOpen days open</p>
+            </li>
+          }
+        </ul>
+      }
+    </section>
+  </section>
+</section>

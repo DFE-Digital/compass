@@ -4,15 +4,7 @@
     var phaseNames = ViewBag.PhaseNames as Dictionary<int, string> ?? new Dictionary<int, string>();
     var priorityNames = ViewBag.PriorityNames as Dictionary<int, string> ?? new Dictionary<int, string>();
     var businessAreaById = ViewBag.BusinessAreaNameByProjectId as Dictionary<int, string> ?? new Dictionary<int, string>();
-    string PriorityTagClass(string? name)
-    {
-        if (string.IsNullOrWhiteSpace(name)) return "dfe-c-tag dfe-c-tag--grey";
-        var s = name.ToLowerInvariant();
-        if (s.Contains("high") || s.Contains("critical")) return "dfe-c-tag dfe-c-tag--red";
-        if (s.Contains("medium")) return "dfe-c-tag dfe-c-tag--amber";
-        if (s.Contains("low")) return "dfe-c-tag dfe-c-tag--green";
-        return "dfe-c-tag dfe-c-tag--grey";
-    }
+    var suppressBusinessAreaColumn = ViewBag.SuppressBusinessAreaColumn as bool? == true;
     string DirSummary(WorkItem w) =>
         w.Directorates?.Any() == true
             ? string.Join(", ", w.Directorates.Select(d => d.Division?.Name).Where(n => !string.IsNullOrEmpty(n)).Distinct().OrderBy(n => n))
@@ -26,27 +18,42 @@
     var phaseName = w.DeliveryPhaseId.HasValue && phaseNames.TryGetValue(w.DeliveryPhaseId.Value, out var ph) ? ph : null;
     var priorityName = w.PriorityId.HasValue && priorityNames.TryGetValue(w.PriorityId.Value, out var pr) ? pr : null;
     var pcName = ViewBag.PrimaryContactById is Dictionary<int, string> pcMap && pcMap.TryGetValue(w.Id, out var pc) ? pc : "—";
- <tr class="bypriority-work-row">
-        <td>
- <a href="@Url.Action("Detail", "ModernWork", new { id = w.Id })" class="dfe-c-link dfe-c-fw-bold">@w.Title</a>
- <div class="dfe-c-body-s dfe-c-text-muted" style="margin-top:0.25rem;line-height:1.3;">
- WI-@w.Id.ToString("D8")@if (!string.IsNullOrEmpty(phaseName)) { <span aria-hidden="true"> · </span><span class="dfe-c-text-muted">@phaseName</span> }
+    var ragName = latestRag?.RagStatus?.Name ?? "";
+    var searchable = string.Join(" ", new[]
+    {
+        w.Title ?? "",
+        suppressBusinessAreaColumn ? "" : BusinessAreaCell(w),
+        DirSummary(w),
+        priorityName ?? "",
+        ragName,
+        pcName,
+        w.Status ?? "",
+        $"WI-{w.Id:D8}"
+    }.Where(s => !string.IsNullOrWhiteSpace(s)));
+ <tr class="govuk-table__row bypriority-work-row" data-searchable="@searchable">
+ <td class="govuk-table__cell" data-label="Work item">
+ <a href="@Url.Action("Detail", "ModernWork", new { id = w.Id })" class="govuk-link govuk-link--no-visited-state">@w.Title</a>
+ <div class="govuk-body-s modern-work-table__meta" style="color:#505a5f;">
+ WI-@w.Id.ToString("D8")@if (!string.IsNullOrEmpty(phaseName)) { <span aria-hidden="true"> · </span><span>@phaseName</span> }
             </div>
         </td>
-        <td class="dfe-c-body-s">@BusinessAreaCell(w)</td>
-        <td class="dfe-c-body-s">@DirSummary(w)</td>
-        <td>
+ @if (!suppressBusinessAreaColumn)
+ {
+ <td class="govuk-table__cell" data-label="Business area">@BusinessAreaCell(w)</td>
+ }
+ <td class="govuk-table__cell" data-label="Directorate">@DirSummary(w)</td>
+ <td class="govuk-table__cell" data-label="Priority">
             @if (!string.IsNullOrEmpty(priorityName))
             {
- <span class="@PriorityTagClass(priorityName)">@priorityName.ToUpperInvariant()</span>
+ <span class="@WorkBadgeCss.PriorityDfeFrontendBadgeClass(priorityName)">@priorityName.ToUpperInvariant()</span>
             }
             else
             {
- <span class="dfe-c-text-muted">—</span>
+ <span class="govuk-hint govuk-!-margin-bottom-0">—</span>
             }
         </td>
-        <td>@await Html.PartialAsync("_WorkRagBadge", latestRag)</td>
-        <td>@pcName</td>
- <td><span class="@WorkBadgeCss.StatusDfeTagClass(w.Status)">@w.Status</span></td>
+ <td class="govuk-table__cell" data-label="RAG">@await Html.PartialAsync("_WorkRagBadge", latestRag)</td>
+ <td class="govuk-table__cell" data-label="Primary contact">@pcName</td>
+ <td class="govuk-table__cell" data-label="Status"><span class="@WorkBadgeCss.StatusDfeFrontendBadgeClass(w.Status)">@w.Status</span></td>
     </tr>
 }

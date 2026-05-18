@@ -1,0 +1,112 @@
+@* Minimal shell for work edit flows opened inside an iframe (query: embed=1). *@
+<!DOCTYPE html>
+<html lang="en" class="govuk-template govuk-template--rebranded">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+	<title>@ViewData["Title"] — Compass</title>
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+	<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+	<link rel="stylesheet" href="~/modern/css/govuk-frontend-6.1.0.min.css" />
+	<link rel="stylesheet" href="~/_content/DfEDigital.Frontend.AspNetCore/dfe/dfe.min.css" asp-append-version="true" />
+	<link rel="stylesheet" href="~/modern/css/modern.css" asp-append-version="true" />
+	<link rel="icon" href="~/modern/assets/images/favicon.svg" type="image/svg+xml" />
+	<link rel="mask-icon" href="~/modern/assets/images/govuk-icon-mask.svg" color="#0b0c0c" />
+	<link rel="apple-touch-icon" sizes="180x180" href="~/modern/assets/images/favicon.svg" />
+	<meta name="theme-color" content="#0b0c0c" />
+	@await RenderSectionAsync("Styles", required: false)
+</head>
+<body class="govuk-template__body govuk-body use-dfe-brand work-embed-modal-body" data-main-nav="" data-sub-nav="">
+	@{
+		var cspNonce = Context.Items["Nonce"]?.ToString() ?? "";
+	}
+	<script nonce="@cspNonce">
+		document.body.className += ' js-enabled' + ('noModule' in HTMLScriptElement.prototype ? ' govuk-frontend-supported' : '');
+	</script>
+
+	<a href="#main-content" class="govuk-skip-link" data-module="govuk-skip-link">Skip to main content</a>
+
+	<div hidden>
+		@await RenderSectionAsync("Breadcrumbs", required: false)
+		@await RenderSectionAsync("Masthead", required: false)
+	</div>
+
+	<main class="dfe-c-main" id="main-content" role="main">
+		<div class="govuk-width-container dfe-c-page">
+			@await Html.PartialAsync("~/Views/Modern/Shared/_TempDataBanner.cshtml")
+			@RenderBody()
+		</div>
+	</main>
+
+	@await Html.PartialAsync("~/Views/Modern/Shared/_ConfirmModal.cshtml")
+	@await Html.PartialAsync("~/Views/Modern/Shared/_GeneratingReportModal.cshtml")
+	@await Html.PartialAsync("~/Views/Modern/Shared/_PageNavLoadingOverlay.cshtml")
+
+	<script src="~/modern/js/compass2-design-file.js" asp-append-version="true" nonce="@cspNonce"></script>
+	@await RenderSectionAsync("Scripts", required: false)
+	<script src="~/modern/js/site.js" asp-append-version="true" nonce="@cspNonce"></script>
+	<script src="~/_content/DfEDigital.Frontend.AspNetCore/dfe/dfe-frontend.iife.min.js" asp-append-version="true" nonce="@cspNonce"></script>
+	<script src="~/modern/js/dfe-f-panel-container.js" asp-append-version="true" nonce="@cspNonce"></script>
+	<script src="~/modern/js/user-picker.js" asp-append-version="true" nonce="@cspNonce"></script>
+	<script src="~/modern/js/confirm-modal.js" asp-append-version="true" nonce="@cspNonce"></script>
+	<script src="~/modern/js/generating-report-modal.js" asp-append-version="true" nonce="@cspNonce"></script>
+	<script src="~/modern/js/page-nav-loading.js" asp-append-version="true" nonce="@cspNonce"></script>
+	<script type="module" src="~/modern/js/govuk-frontend-init.js" asp-append-version="true" nonce="@cspNonce"></script>
+	<script nonce="@cspNonce">
+	(function () {
+		function stayInIframeForClick(aHref) {
+			if (!aHref || aHref.charAt(0) === '#') return true;
+			try {
+				var u = new URL(aHref, window.location.href);
+				if (u.origin !== window.location.origin) return false;
+				return u.pathname === window.location.pathname;
+			} catch (e) {
+				return false;
+			}
+		}
+		function armEmbedForms() {
+			document.querySelectorAll('form').forEach(function (f) {
+				if (!f.querySelector('input[name="embed"][value="1"]')) {
+					var h = document.createElement('input');
+					h.type = 'hidden';
+					h.name = 'embed';
+					h.value = '1';
+					f.appendChild(h);
+				}
+				if (!f.getAttribute('target')) {
+					f.setAttribute('target', '_top');
+				}
+			});
+		}
+		document.addEventListener('click', function (e) {
+			var a = e.target.closest('a[href]');
+			if (!a || a.closest('.user-picker')) return;
+			var href = a.getAttribute('href');
+			if (!href || href.startsWith('javascript:')) return;
+			if (stayInIframeForClick(href)) return;
+			e.preventDefault();
+			window.top.location.href = a.href;
+		}, true);
+		function scrollToHashTarget() {
+			if (!location.hash || location.hash.length < 2) return;
+			var target = document.querySelector(location.hash);
+			if (target && typeof target.scrollIntoView === 'function') {
+				target.scrollIntoView({ block: 'start' });
+			}
+		}
+		function onEmbedReady() {
+			armEmbedForms();
+			scrollToHashTarget();
+			window.setTimeout(scrollToHashTarget, 150);
+		}
+		if (document.readyState === 'loading') {
+			document.addEventListener('DOMContentLoaded', onEmbedReady);
+		} else {
+			onEmbedReady();
+		}
+	})();
+	</script>
+</body>
+</html>

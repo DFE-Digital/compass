@@ -14,6 +14,7 @@ using Compass.Services.Modern;
 using Compass.Services.Fips;
 using Compass.Services.Raid;
 using Compass.ViewModels.Modern;
+using Compass.ViewModels.Modern.Ddr;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -41,9 +42,11 @@ public class ModernOperationsController : Controller
     private readonly IModernWorkService _modernWork;
     private readonly IProductsApiService _productsApi;
     private readonly IFipsBusinessAreaLookupSyncService _fipsBusinessAreaLookupSync;
+    private readonly IFipsCompletionBulkImportService _fipsCompletionBulkImport;
     private readonly IOperationsRiskEditService _operationsRiskEdit;
     private readonly INotificationService _notificationService;
     private readonly IConfiguration _configuration;
+    private readonly CommissionReportingAnalyticsService _commissionReportingAnalytics;
 
     public ModernOperationsController(
         CompassDbContext db,
@@ -54,9 +57,11 @@ public class ModernOperationsController : Controller
         IModernWorkService modernWork,
         IProductsApiService productsApi,
         IFipsBusinessAreaLookupSyncService fipsBusinessAreaLookupSync,
+        IFipsCompletionBulkImportService fipsCompletionBulkImport,
         IOperationsRiskEditService operationsRiskEdit,
         INotificationService notificationService,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        CommissionReportingAnalyticsService commissionReportingAnalytics)
     {
         _db = db;
         _fipsCmdbProductSync = fipsCmdbProductSync;
@@ -66,9 +71,11 @@ public class ModernOperationsController : Controller
         _modernWork = modernWork;
         _productsApi = productsApi;
         _fipsBusinessAreaLookupSync = fipsBusinessAreaLookupSync;
+        _fipsCompletionBulkImport = fipsCompletionBulkImport;
         _operationsRiskEdit = operationsRiskEdit;
         _notificationService = notificationService;
         _configuration = configuration;
+        _commissionReportingAnalytics = commissionReportingAnalytics;
     }
 
     private async Task<IActionResult?> DemandDisabledRedirectAsync()
@@ -99,6 +106,24 @@ public class ModernOperationsController : Controller
             "issues" => "issues",
             _ => "information"
         };
+
+    private static bool TryParseBulkEnterpriseAction(string? action, out bool isEnterprise)
+    {
+        if (string.Equals(action, "true", StringComparison.OrdinalIgnoreCase))
+        {
+            isEnterprise = true;
+            return true;
+        }
+
+        if (string.Equals(action, "false", StringComparison.OrdinalIgnoreCase))
+        {
+            isEnterprise = false;
+            return true;
+        }
+
+        isEnterprise = false;
+        return false;
+    }
 
     private static string? FormatCmdbSnapshotJson(string? raw)
     {
@@ -153,14 +178,204 @@ public class ModernOperationsController : Controller
         SetNav("operations-dashboard");
 
         var raid = await RaidEscalationManagementViewModelBuilder.BuildAsync(_db, "escalations", ct);
+
+        var raidEnabled = await _globalFeatureToggle.IsFeatureEnabledForPrincipalAsync(FeatureCodes.Raid, User);
+
+        var pendingDdrInsight = 0;
+        if (await _globalFeatureToggle.IsFeatureEnabledForPrincipalAsync(FeatureCodes.Ddr, User))
+        {
+            pendingDdrInsight = await _db.DesignDecisionRecords.AsNoTracking()
+                .CountAsync(r => r.DeletedAt == null && r.SubmittedAt != null && !r.InsightClassifications.Any(), ct);
+        }
+
+        var cmsNew = await _db.CmsAccessRequests.AsNoTracking().CountAsync(x => x.Status == "New", ct);
+        var cmsCompleted = await _db.CmsAccessRequests.AsNoTracking().CountAsync(x => x.Status == "Completed", ct);
+        var cmsRejected = await _db.CmsAccessRequests.AsNoTracking().CountAsync(x => x.Status == "Rejected", ct);
+
+        var attentionTotal = cmsNew + pendingDdrInsight + (raidEnabled ? raid.PendingApprovalCount : 0);
+
+        var activeWorkCount = await _db.Projects.AsNoTracking()
+            .CountAsync(p => p.Status == "Active", ct);
+
+        var demandEnabled = await _globalFeatureToggle.IsFeatureEnabledForPrincipalAsync(FeatureCodes.Demand, User);
+        var demandTotal = 0;
+        var triageUpcoming = 0;
+        if (demandEnabled)
+        {
+            demandTotal = await _db.DemandPipelineRequests.AsNoTracking().CountAsync(ct);
+            var today = DateTime.UtcNow.Date;
+            triageUpcoming = await _db.DemandPipelineTriageMeetings.AsNoTracking()
+                .CountAsync(m =>
+                    m.Status == "Scheduled" &&
+                    (m.MeetingDate == null || m.MeetingDate.Value.Date >= today), ct);
+        }
+
+        var fipsEnabled = await _globalFeatureToggle.IsFeatureEnabledForPrincipalAsync(FeatureCodes.Fips, User);
+        var serviceRegisterActive = 0;
+        if (fipsEnabled)
+        {
+            serviceRegisterActive = await _db.CMDBProducts.AsNoTracking()
+                .CountAsync(p => p.Status == CMDBProductStatus.Active, ct);
+        }
+
+        var activeCommissions = await _db.Commissions.AsNoTracking()
+            .CountAsync(c => c.IsActive, ct);
+
         var vm = new ModernOperationsDashboardViewModel
         {
+            AttentionQueueTotal = attentionTotal,
             PendingTierChangeCount = raid.PendingApprovalCount,
             PendingEscalationsCount = raid.PendingEscalationsCount,
             PendingDeescalationsCount = raid.PendingDeescalationsCount,
-            CurrentlyEscalatedCount = raid.CurrentlyEscalatedCount
+            CurrentlyEscalatedCount = raid.CurrentlyEscalatedCount,
+            ActiveRisksCount = raid.ActiveRisksCount,
+            PendingDdrDesignOpsInsightCount = pendingDdrInsight,
+            CmsAccessRequestsNewCount = cmsNew,
+            CmsAccessRequestsCompletedCount = cmsCompleted,
+            CmsAccessRequestsRejectedCount = cmsRejected,
+            ManageWorkActiveCount = activeWorkCount,
+            ManageDemandTotalCount = demandTotal,
+            ManageTriageUpcomingMeetingsCount = triageUpcoming,
+            ManagePerformanceActiveCommissionsCount = activeCommissions,
+            ServiceRegisterActiveProductCount = serviceRegisterActive,
         };
         return View("~/Views/Modern/Operations/OperationsDashboard.cshtml", vm);
+    }
+
+    /// <summary>DDR overview for Central Operations — queues, breakdowns, and links into the DDR register and detail views.</summary>
+    [HttpGet("ddr")]
+    public async Task<IActionResult> Ddr(CancellationToken ct)
+    {
+        if (!await _globalFeatureToggle.IsFeatureEnabledForPrincipalAsync(FeatureCodes.Ddr, User))
+        {
+            TempData["ErrorMessage"] = "Design Decision Records are not enabled.";
+            return RedirectToAction(nameof(Dashboard));
+        }
+
+        SetNav("operations-ddr");
+        var model = await BuildOperationsDdrDashboardAsync(ct);
+        return View("~/Views/Modern/Operations/DdrDashboard.cshtml", model);
+    }
+
+    private async Task<ModernOperationsDdrDashboardViewModel> BuildOperationsDdrDashboardAsync(CancellationToken ct)
+    {
+        var baseQ = _db.DesignDecisionRecords.AsNoTracking()
+            .Where(r => r.DeletedAt == null);
+
+        var total = await baseQ.CountAsync(ct);
+        var pendingInsight = await baseQ.CountAsync(
+            r => r.SubmittedAt != null && !r.InsightClassifications.Any(),
+            ct);
+        var submittedTotal = await baseQ.CountAsync(r => r.SubmittedAt != null, ct);
+        var retrospectiveCount = await baseQ.CountAsync(r => r.RetrospectiveRecord, ct);
+
+        var preview = await baseQ
+            .Where(r => r.SubmittedAt != null && !r.InsightClassifications.Any())
+            .OrderByDescending(r => r.SubmittedAt)
+            .Take(20)
+            .Select(r => new { r.Reference, r.ShortTitle, r.SubmittedAt })
+            .ToListAsync(ct);
+
+        var previewRows = preview.Select(r => new DdrOpsQueueRow
+        {
+            Reference = r.Reference,
+            ShortTitle = r.ShortTitle,
+            SubmittedAt = r.SubmittedAt,
+            DetailUrl = Url.Action("Detail", "ModernDesignDecisionRecords", new { reference = r.Reference }) ?? "#",
+        }).ToList();
+
+        var byCategoryRaw = await baseQ
+            .GroupBy(r => r.Category)
+            .Select(g => new { Key = g.Key, Count = g.Count() })
+            .ToListAsync(ct);
+        var byCategory = byCategoryRaw
+            .OrderByDescending(x => x.Count)
+            .Select(x => new DdrDashboardBreakdownRow
+            {
+                Label = x.Key ?? "(unknown)",
+                Count = x.Count,
+                RegisterUrl = Url.Action("Register", "ModernDesignDecisionRecords", new { category = x.Key }) ?? "#",
+            })
+            .ToList();
+
+        var typedDeviations = await baseQ
+            .Where(r => r.DeviationFlag && r.DeviationType != null && r.DeviationType != "")
+            .GroupBy(r => r.DeviationType!)
+            .Select(g => new { Key = g.Key, Count = g.Count() })
+            .ToListAsync(ct);
+
+        var unsetDeviation = await baseQ.CountAsync(
+            r => r.DeviationFlag && (r.DeviationType == null || r.DeviationType == ""),
+            ct);
+
+        var byDeviation = typedDeviations.Select(x => new DdrDashboardBreakdownRow
+        {
+            Label = x.Key,
+            Count = x.Count,
+            RegisterUrl = Url.Action("Register", "ModernDesignDecisionRecords",
+                new { deviation = "true", deviationType = x.Key }) ?? "#",
+        }).ToList();
+
+        if (unsetDeviation > 0)
+        {
+            byDeviation.Add(new DdrDashboardBreakdownRow
+            {
+                Label = "Type not set",
+                Count = unsetDeviation,
+                RegisterUrl = Url.Action("Register", "ModernDesignDecisionRecords",
+                    new { deviation = "true", deviationType = DdrRegisterQueryValues.UnsetDeviationType }) ?? "#",
+            });
+        }
+
+        byDeviation.Sort((a, b) => b.Count.CompareTo(a.Count));
+
+        var productGroups = await (
+                from pl in _db.DdrProductLinks.AsNoTracking()
+                join r in _db.DesignDecisionRecords.AsNoTracking() on pl.DesignDecisionRecordId equals r.Id
+                where r.DeletedAt == null
+                group pl by pl.FipsProductId
+                into g
+                select new { ProductId = g.Key, Count = g.Count() })
+            .OrderByDescending(x => x.Count)
+            .Take(40)
+            .ToListAsync(ct);
+
+        var pIds = productGroups.Select(x => x.ProductId).ToList();
+        var productTitles = await _db.CMDBProducts.AsNoTracking()
+            .Where(p => pIds.Contains(p.Id))
+            .Select(p => new { p.Id, p.Title })
+            .ToDictionaryAsync(x => x.Id, x => x.Title, ct);
+
+        var byProduct = productGroups.Select(pg =>
+        {
+            var title = productTitles.TryGetValue(pg.ProductId, out var t) && !string.IsNullOrWhiteSpace(t)
+                ? t!
+                : "(unknown product)";
+            return new DdrDashboardBreakdownRow
+            {
+                Label = title,
+                Count = pg.Count,
+                RegisterUrl = Url.Action("Register", "ModernDesignDecisionRecords", new { productId = pg.ProductId }) ?? "#",
+            };
+        }).ToList();
+
+        return new ModernOperationsDdrDashboardViewModel
+        {
+            TotalDdrs = total,
+            PendingDesignOpsInsightCount = pendingInsight,
+            SubmittedTotalCount = submittedTotal,
+            RetrospectiveCount = retrospectiveCount,
+            PendingInsightPreview = previewRows,
+            ByCategory = byCategory,
+            ByDeviationType = byDeviation,
+            ByProduct = byProduct,
+            OversightPendingInsightUrl = Url.Action("Oversight", "ModernDesignDecisionRecords",
+                new { filter = "pending-insight" }) ?? "#",
+            OversightDashboardUrl = Url.Action("Oversight", "ModernDesignDecisionRecords") ?? "#",
+            RegisterUrl = Url.Action("Register", "ModernDesignDecisionRecords") ?? "#",
+            RegisterRetrospectiveUrl = Url.Action("Register", "ModernDesignDecisionRecords",
+                new { retrospective = "true" }) ?? "#",
+        };
     }
 
     private static string NormalizeCmsAccessRequestTab(string? tab) =>
@@ -481,25 +696,6 @@ public class ModernOperationsController : Controller
             FormMethod = "get",
             ClearUrl = Url.Action(nameof(ManageWork), "ModernOperations", new { tab = activeTab }) ?? manageWorkUrl,
             ActiveChips = vm.ActiveFilterChips,
-            SecondaryActionUrl = Url.Action(nameof(ModernWorkController.ExportRegister), "ModernWork", new
-            {
-                scope = "allwork",
-                tab = activeTab,
-                search,
-                businessAreaId,
-                directorateId,
-                phaseId,
-                ragId,
-                priorityId,
-                monthlyUpdate,
-                primaryContactUserId,
-                tagId,
-                tagIds = mergedTags,
-                mine,
-                sort,
-                sd
-            }),
-            SecondaryActionLabel = "Export this view",
             Fields = new List<SearchAndFilterFieldViewModel>()
         };
         ViewBag.ActiveTab = activeTab;
@@ -599,222 +795,23 @@ public class ModernOperationsController : Controller
     {
         SetNav("operations-manage-performance");
 
-        var commissionOptions = await _db.Commissions.AsNoTracking()
-            .OrderByDescending(c => c.DueDate)
-            .Select(c => new CommissionPickerOption { Id = c.Id, Name = c.Name, DueDate = c.DueDate, IsActive = c.IsActive })
-            .ToListAsync(cancellationToken);
-
-        var jsonOpts = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
-
-        if (commissionOptions.Count == 0)
-        {
-            return View("~/Views/Modern/Operations/ManagePerformance.cshtml",
-                new OperationsManagePerformanceViewModel { CommissionOptions = commissionOptions });
-        }
-
-        var selectedId = commissionId ?? commissionOptions[0].Id;
-        if (!commissionOptions.Any(x => x.Id == selectedId))
-        {
-            TempData["Error"] = "Choose a commission from the list.";
-            selectedId = commissionOptions[0].Id;
-        }
-
-        var commissionEntity = await _db.Commissions.AsNoTracking()
-            .FirstOrDefaultAsync(c => c.Id == selectedId, cancellationToken);
-
-        if (commissionEntity == null)
-        {
-            TempData["Error"] = "Commission not found.";
-            return View("~/Views/Modern/Operations/ManagePerformance.cshtml",
-                new OperationsManagePerformanceViewModel { CommissionOptions = commissionOptions });
-        }
-
-        List<ProductDto> eligibleProducts;
         try
         {
-            var allProducts = await _productsApi.GetAllProductsAsync();
-            eligibleProducts = CommissionReportingProductScope.GetAllActivePublishedEligible(allProducts)
-                .Where(p => CommissionReportingProductScope.ProductMatchesCommissionInScopeRules(commissionEntity, p))
-                .ToList();
+            var vm = await _commissionReportingAnalytics.BuildOperationsManagePerformanceAsync(
+                commissionId, cancellationToken);
+            return View("~/Views/Modern/Operations/ManagePerformance.cshtml", vm);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Operations manage performance: failed to load product catalogue");
-            TempData["Error"] = "Could not load product data from the catalogue. Try again later.";
-            eligibleProducts = new List<ProductDto>();
+            _logger.LogError(ex, "Operations manage performance: failed to build dashboard");
+            TempData["Error"] = "Could not load performance data. Try again later.";
+            return View("~/Views/Modern/Operations/ManagePerformance.cshtml",
+                new OperationsManagePerformanceViewModel());
         }
-
-        var submissions = await _db.CommissionSubmissions.AsNoTracking()
-            .Where(cs => cs.CommissionId == commissionEntity.Id)
-            .ToDictionaryAsync(cs => cs.ProductDocumentId, cs => cs, cancellationToken);
-
-        var submitted = 0;
-        var late = 0;
-        var inProgress = 0;
-        var notStarted = 0;
-        foreach (var p in eligibleProducts)
-        {
-            var doc = p.DocumentId ?? "";
-            if (string.IsNullOrEmpty(doc) || !submissions.TryGetValue(doc, out var sub))
-            {
-                notStarted++;
-                continue;
-            }
-
-            switch (sub.Status)
-            {
-                case CommissionSubmissionStatus.Submitted:
-                    submitted++;
-                    break;
-                case CommissionSubmissionStatus.Late:
-                    late++;
-                    break;
-                case CommissionSubmissionStatus.InProgress:
-                    inProgress++;
-                    break;
-                default:
-                    notStarted++;
-                    break;
-            }
-        }
-
-        static OpsPerfOrgRow AggregateOrgGroup(
-            IGrouping<string, ProductDto> g,
-            Dictionary<string, CommissionSubmission> submissionByDoc)
-        {
-            var potential = 0;
-            var ac = 0;
-            var al = 0;
-            var ip = 0;
-            var ns = 0;
-            foreach (var p in g)
-            {
-                potential++;
-                var doc = p.DocumentId ?? "";
-                if (string.IsNullOrEmpty(doc) || !submissionByDoc.TryGetValue(doc, out var sub))
-                {
-                    ns++;
-                    continue;
-                }
-
-                switch (sub.Status)
-                {
-                    case CommissionSubmissionStatus.Submitted:
-                        ac++;
-                        break;
-                    case CommissionSubmissionStatus.Late:
-                        al++;
-                        break;
-                    case CommissionSubmissionStatus.InProgress:
-                        ip++;
-                        break;
-                    default:
-                        ns++;
-                        break;
-                }
-            }
-
-            return new OpsPerfOrgRow
-            {
-                Name = g.Key,
-                PotentialSubmissions = potential,
-                ActualSubmitted = ac,
-                ActualLate = al,
-                InProgress = ip,
-                NotStarted = ns
-            };
-        }
-
-        var baRows = eligibleProducts
-            .GroupBy(p => CommissionReportingProductScope.GetBusinessArea(p) ?? "Unassigned")
-            .Select(g => AggregateOrgGroup(g, submissions))
-            .OrderByDescending(r => r.PotentialSubmissions)
-            .ThenBy(r => r.Name)
-            .ToList();
-
-        var dirRows = eligibleProducts
-            .GroupBy(p => CommissionReportingProductScope.GetDirectorate(p) ?? "Unassigned")
-            .Select(g => AggregateOrgGroup(g, submissions))
-            .OrderByDescending(r => r.PotentialSubmissions)
-            .ThenBy(r => r.Name)
-            .ToList();
-
-        var doughnut = new
-        {
-            labels = new[] { "Submitted", "Late", "In progress", "Not started" },
-            values = new[] { submitted, late, inProgress, notStarted },
-            colors = new[] { "#00703c", "#d4351c", "#f47738", "#b1b4b6" }
-        };
-
-        var topBa = baRows.Take(16).ToList();
-        var baBar = new
-        {
-            labels = topBa.Select(r => r.Name).ToArray(),
-            potential = topBa.Select(r => r.PotentialSubmissions).ToArray(),
-            actual = topBa.Select(r => r.ActualSubmitted + r.ActualLate).ToArray()
-        };
-
-        var timelinePoints = submissions.Values
-            .Where(s => s.SubmittedDate.HasValue &&
-                        (s.Status == CommissionSubmissionStatus.Submitted || s.Status == CommissionSubmissionStatus.Late))
-            .Select(s => s.SubmittedDate!.Value.Date)
-            .OrderBy(d => d)
-            .ToList();
-
-        object timeline;
-        if (timelinePoints.Count == 0)
-        {
-            timeline = new { labels = Array.Empty<string>(), cumulative = Array.Empty<int>() };
-        }
-        else
-        {
-            var byDay = timelinePoints.GroupBy(d => d).OrderBy(g => g.Key).ToList();
-            var labels = new List<string>();
-            var cumulative = new List<int>();
-            var running = 0;
-            foreach (var day in byDay)
-            {
-                running += day.Count();
-                labels.Add(day.Key.ToString("d MMM yyyy", System.Globalization.CultureInfo.GetCultureInfo("en-GB")));
-                cumulative.Add(running);
-            }
-
-            timeline = new { labels, cumulative };
-        }
-
-        var vm = new OperationsManagePerformanceViewModel
-        {
-            CommissionOptions = commissionOptions,
-            SelectedCommissionId = commissionEntity.Id,
-            Commission = new CommissionSummaryVm
-            {
-                Id = commissionEntity.Id,
-                Name = commissionEntity.Name,
-                Quarter = commissionEntity.Quarter,
-                StartDate = commissionEntity.StartDate,
-                EndDate = commissionEntity.EndDate,
-                OpenDate = commissionEntity.OpenDate,
-                DueDate = commissionEntity.DueDate,
-                IsActive = commissionEntity.IsActive
-            },
-            EligibleProductCount = eligibleProducts.Count,
-            SubmittedCount = submitted,
-            LateCount = late,
-            InProgressCount = inProgress,
-            NotStartedCount = notStarted,
-            BusinessAreaRows = baRows,
-            DirectorateRows = dirRows,
-            StatusDoughnutJson = JsonSerializer.Serialize(doughnut, jsonOpts),
-            BusinessAreaBarJson = JsonSerializer.Serialize(baBar, jsonOpts),
-            SubmissionTimelineJson = JsonSerializer.Serialize(timeline, jsonOpts),
-            HasCommission = true,
-            HasEligibleProducts = eligibleProducts.Count > 0
-        };
-
-        return View("~/Views/Modern/Operations/ManagePerformance.cshtml", vm);
     }
 
     [HttpGet("raid/escalations")]
+    [ServiceFilter(typeof(Compass.Filters.RaidFeatureGateFilter))]
     public async Task<IActionResult> RaidEscalations(string? tab, CancellationToken ct)
     {
         SetNav("operations-raid");
@@ -825,6 +822,7 @@ public class ModernOperationsController : Controller
     }
 
     [HttpGet("raid/risks/{id:int}/edit")]
+    [ServiceFilter(typeof(Compass.Filters.RaidFeatureGateFilter))]
     public async Task<IActionResult> RaidRiskOperationsEdit(int id, CancellationToken ct)
     {
         SetNav("operations-raid");
@@ -832,8 +830,11 @@ public class ModernOperationsController : Controller
         if (form == null)
             return NotFound();
 
-        await _operationsRiskEdit.LoadEditorViewBagAsync(this, form.OwnerUserId, form.SroUserId, ct);
-        ViewBag.EditorTitle = "Edit risk (Operations)";
+        await _operationsRiskEdit.LoadEditorViewBagAsync(this, form, ct);
+        var opsSummary = ViewBag.OperationsRiskSummary as OperationsRiskEditorSummaryVm;
+        ViewBag.EditorTitle = opsSummary != null && !string.IsNullOrWhiteSpace(opsSummary.Reference)
+            ? $"Edit {opsSummary.Reference} (Operations)"
+            : "Edit risk (Operations)";
         ViewBag.OperationsRiskEdit = true;
         ViewBag.OperationsFormPostUrl = Url.Action(
             nameof(RaidRiskOperationsEditPost),
@@ -846,6 +847,7 @@ public class ModernOperationsController : Controller
 
     [HttpPost("raid/risks/{id:int}/edit")]
     [ValidateAntiForgeryToken]
+    [ServiceFilter(typeof(Compass.Filters.RaidFeatureGateFilter))]
     public async Task<IActionResult> RaidRiskOperationsEditPost(
         int id,
         [FromForm] ModernRaidRiskEditorForm form,
@@ -859,8 +861,11 @@ public class ModernOperationsController : Controller
             id, form, operationsChangeReason, editorId, CurrentUserEmail, ModelState, ct);
         if (!ok)
         {
-            await _operationsRiskEdit.LoadEditorViewBagAsync(this, form.OwnerUserId, form.SroUserId, ct);
-            ViewBag.EditorTitle = "Edit risk (Operations)";
+            await _operationsRiskEdit.LoadEditorViewBagAsync(this, form, ct);
+            var opsSummary = ViewBag.OperationsRiskSummary as OperationsRiskEditorSummaryVm;
+            ViewBag.EditorTitle = opsSummary != null && !string.IsNullOrWhiteSpace(opsSummary.Reference)
+                ? $"Edit {opsSummary.Reference} (Operations)"
+                : "Edit risk (Operations)";
             ViewBag.OperationsRiskEdit = true;
             ViewBag.OperationsFormPostUrl = Url.Action(
                 nameof(RaidRiskOperationsEditPost),
@@ -915,15 +920,18 @@ public class ModernOperationsController : Controller
 
     /// <summary>Primary URL for operations to approve/reject a tier request (<c>…/action/{id}</c>).</summary>
     [HttpGet("raid/escalations/action/{requestId:int}")]
+    [ServiceFilter(typeof(Compass.Filters.RaidFeatureGateFilter))]
     public Task<IActionResult> RaidEscalationAction(int requestId, string? returnTab, string? returnUrl, CancellationToken ct) =>
         RaidEscalationReview(requestId, returnTab, returnUrl, ct);
 
     /// <summary>Legacy URL — use <see cref="RaidEscalationAction" /> (…/action/{id}).</summary>
     [HttpGet("raid/escalations/manage/{requestId:int}")]
+    [ServiceFilter(typeof(Compass.Filters.RaidFeatureGateFilter))]
     public Task<IActionResult> ManageRaidEscalationRequest(int requestId, string? returnTab, string? returnUrl, CancellationToken ct) =>
         RaidEscalationReview(requestId, returnTab, returnUrl, ct);
 
     [HttpGet("raid/escalations/review/{requestId:int}")]
+    [ServiceFilter(typeof(Compass.Filters.RaidFeatureGateFilter))]
     public async Task<IActionResult> RaidEscalationReview(int requestId, string? returnTab, string? returnUrl, CancellationToken ct)
     {
         SetNav("operations-raid");
@@ -1051,6 +1059,7 @@ public class ModernOperationsController : Controller
 
     [HttpPost("raid/escalations/decide")]
     [ValidateAntiForgeryToken]
+    [ServiceFilter(typeof(Compass.Filters.RaidFeatureGateFilter))]
     public async Task<IActionResult> RaidEscalationDecide(
         int requestId,
         string? decision,
@@ -1214,11 +1223,13 @@ public class ModernOperationsController : Controller
 
         SetNav("operations-service-register");
 
-        var activeTab = string.IsNullOrWhiteSpace(tab) ? "all" : tab;
+        var requestedTab = string.IsNullOrWhiteSpace(tab) ? "active" : tab.Trim().ToLowerInvariant();
         var email = CurrentUserEmail;
 
         var vm = await FipsProductListingHelper.BuildProductsViewModelAsync(
-            _db, activeTab, email, search, businessAreaId, channelId, userGroupId, typeId, phaseId, ct);
+            _db, requestedTab, email, search, businessAreaId, channelId, userGroupId, typeId, phaseId,
+            categorisationItemId: null, categorisationGroupId: null, ct);
+        var activeTab = vm.ActiveTab;
         vm.CanSyncFromCmdb = true;
 
         var baseUrl = Url.Action(nameof(ServiceRegister), "ModernOperations", new { tab = activeTab })
@@ -1241,7 +1252,8 @@ public class ModernOperationsController : Controller
 
         var email = CurrentUserEmail;
         var auditName = User.Identity?.Name ?? email;
-        var returnTab = string.Equals(f.SourceTab, "all", StringComparison.OrdinalIgnoreCase) ? "all" : "new";
+        var sourceTab = (f.SourceTab ?? "new").Trim().ToLowerInvariant();
+        var returnTab = sourceTab is "enterprise" or "all" or "active" or "search" ? sourceTab : "new";
 
         IActionResult RedirectBack() =>
             RedirectToAction(nameof(ServiceRegister), new
@@ -1262,9 +1274,14 @@ public class ModernOperationsController : Controller
             return RedirectBack();
         }
 
-        if (!f.ApplyStatus && !f.ApplyPhase && !f.ApplyBusinessArea && !f.ApplyChannel && !f.ApplyType)
+        var bulkEnterpriseAction = string.IsNullOrWhiteSpace(f.BulkEnterpriseAction)
+            ? Request.Form["BulkEnterpriseAction"].ToString()
+            : f.BulkEnterpriseAction;
+        var applyEnterprise = TryParseBulkEnterpriseAction(bulkEnterpriseAction, out var bulkEnterpriseValue);
+
+        if (!f.ApplyStatus && !f.ApplyPhase && !f.ApplyBusinessArea && !f.ApplyChannel && !f.ApplyType && !applyEnterprise)
         {
-            TempData["Error"] = "Select at least one action (status, phase, business area, channels, or types).";
+            TempData["Error"] = "Select at least one action (status, phase, enterprise, business area, channels, or types).";
             return RedirectBack();
         }
 
@@ -1287,7 +1304,7 @@ public class ModernOperationsController : Controller
                 f.BusinessAreaLookupIds ?? Array.Empty<int>(), ct);
         }
 
-        var isAllTab = string.Equals(f.SourceTab, "all", StringComparison.OrdinalIgnoreCase);
+        var isNewTabOnly = string.Equals(f.SourceTab, "new", StringComparison.OrdinalIgnoreCase);
         var productsQ = _db.CMDBProducts
             .AsNoTracking()
             .Include(p => p.BusinessAreas)
@@ -1296,15 +1313,15 @@ public class ModernOperationsController : Controller
             .Include(p => p.Types)
             .Include(p => p.CategorisationItems)
             .Where(p => ids.Contains(p.Id));
-        if (!isAllTab)
+        if (isNewTabOnly)
             productsQ = productsQ.Where(p => p.Status == CMDBProductStatus.New);
         var products = await productsQ.ToListAsync(ct);
 
         if (products.Count == 0)
         {
-            TempData["Error"] = isAllTab
-                ? "No products matched your selection. Refresh the list and try again."
-                : "No new products matched your selection. Refresh the list and try again.";
+            TempData["Error"] = isNewTabOnly
+                ? "No new products matched your selection. Refresh the list and try again."
+                : "No products matched your selection. Refresh the list and try again.";
             return RedirectBack();
         }
 
@@ -1315,7 +1332,7 @@ public class ModernOperationsController : Controller
         {
             try
             {
-                if (f.ApplyPhase || f.ApplyBusinessArea || f.ApplyChannel || f.ApplyType)
+                if (f.ApplyPhase || f.ApplyBusinessArea || f.ApplyChannel || f.ApplyType || applyEnterprise)
                 {
                     var phase = f.ApplyPhase ? f.BulkPhaseId : p.PhaseId;
                     var bas = f.ApplyBusinessArea
@@ -1329,6 +1346,7 @@ public class ModernOperationsController : Controller
                         ? (f.BulkTypeIds ?? Array.Empty<int>())
                         : p.Types.Select(t => t.FipsTypeId).ToArray();
                     var cat = p.CategorisationItems.Select(c => c.FipsCategorisationItemId).ToArray();
+                    bool? isEnterprise = applyEnterprise ? bulkEnterpriseValue : null;
 
                     var u = await _fipsProductWrite.TryUpdateAsync(
                         p.Id,
@@ -1344,7 +1362,7 @@ public class ModernOperationsController : Controller
                         ty,
                         cat,
                         null,
-                        p.IsEnterpriseService,
+                        isEnterprise,
                         ct);
 
                     if (u.NotFound || u.Forbidden)
@@ -1386,7 +1404,7 @@ public class ModernOperationsController : Controller
             if (notInScope > 0)
             {
                 parts.Add(
-                    isAllTab
+                    !isNewTabOnly
                         ? $"{notInScope} selected id(s) were not in this list or no longer match."
                         : $"{notInScope} selected id(s) were not new products in this list or no longer match.");
             }
@@ -1410,11 +1428,11 @@ public class ModernOperationsController : Controller
 
         try
         {
+            await EnsureDefaultCmdbSyncRulesAsync(ct);
             var r = await _fipsCmdbProductSync.SyncActiveServiceOfferingsAsync(CurrentUserEmail, ct);
             TempData["Success"] =
-                $"CMDB sync finished: {r.Updated} product(s) updated. {r.StatusSetByRules} status change(s) from sync rules. " +
-                $"Skipped {r.SkippedRetired} inactive (retired) in Compass, {r.SkippedNoSysId} CMDB rows without sys_id, " +
-                $"{r.SkippedNoLocalMatch} with no matching Compass product (no new rows created).";
+                $"CMDB sync finished: {r.Created} product(s) created, {r.Updated} updated. {r.StatusSetByRules} status change(s) from sync rules. " +
+                $"Skipped {r.SkippedRetired} inactive (retired) in Compass, {r.SkippedNoSysId} CMDB rows without sys_id.";
             if (r.Errors > 0)
             {
                 TempData["Error"] =
@@ -1428,7 +1446,7 @@ public class ModernOperationsController : Controller
             TempData["Error"] = "CMDB sync failed: " + ex.Message;
         }
 
-        return RedirectToAction(nameof(ServiceRegister), new { tab = "all" });
+        return RedirectToAction(nameof(ServiceRegister), new { tab = "active" });
     }
 
     /// <summary>Server-sent events while bulk CMDB sync runs (for service register modal).</summary>
@@ -1457,6 +1475,7 @@ public class ModernOperationsController : Controller
 
         try
         {
+            await EnsureDefaultCmdbSyncRulesAsync(ct);
             var syncResult = await _fipsCmdbProductSync.SyncActiveServiceOfferingsAsync(
                 CurrentUserEmail,
                 ct,
@@ -1468,6 +1487,7 @@ public class ModernOperationsController : Controller
                 success = true,
                 result = new
                 {
+                    syncResult.Created,
                     syncResult.Updated,
                     syncResult.SkippedRetired,
                     syncResult.SkippedNoSysId,
@@ -1587,6 +1607,8 @@ public class ModernOperationsController : Controller
 
         await FipsProductRaidQuery.PopulateRaidListsAsync(_db, vm, product, ct);
 
+        vm.DataCompletion = FipsProductListingHelper.GetDataCompletionSummary(product);
+
         return View("~/Views/Modern/Operations/ServiceRegisterProduct.cshtml", vm);
     }
 
@@ -1623,7 +1645,7 @@ public class ModernOperationsController : Controller
             typeIds,
             categorisationItemIds,
             reportingContactUserId,
-            isEnterpriseService,
+            isEnterpriseService: isEnterpriseService,
             ct);
 
         if (outcome.NotFound)
@@ -1682,28 +1704,120 @@ public class ModernOperationsController : Controller
         return RedirectToAction(nameof(ServiceRegisterProduct), new { id, tab = "information" });
     }
 
-    [HttpGet("service-register/cmdb-sync-rules")]
-    public async Task<IActionResult> ServiceRegisterCmdbRules(CancellationToken ct)
+    [HttpGet("service-register/sync-settings")]
+    public async Task<IActionResult> ServiceRegisterSyncSettings(CancellationToken ct)
     {
         var blocked = await FipsDatabaseDisabledRedirectAsync();
         if (blocked != null)
             return blocked;
 
         SetNav("operations-service-register");
+        await EnsureDefaultCmdbSyncRulesAsync(ct);
         var rules = await _db.FipsCmdbSyncRules.AsNoTracking()
             .OrderBy(r => r.SortOrder)
             .ThenBy(r => r.Id)
             .ToListAsync(ct);
-        return View("~/Views/Modern/Operations/ServiceRegisterCmdbRules.cshtml", rules);
+        var subNav = await FipsProductListingHelper.BuildSubNavModelAsync(
+            _db, "sync", CurrentUserEmail, ct);
+        var vm = new ServiceRegisterSyncSettingsViewModel { Rules = rules, SubNav = subNav, CanSyncFromCmdb = true };
+        return View("~/Views/Modern/Operations/ServiceRegisterSyncSettings.cshtml", vm);
     }
 
-    [HttpPost("service-register/cmdb-sync-rules/add")]
+    [HttpGet("service-register/cmdb-sync-rules")]
+    public IActionResult ServiceRegisterCmdbRulesLegacy() =>
+        RedirectToAction(nameof(ServiceRegisterSyncSettings));
+
+    [HttpGet("service-register/sync-settings/export-completion")]
+    public IActionResult ServiceRegisterExportCompletionTemplate()
+    {
+        var bytes = FipsCompletionSpreadsheet.BuildHeaderOnlyWorkbook();
+        var fileName = $"fips-completion-import-template-{DateTime.UtcNow:yyyyMMdd}.xlsx";
+        return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
+    }
+
+    [HttpPost("service-register/sync-settings/import-completion")]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> ServiceRegisterCmdbRulesAdd(
+    public async Task<IActionResult> ServiceRegisterImportCompletion(IFormFile? file, CancellationToken ct)
+    {
+        var blocked = await FipsDatabaseDisabledRedirectAsync();
+        if (blocked != null)
+            return blocked;
+
+        SetNav("operations-service-register");
+        await EnsureDefaultCmdbSyncRulesAsync(ct);
+
+        FipsCompletionImportResult? importResult = null;
+
+        if (file == null || file.Length == 0)
+        {
+            TempData["Error"] = "Choose an Excel (.xlsx) file to upload.";
+        }
+        else
+        {
+            var ext = Path.GetExtension(file.FileName ?? "").ToLowerInvariant();
+            if (ext is not ".xlsx" and not ".xlsm")
+            {
+                TempData["Error"] = "Upload an Excel file (.xlsx). Use the FIPS completion export format.";
+            }
+            else
+            {
+                try
+                {
+                    await using var stream = file.OpenReadStream();
+                    var rows = FipsCompletionSpreadsheet.ParseImportRows(stream);
+                    if (rows.Count == 0)
+                    {
+                        TempData["Error"] = "No rows with phase or product URL values were found in the file.";
+                    }
+                    else
+                    {
+                        var email = CurrentUserEmail;
+                        var auditName = User.Identity?.Name ?? email;
+                        importResult = await _fipsCompletionBulkImport.ImportAsync(rows, email, auditName, ct);
+                        if (importResult.UpdatedCount > 0)
+                        {
+                            TempData["Success"] =
+                                $"Imported {importResult.UpdatedCount} row(s). Skipped {importResult.SkippedCount}, failed {importResult.FailedCount}.";
+                        }
+                        else if (importResult.FailedCount > 0)
+                            TempData["Error"] = $"Import failed for all {importResult.FailedCount} row(s). See details below.";
+                        else
+                            TempData["Success"] = "No changes were needed — values already match.";
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "FIPS completion import parse failed");
+                    TempData["Error"] =
+                        "Could not read the file. Use the FIPS completion export from DdtReports, or the download template on this page.";
+                }
+            }
+        }
+
+        var rules = await _db.FipsCmdbSyncRules.AsNoTracking()
+            .OrderBy(r => r.SortOrder)
+            .ThenBy(r => r.Id)
+            .ToListAsync(ct);
+        var subNav = await FipsProductListingHelper.BuildSubNavModelAsync(
+            _db, "sync", CurrentUserEmail, ct);
+        var vm = new ServiceRegisterSyncSettingsViewModel
+        {
+            Rules = rules,
+            SubNav = subNav,
+            CanSyncFromCmdb = true,
+            LastImportResult = importResult
+        };
+        return View("~/Views/Modern/Operations/ServiceRegisterSyncSettings.cshtml", vm);
+    }
+
+    [HttpPost("service-register/sync-settings/add")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ServiceRegisterSyncSettingsAdd(
         string? name,
         string fieldScope,
         string matchKind,
         string pattern,
+        string ruleAction,
         CMDBProductStatus targetStatus,
         int sortOrder,
         bool isActive,
@@ -1716,30 +1830,38 @@ public class ModernOperationsController : Controller
         fieldScope = (fieldScope ?? "").Trim();
         matchKind = (matchKind ?? "").Trim();
         pattern = (pattern ?? "").Trim();
+        ruleAction = (ruleAction ?? FipsCmdbSyncRuleActions.SetStatus).Trim();
+        if (!FipsCmdbSyncRuleActions.All.Contains(ruleAction))
+        {
+            TempData["Error"] = "Invalid rule action.";
+            return RedirectToAction(nameof(ServiceRegisterSyncSettings));
+        }
         if (!FipsCmdbSyncRuleScopes.All.Contains(fieldScope))
         {
             TempData["Error"] = "Invalid field scope.";
-            return RedirectToAction(nameof(ServiceRegisterCmdbRules));
+            return RedirectToAction(nameof(ServiceRegisterSyncSettings));
         }
         if (!FipsCmdbSyncRuleMatchKinds.All.Contains(matchKind))
         {
             TempData["Error"] = "Match kind must be Contains or Regex.";
-            return RedirectToAction(nameof(ServiceRegisterCmdbRules));
+            return RedirectToAction(nameof(ServiceRegisterSyncSettings));
         }
         if (pattern.Length == 0)
         {
             TempData["Error"] = "Enter a pattern to match.";
-            return RedirectToAction(nameof(ServiceRegisterCmdbRules));
+            return RedirectToAction(nameof(ServiceRegisterSyncSettings));
         }
         if (pattern.Length > 2000)
         {
             TempData["Error"] = "Pattern is too long (max 2000 characters).";
-            return RedirectToAction(nameof(ServiceRegisterCmdbRules));
+            return RedirectToAction(nameof(ServiceRegisterSyncSettings));
         }
-        if (targetStatus != CMDBProductStatus.Rejected && targetStatus != CMDBProductStatus.Inactive)
+        if (string.Equals(ruleAction, FipsCmdbSyncRuleActions.SetStatus, StringComparison.OrdinalIgnoreCase)
+            && targetStatus != CMDBProductStatus.Rejected
+            && targetStatus != CMDBProductStatus.Inactive)
         {
-            TempData["Error"] = "Rules may only set status to Rejected or Retired (inactive).";
-            return RedirectToAction(nameof(ServiceRegisterCmdbRules));
+            TempData["Error"] = "Status rules may only set status to Rejected or Retired (inactive).";
+            return RedirectToAction(nameof(ServiceRegisterSyncSettings));
         }
 
         var now = DateTime.UtcNow;
@@ -1749,6 +1871,7 @@ public class ModernOperationsController : Controller
             FieldScope = fieldScope,
             MatchKind = matchKind,
             Pattern = pattern,
+            Action = ruleAction,
             TargetStatus = targetStatus,
             SortOrder = sortOrder,
             IsActive = isActive,
@@ -1756,13 +1879,12 @@ public class ModernOperationsController : Controller
             UpdatedAt = now
         });
         await _db.SaveChangesAsync(ct);
-        TempData["Success"] = "Rule added.";
-        return RedirectToAction(nameof(ServiceRegisterCmdbRules));
+        return RedirectToAction(nameof(ServiceRegisterSyncSettings));
     }
 
-    [HttpPost("service-register/cmdb-sync-rules/{id:int}/delete")]
+    [HttpPost("service-register/sync-settings/{id:int}/delete")]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> ServiceRegisterCmdbRulesDelete(int id, CancellationToken ct)
+    public async Task<IActionResult> ServiceRegisterSyncSettingsDelete(int id, CancellationToken ct)
     {
         var blocked = await FipsDatabaseDisabledRedirectAsync();
         if (blocked != null)
@@ -1772,13 +1894,36 @@ public class ModernOperationsController : Controller
         if (row == null) return NotFound();
         _db.FipsCmdbSyncRules.Remove(row);
         await _db.SaveChangesAsync(ct);
-        TempData["Success"] = "Rule deleted.";
-        return RedirectToAction(nameof(ServiceRegisterCmdbRules));
+        return RedirectToAction(nameof(ServiceRegisterSyncSettings));
     }
 
-    [HttpPost("service-register/cmdb-sync-rules/{id:int}/toggle")]
+    [HttpPost("service-register/sync-settings/reset-products-for-cmdb")]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> ServiceRegisterCmdbRulesToggle(int id, CancellationToken ct)
+    public async Task<IActionResult> ServiceRegisterResetProductsForCmdb(CancellationToken ct)
+    {
+        var blocked = await FipsDatabaseDisabledRedirectAsync();
+        if (blocked != null)
+            return blocked;
+
+        try
+        {
+            var r = await _fipsCmdbProductSync.ResetAllProductsForCmdbResyncAsync(CurrentUserEmail, ct);
+            TempData["Success"] =
+                $"Reset {r.ProductsReset} product(s): cleared status, phase, business area, product URL, type, channel, and enterprise service. " +
+                $"{r.SkippedInactive} retired product(s) were not changed. Run Sync from CMDB to reapply CMDB data and sync rules.";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "CMDB product reset for resync failed");
+            TempData["Error"] = "Reset failed: " + ex.Message;
+        }
+
+        return RedirectToAction(nameof(ServiceRegisterSyncSettings));
+    }
+
+    [HttpPost("service-register/sync-settings/{id:int}/toggle")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ServiceRegisterSyncSettingsToggle(int id, CancellationToken ct)
     {
         var blocked = await FipsDatabaseDisabledRedirectAsync();
         if (blocked != null)
@@ -1789,8 +1934,36 @@ public class ModernOperationsController : Controller
         row.IsActive = !row.IsActive;
         row.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync(ct);
-        TempData["Success"] = row.IsActive ? "Rule enabled." : "Rule disabled.";
-        return RedirectToAction(nameof(ServiceRegisterCmdbRules));
+        return RedirectToAction(nameof(ServiceRegisterSyncSettings));
+    }
+
+    private async Task EnsureDefaultCmdbSyncRulesAsync(CancellationToken cancellationToken)
+    {
+        if (!await _db.FipsCmdbSyncRules.AnyAsync(cancellationToken))
+        {
+            var now = DateTime.UtcNow;
+            foreach (var rule in FipsCmdbSyncDefaultRules.CreateSeedRules(now))
+                _db.FipsCmdbSyncRules.Add(rule);
+            await _db.SaveChangesAsync(cancellationToken);
+            return;
+        }
+
+        await EnsureBusinessServiceEnterpriseRuleAsync(cancellationToken);
+    }
+
+    private async Task EnsureBusinessServiceEnterpriseRuleAsync(CancellationToken cancellationToken)
+    {
+        var exists = await _db.FipsCmdbSyncRules.AnyAsync(
+            r => r.Action == FipsCmdbSyncRuleActions.SetEnterpriseService
+                 && r.FieldScope == FipsCmdbSyncRuleScopes.ServiceClassification
+                 && r.Pattern == "Business Service",
+            cancellationToken);
+        if (exists)
+            return;
+
+        var now = DateTime.UtcNow;
+        _db.FipsCmdbSyncRules.Add(FipsCmdbSyncDefaultRules.CreateBusinessServiceEnterpriseRule(now));
+        await _db.SaveChangesAsync(cancellationToken);
     }
 
     [HttpGet("manage-triage")]

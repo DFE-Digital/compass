@@ -1,0 +1,267 @@
+@model Compass.ViewModels.Modern.ModernRaidDashboardViewModel
+@using System.Linq
+@using System.Text.Json
+@{
+  var matrixDrillJson = ViewBag.MatrixDrillJson as string ?? "{}";
+  var matrixRowGroups = Model.MatrixCells.Count > 0
+    ? Model.MatrixCells.Chunk(5)
+    : Enumerable.Empty<Compass.ViewModels.Modern.ModernRaidMatrixCellVm[]>();
+  var mxRowsList = matrixRowGroups.Select(g => g.ToArray()).ToList();
+  var colTotals = new int[5];
+  foreach (var row in mxRowsList)
+  {
+    for (var ci = 0; ci < row.Length && ci < 5; ci++)
+      colTotals[ci] += row[ci].Count;
+  }
+  string RiskMxCellClass(string tone, int count) => count == 0
+    ? "mr-mx__cell mr-mx__cell--zero"
+    : tone switch
+    {
+      "r" => "mr-mx__cell mr-mx__cell--critical",
+      "ar" => "mr-mx__cell mr-mx__cell--high",
+      "ag" => "mr-mx__cell mr-mx__cell--medium",
+      _ => "mr-mx__cell mr-mx__cell--low"
+    };
+  var scopeLabel = Model.ScopeKind == Compass.ViewModels.Modern.RaidDashboardScopeKind.Directorate ? "directorate" : "business area";
+  var summaryId = ViewBag.MatrixSummaryId as string ?? "raid-matrix-summary";
+  var sectionTitleId = ViewBag.MatrixSectionTitleId as string ?? "raid-matrix-section-title";
+}
+
+<article class="dfe-f-card raid-dash-matrix-card" id="raid-rpt-matrix" role="region" aria-labelledby="@sectionTitleId" aria-describedby="@summaryId">
+  <div class="dfe-f-card__inner">
+    <header class="dfe-f-card__header">
+      <h2 class="govuk-heading-m dfe-f-card__heading govuk-!-margin-top-0" id="@sectionTitleId">Inherent risk matrix</h2>
+    </header>
+    <div class="dfe-f-card__body govuk-body govuk-!-margin-bottom-0">
+      <p id="@summaryId" class="govuk-body-s govuk-!-margin-bottom-3">
+        @(Model.IsScoped ? $"Open risks in this {scopeLabel}" : "Your open risks") by impact and likelihood. Select a count to list risks.
+      </p>
+      <ul class="raid-matrix-legend govuk-!-margin-bottom-3" aria-label="Inherent risk band legend">
+        <li class="raid-matrix-legend__item"><span class="raid-matrix-legend__swatch" style="background:#f8d7da;" aria-hidden="true"></span><span>Highest (20–25)</span></li>
+        <li class="raid-matrix-legend__item"><span class="raid-matrix-legend__swatch" style="background:#fff0e0;" aria-hidden="true"></span><span>Elevated (15–19)</span></li>
+        <li class="raid-matrix-legend__item"><span class="raid-matrix-legend__swatch" style="background:#fff7e0;" aria-hidden="true"></span><span>Medium (8–12)</span></li>
+        <li class="raid-matrix-legend__item"><span class="raid-matrix-legend__swatch" style="background:#e3f5eb;" aria-hidden="true"></span><span>Lower (1–7)</span></li>
+      </ul>
+      @if (Model.OpenRiskCount == 0)
+      {
+        <p class="govuk-body govuk-!-margin-bottom-0">No open risks in this view.</p>
+      }
+      else
+      {
+        <div class="dfe-f-table-wrapper mr-matrix-scroll" data-module="dfe-f-table">
+          <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+          <table class="govuk-table govuk-table--small-text-until-tablet mr-mx" aria-describedby="@summaryId">
+            <caption class="govuk-visually-hidden">Open risk counts by impact and likelihood</caption>
+            <thead class="govuk-table__head">
+              <tr class="govuk-table__row">
+                <th class="mr-mx__corner" scope="col" id="raid-matrix-corner">
+                  <span class="mr-mx__corner-label mr-mx__corner-label--col">Likelihood →</span>
+                  <span class="mr-mx__corner-label mr-mx__corner-label--row">Impact ↓</span>
+                </th>
+                @for (var lh = 0; lh < Model.MatrixLikelihoodAxisLabels.Count; lh++)
+                {
+                  <th scope="col" class="mr-mx__col-hdr" id="raid-matrix-lik-@lh">@Model.MatrixLikelihoodAxisLabels[lh]</th>
+                }
+                <th scope="col" class="govuk-table__header mr-mx__col-hdr mr-mx__col-hdr--total">Total</th>
+              </tr>
+            </thead>
+            <tbody class="govuk-table__body">
+              @{ var impactIdx = 0; }
+              @foreach (var row in mxRowsList)
+              {
+                var impactLabel = Model.MatrixImpactAxisLabels.Count > impactIdx
+                  ? Model.MatrixImpactAxisLabels[Model.MatrixImpactAxisLabels.Count - 1 - impactIdx]
+                  : $"Impact {5 - impactIdx}";
+                var rowSum = row.Sum(c => c.Count);
+                var colIdx = 0;
+                <tr class="govuk-table__row">
+                  <th class="mr-mx__row-hdr" scope="row" id="raid-matrix-imp-@impactIdx">@impactLabel</th>
+                  @foreach (var cell in row)
+                  {
+                    var likR = cell.LikelihoodRating;
+                    var likIdx = likR < 1 ? 0 : (likR > 5 ? 4 : likR - 1);
+                    var likHdr = Model.MatrixLikelihoodAxisLabels.Count > likIdx
+                      ? Model.MatrixLikelihoodAxisLabels[likIdx]
+                      : cell.LikelihoodRating.ToString();
+                    var cellHeaders = $"raid-matrix-imp-{impactIdx} raid-matrix-lik-{colIdx}";
+                    <td class="@RiskMxCellClass(cell.CellTone, cell.Count)" headers="@cellHeaders">
+                      @if (cell.Count == 0)
+                      {
+                        <span class="mr-mx__empty" aria-hidden="true">–</span>
+                        <span class="govuk-visually-hidden">0 open risks, @impactLabel impact, @likHdr likelihood</span>
+                      }
+                      else
+                      {
+                        <button type="button"
+                                class="raid-matrix-drill"
+                                data-matrix-key="@($"{cell.ImpactRating}|{cell.LikelihoodRating}")"
+                                data-impact-label="@impactLabel"
+                                data-likelihood-label="@likHdr"
+                                aria-expanded="false"
+                                aria-controls="raid-matrix-drilldown-panel"
+                                id="raid-matrix-btn-@impactIdx-@colIdx">
+                          <span class="mr-mx__count"><span class="govuk-visually-hidden">Show list of </span>@cell.Count</span>
+                          <span class="govuk-visually-hidden"> @(cell.Count == 1 ? "open risk" : "open risks") at @impactLabel impact, @likHdr likelihood.</span>
+                        </button>
+                      }
+                    </td>
+                    colIdx++;
+                  }
+                  <td class="mr-mx__cell mr-mx__cell--total"><strong>@rowSum</strong></td>
+                </tr>
+                impactIdx++;
+              }
+            </tbody>
+            <tfoot>
+              <tr class="govuk-table__row">
+                <th scope="row" class="mr-mx__row-hdr mr-mx__row-hdr--total">Total</th>
+                @for (var ci = 0; ci < 5; ci++)
+                {
+                  <td class="mr-mx__cell mr-mx__cell--total"><strong>@colTotals[ci]</strong></td>
+                }
+                <td class="mr-mx__cell mr-mx__cell--grand"><strong>@Model.OpenRiskCount</strong></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      }
+    </div>
+  </div>
+</article>
+
+<article id="raid-matrix-drilldown-panel" class="dfe-f-card raid-dash-drill-panel govuk-!-margin-top-4" hidden role="region" aria-labelledby="raid-matrix-drilldown-title" aria-live="polite">
+  <div class="dfe-f-card__inner">
+    <div class="dfe-f-card__body govuk-body govuk-!-margin-bottom-0">
+      <div class="raid-matrix-drilldown__header">
+        <h3 class="raid-matrix-drilldown__title govuk-heading-s govuk-!-margin-0" id="raid-matrix-drilldown-title"></h3>
+        <button type="button" class="raid-matrix-drilldown__close" aria-label="Close the risk list">&times;</button>
+      </div>
+      <div class="dfe-f-table-wrapper govuk-!-margin-bottom-0" data-module="dfe-f-table">
+        <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+        <table class="govuk-table raid-reg-like-open-risks" id="raid-matrix-drill-table">
+          <thead class="govuk-table__head">
+            <tr class="govuk-table__row">
+              <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Risk</button></th>
+              <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Business area</button></th>
+              <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Tier</button></th>
+              <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Relation</button></th>
+              <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Status</button></th>
+              <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Owner</button></th>
+              <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Likelihood</button></th>
+              <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Impact</button></th>
+              <th scope="col" class="govuk-table__header govuk-!-text-align-right" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Score</button></th>
+            </tr>
+          </thead>
+          <tbody id="raid-matrix-drilldown-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</article>
+
+<script nonce="@Context.Items["Nonce"]">
+(function () {
+  var data = @Html.Raw(matrixDrillJson);
+  var panel = document.getElementById('raid-matrix-drilldown-panel');
+  var titleEl = document.getElementById('raid-matrix-drilldown-title');
+  var bodyEl = document.getElementById('raid-matrix-drilldown-body');
+  var matrixRoot = document.getElementById('raid-rpt-matrix');
+  if (!panel || !titleEl || !bodyEl || !matrixRoot) return;
+  var activeBtn = null;
+  function escHtml(s) {
+    var d = document.createElement('div');
+    d.appendChild(document.createTextNode(s || ''));
+    return d.innerHTML;
+  }
+  function raidRegScoreClass(score) {
+    if (score >= 20) return 'raid-reg-score raid-reg-score--highest';
+    if (score >= 15) return 'raid-reg-score raid-reg-score--elevated';
+    if (score >= 8) return 'raid-reg-score raid-reg-score--medium';
+    return 'raid-reg-score raid-reg-score--lower';
+  }
+  function tierCell(tier) {
+    var t = (tier || '').trim();
+    if (!t) return '<span class="govuk-body-s dfe-c-text-muted">—</span>';
+    return '<span class="dfe-f-badge dfe-f-badge--blue">' + escHtml(t) + '</span>';
+  }
+  function statusTag(status) {
+    if (!status || status === '—') return '<span class="govuk-body-s dfe-c-text-muted">—</span>';
+    var up = String(status).toUpperCase();
+    var isClosed = String(status).toLowerCase().indexOf('closed') >= 0;
+    var tagClass = isClosed ? 'dfe-f-badge dfe-f-badge--green' : 'dfe-f-badge dfe-f-badge--blue';
+    return '<span class="' + tagClass + '">' + escHtml(up) + '</span>';
+  }
+  function relationHtml(r) {
+    var k = (r.relationKind || 'Unknown') + '';
+    var target = (r.relationTarget || '') + '';
+    if (k === 'Organisation') return '<span>Organisation</span>';
+    if (k === 'FIPS' || k === 'Fips') {
+      if (!target) return '<span class="dfe-c-text-muted">—</span>';
+      return '<span>FIPS</span> <span>·</span> <span>' + escHtml(target) + '</span>';
+    }
+    if (k === 'Work') {
+      var wurl = (r.relationWorkItemUrl || '') + '';
+      if (wurl && r.relationProjectId) {
+        return '<span>Work</span> <span>·</span> <a class="govuk-link govuk-link--no-visited-state" href="' + escHtml(wurl) + '">' + escHtml(target || 'View') + '</a>';
+      }
+      if (target) return '<span>Work</span> <span>·</span> <span>' + escHtml(target) + '</span>';
+      return '<span>Work</span>';
+    }
+    if (!target) return '<span class="dfe-c-text-muted">—</span>';
+    return '<span>' + escHtml(target) + '</span>';
+  }
+  function show(btn) {
+    var key = btn.getAttribute('data-matrix-key');
+    var imp = btn.getAttribute('data-impact-label') || '';
+    var lik = btn.getAttribute('data-likelihood-label') || '';
+    var rows = (key && data[key]) ? data[key] : [];
+    titleEl.textContent = imp + ' × ' + lik + ' · ' + rows.length + (rows.length === 1 ? ' open risk' : ' open risks');
+    bodyEl.innerHTML = '';
+    rows.forEach(function (r) {
+      var tr = document.createElement('tr');
+      var sc = (typeof r.riskScore === 'number' ? r.riskScore : parseInt(r.riskScore, 10)) || 0;
+      var scoreSpan = '<span class="' + raidRegScoreClass(sc) + '">' + escHtml(String(sc)) + '</span>';
+      tr.innerHTML =
+        '<td class="govuk-table__cell"><a class="govuk-link govuk-!-font-weight-bold govuk-link--no-visited-state" href="' + escHtml(r.href) + '">' + escHtml(r.title) + '</a>' +
+        '<div class="dfe-c-body-s dfe-c-text-muted govuk-!-margin-top-1" style="line-height:1.3;">' + escHtml(r.reference) + '</div></td>' +
+        '<td class="govuk-body-s">' + escHtml((r.businessArea == null || r.businessArea === '') ? '—' : r.businessArea) + '</td>' +
+        '<td class="govuk-body-s">' + tierCell(r.tier) + '</td>' +
+        '<td class="govuk-body-s">' + relationHtml(r) + '</td>' +
+        '<td class="govuk-table__cell">' + statusTag(r.status) + '</td>' +
+        '<td class="govuk-body-s">' + escHtml((r.owner == null || r.owner === '') ? '—' : r.owner) + '</td>' +
+        '<td class="govuk-body-s">' + escHtml((r.likelihood == null || r.likelihood === '') ? '—' : r.likelihood) + '</td>' +
+        '<td class="govuk-body-s">' + escHtml((r.impact == null || r.impact === '') ? '—' : r.impact) + '</td>' +
+        '<td class="govuk-body-s govuk-!-text-align-right">' + scoreSpan + '</td>';
+      bodyEl.appendChild(tr);
+    });
+    panel.hidden = false;
+    document.querySelectorAll('.raid-matrix-drill').forEach(function (b) { b.setAttribute('aria-expanded', 'false'); });
+    btn.setAttribute('aria-expanded', 'true');
+    panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    window.setTimeout(function () {
+      var first = bodyEl.querySelector('a[href]');
+      if (first) first.focus();
+    }, 0);
+  }
+  function hide() {
+    var toFocus = activeBtn;
+    panel.hidden = true;
+    if (activeBtn) {
+      activeBtn.classList.remove('raid-matrix-drill--active');
+      activeBtn.setAttribute('aria-expanded', 'false');
+      activeBtn = null;
+    }
+    if (toFocus) toFocus.focus();
+  }
+  matrixRoot.addEventListener('click', function (e) {
+    var btn = e.target.closest('.raid-matrix-drill');
+    if (!btn) return;
+    if (activeBtn === btn) { hide(); return; }
+    if (activeBtn) activeBtn.classList.remove('raid-matrix-drill--active');
+    activeBtn = btn;
+    activeBtn.classList.add('raid-matrix-drill--active');
+    show(btn);
+  });
+  panel.querySelector('.raid-matrix-drilldown__close').addEventListener('click', hide);
+})();
+</script>

@@ -19,19 +19,38 @@ public class MonthlyUpdateService : IMonthlyUpdateService
         return row == null
             ? null
             : new MonthlyReportingPeriodInfo(row.PeriodStart, row.PeriodEnd, row.SubmissionOpens,
-                row.SubmissionCloses);
+                row.SubmissionCloses, row.PeriodLabel);
     }
 
     public bool IsMonthlyReportEditingAllowed(int reportingYear, int reportingMonth)
     {
-        var explicitRow = TryGetActiveExplicitPeriodRow(reportingYear, reportingMonth);
-        if (explicitRow == null)
+        var d = DateTime.UtcNow.Date;
+        var opens = GetSubmissionWindowOpens(reportingYear, reportingMonth);
+        var closes = GetSubmissionWindowCloses(reportingYear, reportingMonth);
+        if (TryGetActiveExplicitPeriodRow(reportingYear, reportingMonth) == null)
             return true;
 
-        var d = DateTime.UtcNow.Date;
-        var opens = explicitRow.SubmissionOpens.Date;
-        var closes = explicitRow.SubmissionCloses.Date;
         return d >= opens && d <= closes;
+    }
+
+    public DateTime GetSubmissionWindowOpens(int reportingYear, int reportingMonth)
+    {
+        var explicitRow = TryGetActiveExplicitPeriodRow(reportingYear, reportingMonth);
+        if (explicitRow != null)
+            return explicitRow.SubmissionOpens.Date;
+
+        var dim = DateTime.DaysInMonth(reportingYear, reportingMonth);
+        var day = Math.Min(20, dim);
+        return new DateTime(reportingYear, reportingMonth, day);
+    }
+
+    public DateTime GetSubmissionWindowCloses(int reportingYear, int reportingMonth)
+    {
+        var explicitRow = TryGetActiveExplicitPeriodRow(reportingYear, reportingMonth);
+        if (explicitRow != null)
+            return explicitRow.SubmissionCloses.Date;
+
+        return new DateTime(reportingYear, reportingMonth, DateTime.DaysInMonth(reportingYear, reportingMonth));
     }
 
     public DateTime GetMonthlyUpdateDueDate(int year, int month)
@@ -70,6 +89,30 @@ public class MonthlyUpdateService : IMonthlyUpdateService
         var nextYear = month == 12 ? year + 1 : year;
         var nextPeriodDueDate = GetMonthlyUpdateDueDate(nextYear, nextMonth);
         return nextPeriodDueDate.AddDays(-10);
+    }
+
+    public (int Year, int Month) ResolveDashboardReportingPeriod(DateTime utcNow)
+    {
+        var reportYear = utcNow.Year;
+        var reportMonth = utcNow.Month;
+
+        if (IsMonthlyReportEditingAllowed(reportYear, reportMonth))
+            return (reportYear, reportMonth);
+
+        var prevYear = reportMonth == 1 ? reportYear - 1 : reportYear;
+        var prevMonth = reportMonth == 1 ? 12 : reportMonth - 1;
+        if (IsMonthlyReportEditingAllowed(prevYear, prevMonth))
+            return (prevYear, prevMonth);
+
+        var currentPeriodDueDate = GetMonthlyUpdateDueDate(reportYear, reportMonth);
+        var daysUntilCurrentPeriodDueDate = (currentPeriodDueDate - utcNow).Days;
+        var applicableYear = daysUntilCurrentPeriodDueDate <= 10
+            ? reportYear
+            : (reportMonth == 1 ? reportYear - 1 : reportYear);
+        var applicableMonth = daysUntilCurrentPeriodDueDate <= 10
+            ? reportMonth
+            : (reportMonth == 1 ? 12 : reportMonth - 1);
+        return (applicableYear, applicableMonth);
     }
 
     public UpdateSubmissionStatus CalculateUpdateStatus(int year, int month, DateTime? submittedDate)

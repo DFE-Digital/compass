@@ -11,7 +11,9 @@ public sealed record ModernRaidRiskRow(
     string? ImpactLabel,
     int RiskScore,
     /// <summary>Risk tier display name from <c>RiskTier.Name</c> when set; also used as the sub-heading key when the register groups by tier.</summary>
-    string? Tier);
+    string? Tier,
+    /// <summary>Plain-text description snippet for quick views (e.g. business area dashboard modal).</summary>
+    string? DescriptionSummary = null);
 
 public sealed record ModernRaidIssueRow(
     int Id,
@@ -21,16 +23,19 @@ public sealed record ModernRaidIssueRow(
     string? Status,
     string? Owner,
     string? Priority,
-    string? Severity);
+    string? Severity,
+    string? DescriptionSummary = null);
 
 public sealed record ModernRaidDependencyRow(
     int Id,
     string SourceType,
     int SourceId,
     string? SourceTitle,
+    string? SourceDetailUrl,
     string TargetType,
     int TargetId,
     string? TargetTitle,
+    string? TargetDetailUrl,
     string? DependencyType,
     string? LinkTypeLabel,
     string? CriticalityLabel,
@@ -51,4 +56,19 @@ public sealed record ModernRaidAssumptionRow(
     string? Criticality,
     string? Status,
     DateTime? ReviewDate,
+    DateTime Updated);
+
+public sealed record ModernRaidNearMissRow(
+    int Id,
+    string Reference,
+    DateTime DateLogged,
+    string? TypeLabel,
+    string? DirectorateLabel,
+    string? BusinessAreaLabel,
+    string? OwnersSummary,
+    string? SeriousnessLabel,
+    string? TierLabel,
+    string? StatusLabel,
+    string? PostMitigationRagLabel,
+    string? PostMitigationRagCssClass,
     DateTime Updated);

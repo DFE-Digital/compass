@@ -1,11 +1,8 @@
 @model Compass.ViewModels.Modern.ModernRaidEscalationManagementViewModel
+@using Compass.ViewModels.Modern
 @{
   ViewData["Title"] = "RAID — tier change requests";
   var tab = Model.ActiveTab;
-  var escOn = tab == "escalations" ? "on" : null;
-  var deOn = tab == "deescalations" ? "on" : null;
-  var curOn = tab == "current" ? "on" : null;
-  var actOn = tab == "active" ? "on" : null;
 }
 @section Breadcrumbs {
   <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
@@ -13,16 +10,15 @@
   <li class="govuk-breadcrumbs__list-item" aria-current="page">RAID tier requests</li>
 }
 
-<div class="modern-work-page" style="max-width: 100%; box-sizing: border-box;">
-  <div class="dfe-c-mb-4 dfe-c-flex--between" style="flex-wrap:wrap;align-items:flex-start;gap:1rem;">
-    <div class="dfe-c-page-title" style="margin:0;min-width:0;flex:1;max-width: 100%;">
-      <div class="dfe-c-page-title__caption">Operations · RAID</div>
-      <h1 class="dfe-c-page-title__heading">Tier change requests</h1>
-    </div>
-  </div>
-  <p class="dfe-c-body dfe-c-text-muted govuk-!-margin-bottom-4" style="margin-top:0; max-width: 40rem;">
-    Review tier-change requests from delivery teams. Approve or reject each escalation or de-escalation; approved risks move to the operational Tier&nbsp;1, Tier&nbsp;2 or Tier&nbsp;3 band that matches the requested governance level.
-  </p>
+<div class="modern-work-page modern-operations-raid-escalations">
+  @{
+    var raidEscIntro = await Html.PartialAsync("_RaidEscalationsIntroLede");
+  }
+  @await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+    Caption = "Operations · RAID",
+    Title = "Tier change requests",
+    Lede = raidEscIntro
+  })
   @if (TempData["ErrorMessage"] is string errorMessage && !string.IsNullOrWhiteSpace(errorMessage))
   {
     <div class="govuk-error-summary" role="alert" data-module="govuk-error-summary">
@@ -38,60 +34,80 @@
     </div>
   }
 
-  <div class="dfe-c-card-grid dfe-c-card-grid--3 dfe-c-mb-3" role="region" aria-label="Request summary">
-    <div class="dfe-c-metric dfe-c-metric--red">
-      <div class="dfe-c-metric__number">@Model.PendingEscalationsCount</div>
-      <div class="dfe-c-metric__label">Requested escalations (pending)</div>
+  <div class="dfe-f-card-grid govuk-!-margin-bottom-3" role="region" aria-label="Request summary">
+    @await Html.PartialAsync("~/Views/Modern/Raid/_RaidDashboardStatCard.cshtml", new Compass.ViewModels.Modern.RaidDashboardStatCardVm
+    {
+      Label = "Requested escalations (pending)",
+      Value = Model.PendingEscalationsCount.ToString("N0"),
+      Trend = "View queue",
+      Href = Url.Action("RaidEscalations", "ModernOperations", new { tab = "escalations" }) ?? "#",
+      AriaLabel = $"Requested escalations pending, {Model.PendingEscalationsCount}",
+      TintClass = "dfe-f-stat-card--tint-red"
+    })
+    @await Html.PartialAsync("~/Views/Modern/Raid/_RaidDashboardStatCard.cshtml", new Compass.ViewModels.Modern.RaidDashboardStatCardVm
+    {
+      Label = "Requested de-escalations (pending)",
+      Value = Model.PendingDeescalationsCount.ToString("N0"),
+      Trend = "View queue",
+      Href = Url.Action("RaidEscalations", "ModernOperations", new { tab = "deescalations" }) ?? "#",
+      AriaLabel = $"Requested de-escalations pending, {Model.PendingDeescalationsCount}",
+      TintClass = "dfe-f-stat-card--tint-orange"
+    })
+    @await Html.PartialAsync("~/Views/Modern/Raid/_RaidDashboardStatCard.cshtml", new Compass.ViewModels.Modern.RaidDashboardStatCardVm
+    {
+      Label = "Currently escalated (from approved moves)",
+      Value = Model.CurrentlyEscalatedCount.ToString("N0"),
+      Trend = "View queue",
+      Href = Url.Action("RaidEscalations", "ModernOperations", new { tab = "current" }) ?? "#",
+      AriaLabel = $"Currently escalated from approved moves, {Model.CurrentlyEscalatedCount}",
+      TintClass = "dfe-f-stat-card--tint-blue"
+    })
+    @await Html.PartialAsync("~/Views/Modern/Raid/_RaidDashboardStatCard.cshtml", new Compass.ViewModels.Modern.RaidDashboardStatCardVm
+    {
+      Label = "Active risks (open)",
+      Value = Model.ActiveRisksCount.ToString("N0"),
+      Trend = "Edit in Operations",
+      Href = Url.Action("RaidEscalations", "ModernOperations", new { tab = "active" }) ?? "#",
+      AriaLabel = $"Active open risks, {Model.ActiveRisksCount}",
+      TintClass = "dfe-f-stat-card--tint-grey"
+    })
+  </div>
+
+  <div class="mr-report-section-panel dfe-f-toggle govuk-!-margin-bottom-4" data-module="dfe-f-toggle">
+    <div class="dfe-f-toggle__title-wrapper">
+      <h2 class="dfe-f-toggle__heading govuk-!-margin-bottom-0">
+        <button type="button" class="dfe-f-toggle__button" aria-expanded="true" aria-controls="raid-esc-approval-help" id="raid-esc-approval-help-btn">
+          <span class="dfe-f-toggle__icon" aria-hidden="true"></span>
+          <span class="dfe-f-toggle__title">How approval maps proposed tiers to operational bands</span>
+        </button>
+      </h2>
     </div>
-    <div class="dfe-c-metric dfe-c-metric--amber">
-      <div class="dfe-c-metric__number">@Model.PendingDeescalationsCount</div>
-      <div class="dfe-c-metric__label">Requested de-escalations (pending)</div>
-    </div>
-    <div class="dfe-c-metric dfe-c-metric--navy">
-      <div class="dfe-c-metric__number">@Model.CurrentlyEscalatedCount</div>
-      <div class="dfe-c-metric__label">Currently escalated (from approved moves)</div>
+    <div id="raid-esc-approval-help" class="dfe-f-toggle__content">
+      <div class="dfe-f-toggle__body">
+        <p class="govuk-body govuk-!-margin-bottom-0">
+          A “Tier 2 — Proposed” (or similar) request matches the <strong>governance level</strong> of Tier 2. When you approve, the risk is set to the <strong>operational</strong> risk tier in admin with that same level (for example <strong>Tier 2</strong>).
+          De-escalations work the same way. Use <strong>Action request</strong> in the list to approve or reject and record a reason. The risk name link opens the same action. Use <strong>View in RAID</strong> only to read the full risk in the main RAID app.
+        </p>
+      </div>
     </div>
   </div>
 
-  <div class="mr-report-section-panel dfe-c-collapsible dfe-c-collapsible--open govuk-!-margin-bottom-4" style="max-width: 100%;">
-    <button type="button" class="dfe-c-collapsible__trigger" aria-expanded="true">
-      <span class="dfe-c-collapsible__icon" aria-hidden="true">−</span>
-      <span>How approval maps proposed tiers to operational bands</span>
-    </button>
-    <div class="dfe-c-collapsible__body">
-      <p class="dfe-c-body-s dfe-c-text-muted govuk-!-margin-bottom-0">
-        A “Tier 2 — Proposed” (or similar) request matches the <strong>governance level</strong> of Tier 2. When you approve, the risk is set to the <strong>operational</strong> risk tier in admin with that same level (for example <strong>Tier 2</strong>).
-        De-escalations work the same way. Use <strong>Action request</strong> in the list to approve or reject and record a reason. The risk name link opens the same action. Use <strong>View in RAID</strong> only to read the full risk in the main RAID app.
-      </p>
-    </div>
-  </div>
-
-  <div class="tabs govuk-!-margin-bottom-4" role="tablist" aria-label="Tier request queues">
-    <a class="tab @escOn"
-       role="tab"
-       id="tab-raid-esc"
-       aria-selected="@(tab == "escalations" ? "true" : "false")"
-       @if (tab == "escalations") { <text>aria-current="page" </text> }
-       href="@Url.Action("RaidEscalations", "ModernOperations", new { tab = "escalations" })">Requested escalations <span class="dfe-c-fw-regular">(@Model.PendingEscalationsCount)</span></a>
-    <a class="tab @deOn"
-       role="tab"
-       id="tab-raid-de"
-       aria-selected="@(tab == "deescalations" ? "true" : "false")"
-       @if (tab == "deescalations") { <text>aria-current="page" </text> }
-       href="@Url.Action("RaidEscalations", "ModernOperations", new { tab = "deescalations" })">Requested de-escalations <span class="dfe-c-fw-regular">(@Model.PendingDeescalationsCount)</span></a>
-    <a class="tab @curOn"
-       role="tab"
-       id="tab-raid-cur"
-       aria-selected="@(tab == "current" ? "true" : "false")"
-       @if (tab == "current") { <text>aria-current="page" </text> }
-       href="@Url.Action("RaidEscalations", "ModernOperations", new { tab = "current" })">Currently escalated <span class="dfe-c-fw-regular">(@Model.CurrentlyEscalatedCount)</span></a>
-    <a class="tab @actOn"
-       role="tab"
-       id="tab-raid-active"
-       aria-selected="@(tab == "active" ? "true" : "false")"
-       @if (tab == "active") { <text>aria-current="page" </text> }
-       href="@Url.Action("RaidEscalations", "ModernOperations", new { tab = "active" })">Active risks <span class="dfe-c-fw-regular">(@Model.ActiveRisksCount)</span></a>
-  </div>
+  <nav class="dfe-f-sub-navigation govuk-!-margin-bottom-4" aria-label="Tier request queues">
+    <ul class="dfe-f-sub-navigation__list">
+      <li class="dfe-f-sub-navigation__item@(tab == "escalations" ? " dfe-f-sub-navigation__item--active" : "")">
+        <a class="dfe-f-sub-navigation__link govuk-link govuk-link--no-visited-state" id="tab-raid-esc" href="@Url.Action("RaidEscalations", "ModernOperations", new { tab = "escalations" })"@if (tab == "escalations") { <text> aria-current="page"</text> }>Requested escalations <span class="dfe-c-fw-regular">(@Model.PendingEscalationsCount)</span></a>
+      </li>
+      <li class="dfe-f-sub-navigation__item@(tab == "deescalations" ? " dfe-f-sub-navigation__item--active" : "")">
+        <a class="dfe-f-sub-navigation__link govuk-link govuk-link--no-visited-state" id="tab-raid-de" href="@Url.Action("RaidEscalations", "ModernOperations", new { tab = "deescalations" })"@if (tab == "deescalations") { <text> aria-current="page"</text> }>Requested de-escalations <span class="dfe-c-fw-regular">(@Model.PendingDeescalationsCount)</span></a>
+      </li>
+      <li class="dfe-f-sub-navigation__item@(tab == "current" ? " dfe-f-sub-navigation__item--active" : "")">
+        <a class="dfe-f-sub-navigation__link govuk-link govuk-link--no-visited-state" id="tab-raid-cur" href="@Url.Action("RaidEscalations", "ModernOperations", new { tab = "current" })"@if (tab == "current") { <text> aria-current="page"</text> }>Currently escalated <span class="dfe-c-fw-regular">(@Model.CurrentlyEscalatedCount)</span></a>
+      </li>
+      <li class="dfe-f-sub-navigation__item@(tab == "active" ? " dfe-f-sub-navigation__item--active" : "")">
+        <a class="dfe-f-sub-navigation__link govuk-link govuk-link--no-visited-state" id="tab-raid-active" href="@Url.Action("RaidEscalations", "ModernOperations", new { tab = "active" })"@if (tab == "active") { <text> aria-current="page"</text> }>Active risks <span class="dfe-c-fw-regular">(@Model.ActiveRisksCount)</span></a>
+      </li>
+    </ul>
+  </nav>
 
   <div class="tab-panel-region" style="min-height:2rem;" role="region" aria-label="Selected queue">
   @if (tab == "escalations")
@@ -108,34 +124,47 @@
   {
     @if (!Model.Current.Any())
     {
-      <p class="govuk-body dfe-c-text-muted govuk-!-margin-bottom-0">No currently escalated open risks from approved tier moves. Approvals that increase governance appear here for monitoring.</p>
+      <div class="modern-operations-raid-escalations__empty" role="status">
+        <p class="govuk-body govuk-!-margin-bottom-0">No currently escalated open risks from approved tier moves. Approvals that increase governance appear here for monitoring.</p>
+      </div>
     }
     else
     {
-      <div class="dfe-c-table-wrap">
-        <table id="raid-ops-escalations-current" aria-label="Risks currently in an escalated position" class="govuk-!-margin-bottom-0">
-          <thead>
-            <tr>
-              <th scope="col">Risk</th>
-              <th scope="col">Before</th>
-              <th scope="col">After (current)</th>
-              <th scope="col">Move</th>
-              <th scope="col">Approved</th>
+      <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+        <table id="raid-ops-escalations-current" aria-label="Risks currently in an escalated position" class="govuk-table govuk-!-margin-bottom-0">
+          <thead class="govuk-table__head">
+            <tr class="govuk-table__row">
+              <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Risk</button>
+        </th>
+              <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Before</button>
+        </th>
+              <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">After (current)</button>
+        </th>
+              <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Move</button>
+        </th>
+              <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Approved</button>
+        </th>
             </tr>
           </thead>
-          <tbody>
+          <tbody class="govuk-table__body">
             @foreach (var row in Model.Current)
             {
               var detailUrl = Url.Action("RiskDetail", "ModernRaid", new { id = row.RecordId });
-              <tr>
-                <td>
-                  <a class="dfe-c-link govuk-!-font-weight-bold" href="@detailUrl" rel="noopener noreferrer" target="_blank">@row.Reference</a>
+              <tr class="govuk-table__row">
+                <td class="govuk-table__cell">
+                  <a class="govuk-link govuk-!-font-weight-bold govuk-link--no-visited-state" href="@detailUrl" rel="noopener noreferrer" target="_blank">@row.Reference</a>
                   <div class="govuk-body-s dfe-c-text-muted">@row.Title</div>
                 </td>
-                <td class="govuk-body-s">@row.PreviousTier</td>
-                <td class="govuk-body-s">@row.CurrentTier</td>
-                <td class="govuk-body-s">@row.EscalationPath</td>
-                <td class="govuk-body-s">@(string.IsNullOrWhiteSpace(row.ApprovedBy) ? "—" : row.ApprovedBy)<br />@((row.ApprovedAt ?? row.UpdatedAt).ToString("d MMM yyyy"))</td>
+                <td class="govuk-table__cell">@row.PreviousTier</td>
+                <td class="govuk-table__cell">@row.CurrentTier</td>
+                <td class="govuk-table__cell">@row.EscalationPath</td>
+                <td class="govuk-table__cell">@(string.IsNullOrWhiteSpace(row.ApprovedBy) ? "—" : row.ApprovedBy)<br />@((row.ApprovedAt ?? row.UpdatedAt).ToString("d MMM yyyy"))</td>
               </tr>
             }
           </tbody>
@@ -150,36 +179,51 @@
     </p>
     @if (!Model.ActiveRisks.Any())
     {
-      <p class="govuk-body dfe-c-text-muted govuk-!-margin-bottom-0">No open risks in the register.</p>
+      <div class="modern-operations-raid-escalations__empty" role="status">
+        <p class="govuk-body govuk-!-margin-bottom-0">No open risks in the register.</p>
+      </div>
     }
     else
     {
-      <div class="dfe-c-table-wrap">
-        <table id="raid-ops-active-risks" class="govuk-!-margin-bottom-0" aria-label="Active open risks">
-          <thead>
-            <tr>
-              <th scope="col">Reference</th>
-              <th scope="col">Title</th>
-              <th scope="col">Tier</th>
-              <th scope="col">Status</th>
-              <th scope="col">Updated</th>
-              <th scope="col">Action</th>
+      <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+        <table id="raid-ops-active-risks" class="govuk-table govuk-!-margin-bottom-0" aria-label="Active open risks">
+          <thead class="govuk-table__head">
+            <tr class="govuk-table__row">
+              <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Reference</button>
+        </th>
+              <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Title</button>
+        </th>
+              <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Tier</button>
+        </th>
+              <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Status</button>
+        </th>
+              <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Updated</button>
+        </th>
+              <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Action</button>
+        </th>
             </tr>
           </thead>
-          <tbody>
+          <tbody class="govuk-table__body">
             @foreach (var r in Model.ActiveRisks)
             {
               var editUrl = Url.Action("RaidRiskOperationsEdit", "ModernOperations", new { id = r.Id });
-              <tr>
-                <td class="govuk-body-s govuk-!-font-weight-bold">@r.Reference</td>
-                <td class="govuk-body-s">@r.Title</td>
-                <td class="govuk-body-s">@(r.TierName ?? "—")</td>
-                <td class="govuk-body-s">@(r.StatusLabel ?? "—")</td>
-                <td class="govuk-body-s">@r.UpdatedAt.ToString("d MMM yyyy")</td>
-                <td class="govuk-body-s">
+              <tr class="govuk-table__row">
+                <td class="govuk-table__cell dfe-c-mono govuk-!-font-weight-bold">@r.Reference</td>
+                <td class="govuk-table__cell">@r.Title</td>
+                <td class="govuk-table__cell">@(r.TierName ?? "—")</td>
+                <td class="govuk-table__cell">@(r.StatusLabel ?? "—")</td>
+                <td class="govuk-table__cell">@r.UpdatedAt.ToString("d MMM yyyy")</td>
+                <td class="govuk-table__cell">
                   @if (!string.IsNullOrEmpty(editUrl))
                   {
-                    <a class="govuk-link" href="@editUrl">Edit in Operations</a>
+                    <a class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0" href="@editUrl">Edit in Operations</a>
                   }
                 </td>
               </tr>

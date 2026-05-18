@@ -24,7 +24,20 @@ public class ModernProfileController : Controller
     }
 
     [HttpGet("")]
-    public async Task<IActionResult> Index(CancellationToken cancellationToken)
+    public Task<IActionResult> Index(CancellationToken cancellationToken) =>
+        RenderAsync("~/Views/Modern/Profile/Index.cshtml", cancellationToken);
+
+    [HttpGet("permissions")]
+    public Task<IActionResult> Permissions(CancellationToken cancellationToken) =>
+        RenderAsync("~/Views/Modern/Profile/Permissions.cshtml", cancellationToken);
+
+    private async Task<IActionResult> RenderAsync(string viewName, CancellationToken cancellationToken)
+    {
+        var vm = await BuildViewModelAsync(cancellationToken);
+        return View(viewName, vm);
+    }
+
+    private async Task<ModernProfileViewModel> BuildViewModelAsync(CancellationToken cancellationToken)
     {
         var email = User.Identity?.Name
             ?? User.FindFirstValue(ClaimTypes.Email)
@@ -53,21 +66,24 @@ public class ModernProfileController : Controller
             }
         }
 
-        var vm = new ModernProfileViewModel
+        return new ModernProfileViewModel
         {
-            SignInName = User.Identity?.Name,
-            Email = email,
-            HasCompassUserRecord = dbUser != null,
-            DatabaseName = dbUser?.Name,
-            FirstName = dbUser?.FirstName,
-            LastName = dbUser?.LastName,
-            JobTitle = dbUser?.JobTitle,
-            UserPrincipalName = dbUser?.UserPrincipalName,
-            AzureObjectId = dbUser?.AzureObjectId,
-            ApplicationRole = dbUser?.Role.ToString(),
+            Email = string.IsNullOrEmpty(email) ? null : email,
+            DisplayName = BuildDisplayName(dbUser),
             DirectoryGroups = groups
         };
+    }
 
-        return View("~/Views/Modern/Profile/Index.cshtml", vm);
+    private static string? BuildDisplayName(User? dbUser)
+    {
+        if (dbUser == null) return null;
+        if (!string.IsNullOrWhiteSpace(dbUser.Name))
+            return dbUser.Name.Trim();
+
+        var parts = new[] { dbUser.FirstName, dbUser.LastName }
+            .Where(s => !string.IsNullOrWhiteSpace(s))
+            .Select(s => s!.Trim());
+        var joined = string.Join(" ", parts);
+        return string.IsNullOrWhiteSpace(joined) ? null : joined;
     }
 }

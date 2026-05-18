@@ -1,4 +1,5 @@
 @model Compass.ViewModels.Modern.ModernOperationsAccessibilityViewModel
+@using Compass.ViewModels.Modern
 @using System.Text.Json
 @using System.Text.Json.Serialization
 @using Compass.Services.Aiss
@@ -27,16 +28,15 @@
   <li class="govuk-breadcrumbs__list-item" aria-current="page">Accessibility</li>
 }
 
-<div class="modern-work-page" style="max-width: 100%; box-sizing: border-box;">
-  <div class="dfe-c-mb-4 dfe-c-flex--between" style="flex-wrap:wrap;align-items:flex-start;gap:1rem;">
-    <div class="dfe-c-page-title" style="margin:0;min-width:0;flex:1;max-width: 100%;">
-      <div class="dfe-c-page-title__caption">Reporting</div>
-      <h1 class="dfe-c-page-title__heading">Accessibility (AISS)</h1>
-      <p class="dfe-c-page-title__lede" style="margin:0.25rem 0 0 0;max-width: 44rem;">
-        All data is live from the <a class="govuk-link" href="https://accessibility-statements.education.gov.uk" rel="noopener noreferrer" target="_blank">Accessibility issues and statement service (opens in new tab)</a>.
-      </p>
-    </div>
-  </div>
+<div class="modern-work-page modern-reporting-accessibility" style="max-width: 100%; box-sizing: border-box;">
+  @{
+    var aissHeaderLede = await Html.PartialAsync("_ReportingAccessibilityHeaderLede");
+  }
+  @await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+    Caption = "Reporting",
+    Title = "Accessibility (AISS)",
+    Lede = aissHeaderLede
+  })
 
   @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
   {
@@ -48,23 +48,23 @@
   @if (Model.Summary is { } s)
   {
     <h2 class="govuk-heading-m govuk-!-margin-top-4">At a glance</h2>
-    <div class="dfe-c-card-grid dfe-c-card-grid--2 dfe-c-mb-3" role="region" aria-label="Accessibility counts">
-      <div class="dfe-c-metric dfe-c-metric--red">
-        <div class="dfe-c-metric__number">@(s.Issues?.Open.ToString() ?? "—")</div>
-        <div class="dfe-c-metric__label">Open issues</div>
+    <div class="dfe-f-card-grid govuk-!-margin-bottom-3" role="region" aria-label="Accessibility counts">
+      <div class="dfe-f-stat-card dfe-f-stat-card--tint-red">
+        <p class="govuk-body-s dfe-f-stat-card__label">Open issues</p>
+        <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@(s.Issues?.Open.ToString() ?? "—")</p>
       </div>
-      <div class="dfe-c-metric dfe-c-metric--navy">
-        <div class="dfe-c-metric__number">@(s.Issues?.Overdue.ToString() ?? "—")</div>
-        <div class="dfe-c-metric__label">Overdue issues</div>
+      <div class="dfe-f-stat-card dfe-f-stat-card--tint-blue">
+        <p class="govuk-body-s dfe-f-stat-card__label">Overdue issues</p>
+        <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@(s.Issues?.Overdue.ToString() ?? "—")</p>
       </div>
-      <div class="dfe-c-metric dfe-c-metric--teal">
-        <div class="dfe-c-metric__number">@(s.Services?.Onboarded.ToString() ?? "—")</div>
-        <div class="dfe-c-metric__label">Onboarded</div>
+      <div class="dfe-f-stat-card dfe-f-stat-card--tint-teal">
+        <p class="govuk-body-s dfe-f-stat-card__label">Onboarded</p>
+        <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@(s.Services?.Onboarded.ToString() ?? "—")</p>
       </div>
-      <div class="dfe-c-metric dfe-c-metric--green">
-        <div class="dfe-c-metric__number">@(s.Services?.Installed.ToString() ?? "—")</div>
-        <div class="dfe-c-metric__label">Installed</div>
-        <div class="dfe-c-metric__note">With statement installed in AISS</div>
+      <div class="dfe-f-stat-card dfe-f-stat-card--tint-green">
+        <p class="govuk-body-s dfe-f-stat-card__label">Installed</p>
+        <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@(s.Services?.Installed.ToString() ?? "—")</p>
+        <p class="govuk-body-s govuk-!-margin-top-2 govuk-!-margin-bottom-0">With statement installed in AISS</p>
       </div>
     </div>
 
@@ -73,27 +73,30 @@
       var c = s.IssueCriteria;
       <h2 class="govuk-heading-m govuk-!-margin-top-4">By WCAG and category</h2>
       <p class="govuk-body dfe-c-text-muted govuk-!-margin-bottom-2">Open, closed, and overdue counts per designops bucket.</p>
-      <div class="dfe-c-table-wrap">
-        <table id="aiss-ops-criteria" class="govuk-!-margin-bottom-0" aria-label="Issue counts by criterion">
-          <thead>
-            <tr>
-              <th scope="col">Criterion</th>
-              <th scope="col" style="text-align: right;">Open</th>
-              <th scope="col" style="text-align: right;">Closed</th>
-              <th scope="col" style="text-align: right;">Overdue (open)</th>
+      <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+        <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+        <table id="aiss-ops-criteria" class="govuk-table govuk-table--small-text-until-tablet govuk-!-margin-bottom-0" aria-label="Issue counts by criterion">
+          <thead class="govuk-table__head">
+            <tr class="govuk-table__row">
+              <th scope="col" class="govuk-table__header" aria-sort="none">
+                <button type="button" class="dfe-f-table-sort-button">Criterion</button>
+              </th>
+              @await Html.PartialAsync("_SortableThNumeric", "Open")
+              @await Html.PartialAsync("_SortableThNumeric", "Closed")
+              @await Html.PartialAsync("_SortableThNumeric", "Overdue (open)")
             </tr>
           </thead>
-          <tbody>
+          <tbody class="govuk-table__body">
             @foreach (var row in new (string key, AissCriterionTrio? t)[]
             {
               ("a", c.A), ("aa", c.Aa), ("aaa", c.Aaa), ("bp", c.Bp), ("ux", c.Ux), ("other", c.Other)
             })
             {
-              <tr>
-                <td class="govuk-body-s govuk-!-font-weight-bold">@CriterionLabel(row.key)</td>
-                <td class="govuk-body-s" style="text-align: right;">@(row.t?.Open.ToString() ?? "—")</td>
-                <td class="govuk-body-s" style="text-align: right;">@(row.t?.Closed.ToString() ?? "—")</td>
-                <td class="govuk-body-s" style="text-align: right;">@(row.t?.Overdue.ToString() ?? "—")</td>
+              <tr class="govuk-table__row">
+                <th scope="row" class="govuk-table__header">@CriterionLabel(row.key)</th>
+                <td class="govuk-table__cell govuk-table__cell--numeric dfe-f-u-tabular-numbers">@(row.t?.Open.ToString() ?? "—")</td>
+                <td class="govuk-table__cell govuk-table__cell--numeric dfe-f-u-tabular-numbers">@(row.t?.Closed.ToString() ?? "—")</td>
+                <td class="govuk-table__cell govuk-table__cell--numeric dfe-f-u-tabular-numbers">@(row.t?.Overdue.ToString() ?? "—")</td>
               </tr>
             }
           </tbody>
@@ -105,35 +108,36 @@
     {
       <h2 class="govuk-heading-m govuk-!-margin-top-6">By service</h2>
       <p class="govuk-body dfe-c-text-muted govuk-!-margin-bottom-2">FIPS / AISS services with open issue counts and open issues by bucket.</p>
-      <div class="dfe-c-table-wrap">
-        <table id="aiss-ops-byservice" class="govuk-!-margin-bottom-0" aria-label="Open issues by service">
-          <thead>
-            <tr>
-              <th scope="col">Service</th>
-              <th scope="col" style="text-align: right;">Open</th>
-              <th scope="col" style="text-align: right;">A</th>
-              <th scope="col" style="text-align: right;">AA</th>
-              <th scope="col" style="text-align: right;">AAA</th>
-              <th scope="col" style="text-align: right;">BP</th>
-              <th scope="col" style="text-align: right;">UX</th>
-              <th scope="col" style="text-align: right;">Other</th>
+      <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+        <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+        <table id="aiss-ops-byservice" class="govuk-table govuk-table--small-text-until-tablet govuk-!-margin-bottom-0 modern-aiss-byservice-table" aria-label="Open issues by service">
+          <thead class="govuk-table__head">
+            <tr class="govuk-table__row">
+              <th scope="col" class="govuk-table__header modern-aiss-byservice-table__service" aria-sort="none">
+                <button type="button" class="dfe-f-table-sort-button">Service</button>
+              </th>
+              @await Html.PartialAsync("_SortableThNumeric", "Open")
+              @await Html.PartialAsync("_SortableThNumeric", "A")
+              @await Html.PartialAsync("_SortableThNumeric", "AA")
+              @await Html.PartialAsync("_SortableThNumeric", "AAA")
+              @await Html.PartialAsync("_SortableThNumeric", "BP")
+              @await Html.PartialAsync("_SortableThNumeric", "UX")
+              @await Html.PartialAsync("_SortableThNumeric", "Other")
             </tr>
           </thead>
-          <tbody>
+          <tbody class="govuk-table__body">
             @foreach (var row in list.OrderByDescending(x => x.IssuesOpen).ThenBy(x => x.Name))
             {
               var o = row.OpenByCriterion;
-              <tr>
-                <td class="govuk-body-s" style="max-width: 22rem;">
-                  <span class="govuk-!-font-weight-bold">@(string.IsNullOrWhiteSpace(row.Name) ? "—" : row.Name)</span>
-                </td>
-                <td class="govuk-body-s" style="text-align: right;">@row.IssuesOpen</td>
-                <td class="govuk-body-s" style="text-align: right;">@(o?.A ?? 0)</td>
-                <td class="govuk-body-s" style="text-align: right;">@(o?.Aa ?? 0)</td>
-                <td class="govuk-body-s" style="text-align: right;">@(o?.Aaa ?? 0)</td>
-                <td class="govuk-body-s" style="text-align: right;">@(o?.Bp ?? 0)</td>
-                <td class="govuk-body-s" style="text-align: right;">@(o?.Ux ?? 0)</td>
-                <td class="govuk-body-s" style="text-align: right;">@(o?.Other ?? 0)</td>
+              <tr class="govuk-table__row">
+                <th scope="row" class="govuk-table__header modern-aiss-byservice-table__service">@(string.IsNullOrWhiteSpace(row.Name) ? "—" : row.Name)</th>
+                <td class="govuk-table__cell govuk-table__cell--numeric dfe-f-u-tabular-numbers">@row.IssuesOpen</td>
+                <td class="govuk-table__cell govuk-table__cell--numeric dfe-f-u-tabular-numbers">@(o?.A ?? 0)</td>
+                <td class="govuk-table__cell govuk-table__cell--numeric dfe-f-u-tabular-numbers">@(o?.Aa ?? 0)</td>
+                <td class="govuk-table__cell govuk-table__cell--numeric dfe-f-u-tabular-numbers">@(o?.Aaa ?? 0)</td>
+                <td class="govuk-table__cell govuk-table__cell--numeric dfe-f-u-tabular-numbers">@(o?.Bp ?? 0)</td>
+                <td class="govuk-table__cell govuk-table__cell--numeric dfe-f-u-tabular-numbers">@(o?.Ux ?? 0)</td>
+                <td class="govuk-table__cell govuk-table__cell--numeric dfe-f-u-tabular-numbers">@(o?.Other ?? 0)</td>
               </tr>
             }
           </tbody>
@@ -170,24 +174,6 @@
     </div>
   }
 </div>
-
-<style nonce="@Context.Items["Nonce"]">
-  .ops-aiss-trend-grid {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 1.5rem;
-  }
-  @@media (min-width: 48rem) {
-    .ops-aiss-trend-grid { grid-template-columns: 1fr 1fr; }
-  }
-  .ops-aiss-trend-wrap {
-    position: relative;
-    width: 100%;
-    max-width: 100%;
-    height: 280px;
-  }
-  .ops-aiss-trend-card h3 { margin-bottom: 0.5rem; }
-</style>
 
 @section Scripts {
   @if (Model.Trends is { } trendData && trendData.MonthLabels.Count > 0 && string.IsNullOrWhiteSpace(Model.TrendsError))

@@ -1,4 +1,5 @@
 @model Compass.ViewModels.Modern.AdminGroupDetailViewModel
+@using Compass.ViewModels.Modern
 @{
     ViewData["Title"] = Model.Name + " — Group";
     var addMemberPicker = new UserPickerViewModel
@@ -19,22 +20,19 @@
 }
 
 <div class="admin-hub">
- <div class="dfe-c-page-title dfe-c-mb-2">
- <div class="dfe-c-page-title__caption">Group</div>
- <h1 class="dfe-c-page-title__heading">@Model.Name</h1>
-    @if (!string.IsNullOrEmpty(Model.Description))
-    {
- <p class="dfe-c-page-title__lede">@Model.Description</p>
-    }
- <p class="govuk-body govuk-!-margin-bottom-0">
- <a href="@Url.Action("GroupEdit", "ModernAdmin", new { id = Model.Id })" class="govuk-link govuk-link--no-visited-state">Edit group details</a>
-    </p>
-  </div>
+ @{
+   var groupDetailLede = await Html.PartialAsync("_AdminGroupDetailHeaderLede", Model);
+ }
+ @await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+   Caption = "Group",
+   Title = Model.Name,
+   Lede = groupDetailLede
+ })
 
  <div class="dfe-c-flex" style="gap:0.5rem;flex-wrap:wrap;margin-bottom:1rem;">
- @if (Model.IsActive) { <span class="dfe-c-tag dfe-c-tag--green">Active</span> }
- else { <span class="dfe-c-tag dfe-c-tag--grey">Inactive</span> }
- @if (Model.IsSystemGroup) { <span class="dfe-c-tag dfe-c-tag--blue">System group</span> }
+ @if (Model.IsActive) { <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--green">Active</span> }
+ else { <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--grey">Inactive</span> }
+ @if (Model.IsSystemGroup) { <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--blue">System group</span> }
   </div>
 
   @if (ViewBag.AdminError != null)
@@ -46,7 +44,7 @@
   }
   @if (ViewBag.AdminMessage != null)
   {
- <div class="govuk-notification-banner govuk-notification-banner--success dfe-c-mb-3" role="region" aria-labelledby="group-notif-title">
+ <div class="govuk-notification-banner govuk-notification-banner--success govuk-!-margin-bottom-3" role="region" aria-labelledby="group-notif-title">
  <div class="govuk-notification-banner__header">
  <h2 class="govuk-notification-banner__title" id="group-notif-title">Success</h2>
       </div>
@@ -61,32 +59,33 @@
  <button type="button" class="govuk-button" id="btn-open-add-member" aria-haspopup="dialog" aria-controls="dlg-add-member" data-dialog-open="dlg-add-member">Add member</button>
   </div>
 
- <div class="dfe-c-table-wrap" style="margin-bottom:1.5rem;">
-    <table >
-      <thead>
-        <tr>
- <th data-sort-bound="1" class="sortable">Name</th>
- <th data-sort-bound="1" class="sortable">Email</th>
- <th data-sort-bound="1" class="sortable">App role</th>
- <th data-sort-bound="1" class="sortable">Added</th>
- <th><span class="govuk-visually-hidden">Actions</span></th>
+ <div class="dfe-f-table-wrapper" style="margin-bottom:1.5rem;" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+    <table class="govuk-table">
+      <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+ <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Name</button></th>
+ <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Email</button></th>
+ <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">App role</button></th>
+ <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Added</button></th>
+ <th scope="col" class="govuk-table__header govuk-table__header--numeric"><span class="govuk-visually-hidden">Actions</span></th>
         </tr>
       </thead>
-      <tbody>
+      <tbody class="govuk-table__body">
         @if (Model.Members.Count == 0)
         {
- <tr><td colspan="5" class="dfe-c-text-muted">No members yet. Use <strong>Add member</strong> to add someone from the directory.</td></tr>
+ <tr class="govuk-table__row"><td colspan="5" class="dfe-c-text-muted">No members yet. Use <strong>Add member</strong> to add someone from the directory.</td></tr>
         }
         else
         {
           foreach (var m in Model.Members)
           {
-            <tr>
-              <td><strong>@m.Name</strong></td>
-              <td>@m.Email</td>
-              <td>@m.Role</td>
-              <td>@m.AssignedAt.ToString("d MMM yyyy")</td>
-              <td style="text-align:right;white-space:nowrap;">
+            <tr class="govuk-table__row">
+              <td class="govuk-table__cell"><strong>@m.Name</strong></td>
+              <td class="govuk-table__cell">@m.Email</td>
+              <td class="govuk-table__cell">@m.Role</td>
+              <td class="govuk-table__cell">@m.AssignedAt.ToString("d MMM yyyy")</td>
+              <td class="govuk-table__cell" style="text-align:right;white-space:nowrap;">
                 <form method="post"
                       action="@Url.Action("GroupRemoveMember", "ModernAdmin", new { id = Model.Id })"
                       data-confirm-title="Remove member"
@@ -127,30 +126,31 @@
     }
   </div>
 
- <div class="dfe-c-table-wrap" style="margin-bottom:1.5rem;">
-    <table >
-      <thead>
-        <tr>
- <th data-sort-bound="1" class="sortable">Feature</th>
- <th data-sort-bound="1" class="sortable">Code</th>
- <th data-sort-bound="1" class="sortable">Permission</th>
- <th><span class="govuk-visually-hidden">Actions</span></th>
+ <div class="dfe-f-table-wrapper" style="margin-bottom:1.5rem;" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+    <table class="govuk-table">
+      <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+ <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Feature</button></th>
+ <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Code</button></th>
+ <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Permission</button></th>
+ <th scope="col" class="govuk-table__header govuk-table__header--numeric"><span class="govuk-visually-hidden">Actions</span></th>
         </tr>
       </thead>
-      <tbody>
+      <tbody class="govuk-table__body">
         @if (Model.Features.Count == 0)
         {
- <tr><td colspan="4" class="dfe-c-text-muted">No feature permissions assigned.</td></tr>
+ <tr class="govuk-table__row"><td colspan="4" class="dfe-c-text-muted">No feature permissions assigned.</td></tr>
         }
         else
         {
           foreach (var f in Model.Features)
           {
-            <tr>
-              <td><strong>@f.FeatureName</strong></td>
-              <td><code>@f.FeatureCode</code></td>
- <td><span class="dfe-c-tag dfe-c-tag--blue">@f.Permission.ToUpper()</span></td>
-              <td style="text-align:right;white-space:nowrap;">
+            <tr class="govuk-table__row">
+              <td class="govuk-table__cell"><strong>@f.FeatureName</strong></td>
+              <td class="govuk-table__cell"><code>@f.FeatureCode</code></td>
+ <td class="govuk-table__cell"><span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--blue">@f.Permission.ToUpper()</span></td>
+              <td class="govuk-table__cell" style="text-align:right;white-space:nowrap;">
                 <form method="post"
                       action="@Url.Action("GroupRemovePermission", "ModernAdmin", new { id = Model.Id })"
                       style="display:inline;"

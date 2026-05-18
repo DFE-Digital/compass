@@ -16,8 +16,10 @@ public class ApiAuthenticationMiddleware
 
     public async Task InvokeAsync(HttpContext context, IApiTokenService apiTokenService)
     {
-        // Only apply to /api/v1/* endpoints
-        if (!context.Request.Path.StartsWithSegments("/api/v1"))
+        // Apply to /api/v1/* (Service Register, etc.) and /api/products/fips/* (FIPS lookup JSON — same Bearer tokens).
+        var isApiV1 = context.Request.Path.StartsWithSegments("/api/v1");
+        var isFipsProductLookups = context.Request.Path.StartsWithSegments("/api/products/fips");
+        if (!isApiV1 && !isFipsProductLookups)
         {
             await _next(context);
             return;

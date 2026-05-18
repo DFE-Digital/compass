@@ -1,27 +1,10 @@
 @model Compass.Models.Modern.Work.WorkRegisterViewModel
 @using Compass.Models.Modern.Work
+@using Compass.ViewModels.Modern
 @{
     ViewData["Title"] = Model.PageTitle;
     var activePausedCount = Model.ActivePaused.Count;
-    var totalRegisterCount = Model.ActiveCount + Model.PausedCount + Model.CompletedCount + Model.CancelledCount;
     var businessAreaCount = Model.BusinessAreas?.Count ?? 0;
-    string RagBadgeClass(string? name) {
-        if (string.IsNullOrEmpty(name)) return "rag-badge rag-none";
-        var n = (name ?? "").ToLowerInvariant();
-        if (n.Contains("green")) return "rag-badge rag-green";
-        if (n.Contains("amber") && n.Contains("red")) return "rag-badge rag-amber-red";
-        if (n.Contains("red")) return "rag-badge rag-red";
-        if (n.Contains("amber")) return "rag-badge rag-amber";
-        return "rag-badge rag-none";
-    }
-    string PriorityClass(string? name) {
-        if (string.IsNullOrEmpty(name)) return "wreg-priority wreg-priority--medium";
-        var n = (name ?? "").ToLowerInvariant();
-        if (n.Contains("critical")) return "wreg-priority wreg-priority--critical";
-        if (n.Contains("high")) return "wreg-priority wreg-priority--high";
-        if (n.Contains("low")) return "wreg-priority wreg-priority--low";
-        return "wreg-priority wreg-priority--medium";
-    }
     var indexAction = "Index";
 }
 @section Breadcrumbs {
@@ -30,41 +13,38 @@
  <li class="govuk-breadcrumbs__list-item" aria-current="page">@Model.PageTitle</li>
 }
 
-<div class="dfe-c-flex--between dfe-c-mb-3" style="flex-wrap:wrap;gap:1rem;">
- <div class="dfe-c-page-title" style="margin:0">
- <div class="dfe-c-page-title__caption">Work</div>
- <h1 class="dfe-c-page-title__heading">@Model.PageTitle</h1>
- <p class="dfe-c-page-title__lede">@totalRegisterCount work items (excludes deleted)</p>
- <p class="dfe-c-body dfe-c-text-muted dfe-c-mb-0 dfe-c-mt-1">@Model.PageDescription</p>
-  </div>
- <div class="dfe-c-export-group" style="margin:0;">
- <a href="@Url.Action("DownloadExcel", "Exports")" class="govuk-button govuk-button--outline-blue">Export Excel</a>
- <a href="@Url.Action("Index", "Exports", new { section = "work" })" class="govuk-button govuk-button--outline-blue">All exports</a>
- <a href="@Url.Action("Create", "ModernWork")" class="govuk-button">Create work item</a>
-  </div>
-</div>
+@{
+  var indexHeaderActions = await Html.PartialAsync("_WorkIndexHeaderActions");
+  var indexHeaderLede = await Html.PartialAsync("_WorkIndexHeaderLede", Model);
+}
+@await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+  Caption = "Work",
+  Title = Model.PageTitle,
+  Lede = indexHeaderLede,
+  Actions = indexHeaderActions
+})
 
 
-  <!-- Summary metrics (dfe-c-card-grid + dfe-c-metric — legacy .grid/.metric classes are not in modern CSS) -->
- <div class="dfe-c-card-grid dfe-c-card-grid--4 dfe-c-mb-3" role="region" aria-label="Work register summary">
- <div class="dfe-c-metric dfe-c-metric--green">
- <div class="dfe-c-metric__number">@Model.ActiveCount</div>
- <div class="dfe-c-metric__label">Active work items</div>
+  <!-- Summary metrics -->
+ <div class="dfe-f-card-grid govuk-!-margin-bottom-3" role="region" aria-label="Work register summary">
+ <div class="dfe-f-stat-card dfe-f-stat-card--tint-green">
+ <p class="govuk-body-s dfe-f-stat-card__label">Active work items</p>
+ <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@Model.ActiveCount</p>
     </div>
- <div class="dfe-c-metric dfe-c-metric--amber">
- <div class="dfe-c-metric__number">@Model.PausedCount</div>
- <div class="dfe-c-metric__label">Paused</div>
+ <div class="dfe-f-stat-card dfe-f-stat-card--tint-orange">
+ <p class="govuk-body-s dfe-f-stat-card__label">Paused</p>
+ <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@Model.PausedCount</p>
     </div>
- <div class="dfe-c-metric @(Model.RagRedCount> 0 ?"dfe-c-metric--red" : "dfe-c-metric--teal")">
- <div class="dfe-c-metric__number">@Model.RagRedCount</div>
- <div class="dfe-c-metric__label" style="@(Model.RagRedCount> 0 ? "color:#d4351c;font-weight:700" : "")">@(Model.RagRedCount> 0 ? "⚠ RAG: Red" : "RAG: Red")</div>
+ <div class="dfe-f-stat-card @(Model.RagRedCount > 0 ? "dfe-f-stat-card--tint-red" : "dfe-f-stat-card--tint-teal")">
+ <p class="govuk-body-s dfe-f-stat-card__label">@(Model.RagRedCount > 0 ? "⚠ RAG: Red" : "RAG: Red")</p>
+ <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@Model.RagRedCount</p>
     </div>
- <div class="dfe-c-metric dfe-c-metric--navy">
- <div class="dfe-c-metric__number">@Model.AwaitingMonthlyCount</div>
- <div class="dfe-c-metric__label">Awaiting monthly update</div>
+ <div class="dfe-f-stat-card dfe-f-stat-card--tint-blue">
+ <p class="govuk-body-s dfe-f-stat-card__label">Awaiting monthly update</p>
+ <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@Model.AwaitingMonthlyCount</p>
       @if (Model.AwaitingMonthlyOverdue)
       {
- <div class="dfe-c-metric__note" style="color:var(--red, #d4351c);font-weight:700">Overdue</div>
+ <p class="govuk-body-s govuk-!-margin-top-2 govuk-!-margin-bottom-0">Overdue</p>
       }
     </div>
   </div>
@@ -258,7 +238,7 @@
  </div>
  <div class="filter-panel__actions">
  <button type="submit" class="govuk-button">Apply</button>
- <a href="@Url.Action(indexAction, "ModernWork")" class="govuk-link">Clear filters</a>
+ <a href="@Url.Action(indexAction, "ModernWork")" class="govuk-link govuk-link--no-visited-state">Clear filters</a>
       </div>
     </div>
       </details>
@@ -284,54 +264,74 @@
     </div>
   </form>
 
-  <!-- Tabs -->
- <div class="tabs">
- <button type="button" class="tab on" onclick="switchTab(this,'wreg-active')">Active &amp; Paused (@activePausedCount)</button>
- <button type="button" class="tab" onclick="switchTab(this,'wreg-completed')">Completed (@Model.CompletedCount)</button>
- <button type="button" class="tab" onclick="switchTab(this,'wreg-cancelled')">Cancelled (@Model.CancelledCount)</button>
-  </div>
+  <!-- Work register status switches -->
+ <nav class="tabs dfe-f-sub-navigation govuk-!-margin-bottom-3" aria-label="Work register status">
+ <ul class="dfe-f-sub-navigation__list">
+ <li class="dfe-f-sub-navigation__item dfe-f-sub-navigation__item--active">
+ <button type="button" class="dfe-f-sub-navigation__link govuk-link tab on" onclick="switchTab(this,'wreg-active')">Active &amp; Paused (@activePausedCount)</button>
+ </li>
+ <li class="dfe-f-sub-navigation__item">
+ <button type="button" class="dfe-f-sub-navigation__link govuk-link tab" onclick="switchTab(this,'wreg-completed')">Completed (@Model.CompletedCount)</button>
+ </li>
+ <li class="dfe-f-sub-navigation__item">
+ <button type="button" class="dfe-f-sub-navigation__link govuk-link tab" onclick="switchTab(this,'wreg-cancelled')">Cancelled (@Model.CancelledCount)</button>
+ </li>
+ </ul>
+  </nav>
 
   <!-- Active & Paused -->
  <div id="wreg-active" class="tab-pane on">
     <div style="overflow-x:auto;">
- <div class="dfe-c-table-wrap">
- <table class="modern-work-table">
-        <thead>
-          <tr>
-            <th>Title</th>
-            <th>Status</th>
-            <th>Primary contact</th>
-            <th>Business area</th>
-            <th>Phase</th>
-            <th>Priority</th>
-            <th>Milestones</th>
-            <th>RAG</th>
-            <th>@Model.RegisterMonthlyColumnHeader</th>
+ <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+ <table class="govuk-table modern-work-table">
+        <thead class="govuk-table__head">
+          <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Title</button>
+        </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Status</button>
+        </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Primary contact</button>
+        </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Business area</button>
+        </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Phase</button>
+        </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Priority</button>
+        </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Milestones</button>
+        </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">RAG</button>
+        </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">@Model.RegisterMonthlyColumnHeader</button>
+        </th>
           </tr>
         </thead>
-        <tbody>
+        <tbody class="govuk-table__body">
           @foreach (var r in Model.ActivePaused)
           {
  <tr class="wreg-row" data-searchable="@(r.Title ?? "") @(r.PrimaryContactName ?? "") @(r.BusinessAreaName ?? "") @(r.PhaseName ?? "") @(r.PriorityName ?? "") @(r.RagName ?? "") @(r.Id.ToString("D8"))" onclick="window.location.href='@Url.Action("Detail", "ModernWork", new { id = r.Id })';">
-              <td>
-                <a href="@Url.Action("Detail", "ModernWork", new { id = r.Id })">@r.Title</a>
-                <div style="font-size:12px;color:#505a5f;margin-top:2px;">WI-@r.Id.ToString("D8")</div>
+              <td class="govuk-table__cell">
+                <a href="@Url.Action("Detail", "ModernWork", new { id = r.Id })" class="govuk-link govuk-link--no-visited-state">@r.Title</a>
+                <div class="govuk-body-s dfe-t-u-text-muted modern-work-table__meta">WI-@r.Id.ToString("D8")</div>
               </td>
- <td><span class="@(r.Status =="Active" ? "wreg-status--active" : "wreg-status--paused")">@r.Status</span></td>
-              <td>@(r.PrimaryContactName ?? "—")</td>
-              <td>@(r.BusinessAreaName ?? "—")</td>
- <td><span class="wreg-phase" style="background:#d4efed;color:#00695C;border-color:#9ed0cb;">@(r.PhaseName ?? "—")</span></td>
- <td><span class="@PriorityClass(r.PriorityName)">@(r.PriorityName ?? "—")</span></td>
- <td><span class="wreg-milestone-count">@r.MilestoneCount</span></td>
-              <td>@if (!string.IsNullOrEmpty(r.RagBackgroundColourKey) || !string.IsNullOrEmpty(r.RagTextColourKey))
-              {
- <span class="rag-badge" style="@(string.IsNullOrEmpty(r.RagBackgroundColourKey) ? "" : "background-color: var(--govuk-colour-" + r.RagBackgroundColourKey + ");")@(string.IsNullOrEmpty(r.RagTextColourKey) ? "" : " color: var(--govuk-colour-" + r.RagTextColourKey + ");")">@(r.RagName ?? "—")</span>
-              }
-              else
-              {
- <span class="@RagBadgeClass(r.RagName)">@(r.RagName ?? "—")</span>
-              }</td>
-              <td>@await Html.PartialAsync("~/Views/Modern/Work/_WorkRegisterMonthlyUpdateCell.cshtml", r)</td>
+ <td class="govuk-table__cell"><span class="@WorkBadgeCss.StatusDfeFrontendBadgeClass(r.Status)">@r.Status</span></td>
+              <td class="govuk-table__cell">@(r.PrimaryContactName ?? "—")</td>
+              <td class="govuk-table__cell">@(r.BusinessAreaName ?? "—")</td>
+ <td class="govuk-table__cell"><span class="@WorkBadgeCss.PhaseDfeFrontendBadgeClass(r.PhaseName)">@(r.PhaseName ?? "—")</span></td>
+ <td class="govuk-table__cell"><span class="@WorkBadgeCss.PriorityDfeFrontendBadgeClass(r.PriorityName)">@((r.PriorityName ?? "—").ToUpperInvariant())</span></td>
+ <td class="govuk-table__cell"><span class="wreg-milestone-count">@r.MilestoneCount</span></td>
+ <td class="govuk-table__cell"><span class="@WorkBadgeCss.RagDfeFrontendBadgeClass(r.RagCssClass, r.RagName)">@((r.RagName ?? "—").ToUpperInvariant())</span></td>
+              <td class="govuk-table__cell">@await Html.PartialAsync("~/Views/Modern/Work/_WorkRegisterMonthlyUpdateCell.cshtml", r)</td>
             </tr>
           }
         </tbody>
@@ -347,33 +347,48 @@
   <!-- Completed -->
  <div id="wreg-completed" class="tab-pane">
     <div style="overflow-x:auto;">
- <div class="dfe-c-table-wrap">
- <table class="modern-work-table">
-        <thead>
-          <tr>
-            <th>Title</th>
-            <th>Primary contact</th>
-            <th>Business area</th>
-            <th>Phase</th>
-            <th>Priority</th>
-            <th>Milestones</th>
-            <th>Completed</th>
+ <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+ <table class="govuk-table modern-work-table">
+        <thead class="govuk-table__head">
+          <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Title</button>
+        </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Primary contact</button>
+        </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Business area</button>
+        </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Phase</button>
+        </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Priority</button>
+        </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Milestones</button>
+        </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Completed</button>
+        </th>
           </tr>
         </thead>
-        <tbody>
+        <tbody class="govuk-table__body">
           @foreach (var r in Model.Completed)
           {
  <tr class="wreg-row" data-searchable="@(r.Title ?? "") @(r.PrimaryContactName ?? "") @(r.BusinessAreaName ?? "") @(r.PhaseName ?? "") @(r.PriorityName ?? "") @(r.Id.ToString("D8"))" onclick="window.location.href='@Url.Action("Detail", "ModernWork", new { id = r.Id })';">
-              <td>
-                <a href="@Url.Action("Detail", "ModernWork", new { id = r.Id })">@r.Title</a>
-                <div style="font-size:12px;color:#505a5f;margin-top:2px;">WI-@r.Id.ToString("D8")</div>
+              <td class="govuk-table__cell">
+                <a href="@Url.Action("Detail", "ModernWork", new { id = r.Id })" class="govuk-link govuk-link--no-visited-state">@r.Title</a>
+                <div class="govuk-body-s dfe-t-u-text-muted modern-work-table__meta">WI-@r.Id.ToString("D8")</div>
               </td>
-              <td>@(r.PrimaryContactName ?? "—")</td>
-              <td>@(r.BusinessAreaName ?? "—")</td>
- <td><span class="wreg-phase" style="background:#f3f2f1;color:#505a5f;border-color:#dee0e2;">@(r.PhaseName ?? "—")</span></td>
- <td><span class="@PriorityClass(r.PriorityName)">@(r.PriorityName ?? "—")</span></td>
- <td><span class="wreg-milestone-count">@r.MilestoneCount</span></td>
-              <td style="font-size:13px;color:#505a5f;">@(r.CompletedAt ?? "—")</td>
+              <td class="govuk-table__cell">@(r.PrimaryContactName ?? "—")</td>
+              <td class="govuk-table__cell">@(r.BusinessAreaName ?? "—")</td>
+ <td class="govuk-table__cell"><span class="@WorkBadgeCss.PhaseDfeFrontendBadgeClass(r.PhaseName)">@(r.PhaseName ?? "—")</span></td>
+ <td class="govuk-table__cell"><span class="@WorkBadgeCss.PriorityDfeFrontendBadgeClass(r.PriorityName)">@((r.PriorityName ?? "—").ToUpperInvariant())</span></td>
+ <td class="govuk-table__cell"><span class="wreg-milestone-count">@r.MilestoneCount</span></td>
+              <td class="govuk-table__cell" style="font-size:13px;color:#505a5f;">@(r.CompletedAt ?? "—")</td>
             </tr>
           }
         </tbody>
@@ -389,33 +404,48 @@
   <!-- Cancelled -->
  <div id="wreg-cancelled" class="tab-pane">
     <div style="overflow-x:auto;">
- <div class="dfe-c-table-wrap">
- <table class="modern-work-table">
-        <thead>
-          <tr>
-            <th>Title</th>
-            <th>Primary contact</th>
-            <th>Business area</th>
-            <th>Priority</th>
-            <th>Milestones</th>
-            <th>Cancelled</th>
-            <th>Reason</th>
+ <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+ <table class="govuk-table modern-work-table">
+        <thead class="govuk-table__head">
+          <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Title</button>
+        </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Primary contact</button>
+        </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Business area</button>
+        </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Priority</button>
+        </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Milestones</button>
+        </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Cancelled</button>
+        </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Reason</button>
+        </th>
           </tr>
         </thead>
-        <tbody>
+        <tbody class="govuk-table__body">
           @foreach (var r in Model.Cancelled)
           {
  <tr class="wreg-row" data-searchable="@(r.Title ?? "") @(r.PrimaryContactName ?? "") @(r.BusinessAreaName ?? "") @(r.PriorityName ?? "") @(r.CancelledReason ?? "") @(r.Id.ToString("D8"))" onclick="window.location.href='@Url.Action("Detail", "ModernWork", new { id = r.Id })';">
-              <td>
-                <a href="@Url.Action("Detail", "ModernWork", new { id = r.Id })">@r.Title</a>
-                <div style="font-size:12px;color:#505a5f;margin-top:2px;">WI-@r.Id.ToString("D8")</div>
+              <td class="govuk-table__cell">
+                <a href="@Url.Action("Detail", "ModernWork", new { id = r.Id })" class="govuk-link govuk-link--no-visited-state">@r.Title</a>
+                <div class="govuk-body-s dfe-t-u-text-muted modern-work-table__meta">WI-@r.Id.ToString("D8")</div>
               </td>
-              <td>@(r.PrimaryContactName ?? "—")</td>
-              <td>@(r.BusinessAreaName ?? "—")</td>
- <td><span class="@PriorityClass(r.PriorityName)">@(r.PriorityName ?? "—")</span></td>
- <td><span class="wreg-milestone-count">@r.MilestoneCount</span></td>
-              <td style="font-size:13px;color:#505a5f;">@(r.CompletedAt ?? "—")</td>
-              <td style="font-size:13px;color:#505a5f;">@(r.CancelledReason ?? "—")</td>
+              <td class="govuk-table__cell">@(r.PrimaryContactName ?? "—")</td>
+              <td class="govuk-table__cell">@(r.BusinessAreaName ?? "—")</td>
+ <td class="govuk-table__cell"><span class="@WorkBadgeCss.PriorityDfeFrontendBadgeClass(r.PriorityName)">@((r.PriorityName ?? "—").ToUpperInvariant())</span></td>
+ <td class="govuk-table__cell"><span class="wreg-milestone-count">@r.MilestoneCount</span></td>
+              <td class="govuk-table__cell" style="font-size:13px;color:#505a5f;">@(r.CompletedAt ?? "—")</td>
+              <td class="govuk-table__cell" style="font-size:13px;color:#505a5f;">@(r.CancelledReason ?? "—")</td>
             </tr>
           }
         </tbody>
@@ -447,8 +477,11 @@
   window.switchTab = function(btn, panelId) {
     var parent = btn.closest('.dfe-c-page') || document.body;
     parent.querySelectorAll('.tabs .tab').forEach(function(t){ t.classList.remove('on'); });
+    parent.querySelectorAll('.tabs .dfe-f-sub-navigation__item').forEach(function(li){ li.classList.remove('dfe-f-sub-navigation__item--active'); });
     parent.querySelectorAll('.tab-pane').forEach(function(p){ p.classList.remove('on'); });
     btn.classList.add('on');
+    var li = btn.closest('.dfe-f-sub-navigation__item');
+    if (li) li.classList.add('dfe-f-sub-navigation__item--active');
     var panel = document.getElementById(panelId);
     if (panel) panel.classList.add('on');
     var tabField = document.getElementById('work-active-tab');

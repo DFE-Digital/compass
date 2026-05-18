@@ -1,6 +1,9 @@
+using System.Collections.Generic;
 using Compass.Data;
 using Compass.Models;
+using Compass.Services;
 using Compass.Services.Dashboard;
+using Compass.Services.Fips;
 using Compass.ViewModels.Dashboard;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Hosting;
@@ -18,17 +21,20 @@ public class ModernDashboardController : Controller
     private readonly CompassDbContext _context;
     private readonly IWebHostEnvironment _environment;
     private readonly IHomeDashboardViewModelBuilder _dashboardBuilder;
+    private readonly IGlobalFeatureToggleService _globalFeatureToggle;
 
     public ModernDashboardController(
         ILogger<ModernDashboardController> logger,
         CompassDbContext context,
         IWebHostEnvironment environment,
-        IHomeDashboardViewModelBuilder dashboardBuilder)
+        IHomeDashboardViewModelBuilder dashboardBuilder,
+        IGlobalFeatureToggleService globalFeatureToggle)
     {
         _logger = logger;
         _context = context;
         _environment = environment;
         _dashboardBuilder = dashboardBuilder;
+        _globalFeatureToggle = globalFeatureToggle;
     }
 
     [HttpGet("dashboard")]
@@ -120,6 +126,19 @@ public class ModernDashboardController : Controller
 
             var preference = await _dashboardBuilder.GetOrCreateDashboardPreferenceAsync(effectiveUser);
             var viewModel = await _dashboardBuilder.BuildDashboardViewModelAsync(effectiveUser, effectiveUserEmail, preference, Url, HttpContext);
+
+            var fipsRegisterEnabled =
+                await _globalFeatureToggle.IsFeatureEnabledForPrincipalAsync(FeatureCodes.Fips, User);
+            ViewBag.FipsServiceRegisterEnabled = fipsRegisterEnabled;
+            if (fipsRegisterEnabled)
+            {
+                var myRegisterProducts = await FipsProductListingHelper.BuildMyProductDtosForDashboardAsync(
+                    _context, effectiveUserEmail);
+                viewModel.MyProducts = myRegisterProducts;
+                viewModel.Metrics.ProductCount = myRegisterProducts.Count;
+            }
+
+            ViewBag.DashboardServiceRegisterProductIdByCmdbKey = null;
 
             ViewBag.MainNavSection = "home";
             return View("~/Views/Modern/Dashboard/Index.cshtml", viewModel);

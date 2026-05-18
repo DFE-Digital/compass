@@ -1,8 +1,11 @@
 @model FipsProductDetailViewModel
+@using Compass.ViewModels.Modern
+@using Compass.Models
 @{
-    ViewData["Title"] = Model.Product.Title + " — Service register (operations)";
+    ViewData["Title"] = Model.Product.Title + " — Service register";
     var p = Model.Product;
     var detailTab = Model.ActiveDetailTab;
+    var editInfoUrl = Url.Action("ServiceRegisterProduct", "ModernOperations", new { id = p.Id, tab = "information", edit = true }) ?? "#";
 }
 
 @section Breadcrumbs {
@@ -14,9 +17,9 @@
 
 @if (TempData["Success"] != null)
 {
- <div class="govuk-notification-banner govuk-notification-banner--success govuk-!-margin-bottom-4" role="region">
+ <div class="govuk-notification-banner govuk-notification-banner--success govuk-!-margin-bottom-3" role="region" aria-labelledby="sr-product-success-title">
  <div class="govuk-notification-banner__header">
- <h2 class="govuk-notification-banner__title">Success</h2>
+ <h2 class="govuk-notification-banner__title" id="sr-product-success-title">Success</h2>
         </div>
  <div class="govuk-notification-banner__content">
  <p class="govuk-notification-banner__heading">@TempData["Success"]</p>
@@ -25,39 +28,31 @@
 }
 @if (TempData["Error"] != null)
 {
- <div class="govuk-error-summary govuk-!-margin-bottom-4" role="alert">
- <h2 class="govuk-error-summary__title">Something went wrong</h2>
+ <div class="govuk-error-summary govuk-!-margin-bottom-3" role="alert">
+ <h2 class="govuk-error-summary__title">There is a problem</h2>
  <div class="govuk-error-summary__body">@TempData["Error"]</div>
     </div>
 }
 
-<div class="dfe-c-screen">
- <div class="dfe-c-flex--between dfe-c-mb-3" style="flex-wrap:wrap;gap:1rem;align-items:flex-start;">
- <div class="dfe-c-screen__header" style="margin:0;">
- <h1 class="govuk-heading-l govuk-!-margin-bottom-0">@p.Title</h1>
- <p class="govuk-body-s govuk-!-margin-top-2 govuk-!-margin-bottom-0" style="color:#505a5f;">Operations view — full edit, single-product CMDB sync, and stored CMDB JSON snapshot.</p>
-        </div>
- <div class="dfe-c-flex" style="gap:0.75rem;flex-wrap:wrap;align-items:center;">
- <form id="fips-cmdb-single-sync-antiforgery" method="post" class="govuk-!-margin-bottom-0" aria-hidden="true">
-                @Html.AntiForgeryToken()
-            </form>
- <button type="button" class="btn btn-secondary" id="fips-cmdb-single-sync-start" aria-haspopup="dialog">Sync this product from CMDB</button>
- <a class="govuk-link govuk-link--no-visited-state govuk-!-font-weight-bold" href="@Url.Action("ServiceRegister", "ModernOperations")">Service register list · sync all</a>
-        </div>
-    </div>
+@{
+  var srProductActions = await Html.PartialAsync("~/Views/Modern/Shared/_ServiceRegisterProductHeaderActions.cshtml", Model);
+}
+@await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+  Caption = "Operations",
+  Title = p.Title,
+  Lede = null,
+  Actions = srProductActions
+})
 
- <div class="tabs dfe-c-mb-3" role="tablist" aria-label="Product sections">
-        <a href="@Url.Action("ServiceRegisterProduct", "ModernOperations", new { id = p.Id, tab = "information", edit = Model.EditMode })"
- class="tab @(detailTab =="information" ? "on" : "")" role="tab" aria-selected="@(detailTab == "information")" aria-controls="d-ops-fips-information" id="tab-ops-fips-information">Information</a>
-        <a href="@Url.Action("ServiceRegisterProduct", "ModernOperations", new { id = p.Id, tab = "history" })"
- class="tab @(detailTab =="history" ? "on" : "")" role="tab" aria-selected="@(detailTab == "history")" aria-controls="d-ops-fips-history" id="tab-ops-fips-history">History</a>
-        <a href="@Url.Action("ServiceRegisterProduct", "ModernOperations", new { id = p.Id, tab = "risks" })"
- class="tab @(detailTab =="risks" ? "on" : "")" role="tab" aria-selected="@(detailTab == "risks")" aria-controls="d-fips-risks" id="tab-ops-fips-risks">Risks (@Model.ProductRisks.Count)</a>
-        <a href="@Url.Action("ServiceRegisterProduct", "ModernOperations", new { id = p.Id, tab = "issues" })"
- class="tab @(detailTab =="issues" ? "on" : "")" role="tab" aria-selected="@(detailTab == "issues")" aria-controls="d-fips-issues" id="tab-ops-fips-issues">Issues (@Model.ProductIssues.Count)</a>
-        <a href="@Url.Action("ServiceRegisterProduct", "ModernOperations", new { id = p.Id, tab = "cmdb" })"
- class="tab @(detailTab =="cmdb" ? "on" : "")" role="tab" aria-selected="@(detailTab == "cmdb")" aria-controls="d-ops-fips-cmdb" id="tab-ops-fips-cmdb">CMDB snapshot (JSON)</a>
-    </div>
+<div class="fips-product-detail modern-operations-service-register-product">
+<div class="govuk-grid-row ops-fips-product-layout govuk-!-margin-top-4">
+<div class="govuk-grid-column-one-quarter-from-desktop ops-fips-product-layout__nav">
+  <div class="dfe-f-u-sticky govuk-!-margin-bottom-4 ops-fips-product-layout__nav-inner" style="--dfe-f-sticky-top: 1rem;">
+    @await Html.PartialAsync("~/Views/Modern/Shared/_ServiceRegisterProductSideNav.cshtml", Model)
+  </div>
+</div>
+<div class="govuk-grid-column-three-quarters-from-desktop">
+    @await Html.PartialAsync("~/Views/Modern/Shared/_ServiceRegisterProductRecordCard.cshtml", Model)
 
     @if (Model.EditMode && Model.CanManage && detailTab == "information")
     {
@@ -74,16 +69,15 @@
             Hint = "Search and select a user from Entra.",
             DefaultSummaryText = "No user selected."
         };
- <div class="dfe-c-form-layout">
- <div class="dfe-c-form-layout__main">
+        <p class="govuk-body-s govuk-!-margin-bottom-4" style="color:#505a5f;">Run <strong>Sync this product from CMDB</strong> (top right) to refresh title, description, contacts, and the JSON snapshot on the CMDB tab.</p>
+ <div class="dfe-c-card dfe-c-card--plain govuk-!-margin-bottom-4">
  <div id="d-ops-fips-information" class="tab-pane on" role="tabpanel">
- <div class="dfe-c-card dfe-c-card--plain">
                         <form method="post" novalidate asp-controller="ModernOperations" asp-action="ServiceRegisterProductUpdate" asp-route-id="@p.Id">
                             @Html.AntiForgeryToken()
 
  <fieldset class="govuk-fieldset govuk-!-margin-bottom-6">
  <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">CMDB reference</legend>
- <p class="govuk-body-s govuk-!-margin-bottom-3" style="color:#505a5f;">Synced from CMDB. Use <strong>Sync this product from CMDB</strong> above to refresh title, description, contacts, and the JSON snapshot.</p>
+ <p class="govuk-body-s govuk-!-margin-bottom-3" style="color:#505a5f;">Synced from CMDB.</p>
  <dl class="govuk-summary-list govuk-!-margin-bottom-0">
  <div class="govuk-summary-list__row">
  <dt class="govuk-summary-list__key">CMDB description</dt>
@@ -234,15 +228,17 @@
                             </div>
                         </form>
                     </div>
+ </div>
 
- <h2 class="govuk-heading-m govuk-!-margin-top-6">People</h2>
+ <div class="dfe-c-card dfe-c-card--plain govuk-!-margin-bottom-0">
+ <h2 class="govuk-heading-s govuk-!-margin-top-0 govuk-!-margin-bottom-3">People</h2>
                     @if (p.Contacts.Count == 0)
                     {
- <p class="govuk-body">No contacts assigned.</p>
+ <p class="govuk-body govuk-!-margin-bottom-0">No contacts assigned.</p>
                     }
                     else
                     {
- <dl class="govuk-summary-list">
+ <dl class="govuk-summary-list govuk-!-margin-bottom-0">
                             @foreach (var c in p.Contacts.OrderBy(c => c.FipsContactRole.DisplayOrder))
                             {
  <div class="govuk-summary-list__row">
@@ -268,82 +264,26 @@
                         </dl>
                     }
                 </div>
-            </div>
-
- <div class="dfe-c-form-layout__aside">
- <div class="dfe-c-sidebar">
- <div class="dfe-c-scard govuk-!-margin-bottom-4">
- <div class="dfe-c-scard__title">Product record</div>
- <p class="govuk-body govuk-!-margin-bottom-3">
- <span class="dfe-c-tag @ProductStatusDfeTagClass(p.Status)">@p.Status</span>
-                        </p>
- <dl class="dfe-c-scard__list">
-                            <dt>Entry ID</dt>
- <dd class="govuk-!-font-size-16" style="word-break:break-all;">@p.Id</dd>
-                            <dt>Unique ID</dt>
-                            <dd>@(p.UniqueID == 0 ? "—" : p.UniqueID.ToString())</dd>
-                            @if (p.CMDBID != null)
-                            {
-                                <dt>CMDB ID</dt>
-                                <dd>@p.CMDBID</dd>
-                            }
-                            <dt>Access</dt>
-                            <dd>Central operations — edit any product</dd>
-                        </dl>
-                        @{
-                            var editTransitions = StatusTransitions(p.Status);
-                        }
-                        @if (editTransitions.Length > 0)
-                        {
- <div class="govuk-!-margin-top-3">
-                                @foreach (var t in editTransitions)
-                                {
-                                    if (t.Status == CMDBProductStatus.Inactive)
-                                    {
- <form method="post" asp-controller="ModernOperations" asp-action="ServiceRegisterProductChangeStatus" asp-route-id="@p.Id" class="govuk-!-margin-bottom-2" data-confirm-title="Set product to inactive" data-confirm-message="The product will be treated as retired in Compass and will not be included in the active FIPS/CMDB sync. You can reactivate it later.">
-                                            @Html.AntiForgeryToken()
-                                            <input type="hidden" name="newStatus" value="@((int)t.Status)" />
- <button type="submit" class="govuk-button govuk-button--warning govuk-!-margin-bottom-0">@t.Label</button>
-                                        </form>
-                                    }
-                                    else
-                                    {
- <form method="post" asp-controller="ModernOperations" asp-action="ServiceRegisterProductChangeStatus" asp-route-id="@p.Id" class="govuk-!-margin-bottom-2">
-                                            @Html.AntiForgeryToken()
-                                            <input type="hidden" name="newStatus" value="@((int)t.Status)" />
- <button type="submit" class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0">@t.Label</button>
-                                        </form>
-                                    }
-                                }
-                            </div>
-                        }
-                    </div>
- <div class="dfe-c-scard">
- <div class="dfe-c-scard__title">CMDB data</div>
- <p class="govuk-body-s govuk-!-margin-bottom-0" style="color:#505a5f;">Run sync to refresh the snapshot shown on the <strong>CMDB snapshot</strong> tab.</p>
-                    </div>
-                </div>
-            </div>
-        </div>
     }
     else
     {
- <div class="dfe-c-form-layout">
- <div class="dfe-c-form-layout__main">
 
- <div id="d-ops-fips-information" class="tab-pane @(detailTab =="information" ? "on" : "")" role="tabpanel">
- <h2 class="govuk-heading-m">Overview</h2>
- <dl class="govuk-summary-list">
-                    @{ var readOnlyFields = new (string Label, string? Value, bool IsUrl)[] {
-                        ("CMDB description", p.CMDBDescription, false),
-                        ("User description", p.UserDescription, false),
-                        ("Phase", p.Phase?.Name, false),
-                        ("Business area", Model.BusinessAreasDisplay, false),
-                        ("Channel", Model.ChannelsDisplay, false),
-                        ("User group", Model.UserGroupsDisplay, false),
-                        ("Type", Model.TypesDisplay, false),
-                        ("Enterprise service", p.IsEnterpriseService ? "Yes" : "No", false),
-                        ("Product URL", p.ProductURL, true)
+ <div id="d-ops-fips-information" class="tab-pane @(detailTab == "information" ? "on" : "")" role="tabpanel">
+ @if (detailTab == "information")
+ {
+   <div class="dfe-c-card dfe-c-card--plain govuk-!-margin-bottom-4">
+     <h2 class="govuk-heading-s govuk-!-margin-top-0 govuk-!-margin-bottom-3">Overview</h2>
+     <dl class="govuk-summary-list govuk-!-margin-bottom-0">
+                    @{ var readOnlyFields = new (string Label, string? Value, bool IsUrl, string ChangeVisuallyHidden)[] {
+                        ("CMDB description", p.CMDBDescription, false, "CMDB description"),
+                        ("User description", p.UserDescription, false, "user description"),
+                        ("Phase", p.Phase?.Name, false, "phase"),
+                        ("Business area", Model.BusinessAreasDisplay, false, "business area"),
+                        ("Channel", Model.ChannelsDisplay, false, "channel"),
+                        ("User group", Model.UserGroupsDisplay, false, "user group"),
+                        ("Type", Model.TypesDisplay, false, "type"),
+                        ("Enterprise service", p.IsEnterpriseService ? "Yes" : "No", false, "enterprise service"),
+                        ("Product URL", p.ProductURL, true, "product URL")
                     }; }
                     @foreach (var f in readOnlyFields)
                     {
@@ -359,6 +299,12 @@
                                     @(string.IsNullOrWhiteSpace(f.Value) ? "—" : f.Value)
                                 }
                             </dd>
+ @if (Model.CanManage)
+ {
+ <dd class="govuk-summary-list__actions">
+   <a class="govuk-link" href="@editInfoUrl">Change<span class="govuk-visually-hidden"> @f.ChangeVisuallyHidden</span></a>
+ </dd>
+ }
                         </div>
                     }
                     @foreach (var cat in Model.CategorisationSummaryLines)
@@ -366,18 +312,26 @@
  <div class="govuk-summary-list__row">
  <dt class="govuk-summary-list__key">@cat.GroupName</dt>
  <dd class="govuk-summary-list__value">@cat.ItemsDisplay</dd>
+ @if (Model.CanManage)
+ {
+ <dd class="govuk-summary-list__actions">
+   <a class="govuk-link" href="@editInfoUrl">Change<span class="govuk-visually-hidden"> @cat.GroupName</span></a>
+ </dd>
+ }
                         </div>
                     }
                 </dl>
+   </div>
 
- <h2 class="govuk-heading-m govuk-!-margin-top-6">People</h2>
+   <div class="dfe-c-card dfe-c-card--plain govuk-!-margin-bottom-0">
+ <h2 class="govuk-heading-s govuk-!-margin-top-0 govuk-!-margin-bottom-3">People</h2>
                 @if (p.Contacts.Count == 0)
                 {
- <p class="govuk-body">No contacts assigned.</p>
+ <p class="govuk-body govuk-!-margin-bottom-0">No contacts assigned.</p>
                 }
                 else
                 {
- <dl class="govuk-summary-list">
+ <dl class="govuk-summary-list govuk-!-margin-bottom-0">
                         @foreach (var c in p.Contacts.OrderBy(c => c.FipsContactRole.DisplayOrder))
                         {
  <div class="govuk-summary-list__row">
@@ -398,13 +352,21 @@
                                         <span>—</span>
                                     }
                                 </dd>
+ @if (Model.CanManage)
+ {
+ <dd class="govuk-summary-list__actions">
+   <a class="govuk-link" href="@editInfoUrl">Change<span class="govuk-visually-hidden"> @c.FipsContactRole.Name</span></a>
+ </dd>
+ }
                             </div>
                         }
                     </dl>
                 }
+   </div>
+ }
             </div>
 
- <div id="d-ops-fips-history" class="tab-pane @(detailTab =="history" ? "on" : "")" role="tabpanel">
+ <div id="d-ops-fips-history" class="tab-pane @(detailTab == "history" ? "on" : "")" role="tabpanel">
  <h2 class="govuk-heading-m">Change history</h2>
                 @if (Model.AuditHistory.Count == 0)
                 {
@@ -445,12 +407,12 @@
                 }
             </div>
 
- <div id="d-ops-fips-cmdb" class="tab-pane @(detailTab =="cmdb" ? "on" : "")" role="tabpanel">
+ <div id="d-ops-fips-cmdb" class="tab-pane @(detailTab == "cmdb" ? "on" : "")" role="tabpanel">
  <h2 class="govuk-heading-m">CMDB snapshot stored in Compass</h2>
  <p class="govuk-body">This is the JSON saved on the product row during the last successful CMDB sync (single or bulk). Use it for rules, support, and future reporting.</p>
                 @if (string.IsNullOrWhiteSpace(Model.CmdbSnapshotJsonFormatted))
                 {
- <p class="govuk-body govuk-!-margin-bottom-0">No snapshot yet. Run <strong>Sync this product from CMDB</strong> above.</p>
+ <p class="govuk-body govuk-!-margin-bottom-0">No snapshot yet. Run <strong>Sync this product from CMDB</strong> (top right).</p>
                 }
                 else
                 {
@@ -458,83 +420,41 @@
                 }
             </div>
 
-            <partial name="~/Views/Modern/Shared/_FipsProductRaidPanes.cshtml" model="Model" />
+            @if (ViewBag.ShowRaidNavigation == true)
+            {
+              <partial name="~/Views/Modern/Shared/_FipsProductRaidPanes.cshtml" model="Model" />
+            }
 
-        </div>
-
- <div class="dfe-c-form-layout__aside">
- <div class="dfe-c-sidebar">
- <div class="dfe-c-scard govuk-!-margin-bottom-4">
- <div class="dfe-c-scard__title">Product record</div>
- <p class="govuk-body govuk-!-margin-bottom-3">
- <span class="dfe-c-tag @ProductStatusDfeTagClass(p.Status)">@p.Status</span>
-                </p>
- <dl class="dfe-c-scard__list">
-                    <dt>Entry ID</dt>
- <dd class="govuk-!-font-size-16" style="word-break:break-all;">@p.Id</dd>
-                    <dt>Unique ID</dt>
-                    <dd>@(p.UniqueID == 0 ? "—" : p.UniqueID.ToString())</dd>
-                    @if (p.CMDBID != null)
-                    {
-                        <dt>CMDB ID</dt>
-                        <dd>@p.CMDBID</dd>
-                    }
-                    <dt>Access</dt>
-                    <dd>Central operations — edit any product</dd>
-                </dl>
-                @if (detailTab == "information")
-                {
- <div class="govuk-button-group govuk-!-margin-top-4 govuk-!-margin-bottom-0">
-                        <a href="@Url.Action("ServiceRegisterProduct", "ModernOperations", new { id = p.Id, tab = "information", edit = true })"
- class="govuk-button govuk-button--secondary">Edit entry</a>
-                    </div>
-                    var transitions = StatusTransitions(p.Status);
-                    @if (transitions.Length > 0)
-                    {
- <div class="govuk-!-margin-top-3">
-                            @foreach (var t in transitions)
-                            {
-                                if (t.Status == CMDBProductStatus.Inactive)
-                                {
- <form method="post" asp-controller="ModernOperations" asp-action="ServiceRegisterProductChangeStatus" asp-route-id="@p.Id" class="govuk-!-margin-bottom-2" data-confirm-title="Set product to inactive" data-confirm-message="The product will be treated as retired in Compass and will not be included in the active FIPS/CMDB sync. You can reactivate it later.">
-                                        @Html.AntiForgeryToken()
-                                        <input type="hidden" name="newStatus" value="@((int)t.Status)" />
- <button type="submit" class="govuk-button govuk-button--warning govuk-!-margin-bottom-0">@t.Label</button>
-                                    </form>
-                                }
-                                else
-                                {
- <form method="post" asp-controller="ModernOperations" asp-action="ServiceRegisterProductChangeStatus" asp-route-id="@p.Id" class="govuk-!-margin-bottom-2">
-                                        @Html.AntiForgeryToken()
-                                        <input type="hidden" name="newStatus" value="@((int)t.Status)" />
- <button type="submit" class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0">@t.Label</button>
-                                    </form>
-                                }
-                            }
-                        </div>
-                    }
-                }
-            </div>
-            </div>
-        </div>
-    </div>
     }
 </div>
-
-<div id="fips-cmdb-single-sync-modal" class="fips-modal fips-cmdb-sync-modal" hidden role="dialog" aria-modal="true" aria-labelledby="fips-cmdb-single-sync-title">
- <div class="fips-modal__content fips-cmdb-sync-modal__panel">
- <h2 class="govuk-heading-m govuk-!-margin-top-0" id="fips-cmdb-single-sync-title">Sync from CMDB</h2>
- <p class="govuk-body" id="fips-cmdb-single-sync-live" aria-live="polite" aria-atomic="true">Starting…</p>
- <div class="fips-cmdb-sync-modal__progress-wrap govuk-!-margin-bottom-4">
- <progress id="fips-cmdb-single-sync-progress" class="fips-cmdb-sync-modal__progress" max="100" aria-hidden="true"></progress>
-        </div>
- <div id="fips-cmdb-single-sync-summary" class="govuk-body-s govuk-!-margin-bottom-4" style="display:none;"></div>
- <div class="govuk-button-group govuk-!-margin-bottom-0">
- <button type="button" class="govuk-button" id="fips-cmdb-single-sync-close" style="display:none;">Close and refresh</button>
- <button type="button" class="govuk-button govuk-button--secondary" id="fips-cmdb-single-sync-dismiss">Cancel</button>
-        </div>
-    </div>
 </div>
+</div>
+
+<dialog id="fips-cmdb-single-sync-modal"
+        class="dfe-f-modal govuk-!-margin-0 fips-cmdb-sync-modal"
+        data-module="dfe-f-modal"
+        aria-labelledby="fips-cmdb-single-sync-title"
+        aria-describedby="fips-cmdb-single-sync-description"
+        aria-modal="true"
+        role="dialog">
+ <div class="dfe-f-modal__panel">
+  <header class="dfe-f-modal__header">
+   <h2 id="fips-cmdb-single-sync-title" class="govuk-heading-m dfe-f-modal__title">Sync from CMDB</h2>
+   <button type="button" class="dfe-f-modal__close" id="fips-cmdb-single-sync-header-close" aria-label="Close"><span class="dfe-f-modal__close-x" aria-hidden="true">×</span></button>
+  </header>
+  <div class="dfe-f-modal__body" id="fips-cmdb-single-sync-description">
+   <p class="govuk-body" id="fips-cmdb-single-sync-live" aria-live="polite" aria-atomic="true">Starting…</p>
+   <div class="fips-cmdb-sync-modal__progress-wrap govuk-!-margin-bottom-4">
+    <progress id="fips-cmdb-single-sync-progress" class="fips-cmdb-sync-modal__progress" max="100" value="0" aria-hidden="true"></progress>
+   </div>
+   <div id="fips-cmdb-single-sync-summary" class="govuk-body-s" style="display:none;"></div>
+  </div>
+  <footer class="dfe-f-modal__footer">
+   <button type="button" class="govuk-button" id="fips-cmdb-single-sync-close" style="display:none;">Close and refresh</button>
+   <button type="button" class="govuk-button govuk-button--secondary" id="fips-cmdb-single-sync-dismiss">Cancel</button>
+  </footer>
+ </div>
+</dialog>
 
 @section Scripts {
     <script nonce="@Context.Items["Nonce"]">
@@ -547,6 +467,7 @@
             var summary = document.getElementById('fips-cmdb-single-sync-summary');
             var closeBtn = document.getElementById('fips-cmdb-single-sync-close');
             var dismissBtn = document.getElementById('fips-cmdb-single-sync-dismiss');
+            var headerCloseBtn = document.getElementById('fips-cmdb-single-sync-header-close');
             var tokenForm = document.getElementById('fips-cmdb-single-sync-antiforgery');
             if (!startBtn || !modal || !tokenForm) return;
 
@@ -561,13 +482,14 @@
             function openModal() {
                 syncFinished = false;
                 abortController = new AbortController();
-                modal.hidden = false;
+                try { modal.showModal(); } catch (e) {}
                 summary.style.display = 'none';
                 summary.textContent = '';
                 summary.style.color = '';
                 closeBtn.style.display = 'none';
                 dismissBtn.textContent = 'Cancel';
-                progress.removeAttribute('value');
+                progress.value = 0;
+                progress.max = 100;
                 live.textContent = 'Fetching this product from CMDB…';
                 startBtn.disabled = true;
             }
@@ -580,17 +502,23 @@
                 if (success) {
                     progress.value = 100;
                     closeBtn.style.display = '';
+                } else {
+                    progress.value = 0;
                 }
             }
 
-            dismissBtn.addEventListener('click', function () {
+            function closeSingleSyncModal() {
                 if (!syncFinished && abortController) abortController.abort();
-                modal.hidden = true;
-            });
+                try { modal.close(); } catch (e) {}
+            }
+
+            dismissBtn.addEventListener('click', closeSingleSyncModal);
+            if (headerCloseBtn) headerCloseBtn.addEventListener('click', closeSingleSyncModal);
             closeBtn.addEventListener('click', function () { window.location.reload(); });
 
             startBtn.addEventListener('click', function () {
                 openModal();
+                progress.value = 25;
                 var body = new URLSearchParams();
                 body.set('__RequestVerificationToken', getToken());
                 fetch(jsonUrl, {
@@ -605,6 +533,7 @@
                 }).then(function (pack) {
                     if (!pack) return;
                     var data = pack.data;
+                    progress.value = 90;
                     if (!pack.ok) {
                         live.textContent = (data && data.message) ? data.message : 'Sync failed.';
                         summary.style.display = '';
@@ -627,30 +556,9 @@
                     endModal(false);
                 });
             });
+            if (typeof window.DfeFrontend !== 'undefined' && typeof window.DfeFrontend.initAll === 'function') {
+                window.DfeFrontend.initAll();
+            }
         })();
     </script>
-}
-
-@functions {
-    string ProductStatusDfeTagClass(CMDBProductStatus status) => status switch
-    {
-        CMDBProductStatus.Active => "dfe-c-tag--green",
-        CMDBProductStatus.New => "dfe-c-tag--blue",
-        CMDBProductStatus.Inactive => "dfe-c-tag--grey",
-        CMDBProductStatus.Rejected => "dfe-c-tag--red",
-        _ => "dfe-c-tag--grey"
-    };
-
-    (CMDBProductStatus Status, string Label)[] StatusTransitions(CMDBProductStatus current) => current switch
-    {
-        CMDBProductStatus.New => new[]
-        {
-            (CMDBProductStatus.Active, "Set active"),
-            (CMDBProductStatus.Inactive, "Set as inactive")
-        },
-        CMDBProductStatus.Active => new[] { (CMDBProductStatus.Inactive, "Set as inactive") },
-        CMDBProductStatus.Inactive => new[] { (CMDBProductStatus.Active, "Reactivate") },
-        CMDBProductStatus.Rejected => new[] { (CMDBProductStatus.Active, "Set active") },
-        _ => Array.Empty<(CMDBProductStatus, string)>()
-    };
 }

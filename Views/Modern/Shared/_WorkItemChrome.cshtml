@@ -1,82 +1,28 @@
 @model Compass.Models.Modern.Work.WorkItem?
-@using Compass.Models
 @using Compass.Models.Modern.Work
 @{
   var work = Model ?? ViewBag.WorkItem as WorkItem;
   if (work == null) { return; }
-  var workIdShort = (ViewBag.WorkIdShort as string) ?? work.Id.ToString("X8").ToUpperInvariant();
-  var portfolioName = ViewBag.PortfolioName as string ?? "—";
-  var linkedDemand = ViewBag.LinkedDemand as DemandRequest;
-  var linkedBusinessCase = ViewBag.LinkedBusinessCase as BusinessCase;
-  var deliveryPhaseName = ViewBag.DeliveryPhaseName as string ?? "—";
-  var priorityName = ViewBag.PriorityName as string ?? "—";
-  var latestRag = ViewBag.LatestRag as ChromeRagSnapshot ?? work.RagHistory?.OrderByDescending(r => r.UpdatedAt).FirstOrDefault();
-  var ragDisplayName = latestRag?.RagStatus?.Name ?? ViewBag.CurrentRagName as string;
-  var currentRagBgKey = ViewBag.CurrentRagBackgroundColourKey as string;
-  var currentRagTextKey = ViewBag.CurrentRagTextColourKey as string;
-  var currentRagCssClass = ViewBag.CurrentRagCssClass as string;
-  var currentSection = (ViewBag.WorkChromeSection as string) ?? "overview";
   var subPageChrome = ViewBag.WorkChromeSubPage as bool? ?? false;
-  var tabsAsLinks = ViewBag.WorkChromeTabsAsLinks as bool? ?? false;
   var detailUrl = Url.Action("Detail", "ModernWork", new { id = work.Id });
-  string TabClass(string section) { return currentSection == section ? "tab on" : "tab"; }
   var monthlyReportDue = ViewBag.MonthlyReportDue as bool? ?? false;
   var currentPeriodLabel = ViewBag.CurrentPeriodLabel as string;
   var currentPeriodDueDate = ViewBag.CurrentPeriodDueDate as DateTime?;
   var lastMonthlyMonth = ViewBag.LastMonthlyUpdateMonth as string;
   var lastMonthlyBy = ViewBag.LastMonthlyUpdateBy as string;
-  var phaseDisplay = (!string.IsNullOrWhiteSpace(deliveryPhaseName) && deliveryPhaseName != "—") ? deliveryPhaseName : null;
-  var phaseTagClass = WorkBadgeCss.PhaseDfeTagClass(deliveryPhaseName);
-  var ragTagClass = (!string.IsNullOrEmpty(currentRagBgKey) || !string.IsNullOrEmpty(currentRagTextKey))
-    ? ""
-    : WorkBadgeCss.RagDfeTagClass(currentRagCssClass, ragDisplayName);
-  var priorityTagClass = WorkBadgeCss.PriorityDfeTagClass(priorityName);
   var minimalHeader = ViewBag.WorkChromeMinimalHeader as bool? ?? false;
+  var req = Context?.Request;
+  var embedFrame = string.Equals(req?.Query["embed"].FirstOrDefault(), "1", StringComparison.Ordinal)
+      || (req != null && req.HasFormContentType
+          && string.Equals(req.Form["embed"].FirstOrDefault(), "1", StringComparison.Ordinal));
 }
 @if (subPageChrome)
 {
  <a href="@detailUrl" class="govuk-back-link dfe-c-mt-0 dfe-c-mb-2">Back to work item</a>
 }
-@if (!minimalHeader)
+@if (!minimalHeader && !embedFrame)
 {
-<div class="dfe-c-flex--between dfe-c-mb-2" style="flex-wrap:wrap;gap:1rem;align-items:flex-start;">
-  <div>
-    <div style="font-size:0.8125rem;color:var(--grey-4);margin-bottom:0.25rem;">
- <span class="dfe-c-mono--inline">WI-@workIdShort</span>
-      <text> · @(portfolioName)</text>
-      @if (phaseDisplay != null)
-      {
- <text> · </text><span class="@phaseTagClass">@phaseDisplay.ToUpperInvariant()</span>
-      }
-    </div>
- <h1 class="dfe-c-page-title__heading" style="margin-bottom:0.25rem;">@work.Title</h1>
- <div class="dfe-c-flex" style="gap:0.5rem;flex-wrap:wrap;align-items:center;">
-      @if (!string.IsNullOrEmpty(ragDisplayName))
-      {
-        @if (!string.IsNullOrEmpty(currentRagBgKey) || !string.IsNullOrEmpty(currentRagTextKey))
-        {
- <span class="rag-badge" style="@(string.IsNullOrEmpty(currentRagBgKey) ? "" : "background-color: var(--govuk-colour-" + currentRagBgKey + ");")@(string.IsNullOrEmpty(currentRagTextKey) ? "" : " color: var(--govuk-colour-" + currentRagTextKey + ");")">@ragDisplayName.ToUpperInvariant() RAG</span>
-        }
-        else
-        {
- <span class="@ragTagClass">@ragDisplayName.ToUpperInvariant() RAG</span>
-        }
-      }
-      @if (monthlyReportDue)
-      {
- <span class="dfe-c-tag dfe-c-tag--red">MONTHLY UPDATE OVERDUE</span>
-      }
-      @if (!string.IsNullOrWhiteSpace(priorityName) && priorityName != "—")
-      {
- <span class="@priorityTagClass">@(priorityName.ToUpperInvariant()) PRIORITY</span>
-      }
-      @if (work.FlagshipProject)
-      {
- <span class="dfe-c-tag dfe-c-tag--teal">FLAGSHIP</span>
-      }
-    </div>
-  </div>
-</div>
+  @await Html.PartialAsync("_WorkItemMasthead", work)
 }
 
 @if (!subPageChrome && monthlyReportDue && !string.IsNullOrEmpty(currentPeriodLabel))
@@ -96,45 +42,6 @@
   </div>
 }
 
-@if (!subPageChrome)
-{
-<div class="tabs wd-tabs" role="tablist" aria-label="Work item sections" style="position:relative;">
-  @if (tabsAsLinks)
-  {
- <a href="@(detailUrl)#wd-overview" class="tab @TabClass("overview")" role="tab" aria-selected="@(currentSection == "overview")" aria-controls="wd-overview" id="wd-tab-overview">Overview</a>
- <a href="@(detailUrl)#wd-updates" class="tab @TabClass("updates")" role="tab" aria-selected="@(currentSection == "updates")" aria-controls="wd-updates" id="wd-tab-updates">Monthly updates</a>
- <a href="@(detailUrl)#wd-risks" class="tab @TabClass("risks")" role="tab" aria-selected="@(currentSection == "risks")" aria-controls="wd-risks" id="wd-tab-risks">Risks &amp; Issues</a>
- <a href="@(detailUrl)#wd-milestones" class="tab @TabClass("milestones")" role="tab" aria-selected="@(currentSection == "milestones")" aria-controls="wd-milestones" id="wd-tab-milestones">Milestones</a>
- <a href="@(detailUrl)#wd-contacts" class="tab @TabClass("contacts")" role="tab" aria-selected="@(currentSection == "contacts")" aria-controls="wd-contacts" id="wd-tab-contacts">Contacts</a>
- <a href="@(detailUrl)#wd-governance" class="tab @TabClass("governance")" role="tab" aria-selected="@(currentSection == "governance")" aria-controls="wd-governance" id="wd-tab-governance">Governance</a>
- <a href="@(detailUrl)#wd-dependencies" class="tab @TabClass("dependencies")" role="tab" aria-selected="@(currentSection == "dependencies")" aria-controls="wd-dependencies" id="wd-tab-dependencies">Dependencies</a>
-    <div style="position:relative;display:flex;align-items:stretch;margin-bottom:-2px;" id="wd-more-wrap">
- <button type="button" id="wd-more-btn" class="tab wd-more-tab-btn @(currentSection == "links" || currentSection == "audit" ? "on" : "")" role="tab" aria-haspopup="true" aria-expanded="false" aria-controls="wd-more-menu" data-wd-more-btn="1">More <span id="wd-more-active-label" class="wd-more-active-label" style="display:none;"> — <span id="wd-more-active-name"></span></span> ▾</button>
-      <div id="wd-more-menu" style="display:none;position:absolute;top:100%;left:0;background:#fff;border:1px solid #dee0e2;border-top:3px solid #003a69;box-shadow:0 4px 12px rgba(0,0,0,0.12);min-width:200px;z-index:200;" role="group" aria-label="More sections">
- <a id="wd-tab-links" href="@(detailUrl)#wd-links" class="wd-more-link" style="display:flex;align-items:center;padding:10px 16px;font-size:14px;font-weight:600;color:#505a5f;cursor:pointer;border-bottom:1px solid #f3f2f1;text-decoration:none;">Linked records</a>
- <a id="wd-tab-audit" href="@(detailUrl)#wd-audit" class="wd-more-link" style="display:flex;align-items:center;padding:10px 16px;font-size:14px;font-weight:600;color:#505a5f;cursor:pointer;text-decoration:none;">Audit trail</a>
-      </div>
-    </div>
-  }
-  else
-  {
- <button type="button" class="tab @(currentSection =="overview" ? "on" : "")" id="wd-tab-overview" role="tab" aria-selected="@(currentSection == "overview")" aria-controls="wd-overview" onclick="typeof wdTab==='function'&&wdTab(this,'wd-overview')">Overview</button>
- <button type="button" class="tab @(currentSection =="updates" ? "on" : "")" id="wd-tab-updates" role="tab" aria-selected="@(currentSection == "updates")" aria-controls="wd-updates" onclick="typeof wdTab==='function'&&wdTab(this,'wd-updates')">Monthly updates</button>
- <button type="button" class="tab @(currentSection =="risks" ? "on" : "")" id="wd-tab-risks" role="tab" aria-selected="@(currentSection == "risks")" aria-controls="wd-risks" onclick="typeof wdTab==='function'&&wdTab(this,'wd-risks')">Risks &amp; Issues</button>
- <button type="button" class="tab @(currentSection =="milestones" ? "on" : "")" id="wd-tab-milestones" role="tab" aria-selected="@(currentSection == "milestones")" aria-controls="wd-milestones" onclick="typeof wdTab==='function'&&wdTab(this,'wd-milestones')">Milestones</button>
- <button type="button" class="tab @(currentSection =="contacts" ? "on" : "")" id="wd-tab-contacts" role="tab" aria-selected="@(currentSection == "contacts")" aria-controls="wd-contacts" onclick="typeof wdTab==='function'&&wdTab(this,'wd-contacts')">Contacts</button>
- <button type="button" class="tab @(currentSection =="governance" ? "on" : "")" id="wd-tab-governance" role="tab" aria-selected="@(currentSection == "governance")" aria-controls="wd-governance" onclick="typeof wdTab==='function'&&wdTab(this,'wd-governance')">Governance</button>
- <button type="button" class="tab @(currentSection =="dependencies" ? "on" : "")" id="wd-tab-dependencies" role="tab" aria-selected="@(currentSection == "dependencies")" aria-controls="wd-dependencies" onclick="typeof wdTab==='function'&&wdTab(this,'wd-dependencies')">Dependencies</button>
-    <div style="position:relative;display:flex;align-items:stretch;margin-bottom:-2px;" id="wd-more-wrap">
- <button type="button" id="wd-more-btn" class="tab wd-more-tab-btn @(currentSection == "links" || currentSection == "audit" ? "on" : "")" role="tab" aria-haspopup="true" aria-expanded="false" aria-controls="wd-more-menu" data-wd-more-btn="1">More <span id="wd-more-active-label" class="wd-more-active-label" style="display:none;"> — <span id="wd-more-active-name"></span></span> ▾</button>
-      <div id="wd-more-menu" style="display:none;position:absolute;top:100%;left:0;background:#fff;border:1px solid #dee0e2;border-top:3px solid #003a69;box-shadow:0 4px 12px rgba(0,0,0,0.12);min-width:200px;z-index:200;" role="group" aria-label="More sections">
- <a id="wd-tab-links" href="@(detailUrl)#wd-links" class="wd-more-link" style="display:flex;align-items:center;padding:10px 16px;font-size:14px;font-weight:600;color:#505a5f;cursor:pointer;border-bottom:1px solid #f3f2f1;text-decoration:none;">Linked records</a>
- <a id="wd-tab-audit" href="@(detailUrl)#wd-audit" class="wd-more-link" style="display:flex;align-items:center;padding:10px 16px;font-size:14px;font-weight:600;color:#505a5f;cursor:pointer;text-decoration:none;">Audit trail</a>
-      </div>
-    </div>
-  }
-</div>
-}
 <style>
 .monthly-due-banner { background: #1d70b8; color: #fff; padding: 10px 20px; margin-bottom: 0; border-bottom: 1px solid #dee0e2; }
 .monthly-due-banner__inner { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; max-width: 100%; }

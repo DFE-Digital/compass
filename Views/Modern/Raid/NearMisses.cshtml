@@ -1,0 +1,289 @@
+@model Compass.ViewModels.Modern.ModernRaidNearMissesPageViewModel
+@using System
+@using System.Globalization
+@using Compass.ViewModels.Modern
+@using Microsoft.AspNetCore.Html
+@{
+  ViewData["Title"] = "RAID — Near misses";
+  var enGb = CultureInfo.GetCultureInfo("en-GB");
+  var formAction = Url.Action("NearMisses", "ModernRaid");
+  var clearUrl = formAction;
+  var activeTab = string.IsNullOrWhiteSpace(Model.ActiveTab) ? "open" : Model.ActiveTab;
+  var filterQs =
+    $"&search={Uri.EscapeDataString(Model.Search ?? "")}" +
+    $"&directorateLookupId={Model.DirectorateLookupId}" +
+    $"&businessAreaLookupId={Model.BusinessAreaLookupId}" +
+    $"&riskTierId={Model.RiskTierId}" +
+    $"&nearMissStatusId={Model.NearMissStatusId}";
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="/modern/raid/dashboard">RAID</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">Near misses</li>
+}
+
+<div class="modern-work-page raid-risks-page raid-near-misses-page">
+  <style>
+    .raid-near-misses-page .raid-near-misses-data-table .raid-near-misses-badge-cell { white-space: nowrap; }
+    .raid-near-misses-page .raid-near-misses-data-table thead th.govuk-table__header--numeric .dfe-f-table-sort-button { justify-content: flex-end; }
+    .raid-near-misses-page .raid-near-misses-data-table tbody td.govuk-table__cell--numeric { text-align: right; }
+    .raid-near-misses-page .raid-near-misses-data-shell {
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 0;
+      overflow: hidden;
+      padding: 0;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+    }
+    .raid-near-misses-page .filter-toolbar input[type="search"],
+    .raid-near-misses-page .filter-toolbar .filter-search,
+    .raid-near-misses-page .filter-toolbar__search-wrap .filter-search,
+    .raid-near-misses-page .filter-toolbar__search-wrap input[type="search"],
+    .raid-near-misses-page .filter-toolbar__search-submit,
+    .raid-near-misses-page .filter-toggle-btn,
+    .raid-near-misses-page .filter-panel select,
+    .raid-near-misses-page .filter-panel input,
+    .raid-near-misses-page a.filter-active-chip,
+    .raid-near-misses-page .dfe-c-tag,
+    .raid-near-misses-page .govuk-button,
+    .raid-near-misses-page .govuk-select {
+      border-radius: 0;
+    }
+    .raid-near-misses-page .raid-near-misses-data-shell .dfe-f-table-wrapper { margin-bottom: 0; }
+    .raid-near-misses-page .raid-near-misses-data-table { margin-bottom: 0; }
+    .raid-near-misses-page .raid-near-misses-data-table thead .govuk-table__header {
+      background: #f3f2f1;
+      border-bottom: 2px solid #0b0c0c;
+      font-weight: 700;
+      vertical-align: bottom;
+    }
+    .raid-near-misses-page .raid-near-misses-data-table tbody tr:nth-child(even) { background: #fafafa; }
+    .raid-near-misses-page .raid-near-misses-data-table tbody td,
+    .raid-near-misses-page .raid-near-misses-data-table tbody th { vertical-align: middle; }
+  </style>
+
+  @{
+    var headerActions = new HtmlString($"<a class=\"govuk-button\" href=\"{Url.Action("NearMissCreate", "ModernRaid")}\">Add near miss</a>");
+  }
+  @await Html.PartialAsync("~/Views/Modern/Shared/_ModernPageHeader.cshtml", new ModernPageHeaderViewModel {
+    Caption = "RAID",
+    Title = "Near misses register",
+    Lede = new HtmlString($"<p class=\"govuk-body govuk-!-margin-bottom-0\">Browse and filter near misses and unexpected issues ({Model.TotalFiltered:N0} matched).</p>"),
+    Actions = headerActions
+  })
+
+  @if (TempData["Message"] is string nmMsg && !string.IsNullOrWhiteSpace(nmMsg))
+  {
+    <div class="govuk-notification-banner govuk-notification-banner--success govuk-!-margin-bottom-4" role="region" aria-labelledby="raid-nm-banner-title">
+      <div class="govuk-notification-banner__header">
+        <h2 class="govuk-notification-banner__title" id="raid-nm-banner-title">Success</h2>
+      </div>
+      <div class="govuk-notification-banner__content">
+        <p class="govuk-notification-banner__heading">@nmMsg</p>
+      </div>
+    </div>
+  }
+
+  <form method="get" action="@formAction" id="raid-near-misses-register-form" class="govuk-!-margin-bottom-0">
+    <input type="hidden" name="tab" value="@activeTab" />
+    <input type="hidden" name="page" value="1" />
+    <div id="search-and-filter">
+      <div class="filter-toolbar">
+        <div class="filter-toolbar__search-wrap">
+          <input type="search" name="search" id="raid-near-misses-search" value="@Model.Search" placeholder="Search incident ID or impact…" class="filter-search" autocomplete="off" aria-label="Search near misses" />
+          <button type="submit" class="govuk-button govuk-button--secondary filter-toolbar__search-submit">Search</button>
+        </div>
+        <button type="button" class="filter-toggle-btn" id="raid-near-misses-filter-btn" aria-expanded="false" aria-controls="raid-near-misses-filter-panel">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="flex-shrink:0;" aria-hidden="true"><path d="M1 3h14v1.5l-5 5V14l-4-2V9.5L1 4.5V3z"></path></svg>
+          <span class="filter-toggle-label">Filter</span>
+        </button>
+      </div>
+      <div class="filter-panel filter-panel--allwork" id="raid-near-misses-filter-panel">
+        <div class="filter-panel__grid">
+          @if (Model.DirectorateOptions.Count > 0)
+          {
+            <div>
+              <label for="raid-nm-directorate">Directorate</label>
+              <select name="directorateLookupId" id="raid-nm-directorate" class="govuk-select">
+                <option value="">All directorates</option>
+                @foreach (var o in Model.DirectorateOptions)
+                {
+                  if (Model.DirectorateLookupId == o.Id) { <option value="@o.Id" selected>@o.Name</option> }
+                  else { <option value="@o.Id">@o.Name</option> }
+                }
+              </select>
+            </div>
+          }
+          @if (Model.BusinessAreaOptions.Count > 0)
+          {
+            <div>
+              <label for="raid-nm-ba">Business area</label>
+              <select name="businessAreaLookupId" id="raid-nm-ba" class="govuk-select">
+                <option value="">All business areas</option>
+                @foreach (var o in Model.BusinessAreaOptions)
+                {
+                  if (Model.BusinessAreaLookupId == o.Id) { <option value="@o.Id" selected>@o.Name</option> }
+                  else { <option value="@o.Id">@o.Name</option> }
+                }
+              </select>
+            </div>
+          }
+          <div>
+            <label for="raid-nm-tier">Tier</label>
+            <select name="riskTierId" id="raid-nm-tier" class="govuk-select">
+              <option value="">All tiers</option>
+              @foreach (var o in Model.TierOptions)
+              {
+                if (Model.RiskTierId == o.Id) { <option value="@o.Id" selected>@o.Name</option> }
+                else { <option value="@o.Id">@o.Name</option> }
+              }
+            </select>
+          </div>
+          <div>
+            <label for="raid-nm-status">Status</label>
+            <select name="nearMissStatusId" id="raid-nm-status" class="govuk-select">
+              <option value="">All statuses</option>
+              @foreach (var o in Model.StatusOptions)
+              {
+                if (Model.NearMissStatusId == o.Id) { <option value="@o.Id" selected>@o.Name</option> }
+                else { <option value="@o.Id">@o.Name</option> }
+              }
+            </select>
+          </div>
+        </div>
+        <div class="filter-panel__actions" style="margin-top:0.75rem;display:flex;gap:0.5rem;flex-wrap:wrap;">
+          <button type="submit" class="govuk-button">Apply filters</button>
+          <a class="govuk-button govuk-button--secondary" href="@clearUrl">Clear</a>
+        </div>
+      </div>
+    </div>
+  </form>
+
+  @{
+    var nearMissScopeNav = new RaidRegisterScopeNavViewModel
+    {
+      AriaLabel = "Near miss register views",
+      ActiveTab = activeTab,
+      Links = new[]
+      {
+        new RaidRegisterScopeNavLink
+        {
+          TabKey = "open",
+          Label = "Open near misses",
+          Href = $"{formAction}?tab=open&page=1{filterQs}",
+          Count = Model.OpenCount
+        },
+        new RaidRegisterScopeNavLink
+        {
+          TabKey = "closed",
+          Label = "Closed near misses",
+          Href = $"{formAction}?tab=closed&page=1{filterQs}",
+          Count = Model.ClosedCount
+        },
+        new RaidRegisterScopeNavLink
+        {
+          TabKey = "all",
+          Label = "All near misses",
+          Href = $"{formAction}?tab=all&page=1{filterQs}",
+          Count = Model.AllCount
+        }
+      }
+    };
+  }
+  @await Html.PartialAsync("~/Views/Modern/Raid/_RaidRegisterScopeNav.cshtml", nearMissScopeNav)
+
+  @if (Model.Rows.Count == 0)
+  {
+    <p class="govuk-body">No near misses match your filters.</p>
+  }
+  else
+  {
+    <div class="raid-near-misses-data-shell govuk-!-margin-top-0">
+      <div class="dfe-f-table-wrapper govuk-!-margin-bottom-0" data-module="dfe-f-table">
+        <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+        <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed raid-near-misses-data-table govuk-!-margin-bottom-0" id="raid-near-misses-table">
+          <caption class="govuk-visually-hidden">Near misses matching current filters</caption>
+          <thead class="govuk-table__head">
+            <tr class="govuk-table__row">
+              <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none">
+                <button type="button" class="dfe-f-table-sort-button">Record</button>
+              </th>
+              <th scope="col" class="govuk-table__header" aria-sort="none">
+                <button type="button" class="dfe-f-table-sort-button">Incident ID</button>
+              </th>
+              <th scope="col" class="govuk-table__header" aria-sort="none">
+                <button type="button" class="dfe-f-table-sort-button">Date</button>
+              </th>
+              <th scope="col" class="govuk-table__header" aria-sort="none">
+                <button type="button" class="dfe-f-table-sort-button">Type</button>
+              </th>
+              <th scope="col" class="govuk-table__header" aria-sort="none">
+                <button type="button" class="dfe-f-table-sort-button">Directorate</button>
+              </th>
+              <th scope="col" class="govuk-table__header" aria-sort="none">
+                <button type="button" class="dfe-f-table-sort-button">Business area</button>
+              </th>
+              <th scope="col" class="govuk-table__header" aria-sort="none">
+                <button type="button" class="dfe-f-table-sort-button">Owners</button>
+              </th>
+              <th scope="col" class="govuk-table__header" aria-sort="none">
+                <button type="button" class="dfe-f-table-sort-button">Seriousness</button>
+              </th>
+              <th scope="col" class="govuk-table__header" aria-sort="none">
+                <button type="button" class="dfe-f-table-sort-button">Tier</button>
+              </th>
+              <th scope="col" class="govuk-table__header" aria-sort="none">
+                <button type="button" class="dfe-f-table-sort-button">RAG</button>
+              </th>
+              <th scope="col" class="govuk-table__header" aria-sort="none">
+                <button type="button" class="dfe-f-table-sort-button">Status</button>
+              </th>
+            </tr>
+          </thead>
+          <tbody class="govuk-table__body">
+            @foreach (var row in Model.Rows)
+            {
+              var url = Url.Action("NearMissDetail", "ModernRaid", new { id = row.Id });
+              <tr class="govuk-table__row">
+                <td class="govuk-table__cell govuk-table__cell--numeric govuk-body-s">@row.Id</td>
+                <td class="govuk-table__cell">
+                  <a class="govuk-link govuk-link--no-visited-state" href="@url">@row.Reference</a>
+                </td>
+                <td class="govuk-table__cell govuk-body-s">@row.DateLogged.ToString("d MMM yyyy", enGb)</td>
+                <td class="govuk-table__cell govuk-body-s">@(row.TypeLabel ?? "—")</td>
+                <td class="govuk-table__cell govuk-body-s">@(row.DirectorateLabel ?? "—")</td>
+                <td class="govuk-table__cell govuk-body-s">@(row.BusinessAreaLabel ?? "—")</td>
+                <td class="govuk-table__cell govuk-body-s">@(row.OwnersSummary ?? "—")</td>
+                <td class="govuk-table__cell govuk-body-s raid-near-misses-badge-cell">@(row.SeriousnessLabel ?? "—")</td>
+                <td class="govuk-table__cell govuk-body-s raid-near-misses-badge-cell">@(row.TierLabel ?? "—")</td>
+                <td class="govuk-table__cell govuk-body-s raid-near-misses-badge-cell">
+                  @if (!string.IsNullOrEmpty(row.PostMitigationRagLabel))
+                  {
+                    <span class="@(row.PostMitigationRagCssClass ?? "dfe-f-badge dfe-f-badge--small")">@row.PostMitigationRagLabel</span>
+                  }
+                  else { <text>—</text> }
+                </td>
+                <td class="govuk-table__cell govuk-body-s">@(row.StatusLabel ?? "—")</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+  }
+
+  @if (Model.TotalPages > 1)
+  {
+    Func<int, string> nearMissPageUrl = p =>
+      $"{formAction}?tab={activeTab}&page={p}{filterQs}";
+    <div class="govuk-!-margin-top-6">
+      @await Html.PartialAsync("~/Views/Modern/Shared/_GovUkPagination.cshtml", new GovUkPaginationViewModel {
+        CurrentPage = Model.Page,
+        TotalPages = Model.TotalPages,
+        PageUrl = nearMissPageUrl,
+        NavigationAriaLabel = "Near misses results"
+      })
+    </div>
+  }
+</div>

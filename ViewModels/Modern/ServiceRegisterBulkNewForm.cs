@@ -26,6 +26,9 @@ public sealed class ServiceRegisterBulkNewForm
     public bool ApplyType { get; set; }
     public int[]? BulkTypeIds { get; set; }
 
+    /// <summary><c>true</c> or <c>false</c> to set enterprise flag; empty or any other value leaves it unchanged.</summary>
+    public string? BulkEnterpriseAction { get; set; }
+
     // Preserve list filters on redirect
     public string? RSearch { get; set; }
     public int? RBusinessAreaId { get; set; }

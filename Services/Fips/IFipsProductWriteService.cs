@@ -30,7 +30,8 @@ public interface IFipsProductWriteService
         int[]? typeIds,
         int[]? categorisationItemIds = null,
         int? reportingContactUserId = null,
-        bool isEnterpriseService = false,
+        /// <summary>When null, <see cref="CMDBProduct.IsEnterpriseService"/> is left unchanged.</summary>
+        bool? isEnterpriseService = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>Changes product status with the same permission rule as <see cref="TryUpdateAsync"/>.</summary>

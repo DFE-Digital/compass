@@ -1,0 +1,46 @@
+@model Compass.ViewModels.Modern.GovUkCharacterCountTextareaViewModel
+@{
+  var state = ViewData.ModelState[Model.ModelStateKey];
+  var hasError = state?.Errors.Count > 0 == true;
+  var errMsg = hasError ? state!.Errors[0].ErrorMessage : null;
+  var hintId = $"{Model.FieldId}-hint";
+  var infoId = $"{Model.FieldId}-info";
+  var errorId = $"{Model.FieldId}-error";
+  var describedByParts = new List<string> { infoId };
+  if (!string.IsNullOrEmpty(Model.Hint))
+    describedByParts.Add(hintId);
+  if (hasError)
+    describedByParts.Add(errorId);
+  var describedBy = string.Join(' ', describedByParts);
+}
+<div class="govuk-character-count" data-module="govuk-character-count" data-maxlength="@Model.MaxLength">
+  <div class="govuk-form-group@(hasError ? " govuk-form-group--error" : "")">
+    @if (!Model.VisuallyHiddenLabel)
+    {
+      <label class="@Model.LabelClass" for="@Model.FieldId">@Model.Label</label>
+    }
+    else
+    {
+      <label class="@Model.LabelClass govuk-visually-hidden" for="@Model.FieldId">@Model.Label</label>
+    }
+    @if (!string.IsNullOrEmpty(Model.Hint))
+    {
+      <div id="@hintId" class="govuk-hint">@Model.Hint</div>
+    }
+    @if (hasError && errMsg != null)
+    {
+      <p id="@errorId" class="govuk-error-message">
+        <span class="govuk-visually-hidden">Error:</span> @errMsg
+      </p>
+    }
+    <textarea class="govuk-textarea govuk-js-character-count@(hasError ? " govuk-textarea--error" : "")"
+              id="@Model.FieldId"
+              name="@Model.Name"
+              rows="@Model.Rows"
+              maxlength="@Model.MaxLength"
+              aria-describedby="@describedBy">@Model.Value</textarea>
+  </div>
+  <div id="@infoId" class="govuk-hint govuk-character-count__message govuk-visually-hidden">
+    You can enter up to @Model.MaxLength characters
+  </div>
+</div>

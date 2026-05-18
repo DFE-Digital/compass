@@ -4,14 +4,17 @@
     var work = ViewBag.WorkItem as WorkItem;
     var ragStatusesDict = ViewBag.RagStatusesDict as Dictionary<int, string> ?? new Dictionary<int, string>();
     var ragCssClassByStatusId = ViewBag.RagCssClassByStatusId as Dictionary<int, string?> ?? new Dictionary<int, string?>();
-    var lookupCss = Model.RagStatusId.HasValue && ragCssClassByStatusId.TryGetValue(Model.RagStatusId.Value, out var lc) ? lc : null;
-    var ragName = Model.RagStatusId.HasValue && ragStatusesDict.TryGetValue(Model.RagStatusId.Value, out string? rn) ? rn : "—";
-    var ragTagClass = WorkBadgeCss.RagDfeTagClass(lookupCss, ragName == "—" ? null : ragName);
+    var lookupCss = !string.IsNullOrWhiteSpace(Model.RagCssClass)
+        ? Model.RagCssClass
+        : (Model.RagStatusId.HasValue && ragCssClassByStatusId.TryGetValue(Model.RagStatusId.Value, out var lc) ? lc : null);
+    var ragName = !string.IsNullOrWhiteSpace(Model.RagDisplayName)
+        ? Model.RagDisplayName
+        : (Model.RagStatusId.HasValue && ragStatusesDict.TryGetValue(Model.RagStatusId.Value, out string? rn) ? rn : null);
+    var ragTagClass = WorkBadgeCss.RagDfeFrontendBadgeClass(lookupCss, string.IsNullOrWhiteSpace(ragName) ? null : ragName);
     var submittedByName = ViewBag.SubmittedByName as string ?? Model.SubmittedBy ?? "—";
     var ragJustification = Model.RagJustification;
     var pathToGreen = Model.PathToGreen;
     var isGreen = (ragName ?? "").Contains("green", StringComparison.OrdinalIgnoreCase);
-    var wiRef = ViewBag.WorkIdShort as string ?? Model.WorkItemId.ToString("X8").ToUpperInvariant();
     var periodDue = ViewBag.PeriodDueDate as DateTime?;
     ViewData["Title"] = $"Monthly update — {Model.ReportMonth:MMMM yyyy}";
 }
@@ -19,48 +22,88 @@
  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernWork")">Work</a></li>
  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Detail", "ModernWork", new { id = Model.WorkItemId })#wd-updates">@(work?.Title ?? "Work item")</a></li>
- <li class="govuk-breadcrumbs__list-item" aria-current="page">@Model.ReportMonth.ToString("MMMM yyyy") return</li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">@Model.ReportMonth.ToString("MMMM yyyy")</li>
 }
 
-<div id="sc-work-viewmonthlyupdate">
-  @await Html.PartialAsync("_WorkItemChrome", ViewBag.WorkItem as WorkItem)
+<div id="sc-work-viewmonthlyupdate" class="modern-work-page">
+ @if (work != null)
+ {
+   @await Html.PartialAsync("_WorkItemChrome", work)
+ }
 
- <div class="dfe-c-page-title">
- <div class="dfe-c-page-title__caption">Work — monthly update</div>
- <h1 class="dfe-c-page-title__heading">@Model.ReportMonth.ToString("MMMM yyyy")</h1>
- <p class="dfe-c-page-title__lede">Submitted return · WI-@wiRef · @(work?.Title ?? "—")</p>
+<div class="govuk-grid-row modern-work-detail-layout govuk-!-margin-top-4">
+  <div class="govuk-grid-column-one-quarter-from-desktop modern-work-detail-layout__nav">
+    <div class="dfe-f-u-sticky govuk-!-margin-bottom-4 modern-work-detail-layout__nav-inner" style="--dfe-f-sticky-top: 1rem;">
+      @if (work != null)
+      {
+        @await Html.PartialAsync("_WorkItemSideNav", work)
+      }
+    </div>
   </div>
+  <div class="govuk-grid-column-three-quarters-from-desktop modern-work-detail-main">
 
- <div class="dfe-c-form-layout">
- <div class="dfe-c-form-layout__main">
- <div class="dfe-c-card dfe-c-card--plain">
- <div class="monthly-return-submitted-banner">
- <span class="govuk-tag govuk-tag--green">Submitted</span>
- <span class="govuk-body govuk-!-margin-bottom-0">
- <span class="govuk-visually-hidden">Submitted on </span>
-            <strong>@(Model.SubmittedAt?.ToString("d MMMM yyyy 'at' HH:mm") ?? "—")</strong>
-            <span aria-hidden="true"> · </span>by @submittedByName
-          </span>
- <span class="govuk-tag govuk-tag--grey">Read only</span>
+ <div class="govuk-summary-card">
+ <div class="govuk-summary-card__title-wrapper">
+ <h2 class="govuk-summary-card__title">Submission summary</h2>
         </div>
+ <div class="govuk-summary-card__content">
+ <dl class="govuk-summary-list govuk-!-margin-bottom-0">
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">Reporting period</dt>
+ <dd class="govuk-summary-list__value">@Model.ReportMonth.ToString("MMMM yyyy")</dd>
+          </div>
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">Submitted</dt>
+ <dd class="govuk-summary-list__value">
+ <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--green govuk-!-margin-right-2">Submitted</span>
+            @(Model.SubmittedAt?.ToString("d MMMM yyyy 'at' HH:mm") ?? "—")<span aria-hidden="true"> · </span>by @submittedByName
+          </dd>
+          </div>
+          @if (periodDue.HasValue)
+          {
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">Return deadline</dt>
+ <dd class="govuk-summary-list__value">@periodDue.Value.ToString("d MMMM yyyy")</dd>
+            </div>
+          }
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">RAG at submission</dt>
+ <dd class="govuk-summary-list__value">
+              @if (string.IsNullOrWhiteSpace(ragName))
+              {
+ <span class="govuk-hint govuk-!-margin-bottom-0">—</span>
+              }
+              else
+              {
+ <span class="@ragTagClass dfe-f-badge--small">@ragName.ToUpperInvariant()</span>
+              }
+            </dd>
+          </div>
+        </dl>
+        </div>
+ </div>
 
- <p class="govuk-body govuk-!-margin-bottom-0">This is the return as submitted. It cannot be edited on this page@if (ViewBag.CanUnsubmit == true) {<text> — use <strong>Unsubmit to edit</strong> below before the return deadline if you need to change it.</text>} else {<text>.</text>}</p>
+ <div class="govuk-summary-card govuk-!-margin-top-6">
+ <div class="govuk-summary-card__title-wrapper">
+ <h2 class="govuk-summary-card__title">Monthly update</h2>
+        </div>
+ <div class="govuk-summary-card__content">
 
- <section class="monthly-return-section" aria-labelledby="monthly-return-narrative-heading">
- <h2 class="govuk-heading-m govuk-!-margin-top-0" id="monthly-return-narrative-heading">Monthly update narrative</h2>
- <p class="govuk-hint govuk-!-margin-bottom-2">What happened this month — progress, blockers, and decisions.</p>
+ <section class="monthly-return-section govuk-!-margin-bottom-6" aria-labelledby="monthly-return-narrative-heading">
+ <h3 class="govuk-heading-m govuk-!-margin-top-0" id="monthly-return-narrative-heading">Narrative</h3>
+ <p class="govuk-hint govuk-!-margin-bottom-2">Progress, blockers, and decisions for this month.</p>
           @if (string.IsNullOrWhiteSpace(Model.Narrative))
           {
- <p class="monthly-return-readonly-text monthly-return-readonly-text--empty govuk-body" id="monthly-return-narrative-body">Not provided</p>
+ <p class="monthly-return-readonly-text monthly-return-readonly-text--empty govuk-body govuk-!-margin-bottom-0" id="monthly-return-narrative-body">Not provided</p>
           }
           else
           {
- <div class="monthly-return-readonly-text govuk-body" id="monthly-return-narrative-body" style="white-space:pre-wrap;">@Model.Narrative</div>
+ <div class="monthly-return-readonly-text govuk-body govuk-!-margin-bottom-0" id="monthly-return-narrative-body" style="white-space:pre-wrap;">@Model.Narrative</div>
           }
         </section>
 
- <section class="monthly-return-section" aria-labelledby="monthly-return-headcount-heading">
- <h2 class="govuk-heading-m" id="monthly-return-headcount-heading">Headcount</h2>
+ <section class="monthly-return-section govuk-!-margin-bottom-6" aria-labelledby="monthly-return-headcount-heading">
+ <h3 class="govuk-heading-m" id="monthly-return-headcount-heading">Headcount</h3>
  <dl class="govuk-summary-list govuk-summary-list--no-border govuk-!-margin-bottom-0">
  <div class="govuk-summary-list__row">
  <dt class="govuk-summary-list__key">Permanent FTE</dt>
@@ -74,32 +117,22 @@
         </section>
 
  <section class="monthly-return-section" aria-labelledby="monthly-return-rag-heading">
- <h2 class="govuk-heading-m" id="monthly-return-rag-heading">RAG outcome</h2>
- <p class="govuk-hint govuk-!-margin-bottom-2">Delivery confidence for this reporting period (from RAG history at submission).</p>
- <p class="govuk-body govuk-!-margin-bottom-4">
-            @if (ragName == "—")
-            {
- <span class="dfe-c-text-muted">—</span>
-            }
-            else
-            {
- <span class="@ragTagClass">@ragName.ToUpperInvariant()</span>
-            }
-          </p>
+ <h3 class="govuk-heading-m" id="monthly-return-rag-heading">RAG justification</h3>
+ <p class="govuk-hint govuk-!-margin-bottom-2">Delivery confidence for this reporting period.</p>
 
- <h3 class="govuk-heading-s" id="monthly-return-rag-justification-heading">Justification for RAG</h3>
+ <h4 class="govuk-heading-s" id="monthly-return-rag-justification-heading">Justification</h4>
           @if (string.IsNullOrWhiteSpace(ragJustification))
           {
- <p class="monthly-return-readonly-text monthly-return-readonly-text--empty govuk-body govuk-!-margin-bottom-0" aria-labelledby="monthly-return-rag-justification-heading">Not provided</p>
+ <p class="monthly-return-readonly-text monthly-return-readonly-text--empty govuk-body" aria-labelledby="monthly-return-rag-justification-heading">Not provided</p>
           }
           else
           {
- <div class="monthly-return-readonly-text govuk-body govuk-!-margin-bottom-0" aria-labelledby="monthly-return-rag-justification-heading">@ragJustification</div>
+ <div class="monthly-return-readonly-text govuk-body" aria-labelledby="monthly-return-rag-justification-heading">@ragJustification</div>
           }
 
           @if (!isGreen)
           {
- <h3 class="govuk-heading-s govuk-!-margin-top-6" id="monthly-return-path-heading">Path to green</h3>
+ <h4 class="govuk-heading-s govuk-!-margin-top-6" id="monthly-return-path-heading">Path to green</h4>
             @if (string.IsNullOrWhiteSpace(pathToGreen))
             {
  <p class="monthly-return-readonly-text monthly-return-readonly-text--empty govuk-body govuk-!-margin-bottom-0" aria-labelledby="monthly-return-path-heading">Not provided</p>
@@ -111,43 +144,21 @@
           }
         </section>
 
- <div class="dfe-c-button-group govuk-!-margin-top-6">
+        </div>
+ </div>
+
+ <div class="govuk-button-group govuk-!-margin-top-6">
  <a href="@Url.Action("Detail", "ModernWork", new { id = Model.WorkItemId })#wd-updates" class="govuk-button govuk-button--secondary" data-module="govuk-button">Back to monthly updates</a>
           @if (ViewBag.CanUnsubmit == true)
           {
- <form method="post" action="@Url.Action("UnsubmitMonthlyUpdate", "ModernWork", new { id = Model.WorkItemId })" class="dfe-c-d-inline-block govuk-!-margin-left-2">
+ <form method="post" action="@Url.Action("UnsubmitMonthlyUpdate", "ModernWork", new { id = Model.WorkItemId })" class="govuk-!-margin-bottom-0">
               @Html.AntiForgeryToken()
               <input type="hidden" name="updateId" value="@Model.Id" />
  <button type="submit" class="govuk-button govuk-button--secondary">Unsubmit to edit</button>
             </form>
           }
         </div>
-        @if (ViewBag.CanUnsubmit == true)
-        {
- <p class="govuk-body govuk-hint govuk-!-margin-top-2 govuk-!-margin-bottom-0">Unsubmitting reopens the return for this period so you can edit and resubmit before @(periodDue?.ToString("d MMMM yyyy") ?? "the deadline").</p>
-        }
+
       </div>
     </div>
-
- <aside class="dfe-c-form-layout__aside">
- <div class="dfe-c-sidebar">
- <div class="dfe-c-scard" style="border-top:3px solid #003a69;">
- <div class="dfe-c-scard__title">Reporting period</div>
- <p class="govuk-body govuk-!-margin-bottom-0"><strong>@Model.ReportMonth.ToString("MMMM yyyy")</strong></p>
-        </div>
-        @if (periodDue.HasValue)
-        {
- <div class="dfe-c-scard" style="border-top:3px solid #003a69;">
- <div class="dfe-c-scard__title">Return deadline</div>
- <p class="govuk-body govuk-!-margin-bottom-0"><strong>@periodDue.Value.ToString("d MMMM yyyy")</strong></p>
-          </div>
-        }
- <div class="dfe-c-scard" style="border-top:3px solid #003a69;">
- <div class="dfe-c-scard__title">Work item</div>
- <p class="govuk-body govuk-!-margin-bottom-2"><a class="govuk-link" href="@Url.Action("Detail", "ModernWork", new { id = Model.WorkItemId })">@(work?.Title ?? "Open work item")</a></p>
- <p class="govuk-body-s govuk-!-margin-bottom-0" style="color:#505a5f;">Monthly reporting table is on the <strong>Monthly updates</strong> section of the work item.</p>
-        </div>
-      </div>
-    </aside>
-  </div>
 </div>

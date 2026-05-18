@@ -1,6 +1,32 @@
 @model Compass.ViewModels.Modern.CompassNotificationSettingsPageViewModel
+@using System.Text.RegularExpressions
+@using Compass.ViewModels.Modern
+@using Microsoft.AspNetCore.Html
 @{
   ViewData["Title"] = "Notification settings";
+
+  string NotifCategoryAnchorId(string category) =>
+      "notif-cat-" + Regex.Replace(category.ToLowerInvariant(), @"[^a-z0-9]+", "-").Trim('-');
+
+  var seenCats = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+  var categoryLinks = new List<NotificationAdminSideNavCategoryLink>();
+  foreach (var r in Model.Rows)
+  {
+    if (seenCats.Add(r.Category))
+    {
+      categoryLinks.Add(new NotificationAdminSideNavCategoryLink
+      {
+        AnchorId = NotifCategoryAnchorId(r.Category),
+        CategoryTitle = r.Category
+      });
+    }
+  }
+
+  var notificationSideNav = new NotificationAdminSideNavViewModel
+  {
+    IsEmailLogPage = false,
+    SettingsCategories = categoryLinks
+  };
 }
 
 @section Breadcrumbs {
@@ -10,19 +36,16 @@
 }
 
 <div class="admin-hub">
- <div class="dfe-c-flex--between dfe-c-mb-3" style="flex-wrap:wrap;gap:1rem;align-items:flex-start;">
- <div class="dfe-c-page-title" style="margin:0;flex:1 1 20rem;">
- <div class="dfe-c-page-title__caption">Administration</div>
- <h1 class="dfe-c-page-title__heading">Notification settings</h1>
- <p class="dfe-c-page-title__lede">
-      Defaults for Compass reminder emails — who receives each type of notification when automation runs.
-      Delivery hooks use these flags when sending; Central Operations addresses resolve from configuration at send time.
-    </p>
-    </div>
- <div class="dfe-c-flex" style="gap:0.5rem;flex-wrap:wrap;">
- <a class="govuk-link govuk-link--no-visited-state govuk-!-font-weight-bold" href="@Url.Action("NotificationEmailLog", "ModernAdminNotificationSettings")">Notification email log</a>
-    </div>
-  </div>
+ @{
+   var notifSettingsLede = new HtmlString("<p class=\"govuk-body govuk-!-margin-bottom-0\">Defaults for Compass reminder emails — who receives each type of notification when automation runs. Delivery hooks use these flags when sending; Central Operations addresses resolve from configuration at send time.</p>");
+   var notifSettingsActions = new HtmlString($"<a class=\"govuk-link govuk-link--no-visited-state govuk-!-font-weight-bold\" href=\"{Url.Action("NotificationEmailLog", "ModernAdminNotificationSettings") ?? "#"}\">Notification email log</a>");
+ }
+ @await Html.PartialAsync("~/Views/Modern/Shared/_ModernPageHeader.cshtml", new ModernPageHeaderViewModel {
+   Caption = "Administration",
+   Title = "Notification settings",
+   Lede = notifSettingsLede,
+   Actions = notifSettingsActions
+ })
 
   @if (ViewBag.AdminError != null)
   {
@@ -33,7 +56,7 @@
   }
   @if (ViewBag.AdminMessage != null)
   {
- <div class="govuk-notification-banner govuk-notification-banner--success dfe-c-mb-3" role="region" aria-labelledby="ns-msg-title">
+ <div class="govuk-notification-banner govuk-notification-banner--success govuk-!-margin-bottom-3" role="region" aria-labelledby="ns-msg-title">
  <div class="govuk-notification-banner__header">
  <h2 class="govuk-notification-banner__title" id="ns-msg-title">Success</h2>
       </div>
@@ -43,6 +66,12 @@
     </div>
   }
 
+ <div class="govuk-grid-row notification-settings-layout">
+ <div class="govuk-grid-column-one-quarter-from-desktop notification-settings-layout__nav">
+ @await Html.PartialAsync("~/Views/Modern/Admin/_NotificationAdminSideNav.cshtml", notificationSideNav)
+ </div>
+ <div class="govuk-grid-column-three-quarters-from-desktop">
+ <div id="notification-settings-main">
  <form method="post" action="@Url.Action("NotificationSettings", "ModernAdminNotificationSettings")">
     @Html.AntiForgeryToken()
 
@@ -55,7 +84,7 @@
  @if (!string.Equals(prevCat, row.Category, StringComparison.Ordinal))
       {
         prevCat = row.Category;
- <h2 class="govuk-heading-m govuk-!-margin-bottom-3 @(i > 0 ? "govuk-!-margin-top-8" : "")">@row.Category</h2>
+ <h2 id="@NotifCategoryAnchorId(row.Category)" class="govuk-heading-m govuk-!-margin-bottom-3 notification-settings-layout__category-anchor @(i > 0 ? "govuk-!-margin-top-8" : "")">@row.Category</h2>
       }
 
  <div class="dfe-c-card dfe-c-mb-4" style="border:1px solid var(--grey-2);padding:1.25rem 1.5rem;background:var(--white);">
@@ -125,4 +154,7 @@
  <a class="govuk-link govuk-link--no-visited-state govuk-!-margin-left-2" href="@Url.Action("Index", "ModernAdmin")">Cancel</a>
     </div>
   </form>
+ </div>
+ </div>
+ </div>
 </div>

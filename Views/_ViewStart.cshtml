@@ -1,14 +1,25 @@
 @{
-    // All views under Views/Modern/ use the Compass2 shell (dfe-c / govuk-frontend, ~/modern/css/*).
-    // Other areas keep the legacy Shared/_Layout.cshtml.
+    // Views under Views/Modern/ use the Compass2 shell (dfe-c / govuk-frontend, ~/modern/css/*).
+    // / and /Home/Index redirect to /modern/dashboard; other legacy areas keep Shared/_Layout.cshtml.
     var viewPath = ViewContext.View?.Path;
     var normalized = viewPath?.Replace('\\', '/') ?? "";
     var controller = ViewContext.RouteData.Values["controller"]?.ToString() ?? "";
+    var action = ViewContext.RouteData.Values["action"]?.ToString() ?? "";
     var isModernViewPath = normalized.Contains("/Views/Modern/", StringComparison.OrdinalIgnoreCase);
     var isModernController = controller.StartsWith("Modern", StringComparison.OrdinalIgnoreCase);
-    if (isModernViewPath || isModernController)
+    var isModernErrorPage = string.Equals(controller, "Home", StringComparison.OrdinalIgnoreCase)
+        && (string.Equals(action, "Error", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(action, "NotFound", StringComparison.OrdinalIgnoreCase));
+    if (isModernViewPath || isModernController || isModernErrorPage)
     {
         Layout = "~/Views/Modern/Shared/_Layout.cshtml";
+        var embedQuery = string.Equals(Context.Request.Query["embed"].FirstOrDefault(), "1", StringComparison.Ordinal);
+        var embedForm = Context.Request.HasFormContentType
+            && string.Equals(Context.Request.Form["embed"].FirstOrDefault(), "1", StringComparison.Ordinal);
+        if (embedQuery || embedForm)
+        {
+            Layout = "~/Views/Modern/Shared/_LayoutEmbed.cshtml";
+        }
     }
     else
     {

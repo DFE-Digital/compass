@@ -1,0 +1,153 @@
+@model Compass.ViewModels.Modern.ModernRaidReviewOverviewViewModel
+@using System.Globalization
+@using Compass.ViewModels.Modern
+@{
+  ViewData["Title"] = $"RAID review — {Model.ReviewMonthLabel}";
+  var enGb = CultureInfo.GetCultureInfo("en-GB");
+  var workUrl = Url.Action("ReviewWork", "ModernRaid", new { ba = Model.BusinessAreaQuery, kind = "risks" }) ?? "#";
+  var setupUrl = Url.Action("ReviewSetup", "ModernRaid") ?? "#";
+  var storageKey = ViewBag.RaidReviewStorageKey as string ?? "compass.raidReview.businessAreaIds";
+  var totalOpen = Model.OpenRiskCount + Model.OpenIssueCount;
+  var reviewCtaLabel = Model.HasStartedReview ? "Continue review" : "Start review";
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernRaid")">RAID</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("ReviewStart", "ModernRaid")">Monthly review</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">@Model.ReviewMonthLabel</li>
+}
+
+<div class="modern-work-page raid-review-overview">
+  @await Html.PartialAsync("~/Views/Modern/Shared/_ModernPageHeader.cshtml", new ModernPageHeaderViewModel
+  {
+    Caption = "RAID monthly review",
+    Title = Model.ReviewMonthLabel,
+    Actions = new Microsoft.AspNetCore.Html.HtmlString($"<a class=\"govuk-link govuk-link--no-visited-state govuk-!-margin-right-3\" href=\"{setupUrl}\">Change business areas</a>")
+  })
+
+  <dl class="govuk-summary-list govuk-!-margin-top-6">
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Review month</dt>
+      <dd class="govuk-summary-list__value">@Model.ReviewMonthLabel</dd>
+    </div>
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Business areas</dt>
+      <dd class="govuk-summary-list__value">
+        @if (Model.BusinessAreaLabels.Count == 0)
+        {
+          <text>—</text>
+        }
+        else if (Model.BusinessAreaLabels.Count == 1)
+        {
+          @Model.BusinessAreaLabels[0]
+        }
+        else
+        {
+          <ul class="govuk-list govuk-!-margin-bottom-0">
+            @foreach (var area in Model.BusinessAreaLabels)
+            {
+              <li>@area</li>
+            }
+          </ul>
+        }
+      </dd>
+    </div>
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Review by</dt>
+      <dd class="govuk-summary-list__value">@Model.ReviewDueByLabel <span class="govuk-body-s govuk-!-display-block govuk-hint govuk-!-margin-top-1">Last working day of the month</span></dd>
+    </div>
+  </dl>
+
+  <p class="govuk-body govuk-!-margin-top-4">Risks and issues in these business areas should be reviewed by <strong>@Model.ReviewDueByLabel</strong>.</p>
+
+  <div class="dfe-f-card-grid govuk-!-margin-top-6">
+    @await Html.PartialAsync("~/Views/Modern/Raid/_RaidDashboardStatCard.cshtml", new RaidDashboardStatCardVm { Label = "Open risks", Value = Model.OpenRiskCount.ToString("N0", enGb), TintClass = "dfe-f-stat-card--tint-grey" })
+    @await Html.PartialAsync("~/Views/Modern/Raid/_RaidDashboardStatCard.cshtml", new RaidDashboardStatCardVm { Label = "Open issues", Value = Model.OpenIssueCount.ToString("N0", enGb), TintClass = "dfe-f-stat-card--tint-teal" })
+    @await Html.PartialAsync("~/Views/Modern/Raid/_RaidDashboardStatCard.cshtml", new RaidDashboardStatCardVm { Label = "Reviewed this month", Value = Model.ReviewedThisMonthCount.ToString("N0", enGb), TintClass = "dfe-f-stat-card--tint-blue" })
+    @await Html.PartialAsync("~/Views/Modern/Raid/_RaidDashboardStatCard.cshtml", new RaidDashboardStatCardVm
+    {
+      Label = "Need attention",
+      Value = Model.AttentionCount.ToString("N0", enGb),
+      TintClass = Model.AttentionCount > 0 ? "dfe-f-stat-card--tint-red" : "dfe-f-stat-card--tint-grey"
+    })
+  </div>
+
+  @if (Model.RisksByTier.Count > 0)
+  {
+    <h2 class="govuk-heading-m govuk-!-margin-top-8">Open risks by tier</h2>
+    <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+      <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed">
+        <thead class="govuk-table__head">
+          <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header">Tier</th>
+            <th scope="col" class="govuk-table__header govuk-table__header--numeric">Open risks</th>
+          </tr>
+        </thead>
+        <tbody class="govuk-table__body">
+          @foreach (var row in Model.RisksByTier)
+          {
+            <tr class="govuk-table__row">
+              <td class="govuk-table__cell">@row.Label</td>
+              <td class="govuk-table__cell govuk-table__cell--numeric">@row.Count</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+
+  @if (Model.AttentionItems.Count > 0)
+  {
+    <h2 class="govuk-heading-m govuk-!-margin-top-8">Risks and issues needing attention</h2>
+    <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+      <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed">
+        <thead class="govuk-table__head">
+          <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header">Ref</th>
+            <th scope="col" class="govuk-table__header">Title</th>
+            <th scope="col" class="govuk-table__header">Why</th>
+          </tr>
+        </thead>
+        <tbody class="govuk-table__body">
+          @foreach (var a in Model.AttentionItems)
+          {
+            var href = a.Kind == "risk"
+              ? Url.Action("RiskDetail", "ModernRaid", new { id = a.Id })
+              : Url.Action("IssueDetail", "ModernRaid", new { id = a.Id });
+            <tr class="govuk-table__row">
+              <td class="govuk-table__cell govuk-body-s">@a.Reference</td>
+              <td class="govuk-table__cell"><a class="govuk-link govuk-link--no-visited-state" href="@href">@a.Title</a></td>
+              <td class="govuk-table__cell govuk-body-s">@a.Reason</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+
+  <p class="govuk-!-margin-top-8 govuk-!-margin-bottom-0">
+    <a class="govuk-button" href="@workUrl" id="raid-review-start-work">@reviewCtaLabel</a>
+  </p>
+  @if (Model.HasStartedReview && totalOpen > 0)
+  {
+    <p class="govuk-hint govuk-!-margin-top-2">
+      <strong>@Model.ReviewedThisMonthCount</strong> of <strong>@totalOpen</strong> open records reviewed this month.
+    </p>
+  }
+</div>
+
+@section Scripts {
+  <script nonce="@(Context.Items["Nonce"]?.ToString() ?? "")">
+    (function () {
+      var key = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(storageKey));
+      var ba = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.BusinessAreaQuery));
+      try {
+        if (ba) {
+          var ids = ba.split(',').map(function (x) { return parseInt(x, 10); }).filter(function (n) { return n > 0; });
+          if (ids.length) localStorage.setItem(key, JSON.stringify(ids));
+        }
+      } catch (e) { /* ignore */ }
+    })();
+  </script>
+}

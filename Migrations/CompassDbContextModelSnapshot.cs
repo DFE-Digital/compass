@@ -17,7 +17,7 @@ namespace Compass.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "9.0.9")
+                .HasAnnotation("ProductVersion", "10.0.0")
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
@@ -2767,6 +2767,621 @@ namespace Compass.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("DdatProfessions");
+                });
+
+            modelBuilder.Entity("Compass.Models.Ddr.DdrAlternative", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AlternativeText")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("DesignDecisionRecordId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Outcome")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DesignDecisionRecordId");
+
+                    b.ToTable("ddr_alternative", (string)null);
+                });
+
+            modelBuilder.Entity("Compass.Models.Ddr.DdrAuditEvent", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int>("DesignDecisionRecordId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("FieldName")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("NewValue")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("PreviousValue")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("DesignDecisionRecordId");
+
+                    b.ToTable("ddr_audit_event", (string)null);
+                });
+
+            modelBuilder.Entity("Compass.Models.Ddr.DdrComment", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("CommentText")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("CommentType")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("CreatedByName")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int>("DesignDecisionRecordId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("DesignDecisionRecordId");
+
+                    b.ToTable("ddr_comment", (string)null);
+                });
+
+            modelBuilder.Entity("Compass.Models.Ddr.DdrComponentPatternLink", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("DesignDecisionRecordId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ItemName")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("ItemType")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("ItemUrl")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("SourceSystem")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DesignDecisionRecordId");
+
+                    b.ToTable("ddr_component_pattern_link", (string)null);
+                });
+
+            modelBuilder.Entity("Compass.Models.Ddr.DdrEvidence", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("DesignDecisionRecordId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("EvidenceSummary")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("EvidenceTitle")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("EvidenceType")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("EvidenceUrl")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DesignDecisionRecordId");
+
+                    b.ToTable("ddr_evidence", (string)null);
+                });
+
+            modelBuilder.Entity("Compass.Models.Ddr.DdrFeatureSetting", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("SettingKey")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("SettingValue")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SettingKey");
+
+                    b.HasIndex("UpdatedAt");
+
+                    b.ToTable("ddr_feature_setting", (string)null);
+                });
+
+            modelBuilder.Entity("Compass.Models.Ddr.DdrGitHubIssueLink", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("BacklogType")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int>("DesignDecisionRecordId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("IssueTitle")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("IssueUrl")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DesignDecisionRecordId");
+
+                    b.ToTable("ddr_github_issue_link", (string)null);
+                });
+
+            modelBuilder.Entity("Compass.Models.Ddr.DdrInsightClassification", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Classification")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int>("DesignDecisionRecordId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Classification");
+
+                    b.HasIndex("DesignDecisionRecordId");
+
+                    b.ToTable("ddr_insight_classification", (string)null);
+                });
+
+            modelBuilder.Entity("Compass.Models.Ddr.DdrProductLink", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int>("DesignDecisionRecordId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("FipsProductId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FipsProductId");
+
+                    b.HasIndex("DesignDecisionRecordId", "FipsProductId")
+                        .IsUnique();
+
+                    b.ToTable("ddr_record_product_link", (string)null);
+                });
+
+            modelBuilder.Entity("Compass.Models.Ddr.DdrRecommendedFollowUp", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int>("DesignDecisionRecordId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("FollowUpAction")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("TargetBacklog")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DesignDecisionRecordId");
+
+                    b.HasIndex("Status");
+
+                    b.ToTable("ddr_recommended_follow_up", (string)null);
+                });
+
+            modelBuilder.Entity("Compass.Models.Ddr.DdrRelatedRecord", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("DesignDecisionRecordId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("RelatedDesignDecisionRecordId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("RelationshipType")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DesignDecisionRecordId");
+
+                    b.HasIndex("RelatedDesignDecisionRecordId");
+
+                    b.ToTable("ddr_related_record", (string)null);
+                });
+
+            modelBuilder.Entity("Compass.Models.Ddr.DdrStandardLink", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("DesignDecisionRecordId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("StandardReference")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("StandardTitle")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("StandardType")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("StandardUrl")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DesignDecisionRecordId");
+
+                    b.ToTable("ddr_standard_link", (string)null);
+                });
+
+            modelBuilder.Entity("Compass.Models.Ddr.DdrWorkItemLink", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int>("DesignDecisionRecordId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("WorkItemId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("WorkItemId");
+
+                    b.HasIndex("DesignDecisionRecordId", "WorkItemId")
+                        .IsUnique();
+
+                    b.ToTable("ddr_record_work_item_link", (string)null);
+                });
+
+            modelBuilder.Entity("Compass.Models.Ddr.DesignDecisionRecord", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ApprovalRoute")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("ApprovedBy")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("AuthorDisplayName")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int?>("AuthorUserId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("ConsequencesTradeoffs")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ContextProblemStatement")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("CurrentValidity")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("CurrentValidityRationale")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Decision")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("DeviationDetails")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("DeviationFlag")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("DeviationType")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("MessageToDesignOps")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("OriginalDecisionDate")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("Rationale")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Reference")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("RetrospectiveContext")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("RetrospectiveRecord")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("ReviewDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ReviewTrigger")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("ShortTitle")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime?>("SubmittedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("SubmittedBy")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Category");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("DeviationFlag");
+
+                    b.HasIndex("Reference")
+                        .IsUnique();
+
+                    b.HasIndex("ReviewDate");
+
+                    b.HasIndex("Status");
+
+                    b.ToTable("ddr_record", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.DdtStandard", b =>
@@ -6111,6 +6726,11 @@ namespace Compass.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
@@ -8271,6 +8891,288 @@ namespace Compass.Migrations
                     b.HasIndex("ProjectMonthlyUpdateId");
 
                     b.ToTable("MonthlyUpdateNarratives");
+                });
+
+            modelBuilder.Entity("Compass.Models.NearMiss", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int?>("BusinessAreaLookupId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("CreatedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("DateLogged")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("DirectorateLookupId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Impact")
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<int?>("NearMissSeriousnessId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("NearMissStatusId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("NearMissTypeId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("PostMitigationRagStatusLookupId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Reference")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<int?>("RiskTierId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("UpdatedByUserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BusinessAreaLookupId");
+
+                    b.HasIndex("CreatedByUserId");
+
+                    b.HasIndex("DirectorateLookupId");
+
+                    b.HasIndex("NearMissSeriousnessId");
+
+                    b.HasIndex("NearMissStatusId");
+
+                    b.HasIndex("NearMissTypeId");
+
+                    b.HasIndex("PostMitigationRagStatusLookupId");
+
+                    b.HasIndex("Reference")
+                        .IsUnique();
+
+                    b.HasIndex("RiskTierId");
+
+                    b.HasIndex("UpdatedByUserId");
+
+                    b.ToTable("NearMisses");
+                });
+
+            modelBuilder.Entity("Compass.Models.NearMissAction", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("ActionDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ActionText")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("NearMissId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("RecordedByUserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NearMissId");
+
+                    b.HasIndex("RecordedByUserId");
+
+                    b.ToTable("NearMissActions");
+                });
+
+            modelBuilder.Entity("Compass.Models.NearMissMitigation", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AssuranceTakenPlace")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("MitigationDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("NearMissId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("RecordedByUserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NearMissId");
+
+                    b.HasIndex("RecordedByUserId");
+
+                    b.ToTable("NearMissMitigations");
+                });
+
+            modelBuilder.Entity("Compass.Models.NearMissOwner", b =>
+                {
+                    b.Property<int>("NearMissId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("NearMissId", "UserId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("NearMissOwners");
+                });
+
+            modelBuilder.Entity("Compass.Models.NearMissSeriousness", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Label")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("NearMissSeriousnesses");
+                });
+
+            modelBuilder.Entity("Compass.Models.NearMissStatus", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Label")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("NearMissStatuses");
+                });
+
+            modelBuilder.Entity("Compass.Models.NearMissType", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Label")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("NearMissTypes");
                 });
 
             modelBuilder.Entity("Compass.Models.NotificationLog", b =>
@@ -10724,6 +11626,48 @@ namespace Compass.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("RagStatusLookups");
+                });
+
+            modelBuilder.Entity("Compass.Models.Raid.RaidMonthlyReview", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("MonthlyComment")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int>("RecordId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("RecordType")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int>("ReviewMonth")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ReviewYear")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("ReviewedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("ReviewedByUserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ReviewedByUserId");
+
+                    b.HasIndex("RecordType", "RecordId", "ReviewYear", "ReviewMonth")
+                        .IsUnique();
+
+                    b.ToTable("RaidMonthlyReviews");
                 });
 
             modelBuilder.Entity("Compass.Models.RaidEscalationTierChangeRequest", b =>
@@ -14153,6 +15097,138 @@ namespace Compass.Migrations
                     b.Navigation("DdatFrameworkSkill");
                 });
 
+            modelBuilder.Entity("Compass.Models.Ddr.DdrAlternative", b =>
+                {
+                    b.HasOne("Compass.Models.Ddr.DesignDecisionRecord", "DesignDecisionRecord")
+                        .WithMany("Alternatives")
+                        .HasForeignKey("DesignDecisionRecordId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("DesignDecisionRecord");
+                });
+
+            modelBuilder.Entity("Compass.Models.Ddr.DdrAuditEvent", b =>
+                {
+                    b.HasOne("Compass.Models.Ddr.DesignDecisionRecord", "DesignDecisionRecord")
+                        .WithMany("AuditEvents")
+                        .HasForeignKey("DesignDecisionRecordId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("DesignDecisionRecord");
+                });
+
+            modelBuilder.Entity("Compass.Models.Ddr.DdrComment", b =>
+                {
+                    b.HasOne("Compass.Models.Ddr.DesignDecisionRecord", "DesignDecisionRecord")
+                        .WithMany("Comments")
+                        .HasForeignKey("DesignDecisionRecordId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("DesignDecisionRecord");
+                });
+
+            modelBuilder.Entity("Compass.Models.Ddr.DdrComponentPatternLink", b =>
+                {
+                    b.HasOne("Compass.Models.Ddr.DesignDecisionRecord", "DesignDecisionRecord")
+                        .WithMany("ComponentPatternLinks")
+                        .HasForeignKey("DesignDecisionRecordId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("DesignDecisionRecord");
+                });
+
+            modelBuilder.Entity("Compass.Models.Ddr.DdrEvidence", b =>
+                {
+                    b.HasOne("Compass.Models.Ddr.DesignDecisionRecord", "DesignDecisionRecord")
+                        .WithMany("Evidence")
+                        .HasForeignKey("DesignDecisionRecordId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("DesignDecisionRecord");
+                });
+
+            modelBuilder.Entity("Compass.Models.Ddr.DdrGitHubIssueLink", b =>
+                {
+                    b.HasOne("Compass.Models.Ddr.DesignDecisionRecord", "DesignDecisionRecord")
+                        .WithMany("GitHubIssueLinks")
+                        .HasForeignKey("DesignDecisionRecordId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("DesignDecisionRecord");
+                });
+
+            modelBuilder.Entity("Compass.Models.Ddr.DdrInsightClassification", b =>
+                {
+                    b.HasOne("Compass.Models.Ddr.DesignDecisionRecord", "DesignDecisionRecord")
+                        .WithMany("InsightClassifications")
+                        .HasForeignKey("DesignDecisionRecordId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("DesignDecisionRecord");
+                });
+
+            modelBuilder.Entity("Compass.Models.Ddr.DdrProductLink", b =>
+                {
+                    b.HasOne("Compass.Models.Ddr.DesignDecisionRecord", "DesignDecisionRecord")
+                        .WithMany("ProductLinks")
+                        .HasForeignKey("DesignDecisionRecordId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("DesignDecisionRecord");
+                });
+
+            modelBuilder.Entity("Compass.Models.Ddr.DdrRecommendedFollowUp", b =>
+                {
+                    b.HasOne("Compass.Models.Ddr.DesignDecisionRecord", "DesignDecisionRecord")
+                        .WithMany("RecommendedFollowUps")
+                        .HasForeignKey("DesignDecisionRecordId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("DesignDecisionRecord");
+                });
+
+            modelBuilder.Entity("Compass.Models.Ddr.DdrRelatedRecord", b =>
+                {
+                    b.HasOne("Compass.Models.Ddr.DesignDecisionRecord", "DesignDecisionRecord")
+                        .WithMany("RelatedRecords")
+                        .HasForeignKey("DesignDecisionRecordId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("DesignDecisionRecord");
+                });
+
+            modelBuilder.Entity("Compass.Models.Ddr.DdrStandardLink", b =>
+                {
+                    b.HasOne("Compass.Models.Ddr.DesignDecisionRecord", "DesignDecisionRecord")
+                        .WithMany("StandardLinks")
+                        .HasForeignKey("DesignDecisionRecordId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("DesignDecisionRecord");
+                });
+
+            modelBuilder.Entity("Compass.Models.Ddr.DdrWorkItemLink", b =>
+                {
+                    b.HasOne("Compass.Models.Ddr.DesignDecisionRecord", "DesignDecisionRecord")
+                        .WithMany("WorkItemLinks")
+                        .HasForeignKey("DesignDecisionRecordId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("DesignDecisionRecord");
+                });
+
             modelBuilder.Entity("Compass.Models.DdtStandard", b =>
                 {
                     b.HasOne("Compass.Models.User", "CreatorUser")
@@ -15508,6 +16584,116 @@ namespace Compass.Migrations
                     b.Navigation("ProjectMonthlyUpdate");
                 });
 
+            modelBuilder.Entity("Compass.Models.NearMiss", b =>
+                {
+                    b.HasOne("Compass.Models.BusinessAreaLookup", "BusinessAreaLookup")
+                        .WithMany()
+                        .HasForeignKey("BusinessAreaLookupId");
+
+                    b.HasOne("Compass.Models.User", "CreatedByUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId");
+
+                    b.HasOne("Compass.Models.DirectorateLookup", "DirectorateLookup")
+                        .WithMany()
+                        .HasForeignKey("DirectorateLookupId");
+
+                    b.HasOne("Compass.Models.NearMissSeriousness", "SeriousnessLookup")
+                        .WithMany()
+                        .HasForeignKey("NearMissSeriousnessId");
+
+                    b.HasOne("Compass.Models.NearMissStatus", "StatusLookup")
+                        .WithMany()
+                        .HasForeignKey("NearMissStatusId");
+
+                    b.HasOne("Compass.Models.NearMissType", "TypeLookup")
+                        .WithMany()
+                        .HasForeignKey("NearMissTypeId");
+
+                    b.HasOne("Compass.Models.RagStatusLookup", "PostMitigationRagStatusLookup")
+                        .WithMany()
+                        .HasForeignKey("PostMitigationRagStatusLookupId");
+
+                    b.HasOne("Compass.Models.RiskTier", "RiskTier")
+                        .WithMany()
+                        .HasForeignKey("RiskTierId");
+
+                    b.HasOne("Compass.Models.User", "UpdatedByUser")
+                        .WithMany()
+                        .HasForeignKey("UpdatedByUserId");
+
+                    b.Navigation("BusinessAreaLookup");
+
+                    b.Navigation("CreatedByUser");
+
+                    b.Navigation("DirectorateLookup");
+
+                    b.Navigation("PostMitigationRagStatusLookup");
+
+                    b.Navigation("RiskTier");
+
+                    b.Navigation("SeriousnessLookup");
+
+                    b.Navigation("StatusLookup");
+
+                    b.Navigation("TypeLookup");
+
+                    b.Navigation("UpdatedByUser");
+                });
+
+            modelBuilder.Entity("Compass.Models.NearMissAction", b =>
+                {
+                    b.HasOne("Compass.Models.NearMiss", "NearMiss")
+                        .WithMany("NearMissActions")
+                        .HasForeignKey("NearMissId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Compass.Models.User", "RecordedByUser")
+                        .WithMany()
+                        .HasForeignKey("RecordedByUserId");
+
+                    b.Navigation("NearMiss");
+
+                    b.Navigation("RecordedByUser");
+                });
+
+            modelBuilder.Entity("Compass.Models.NearMissMitigation", b =>
+                {
+                    b.HasOne("Compass.Models.NearMiss", "NearMiss")
+                        .WithMany("NearMissMitigations")
+                        .HasForeignKey("NearMissId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Compass.Models.User", "RecordedByUser")
+                        .WithMany()
+                        .HasForeignKey("RecordedByUserId");
+
+                    b.Navigation("NearMiss");
+
+                    b.Navigation("RecordedByUser");
+                });
+
+            modelBuilder.Entity("Compass.Models.NearMissOwner", b =>
+                {
+                    b.HasOne("Compass.Models.NearMiss", "NearMiss")
+                        .WithMany("NearMissOwners")
+                        .HasForeignKey("NearMissId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Compass.Models.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("NearMiss");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("Compass.Models.NotificationLog", b =>
                 {
                     b.HasOne("Compass.Models.NotificationRule", "NotificationRule")
@@ -16111,6 +17297,17 @@ namespace Compass.Migrations
                     b.Navigation("Project");
 
                     b.Navigation("WorkItemTagLookup");
+                });
+
+            modelBuilder.Entity("Compass.Models.Raid.RaidMonthlyReview", b =>
+                {
+                    b.HasOne("Compass.Models.User", "ReviewedByUser")
+                        .WithMany()
+                        .HasForeignKey("ReviewedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("ReviewedByUser");
                 });
 
             modelBuilder.Entity("Compass.Models.RaidEscalationTierChangeRequest", b =>
@@ -17048,6 +18245,33 @@ namespace Compass.Migrations
                     b.Navigation("ServiceStandardProfessions");
                 });
 
+            modelBuilder.Entity("Compass.Models.Ddr.DesignDecisionRecord", b =>
+                {
+                    b.Navigation("Alternatives");
+
+                    b.Navigation("AuditEvents");
+
+                    b.Navigation("Comments");
+
+                    b.Navigation("ComponentPatternLinks");
+
+                    b.Navigation("Evidence");
+
+                    b.Navigation("GitHubIssueLinks");
+
+                    b.Navigation("InsightClassifications");
+
+                    b.Navigation("ProductLinks");
+
+                    b.Navigation("RecommendedFollowUps");
+
+                    b.Navigation("RelatedRecords");
+
+                    b.Navigation("StandardLinks");
+
+                    b.Navigation("WorkItemLinks");
+                });
+
             modelBuilder.Entity("Compass.Models.DdtStandard", b =>
                 {
                     b.Navigation("AuditLogs");
@@ -17259,6 +18483,15 @@ namespace Compass.Migrations
                     b.Navigation("Objectives");
 
                     b.Navigation("Projects");
+                });
+
+            modelBuilder.Entity("Compass.Models.NearMiss", b =>
+                {
+                    b.Navigation("NearMissActions");
+
+                    b.Navigation("NearMissMitigations");
+
+                    b.Navigation("NearMissOwners");
                 });
 
             modelBuilder.Entity("Compass.Models.NotificationTemplate", b =>

@@ -1,4 +1,5 @@
 @model List<Compass.Models.DemandPipeline.DemandPipelineRequest>
+@using Compass.ViewModels.Modern
 @{
     ViewData["Title"] = "Manage demand";
     var allStatuses = new[] { "Draft", "Submitted", "Active", "ExploratoryReview", "Scoring", "Scored", "TriagePending", "Triaged", "Progressed to delivery", "Closed - Progressed to delivery", "Returned", "Rejected", "Paused", "Closed" };
@@ -49,11 +50,14 @@
  </div>
 }
 
-<div class="dfe-c-page-title" style="margin-bottom:1rem;">
- <div class="dfe-c-page-title__caption">Operations</div>
- <h1 class="dfe-c-page-title__heading">Manage demand</h1>
- <p class="govuk-body-s govuk-!-margin-top-1 govuk-!-margin-bottom-0" style="color:#505a5f;">All demand pipeline requests — override status and manage records.</p>
-</div>
+@{
+  var opsDemandLede = await Html.PartialAsync("_ManageDemandHeaderLede");
+}
+@await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+  Caption = "Operations",
+  Title = "Manage demand",
+  Lede = opsDemandLede
+})
 
 @await Html.PartialAsync("_SearchAndFilter", (Compass.Models.SearchAndFilterViewModel)ViewBag.SearchAndFilter)
 
@@ -65,31 +69,44 @@
 }
 else
 {
- <div class="dfe-c-table-wrap">
- <table>
+ <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+ <table class="govuk-table">
  <caption class="govuk-visually-hidden">Demand pipeline requests</caption>
-    <thead>
-        <tr>
-            <th scope="col">Reference</th>
-            <th scope="col">Title</th>
-            <th scope="col">Department</th>
-            <th scope="col">SRO</th>
-            <th scope="col">Status</th>
-            <th scope="col">Change status</th>
+    <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Reference</button>
+        </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Title</button>
+        </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Department</button>
+        </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">SRO</button>
+        </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Status</button>
+        </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Change status</button>
+        </th>
         </tr>
     </thead>
-    <tbody>
+    <tbody class="govuk-table__body">
     @foreach (var d in Model)
     {
-        <tr>
-            <td>
+        <tr class="govuk-table__row">
+            <td class="govuk-table__cell">
                 <a href="@Url.Action("RequestDetail", "ModernDemand", new { id = d.Id })" class="govuk-link govuk-link--no-visited-state">@d.Reference</a>
             </td>
-            <td>@d.Title</td>
-            <td>@(d.DepartmentGroup ?? "—")</td>
-            <td>@(d.Sro ?? "—")</td>
-            <td><span class="dfe-c-tag @StatusTagMod(d.Status)">@StatusLabel(d.Status)</span></td>
-            <td>
+            <td class="govuk-table__cell">@d.Title</td>
+            <td class="govuk-table__cell">@(d.DepartmentGroup ?? "—")</td>
+            <td class="govuk-table__cell">@(d.Sro ?? "—")</td>
+            <td class="govuk-table__cell"><span class="dfe-c-tag @StatusTagMod(d.Status)">@StatusLabel(d.Status)</span></td>
+            <td class="govuk-table__cell">
                 <form method="post" action="@Url.Action("ManageDemandUpdateStatus", "ModernOperations", new { id = d.Id })" class="govuk-!-margin-bottom-0" style="display:flex;gap:0.5rem;align-items:center;">
                     @Html.AntiForgeryToken()
                     <input type="hidden" name="search" value="@Context.Request.Query["search"]" />

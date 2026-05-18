@@ -1,5 +1,6 @@
 @model IEnumerable<Compass.Models.Modern.Work.WorkItem>
 @using Compass.Models.Modern.Work
+@using Compass.ViewModels.Modern
 @{
     ViewData["Title"] = "Work by priority";
     var items = Model?.ToList() ?? new List<WorkItem>();
@@ -39,13 +40,14 @@
 }
 
 <div id="sc-work-bypriority" class="modern-work-page">
- <div class="dfe-c-flex--between dfe-c-mb-3" style="flex-wrap:wrap;gap:1rem;">
- <div class="dfe-c-page-title" style="margin:0;">
- <div class="dfe-c-page-title__caption">Work</div>
- <h1 class="dfe-c-page-title__heading">By priority</h1>
- <p class="dfe-c-page-title__lede">Browse work grouped by delivery priority, priority outcome, or mission pillar. Use filters to narrow the list; expand each section to see work items.</p>
-    </div>
-  </div>
+@{
+  var byPriorityLede = await Html.PartialAsync("_GovukBodyParagraph", "Browse work grouped by delivery priority, priority outcome, or mission pillar. Use filters to narrow the list; expand each section to see work items.");
+}
+@await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+  Caption = "Work",
+  Title = "By priority",
+  Lede = byPriorityLede
+})
 
  <form method="get" action="@Url.Action("ByPriority", "ModernWork")" id="bypriority-filter-form" class="dfe-c-mb-3">
     <input type="hidden" name="tab" value="@tab" />
@@ -137,7 +139,7 @@
         </div>
  <div class="filter-panel__actions">
  <button type="submit" class="govuk-button">Apply filters</button>
- <a href="@Url.Action("ByPriority", "ModernWork", new { tab })" class="govuk-link">Clear filters</a>
+ <a href="@Url.Action("ByPriority", "ModernWork", new { tab })" class="govuk-link govuk-link--no-visited-state">Clear filters</a>
         </div>
       </div>
     </div>
@@ -149,46 +151,77 @@
   }
   else
   {
- <div class="tabs" role="tablist" aria-label="Group work by">
- <a href="@Url.Action("ByPriority", "ModernWork", BpRoute("levels"))" class="tab @(tab =="levels" ? "on" : "")" role="tab" aria-selected="@(tab == "levels")" aria-controls="d-bypriority-levels" id="tab-bypriority-levels">Delivery priority</a>
- <a href="@Url.Action("ByPriority", "ModernWork", BpRoute("outcomes"))" class="tab @(tab =="outcomes" ? "on" : "")" role="tab" aria-selected="@(tab == "outcomes")" aria-controls="d-bypriority-outcomes" id="tab-bypriority-outcomes">Priority outcomes</a>
- <a href="@Url.Action("ByPriority", "ModernWork", BpRoute("mission"))" class="tab @(tab =="mission" ? "on" : "")" role="tab" aria-selected="@(tab == "mission")" aria-controls="d-bypriority-mission" id="tab-bypriority-mission">Mission pillars</a>
-    </div>
+ <nav class="dfe-f-sub-navigation govuk-!-margin-bottom-4" aria-label="Group work by">
+ <ul class="dfe-f-sub-navigation__list">
+ <li class="dfe-f-sub-navigation__item@(tab == "levels" ? " dfe-f-sub-navigation__item--active" : "")">
+ <a class="dfe-f-sub-navigation__link govuk-link govuk-link--no-visited-state" href="@Url.Action("ByPriority", "ModernWork", BpRoute("levels"))" id="tab-bypriority-levels"@if (tab == "levels") { <text> aria-current="page"</text> }>Delivery priority</a>
+ </li>
+ <li class="dfe-f-sub-navigation__item@(tab == "outcomes" ? " dfe-f-sub-navigation__item--active" : "")">
+ <a class="dfe-f-sub-navigation__link govuk-link govuk-link--no-visited-state" href="@Url.Action("ByPriority", "ModernWork", BpRoute("outcomes"))" id="tab-bypriority-outcomes"@if (tab == "outcomes") { <text> aria-current="page"</text> }>Priority outcomes</a>
+ </li>
+ <li class="dfe-f-sub-navigation__item@(tab == "mission" ? " dfe-f-sub-navigation__item--active" : "")">
+ <a class="dfe-f-sub-navigation__link govuk-link govuk-link--no-visited-state" href="@Url.Action("ByPriority", "ModernWork", BpRoute("mission"))" id="tab-bypriority-mission"@if (tab == "mission") { <text> aria-current="page"</text> }>Mission pillars</a>
+ </li>
+ </ul>
+    </nav>
 
  <div id="d-bypriority-levels" class="tab-pane @(tab =="levels" ? "on" : "")" role="tabpanel" aria-labelledby="tab-bypriority-levels">
- <div class="bypriority-bulk-bar">
- <button type="button" class="govuk-button govuk-button--secondary" id="bypriority-bulk-levels" aria-label="Open all sections">Open all</button>
-      </div>
- <div class="bypriority-group-stack dfe-c-mb-3" id="bypriority-levels-stack">
+ <div class="dfe-f-toggle-group dfe-c-mb-4" data-module="dfe-f-toggle-group">
+ <div class="dfe-f-toggle-group__controls govuk-body-s">
+ <button type="button" class="dfe-f-toggle-group__action" data-dfe-toggle-expand-all>Expand all</button>
+ <span class="dfe-f-toggle-group__separator" aria-hidden="true"> · </span>
+ <button type="button" class="dfe-f-toggle-group__action" data-dfe-toggle-collapse-all>Collapse all</button>
+ </div>
+ <div class="dfe-f-toggle-group__items bypriority-group-stack govuk-!-margin-bottom-3" id="bypriority-levels-stack">
         @if (priorityOptions.Any())
         {
           foreach (var pr in priorityOptions)
           {
             var groupItems = items.Where(w => w.PriorityId == pr.Id).ToList();
             var gCount = workCountByDeliveryPriorityId.TryGetValue(pr.Id, out var c) ? c : groupItems.Count;
- <details class="dfe-c-collapsible bypriority-group">
- <summary class="dfe-c-collapsible__trigger">
- <span class="dfe-c-collapsible__icon" aria-hidden="true"></span>
-                <span>@pr.Name</span>
- <span class="dfe-c-collapsible__status"><span class="govuk-tag govuk-tag--grey">@gCount work item@(gCount == 1 ? "" : "s")</span></span>
-              </summary>
- <div class="dfe-c-collapsible__body">
+ <div class="bypriority-group dfe-f-toggle govuk-!-margin-bottom-3">
+ <div class="dfe-f-toggle__title-wrapper">
+ <h2 class="dfe-f-toggle__heading">
+ <button type="button" class="dfe-f-toggle__button" aria-expanded="false" aria-controls="bp-lvl-@pr.Id" id="bp-lvl-btn-@pr.Id">
+ <span class="dfe-f-toggle__icon" aria-hidden="true"></span>
+ <span class="dfe-f-toggle__title">@pr.Name</span>
+ <span class="mr-toggle-panel__meta"><span class="dfe-f-badge dfe-f-badge--blue">@gCount work item@(gCount == 1 ? "" : "s")</span></span>
+ </button>
+ </h2>
+ </div>
+ <div id="bp-lvl-@pr.Id" class="dfe-f-toggle__content">
+ <div class="dfe-f-toggle__body govuk-body">
                 @if (groupItems.Any())
                 {
- <div class="dfe-c-table-wrap" >
-                    <table>
-                      <thead>
-                        <tr>
-                          <th scope="col">Work item</th>
-                          <th scope="col">Business area</th>
-                          <th scope="col">Directorate</th>
-                          <th scope="col">Priority</th>
-                          <th scope="col">RAG</th>
-                          <th scope="col">Primary contact</th>
-                          <th scope="col">Status</th>
+ <div class="dfe-f-table-wrapper dfe-f-table-wrapper--stacked" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+                    <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed modern-work-table"><caption class="govuk-table__caption govuk-visually-hidden">Work items</caption>
+                      <thead class="govuk-table__head">
+                        <tr class="govuk-table__row">
+                          <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Work item</button>
+        </th>
+                          <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Business area</button>
+        </th>
+                          <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Directorate</button>
+        </th>
+                          <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Priority</button>
+        </th>
+                          <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">RAG</button>
+        </th>
+                          <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Primary contact</button>
+        </th>
+                          <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Status</button>
+        </th>
                         </tr>
                       </thead>
-                      <tbody>
+                      <tbody class="govuk-table__body">
                         @await Html.PartialAsync("_ByPriorityWorkRows", groupItems)
                       </tbody>
                     </table>
@@ -199,7 +232,8 @@
  <p class="dfe-c-body-s muted dfe-c-m-0">No work items in this group for the current filters.</p>
                 }
               </div>
-            </details>
+            </div>
+          </div>
           }
         }
         else
@@ -207,29 +241,49 @@
  <p class="dfe-c-body muted">No delivery priorities are configured.</p>
         }
 
- <details class="dfe-c-collapsible bypriority-group">
- <summary class="dfe-c-collapsible__trigger">
- <span class="dfe-c-collapsible__icon" aria-hidden="true"></span>
-            <span>No delivery priority set</span>
- <span class="dfe-c-collapsible__status"><span class="govuk-tag govuk-tag--grey">@untaggedDeliveryPriority.Count work item@(untaggedDeliveryPriority.Count == 1 ? "" : "s")</span></span>
-          </summary>
- <div class="dfe-c-collapsible__body">
+ <div class="bypriority-group dfe-f-toggle govuk-!-margin-bottom-3">
+ <div class="dfe-f-toggle__title-wrapper">
+ <h2 class="dfe-f-toggle__heading">
+ <button type="button" class="dfe-f-toggle__button" aria-expanded="false" aria-controls="bp-lvl-untagged" id="bp-lvl-btn-untagged">
+ <span class="dfe-f-toggle__icon" aria-hidden="true"></span>
+ <span class="dfe-f-toggle__title">No delivery priority set</span>
+ <span class="mr-toggle-panel__meta"><span class="dfe-f-badge dfe-f-badge--blue">@untaggedDeliveryPriority.Count work item@(untaggedDeliveryPriority.Count == 1 ? "" : "s")</span></span>
+ </button>
+ </h2>
+ </div>
+ <div id="bp-lvl-untagged" class="dfe-f-toggle__content">
+ <div class="dfe-f-toggle__body govuk-body">
             @if (untaggedDeliveryPriority.Any())
             {
- <div class="dfe-c-table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th scope="col">Work item</th>
-                      <th scope="col">Business area</th>
-                      <th scope="col">Directorate</th>
-                      <th scope="col">Priority</th>
-                      <th scope="col">RAG</th>
-                      <th scope="col">Primary contact</th>
-                      <th scope="col">Status</th>
+ <div class="dfe-f-table-wrapper dfe-f-table-wrapper--stacked" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+                <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed modern-work-table"><caption class="govuk-table__caption govuk-visually-hidden">Work items</caption>
+                  <thead class="govuk-table__head">
+                    <tr class="govuk-table__row">
+                      <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Work item</button>
+        </th>
+                      <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Business area</button>
+        </th>
+                      <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Directorate</button>
+        </th>
+                      <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Priority</button>
+        </th>
+                      <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">RAG</button>
+        </th>
+                      <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Primary contact</button>
+        </th>
+                      <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Status</button>
+        </th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody class="govuk-table__body">
                     @await Html.PartialAsync("_ByPriorityWorkRows", untaggedDeliveryPriority)
                   </tbody>
                 </table>
@@ -240,44 +294,69 @@
  <p class="dfe-c-body-s muted dfe-c-m-0">All matching work items have a delivery priority assigned.</p>
             }
           </div>
-        </details>
+        </div>
       </div>
+      </div>
+    </div>
     </div>
 
  <div id="d-bypriority-outcomes" class="tab-pane @(tab =="outcomes" ? "on" : "")" role="tabpanel" aria-labelledby="tab-bypriority-outcomes">
- <div class="bypriority-bulk-bar">
- <button type="button" class="govuk-button govuk-button--secondary" id="bypriority-bulk-outcomes" aria-label="Open all sections">Open all</button>
-      </div>
- <div class="bypriority-group-stack dfe-c-mb-3" id="bypriority-outcomes-stack">
+ <div class="dfe-f-toggle-group dfe-c-mb-4" data-module="dfe-f-toggle-group">
+ <div class="dfe-f-toggle-group__controls govuk-body-s">
+ <button type="button" class="dfe-f-toggle-group__action" data-dfe-toggle-expand-all>Expand all</button>
+ <span class="dfe-f-toggle-group__separator" aria-hidden="true"> · </span>
+ <button type="button" class="dfe-f-toggle-group__action" data-dfe-toggle-collapse-all>Collapse all</button>
+ </div>
+ <div class="dfe-f-toggle-group__items bypriority-group-stack govuk-!-margin-bottom-3" id="bypriority-outcomes-stack">
         @if (priorityOutcomes.Any())
         {
           foreach (var po in priorityOutcomes)
           {
             var groupItems = items.Where(w => w.PriorityOutcomes != null && w.PriorityOutcomes.Any(x => x.PriorityOutcomeId == po.Id)).ToList();
             var gCount = workCountByPriorityOutcomeId.TryGetValue(po.Id, out var c) ? c : groupItems.Count;
- <details class="dfe-c-collapsible bypriority-group">
- <summary class="dfe-c-collapsible__trigger">
- <span class="dfe-c-collapsible__icon" aria-hidden="true"></span>
-                <span>@po.Name</span>
- <span class="dfe-c-collapsible__status"><span class="govuk-tag govuk-tag--grey">@gCount work item@(gCount == 1 ? "" : "s")</span></span>
-              </summary>
- <div class="dfe-c-collapsible__body">
+ <div class="bypriority-group dfe-f-toggle govuk-!-margin-bottom-3">
+ <div class="dfe-f-toggle__title-wrapper">
+ <h2 class="dfe-f-toggle__heading">
+ <button type="button" class="dfe-f-toggle__button" aria-expanded="false" aria-controls="bp-out-@po.Id" id="bp-out-btn-@po.Id">
+ <span class="dfe-f-toggle__icon" aria-hidden="true"></span>
+ <span class="dfe-f-toggle__title">@po.Name</span>
+ <span class="mr-toggle-panel__meta"><span class="dfe-f-badge dfe-f-badge--blue">@gCount work item@(gCount == 1 ? "" : "s")</span></span>
+ </button>
+ </h2>
+ </div>
+ <div id="bp-out-@po.Id" class="dfe-f-toggle__content">
+ <div class="dfe-f-toggle__body govuk-body">
                 @if (groupItems.Any())
                 {
- <div class="dfe-c-table-wrap">
-                    <table>
-                      <thead>
-                        <tr>
-                          <th scope="col">Work item</th>
-                          <th scope="col">Business area</th>
-                          <th scope="col">Directorate</th>
-                          <th scope="col">Priority</th>
-                          <th scope="col">RAG</th>
-                          <th scope="col">Primary contact</th>
-                          <th scope="col">Status</th>
+ <div class="dfe-f-table-wrapper dfe-f-table-wrapper--stacked" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+                    <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed modern-work-table"><caption class="govuk-table__caption govuk-visually-hidden">Work items</caption>
+                      <thead class="govuk-table__head">
+                        <tr class="govuk-table__row">
+                          <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Work item</button>
+        </th>
+                          <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Business area</button>
+        </th>
+                          <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Directorate</button>
+        </th>
+                          <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Priority</button>
+        </th>
+                          <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">RAG</button>
+        </th>
+                          <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Primary contact</button>
+        </th>
+                          <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Status</button>
+        </th>
                         </tr>
                       </thead>
-                      <tbody>
+                      <tbody class="govuk-table__body">
                         @await Html.PartialAsync("_ByPriorityWorkRows", groupItems)
                       </tbody>
                     </table>
@@ -288,7 +367,8 @@
  <p class="dfe-c-body-s muted dfe-c-m-0">No work items in this group for the current filters.</p>
                 }
               </div>
-            </details>
+            </div>
+          </div>
           }
         }
         else
@@ -296,29 +376,49 @@
  <p class="dfe-c-body muted">No priority outcomes are configured.</p>
         }
 
- <details class="dfe-c-collapsible bypriority-group">
- <summary class="dfe-c-collapsible__trigger">
- <span class="dfe-c-collapsible__icon" aria-hidden="true"></span>
-            <span>Not tagged with a priority outcome</span>
- <span class="dfe-c-collapsible__status"><span class="govuk-tag govuk-tag--grey">@untaggedOutcomes.Count work item@(untaggedOutcomes.Count == 1 ? "" : "s")</span></span>
-          </summary>
- <div class="dfe-c-collapsible__body">
+ <div class="bypriority-group dfe-f-toggle govuk-!-margin-bottom-3">
+ <div class="dfe-f-toggle__title-wrapper">
+ <h2 class="dfe-f-toggle__heading">
+ <button type="button" class="dfe-f-toggle__button" aria-expanded="false" aria-controls="bp-out-untagged" id="bp-out-btn-untagged">
+ <span class="dfe-f-toggle__icon" aria-hidden="true"></span>
+ <span class="dfe-f-toggle__title">Not tagged with a priority outcome</span>
+ <span class="mr-toggle-panel__meta"><span class="dfe-f-badge dfe-f-badge--blue">@untaggedOutcomes.Count work item@(untaggedOutcomes.Count == 1 ? "" : "s")</span></span>
+ </button>
+ </h2>
+ </div>
+ <div id="bp-out-untagged" class="dfe-f-toggle__content">
+ <div class="dfe-f-toggle__body govuk-body">
             @if (untaggedOutcomes.Any())
             {
- <div class="dfe-c-table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th scope="col">Work item</th>
-                      <th scope="col">Business area</th>
-                      <th scope="col">Directorate</th>
-                      <th scope="col">Priority</th>
-                      <th scope="col">RAG</th>
-                      <th scope="col">Primary contact</th>
-                      <th scope="col">Status</th>
+ <div class="dfe-f-table-wrapper dfe-f-table-wrapper--stacked" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+                <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed modern-work-table"><caption class="govuk-table__caption govuk-visually-hidden">Work items</caption>
+                  <thead class="govuk-table__head">
+                    <tr class="govuk-table__row">
+                      <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Work item</button>
+        </th>
+                      <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Business area</button>
+        </th>
+                      <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Directorate</button>
+        </th>
+                      <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Priority</button>
+        </th>
+                      <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">RAG</button>
+        </th>
+                      <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Primary contact</button>
+        </th>
+                      <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Status</button>
+        </th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody class="govuk-table__body">
                     @await Html.PartialAsync("_ByPriorityWorkRows", untaggedOutcomes)
                   </tbody>
                 </table>
@@ -329,44 +429,69 @@
  <p class="dfe-c-body-s muted dfe-c-m-0">All matching work items are tagged with at least one priority outcome.</p>
             }
           </div>
-        </details>
+        </div>
       </div>
+      </div>
+    </div>
     </div>
 
  <div id="d-bypriority-mission" class="tab-pane @(tab =="mission" ? "on" : "")" role="tabpanel" aria-labelledby="tab-bypriority-mission">
- <div class="bypriority-bulk-bar">
- <button type="button" class="govuk-button govuk-button--secondary" id="bypriority-bulk-mission" aria-label="Open all sections">Open all</button>
-      </div>
- <div class="bypriority-group-stack dfe-c-mb-3" id="bypriority-mission-stack">
+ <div class="dfe-f-toggle-group dfe-c-mb-4" data-module="dfe-f-toggle-group">
+ <div class="dfe-f-toggle-group__controls govuk-body-s">
+ <button type="button" class="dfe-f-toggle-group__action" data-dfe-toggle-expand-all>Expand all</button>
+ <span class="dfe-f-toggle-group__separator" aria-hidden="true"> · </span>
+ <button type="button" class="dfe-f-toggle-group__action" data-dfe-toggle-collapse-all>Collapse all</button>
+ </div>
+ <div class="dfe-f-toggle-group__items bypriority-group-stack govuk-!-margin-bottom-3" id="bypriority-mission-stack">
         @if (missionPillars.Any())
         {
           foreach (var mp in missionPillars)
           {
             var groupItems = items.Where(w => w.MissionPillars != null && w.MissionPillars.Any(x => x.MissionPillarId == mp.Id)).ToList();
             var gCount = workCountByMissionPillarId.TryGetValue(mp.Id, out var c) ? c : groupItems.Count;
- <details class="dfe-c-collapsible bypriority-group">
- <summary class="dfe-c-collapsible__trigger">
- <span class="dfe-c-collapsible__icon" aria-hidden="true"></span>
-                <span>@mp.Name</span>
- <span class="dfe-c-collapsible__status"><span class="govuk-tag govuk-tag--grey">@gCount work item@(gCount == 1 ? "" : "s")</span></span>
-              </summary>
- <div class="dfe-c-collapsible__body">
+ <div class="bypriority-group dfe-f-toggle govuk-!-margin-bottom-3">
+ <div class="dfe-f-toggle__title-wrapper">
+ <h2 class="dfe-f-toggle__heading">
+ <button type="button" class="dfe-f-toggle__button" aria-expanded="false" aria-controls="bp-mis-@mp.Id" id="bp-mis-btn-@mp.Id">
+ <span class="dfe-f-toggle__icon" aria-hidden="true"></span>
+ <span class="dfe-f-toggle__title">@mp.Name</span>
+ <span class="mr-toggle-panel__meta"><span class="dfe-f-badge dfe-f-badge--blue">@gCount work item@(gCount == 1 ? "" : "s")</span></span>
+ </button>
+ </h2>
+ </div>
+ <div id="bp-mis-@mp.Id" class="dfe-f-toggle__content">
+ <div class="dfe-f-toggle__body govuk-body">
                 @if (groupItems.Any())
                 {
- <div class="dfe-c-table-wrap" >
-                    <table>
-                      <thead>
-                        <tr>
-                          <th scope="col">Work item</th>
-                          <th scope="col">Business area</th>
-                          <th scope="col">Directorate</th>
-                          <th scope="col">Priority</th>
-                          <th scope="col">RAG</th>
-                          <th scope="col">Primary contact</th>
-                          <th scope="col">Status</th>
+ <div class="dfe-f-table-wrapper dfe-f-table-wrapper--stacked" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+                    <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed modern-work-table"><caption class="govuk-table__caption govuk-visually-hidden">Work items</caption>
+                      <thead class="govuk-table__head">
+                        <tr class="govuk-table__row">
+                          <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Work item</button>
+        </th>
+                          <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Business area</button>
+        </th>
+                          <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Directorate</button>
+        </th>
+                          <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Priority</button>
+        </th>
+                          <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">RAG</button>
+        </th>
+                          <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Primary contact</button>
+        </th>
+                          <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Status</button>
+        </th>
                         </tr>
                       </thead>
-                      <tbody>
+                      <tbody class="govuk-table__body">
                         @await Html.PartialAsync("_ByPriorityWorkRows", groupItems)
                       </tbody>
                     </table>
@@ -377,7 +502,8 @@
  <p class="dfe-c-body-s muted dfe-c-m-0">No work items in this group for the current filters.</p>
                 }
               </div>
-            </details>
+            </div>
+          </div>
           }
         }
         else
@@ -385,29 +511,49 @@
  <p class="dfe-c-body muted">No mission pillars are configured.</p>
         }
 
- <details class="dfe-c-collapsible bypriority-group">
- <summary class="dfe-c-collapsible__trigger">
- <span class="dfe-c-collapsible__icon" aria-hidden="true"></span>
-            <span>Not tagged with a mission pillar</span>
- <span class="dfe-c-collapsible__status"><span class="govuk-tag govuk-tag--grey">@untaggedMission.Count work item@(untaggedMission.Count == 1 ? "" : "s")</span></span>
-          </summary>
- <div class="dfe-c-collapsible__body">
+ <div class="bypriority-group dfe-f-toggle govuk-!-margin-bottom-3">
+ <div class="dfe-f-toggle__title-wrapper">
+ <h2 class="dfe-f-toggle__heading">
+ <button type="button" class="dfe-f-toggle__button" aria-expanded="false" aria-controls="bp-mis-untagged" id="bp-mis-btn-untagged">
+ <span class="dfe-f-toggle__icon" aria-hidden="true"></span>
+ <span class="dfe-f-toggle__title">Not tagged with a mission pillar</span>
+ <span class="mr-toggle-panel__meta"><span class="dfe-f-badge dfe-f-badge--blue">@untaggedMission.Count work item@(untaggedMission.Count == 1 ? "" : "s")</span></span>
+ </button>
+ </h2>
+ </div>
+ <div id="bp-mis-untagged" class="dfe-f-toggle__content">
+ <div class="dfe-f-toggle__body govuk-body">
             @if (untaggedMission.Any())
             {
- <div class="dfe-c-table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th scope="col">Work item</th>
-                      <th scope="col">Business area</th>
-                      <th scope="col">Directorate</th>
-                      <th scope="col">Priority</th>
-                      <th scope="col">RAG</th>
-                      <th scope="col">Primary contact</th>
-                      <th scope="col">Status</th>
+ <div class="dfe-f-table-wrapper dfe-f-table-wrapper--stacked" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+                <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed modern-work-table"><caption class="govuk-table__caption govuk-visually-hidden">Work items</caption>
+                  <thead class="govuk-table__head">
+                    <tr class="govuk-table__row">
+                      <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Work item</button>
+        </th>
+                      <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Business area</button>
+        </th>
+                      <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Directorate</button>
+        </th>
+                      <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Priority</button>
+        </th>
+                      <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">RAG</button>
+        </th>
+                      <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Primary contact</button>
+        </th>
+                      <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Status</button>
+        </th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody class="govuk-table__body">
                     @await Html.PartialAsync("_ByPriorityWorkRows", untaggedMission)
                   </tbody>
                 </table>
@@ -418,46 +564,26 @@
  <p class="dfe-c-body-s muted dfe-c-m-0">All matching work items are tagged with at least one mission pillar.</p>
             }
           </div>
-        </details>
+        </div>
+      </div>
       </div>
     </div>
-
- <p class="dfe-c-body-s muted dfe-c-mt-2">Showing @count work item@(count == 1 ? "" : "s") for the current filters.</p>
+    </div>
   }
 </div>
 
 @section Styles {
 <style>
-  .bypriority-bulk-bar {
-    display: flex;
-    justify-content: flex-end;
-    margin-bottom: 0.75rem;
-  }
-  .bypriority-group-stack .bypriority-group { margin-bottom: 0.75rem; }
-  .bypriority-group-stack .dfe-c-collapsible__trigger { align-items: center; justify-content: flex-start; gap: 0.5rem; flex-wrap: wrap; }
-  /* + when collapsed, − when expanded (native <details open>) */
-  #sc-work-bypriority details.bypriority-group .dfe-c-collapsible__icon {
-    font-size: 0;
-    line-height: 0;
-    overflow: hidden;
-  }
-  #sc-work-bypriority details.bypriority-group .dfe-c-collapsible__icon::before {
-    content: '+';
-    font-size: 1rem;
-    line-height: 1;
-    font-weight: 700;
-    color: var(--navy);
+  .dfe-f-toggle-group__items.bypriority-group-stack .bypriority-group.dfe-f-toggle { margin-bottom: 0.75rem; }
+  .mr-toggle-panel__meta {
+    margin-left: auto;
+    flex-shrink: 0;
     display: flex;
     align-items: center;
-    justify-content: center;
-    width: 100%;
-    height: 100%;
-  }
-  #sc-work-bypriority details.bypriority-group[open] .dfe-c-collapsible__icon::before {
-    content: '\2212';
+    gap: 0.5rem;
   }
   /* Align GOV.UK table with Compass2 register styling inside bordered wrap */
-  #sc-work-bypriority .dfe-c-table-wrap .govuk-table {
+  #sc-work-bypriority .dfe-f-table-wrapper .govuk-table {
     margin-bottom: 0;
     width: 100%;
   }
@@ -475,56 +601,10 @@
       tr.style.display = (!term || text.indexOf(term) !== -1) ? '' : 'none';
     });
   }
-  function initByPriorityBulk(stackId, btnId) {
-    var stack = document.getElementById(stackId);
-    var btn = document.getElementById(btnId);
-    if (!stack || !btn) return;
-    function getDetails() {
-      return stack.querySelectorAll('details.bypriority-group');
-    }
-    function allExpanded() {
-      var ds = getDetails();
-      if (!ds.length) return false;
-      for (var i = 0; i < ds.length; i++) {
-        if (!ds[i].open) return false;
-      }
-      return true;
-    }
-    function sync() {
-      var ds = getDetails();
-      if (!ds.length) {
-        btn.style.display = 'none';
-        return;
-      }
-      btn.style.display = '';
-      if (allExpanded()) {
-        btn.textContent = 'Close all';
-        btn.setAttribute('aria-label', 'Close all sections');
-      } else {
-        btn.textContent = 'Open all';
-        btn.setAttribute('aria-label', 'Open all sections');
-      }
-    }
-    btn.addEventListener('click', function() {
-      var ds = getDetails();
-      var expand = !allExpanded();
-      for (var i = 0; i < ds.length; i++) {
-        ds[i].open = expand;
-      }
-      sync();
-    });
-    getDetails().forEach(function(d) {
-      d.addEventListener('toggle', sync);
-    });
-    sync();
-  }
 
   document.addEventListener('DOMContentLoaded', function() {
     var el = document.getElementById('bypriority-search');
     if (el) { el.addEventListener('input', filterTable); el.addEventListener('keyup', filterTable); if ((el.value || '').trim()) filterTable(); }
-    initByPriorityBulk('bypriority-levels-stack', 'bypriority-bulk-levels');
-    initByPriorityBulk('bypriority-outcomes-stack', 'bypriority-bulk-outcomes');
-    initByPriorityBulk('bypriority-mission-stack', 'bypriority-bulk-mission');
   });
 })();
 </script>

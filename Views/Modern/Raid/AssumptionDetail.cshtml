@@ -1,5 +1,6 @@
 @model Compass.Models.Assumption
 @using Compass.Models
+@using Compass.ViewModels.Modern
 @using System.Globalization
 @using System.Linq
 @{
@@ -92,31 +93,18 @@
   <p class="dfe-c-body govuk-!-margin-bottom-2">
     <a href="@assumptionsRegisterUrl" class="dfe-c-link">← Back to assumptions register</a>
   </p>
-  <div style="font-size:0.8125rem;color:var(--grey-4);margin-bottom:0.75rem;">
-    <span class="dfe-c-mono--inline">A-@Model.Id.ToString("D4")</span>
-    <span aria-hidden="true">&nbsp;·&nbsp;</span>@teamLabel
-    <span aria-hidden="true">&nbsp;·&nbsp;</span>Owner: @ownerDisplay
-  </div>
-  <div class="dfe-c-flex--between dfe-c-mb-2" style="flex-wrap:wrap;gap:1rem;align-items:flex-start;">
-    <div style="flex:1;min-width:min(100%, 18rem);">
-      <h1 class="dfe-c-page-title__heading" style="margin-bottom:0.375rem;word-wrap:break-word;">@displayTitle</h1>
-      <div class="dfe-c-flex" style="gap:0.5rem;flex-wrap:wrap;align-items:center;">
-        <span class="@CritTagClass()">@((Model.CriticalityLookup?.Label ?? "—").ToUpperInvariant())</span>
-        <span class="@StatusTagClass()">@((Model.StatusLookup?.Label ?? "—").ToUpperInvariant())</span>
-        <span style="font-size:0.875rem;color:var(--grey-4);">
-          Created @createdUk
-          <span aria-hidden="true">&nbsp;·&nbsp;</span>Updated @updatedLine
-        </span>
-      </div>
-    </div>
-    <div class="dfe-c-flex" style="gap:0.5rem;flex-wrap:wrap;align-items:flex-start;flex-shrink:0;">
-      @if (workItemUrl != null)
-      {
-        <a href="@workItemUrl" class="govuk-button govuk-button--secondary">Work item</a>
-      }
-      <a href="@assumpEditUrl" class="govuk-button">Edit assumption</a>
-    </div>
-  </div>
+  @{
+    ViewBag.AssumptionDetailWorkItemUrl = workItemUrl;
+    ViewBag.AssumptionDetailEditUrl = assumpEditUrl;
+    var assumptionDetailLede = await Html.PartialAsync("~/Views/Modern/Raid/_RaidAssumptionDetailHeaderLede.cshtml", Model);
+    var assumptionDetailActions = await Html.PartialAsync("~/Views/Modern/Raid/_RaidAssumptionDetailHeaderActions.cshtml", Model);
+  }
+  @await Html.PartialAsync("~/Views/Modern/Shared/_ModernPageHeader.cshtml", new ModernPageHeaderViewModel {
+    Caption = $"A-{Model.Id:D4} · {teamLabel} · Owner: {ownerDisplay}",
+    Title = displayTitle,
+    Lede = assumptionDetailLede,
+    Actions = assumptionDetailActions
+  })
 
   <div style="border:1px solid var(--grey-2);margin-bottom:1.5rem;background:var(--white);">
     <div style="font-size:0.6875rem;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;color:var(--grey-4);padding:0.875rem 1.125rem 0.25rem;">Assumption at a glance</div>

@@ -1,4 +1,6 @@
 @model Compass.Models.FunctionalStandard
+@using Compass.ViewModels.Modern
+@using Microsoft.AspNetCore.Html
 @{
     ViewData["Title"] = $"Standard {Model.Id} — {Model.Title}";
     string BackUrl() => Url.Action("Index", "ModernAdmin", new { panel = "std-functional" }) ?? "#";
@@ -12,11 +14,11 @@
 }
 
 <div class="admin-hub">
-    <div class="dfe-c-page-title dfe-c-mb-3">
-        <div class="dfe-c-page-title__caption">Functional standard @Model.Id</div>
-        <h1 class="dfe-c-page-title__heading">@Model.Title</h1>
-        <p class="dfe-c-page-title__lede"><a class="govuk-link govuk-link--no-visited-state" href="@BackUrl()">Back to all standards</a></p>
-    </div>
+    @await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+        Caption = $"Functional standard {Model.Id}",
+        Title = Model.Title,
+        Lede = new HtmlString($"<p class=\"govuk-body govuk-!-margin-bottom-0\"><a class=\"govuk-link govuk-link--no-visited-state\" href=\"{BackUrl()}\">Back to all standards</a></p>")
+    })
 
     @if (ViewBag.AdminMessage != null)
     {
@@ -65,30 +67,35 @@
         <a class="govuk-button govuk-!-margin-bottom-0" href="@Url.Action("FsThemeCreate", "ModernAdmin", new { standardId = Model.Id })">Add theme</a>
     </div>
 
-    <div class="dfe-c-table-wrap">
-        <table>
-            <thead>
-                <tr>
-                    <th data-sort-bound="1" class="sortable">Theme ID</th>
-                    <th>Title</th>
-                    <th>Practice areas</th>
-                    <th><span class="govuk-visually-hidden">Actions</span></th>
+    <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+        <table class="govuk-table">
+            <thead class="govuk-table__head">
+                <tr class="govuk-table__row">
+                    <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Theme ID</button></th>
+                    <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Title</button>
+        </th>
+                    <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Practice areas</button>
+        </th>
+                    <th scope="col" class="govuk-table__header govuk-table__header--numeric"><span class="govuk-visually-hidden">Actions</span></th>
                 </tr>
             </thead>
-            <tbody>
+            <tbody class="govuk-table__body">
                 @if (!Model.Themes.Any())
                 {
-                    <tr><td colspan="4" class="dfe-c-text-muted">No themes yet.</td></tr>
+                    <tr class="govuk-table__row"><td colspan="4" class="dfe-c-text-muted">No themes yet.</td></tr>
                 }
                 else
                 {
                     foreach (var theme in Model.Themes.OrderBy(t => t.ThemeId))
                     {
-                        <tr>
-                            <td>@theme.ThemeId</td>
-                            <td><strong>@theme.Title</strong></td>
-                            <td>@theme.PracticeAreas.Count</td>
-                            <td style="text-align:right;white-space:nowrap;">
+                        <tr class="govuk-table__row">
+                            <td class="govuk-table__cell">@theme.ThemeId</td>
+                            <td class="govuk-table__cell"><strong>@theme.Title</strong></td>
+                            <td class="govuk-table__cell">@theme.PracticeAreas.Count</td>
+                            <td class="govuk-table__cell" style="text-align:right;white-space:nowrap;">
                                 <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("FsThemeDetail", "ModernAdmin", new { standardId = Model.Id, themeId = theme.ThemeId })">Manage</a>
                             </td>
                         </tr>

@@ -61,6 +61,8 @@ public class ServiceLinePickedItem
 {
     public string Id { get; init; } = "";
     public string Label { get; init; } = "";
+    /// <summary>Optional secondary line (e.g. WI-00000123 for work items).</summary>
+    public string? Subtitle { get; init; }
 }
 
 public class ServiceLineFormOption

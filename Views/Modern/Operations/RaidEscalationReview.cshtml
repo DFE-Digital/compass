@@ -1,4 +1,5 @@
 @model Compass.ViewModels.Modern.ModernRaidEscalationReviewViewModel
+@using Compass.ViewModels.Modern
 @{
   ViewData["Title"] = "Action request — " + Model.Reference;
   var tierRequestsListUrl = Url.Action("RaidEscalations", "ModernOperations", new { tab = Model.ListReturnTab }) ?? "#";
@@ -25,17 +26,16 @@
     .raid-ops-esc .raid-esc-tier-block__row + .raid-esc-tier-block__row { margin-top: 0.9rem; padding-top: 0.9rem; border-top: 1px solid #b1b4b6; }
     .raid-ops-esc .raid-esc-tier-block__k { display: block; font-size: 0.875rem; font-weight: 400; color: #505a5f; margin-bottom: 0.2rem; }
   </style>
-  <div class="dfe-c-mb-4 dfe-c-flex--between" style="flex-wrap:wrap;align-items:flex-start;gap:0.75rem;">
-    <div class="dfe-c-page-title" style="margin:0;flex:1;min-width:0">
-      <div class="dfe-c-page-title__caption">Operations · RAID</div>
-      <h1 class="dfe-c-page-title__heading">Escalation request</h1>
-      <p class="dfe-c-page-title__lede raid-esc-cap" style="margin:0.35rem 0 0 0;">@Model.Reference — @Model.Title</p>
-    </div>
-    <div class="dfe-c-export-group" style="display:flex;gap:0.5rem;flex-wrap:wrap;">
-      <a class="govuk-button govuk-button--secondary" href="@Model.RiskDetailUrl" target="_blank" rel="noopener noreferrer">Open risk in RAID</a>
-      <a class="govuk-button govuk-button--secondary" href="@Model.ListReturnUrl">Back to queue</a>
-    </div>
-  </div>
+  @{
+    var raidEscRevLede = await Html.PartialAsync("_RaidEscalationReviewHeaderLede", Model);
+    var raidEscRevActions = await Html.PartialAsync("_RaidEscalationReviewHeaderActions", Model);
+  }
+  @await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+    Caption = "Operations · RAID",
+    Title = "Escalation request",
+    Lede = raidEscRevLede,
+    Actions = raidEscRevActions
+  })
 
   @if (TempData["ErrorMessage"] is string errMsg && !string.IsNullOrWhiteSpace(errMsg))
   {

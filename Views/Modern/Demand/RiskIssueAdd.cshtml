@@ -1,6 +1,7 @@
 @model Compass.Models.DemandPipeline.DemandPipelineRiskIssue
 @using Compass.Models.Modern.Work
 @using Compass.Models
+@using Compass.ViewModels.Modern
 @{
   var demandId = (Guid)ViewBag.DemandRequestId;
   var isIssue = string.Equals(Model.EntryType, "Issue", StringComparison.OrdinalIgnoreCase);
@@ -18,11 +19,17 @@
 }
 
 <div class="dfe-c-mb-4">
-  <div class="dfe-c-page-title govuk-!-margin-bottom-4">
-    <div class="dfe-c-page-title__caption">@(ViewBag.DemandReference as string)</div>
-    <h1 class="dfe-c-page-title__heading">Add @noun</h1>
-    <p class="dfe-c-page-title__lede govuk-!-margin-bottom-0">@(isIssue ? "Log an issue that is affecting this demand. An issue is something that has happened or is actively occurring and needs resolution." : "Log a risk that might affect this demand. A risk is something that might happen; you monitor and mitigate it.")</p>
-  </div>
+  @{
+    var addRiLedeText = isIssue
+      ? "Log an issue that is affecting this demand. An issue is something that has happened or is actively occurring and needs resolution."
+      : "Log a risk that might affect this demand. A risk is something that might happen; you monitor and mitigate it.";
+    var addRiLede = await Html.PartialAsync("_GovukBodyParagraph", addRiLedeText);
+  }
+  @await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+    Caption = ViewBag.DemandReference as string,
+    Title = $"Add {noun}",
+    Lede = addRiLede
+  })
 
   <div class="dfe-c-form-layout">
     <div class="dfe-c-form-layout__main">

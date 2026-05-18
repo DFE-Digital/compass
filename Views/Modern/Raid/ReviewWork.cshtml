@@ -1,0 +1,319 @@
+@model Compass.ViewModels.Modern.ModernRaidReviewWorkViewModel
+@using System.Globalization
+@using Compass.ViewModels.Modern
+@{
+  ViewData["Title"] = "RAID review";
+  var enGb = CultureInfo.GetCultureInfo("en-GB");
+  var baLabels = string.Join(", ", Model.BusinessAreaLabels);
+  var overviewUrl = Url.Action("ReviewOverview", "ModernRaid", new { ba = Model.BusinessAreaQuery }) ?? "#";
+  var setupUrl = Url.Action("ReviewSetup", "ModernRaid") ?? "#";
+  var reviewedCount = Model.ReviewedCount;
+  var totalCount = Model.TotalCount;
+  var showRisks = Model.ActiveKind == "risk";
+  var showIssues = Model.ActiveKind == "issue";
+  var pendingItems = showRisks ? Model.PendingRisks : Model.PendingIssues;
+  var reviewedItems = showRisks ? Model.ReviewedRisks : Model.ReviewedIssues;
+  var hasPending = pendingItems.Count > 0;
+  var activeTabCount = showRisks ? Model.RiskCount : Model.IssueCount;
+  var risksUrl = Url.Action("ReviewWork", "ModernRaid", new { ba = Model.BusinessAreaQuery, kind = "risks" }) ?? "#";
+  var issuesUrl = Url.Action("ReviewWork", "ModernRaid", new { ba = Model.BusinessAreaQuery, kind = "issues" }) ?? "#";
+  var reviewedSectionLabel = showRisks ? "Reviewed risks" : "Reviewed issues";
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernRaid")">RAID</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("ReviewStart", "ModernRaid")">Monthly review</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@overviewUrl">@Model.ReviewMonthLabel</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">Review</li>
+}
+
+@section Styles {
+  <style>
+    .raid-review-work .raid-review-work-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .raid-review-work .raid-review-row.dfe-f-toggle {
+      margin-bottom: 0;
+      border: 1px solid var(--govuk-surface-border-colour, #8eb8dc);
+      background: transparent;
+      overflow: hidden;
+    }
+
+    .raid-review-work .raid-review-row__header {
+      display: block;
+    }
+
+    .raid-review-work .raid-review-row__header-btn {
+      display: flex;
+      align-items: stretch;
+      width: 100%;
+      padding: 0;
+      border: 0;
+      background: none;
+      cursor: pointer;
+      text-align: left;
+      font: inherit;
+      color: inherit;
+      gap: 0;
+    }
+
+    .raid-review-work .raid-review-row__header-btn:hover .raid-review-row__main,
+    .raid-review-work .raid-review-row__header-btn:hover .raid-review-row__toggle-cell,
+    .raid-review-work .raid-review-row__header-btn:focus-visible .raid-review-row__main,
+    .raid-review-work .raid-review-row__header-btn:focus-visible .raid-review-row__toggle-cell {
+      background: var(--govuk-surface-background-colour, #f4f8fb);
+    }
+
+    .raid-review-work .raid-review-row__header-btn:focus-visible {
+      outline: 3px solid var(--govuk-focus-colour, #ffdd00);
+      outline-offset: 0;
+    }
+
+    .raid-review-work .raid-review-row__toggle-cell {
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      flex-shrink: 0;
+      width: 3rem;
+      padding: 1rem 0.75rem;
+      background: var(--govuk-surface-background-colour, #f4f8fb);
+      border-right: 1px solid var(--govuk-surface-border-colour, #8eb8dc);
+    }
+
+    .raid-review-work .raid-review-row[aria-expanded="true"] .raid-review-row__toggle-cell {
+      border-bottom: 1px solid var(--govuk-surface-border-colour, #8eb8dc);
+    }
+
+    .raid-review-work .raid-review-row__toggle-cell .dfe-f-toggle__icon {
+      margin-top: 0.15rem;
+    }
+
+    .raid-review-work .raid-review-row__main {
+      flex: 1 1 auto;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      padding: 1rem 1.25rem;
+      background: #fff;
+    }
+
+    .raid-review-work .raid-review-row[aria-expanded="true"] .raid-review-row__main {
+      background: var(--govuk-surface-background-colour, #f4f8fb);
+      border-bottom: 1px solid var(--govuk-surface-border-colour, #8eb8dc);
+    }
+
+    .raid-review-work .raid-review-row__type-line {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.35rem 0.5rem;
+      font-size: 0.875rem;
+      line-height: 1.4;
+    }
+
+    .raid-review-work .raid-review-row__kind {
+      font-weight: 700;
+      color: #0b0c0c;
+    }
+
+    .raid-review-work .raid-review-row__sep {
+      color: #505a5f;
+    }
+
+    .raid-review-work .raid-review-row__ref {
+      font-weight: 700;
+      color: #505a5f;
+    }
+
+    .raid-review-work .raid-review-row__status {
+      display: inline-flex;
+      margin-left: auto;
+    }
+
+    .raid-review-work .raid-review-row__title {
+      display: block;
+      font-size: 1.1875rem;
+      font-weight: 700;
+      line-height: 1.3;
+      color: #0b0c0c;
+    }
+
+    .raid-review-work .raid-review-row__meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem 1.25rem;
+      margin: 0.35rem 0 0;
+      font-size: 0.875rem;
+      line-height: 1.4;
+    }
+
+    .raid-review-work .raid-review-row__meta-item {
+      display: inline;
+    }
+
+    .raid-review-work .raid-review-row__meta-label {
+      font-weight: 700;
+      color: #505a5f;
+    }
+
+    .raid-review-work .raid-review-row__meta-label::after {
+      content: ":";
+      margin-right: 0.2rem;
+    }
+
+    .raid-review-work .raid-review-row__meta-value {
+      color: #0b0c0c;
+    }
+
+    .raid-review-work .raid-review-row__panel.dfe-f-toggle__content {
+      border-top: 0;
+      padding: 0.9375rem 1.25rem 1.25rem;
+    }
+
+    .raid-review-work .raid-review-panel-section {
+      padding: 1rem 0;
+      border-bottom: 1px solid #e5e7eb;
+    }
+
+    .raid-review-work .raid-review-panel-section:last-child {
+      border-bottom: 0;
+      padding-bottom: 0;
+    }
+
+    .raid-review-work .raid-review-previous__comment {
+      padding: 0.75rem 1rem;
+      background: #f3f2f1;
+      border-left: 4px solid #1d70b8;
+    }
+
+    .raid-review-work .raid-review-previous__meta {
+      color: #505a5f;
+    }
+
+    .raid-review-work .raid-review-work-section {
+      margin-top: 2.5rem;
+    }
+
+    .raid-review-work .raid-review-work-section:first-of-type {
+      margin-top: 1rem;
+    }
+
+    .raid-review-work .raid-review-work-list--reviewed {
+      margin-top: 0.75rem;
+    }
+
+    .raid-review-work .raid-review-kind-nav {
+      margin-top: 1.5rem;
+    }
+  </style>
+}
+
+<div class="modern-work-page raid-review-work">
+  @await Html.PartialAsync("~/Views/Modern/Shared/_ModernPageHeader.cshtml", new ModernPageHeaderViewModel
+  {
+    Caption = $"RAID monthly review · {Model.ReviewMonthLabel}",
+    Title = "RAID review",
+    Lede = new Microsoft.AspNetCore.Html.HtmlString($"<p class=\"govuk-body govuk-!-margin-bottom-0\"><strong>{reviewedCount}</strong> of <strong>{totalCount}</strong> open records reviewed this month for {System.Net.WebUtility.HtmlEncode(baLabels)}. Review and update each item — skip any you will handle later.</p>"),
+    BackLinkHref = overviewUrl,
+    BackLinkText = "Back to overview"
+  })
+
+  @if (TempData["Error"] is string reviewError && !string.IsNullOrWhiteSpace(reviewError))
+  {
+    <div class="govuk-error-summary govuk-!-margin-top-4" role="alert" aria-labelledby="raid-review-error-summary-title">
+      <h2 class="govuk-error-summary__title" id="raid-review-error-summary-title">There is a problem</h2>
+      <div class="govuk-error-summary__body">
+        <p class="govuk-body govuk-!-margin-bottom-0">@reviewError</p>
+      </div>
+    </div>
+  }
+
+  @if (TempData["Message"] is string reviewMessage && !string.IsNullOrWhiteSpace(reviewMessage))
+  {
+    <div class="govuk-notification-banner govuk-notification-banner--success govuk-!-margin-top-4" role="region" aria-labelledby="raid-review-success-banner-title" data-module="govuk-notification-banner">
+      <div class="govuk-notification-banner__header">
+        <h2 class="govuk-notification-banner__title" id="raid-review-success-banner-title">Success</h2>
+      </div>
+      <div class="govuk-notification-banner__content">
+        <p class="govuk-notification-banner__heading">@reviewMessage</p>
+      </div>
+    </div>
+  }
+
+  <nav class="dfe-f-sub-navigation raid-review-kind-nav govuk-!-margin-bottom-4" aria-label="RAID review record type">
+    <ul class="dfe-f-sub-navigation__list">
+      <li class="dfe-f-sub-navigation__item@(showRisks ? " dfe-f-sub-navigation__item--active" : "")">
+        <a class="dfe-f-sub-navigation__link govuk-link govuk-link--no-visited-state" href="@risksUrl"@if (showRisks) { <text> aria-current="page"</text> }>Risks<span class="dfe-c-fw-regular"> (@Model.RiskCount)</span></a>
+      </li>
+      <li class="dfe-f-sub-navigation__item@(showIssues ? " dfe-f-sub-navigation__item--active" : "")">
+        <a class="dfe-f-sub-navigation__link govuk-link govuk-link--no-visited-state" href="@issuesUrl"@if (showIssues) { <text> aria-current="page"</text> }>Issues<span class="dfe-c-fw-regular"> (@Model.IssueCount)</span></a>
+      </li>
+    </ul>
+  </nav>
+
+  @if (Model.TotalCount == 0)
+  {
+    <p class="govuk-body">There are no open risks or issues in the selected business areas.</p>
+    <p class="govuk-body"><a class="govuk-link" href="@overviewUrl">Return to overview</a></p>
+  }
+  else if (activeTabCount == 0)
+  {
+    <p class="govuk-body">There are no open @(showRisks ? "risks" : "issues") in the selected business areas.</p>
+    <p class="govuk-body">
+      @if (showRisks && Model.IssueCount > 0)
+      {
+        <a class="govuk-link" href="@issuesUrl">Review @Model.IssueCount issue@(Model.IssueCount == 1 ? "" : "s")</a>
+      }
+      else if (showIssues && Model.RiskCount > 0)
+      {
+        <a class="govuk-link" href="@risksUrl">Review @Model.RiskCount risk@(Model.RiskCount == 1 ? "" : "s")</a>
+      }
+    </p>
+  }
+  else
+  {
+    @if (hasPending)
+    {
+      <div id="raid-review-work-list" class="raid-review-work-list" data-raid-review-work-list>
+        @foreach (var item in pendingItems)
+        {
+          @await Html.PartialAsync("~/Views/Modern/Raid/_RaidReviewWorkItem.cshtml", new ModernRaidReviewWorkItemRowViewModel { Item = item, Page = Model })
+        }
+      </div>
+    }
+
+    @if (reviewedItems.Count > 0)
+    {
+      <section class="raid-review-work-section" aria-labelledby="raid-review-reviewed-heading">
+        <h2 class="govuk-heading-m govuk-!-margin-bottom-0" id="raid-review-reviewed-heading">@reviewedSectionLabel</h2>
+        <div class="raid-review-work-list raid-review-work-list--reviewed" data-raid-review-work-list>
+          @foreach (var item in reviewedItems)
+          {
+            @await Html.PartialAsync("~/Views/Modern/Raid/_RaidReviewWorkItem.cshtml", new ModernRaidReviewWorkItemRowViewModel { Item = item, Page = Model })
+          }
+        </div>
+      </section>
+    }
+  }
+
+  <p class="govuk-body govuk-!-margin-top-6">
+    <a class="govuk-link" href="@setupUrl">Change business areas</a>
+    <span aria-hidden="true"> · </span>
+    <a class="govuk-link" href="@overviewUrl">Back to overview</a>
+  </p>
+</div>
+
+@await Html.PartialAsync("~/Views/Modern/Raid/_RaidReviewCloseModal.cshtml")
+
+@section Scripts {
+  <script src="~/modern/js/raid-monthly-review.js" asp-append-version="true" nonce="@(Context.Items["Nonce"]?.ToString() ?? "")"></script>
+  <script nonce="@(Context.Items["Nonce"]?.ToString() ?? "")">
+    window.compassRaidReview.initWorkList({ ba: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.BusinessAreaQuery)) });
+    window.compassRaidReview.initCloseModal();
+  </script>
+}

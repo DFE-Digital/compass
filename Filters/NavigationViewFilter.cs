@@ -1,3 +1,4 @@
+using Compass.Helpers;
 using Compass.Models;
 using Compass.Services;
 using Microsoft.AspNetCore.Mvc;
@@ -33,7 +34,6 @@ public class NavigationViewFilter : IAsyncActionFilter
             {
                 try
                 {
-                    var isSuperAdmin = await _permissionService.IsSuperAdminAsync(userEmail);
                     var canUseOperations = await _permissionService.IsOperationConsoleUserAsync(userEmail);
 
                     controller.ViewBag.CanAccessOperations = canUseOperations;
@@ -50,8 +50,18 @@ public class NavigationViewFilter : IAsyncActionFilter
                         await _globalFeatures.IsFeatureEnabledForPrincipalAsync(
                             FeatureCodes.Fips, context.HttpContext.User);
 
-                    var canManageStandards = isSuperAdmin ||
-                        await _permissionService.IsInGroupAsync(userEmail, "Standards Manager");
+                    controller.ViewBag.ShowRaidNavigation =
+                        await _globalFeatures.IsFeatureEnabledForPrincipalAsync(
+                            FeatureCodes.Raid, context.HttpContext.User);
+
+                    controller.ViewBag.ShowDdrNavigation =
+                        await _globalFeatures.IsFeatureEnabledForPrincipalAsync(
+                            FeatureCodes.Ddr, context.HttpContext.User);
+
+                    var canManageStandards =
+                        await StandardsPermissionHelper.CanAccessModernStandardsManagementAsync(
+                            _permissionService,
+                            context.HttpContext.User);
                     controller.ViewBag.CanAccessStandardsManagement = canManageStandards;
 
                     // Same gate as <see cref="Attributes.RequireAdminAttribute"/> (modern admin hub).
@@ -65,6 +75,8 @@ public class NavigationViewFilter : IAsyncActionFilter
                     controller.ViewBag.ShowDemandNavigation = false;
                     controller.ViewBag.ShowStandardsNavigation = false;
                     controller.ViewBag.ShowFipsDatabaseServiceRegister = false;
+                    controller.ViewBag.ShowRaidNavigation = false;
+                    controller.ViewBag.ShowDdrNavigation = false;
                     controller.ViewBag.CanAccessModernAdmin = false;
                 }
             }

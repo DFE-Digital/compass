@@ -1,0 +1,96 @@
+@model Compass.ViewModels.Modern.DdtStandardWorkflowContextViewModel
+@{
+  var id = Model.StandardId;
+  var hasActions = Model.CanEdit || Model.CanSubmit || Model.CanApprove || Model.CanReject || Model.CanPublish || Model.CanDelete;
+}
+@if (hasActions)
+{
+  <div class="dfe-c-callout dfe-c-mb-4">
+    <div class="dfe-c-callout__heading">Workflow actions</div>
+    <div class="demand-workflow__actions govuk-!-margin-top-2">
+      @if (Model.CanEdit)
+      {
+        <a class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0" href="@Url.Action("DdtCreate", "ModernStandards", new { id })">Edit draft</a>
+      }
+      @if (Model.CanSubmit)
+      {
+        <form method="post" action="@Url.Action("DdtSubmitForReview", "ModernStandards", new { id })" class="demand-workflow__form">
+          @Html.AntiForgeryToken()
+          <button type="submit" class="govuk-button govuk-!-margin-bottom-0">Submit for review</button>
+        </form>
+      }
+      @if (Model.CanApprove)
+      {
+        <details class="govuk-details govuk-!-margin-bottom-0">
+          <summary class="govuk-details__summary">
+            <span class="govuk-details__summary-text">Approve standard</span>
+          </summary>
+          <div class="govuk-details__text">
+            <form method="post" action="@Url.Action("DdtApprove", "ModernStandards", new { id })">
+              @Html.AntiForgeryToken()
+              <div class="govuk-form-group">
+                <label class="govuk-label" for="approve-comment">Comment (optional)</label>
+                <textarea class="govuk-textarea" id="approve-comment" name="comment" rows="3"></textarea>
+              </div>
+              <button type="submit" class="govuk-button">Approve</button>
+            </form>
+          </div>
+        </details>
+      }
+      @if (Model.CanReject)
+      {
+        <details class="govuk-details govuk-!-margin-bottom-0">
+          <summary class="govuk-details__summary">
+            <span class="govuk-details__summary-text">Reject standard</span>
+          </summary>
+          <div class="govuk-details__text">
+            <form method="post" action="@Url.Action("DdtReject", "ModernStandards", new { id })">
+              @Html.AntiForgeryToken()
+              <div class="govuk-form-group">
+                <label class="govuk-label" for="reject-reason">Reason for rejection</label>
+                <textarea class="govuk-textarea" id="reject-reason" name="reason" rows="3" required></textarea>
+              </div>
+              <button type="submit" class="govuk-button govuk-button--warning">Reject</button>
+            </form>
+          </div>
+        </details>
+      }
+      @if (Model.CanPublish)
+      {
+        <form method="post" action="@Url.Action("DdtPublish", "ModernStandards", new { id })" class="demand-workflow__form"
+              data-confirm-title="Publish this standard?"
+              data-confirm-message="This will publish the standard to the public register.">
+          @Html.AntiForgeryToken()
+          <button type="submit" class="govuk-button govuk-!-margin-bottom-0">Publish</button>
+        </form>
+      }
+      @if (Model.CanDelete)
+      {
+        <form method="post" action="@Url.Action("DdtDeleteDraft", "ModernStandards", new { id })" class="demand-workflow__form"
+              data-confirm-title="Delete this draft?"
+              data-confirm-message="This cannot be undone.">
+          @Html.AntiForgeryToken()
+          <button type="submit" class="govuk-button govuk-button--warning govuk-!-margin-bottom-0">Delete draft</button>
+        </form>
+      }
+    </div>
+  </div>
+}
+
+@if (Model.ForumComments.Any())
+{
+  <div class="govuk-!-margin-bottom-6">
+    <h2 class="govuk-heading-m">Forum feedback</h2>
+    @foreach (var c in Model.ForumComments)
+    {
+      <div class="govuk-!-margin-bottom-3 govuk-!-padding-3" style="border-left:4px solid #b1b4b6;background:#f3f2f1;">
+        <p class="govuk-!-margin-bottom-1 govuk-!-font-weight-bold">@c.Title</p>
+        <p class="govuk-body-s govuk-!-margin-bottom-2 govuk-hint">@c.AuthorName · @c.CreatedAt.ToString("d MMM yyyy")</p>
+        @if (!string.IsNullOrWhiteSpace(c.Body))
+        {
+          <p class="govuk-body govuk-!-margin-bottom-0">@c.Body</p>
+        }
+      </div>
+    }
+  </div>
+}

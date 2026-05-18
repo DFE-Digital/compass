@@ -17,11 +17,27 @@ public class OperationsManagePerformanceViewModel
     /// <summary>Submitted + Late (final returns).</summary>
     public int ActualReturnCount => SubmittedCount + LateCount;
 
+    public decimal ReturnRatePercent { get; init; }
+
+    public decimal MetricCompletionPercent { get; init; }
+    public int CompletedMetricCells { get; init; }
+    public int ApplicableMetricCells { get; init; }
+
+    /// <summary>Open, Upcoming, or Closed relative to commission dates.</summary>
+    public string SubmissionWindowPhase { get; init; } = "";
+
+    /// <summary>Days until due date (negative if past due).</summary>
+    public int? DaysUntilDue { get; init; }
+
+    public IReadOnlyList<string> OverviewLines { get; init; } = Array.Empty<string>();
+
     public IReadOnlyList<OpsPerfOrgRow> BusinessAreaRows { get; init; } = Array.Empty<OpsPerfOrgRow>();
     public IReadOnlyList<OpsPerfOrgRow> DirectorateRows { get; init; } = Array.Empty<OpsPerfOrgRow>();
+    public IReadOnlyList<OpsPerfMetricRow> MetricRows { get; init; } = Array.Empty<OpsPerfMetricRow>();
 
     public string StatusDoughnutJson { get; init; } = "{}";
     public string BusinessAreaBarJson { get; init; } = "{}";
+    public string MetricCompletionBarJson { get; init; } = "{}";
     public string SubmissionTimelineJson { get; init; } = "{}";
 
     public bool HasCommission { get; init; }
@@ -56,9 +72,29 @@ public class OpsPerfOrgRow
     public int ActualLate { get; init; }
     public int InProgress { get; init; }
     public int NotStarted { get; init; }
+    public int CompletedMetricCells { get; init; }
+    public int ApplicableMetricCells { get; init; }
 
     public decimal CompletionPercent =>
         PotentialSubmissions <= 0
             ? 0
             : Math.Round(100m * (ActualSubmitted + ActualLate) / PotentialSubmissions, 1);
+
+    public decimal MetricCompletionPercent =>
+        ApplicableMetricCells <= 0
+            ? 0
+            : Math.Round(100m * CompletedMetricCells / ApplicableMetricCells, 1);
+}
+
+public class OpsPerfMetricRow
+{
+    public int MetricId { get; init; }
+    public string Name { get; init; } = "";
+    public int ApplicableProducts { get; init; }
+    public int CompletedCount { get; init; }
+
+    public decimal CompletionPercent =>
+        ApplicableProducts <= 0
+            ? 0
+            : Math.Round(100m * CompletedCount / ApplicableProducts, 1);
 }

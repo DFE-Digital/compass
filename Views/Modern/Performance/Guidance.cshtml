@@ -1,5 +1,7 @@
 @model List<Compass.Models.PerformanceMetric>
 @using System.Text.Json
+@using Compass.ViewModels.Modern
+@using Microsoft.AspNetCore.Html
 @{
   ViewData["Title"] = "Performance metric guidance";
 
@@ -20,6 +22,11 @@
   };
 
   string Slugify(string title) => System.Text.RegularExpressions.Regex.Replace(title.Trim().ToLowerInvariant(), @"[^a-z0-9]+", "-").Trim('-');
+
+  string MetricAnchorId(Compass.Models.PerformanceMetric m) => "metric-" + Slugify(m.Identifier);
+
+  var metricsOrdered = Model.OrderBy(m => m.Identifier).ToList();
+  var sideNavId = "perf-guidance-side-nav-list";
 }
 
 @section Breadcrumbs {
@@ -28,12 +35,12 @@
  <li class="govuk-breadcrumbs__list-item" aria-current="page">Guidance</li>
 }
 
-<div class="admin-hub">
- <div class="dfe-c-page-title dfe-c-mb-4">
- <div class="dfe-c-page-title__caption">Performance</div>
- <h1 class="dfe-c-page-title__heading">Metric guidance</h1>
- <p class="dfe-c-page-title__lede govuk-body">Reference for all active performance metrics including descriptions, data types, validation rules and applicable criteria.</p>
-  </div>
+<div class="perf-guidance-page admin-hub">
+ @await Html.PartialAsync("~/Views/Modern/Shared/_ModernPageHeader.cshtml", new ModernPageHeaderViewModel {
+   Caption = "Performance",
+   Title = "Metric guidance",
+   Lede = new HtmlString("<p class=\"govuk-body govuk-!-margin-bottom-0\">Reference for all active performance metrics including descriptions, data types, validation rules and applicable criteria.</p>")
+ })
 
 @if (Model.Count == 0)
 {
@@ -41,43 +48,56 @@
 }
 else
 {
-  @* Same left-hand nav pattern as /modern/admin — bordered panel, navy header strip, admin-nav-link items *@
-  <div style="display:grid;grid-template-columns:17rem 1fr;gap:1.5rem;align-items:start;" id="guidance-layout">
-    <nav style="background:var(--white);border:1px solid var(--grey-2);position:sticky;top:1rem;align-self:start;max-height:calc(100vh - 2rem);" aria-label="Metric navigation">
-      <div style="padding:0.75rem 1rem;background:var(--grey-1);border-bottom:2px solid var(--navy);font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--navy);">Configuration areas</div>
- <details class="admin-nav-group admin-nav-group--open" id="guidance-metric-nav" open>
- <summary class="admin-nav-group__header">
- <span class="admin-nav-group__icon-open" aria-hidden="true">−</span>
- <span class="admin-nav-group__icon-closed" aria-hidden="true">+</span>
-          <span>Metrics (@Model.Count)</span>
-        </summary>
- <div class="admin-nav-group__body" id="guidance-nav" style="max-height:min(28rem, calc(100vh - 14rem));overflow-y:auto;">
-        @foreach (var m in Model)
-        {
-          var slug = Slugify(m.Title);
- <a href="#metric-@slug" class="admin-nav-link">@m.Title</a>
-        }
-      </div>
-      </details>
-    </nav>
+  <div class="govuk-grid-row perf-guidance-layout">
+    <div class="govuk-grid-column-one-quarter-from-desktop">
+      <nav class="dfe-f-side-navigation perf-guidance-side-nav" aria-label="Metric sections" data-module="dfe-f-side-navigation">
+        <button type="button" class="dfe-f-side-navigation__toggle" aria-controls="@sideNavId" aria-expanded="false">Metrics</button>
+        <ul id="@sideNavId" class="dfe-f-side-navigation__list" hidden>
+          @foreach (var cm in metricsOrdered)
+          {
+            var anchor = MetricAnchorId(cm);
+            <li class="dfe-f-side-navigation__item">
+              <a class="dfe-f-side-navigation__link govuk-link govuk-link--no-visited-state govuk-link--no-underline" href="#@anchor">@cm.Title <span class="govuk-visually-hidden">(@cm.Identifier)</span></a>
+            </li>
+          }
+        </ul>
+      </nav>
+    </div>
 
-    <!-- Metric cards -->
-    <div>
-      <p class="govuk-body dfe-c-mb-4">There are <strong>@Model.Count</strong> active metrics.</p>
+    <div class="govuk-grid-column-three-quarters-from-desktop">
+      <p class="govuk-body dfe-c-mb-4">There are <strong>@Model.Count</strong> active metrics. Expand a metric to see full guidance.</p>
 
-      @foreach (var m in Model)
+      <div class="dfe-f-toggle-group dfe-c-mb-4" data-module="dfe-f-toggle-group">
+        <div class="dfe-f-toggle-group__controls govuk-body-s">
+          <button type="button" class="dfe-f-toggle-group__action" data-dfe-toggle-expand-all>Expand all</button>
+          <span class="dfe-f-toggle-group__separator" aria-hidden="true"> · </span>
+          <button type="button" class="dfe-f-toggle-group__action" data-dfe-toggle-collapse-all>Collapse all</button>
+        </div>
+        <div class="dfe-f-toggle-group__items">
+      @{ var metricIndex = 0; }
+      @foreach (var m in metricsOrdered)
       {
+        metricIndex++;
         var rules = ParseRules(m.ValidationRules);
         var phases = string.IsNullOrWhiteSpace(m.ApplicablePhases) ? null : m.ApplicablePhases.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         var types = string.IsNullOrWhiteSpace(m.ApplicableTypes) ? null : m.ApplicableTypes.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        var slug = Slugify(m.Title);
+        var toggleBtnId = $"perf-guidance-toggle-{metricIndex}";
+        var togglePanelId = $"perf-guidance-panel-{metricIndex}";
 
-        <div class="govuk-summary-card dfe-c-mb-4" id="metric-@slug">
-          <div class="govuk-summary-card__title-wrapper">
-            <h2 class="govuk-summary-card__title">@m.Title <span class="dfe-c-tag dfe-c-tag--grey govuk-!-margin-left-2" style="font-size:0.85rem;">@m.Identifier</span></h2>
-          </div>
-          <div class="govuk-summary-card__content">
-            <dl class="govuk-summary-list">
+          <div class="dfe-f-toggle" data-module="dfe-f-toggle">
+            <div class="dfe-f-toggle__title-wrapper">
+              <h2 class="dfe-f-toggle__heading">
+                <button type="button" id="@toggleBtnId" class="dfe-f-toggle__button" aria-expanded="false" aria-controls="@togglePanelId">
+                  <span class="dfe-f-toggle__icon" aria-hidden="true"></span>
+                  <span class="dfe-f-toggle__title">@m.Title</span>
+                </button>
+              </h2>
+            </div>
+            <div id="@togglePanelId" class="dfe-f-toggle__content" hidden>
+              <div class="dfe-f-toggle__body govuk-body">
+            <div id="@MetricAnchorId(m)" class="perf-guidance-metric-anchor" tabindex="-1"></div>
+            <p class="govuk-body-s govuk-!-margin-bottom-3 govuk-!-margin-top-0"><span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--grey">@m.Identifier</span></p>
+            <dl class="govuk-summary-list govuk-summary-list--no-border govuk-!-margin-bottom-0">
               <div class="govuk-summary-list__row">
                 <dt class="govuk-summary-list__key">Description</dt>
                 <dd class="govuk-summary-list__value">@m.Description</dd>
@@ -162,46 +182,42 @@ else
                 <dd class="govuk-summary-list__value">@m.ValidFromMonth/@m.ValidFromYear</dd>
               </div>
             </dl>
+              </div>
+            </div>
           </div>
-        </div>
       }
+        </div>
+      </div>
     </div>
   </div>
-
-  <style>
-    @@media (max-width: 56.25rem) {
-      #guidance-layout { grid-template-columns: 1fr !important; }
-      #guidance-layout > nav { position: static !important; max-height: none !important; align-self: stretch !important; margin-bottom: 1rem; }
-      #guidance-nav { max-height: none !important; overflow: visible !important; }
-    }
-  </style>
-
-  <script>
-    (function () {
-      var nav = document.getElementById('guidance-nav');
-      if (!nav) return;
-      var links = nav.querySelectorAll('a.admin-nav-link');
-      var cards = [];
-      links.forEach(function (a) {
-        var id = a.getAttribute('href').replace('#', '');
-        var el = document.getElementById(id);
-        if (el) cards.push({ link: a, card: el });
-      });
-      if (!cards.length) return;
-
-      function update() {
-        var offset = 80;
-        var activeIdx = 0;
-        for (var i = 0; i < cards.length; i++) {
-          if (cards[i].card.getBoundingClientRect().top - offset <= 0) activeIdx = i;
-        }
-        links.forEach(function (a) { a.classList.remove('admin-nav-link--active'); });
-        cards[activeIdx].link.classList.add('admin-nav-link--active');
-      }
-
-      window.addEventListener('scroll', update, { passive: true });
-      update();
-    })();
-  </script>
 }
 </div>
+
+@section Scripts {
+<script nonce="@(Context.Items["Nonce"]?.ToString() ?? "")">
+  (function () {
+    function expandHashMetric() {
+      var hash = (window.location.hash || '').replace(/^#/, '');
+      if (!hash) return;
+      var el = document.getElementById(hash);
+      if (!el || !el.classList.contains('perf-guidance-metric-anchor')) return;
+      var toggleRoot = el.closest('.dfe-f-toggle');
+      if (!toggleRoot) return;
+      var btn = toggleRoot.querySelector('.dfe-f-toggle__button');
+      function scrollToAnchor() {
+        el.scrollIntoView({ block: 'start', behavior: 'auto' });
+      }
+      if (btn && btn.getAttribute('aria-expanded') === 'false') {
+        btn.click();
+        window.setTimeout(scrollToAnchor, 80);
+      } else {
+        window.requestAnimationFrame(scrollToAnchor);
+      }
+    }
+    window.addEventListener('load', function () {
+      window.setTimeout(expandHashMetric, 0);
+    });
+    window.addEventListener('hashchange', expandHashMetric);
+  })();
+</script>
+}

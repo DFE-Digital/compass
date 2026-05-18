@@ -4,7 +4,9 @@ using System.Linq;
 using Compass.Data;
 using Compass.Models;
 using Compass.ViewModels;
+using Compass.ViewModels.Modern;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 
 namespace Compass.Services;
 
@@ -245,6 +247,346 @@ public sealed class CommissionReportingAnalyticsService
         page.Detail = detail;
 
         return page;
+    }
+
+    /// <summary>Operations console — live commission dashboard (any commission, includes metric completion).</summary>
+    public async Task<OperationsManagePerformanceViewModel> BuildOperationsManagePerformanceAsync(
+        int? commissionId,
+        CancellationToken cancellationToken = default)
+    {
+        var jsonOpts = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+        var now = DateTime.UtcNow;
+
+        var commissionOptions = await _context.Commissions.AsNoTracking()
+            .OrderByDescending(c => c.DueDate)
+            .Select(c => new CommissionPickerOption
+            {
+                Id = c.Id,
+                Name = c.Name,
+                DueDate = c.DueDate,
+                IsActive = c.IsActive
+            })
+            .ToListAsync(cancellationToken);
+
+        if (commissionOptions.Count == 0)
+            return new OperationsManagePerformanceViewModel { CommissionOptions = commissionOptions };
+
+        var selectedId = commissionId ?? commissionOptions[0].Id;
+        if (commissionOptions.All(x => x.Id != selectedId))
+            selectedId = commissionOptions[0].Id;
+
+        var commissionEntity = await _context.Commissions.AsNoTracking()
+            .FirstOrDefaultAsync(c => c.Id == selectedId, cancellationToken);
+
+        if (commissionEntity == null)
+        {
+            return new OperationsManagePerformanceViewModel
+            {
+                CommissionOptions = commissionOptions,
+                SelectedCommissionId = selectedId
+            };
+        }
+
+        List<ProductDto> eligibleProducts;
+        try
+        {
+            var allProducts = await _productsApi.GetAllProductsAsync();
+            eligibleProducts = CommissionReportingProductScope.GetAllActivePublishedEligible(allProducts)
+                .Where(p => CommissionReportingProductScope.ProductMatchesCommissionInScopeRules(commissionEntity, p))
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Operations manage performance: failed to load product catalogue");
+            return new OperationsManagePerformanceViewModel
+            {
+                CommissionOptions = commissionOptions,
+                SelectedCommissionId = commissionEntity.Id,
+                Commission = MapCommissionSummary(commissionEntity),
+                HasCommission = true,
+                SubmissionWindowPhase = ResolveSubmissionWindowPhase(commissionEntity, now)
+            };
+        }
+
+        var submissions = await _context.CommissionSubmissions.AsNoTracking()
+            .Include(cs => cs.MetricValues)
+            .Where(cs => cs.CommissionId == commissionEntity.Id)
+            .ToListAsync(cancellationToken);
+
+        var submissionsDict = submissions.ToDictionary(cs => cs.ProductDocumentId, cs => cs, StringComparer.OrdinalIgnoreCase);
+        var metricsForPeriod =
+            await CommissionReportingMetricsHelper.LoadEnabledMetricsForCommissionPeriodAsync(
+                _context, commissionEntity, cancellationToken);
+
+        var perProduct = await BuildPerProductStatsAsync(commissionEntity, eligibleProducts, submissions, cancellationToken);
+        var submitted = perProduct.Count(x => x.Status == CommissionSubmissionStatus.Submitted);
+        var late = perProduct.Count(x => x.Status == CommissionSubmissionStatus.Late);
+        var inProgress = perProduct.Count(x => x.Status == CommissionSubmissionStatus.InProgress);
+        var notStarted = perProduct.Count(x => x.Status == CommissionSubmissionStatus.NotStarted);
+        var total = perProduct.Count;
+        var returned = submitted + late;
+        var returnRate = total == 0 ? 0 : Math.Round(100m * returned / total, 1);
+
+        var metNum = perProduct.Sum(x => x.CompletedMetrics);
+        var metDen = perProduct.Sum(x => x.TotalMetrics);
+        var metPct = metDen == 0 ? 0 : Math.Round(100m * metNum / metDen, 1);
+
+        var baRows = BuildOrgRows(perProduct, p => p.BusinessArea ?? "Unassigned");
+
+        var dirRows = eligibleProducts
+            .Select(p =>
+            {
+                var doc = p.DocumentId ?? "";
+                submissionsDict.TryGetValue(doc, out var sub);
+                var existing = sub?.MetricValues?.ToList() ?? new List<CommissionMetricValue>();
+                var applicable = CommissionReportingMetricsHelper.FilterApplicableMetricsForProduct(
+                    commissionEntity, p, metricsForPeriod, existing);
+                var completed = applicable.Count(m =>
+                    existing.Any(mv => mv.PerformanceMetricId == m.Id && mv.IsComplete));
+                var status = sub?.Status ?? CommissionSubmissionStatus.NotStarted;
+                return new
+                {
+                    Directorate = CommissionReportingProductScope.GetDirectorate(p) ?? "Unassigned",
+                    Status = status,
+                    Completed = completed,
+                    Total = applicable.Count
+                };
+            })
+            .GroupBy(x => x.Directorate)
+            .Select(g => AggregateOrgFromParts(g.Key, g.Select(x => (x.Status, x.Completed, x.Total))))
+            .OrderByDescending(r => r.PotentialSubmissions)
+            .ThenBy(r => r.Name)
+            .ToList();
+
+        var metricRows = BuildMetricRows(commissionEntity, eligibleProducts, submissionsDict, metricsForPeriod);
+
+        var doughnut = new
+        {
+            labels = new[] { "Submitted", "Late", "In progress", "Not started" },
+            values = new[] { submitted, late, inProgress, notStarted },
+            colors = new[] { "#00703c", "#d4351c", "#f47738", "#b1b4b6" }
+        };
+
+        var topBa = baRows.Take(12).ToList();
+        var baBar = new
+        {
+            labels = topBa.Select(r => r.Name).ToArray(),
+            potential = topBa.Select(r => r.PotentialSubmissions).ToArray(),
+            actual = topBa.Select(r => r.ActualSubmitted + r.ActualLate).ToArray()
+        };
+
+        var topMetrics = metricRows.OrderByDescending(m => m.ApplicableProducts).Take(12).ToList();
+        var metricBar = new
+        {
+            labels = topMetrics.Select(m => m.Name).ToArray(),
+            completed = topMetrics.Select(m => m.CompletedCount).ToArray(),
+            applicable = topMetrics.Select(m => m.ApplicableProducts).ToArray()
+        };
+
+        var timelinePoints = submissions
+            .Where(s => s.SubmittedDate.HasValue &&
+                        (s.Status == CommissionSubmissionStatus.Submitted || s.Status == CommissionSubmissionStatus.Late))
+            .Select(s => s.SubmittedDate!.Value.Date)
+            .OrderBy(d => d)
+            .ToList();
+
+        object timeline;
+        if (timelinePoints.Count == 0)
+        {
+            timeline = new { labels = Array.Empty<string>(), cumulative = Array.Empty<int>() };
+        }
+        else
+        {
+            var byDay = timelinePoints.GroupBy(d => d).OrderBy(g => g.Key).ToList();
+            var labels = new List<string>();
+            var cumulative = new List<int>();
+            var running = 0;
+            foreach (var day in byDay)
+            {
+                running += day.Count();
+                labels.Add(day.Key.ToString("d MMM yyyy", System.Globalization.CultureInfo.GetCultureInfo("en-GB")));
+                cumulative.Add(running);
+            }
+
+            timeline = new { labels, cumulative };
+        }
+
+        var windowPhase = ResolveSubmissionWindowPhase(commissionEntity, now);
+        var daysUntilDue = (int)(commissionEntity.DueDate.Date - now.Date).TotalDays;
+        var daysUntilOpen = (int)(commissionEntity.OpenDate.Date - now.Date).TotalDays;
+        var overview = BuildOverviewLines(
+            commissionEntity,
+            total,
+            returned,
+            returnRate,
+            submitted,
+            late,
+            metPct,
+            metNum,
+            metDen,
+            windowPhase,
+            daysUntilDue,
+            daysUntilOpen);
+
+        return new OperationsManagePerformanceViewModel
+        {
+            CommissionOptions = commissionOptions,
+            SelectedCommissionId = commissionEntity.Id,
+            Commission = MapCommissionSummary(commissionEntity),
+            EligibleProductCount = total,
+            SubmittedCount = submitted,
+            LateCount = late,
+            InProgressCount = inProgress,
+            NotStartedCount = notStarted,
+            ReturnRatePercent = returnRate,
+            MetricCompletionPercent = metPct,
+            CompletedMetricCells = metNum,
+            ApplicableMetricCells = metDen,
+            SubmissionWindowPhase = windowPhase,
+            DaysUntilDue = daysUntilDue,
+            OverviewLines = overview,
+            BusinessAreaRows = baRows,
+            DirectorateRows = dirRows,
+            MetricRows = metricRows,
+            StatusDoughnutJson = JsonSerializer.Serialize(doughnut, jsonOpts),
+            BusinessAreaBarJson = JsonSerializer.Serialize(baBar, jsonOpts),
+            MetricCompletionBarJson = JsonSerializer.Serialize(metricBar, jsonOpts),
+            SubmissionTimelineJson = JsonSerializer.Serialize(timeline, jsonOpts),
+            HasCommission = true,
+            HasEligibleProducts = total > 0
+        };
+    }
+
+    private static CommissionSummaryVm MapCommissionSummary(Commission c) => new()
+    {
+        Id = c.Id,
+        Name = c.Name,
+        Quarter = c.Quarter,
+        StartDate = c.StartDate,
+        EndDate = c.EndDate,
+        OpenDate = c.OpenDate,
+        DueDate = c.DueDate,
+        IsActive = c.IsActive
+    };
+
+    private static string ResolveSubmissionWindowPhase(Commission c, DateTime now)
+    {
+        if (IsOpenForSubmissionWindow(c, now))
+            return "Open";
+        if (c.IsActive && now < c.OpenDate)
+            return "Upcoming";
+        return "Closed";
+    }
+
+    private static List<string> BuildOverviewLines(
+        Commission commission,
+        int productsInScope,
+        int returned,
+        decimal returnRate,
+        int submitted,
+        int late,
+        decimal metricPct,
+        int metCompleted,
+        int metApplicable,
+        string windowPhase,
+        int daysUntilDue,
+        int daysUntilOpen)
+    {
+        var ci = System.Globalization.CultureInfo.GetCultureInfo("en-GB");
+        var lines = new List<string>
+        {
+            $"{commission.Name} covers {productsInScope:N0} in-scope products from the service register.",
+            $"{returned:N0} products have returned metrics ({returnRate:0.#}% return rate): {submitted:N0} on time and {late:N0} late.",
+            $"Metric completion is {metricPct:0.#}% across the reporting grid ({metCompleted:N0} of {metApplicable:N0} applicable cells completed)."
+        };
+
+        lines.Add(windowPhase switch
+        {
+            "Open" => daysUntilDue >= 0
+                ? $"Submissions are open — due in {daysUntilDue} day{(daysUntilDue == 1 ? "" : "s")} ({commission.DueDate.ToString("d MMM yyyy", ci)})."
+                : $"Submissions are open — due date was {Math.Abs(daysUntilDue)} day{(Math.Abs(daysUntilDue) == 1 ? "" : "s")} ago.",
+            "Upcoming" => daysUntilOpen > 0
+                ? $"Submissions open in {daysUntilOpen} day{(daysUntilOpen == 1 ? "" : "s")} ({commission.OpenDate.ToString("d MMM yyyy", ci)})."
+                : "Submissions window is not yet open.",
+            _ => "This commission round is closed for submissions."
+        });
+
+        return lines;
+    }
+
+    private static List<OpsPerfOrgRow> BuildOrgRows(
+        List<ProductCommissionStats> perProduct,
+        Func<ProductCommissionStats, string> keySelector) =>
+        perProduct
+            .GroupBy(keySelector)
+            .Select(g => AggregateOrgFromParts(
+                g.Key,
+                g.Select(x => (x.Status, x.CompletedMetrics, x.TotalMetrics))))
+            .OrderByDescending(r => r.PotentialSubmissions)
+            .ThenBy(r => r.Name)
+            .ToList();
+
+    private static OpsPerfOrgRow AggregateOrgFromParts(
+        string name,
+        IEnumerable<(CommissionSubmissionStatus Status, int Completed, int Total)> items)
+    {
+        var list = items.ToList();
+        var potential = list.Count;
+        var ac = list.Count(x => x.Status == CommissionSubmissionStatus.Submitted);
+        var al = list.Count(x => x.Status == CommissionSubmissionStatus.Late);
+        var ip = list.Count(x => x.Status == CommissionSubmissionStatus.InProgress);
+        var ns = list.Count(x => x.Status == CommissionSubmissionStatus.NotStarted);
+        return new OpsPerfOrgRow
+        {
+            Name = name,
+            PotentialSubmissions = potential,
+            ActualSubmitted = ac,
+            ActualLate = al,
+            InProgress = ip,
+            NotStarted = ns,
+            CompletedMetricCells = list.Sum(x => x.Completed),
+            ApplicableMetricCells = list.Sum(x => x.Total)
+        };
+    }
+
+    private static List<OpsPerfMetricRow> BuildMetricRows(
+        Commission commission,
+        List<ProductDto> eligibleProducts,
+        Dictionary<string, CommissionSubmission> submissionsDict,
+        List<PerformanceMetric> metricsForPeriod)
+    {
+        var rows = new List<OpsPerfMetricRow>();
+        foreach (var metric in metricsForPeriod.OrderBy(m => m.Title))
+        {
+            var applicable = 0;
+            var completed = 0;
+            foreach (var p in eligibleProducts)
+            {
+                var docId = p.DocumentId ?? "";
+                submissionsDict.TryGetValue(docId, out var sub);
+                var existing = sub?.MetricValues?.ToList() ?? new List<CommissionMetricValue>();
+                var applicableForProduct = CommissionReportingMetricsHelper.FilterApplicableMetricsForProduct(
+                    commission, p, metricsForPeriod, existing);
+                if (applicableForProduct.All(m => m.Id != metric.Id))
+                    continue;
+                applicable++;
+                if (existing.Any(mv => mv.PerformanceMetricId == metric.Id && mv.IsComplete))
+                    completed++;
+            }
+
+            if (applicable > 0)
+            {
+                rows.Add(new OpsPerfMetricRow
+                {
+                    MetricId = metric.Id,
+                    Name = metric.Title,
+                    ApplicableProducts = applicable,
+                    CompletedCount = completed
+                });
+            }
+        }
+
+        return rows;
     }
 
     private static List<ProductDto> ApplyPerformanceCatalogueFilters(

@@ -76,8 +76,8 @@ public class FipsCmdbProductSyncService : IFipsCmdbProductSyncService
         await Report(
             FipsCmdbSyncProgressUpdate.PhaseProcessing,
             total == 0
-                ? "No CMDB entries returned."
-                : $"{total} CMDB entries loaded. Updating matching Compass products…",
+                ? "No CMDB entries returned. Check FipsSync:Cmdb settings and that ServiceNow returns active service offerings."
+                : $"{total} CMDB entries loaded. Creating or updating Compass products…",
             0,
             total);
 
@@ -97,11 +97,28 @@ public class FipsCmdbProductSyncService : IFipsCmdbProductSyncService
                 {
                     try
                     {
+                        var users = await _cmdb.GetServiceOfferingUsersAsync(entry);
                         if (!idByCmdbId.TryGetValue(sysKey, out var existingId))
-                            result.SkippedNoLocalMatch++;
+                        {
+                            var product = new CMDBProduct
+                            {
+                                CMDBID = sysKey,
+                                Status = CMDBProductStatus.New,
+                                CreatedAt = now,
+                                CreatedBy = email,
+                                UpdatedAt = now,
+                                UpdatedBy = email
+                            };
+                            _db.CMDBProducts.Add(product);
+                            result.Created++;
+                            var statusSet = await ApplyCmdbEntryToTrackedProductAsync(
+                                product, entry, users, rules, roleByName, email, now, cancellationToken);
+                            if (statusSet)
+                                result.StatusSetByRules++;
+                            idByCmdbId[sysKey] = product.Id;
+                        }
                         else
                         {
-                            var users = await _cmdb.GetServiceOfferingUsersAsync(entry);
                             var product = await _db.CMDBProducts
                                 .Include(p => p.Contacts)
                                 .FirstAsync(p => p.Id == existingId, cancellationToken);
@@ -126,6 +143,48 @@ public class FipsCmdbProductSyncService : IFipsCmdbProductSyncService
             if (reportProgress != null && (total <= 1 || (i + 1) % progressEvery == 0 || i == entries.Count - 1))
                 await Report(FipsCmdbSyncProgressUpdate.PhaseProcessing, null, i + 1, total);
         }
+
+        return result;
+    }
+
+    public async Task<FipsCmdbProductResetResult> ResetAllProductsForCmdbResyncAsync(
+        string triggeredByEmail,
+        CancellationToken cancellationToken = default)
+    {
+        var email = string.IsNullOrWhiteSpace(triggeredByEmail) ? "system" : triggeredByEmail.Trim();
+        var now = DateTime.UtcNow;
+        var result = new FipsCmdbProductResetResult();
+
+        result.SkippedInactive = await _db.CMDBProducts
+            .CountAsync(p => p.Status == CMDBProductStatus.Inactive, cancellationToken);
+
+        var eligible = _db.CMDBProducts.Where(p => p.Status != CMDBProductStatus.Inactive);
+
+        await _db.CMDBProductBusinessAreas
+            .Where(ba => eligible.Select(p => p.Id).Contains(ba.CMDBProductId))
+            .ExecuteDeleteAsync(cancellationToken);
+        await _db.CMDBProductChannels
+            .Where(ch => eligible.Select(p => p.Id).Contains(ch.CMDBProductId))
+            .ExecuteDeleteAsync(cancellationToken);
+        await _db.CMDBProductTypes
+            .Where(t => eligible.Select(p => p.Id).Contains(t.CMDBProductId))
+            .ExecuteDeleteAsync(cancellationToken);
+
+        result.ProductsReset = await eligible.ExecuteUpdateAsync(
+            s => s
+                .SetProperty(p => p.Status, CMDBProductStatus.New)
+                .SetProperty(p => p.PhaseId, (int?)null)
+                .SetProperty(p => p.ProductURL, (string?)null)
+                .SetProperty(p => p.IsEnterpriseService, false)
+                .SetProperty(p => p.UpdatedAt, now)
+                .SetProperty(p => p.UpdatedBy, email),
+            cancellationToken);
+
+        _logger.LogInformation(
+            "CMDB product reset for resync: {Reset} product(s) cleared, {Skipped} retired skipped, by {Email}",
+            result.ProductsReset,
+            result.SkippedInactive,
+            email);
 
         return result;
     }
@@ -236,11 +295,15 @@ public class FipsCmdbProductSyncService : IFipsCmdbProductSyncService
         AddContact(product, roleByName, "Information Asset Owner", users.InformationAssetOwner, canManage: false);
         AddContact(product, roleByName, "Senior Responsible Officer", users.SeniorResponsibleOwner, canManage: false);
 
-        var ruleStatus = FipsCmdbSyncRuleEvaluator.EvaluateFirstMatch(
+        var ruleStatus = FipsCmdbSyncRuleEvaluator.EvaluateFirstStatusMatch(
             rules, entry, entryJson, product, title, _logger);
         var statusSet = ruleStatus.HasValue;
         if (statusSet)
             product.Status = ruleStatus!.Value;
+
+        if (FipsCmdbSyncRuleEvaluator.EvaluateSetsEnterpriseService(
+                rules, entry, entryJson, product, title, _logger))
+            product.IsEnterpriseService = true;
 
         await _db.SaveChangesAsync(cancellationToken);
         return statusSet;

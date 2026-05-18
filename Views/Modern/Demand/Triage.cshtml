@@ -1,5 +1,6 @@
 @model Compass.ViewModels.Modern.DemandTriageHubViewModel
 @using Compass.Models.DemandPipeline
+@using Compass.ViewModels.Modern
 @{
   ViewData["Title"] = "Triage";
   ViewBag.QueueEmptyMessage = "No demands are currently queued for triage (scored or triage pending).";
@@ -11,25 +12,33 @@
 }
 
 <div id="sc-demand-triage">
- <div class="dfe-c-flex--between dfe-c-mb-3" style="flex-wrap:wrap;gap:1rem;">
- <div class="dfe-c-page-title" style="margin:0;">
- <div class="dfe-c-page-title__caption">Demand pipeline</div>
- <h1 class="dfe-c-page-title__heading">Triage</h1>
- <p class="dfe-c-page-title__lede">Triage meetings, items per meeting, and the full triage queue</p>
-    </div>
-  </div>
+@{
+  var triageLede = await Html.PartialAsync("_GovukBodyParagraph", "Triage meetings, items per meeting, and the full triage queue");
+}
+@await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+  Caption = "Demand pipeline",
+  Title = "Triage",
+  Lede = triageLede
+})
 
  <h2 class="dfe-c-heading-m dfe-c-mb-2">Triage meetings</h2>
  <p class="govuk-body govuk-!-margin-bottom-3">Select a meeting to see demands assigned to it. Open a demand to record the outcome on the <strong>Triage</strong> tab.</p>
 
- <div class="dfe-c-table-wrap dfe-c-mb-4">
-    <table>
-      <thead><tr><th>Meeting</th><th>When</th><th>Items in queue</th><th></th></tr></thead>
-      <tbody>
+ <div class="dfe-f-table-wrapper dfe-c-mb-4" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+    <table class="govuk-table">
+      <thead class="govuk-table__head"><tr class="govuk-table__row"><th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Meeting</button>
+        </th><th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">When</button>
+        </th><th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Items in queue</button>
+        </th><th></th></tr></thead>
+      <tbody class="govuk-table__body">
         @if (Model.Meetings.Count == 0)
         {
-          <tr>
-            <td colspan="4">No triage meetings have been set up yet. Central Operations can add meetings under <a href="@Url.Action("ManageTriage", "ModernOperations")">Operations → Manage triage</a>.</td>
+          <tr class="govuk-table__row">
+            <td class="govuk-table__cell" colspan="4">No triage meetings have been set up yet. Central Operations can add meetings under <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("ManageTriage", "ModernOperations")">Operations → Manage triage</a>.</td>
           </tr>
         }
         else
@@ -38,24 +47,24 @@
           {
             var m = row.Meeting;
             var isSelected = selectedId == m.Id;
-            <tr>
-              <td>
+            <tr class="govuk-table__row">
+              <td class="govuk-table__cell">
                 <strong>@(string.IsNullOrWhiteSpace(m.Name) ? "Triage meeting" : m.Name)</strong>
                 @if (!string.IsNullOrWhiteSpace(m.Location))
                 {
  <span class="dfe-c-table-ref">@m.Location</span>
                 }
               </td>
-              <td>@FormatTriageWhen(m)</td>
-              <td>@row.DemandCount</td>
-              <td>
+              <td class="govuk-table__cell">@FormatTriageWhen(m)</td>
+              <td class="govuk-table__cell">@row.DemandCount</td>
+              <td class="govuk-table__cell">
                 @if (isSelected)
                 {
-                  <a href="@Url.Action("Triage", "ModernDemand")">Clear selection</a>
+                  <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("Triage", "ModernDemand")">Clear selection</a>
                 }
                 else
                 {
-                  <a href="@Url.Action("Triage", "ModernDemand", new { meetingId = m.Id })">View items</a>
+                  <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("Triage", "ModernDemand", new { meetingId = m.Id })">View items</a>
                 }
               </td>
             </tr>
@@ -76,17 +85,24 @@
     }
     else
     {
- <div class="dfe-c-table-wrap dfe-c-mb-4">
-        <table>
-          <thead><tr><th>Reference</th><th>Title</th><th>Status</th><th></th></tr></thead>
-          <tbody>
+ <div class="dfe-f-table-wrapper dfe-c-mb-4" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+        <table class="govuk-table">
+          <thead class="govuk-table__head"><tr class="govuk-table__row"><th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Reference</button>
+        </th><th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Title</button>
+        </th><th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Status</button>
+        </th><th></th></tr></thead>
+          <tbody class="govuk-table__body">
             @foreach (var d in Model.MeetingDemands)
             {
-              <tr>
-                <td>@d.Reference</td>
-                <td><a href="@Url.Action("RequestDetail", "ModernDemand", new { id = d.Id, tab = "triage" })">@d.Title</a></td>
-                <td>@d.Status</td>
-                <td><a href="@Url.Action("RequestDetail", "ModernDemand", new { id = d.Id, tab = "triage" })">Open triage</a></td>
+              <tr class="govuk-table__row">
+                <td class="govuk-table__cell">@d.Reference</td>
+                <td class="govuk-table__cell"><a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("RequestDetail", "ModernDemand", new { id = d.Id, tab = "triage" })">@d.Title</a></td>
+                <td class="govuk-table__cell">@d.Status</td>
+                <td class="govuk-table__cell"><a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("RequestDetail", "ModernDemand", new { id = d.Id, tab = "triage" })">Open triage</a></td>
               </tr>
             }
           </tbody>

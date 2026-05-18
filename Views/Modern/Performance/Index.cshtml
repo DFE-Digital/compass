@@ -1,11 +1,14 @@
 @model ModernPerformanceCommissionsViewModel
 @using Compass.Models
+@using Compass.ViewModels.Modern
+@using Microsoft.AspNetCore.Html
 @{
   ViewData["Title"] = "Performance commissions";
   var active = Model.ActiveTab == "completed" ? "completed" : "active";
   string RowHref(ModernPerformanceCommissionListRow r) =>
     Url.Action("Commission", "ModernPerformance", new { commissionId = r.Commission.Id }) ?? "#";
   string TabUrl(string t) => Url.Action("Index", "ModernPerformance", new { tab = t }) ?? "#";
+  const string linkClass = "govuk-link govuk-link--no-visited-state";
 }
 
 @section Breadcrumbs {
@@ -13,11 +16,11 @@
  <li class="govuk-breadcrumbs__list-item" aria-current="page">Performance</li>
 }
 
-<div class="dfe-c-page-title dfe-c-mb-4">
- <div class="dfe-c-page-title__caption">Performance</div>
- <h1 class="dfe-c-page-title__heading">Commission reporting</h1>
- <p class="dfe-c-page-title__lede govuk-body">Select a commission to report metrics by product. Active commissions accept submissions until the due date.</p>
-</div>
+@await Html.PartialAsync("~/Views/Modern/Shared/_ModernPageHeader.cshtml", new ModernPageHeaderViewModel {
+  Caption = "Performance",
+  Title = "Commission reporting",
+  Lede = new HtmlString("<p class=\"govuk-body govuk-!-margin-bottom-0\">Select a commission to report metrics by product. Active commissions accept submissions until the due date.</p>")
+})
 
 @if (TempData["ErrorMessage"] != null)
 {
@@ -38,76 +41,104 @@
   </div>
 }
 
-<div class="tabs" role="tablist" aria-label="Commission submissions">
- <a href="@TabUrl("active")" class="tab @(active =="active" ? "on" : "")" role="tab" aria-selected="@(active == "active")" aria-controls="d-active" id="tab-active">Active (@Model.OpenForSubmission.Count)</a>
- <a href="@TabUrl("completed")" class="tab @(active =="completed" ? "on" : "")" role="tab" aria-selected="@(active == "completed")" aria-controls="d-completed" id="tab-completed">Completed (@Model.ClosedOrOther.Count)</a>
-</div>
+<nav class="dfe-f-sub-navigation govuk-!-margin-bottom-4" aria-label="Commission submissions">
+ <ul class="dfe-f-sub-navigation__list" style="flex-wrap:wrap;">
+ <li class="dfe-f-sub-navigation__item@(active == "active" ? " dfe-f-sub-navigation__item--active" : "")">
+ <a href="@TabUrl("active")" class="govuk-link dfe-f-sub-navigation__link @linkClass govuk-link--no-visited-state" id="tab-active" aria-controls="d-active" @if (active == "active") { <text> aria-current="page"</text> }>Active (@Model.OpenForSubmission.Count)</a>
+    </li>
+ <li class="dfe-f-sub-navigation__item@(active == "completed" ? " dfe-f-sub-navigation__item--active" : "")">
+ <a href="@TabUrl("completed")" class="govuk-link dfe-f-sub-navigation__link @linkClass govuk-link--no-visited-state" id="tab-completed" aria-controls="d-completed" @if (active == "completed") { <text> aria-current="page"</text> }>Completed (@Model.ClosedOrOther.Count)</a>
+    </li>
+  </ul>
+</nav>
 
 <div id="d-active" class="tab-pane @(active =="active" ? "on" : "")" role="tabpanel">
- <div class="dfe-c-table-wrap dfe-c-mt-3">
-    <table>
-      <thead>
-        <tr>
-          <th scope="col">Commission</th>
-          <th scope="col">Reporting period</th>
-          <th scope="col">Due date</th>
-          <th scope="col">Status</th>
-        </tr>
-      </thead>
-      <tbody>
-      @if (Model.OpenForSubmission.Count == 0)
-      {
- <tr><td colspan="4" class="dfe-c-body muted">No commissions are currently active for submission.</td></tr>
-      }
-      else
-      {
-        foreach (var r in Model.OpenForSubmission)
+ @if (Model.OpenForSubmission.Count == 0)
+ {
+   <div class="govuk-inset-text govuk-!-margin-top-3" role="status" aria-live="polite">
+     <p class="govuk-body govuk-!-margin-bottom-0">No items available</p>
+   </div>
+ }
+ else
+ {
+   <div class="dfe-f-table-wrapper dfe-c-mt-3" data-module="dfe-f-table">
+    <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+      <table class="govuk-table govuk-table--small dfe-f-table--condensed">
+        <thead class="govuk-table__head">
+          <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+            <button type="button" class="dfe-f-table-sort-button">Commission</button>
+          </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+            <button type="button" class="dfe-f-table-sort-button">Reporting period</button>
+          </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+            <button type="button" class="dfe-f-table-sort-button">Due date</button>
+          </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+            <button type="button" class="dfe-f-table-sort-button">Status</button>
+          </th>
+          </tr>
+        </thead>
+        <tbody class="govuk-table__body">
+        @foreach (var r in Model.OpenForSubmission)
         {
-          <tr>
-            <td><a href="@RowHref(r)"><strong>@r.Commission.Name</strong></a></td>
-            <td>@CommissionDisplay.FormatPeriod(r.Commission.StartDate, r.Commission.EndDate)</td>
-            <td>@CommissionDisplay.FormatDueDate(r.Commission.DueDate)</td>
- <td><span class="dfe-c-tag dfe-c-tag--green">Active</span></td>
+          <tr class="govuk-table__row">
+            <td class="govuk-table__cell"><a class="govuk-link @linkClass govuk-!-font-weight-bold govuk-link--no-visited-state" href="@RowHref(r)">@r.Commission.Name</a></td>
+            <td class="govuk-table__cell">@CommissionDisplay.FormatPeriod(r.Commission.StartDate, r.Commission.EndDate)</td>
+            <td class="govuk-table__cell">@CommissionDisplay.FormatDueDate(r.Commission.DueDate)</td>
+   <td class="govuk-table__cell"><span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--green">Active</span></td>
           </tr>
         }
-      }
-      </tbody>
-    </table>
-  </div>
+        </tbody>
+      </table>
+    </div>
+ }
 </div>
 
 <div id="d-completed" class="tab-pane @(active =="completed" ? "on" : "")" role="tabpanel">
  <p class="govuk-body dfe-c-mt-3">Past due, not yet open, and inactive commissions.</p>
- <div class="dfe-c-table-wrap">
-    <table>
-      <thead>
-        <tr>
-          <th scope="col">Commission</th>
-          <th scope="col">Reporting period</th>
-          <th scope="col">Due date</th>
-          <th scope="col">Status</th>
-        </tr>
-      </thead>
-      <tbody>
-      @if (Model.ClosedOrOther.Count == 0)
-      {
- <tr><td colspan="4" class="dfe-c-body muted">No completed or other commissions.</td></tr>
-      }
-      else
-      {
-        foreach (var r in Model.ClosedOrOther)
+ @if (Model.ClosedOrOther.Count == 0)
+ {
+   <div class="govuk-inset-text govuk-!-margin-top-3" role="status" aria-live="polite">
+     <p class="govuk-body govuk-!-margin-bottom-0">No items available</p>
+   </div>
+ }
+ else
+ {
+   <div class="dfe-f-table-wrapper govuk-!-margin-top-3" data-module="dfe-f-table">
+    <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+      <table class="govuk-table govuk-table--small dfe-f-table--condensed">
+        <thead class="govuk-table__head">
+          <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+            <button type="button" class="dfe-f-table-sort-button">Commission</button>
+          </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+            <button type="button" class="dfe-f-table-sort-button">Reporting period</button>
+          </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+            <button type="button" class="dfe-f-table-sort-button">Due date</button>
+          </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+            <button type="button" class="dfe-f-table-sort-button">Status</button>
+          </th>
+          </tr>
+        </thead>
+        <tbody class="govuk-table__body">
+        @foreach (var r in Model.ClosedOrOther)
         {
           string label = !r.Commission.IsActive ? "Inactive" : r.IsNotYetOpen ? "Not yet open" : r.IsPastDue ? "Completed" : "—";
-          string tag = !r.Commission.IsActive ? "dfe-c-tag--grey" : r.IsNotYetOpen ? "dfe-c-tag--blue" : r.IsPastDue ? "dfe-c-tag--green dfe-c-tag--work-completed" : "dfe-c-tag--grey";
-          <tr>
-            <td><a href="@RowHref(r)"><strong>@r.Commission.Name</strong></a></td>
-            <td>@CommissionDisplay.FormatPeriod(r.Commission.StartDate, r.Commission.EndDate)</td>
-            <td>@CommissionDisplay.FormatDueDate(r.Commission.DueDate)</td>
- <td><span class="dfe-c-tag @tag">@label</span></td>
+          string statusBadgeClass = !r.Commission.IsActive ? "dfe-f-badge--grey" : r.IsNotYetOpen ? "dfe-f-badge--blue" : r.IsPastDue ? "dfe-f-badge--green" : "dfe-f-badge--grey";
+          <tr class="govuk-table__row">
+            <td class="govuk-table__cell"><a class="govuk-link @linkClass govuk-!-font-weight-bold govuk-link--no-visited-state" href="@RowHref(r)">@r.Commission.Name</a></td>
+            <td class="govuk-table__cell">@CommissionDisplay.FormatPeriod(r.Commission.StartDate, r.Commission.EndDate)</td>
+            <td class="govuk-table__cell">@CommissionDisplay.FormatDueDate(r.Commission.DueDate)</td>
+   <td class="govuk-table__cell"><span class="dfe-f-badge dfe-f-badge--small @statusBadgeClass">@label</span></td>
           </tr>
         }
-      }
-      </tbody>
-    </table>
-  </div>
+        </tbody>
+      </table>
+    </div>
+ }
 </div>

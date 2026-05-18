@@ -10,6 +10,12 @@
   var useStdPropensity = m.ServiceStandardOutcomeBreakdownAvailable && hasStandardActions;
   var hasSummaryTabular = m.ByOutcome.Count + m.ByType.Count + m.ByPhase.Count + m.ByYear.Count > 0;
   var showKpis = !m.SummaryLoadFailed && m.TotalAssessments > 0;
+  var sa = m.StandardsAnalysis;
+  var aa = m.AssessorAnalysis;
+  var hasStdAnalysis = sa.StandardPoints.Any(p => p.ActionCount > 0);
+  var hasAssessorAnalysis = !aa.LoadFailed && aa.TotalAssessors > 0;
+  var totalStdActions = sa.StandardPoints.Sum(p => p.ActionCount);
+  var showReportNav = showKpis || hasStdAnalysis || !aa.LoadFailed;
 
   var jsonOpts = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull };
   var chartOutcomeJson = JsonSerializer.Serialize(
@@ -58,12 +64,48 @@
       jsonOpts);
   }
 
-  string SasOutcomeTagClass(string? o) => o switch
+  var trendMonths = sa.TrendComparisonMonths > 0 ? sa.TrendComparisonMonths : 6;
+  var chartStdYearTotalJson = JsonSerializer.Serialize(
+    new { labels = sa.TrendPeriodLabels.ToList(), data = sa.TrendPeriodTotals.ToList() },
+    jsonOpts);
+  var chartStdPeriodJson = JsonSerializer.Serialize(
+    new
+    {
+      labels = sa.StandardPoints.Select(p => p.Standard).ToList(),
+      recent = sa.StandardPoints.Select(p => p.ActionsRecentPeriod).ToList(),
+      prior = sa.StandardPoints.Select(p => p.ActionsPriorPeriod).ToList(),
+      trends = sa.StandardPoints.Select(p => p.TrendLabel).ToList(),
+      recentLabel = $"Last {trendMonths} months",
+      priorLabel = $"Prior {trendMonths} months"
+    },
+    jsonOpts);
+
+  var chartAssessorPeriodJson = JsonSerializer.Serialize(
+    new { labels = aa.PeriodLabels.ToList(), data = aa.PeriodTotals.ToList() },
+    jsonOpts);
+  var chartAssessorOutcomeJson = JsonSerializer.Serialize(
+    new { labels = aa.ByOutcome.Select(x => x.Key).ToList(), data = aa.ByOutcome.Select(x => x.Value).ToList() },
+    jsonOpts);
+  var chartAssessorRoleJson = JsonSerializer.Serialize(
+    new { labels = aa.ByPrimaryRole.Select(x => x.Key).ToList(), data = aa.ByPrimaryRole.Select(x => x.Value).ToList() },
+    jsonOpts);
+  var chartAssessorStatusJson = JsonSerializer.Serialize(
+    new { labels = aa.ByStatus.Select(x => x.Key).ToList(), data = aa.ByStatus.Select(x => x.Value).ToList() },
+    jsonOpts);
+
+  string SasOutcomeBadgeModifier(string? o) => o switch
   {
-    { } s when s.Equals("Green", StringComparison.OrdinalIgnoreCase) => "govuk-tag--green",
-    { } s when s.Equals("Amber", StringComparison.OrdinalIgnoreCase) => "govuk-tag--yellow",
-    { } s when s.Equals("Red", StringComparison.OrdinalIgnoreCase) => "govuk-tag--red",
-    _ => "govuk-tag--grey"
+    { } s when s.Equals("Green", StringComparison.OrdinalIgnoreCase) => "dfe-f-badge--green",
+    { } s when s.Equals("Amber", StringComparison.OrdinalIgnoreCase) => "dfe-f-badge--orange",
+    { } s when s.Equals("Red", StringComparison.OrdinalIgnoreCase) => "dfe-f-badge--red",
+    _ => "dfe-f-badge--grey"
+  };
+
+  string SasTrendBadgeModifier(string trend) => trend switch
+  {
+    "Increasing" => "dfe-f-badge--red",
+    "Decreasing" => "dfe-f-badge--green",
+    _ => "dfe-f-badge--grey"
   };
 }
 
@@ -75,13 +117,11 @@
 
 <div class="mr-dash sas-rpt" id="sas-top">
   <header class="sas-rpt__hero">
-    <div class="dfe-c-page-title sas-rpt__title">
-      <div class="dfe-c-page-title__caption">Reporting</div>
-      <h1 class="dfe-c-page-title__heading">Service assessments</h1>
-      <p class="dfe-c-page-title__lede sas-rpt__lede">
-        Published data from the Service Assessment Service. Outcome breakdowns are <strong>Service assessment</strong> only. Phases and years use a fixed order; each chart matches the table beside it.
-      </p>
-    </div>
+    @await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+      Caption = "Reporting",
+      Title = "Service assessments",
+      Lede = null
+    })
   </header>
 
   @if (TempData["ErrorMessage"] != null)
@@ -100,103 +140,184 @@
   {
     @if (showKpis)
     {
-      <section class="sas-rpt__kpis" aria-label="High level figures">
-        <div class="sas-rpt__kpi">
-          <span class="sas-rpt__kpi-value" id="sas-kpi-total">@m.TotalAssessments.ToString("N0")</span>
-          <span class="sas-rpt__kpi-label">Published in summary</span>
+      <section class="sas-rpt__stat-strip" aria-label="High level figures">
+        <h2 class="govuk-heading-m govuk-!-margin-top-4 govuk-!-margin-bottom-3">High level figures</h2>
+        <div class="dfe-f-card-grid govuk-!-margin-bottom-3">
+          <div class="dfe-f-stat-card dfe-f-stat-card--tint-teal">
+            <p class="govuk-body-s dfe-f-stat-card__label">Published in summary</p>
+            <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l" id="sas-kpi-total">@m.TotalAssessments.ToString("N0")</p>
+            <p class="govuk-body-s govuk-!-margin-top-2 govuk-!-margin-bottom-0">
+              <a class="govuk-link govuk-link--no-visited-state" href="#sas-summary-h" data-sas-tab-link="overview">Overview charts</a>
+            </p>
+          </div>
+          @if (m.ByOutcome.Count > 0)
+          {
+            var topOutcome = m.ByOutcome.OrderByDescending(x => x.Value).First();
+            <div class="dfe-f-stat-card dfe-f-stat-card--tint-blue">
+              <p class="govuk-body-s dfe-f-stat-card__label">Largest outcome (Service assessment)</p>
+              <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@topOutcome.Value.ToString("N0")</p>
+              <p class="govuk-body-s govuk-!-margin-top-2 govuk-!-margin-bottom-0">
+                <span class="dfe-f-badge dfe-f-badge--small @SasOutcomeBadgeModifier(topOutcome.Key)">@topOutcome.Key</span>
+                <a class="govuk-link govuk-link--no-visited-state" href="#sas-outcome" data-sas-tab-link="overview">View outcome chart</a>
+              </p>
+            </div>
+          }
+          @if (hasStdAnalysis)
+          {
+            <div class="dfe-f-stat-card dfe-f-stat-card--tint-orange">
+              <p class="govuk-body-s dfe-f-stat-card__label">GSS actions (published SA)</p>
+              <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@totalStdActions.ToString("N0")</p>
+              <p class="govuk-body-s govuk-!-margin-top-2 govuk-!-margin-bottom-0">
+                <a class="govuk-link govuk-link--no-visited-state" href="#sas-standards-analysis" data-sas-tab-link="standards">Standards analysis</a>
+              </p>
+            </div>
+          }
+          @if (hasAssessorAnalysis)
+          {
+            <div class="dfe-f-stat-card dfe-f-stat-card--tint-blue">
+              <p class="govuk-body-s dfe-f-stat-card__label">Assessors</p>
+              <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@aa.TotalAssessors.ToString("N0")</p>
+              <p class="govuk-body-s govuk-!-margin-top-2 govuk-!-margin-bottom-0">
+                <a class="govuk-link govuk-link--no-visited-state" href="#sas-assessor-analysis" data-sas-tab-link="assessors">Assessor analysis</a>
+              </p>
+            </div>
+          }
+          @if (hasList)
+          {
+            <div class="dfe-f-stat-card dfe-f-stat-card--tint-green">
+              <p class="govuk-body-s dfe-f-stat-card__label">In published list</p>
+              <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@m.AssessmentRows.Count.ToString("N0")</p>
+              <p class="govuk-body-s govuk-!-margin-top-2 govuk-!-margin-bottom-0">
+                <a class="govuk-link govuk-link--no-visited-state" href="#sas-list-heading" data-sas-tab-link="overview">Full register</a>
+              </p>
+            </div>
+          }
         </div>
-        @if (m.ByOutcome.Count > 0)
-        {
-          var topOutcome = m.ByOutcome.OrderByDescending(x => x.Value).First();
-          <div class="sas-rpt__kpi">
-            <span class="sas-rpt__kpi-value">@topOutcome.Value.ToString("N0")</span>
-            <span class="sas-rpt__kpi-label">Largest outcome (Service assessment): @topOutcome.Key</span>
-          </div>
-        }
-        @if (hasList)
-        {
-          <div class="sas-rpt__kpi">
-            <span class="sas-rpt__kpi-value">@m.AssessmentRows.Count.ToString("N0")</span>
-            <span class="sas-rpt__kpi-label">In published list (below)</span>
-          </div>
-        }
-        <p class="sas-rpt__kpi-hint">
-          <a class="govuk-link govuk-link--no-visited-state" href="#sas-list-heading">Skip to full list</a>
-          <span class="sas-rpt__kpi-hint-sep" aria-hidden="true">·</span>
-          <a class="govuk-link govuk-link--no-visited-state" href="#sas-std-heading">Actions by standard</a>
-        </p>
       </section>
     }
+
+    @if (showReportNav)
+    {
+      <nav class="sas-rpt__subnav" aria-label="Report views">
+        <ul class="sas-rpt__subnav-list">
+          <li><button type="button" class="sas-rpt__subnav-btn is-active" id="sas-tab-btn-overview" data-sas-tab="overview" aria-controls="sas-tab-panel-overview" aria-selected="true">Overview</button></li>
+          <li><button type="button" class="sas-rpt__subnav-btn" id="sas-tab-btn-standards" data-sas-tab="standards" aria-controls="sas-tab-panel-standards" aria-selected="false">Standards analysis</button></li>
+          <li><button type="button" class="sas-rpt__subnav-btn" id="sas-tab-btn-assessors" data-sas-tab="assessors" aria-controls="sas-tab-panel-assessors" aria-selected="false">Assessor analysis</button></li>
+        </ul>
+      </nav>
+    }
+
+    <div id="sas-tab-panel-overview" class="sas-rpt__tab-panel" role="tabpanel" aria-labelledby="sas-tab-btn-overview">
 
     @if (hasSummaryTabular)
     {
       <section class="sas-rpt__block" aria-label="Report summary: charts and tables">
         <h2 class="sas-rpt__h2" id="sas-summary-h">At a glance</h2>
-        <p class="govuk-hint govuk-!-margin-bottom-4 sas-rpt__h2-hint">Four views of the same published cohort — use whichever is easiest to scan.</p>
+        <p class="govuk-hint govuk-!-margin-bottom-4 sas-rpt__h2-hint">Four views of the same published cohort. Use Chart or Table on each panel; Expand for full width.</p>
 
-        <div class="sas-rpt__summary-grid">
-          <article class="sas-rpt__cell" aria-labelledby="sas-outcome">
-            <h3 class="sas-rpt__h3" id="sas-outcome">By outcome</h3>
-            <p class="sas-rpt__cell-hint">Service assessment type only</p>
+        <div class="sas-rpt__summary-grid" id="sas-summary-grid">
+          <article class="sas-panel" data-sas-panel="outcome" aria-labelledby="sas-outcome">
+            <header class="sas-panel__head">
+              <div class="sas-panel__title-wrap">
+                <h3 class="sas-rpt__h3" id="sas-outcome">By outcome</h3>
+                <p class="sas-rpt__cell-hint govuk-!-margin-bottom-0">Service assessment type only</p>
+              </div>
+              <div class="sas-panel__tools">
+                <div class="sas-panel__view" role="group" aria-label="By outcome view">
+                  <button type="button" class="sas-panel__view-btn is-active" data-sas-view="chart" aria-pressed="true">Chart</button>
+                  <button type="button" class="sas-panel__view-btn" data-sas-view="table" aria-pressed="false">Table</button>
+                </div>
+                <button type="button" class="govuk-button govuk-button--secondary govuk-button--small sas-panel__expand" aria-expanded="false">Expand</button>
+              </div>
+            </header>
+            <div class="sas-panel__body">
             @if (m.ByOutcome.Count == 0)
             {
               <p class="govuk-body dfe-c-text-muted sas-rpt__empty">No outcome data for Service assessments.</p>
             }
             else
             {
-              <div class="sas-rpt__chart sas-rpt__chart--doughnut">
-                <div class="mr-chart-wrap" style="min-height: 200px;">
+              <div class="sas-panel__pane sas-panel__pane--chart">
+                <div class="sas-panel__chart-wrap sas-panel__chart-wrap--doughnut">
                   <canvas id="sas-chart-outcome" role="img" aria-label="Outcomes for service assessments only"></canvas>
                 </div>
               </div>
-              <div class="sas-rpt__table-wrap dfe-c-table-wrap">
-                <table class="mr-ba-table" aria-describedby="sas-outcome">
-                  <thead>
-                  <tr>
-                    <th scope="col" class="mr-ba-table__area-col">Outcome</th>
-                    <th scope="col" class="mr-ba-table__num-hdr">Count</th>
+              <div class="sas-panel__pane sas-panel__pane--table" hidden>
+              <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+                <table class="govuk-table mr-ba-table" aria-describedby="sas-outcome">
+                  <thead class="govuk-table__head">
+                  <tr class="govuk-table__row">
+                    <th scope="col" class="govuk-table__header mr-ba-table__area-col" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Outcome</button>
+        </th>
+                    <th scope="col" class="govuk-table__header mr-ba-table__num-hdr" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Count</button>
+        </th>
                   </tr>
                   </thead>
-                  <tbody>
+                  <tbody class="govuk-table__body">
                   @foreach (var row in m.ByOutcome)
                   {
-                    <tr>
-                      <th scope="row" class="mr-ba-table__area-col">@row.Key</th>
+                    <tr class="govuk-table__row">
+                      <th scope="row" class="mr-ba-table__area-col">
+                        <span class="dfe-f-badge dfe-f-badge--small @SasOutcomeBadgeModifier(row.Key)">@row.Key</span>
+                      </th>
                       <td class="mr-ba-table__num"><span class="mr-ba-num">@row.Value.ToString("N0")</span></td>
                     </tr>
                   }
                   </tbody>
                 </table>
               </div>
+              </div>
             }
+            </div>
           </article>
 
-          <article class="sas-rpt__cell" aria-labelledby="sas-type">
-            <h3 class="sas-rpt__h3" id="sas-type">By type</h3>
-            <p class="sas-rpt__cell-hint">All published assessment types</p>
+          <article class="sas-panel" data-sas-panel="type" aria-labelledby="sas-type">
+            <header class="sas-panel__head">
+              <div class="sas-panel__title-wrap">
+                <h3 class="sas-rpt__h3" id="sas-type">By type</h3>
+                <p class="sas-rpt__cell-hint govuk-!-margin-bottom-0">All published assessment types</p>
+              </div>
+              <div class="sas-panel__tools">
+                <div class="sas-panel__view" role="group" aria-label="By type view">
+                  <button type="button" class="sas-panel__view-btn is-active" data-sas-view="chart" aria-pressed="true">Chart</button>
+                  <button type="button" class="sas-panel__view-btn" data-sas-view="table" aria-pressed="false">Table</button>
+                </div>
+                <button type="button" class="govuk-button govuk-button--secondary govuk-button--small sas-panel__expand" aria-expanded="false">Expand</button>
+              </div>
+            </header>
+            <div class="sas-panel__body">
             @if (m.ByType.Count == 0)
             {
               <p class="govuk-body dfe-c-text-muted sas-rpt__empty">No type data.</p>
             }
             else
             {
-              <div class="sas-rpt__chart sas-rpt__chart--doughnut">
-                <div class="mr-chart-wrap" style="min-height: 200px;">
+              <div class="sas-panel__pane sas-panel__pane--chart">
+                <div class="sas-panel__chart-wrap sas-panel__chart-wrap--doughnut">
                   <canvas id="sas-chart-type" role="img" aria-label="Distribution by assessment type"></canvas>
                 </div>
               </div>
-              <div class="sas-rpt__table-wrap dfe-c-table-wrap">
-                <table class="mr-ba-table" aria-describedby="sas-type">
-                  <thead>
-                  <tr>
-                    <th scope="col" class="mr-ba-table__area-col">Type</th>
-                    <th scope="col" class="mr-ba-table__num-hdr">Count</th>
+              <div class="sas-panel__pane sas-panel__pane--table" hidden>
+              <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+                <table class="govuk-table mr-ba-table" aria-describedby="sas-type">
+                  <thead class="govuk-table__head">
+                  <tr class="govuk-table__row">
+                    <th scope="col" class="govuk-table__header mr-ba-table__area-col" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Type</button>
+        </th>
+                    <th scope="col" class="govuk-table__header mr-ba-table__num-hdr" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Count</button>
+        </th>
                   </tr>
                   </thead>
-                  <tbody>
+                  <tbody class="govuk-table__body">
                   @foreach (var row in m.ByType)
                   {
-                    <tr>
+                    <tr class="govuk-table__row">
                       <th scope="row" class="mr-ba-table__area-col">@row.Key</th>
                       <td class="mr-ba-table__num"><span class="mr-ba-num">@row.Value.ToString("N0")</span></td>
                     </tr>
@@ -204,35 +325,55 @@
                   </tbody>
                 </table>
               </div>
+              </div>
             }
+            </div>
           </article>
 
-          <article class="sas-rpt__cell" aria-labelledby="sas-phase">
-            <h3 class="sas-rpt__h3" id="sas-phase">By phase</h3>
-            <p class="sas-rpt__cell-hint">Discovery → Live, then any other</p>
+          <article class="sas-panel" data-sas-panel="phase" aria-labelledby="sas-phase">
+            <header class="sas-panel__head">
+              <div class="sas-panel__title-wrap">
+                <h3 class="sas-rpt__h3" id="sas-phase">By phase</h3>
+                <p class="sas-rpt__cell-hint govuk-!-margin-bottom-0">Discovery → Live, then any other</p>
+              </div>
+              <div class="sas-panel__tools">
+                <div class="sas-panel__view" role="group" aria-label="By phase view">
+                  <button type="button" class="sas-panel__view-btn is-active" data-sas-view="chart" aria-pressed="true">Chart</button>
+                  <button type="button" class="sas-panel__view-btn" data-sas-view="table" aria-pressed="false">Table</button>
+                </div>
+                <button type="button" class="govuk-button govuk-button--secondary govuk-button--small sas-panel__expand" aria-expanded="false">Expand</button>
+              </div>
+            </header>
+            <div class="sas-panel__body">
             @if (m.ByPhase.Count == 0)
             {
               <p class="govuk-body dfe-c-text-muted sas-rpt__empty">No phase data.</p>
             }
             else
             {
-              <div class="sas-rpt__chart sas-rpt__chart--bar">
-                <div class="mr-chart-wrap" style="min-height: 220px;">
+              <div class="sas-panel__pane sas-panel__pane--chart">
+                <div class="sas-panel__chart-wrap">
                   <canvas id="sas-chart-phase" role="img" aria-label="Counts by delivery phase"></canvas>
                 </div>
               </div>
-              <div class="sas-rpt__table-wrap dfe-c-table-wrap">
-                <table class="mr-ba-table" aria-describedby="sas-phase">
-                  <thead>
-                  <tr>
-                    <th scope="col" class="mr-ba-table__area-col">Phase</th>
-                    <th scope="col" class="mr-ba-table__num-hdr">Count</th>
+              <div class="sas-panel__pane sas-panel__pane--table" hidden>
+              <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+                <table class="govuk-table mr-ba-table" aria-describedby="sas-phase">
+                  <thead class="govuk-table__head">
+                  <tr class="govuk-table__row">
+                    <th scope="col" class="govuk-table__header mr-ba-table__area-col" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Phase</button>
+        </th>
+                    <th scope="col" class="govuk-table__header mr-ba-table__num-hdr" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Count</button>
+        </th>
                   </tr>
                   </thead>
-                  <tbody>
+                  <tbody class="govuk-table__body">
                   @foreach (var row in m.ByPhase)
                   {
-                    <tr>
+                    <tr class="govuk-table__row">
                       <th scope="row" class="mr-ba-table__area-col">@row.Key</th>
                       <td class="mr-ba-table__num"><span class="mr-ba-num">@row.Value.ToString("N0")</span></td>
                     </tr>
@@ -240,35 +381,55 @@
                   </tbody>
                 </table>
               </div>
+              </div>
             }
+            </div>
           </article>
 
-          <article class="sas-rpt__cell" aria-labelledby="sas-year">
-            <h3 class="sas-rpt__h3" id="sas-year">By year</h3>
-            <p class="sas-rpt__cell-hint">Calendar year (ascending)</p>
+          <article class="sas-panel" data-sas-panel="year" aria-labelledby="sas-year">
+            <header class="sas-panel__head">
+              <div class="sas-panel__title-wrap">
+                <h3 class="sas-rpt__h3" id="sas-year">By year</h3>
+                <p class="sas-rpt__cell-hint govuk-!-margin-bottom-0">Calendar year (ascending)</p>
+              </div>
+              <div class="sas-panel__tools">
+                <div class="sas-panel__view" role="group" aria-label="By year view">
+                  <button type="button" class="sas-panel__view-btn is-active" data-sas-view="chart" aria-pressed="true">Chart</button>
+                  <button type="button" class="sas-panel__view-btn" data-sas-view="table" aria-pressed="false">Table</button>
+                </div>
+                <button type="button" class="govuk-button govuk-button--secondary govuk-button--small sas-panel__expand" aria-expanded="false">Expand</button>
+              </div>
+            </header>
+            <div class="sas-panel__body">
             @if (m.ByYear.Count == 0)
             {
               <p class="govuk-body dfe-c-text-muted sas-rpt__empty">No year data.</p>
             }
             else
             {
-              <div class="sas-rpt__chart sas-rpt__chart--bar">
-                <div class="mr-chart-wrap" style="min-height: 200px;">
+              <div class="sas-panel__pane sas-panel__pane--chart">
+                <div class="sas-panel__chart-wrap">
                   <canvas id="sas-chart-year" role="img" aria-label="Counts by year"></canvas>
                 </div>
               </div>
-              <div class="sas-rpt__table-wrap dfe-c-table-wrap">
-                <table class="mr-ba-table" aria-describedby="sas-year">
-                  <thead>
-                  <tr>
-                    <th scope="col" class="mr-ba-table__area-col">Year</th>
-                    <th scope="col" class="mr-ba-table__num-hdr">Count</th>
+              <div class="sas-panel__pane sas-panel__pane--table" hidden>
+              <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+                <table class="govuk-table mr-ba-table" aria-describedby="sas-year">
+                  <thead class="govuk-table__head">
+                  <tr class="govuk-table__row">
+                    <th scope="col" class="govuk-table__header mr-ba-table__area-col" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Year</button>
+        </th>
+                    <th scope="col" class="govuk-table__header mr-ba-table__num-hdr" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Count</button>
+        </th>
                   </tr>
                   </thead>
-                  <tbody>
+                  <tbody class="govuk-table__body">
                   @foreach (var row in m.ByYear)
                   {
-                    <tr>
+                    <tr class="govuk-table__row">
                       <th scope="row" class="mr-ba-table__area-col">@row.Key</th>
                       <td class="mr-ba-table__num"><span class="mr-ba-num">@row.Value.ToString("N0")</span></td>
                     </tr>
@@ -276,12 +437,13 @@
                   </tbody>
                 </table>
               </div>
+              </div>
             }
+            </div>
           </article>
         </div>
       </section>
     }
-  }
 
   @if (!m.ActionsByStandardLoadFailed)
   {
@@ -289,47 +451,60 @@
       <h2 class="sas-rpt__h2" id="sas-std-heading" style="margin-top:0;">Actions by Service Standard</h2>
       @if (useStdPropensity)
       {
-        <p class="govuk-hint govuk-!-margin-bottom-2">Per <abbr title="Government Service Standard">GSS</abbr> point for <strong>published</strong> <strong>Service assessment</strong> only. Each action is assigned the assessment’s <strong>overall</strong> Red / Amber / Green outcome, then the chart shows how action volume is split — so a large Red+Amber share flags standards under more pressure. Standards are sorted with the <strong>most challenging first</strong> (highest % of actions on Red or Amber outcome).</p>
-        <p class="govuk-body-s govuk-!-margin-bottom-4 dfe-c-text-muted" style="max-width:44rem;">Ranks 1–3 in the table are highlighted. Use raw counts in the table for absolute size; the chart is 100% of actions per row so you can compare shape between standards (bar length is the same, mix differs).</p>
+        <p class="govuk-hint govuk-!-margin-bottom-2">Per <abbr title="Government Service Standard">GSS</abbr> point (1–14) for <strong>published</strong> <strong>Service assessment</strong> only. Each action is assigned the assessment’s <strong>overall</strong> Red / Amber / Green outcome; the chart shows how action volume <strong>within that point</strong> splits by outcome — a large Red+Amber share flags pressure on that point. <strong>Rows and the chart are always in GSS number order.</strong></p>
+        <p class="govuk-body-s govuk-!-margin-bottom-4 dfe-c-text-muted sas-rpt__std-hint-narrow">Rows with the highest Red+Amber share are highlighted. Use the table for raw counts; the chart is 100% per row so you compare the <em>mix</em> between points, not total bar length.</p>
       }
       else
       {
-        <p class="govuk-hint govuk-!-margin-bottom-4">Per <abbr title="Government Service Standard">GSS</abbr> point from the aggregate <abbr title="Service assessment service">SAS</abbr> view. A detailed RAG mix could not be loaded — the chart and table use total action and assessment counts only. If this persists, check SAS API configuration and connectivity.</p>
+        <p class="govuk-hint govuk-!-margin-bottom-4">Per <abbr title="Government Service Standard">GSS</abbr> point from the aggregate <abbr title="Service assessment service">SAS</abbr> view, in <strong>standard number order (1–14)</strong>. A detailed RAG mix could not be loaded — the chart and table use total action and assessment counts only. If this persists, check SAS API configuration and connectivity.</p>
       }
       @if (hasStandardActions)
       {
         <div class="sas-rpt__standards-panels">
           <div class="sas-rpt__standards-chart">
             <div class="sas-rpt__chart sas-rpt__chart--standards">
-              <div class="mr-chart-wrap" style="min-height: 320px;">
-                <canvas id="sas-chart-standards" role="img" aria-label="Actions by service standard, @(useStdPropensity ? "share of actions by Red Amber Green and other outcomes" : "actions and assessment counts by standard number")"></canvas>
+              <div class="mr-chart-wrap sas-rpt__standards-canvas-wrap">
+                <canvas id="sas-chart-standards" role="img" aria-label="Actions by GSS point in standard order, @(useStdPropensity ? "share of actions by Red Amber Green and other outcomes" : "actions and assessment counts by point")"></canvas>
               </div>
             </div>
           </div>
-          <div class="sas-rpt__standards-table dfe-c-table-wrap">
+          <div class="sas-rpt__standards-table dfe-f-table-wrapper" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
             @if (useStdPropensity)
             {
-              <table class="mr-ba-table" aria-describedby="sas-std-heading">
-                <caption class="govuk-visually-hidden">Most challenging standards (highest share of actions on Red or Amber) listed first; columns show outcome mix and total actions</caption>
-                <thead>
-                <tr>
-                  <th scope="col" class="mr-ba-table__num-hdr" title="1 = most challenging (highest share of actions on Red or Amber overall outcome)">#</th>
-                  <th scope="col" class="mr-ba-table__area-col">Standard</th>
+              <table class="govuk-table mr-ba-table" aria-describedby="sas-std-heading">
+                <caption class="govuk-visually-hidden">GSS points in number order; columns show outcome mix and totals.</caption>
+                <thead class="govuk-table__head">
+                <tr class="govuk-table__row">
+                  <th scope="col" class="govuk-table__header mr-ba-table__area-col" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">GSS point</button>
+        </th>
                   <th scope="col" class="mr-ba-table__num-hdr" title="Percentage of this row's actions on assessments with Red or Amber overall outcome">Red+Amber</th>
-                  <th scope="col" class="mr-ba-table__num-hdr">Red</th>
-                  <th scope="col" class="mr-ba-table__num-hdr">Amber</th>
-                  <th scope="col" class="mr-ba-table__num-hdr">Green</th>
-                  <th scope="col" class="mr-ba-table__num-hdr">Other</th>
-                  <th scope="col" class="mr-ba-table__num-hdr">Actions (total)</th>
-                  <th scope="col" class="mr-ba-table__num-hdr">Assessments</th>
+                  <th scope="col" class="govuk-table__header mr-ba-table__num-hdr" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Red</button>
+        </th>
+                  <th scope="col" class="govuk-table__header mr-ba-table__num-hdr" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Amber</button>
+        </th>
+                  <th scope="col" class="govuk-table__header mr-ba-table__num-hdr" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Green</button>
+        </th>
+                  <th scope="col" class="govuk-table__header mr-ba-table__num-hdr" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Other</button>
+        </th>
+                  <th scope="col" class="govuk-table__header mr-ba-table__num-hdr" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Actions (total)</button>
+        </th>
+                  <th scope="col" class="govuk-table__header mr-ba-table__num-hdr" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Assessments</button>
+        </th>
                 </tr>
                 </thead>
-                <tbody>
+                <tbody class="govuk-table__body">
                 @foreach (var row in m.StandardActionRows)
                 {
                   var isHot = row.MostProblematicRank <= 3 && row.PctOnAmberOrRed is { } p && p > 0.001;
                   <tr class="@(isHot ? "sas-std--hot" : "")">
-                    <td class="mr-ba-table__num">@row.MostProblematicRank</td>
                     <th scope="row" class="mr-ba-table__area-col">@row.Standard</th>
                     <td class="mr-ba-table__num"><span class="mr-ba-num">@(row.PctOnAmberOrRed is { } x ? $"{x:0.0}%" : "—")</span></td>
                     <td class="mr-ba-table__num"><span class="mr-ba-num">@row.ActionsFromRedOutcome.ToString("N0")</span></td>
@@ -345,18 +520,24 @@
             }
             else
             {
-              <table class="mr-ba-table" aria-describedby="sas-std-heading">
-                <thead>
-                <tr>
-                  <th scope="col" class="mr-ba-table__area-col">Standard</th>
-                  <th scope="col" class="mr-ba-table__num-hdr">Actions</th>
-                  <th scope="col" class="mr-ba-table__num-hdr">Assessments</th>
+              <table class="govuk-table mr-ba-table" aria-describedby="sas-std-heading">
+                <thead class="govuk-table__head">
+                <tr class="govuk-table__row">
+                  <th scope="col" class="govuk-table__header mr-ba-table__area-col" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">GSS point</button>
+        </th>
+                  <th scope="col" class="govuk-table__header mr-ba-table__num-hdr" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Actions</button>
+        </th>
+                  <th scope="col" class="govuk-table__header mr-ba-table__num-hdr" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Assessments</button>
+        </th>
                 </tr>
                 </thead>
-                <tbody>
+                <tbody class="govuk-table__body">
                 @foreach (var row in m.StandardActionRows)
                 {
-                  <tr>
+                  <tr class="govuk-table__row">
                     <th scope="row" class="mr-ba-table__area-col">@row.Standard</th>
                     <td class="mr-ba-table__num"><span class="mr-ba-num">@row.ActionCount.ToString("N0")</span></td>
                     <td class="mr-ba-table__num"><span class="mr-ba-num">@row.AssessmentCount.ToString("N0")</span></td>
@@ -402,31 +583,51 @@
         var typeAnchor = $"sas-type-grp-{grpIndex++}";
         <div class="sas-rpt__type-panel">
           <h3 class="sas-rpt__h3" id="@typeAnchor">@grp.TypeLabel <span class="sas-rpt__type-badge">@grp.Items.Count</span></h3>
-          <div class="dfe-c-table-wrap">
-            <table class="mr-ba-table" aria-labelledby="@typeAnchor">
-              <thead>
-              <tr>
-                <th scope="col" class="mr-ba-table__area-col">Outcome</th>
-                <th scope="col" class="mr-ba-table__area-col">Name</th>
-                <th scope="col" class="mr-ba-table__area-col">Phase</th>
-                <th scope="col" class="mr-ba-table__area-col">Portfolio</th>
-                <th scope="col" class="mr-ba-table__num-hdr">Assessment date</th>
-                <th scope="col" class="mr-ba-table__area-col">Report</th>
+          <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+            <table class="govuk-table mr-ba-table" aria-labelledby="@typeAnchor">
+              <thead class="govuk-table__head">
+              <tr class="govuk-table__row">
+                <th scope="col" class="govuk-table__header mr-ba-table__area-col" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Outcome</button>
+        </th>
+                <th scope="col" class="govuk-table__header mr-ba-table__area-col" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Name</button>
+        </th>
+                <th scope="col" class="govuk-table__header mr-ba-table__area-col" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Phase</button>
+        </th>
+                <th scope="col" class="govuk-table__header mr-ba-table__area-col" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Portfolio</button>
+        </th>
+                <th scope="col" class="govuk-table__header mr-ba-table__num-hdr" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Assessment date</button>
+        </th>
+                <th scope="col" class="govuk-table__header mr-ba-table__area-col" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Report</button>
+        </th>
               </tr>
               </thead>
-              <tbody>
+              <tbody class="govuk-table__body">
               @foreach (var a in grp.Items)
               {
                 var reportUrl = $"{m.SasReportBaseUrl.TrimEnd('/')}/{a.AssessmentId}";
-                <tr>
-                  <td>
-                    <span class="govuk-tag @SasOutcomeTagClass(a.Outcome)">@(!string.IsNullOrEmpty(a.Outcome) ? a.Outcome : "—")</span>
+                <tr class="govuk-table__row">
+                  <td class="govuk-table__cell">
+                    @if (!string.IsNullOrEmpty(a.Outcome))
+                    {
+                      <span class="dfe-f-badge dfe-f-badge--small @SasOutcomeBadgeModifier(a.Outcome)">@a.Outcome</span>
+                    }
+                    else
+                    {
+                      <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--grey">—</span>
+                    }
                   </td>
                   <td class="mr-ba-table__area-col">@(!string.IsNullOrEmpty(a.Name) ? a.Name : "—")</td>
                   <td class="mr-ba-table__area-col">@(a.Phase ?? "—")</td>
                   <td class="mr-ba-table__area-col">@(a.Portfolio ?? "—")</td>
                   <td class="mr-ba-table__num"><span class="mr-ba-num">@(a.AssessmentDate is { } ad ? ad.ToString("d MMM yyyy", System.Globalization.CultureInfo.GetCultureInfo("en-GB")) : "—")</span></td>
-                  <td class="mr-ba-table__num"><a class="dfe-c-link" href="@reportUrl" rel="noopener noreferrer" target="_blank" aria-label="Open full report: @(a.Name?.Replace("\"", "") ?? "assessment")">View</a></td>
+                  <td class="mr-ba-table__num"><a class="govuk-link govuk-link--no-visited-state" href="@reportUrl" rel="noopener noreferrer" target="_blank" aria-label="Open full report: @(a.Name?.Replace("\"", "") ?? "assessment")">View</a></td>
                 </tr>
               }
               </tbody>
@@ -436,192 +637,22 @@
       }
     </section>
   }
+
+    </div>
+
+    <div id="sas-tab-panel-standards" class="sas-rpt__tab-panel" role="tabpanel" aria-labelledby="sas-tab-btn-standards" hidden>
+      @await Html.PartialAsync("_SasStandardsAnalysis", m)
+    </div>
+
+    <div id="sas-tab-panel-assessors" class="sas-rpt__tab-panel" role="tabpanel" aria-labelledby="sas-tab-btn-assessors" hidden>
+      @await Html.PartialAsync("_SasAssessorAnalysis", m)
+    </div>
+  }
+
 </div>
 
-<style>
-  .sas-rpt { width: 100%; max-width: 100%; box-sizing: border-box; padding-bottom: 1rem; }
-  .sas-rpt__title { margin-bottom: 0; }
-  .sas-rpt__lede { max-width: 40rem; margin: 0.5rem 0 0; line-height: 1.5; }
-  .sas-rpt__block { margin-top: 2.25rem; }
-  .sas-rpt__kpis + .sas-rpt__block { margin-top: 1.5rem; }
-  .sas-rpt__hero + .sas-rpt__block { margin-top: 1.75rem; }
-  .sas-rpt__h2 {
-    font-size: 1.3125rem;
-    font-weight: 700;
-    line-height: 1.2;
-    margin: 0 0 0.5rem;
-    padding-bottom: 0.4rem;
-    border-bottom: 4px solid #0b0c0c;
-    letter-spacing: -0.01em;
-  }
-  .sas-rpt__h2-hint { margin-top: -0.25rem; max-width: 44rem; }
-  .sas-rpt__h3 {
-    font-size: 1.0625rem;
-    font-weight: 700;
-    line-height: 1.3;
-    margin: 0 0 0.2rem;
-    color: #0b0c0c;
-  }
-  .sas-rpt__cell-hint {
-    font-size: 0.875rem;
-    line-height: 1.4;
-    color: #505a5f;
-    margin: 0 0 0.75rem;
-  }
-  .sas-rpt__empty { margin: 0.5rem 0 0; }
-
-  .sas-rpt__kpis {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 0.75rem 1.25rem;
-    margin: 0.25rem 0 0.5rem;
-    padding: 1.25rem 1.25rem 1rem;
-    background: #f3f2f1;
-    border: 1px solid #b1b4b6;
-    max-width: 100%;
-  }
-  @@media (min-width: 40.0625em) {
-    .sas-rpt__kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  }
-  .sas-rpt__kpi {
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 0.2rem;
-  }
-  .sas-rpt__kpi-value {
-    font-size: 2.125rem;
-    font-weight: 700;
-    line-height: 1.1;
-    font-variant-numeric: tabular-nums;
-    color: #0b0c0c;
-  }
-  .sas-rpt__kpi-label { font-size: 0.875rem; line-height: 1.4; color: #505a5f; }
-  .sas-rpt__kpi-hint {
-    grid-column: 1 / -1;
-    font-size: 0.875rem;
-    color: #505a5f;
-    margin: 0.5rem 0 0;
-    padding-top: 0.5rem;
-    border-top: 1px solid #b1b4b6;
-  }
-  .sas-rpt__kpi-hint-sep { margin: 0 0.4rem; color: #b1b4b6; }
-
-  .sas-rpt__summary-grid {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 1.25rem;
-  }
-  @@media (min-width: 64.0625em) {
-    .sas-rpt__summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.5rem; }
-  }
-  .sas-rpt__cell {
-    background: #fff;
-    border: 1px solid #b1b4b6;
-    border-left: 4px solid #1d70b8;
-    padding: 1.1rem 1.15rem 1.15rem;
-    min-width: 0;
-  }
-  .sas-rpt__cell .sas-rpt__table-wrap { margin-top: 0.5rem; }
-  .sas-rpt__chart { margin: 0 0 0.5rem; }
-  .sas-rpt__chart--doughnut { max-width: 17rem; margin: 0 auto; }
-  .sas-rpt__chart--bar { margin-left: 0; margin-right: 0; }
-
-  .sas-rpt__standards-panels {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 1.5rem;
-    align-items: start;
-  }
-  @@media (min-width: 56.25em) {
-    .sas-rpt__standards-panels {
-      grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
-    }
-  }
-  .sas-rpt__standards-chart {
-    background: #fff;
-    border: 1px solid #b1b4b6;
-    padding: 1rem;
-    min-width: 0;
-  }
-  .sas-rpt__standards-table { min-width: 0; }
-  .sas-rpt .sas-std--hot th,
-  .sas-rpt .sas-std--hot td {
-    background: #fff3f0;
-    box-shadow: inset 4px 0 0 0 #d4351c;
-  }
-
-  .sas-rpt__type-panel {
-    margin-top: 1.5rem;
-    background: #fff;
-    border: 1px solid #b1b4b6;
-    padding: 0.85rem 1rem 0;
-  }
-  .sas-rpt__type-panel:first-of-type { margin-top: 1.25rem; }
-  .sas-rpt__type-panel .sas-rpt__h3 { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.4rem 0.75rem; }
-  .sas-rpt__type-badge {
-    display: inline-block;
-    font-size: 0.75rem;
-    font-weight: 700;
-    line-height: 1.35;
-    padding: 0.15rem 0.5rem;
-    border-radius: 0.2rem;
-    background: #e6e5e3;
-    color: #0b0c0c;
-    vertical-align: middle;
-  }
-  .sas-rpt__type-panel .dfe-c-table-wrap { border: none; border-top: 1px solid #b1b4b6; }
-
-  /* “Report” table styling: light header band, single rule under titles, row bands, no full grid (overrides global table/thead rules in this page only) */
-  .sas-rpt .sas-rpt__table-wrap.dfe-c-table-wrap,
-  .sas-rpt__standards-table.dfe-c-table-wrap,
-  .sas-rpt__type-panel .dfe-c-table-wrap {
-    border-color: #d0d0d0;
-  }
-  .sas-rpt .mr-ba-table {
-    width: 100%;
-    min-width: 0;
-    border-collapse: collapse;
-    font-size: 0.875rem;
-    line-height: 1.45;
-  }
-  .sas-rpt .mr-ba-table thead th {
-    background: #f3f2f1;
-    color: #0b0c0c;
-    font-weight: 600;
-    font-size: 0.8125rem;
-    letter-spacing: 0.01em;
-    padding: 0.65rem 0.75rem;
-    text-align: left;
-    vertical-align: bottom;
-    border: 0;
-    border-bottom: 2px solid #0b0c0c;
-    white-space: nowrap;
-    position: static; /* not sticky: avoids clash with overflow-x */
-  }
-  .sas-rpt .mr-ba-table thead th.mr-ba-table__num-hdr { text-align: right; }
-  .sas-rpt .mr-ba-table tbody th,
-  .sas-rpt .mr-ba-table tbody td {
-    padding: 0.5rem 0.75rem;
-    border: 0;
-    border-bottom: 1px solid #e8e8e8;
-    vertical-align: middle;
-  }
-  .sas-rpt .mr-ba-table tbody tr:nth-child(even) { background: #fafafa; }
-  .sas-rpt .mr-ba-table tbody tr:hover { background: #eef2f5 !important; }
-  .sas-rpt .mr-ba-table tbody th[scope="row"] {
-    font-weight: 600;
-    text-align: left;
-    color: #0b0c0c;
-  }
-  .sas-rpt .mr-ba-table__num { text-align: right; }
-  .sas-rpt .mr-ba-table .mr-ba-num {
-    font-variant-numeric: tabular-nums;
-  }
-  .sas-rpt .mr-ba-table .govuk-tag { white-space: normal; }
-</style>
-
 @section Scripts {
+  <script src="~/modern/js/sas-report.js" asp-append-version="true" nonce="@Context.Items["Nonce"]"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" nonce="@Context.Items["Nonce"]"></script>
   <script nonce="@Context.Items["Nonce"]">
   (function () {
@@ -632,10 +663,16 @@
     var byPhase = @Html.Raw(chartPhaseJson);
     var byYear = @Html.Raw(chartYearJson);
     var byStd = @Html.Raw(chartStdJson);
-    var colA = '#1d70b8';
-    var colB = '#6f2f5f';
+    var byStdYear = @Html.Raw(chartStdYearTotalJson);
+    var byStdPeriod = @Html.Raw(chartStdPeriodJson);
+    var byAssessorPeriod = @Html.Raw(chartAssessorPeriodJson);
+    var byAssessorOutcome = @Html.Raw(chartAssessorOutcomeJson);
+    var byAssessorRole = @Html.Raw(chartAssessorRoleJson);
+    var byAssessorStatus = @Html.Raw(chartAssessorStatusJson);
+    var colBar = '#505a5f';
+    var colBarAlt = '#85994b';
     var typeColors = [
-      '#1d70b8', '#00703c', '#f47738', '#4c2c92', '#d4351c', '#0b0c0c',
+      '#505a5f', '#00703c', '#f47738', '#4c2c92', '#d4351c', '#0b0c0c',
       '#28a197', '#85994b', '#6f2f5f', '#a285d9'
     ];
     var axisOpts = { grid: { color: 'rgba(11, 12, 12, 0.08)' }, border: { display: false } };
@@ -646,7 +683,7 @@
       if (t === 'amber') return '#f47738';
       if (t === 'red') return '#d4351c';
       if (t.indexOf('not') >= 0) return '#6f777b';
-      return '#1d70b8';
+      return '#505a5f';
     }
 
     var cOut = document.getElementById('sas-chart-outcome');
@@ -700,7 +737,7 @@
         type: 'bar',
         data: {
           labels: byPhase.labels,
-          datasets: [{ label: 'Count', data: byPhase.data, backgroundColor: '#1d70b8', borderRadius: 2 }]
+          datasets: [{ label: 'Count', data: byPhase.data, backgroundColor: colBar, borderRadius: 4, maxBarThickness: 36 }]
         },
         options: {
           indexAxis: 'y',
@@ -719,7 +756,7 @@
         type: 'bar',
         data: {
           labels: byYear.labels,
-          datasets: [{ label: 'Count', data: byYear.data, backgroundColor: '#1d70b8', borderRadius: 2 }]
+          datasets: [{ label: 'Count', data: byYear.data, backgroundColor: colBar, borderRadius: 4, maxBarThickness: 36 }]
         },
         options: {
           responsive: true,
@@ -741,12 +778,12 @@
         new Chart(cSt.getContext('2d'), {
           type: 'bar',
           data: {
-            labels: (byStd.standards || []).map(function (s) { return 'Std ' + s; }),
+            labels: (byStd.standards || []).map(function (s) { return 'Point ' + s; }),
             datasets: [
-              { label: 'Red (share of row)', data: byStd.redPct, backgroundColor: colRed, borderRadius: 0, stack: 'rag' },
-              { label: 'Amber (share of row)', data: byStd.amberPct, backgroundColor: colAmber, borderRadius: 0, stack: 'rag' },
-              { label: 'Green (share of row)', data: byStd.greenPct, backgroundColor: colGreen, borderRadius: 0, stack: 'rag' },
-              { label: 'Other (share of row)', data: byStd.otherPct, backgroundColor: colOth, borderRadius: 0, stack: 'rag' }
+              { label: 'Red (share of row)', data: byStd.redPct, backgroundColor: colRed, borderRadius: 2, stack: 'rag', maxBarThickness: 28 },
+              { label: 'Amber (share of row)', data: byStd.amberPct, backgroundColor: colAmber, borderRadius: 2, stack: 'rag', maxBarThickness: 28 },
+              { label: 'Green (share of row)', data: byStd.greenPct, backgroundColor: colGreen, borderRadius: 2, stack: 'rag', maxBarThickness: 28 },
+              { label: 'Other (share of row)', data: byStd.otherPct, backgroundColor: colOth, borderRadius: 2, stack: 'rag', maxBarThickness: 28 }
             ]
           },
           options: {
@@ -756,7 +793,7 @@
             font: font,
             interaction: { mode: 'index', axis: 'y' },
             plugins: {
-              title: { display: true, text: '100% of actions per standard — compare mix, not total bar length', font: { size: 12, family: font.family, weight: '400' } },
+              title: { display: true, text: 'GSS points in order (1 at top) — each bar is 100% of that point’s actions', font: { size: 12, family: font.family, weight: '400' } },
               tooltip: {
                 callbacks: {
                   label: function (c) {
@@ -770,7 +807,7 @@
             },
             scales: {
               x: { stacked: true, max: 100, min: 0, ticks: { callback: function (v) { return v + '%'; }, font: { size: 11, family: font.family } }, ...axisOpts },
-              y: { stacked: true, ticks: { font: { size: 11, family: font.family } }, ...axisOpts }
+              y: { stacked: true, reverse: true, ticks: { font: { size: 11, family: font.family } }, ...axisOpts }
             }
           }
         });
@@ -778,10 +815,10 @@
         new Chart(cSt.getContext('2d'), {
           type: 'bar',
           data: {
-            labels: (byStd.standards || []).map(function (s) { return 'Std ' + s; }),
+            labels: (byStd.standards || []).map(function (s) { return 'Point ' + s; }),
             datasets: [
-              { label: 'Actions', data: byStd.actionCounts, backgroundColor: colA, borderRadius: 2 },
-              { label: 'Assessments', data: byStd.assessmentCounts, backgroundColor: colB, borderRadius: 2 }
+              { label: 'Actions', data: byStd.actionCounts, backgroundColor: colBar, borderRadius: 4, maxBarThickness: 32 },
+              { label: 'Assessments', data: byStd.assessmentCounts, backgroundColor: colBarAlt, borderRadius: 4, maxBarThickness: 32 }
             ]
           },
           options: {
@@ -793,10 +830,124 @@
             plugins: {
               legend: { position: 'bottom', labels: { font: { size: 12, family: font.family }, boxWidth: 12, padding: 10 } }
             },
-            scales: { x: { beginAtZero: true, ticks: { precision: 0, font: { size: 11, family: font.family } }, ...axisOpts }, y: { stacked: false, ticks: { font: { size: 11, family: font.family } }, ...axisOpts } }
+            scales: { x: { beginAtZero: true, ticks: { precision: 0, font: { size: 11, family: font.family } }, ...axisOpts }, y: { stacked: false, reverse: true, ticks: { font: { size: 11, family: font.family } }, ...axisOpts } }
           }
         });
       }
+    }
+
+    var cStdYr = document.getElementById('sas-chart-std-year-total');
+    if (cStdYr && byStdYear && byStdYear.data && byStdYear.data.length) {
+      new Chart(cStdYr.getContext('2d'), {
+        type: 'line',
+        data: {
+          labels: byStdYear.labels,
+          datasets: [{ label: 'Actions', data: byStdYear.data, borderColor: colBar, backgroundColor: 'rgba(80, 90, 95, 0.15)', fill: true, tension: 0.2, pointRadius: 4 }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          font: font,
+          plugins: { legend: { display: false } },
+          scales: { y: { beginAtZero: true, ticks: { precision: 0, font: { size: 11, family: font.family } }, ...axisOpts }, x: { ticks: { font: { size: 11, family: font.family } }, ...axisOpts } }
+        }
+      });
+    }
+
+    var cStdPer = document.getElementById('sas-chart-std-period');
+    if (cStdPer && byStdPeriod && byStdPeriod.labels && byStdPeriod.labels.length) {
+      new Chart(cStdPer.getContext('2d'), {
+        type: 'bar',
+        data: {
+          labels: (byStdPeriod.labels || []).map(function (s) { return 'Point ' + s; }),
+          datasets: [
+            { label: byStdPeriod.recentLabel || 'Last 6 months', data: byStdPeriod.recent, backgroundColor: colBar, borderRadius: 3, maxBarThickness: 22 },
+            { label: byStdPeriod.priorLabel || 'Prior 6 months', data: byStdPeriod.prior, backgroundColor: colBarAlt, borderRadius: 3, maxBarThickness: 22 }
+          ]
+        },
+        options: {
+          indexAxis: 'y',
+          responsive: true,
+          maintainAspectRatio: false,
+          font: font,
+          plugins: { legend: { position: 'bottom', labels: { font: { size: 11, family: font.family }, boxWidth: 12 } } },
+          scales: { x: { beginAtZero: true, ticks: { precision: 0, font: { size: 11, family: font.family } }, ...axisOpts }, y: { reverse: true, ticks: { font: { size: 11, family: font.family } }, ...axisOpts } }
+        }
+      });
+    }
+
+    var cAssPer = document.getElementById('sas-chart-assessor-period');
+    if (cAssPer && byAssessorPeriod && byAssessorPeriod.data && byAssessorPeriod.data.length) {
+      new Chart(cAssPer.getContext('2d'), {
+        type: 'line',
+        data: {
+          labels: byAssessorPeriod.labels,
+          datasets: [{ label: 'Panel assignments', data: byAssessorPeriod.data, borderColor: colBar, backgroundColor: 'rgba(80, 90, 95, 0.15)', fill: true, tension: 0.2, pointRadius: 4 }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          font: font,
+          plugins: { legend: { display: false } },
+          scales: { y: { beginAtZero: true, ticks: { precision: 0, font: { size: 11, family: font.family } }, ...axisOpts }, x: { ticks: { font: { size: 11, family: font.family } }, ...axisOpts } }
+        }
+      });
+    }
+
+    var cAssOut = document.getElementById('sas-chart-assessor-outcome');
+    if (cAssOut && byAssessorOutcome && byAssessorOutcome.data && byAssessorOutcome.data.length) {
+      new Chart(cAssOut.getContext('2d'), {
+        type: 'doughnut',
+        data: {
+          labels: byAssessorOutcome.labels,
+          datasets: [{ data: byAssessorOutcome.data, backgroundColor: (byAssessorOutcome.labels || []).map(colOutcome), borderWidth: 0 }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          font: font,
+          cutout: '55%',
+          plugins: { legend: { position: 'bottom', labels: { boxWidth: 11, font: { size: 11, family: font.family }, padding: 8 } } }
+        }
+      });
+    }
+
+    var cAssRole = document.getElementById('sas-chart-assessor-role');
+    if (cAssRole && byAssessorRole && byAssessorRole.data && byAssessorRole.data.length) {
+      new Chart(cAssRole.getContext('2d'), {
+        type: 'bar',
+        data: {
+          labels: byAssessorRole.labels,
+          datasets: [{ label: 'Assessors', data: byAssessorRole.data, backgroundColor: colBarAlt, borderRadius: 4, maxBarThickness: 28 }]
+        },
+        options: {
+          indexAxis: 'y',
+          responsive: true,
+          maintainAspectRatio: false,
+          font: font,
+          plugins: { legend: { display: false } },
+          scales: { x: { beginAtZero: true, ticks: { precision: 0, font: { size: 11, family: font.family } }, ...axisOpts }, y: { ticks: { font: { size: 10, family: font.family } }, ...axisOpts } }
+        }
+      });
+    }
+
+    var cAssSt = document.getElementById('sas-chart-assessor-status');
+    if (cAssSt && byAssessorStatus && byAssessorStatus.data && byAssessorStatus.data.length) {
+      new Chart(cAssSt.getContext('2d'), {
+        type: 'bar',
+        data: {
+          labels: byAssessorStatus.labels,
+          datasets: [{ label: 'Assignments', data: byAssessorStatus.data, backgroundColor: colBar, borderRadius: 4, maxBarThickness: 36 }]
+        },
+        options: {
+          indexAxis: 'y',
+          responsive: true,
+          maintainAspectRatio: false,
+          font: font,
+          plugins: { legend: { display: false } },
+          scales: { x: { beginAtZero: true, ticks: { precision: 0, font: { size: 11, family: font.family } }, ...axisOpts }, y: { ticks: { font: { size: 11, family: font.family } }, ...axisOpts } }
+        }
+      });
     }
   })();
   </script>

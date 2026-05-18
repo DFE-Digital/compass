@@ -1,0 +1,137 @@
+@model Compass.ViewModels.Modern.PerfMetricRow
+@using Compass.Services
+@{
+  var perfError = ViewBag.PerfError as string;
+  var validationRulesError = perfError != null && perfError.Contains("Validation rules", StringComparison.OrdinalIgnoreCase);
+  var selPhases = CommissionReportingProductScope.ParseCommaSeparatedValues(Model.ApplicablePhases);
+  var selTypes = CommissionReportingProductScope.ParseCommaSeparatedValues(Model.ApplicableTypes);
+}
+
+<hr class="govuk-section-break govuk-section-break--l govuk-section-break--visible" />
+
+<h2 class="govuk-heading-m">Applicability</h2>
+<p class="govuk-hint">Restrict which products see this metric during submission. Leave a group unticked to apply to <strong>all</strong> values in that group.</p>
+
+<div class="govuk-form-group">
+  <fieldset class="govuk-fieldset">
+    <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Applicable phases</legend>
+    @if (Model.CataloguePhaseOptions.Count == 0)
+    {
+      <p class="govuk-body-s govuk-hint">No active phases found. <a class="govuk-link" href="@Url.Action("Index", "ModernAdmin", new { panel = "phases" })">Add phases in Admin</a>.</p>
+    }
+    else
+    {
+      <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes">
+        @for (var i = 0; i < Model.CataloguePhaseOptions.Count; i++)
+        {
+          var ph = Model.CataloguePhaseOptions[i];
+          var id = $"pm-phase-{i}";
+          <div class="govuk-checkboxes__item">
+            <input class="govuk-checkboxes__input" id="@id" name="selectedPhases" type="checkbox" value="@ph" @(selPhases.Contains(ph) ? "checked" : null) />
+            <label class="govuk-label govuk-checkboxes__label" for="@id">@ph</label>
+          </div>
+        }
+      </div>
+    }
+  </fieldset>
+</div>
+
+<div class="govuk-form-group">
+  <fieldset class="govuk-fieldset">
+    <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Applicable product types</legend>
+    <p class="govuk-hint govuk-!-margin-bottom-2">Uses FIPS types from <a class="govuk-link" href="@Url.Action("Index", "ModernAdmin", new { panel = "fips-types" })">Admin lookups</a>.</p>
+    @if (Model.CatalogueTypeOptions.Count == 0)
+    {
+      <p class="govuk-body-s govuk-hint">No active FIPS types found. <a class="govuk-link" href="@Url.Action("Index", "ModernAdmin", new { panel = "fips-types" })">Add types in Admin</a>.</p>
+    }
+    else
+    {
+      <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes">
+        @for (var i = 0; i < Model.CatalogueTypeOptions.Count; i++)
+        {
+          var ty = Model.CatalogueTypeOptions[i];
+          var id = $"pm-type-{i}";
+          <div class="govuk-checkboxes__item">
+            <input class="govuk-checkboxes__input" id="@id" name="selectedTypes" type="checkbox" value="@ty" @(selTypes.Contains(ty) ? "checked" : null) />
+            <label class="govuk-label govuk-checkboxes__label" for="@id">@ty</label>
+          </div>
+        }
+      </div>
+    }
+  </fieldset>
+</div>
+
+<hr class="govuk-section-break govuk-section-break--l govuk-section-break--visible" />
+
+<h2 class="govuk-heading-m">Validation rules</h2>
+
+<div class="govuk-form-group @(validationRulesError ? "govuk-form-group--error" : "")">
+  <label class="govuk-label govuk-label--s" for="validationRulesJson">Validation rules (JSON)</label>
+  <div id="validationRulesJson-hint" class="govuk-hint">JSON format for validation rules applied when products submit this metric.</div>
+  @if (validationRulesError)
+  {
+    <p id="validationRulesJson-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @perfError</p>
+  }
+  <textarea class="govuk-textarea @(validationRulesError ? "govuk-textarea--error" : "")" id="validationRulesJson" name="validationRulesJson" rows="6" aria-describedby="validationRulesJson-hint">@Model.ValidationRules</textarea>
+</div>
+
+<details class="govuk-details govuk-!-margin-bottom-6" data-module="govuk-details">
+  <summary class="govuk-details__summary">
+    <span class="govuk-details__summary-text">What rules you can add</span>
+  </summary>
+  <div class="govuk-details__text">
+    <p class="govuk-body-s">Available validation rules (all optional except where noted):</p>
+    <dl class="govuk-summary-list govuk-summary-list--no-border">
+      <div class="govuk-summary-list__row">
+        <dt class="govuk-summary-list__key"><code>required</code></dt>
+        <dd class="govuk-summary-list__value">Boolean. If true, the field must be filled in. Default: <code>true</code></dd>
+      </div>
+      <div class="govuk-summary-list__row">
+        <dt class="govuk-summary-list__key"><code>allowNull</code></dt>
+        <dd class="govuk-summary-list__value">Boolean. If true, allows &quot;not captured&quot; option. Default: <code>false</code></dd>
+      </div>
+      <div class="govuk-summary-list__row">
+        <dt class="govuk-summary-list__key"><code>minimumValue</code></dt>
+        <dd class="govuk-summary-list__value">Number. Minimum allowed value (for Number, Decimal, Percentage types)</dd>
+      </div>
+      <div class="govuk-summary-list__row">
+        <dt class="govuk-summary-list__key"><code>maximumValue</code></dt>
+        <dd class="govuk-summary-list__value">Number. Maximum allowed value (for Number, Decimal, Percentage types)</dd>
+      </div>
+      <div class="govuk-summary-list__row">
+        <dt class="govuk-summary-list__key"><code>decimalPlaces</code></dt>
+        <dd class="govuk-summary-list__value">Number. Maximum decimal places allowed (for Decimal and Percentage types)</dd>
+      </div>
+    </dl>
+    <p class="govuk-body-s govuk-!-margin-top-4"><strong>Examples:</strong></p>
+    <ul class="govuk-list govuk-list--bullet govuk-body-s">
+      <li>Number (0-100M): <code>{"required": true, "allowNull": false, "minimumValue": 0, "maximumValue": 100000000}</code></li>
+      <li>Percentage (0-100): <code>{"required": true, "allowNull": false, "minimumValue": 0, "maximumValue": 100}</code></li>
+      <li>Decimal (0-100, 2dp): <code>{"required": true, "allowNull": false, "minimumValue": 0, "maximumValue": 100, "decimalPlaces": 2}</code></li>
+      <li>Optional text: <code>{"required": false, "allowNull": true}</code></li>
+    </ul>
+  </div>
+</details>
+
+<hr class="govuk-section-break govuk-section-break--l govuk-section-break--visible" />
+
+<h2 class="govuk-heading-m">Conditional display</h2>
+
+<div class="govuk-form-group">
+  <label class="govuk-label govuk-label--s" for="conditionalOnMetricId">When to show this metric</label>
+  <div id="conditionalOnMetricId-hint" class="govuk-hint">Optionally show this metric only when another metric has been filled in.</div>
+  <select class="govuk-select" id="conditionalOnMetricId" name="conditionalOnMetricId" aria-describedby="conditionalOnMetricId-hint">
+    <option value="">Always show this metric</option>
+    @foreach (var metric in Model.ConditionalMetricOptions)
+    {
+      if (Model.ConditionalOnMetricId == metric.Id)
+      {
+        <option value="@metric.Id" selected>Show only when &quot;@metric.Title&quot; has a value</option>
+      }
+      else
+      {
+        <option value="@metric.Id">Show only when &quot;@metric.Title&quot; has a value</option>
+      }
+    }
+  </select>
+</div>

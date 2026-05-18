@@ -20,4 +20,7 @@ public sealed class RaidGovUkDateFieldVm
 
     public bool HasError { get; init; }
     public string? ErrorMessage { get; init; }
+
+    /// <summary>When true, inputs have no <c>name</c> (client-only scratch fields).</summary>
+    public bool OmitNames { get; init; }
 }

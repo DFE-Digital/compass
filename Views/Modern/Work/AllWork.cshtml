@@ -1,5 +1,6 @@
 @model Compass.Models.Modern.Work.WorkRegisterViewModel
 @using Compass.Models.Modern.Work
+@using Compass.ViewModels.Modern
 @using System.Linq
 @{
     var opsManage = ViewBag.OpsManageWork as bool? == true;
@@ -11,6 +12,9 @@
     var businessAreaCount = Model.BusinessAreas?.Count ?? 0;
     var allFilteredCount = Model.ActiveCount + Model.PausedCount + Model.CompletedCount + Model.CancelledCount;
 
+    string? MonthlyQ() => string.IsNullOrWhiteSpace(Model.FilterMonthlyUpdate) ? null : Model.FilterMonthlyUpdate;
+    int[]? TagIdsQ() => (Model.FilterTagIds != null && Model.FilterTagIds.Count > 0) ? Model.FilterTagIds.ToArray() : null;
+
     object AllWorkTabQuery(string tab) => new {
         tab,
         page = 1,
@@ -21,9 +25,10 @@
         phaseId = Model.FilterPhaseId,
         ragId = Model.FilterRagId,
         priorityId = Model.FilterPriorityId,
-        monthlyUpdate = Model.FilterMonthlyUpdate,
+        monthlyUpdate = MonthlyQ(),
         primaryContactUserId = Model.FilterPrimaryContactUserId,
         tagId = Model.FilterTagId,
+        tagIds = TagIdsQ(),
         sort = Model.RegisterSortField,
         sd = Model.RegisterSortDescending
     };
@@ -38,9 +43,10 @@
         phaseId = Model.FilterPhaseId,
         ragId = Model.FilterRagId,
         priorityId = Model.FilterPriorityId,
-        monthlyUpdate = Model.FilterMonthlyUpdate,
+        monthlyUpdate = MonthlyQ(),
         primaryContactUserId = Model.FilterPrimaryContactUserId,
         tagId = Model.FilterTagId,
+        tagIds = TagIdsQ(),
         sort = Model.RegisterSortField,
         sd = Model.RegisterSortDescending
     };
@@ -54,9 +60,10 @@
         phaseId = Model.FilterPhaseId,
         ragId = Model.FilterRagId,
         priorityId = Model.FilterPriorityId,
-        monthlyUpdate = Model.FilterMonthlyUpdate,
+        monthlyUpdate = MonthlyQ(),
         primaryContactUserId = Model.FilterPrimaryContactUserId,
         tagId = Model.FilterTagId,
+        tagIds = TagIdsQ(),
         sort = Model.RegisterSortField,
         sd = Model.RegisterSortDescending
     };
@@ -71,35 +78,13 @@
         phaseId = Model.FilterPhaseId,
         ragId = Model.FilterRagId,
         priorityId = Model.FilterPriorityId,
-        monthlyUpdate = Model.FilterMonthlyUpdate,
+        monthlyUpdate = MonthlyQ(),
         primaryContactUserId = Model.FilterPrimaryContactUserId,
         tagId = Model.FilterTagId,
+        tagIds = TagIdsQ(),
         sort = Model.RegisterSortField,
         sd = Model.RegisterSortDescending
     };
-
-    object RegisterSortQuery(string field)
-    {
-        var sf = Model.RegisterSortField ?? "title";
-        var same = string.Equals(sf, field, StringComparison.OrdinalIgnoreCase);
-        var nextSd = same ? !Model.RegisterSortDescending : false;
-        return new {
-            tab = activeTab,
-            page = 1,
-            mine = Model.IsMyWork ? true : (bool?)null,
-            search = Model.FilterSearch,
-            businessAreaId = Model.FilterBusinessAreaId,
-            directorateId = Model.FilterDirectorateId,
-            phaseId = Model.FilterPhaseId,
-            ragId = Model.FilterRagId,
-            priorityId = Model.FilterPriorityId,
-            monthlyUpdate = Model.FilterMonthlyUpdate,
-            primaryContactUserId = Model.FilterPrimaryContactUserId,
-            tagId = Model.FilterTagId,
-            sort = field,
-            sd = nextSd
-        };
-    }
 
     IEnumerable<WorkRegisterRow> RowsForTab(string tab)
     {
@@ -119,14 +104,6 @@
         return Enumerable.Empty<WorkRegisterRow>();
     }
 
-    string PriorityTagClass(string? name) {
-        if (string.IsNullOrEmpty(name)) return "dfe-c-tag dfe-c-tag--grey";
-        var s = name.ToLowerInvariant();
-        if (s.Contains("high") || s.Contains("critical")) return "dfe-c-tag dfe-c-tag--red";
-        if (s.Contains("medium")) return "dfe-c-tag dfe-c-tag--amber";
-        if (s.Contains("low")) return "dfe-c-tag dfe-c-tag--green";
-        return "dfe-c-tag dfe-c-tag--grey";
-    }
 }
 @section Breadcrumbs {
  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
@@ -142,21 +119,18 @@
  }
 }
 
-<div class="modern-work-page">
-<div class="dfe-c-flex--between dfe-c-mb-3" style="flex-wrap:wrap;gap:1rem;">
- <div class="dfe-c-page-title" style="margin:0">
- <div class="dfe-c-page-title__caption">@(opsManage ? "Operations" : "Work")</div>
- <h1 class="dfe-c-page-title__heading">@(opsManage ? "Manage work" : "All work")</h1>
- <p class="dfe-c-page-title__lede" id="work-reg-count">@(Model.IsMyWork ? "Work assigned to you" : $"{Model.ActiveCount + Model.PausedCount} work items across {businessAreaCount} business areas")@(opsManage && !Model.IsMyWork ? " — search, filter and edit any delivery item." : Model.IsMyWork ? "." : "")</p>
-  </div>
- <div class="dfe-c-flex" style="gap:0.5rem;flex-wrap:wrap;align-items:center;">
-    @if (searchAndFilter?.SecondaryActionUrl != null)
-    {
- <a href="@searchAndFilter.SecondaryActionUrl" class="govuk-button govuk-button--outline-blue">Export</a>
-    }
- <a href="@Url.Action("Create", "ModernWork")" class="govuk-button">Create work item</a>
-  </div>
-</div>
+@{
+  var allWorkHeaderActions = await Html.PartialAsync("_AllWorkHeaderActions");
+  var allWorkHeaderLede = await Html.PartialAsync("_AllWorkHeaderLede", Model);
+}
+
+<div class="modern-work-page modern-work-page--all-work">
+@await Html.PartialAsync("_ModernPageHeader", new Compass.ViewModels.Modern.ModernPageHeaderViewModel {
+  Caption = Model.IsMyWork ? "Your work" : (opsManage ? "Operations" : "Work"),
+  Title = opsManage ? "Manage work" : "All work",
+  Lede = allWorkHeaderLede,
+  Actions = allWorkHeaderActions
+})
 
 <form method="get" action="@Url.Action(listAction, listController)" id="allwork-register-form" class="dfe-c-mb-3">
   <input type="hidden" name="tab" value="@activeTab" />
@@ -355,86 +329,72 @@
     </div>
  <div class="filter-panel__actions">
  <button type="submit" class="govuk-button">Apply filters</button>
- <a href="@Url.Action(listAction, listController, new { tab = activeTab, mine = Model.IsMyWork ? true : (bool?)null })" class="govuk-link">Clear filters</a>
+ <a href="@Url.Action(listAction, listController, new { tab = activeTab, mine = Model.IsMyWork ? true : (bool?)null })" class="govuk-link govuk-link--no-visited-state">Clear filters</a>
     </div>
   </div>
   </div>
 </form>
 
-<div class="tabs" role="tablist" aria-label="Work status sections">
-  <a href="@Url.Action(listAction, listController, AllWorkYourWorkTabQuery())"
- class="tab @(Model.IsMyWork && activeTab == "active" ? "on" : "")"
-     role="tab"
-     aria-selected="@(Model.IsMyWork && activeTab == "active")"
-     aria-controls="d-active"
- id="tab-your-work">Your work <span class="dfe-c-fw-regular">(@Model.RegisterActivePausedCountMine)</span></a>
-  <a href="@Url.Action(listAction, listController, AllWorkOrgScopeTabQuery("active"))"
- class="tab @(!Model.IsMyWork && activeTab == "active" ? "on" : "")"
-     role="tab"
-     aria-selected="@(!Model.IsMyWork && activeTab == "active")"
-     aria-controls="d-active"
- id="tab-active">Active &amp; Paused <span class="dfe-c-fw-regular">(@Model.RegisterActivePausedCountOrg)</span></a>
-  <a href="@Url.Action(listAction, listController, AllWorkTabQuery("completed"))"
- class="tab @(activeTab =="completed" ? "on" : "")"
-     role="tab"
-     aria-selected="@(activeTab == "completed")"
-     aria-controls="d-completed"
- id="tab-completed">Completed <span class="dfe-c-fw-regular">(@Model.CompletedCount)</span></a>
-  <a href="@Url.Action(listAction, listController, AllWorkTabQuery("cancelled"))"
- class="tab @(activeTab =="cancelled" ? "on" : "")"
-     role="tab"
-     aria-selected="@(activeTab == "cancelled")"
-     aria-controls="d-cancelled"
- id="tab-cancelled">Cancelled <span class="dfe-c-fw-regular">(@Model.CancelledCount)</span></a>
-  <a href="@Url.Action(listAction, listController, AllWorkTabQuery("all"))"
- class="tab @(activeTab =="all" ? "on" : "")"
-     role="tab"
-     aria-selected="@(activeTab == "all")"
-     aria-controls="d-all"
- id="tab-all">All items <span class="dfe-c-fw-regular">(@allFilteredCount)</span></a>
-</div>
+@if (ViewBag.WorkRegisterSubNav is WorkRegisterSubNavViewModel workRegisterSubNav)
+{
+  @await Html.PartialAsync("_WorkRegisterSubNav", workRegisterSubNav)
+}
 
 <div id="d-active" class="tab-pane @(activeTab =="active" ? "on" : "")" role="tabpanel">
- <div class="dfe-c-table-wrap">
-    <table class="modern-work-table" id="work-table-active">
-      <thead>
-        <tr>
-          <th scope="col"><a class="govuk-link" href="@Url.Action(listAction, listController, RegisterSortQuery("title"))">Work item</a></th>
-          <th scope="col"><a class="govuk-link" href="@Url.Action(listAction, listController, RegisterSortQuery("businessarea"))">Business area</a></th>
-          <th scope="col"><a class="govuk-link" href="@Url.Action(listAction, listController, RegisterSortQuery("priority"))">Priority</a></th>
-          <th scope="col"><a class="govuk-link" href="@Url.Action(listAction, listController, RegisterSortQuery("rag"))">RAG</a></th>
-          <th scope="col"><a class="govuk-link" href="@Url.Action(listAction, listController, RegisterSortQuery("primarycontact"))">Primary contact</a></th>
-          <th scope="col"><a class="govuk-link" href="@Url.Action(listAction, listController, RegisterSortQuery("tags"))">Tags</a></th>
-          <th scope="col"><a class="govuk-link" href="@Url.Action(listAction, listController, RegisterSortQuery("status"))">Status</a></th>
-          <th scope="col"><a class="govuk-link" href="@Url.Action(listAction, listController, RegisterSortQuery("monthly"))">@Model.RegisterMonthlyColumnHeader</a></th>
+ <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+    <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed modern-work-table" id="work-table-active">
+ <caption class="govuk-table__caption govuk-table__caption--m compass2-visually-hidden">@(Model.IsMyWork ? "Your work" : "Active and paused work items")</caption>
+      <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+          <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Work item</button>
+        </th>
+          <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Business area</button>
+        </th>
+          <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Priority</button>
+        </th>
+          <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">RAG</button>
+        </th>
+          <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Primary contact</button>
+        </th>
+          <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Status</button>
+        </th>
+          <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">@Model.RegisterMonthlyColumnHeader</button>
+        </th>
         </tr>
       </thead>
-      <tbody>
+      <tbody class="govuk-table__body">
         @foreach (var r in RowsForTab("active"))
         {
-          <tr>
-            <td>
-              <a href="@Url.Action("Detail", "ModernWork", new { id = r.Id })">@r.Title</a>
- <div class="dfe-c-body-s dfe-c-text-muted" style="margin-top:0.25rem;line-height:1.3;">
+          <tr class="govuk-table__row">
+            <td class="govuk-table__cell">
+              <a href="@Url.Action("Detail", "ModernWork", new { id = r.Id })" class="govuk-link govuk-link--no-visited-state">@r.Title</a>
+ <div class="govuk-body-s dfe-t-u-text-muted modern-work-table__meta">
                 WI-@r.Id.ToString("D8")@if (!string.IsNullOrEmpty(r.PhaseName) && r.PhaseName != "—") { <span aria-hidden="true"> · </span><span>@r.PhaseName</span> }
               </div>
             </td>
-            <td>@(r.BusinessAreaName ?? "—")</td>
- <td><span class="@PriorityTagClass(r.PriorityName)">@((r.PriorityName ?? "—").ToUpperInvariant())</span></td>
-            <td>
-              @if (!string.IsNullOrEmpty(r.RagBackgroundColourKey) || !string.IsNullOrEmpty(r.RagTextColourKey))
-              {
- <span class="rag-badge" style="@(string.IsNullOrEmpty(r.RagBackgroundColourKey) ? "" : "background-color: var(--govuk-colour-" + r.RagBackgroundColourKey + ");")@(string.IsNullOrEmpty(r.RagTextColourKey) ? "" : " color: var(--govuk-colour-" + r.RagTextColourKey + ");")">@((r.RagName ?? "—").ToUpperInvariant())</span>
-              }
-              else
-              {
- <span class="@WorkBadgeCss.RagDfeTagClass(r.RagCssClass, r.RagName)">@((r.RagName ?? "—").ToUpperInvariant())</span>
-              }
-            </td>
-            <td>@(r.PrimaryContactName ?? "—")</td>
- <td class="dfe-c-body-s">@(string.IsNullOrEmpty(r.TagNamesSummary) ? "—" : r.TagNamesSummary)</td>
- <td><span class="@WorkBadgeCss.StatusDfeTagClass(r.Status)">@r.Status</span></td>
-            <td>@await Html.PartialAsync("~/Views/Modern/Work/_WorkRegisterMonthlyUpdateCell.cshtml", r)</td>
+            <td class="govuk-table__cell">@(r.BusinessAreaName ?? "—")</td>
+            <td class="govuk-table__cell">
+                @if (!string.IsNullOrEmpty(r.PriorityName))
+                {
+                    <span class="@WorkBadgeCss.PriorityDfeFrontendBadgeClass(r.PriorityName)">@r.PriorityName.ToUpperInvariant()</span>
+                }
+                else
+                {
+                    <span class="dfe-c-text-muted">—</span>
+                }
+              </td>
+            <td class="govuk-table__cell"><span class="@WorkBadgeCss.RagDfeFrontendBadgeClass(r.RagCssClass, r.RagName)">@((r.RagName ?? "—").ToUpperInvariant())</span></td>
+            <td class="govuk-table__cell">@(r.PrimaryContactName ?? "—")</td>
+ <td class="govuk-table__cell"><span class="@WorkBadgeCss.StatusDfeFrontendBadgeClass(r.Status)">@r.Status</span></td>
+            <td class="govuk-table__cell">@await Html.PartialAsync("~/Views/Modern/Work/_WorkRegisterMonthlyUpdateCell.cshtml", r)</td>
           </tr>
         }
       </tbody>
@@ -444,72 +404,63 @@
   {
  <p class="dfe-c-body muted">No active or paused work items.</p>
   }
-  @if (activeTab == "active")
-  {
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-top:0.875rem;flex-wrap:wrap;gap:0.5rem;">
-    @if (Model.RegisterIsPaginated)
-    {
- <p class="dfe-c-text-muted" style="margin:0;" id="work-showing-count">Showing @(Model.RegisterDisplayRowStart)–@(Model.RegisterDisplayRowEnd) of @(Model.RegisterTotalCount) work items</p>
-    }
-    @if (Model.RegisterIsPaginated && Model.RegisterPageCount > 1)
-    {
- <nav class="dfe-c-flex" style="gap:0.5rem;align-items:center;flex-wrap:wrap;" aria-label="Pagination">
-        @if (Model.RegisterPage > 1)
-        {
- <a class="govuk-link" href="@Url.Action(listAction, listController, AllWorkPageQuery(Model.RegisterPage - 1))">Previous</a>
-        }
- <span class="dfe-c-body-s dfe-c-text-muted">Page @Model.RegisterPage of @Model.RegisterPageCount</span>
-        @if (Model.RegisterPage < Model.RegisterPageCount)
-        {
- <a class="govuk-link" href="@Url.Action(listAction, listController, AllWorkPageQuery(Model.RegisterPage + 1))">Next</a>
-        }
-      </nav>
-    }
-  </div>
-  }
 </div>
 
 <div id="d-completed" class="tab-pane @(activeTab =="completed" ? "on" : "")" role="tabpanel">
- <div class="dfe-c-table-wrap">
- <table class="modern-work-table" id="work-table-completed">
-      <thead>
-        <tr>
-          <th scope="col"><a class="govuk-link" href="@Url.Action(listAction, listController, RegisterSortQuery("title"))">Work item</a></th>
-          <th scope="col"><a class="govuk-link" href="@Url.Action(listAction, listController, RegisterSortQuery("businessarea"))">Business area</a></th>
-          <th scope="col"><a class="govuk-link" href="@Url.Action(listAction, listController, RegisterSortQuery("priority"))">Priority</a></th>
-          <th scope="col"><a class="govuk-link" href="@Url.Action(listAction, listController, RegisterSortQuery("rag"))">RAG</a></th>
-          <th scope="col"><a class="govuk-link" href="@Url.Action(listAction, listController, RegisterSortQuery("primarycontact"))">Primary contact</a></th>
-          <th scope="col"><a class="govuk-link" href="@Url.Action(listAction, listController, RegisterSortQuery("tags"))">Tags</a></th>
-          <th scope="col"><a class="govuk-link" href="@Url.Action(listAction, listController, RegisterSortQuery("status"))">Status</a></th>
-          <th scope="col"><a class="govuk-link" href="@Url.Action(listAction, listController, RegisterSortQuery("monthly"))">@Model.RegisterMonthlyColumnHeader</a></th>
+ <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+ <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed modern-work-table" id="work-table-completed">
+ <caption class="govuk-table__caption govuk-table__caption--m compass2-visually-hidden">Completed work items</caption>
+      <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+          <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Work item</button>
+        </th>
+          <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Business area</button>
+        </th>
+          <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Priority</button>
+        </th>
+          <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">RAG</button>
+        </th>
+          <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Primary contact</button>
+        </th>
+          <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Status</button>
+        </th>
+          <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">@Model.RegisterMonthlyColumnHeader</button>
+        </th>
         </tr>
       </thead>
-      <tbody>
+      <tbody class="govuk-table__body">
         @foreach (var r in RowsForTab("completed"))
         {
  <tr class="wreg-row" data-searchable="@(r.Title ?? "") @(r.PrimaryContactName ?? "") @(r.TagNamesSummary ?? "") @(r.PortfolioName ?? "") @(r.PhaseName ?? "") @(r.PriorityName ?? "") @(r.Id.ToString("D8"))">
-            <td>
-              <a href="@Url.Action("Detail", "ModernWork", new { id = r.Id })">@r.Title</a>
- <div class="dfe-c-body-s dfe-c-text-muted" style="margin-top:0.25rem;line-height:1.3;">
+            <td class="govuk-table__cell">
+              <a href="@Url.Action("Detail", "ModernWork", new { id = r.Id })" class="govuk-link govuk-link--no-visited-state">@r.Title</a>
+ <div class="govuk-body-s dfe-t-u-text-muted modern-work-table__meta">
                 WI-@r.Id.ToString("D8")@if (!string.IsNullOrEmpty(r.PhaseName) && r.PhaseName != "—") { <span aria-hidden="true"> · </span><span>@r.PhaseName</span> }
               </div>
             </td>
-            <td>@(r.BusinessAreaName ?? "—")</td>
- <td><span class="@PriorityTagClass(r.PriorityName)">@((r.PriorityName ?? "—").ToUpperInvariant())</span></td>
-            <td>
-              @if (!string.IsNullOrEmpty(r.RagBackgroundColourKey) || !string.IsNullOrEmpty(r.RagTextColourKey))
-              {
- <span class="rag-badge" style="@(string.IsNullOrEmpty(r.RagBackgroundColourKey) ? "" : "background-color: var(--govuk-colour-" + r.RagBackgroundColourKey + ");")@(string.IsNullOrEmpty(r.RagTextColourKey) ? "" : " color: var(--govuk-colour-" + r.RagTextColourKey + ");")">@((r.RagName ?? "—").ToUpperInvariant())</span>
-              }
-              else
-              {
- <span class="@WorkBadgeCss.RagDfeTagClass(r.RagCssClass, r.RagName)">@((r.RagName ?? "—").ToUpperInvariant())</span>
-              }
-            </td>
-            <td>@(r.PrimaryContactName ?? "—")</td>
- <td class="dfe-c-body-s">@(string.IsNullOrEmpty(r.TagNamesSummary) ? "—" : r.TagNamesSummary)</td>
- <td><span class="@WorkBadgeCss.StatusDfeTagClass(r.Status)">@r.Status</span></td>
- <td><span class="dfe-c-text-muted">—</span></td>
+            <td class="govuk-table__cell">@(r.BusinessAreaName ?? "—")</td>
+            <td class="govuk-table__cell">
+                @if (!string.IsNullOrEmpty(r.PriorityName))
+                {
+                    <span class="@WorkBadgeCss.PriorityDfeFrontendBadgeClass(r.PriorityName)">@r.PriorityName.ToUpperInvariant()</span>
+                }
+                else
+                {
+                    <span class="dfe-c-text-muted">—</span>
+                }
+              </td>
+            <td class="govuk-table__cell"><span class="@WorkBadgeCss.RagDfeFrontendBadgeClass(r.RagCssClass, r.RagName)">@((r.RagName ?? "—").ToUpperInvariant())</span></td>
+            <td class="govuk-table__cell">@(r.PrimaryContactName ?? "—")</td>
+ <td class="govuk-table__cell"><span class="@WorkBadgeCss.StatusDfeFrontendBadgeClass(r.Status)">@r.Status</span></td>
+ <td class="govuk-table__cell"><span class="dfe-c-text-muted">—</span></td>
           </tr>
         }
       </tbody>
@@ -519,72 +470,63 @@
   {
  <p class="dfe-c-body muted">No completed work items.</p>
   }
-  @if (activeTab == "completed")
-  {
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-top:0.875rem;flex-wrap:wrap;gap:0.5rem;">
-    @if (Model.RegisterIsPaginated)
-    {
- <p class="dfe-c-text-muted" style="margin:0;">Showing @(Model.RegisterDisplayRowStart)–@(Model.RegisterDisplayRowEnd) of @(Model.RegisterTotalCount) work items</p>
-    }
-    @if (Model.RegisterIsPaginated && Model.RegisterPageCount > 1)
-    {
- <nav class="dfe-c-flex" style="gap:0.5rem;align-items:center;flex-wrap:wrap;" aria-label="Pagination">
-        @if (Model.RegisterPage > 1)
-        {
- <a class="govuk-link" href="@Url.Action(listAction, listController, AllWorkPageQuery(Model.RegisterPage - 1))">Previous</a>
-        }
- <span class="dfe-c-body-s dfe-c-text-muted">Page @Model.RegisterPage of @Model.RegisterPageCount</span>
-        @if (Model.RegisterPage < Model.RegisterPageCount)
-        {
- <a class="govuk-link" href="@Url.Action(listAction, listController, AllWorkPageQuery(Model.RegisterPage + 1))">Next</a>
-        }
-      </nav>
-    }
-  </div>
-  }
 </div>
 
 <div id="d-cancelled" class="tab-pane @(activeTab =="cancelled" ? "on" : "")" role="tabpanel">
- <div class="dfe-c-table-wrap">
- <table class="modern-work-table" id="work-table-cancelled">
-      <thead>
-        <tr>
-          <th scope="col"><a class="govuk-link" href="@Url.Action(listAction, listController, RegisterSortQuery("title"))">Work item</a></th>
-          <th scope="col"><a class="govuk-link" href="@Url.Action(listAction, listController, RegisterSortQuery("businessarea"))">Business area</a></th>
-          <th scope="col"><a class="govuk-link" href="@Url.Action(listAction, listController, RegisterSortQuery("priority"))">Priority</a></th>
-          <th scope="col"><a class="govuk-link" href="@Url.Action(listAction, listController, RegisterSortQuery("rag"))">RAG</a></th>
-          <th scope="col"><a class="govuk-link" href="@Url.Action(listAction, listController, RegisterSortQuery("primarycontact"))">Primary contact</a></th>
-          <th scope="col"><a class="govuk-link" href="@Url.Action(listAction, listController, RegisterSortQuery("tags"))">Tags</a></th>
-          <th scope="col"><a class="govuk-link" href="@Url.Action(listAction, listController, RegisterSortQuery("status"))">Status</a></th>
-          <th scope="col"><a class="govuk-link" href="@Url.Action(listAction, listController, RegisterSortQuery("monthly"))">@Model.RegisterMonthlyColumnHeader</a></th>
+ <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+ <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed modern-work-table" id="work-table-cancelled">
+ <caption class="govuk-table__caption govuk-table__caption--m compass2-visually-hidden">Cancelled work items</caption>
+      <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+          <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Work item</button>
+        </th>
+          <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Business area</button>
+        </th>
+          <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Priority</button>
+        </th>
+          <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">RAG</button>
+        </th>
+          <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Primary contact</button>
+        </th>
+          <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Status</button>
+        </th>
+          <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">@Model.RegisterMonthlyColumnHeader</button>
+        </th>
         </tr>
       </thead>
-      <tbody>
+      <tbody class="govuk-table__body">
         @foreach (var r in RowsForTab("cancelled"))
         {
  <tr class="wreg-row" data-searchable="@(r.Title ?? "") @(r.PrimaryContactName ?? "") @(r.TagNamesSummary ?? "") @(r.PortfolioName ?? "") @(r.PriorityName ?? "") @(r.CancelledReason ?? "") @(r.Id.ToString("D8"))">
-            <td>
-              <a href="@Url.Action("Detail", "ModernWork", new { id = r.Id })">@r.Title</a>
- <div class="dfe-c-body-s dfe-c-text-muted" style="margin-top:0.25rem;line-height:1.3;">
+            <td class="govuk-table__cell">
+              <a href="@Url.Action("Detail", "ModernWork", new { id = r.Id })" class="govuk-link govuk-link--no-visited-state">@r.Title</a>
+ <div class="govuk-body-s dfe-t-u-text-muted modern-work-table__meta">
                 WI-@r.Id.ToString("D8")@if (!string.IsNullOrEmpty(r.PhaseName) && r.PhaseName != "—") { <span aria-hidden="true"> · </span><span>@r.PhaseName</span> }
               </div>
             </td>
-            <td>@(r.BusinessAreaName ?? "—")</td>
- <td><span class="@PriorityTagClass(r.PriorityName)">@((r.PriorityName ?? "—").ToUpperInvariant())</span></td>
-            <td>
-              @if (!string.IsNullOrEmpty(r.RagBackgroundColourKey) || !string.IsNullOrEmpty(r.RagTextColourKey))
-              {
- <span class="rag-badge" style="@(string.IsNullOrEmpty(r.RagBackgroundColourKey) ? "" : "background-color: var(--govuk-colour-" + r.RagBackgroundColourKey + ");")@(string.IsNullOrEmpty(r.RagTextColourKey) ? "" : " color: var(--govuk-colour-" + r.RagTextColourKey + ");")">@((r.RagName ?? "—").ToUpperInvariant())</span>
-              }
-              else
-              {
- <span class="@WorkBadgeCss.RagDfeTagClass(r.RagCssClass, r.RagName)">@((r.RagName ?? "—").ToUpperInvariant())</span>
-              }
-            </td>
-            <td>@(r.PrimaryContactName ?? "—")</td>
- <td class="dfe-c-body-s">@(string.IsNullOrEmpty(r.TagNamesSummary) ? "—" : r.TagNamesSummary)</td>
- <td><span class="@WorkBadgeCss.StatusDfeTagClass(r.Status)">@r.Status</span></td>
- <td><span class="dfe-c-text-muted">—</span></td>
+            <td class="govuk-table__cell">@(r.BusinessAreaName ?? "—")</td>
+            <td class="govuk-table__cell">
+                @if (!string.IsNullOrEmpty(r.PriorityName))
+                {
+                    <span class="@WorkBadgeCss.PriorityDfeFrontendBadgeClass(r.PriorityName)">@r.PriorityName.ToUpperInvariant()</span>
+                }
+                else
+                {
+                    <span class="dfe-c-text-muted">—</span>
+                }
+              </td>
+            <td class="govuk-table__cell"><span class="@WorkBadgeCss.RagDfeFrontendBadgeClass(r.RagCssClass, r.RagName)">@((r.RagName ?? "—").ToUpperInvariant())</span></td>
+            <td class="govuk-table__cell">@(r.PrimaryContactName ?? "—")</td>
+ <td class="govuk-table__cell"><span class="@WorkBadgeCss.StatusDfeFrontendBadgeClass(r.Status)">@r.Status</span></td>
+ <td class="govuk-table__cell"><span class="dfe-c-text-muted">—</span></td>
           </tr>
         }
       </tbody>
@@ -594,72 +536,63 @@
   {
  <p class="dfe-c-body muted">No cancelled work items.</p>
   }
-  @if (activeTab == "cancelled")
-  {
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-top:0.875rem;flex-wrap:wrap;gap:0.5rem;">
-    @if (Model.RegisterIsPaginated)
-    {
- <p class="dfe-c-text-muted" style="margin:0;">Showing @(Model.RegisterDisplayRowStart)–@(Model.RegisterDisplayRowEnd) of @(Model.RegisterTotalCount) work items</p>
-    }
-    @if (Model.RegisterIsPaginated && Model.RegisterPageCount > 1)
-    {
- <nav class="dfe-c-flex" style="gap:0.5rem;align-items:center;flex-wrap:wrap;" aria-label="Pagination">
-        @if (Model.RegisterPage > 1)
-        {
- <a class="govuk-link" href="@Url.Action(listAction, listController, AllWorkPageQuery(Model.RegisterPage - 1))">Previous</a>
-        }
- <span class="dfe-c-body-s dfe-c-text-muted">Page @Model.RegisterPage of @Model.RegisterPageCount</span>
-        @if (Model.RegisterPage < Model.RegisterPageCount)
-        {
- <a class="govuk-link" href="@Url.Action(listAction, listController, AllWorkPageQuery(Model.RegisterPage + 1))">Next</a>
-        }
-      </nav>
-    }
-  </div>
-  }
 </div>
 
 <div id="d-all" class="tab-pane @(activeTab =="all" ? "on" : "")" role="tabpanel">
- <div class="dfe-c-table-wrap">
-    <table class="modern-work-table" id="work-table-all">
-      <thead>
-        <tr>
-          <th scope="col"><a class="govuk-link" href="@Url.Action(listAction, listController, RegisterSortQuery("title"))">Work item</a></th>
-          <th scope="col"><a class="govuk-link" href="@Url.Action(listAction, listController, RegisterSortQuery("businessarea"))">Business area</a></th>
-          <th scope="col"><a class="govuk-link" href="@Url.Action(listAction, listController, RegisterSortQuery("priority"))">Priority</a></th>
-          <th scope="col"><a class="govuk-link" href="@Url.Action(listAction, listController, RegisterSortQuery("rag"))">RAG</a></th>
-          <th scope="col"><a class="govuk-link" href="@Url.Action(listAction, listController, RegisterSortQuery("primarycontact"))">Primary contact</a></th>
-          <th scope="col"><a class="govuk-link" href="@Url.Action(listAction, listController, RegisterSortQuery("tags"))">Tags</a></th>
-          <th scope="col"><a class="govuk-link" href="@Url.Action(listAction, listController, RegisterSortQuery("status"))">Status</a></th>
-          <th scope="col"><a class="govuk-link" href="@Url.Action(listAction, listController, RegisterSortQuery("monthly"))">@Model.RegisterMonthlyColumnHeader</a></th>
+ <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+    <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed modern-work-table" id="work-table-all">
+ <caption class="govuk-table__caption govuk-table__caption--m compass2-visually-hidden">All work items</caption>
+      <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+          <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Work item</button>
+        </th>
+          <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Business area</button>
+        </th>
+          <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Priority</button>
+        </th>
+          <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">RAG</button>
+        </th>
+          <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Primary contact</button>
+        </th>
+          <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Status</button>
+        </th>
+          <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">@Model.RegisterMonthlyColumnHeader</button>
+        </th>
         </tr>
       </thead>
-      <tbody>
+      <tbody class="govuk-table__body">
         @foreach (var r in RowsForTab("all"))
         {
-          <tr>
-            <td>
-              <a href="@Url.Action("Detail", "ModernWork", new { id = r.Id })">@r.Title</a>
- <div class="dfe-c-body-s dfe-c-text-muted" style="margin-top:0.25rem;line-height:1.3;">
+          <tr class="govuk-table__row">
+            <td class="govuk-table__cell">
+              <a href="@Url.Action("Detail", "ModernWork", new { id = r.Id })" class="govuk-link govuk-link--no-visited-state">@r.Title</a>
+ <div class="govuk-body-s dfe-t-u-text-muted modern-work-table__meta">
                 WI-@r.Id.ToString("D8")@if (!string.IsNullOrEmpty(r.PhaseName) && r.PhaseName != "—") { <span aria-hidden="true"> · </span><span>@r.PhaseName</span> }
               </div>
             </td>
-            <td>@(r.BusinessAreaName ?? "—")</td>
- <td><span class="@PriorityTagClass(r.PriorityName)">@((r.PriorityName ?? "—").ToUpperInvariant())</span></td>
-            <td>
-              @if (!string.IsNullOrEmpty(r.RagBackgroundColourKey) || !string.IsNullOrEmpty(r.RagTextColourKey))
-              {
- <span class="rag-badge" style="@(string.IsNullOrEmpty(r.RagBackgroundColourKey) ? "" : "background-color: var(--govuk-colour-" + r.RagBackgroundColourKey + ");")@(string.IsNullOrEmpty(r.RagTextColourKey) ? "" : " color: var(--govuk-colour-" + r.RagTextColourKey + ");")">@((r.RagName ?? "—").ToUpperInvariant())</span>
-              }
-              else
-              {
- <span class="@WorkBadgeCss.RagDfeTagClass(r.RagCssClass, r.RagName)">@((r.RagName ?? "—").ToUpperInvariant())</span>
-              }
-            </td>
-            <td>@(r.PrimaryContactName ?? "—")</td>
- <td class="dfe-c-body-s">@(string.IsNullOrEmpty(r.TagNamesSummary) ? "—" : r.TagNamesSummary)</td>
- <td><span class="@WorkBadgeCss.StatusDfeTagClass(r.Status)">@(r.Status ?? "—")</span></td>
-            <td>@await Html.PartialAsync("~/Views/Modern/Work/_WorkRegisterMonthlyUpdateCell.cshtml", r)</td>
+            <td class="govuk-table__cell">@(r.BusinessAreaName ?? "—")</td>
+            <td class="govuk-table__cell">
+                @if (!string.IsNullOrEmpty(r.PriorityName))
+                {
+                    <span class="@WorkBadgeCss.PriorityDfeFrontendBadgeClass(r.PriorityName)">@r.PriorityName.ToUpperInvariant()</span>
+                }
+                else
+                {
+                    <span class="dfe-c-text-muted">—</span>
+                }
+              </td>
+            <td class="govuk-table__cell"><span class="@WorkBadgeCss.RagDfeFrontendBadgeClass(r.RagCssClass, r.RagName)">@((r.RagName ?? "—").ToUpperInvariant())</span></td>
+            <td class="govuk-table__cell">@(r.PrimaryContactName ?? "—")</td>
+ <td class="govuk-table__cell"><span class="@WorkBadgeCss.StatusDfeFrontendBadgeClass(r.Status)">@(r.Status ?? "—")</span></td>
+            <td class="govuk-table__cell">@await Html.PartialAsync("~/Views/Modern/Work/_WorkRegisterMonthlyUpdateCell.cshtml", r)</td>
           </tr>
         }
       </tbody>
@@ -669,29 +602,17 @@
   {
  <p class="dfe-c-body muted">No work items match these filters.</p>
   }
-  @if (activeTab == "all")
-  {
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-top:0.875rem;flex-wrap:wrap;gap:0.5rem;">
-    @if (Model.RegisterIsPaginated)
-    {
- <p class="dfe-c-text-muted" style="margin:0;">Showing @(Model.RegisterDisplayRowStart)–@(Model.RegisterDisplayRowEnd) of @(Model.RegisterTotalCount) work items</p>
-    }
-    @if (Model.RegisterIsPaginated && Model.RegisterPageCount > 1)
-    {
- <nav class="dfe-c-flex" style="gap:0.5rem;align-items:center;flex-wrap:wrap;" aria-label="Pagination">
-        @if (Model.RegisterPage > 1)
-        {
- <a class="govuk-link" href="@Url.Action(listAction, listController, AllWorkPageQuery(Model.RegisterPage - 1))">Previous</a>
-        }
- <span class="dfe-c-body-s dfe-c-text-muted">Page @Model.RegisterPage of @Model.RegisterPageCount</span>
-        @if (Model.RegisterPage < Model.RegisterPageCount)
-        {
- <a class="govuk-link" href="@Url.Action(listAction, listController, AllWorkPageQuery(Model.RegisterPage + 1))">Next</a>
-        }
-      </nav>
-    }
-  </div>
-  }
 </div>
+
+@await Html.PartialAsync("~/Views/Modern/Work/_WorkRegisterPaginationFooter.cshtml", new WorkRegisterPaginationFooterViewModel {
+  IsPaginated = Model.RegisterIsPaginated,
+  DisplayRowStart = Model.RegisterDisplayRowStart,
+  DisplayRowEnd = Model.RegisterDisplayRowEnd,
+  TotalCount = Model.RegisterTotalCount,
+  CurrentPage = Model.RegisterPage,
+  TotalPages = Model.RegisterPageCount,
+  PageUrl = p => Url.Action(listAction, listController, AllWorkPageQuery(p)) ?? "#",
+  NavigationAriaLabel = "All work results"
+})
 
 </div>

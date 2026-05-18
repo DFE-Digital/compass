@@ -1,7 +1,41 @@
+using Compass.Models;
+
 namespace Compass.ViewModels.Modern;
 
 /// <summary>Dropdown line for RAID register filters.</summary>
 public sealed record RaidLookupOptionVm(int Id, string Name);
+
+/// <summary>DfE sub-navigation strip for RAID register scope (My / Open / Closed / All or Open / Closed / All).</summary>
+public sealed class RaidRegisterScopeNavViewModel
+{
+    public required string AriaLabel { get; init; }
+    public required string ActiveTab { get; init; }
+    public required IReadOnlyList<RaidRegisterScopeNavLink> Links { get; init; }
+}
+
+public sealed class RaidRegisterScopeNavLink
+{
+    public required string TabKey { get; init; }
+    public required string Label { get; init; }
+    public required string Href { get; init; }
+    public int Count { get; init; }
+}
+
+/// <summary>Footer row count + GOV.UK pagination for RAID register lists.</summary>
+public sealed class RaidRegisterPaginationFooterViewModel
+{
+    public int CurrentPage { get; init; } = 1;
+    public int TotalPages { get; init; } = 1;
+    public int TotalFiltered { get; init; }
+    public int PageSize { get; init; } = 25;
+    public required Func<int, string> PageUrl { get; init; }
+    public string NavigationAriaLabel { get; init; } = "Results";
+    public string ItemNoun { get; init; } = "results";
+
+    public bool IsPaginated => TotalFiltered > PageSize;
+    public int DisplayRowStart => TotalFiltered == 0 ? 0 : (CurrentPage - 1) * PageSize + 1;
+    public int DisplayRowEnd => TotalFiltered == 0 ? 0 : Math.Min(CurrentPage * PageSize, TotalFiltered);
+}
 
 /// <summary>Risks register with filters (GET query round-trips).</summary>
 public sealed class ModernRaidRisksPageViewModel
@@ -333,10 +367,42 @@ public sealed class RaidTierReportingDrillItemVm
     public string? RelationTarget { get; init; }
     public string? Status { get; init; }
     public string? Owner { get; init; }
+    public string? TierName { get; init; }
     public string? LikelihoodLabel { get; init; }
     public string? ImpactLabel { get; init; }
     public int? RiskScore { get; init; }
     public string? IssueSeverityLabel { get; init; }
+    /// <summary>ISO date (yyyy-MM-dd) for display as date opened.</summary>
+    public string? OpenedDate { get; init; }
+}
+
+public sealed class ModernRaidNearMissesPageViewModel
+{
+    public IReadOnlyList<ModernRaidNearMissRow> Rows { get; init; } = Array.Empty<ModernRaidNearMissRow>();
+    public IReadOnlyList<ModernRaidNearMissRow> RecentRows { get; init; } = Array.Empty<ModernRaidNearMissRow>();
+    public int TotalFiltered { get; init; }
+    public int Page { get; init; } = 1;
+    public int PageSize { get; init; } = 25;
+    public int TotalPages => TotalFiltered <= 0 ? 1 : (int)Math.Ceiling(TotalFiltered / (double)Math.Max(PageSize, 1));
+
+    public string? Search { get; init; }
+    public int? DirectorateLookupId { get; init; }
+    public int? BusinessAreaLookupId { get; init; }
+    public int? RiskTierId { get; init; }
+    public int? NearMissStatusId { get; init; }
+    public string ActiveTab { get; init; } = "open";
+    public int OpenCount { get; init; }
+    public int ClosedCount { get; init; }
+    public int AllCount { get; init; }
+
+    public IReadOnlyList<ModernRaidLabelCountVm> ByDirectorate { get; init; } = Array.Empty<ModernRaidLabelCountVm>();
+    public IReadOnlyList<ModernRaidLabelCountVm> ByBusinessArea { get; init; } = Array.Empty<ModernRaidLabelCountVm>();
+    public IReadOnlyList<ModernRaidLabelCountVm> ByTier { get; init; } = Array.Empty<ModernRaidLabelCountVm>();
+
+    public IReadOnlyList<RaidLookupOptionVm> DirectorateOptions { get; init; } = Array.Empty<RaidLookupOptionVm>();
+    public IReadOnlyList<RaidLookupOptionVm> BusinessAreaOptions { get; init; } = Array.Empty<RaidLookupOptionVm>();
+    public IReadOnlyList<RaidLookupOptionVm> TierOptions { get; init; } = Array.Empty<RaidLookupOptionVm>();
+    public IReadOnlyList<RaidLookupOptionVm> StatusOptions { get; init; } = Array.Empty<RaidLookupOptionVm>();
 }
 
 public sealed class ModernRaidAssumptionsPageViewModel
@@ -359,5 +425,41 @@ public sealed class ModernRaidAssumptionsPageViewModel
     public IReadOnlyList<RaidLookupOptionVm> ProjectOptions { get; init; } = Array.Empty<RaidLookupOptionVm>();
     public IReadOnlyList<RaidLookupOptionVm> CriticalityOptions { get; init; } = Array.Empty<RaidLookupOptionVm>();
     public IReadOnlyList<RaidLookupOptionVm> StatusOptions { get; init; } = Array.Empty<RaidLookupOptionVm>();
+}
+
+/// <summary>Business area detail at <c>/modern/raid/business-areas/{id}</c> with RAID registers.</summary>
+public sealed class ModernRaidBusinessAreaDetailViewModel
+{
+    public required BusinessAreaLookup BusinessArea { get; init; }
+    public int WorkItemCount { get; init; }
+    public int TotalRiskCount { get; init; }
+    public int OpenRiskCountSummary { get; init; }
+    /// <summary>Open issues for this business area scope (same rule as <see cref="OpenIssues"/> count).</summary>
+    public int OpenIssueCount { get; init; }
+
+    /// <summary>Directorates (divisions) linked via admin mapping, when any.</summary>
+    public string? LinkedDirectoratesSummary { get; init; }
+
+    /// <summary>Names or emails of business area leadership (DD) from Admin.</summary>
+    public string? LeadershipScopeSummary { get; init; }
+
+    /// <summary>risks, issues, dependencies, or assumptions.</summary>
+    public string ActiveSection { get; init; } = "risks";
+
+    public IReadOnlyList<ModernRaidRiskRow> OpenRisks { get; init; } = Array.Empty<ModernRaidRiskRow>();
+    public IReadOnlyList<ModernRaidRiskRow> ClosedRisks { get; init; } = Array.Empty<ModernRaidRiskRow>();
+
+    public IReadOnlyList<ModernRaidIssueRow> OpenIssues { get; init; } = Array.Empty<ModernRaidIssueRow>();
+    public IReadOnlyList<ModernRaidIssueRow> ClosedIssues { get; init; } = Array.Empty<ModernRaidIssueRow>();
+
+    public IReadOnlyList<ModernRaidDependencyRow> OpenDependencies { get; init; } = Array.Empty<ModernRaidDependencyRow>();
+    public IReadOnlyList<ModernRaidDependencyRow> ClosedDependencies { get; init; } = Array.Empty<ModernRaidDependencyRow>();
+
+    public IReadOnlyList<ModernRaidAssumptionRow> OpenAssumptions { get; init; } = Array.Empty<ModernRaidAssumptionRow>();
+    public IReadOnlyList<ModernRaidAssumptionRow> ClosedAssumptions { get; init; } = Array.Empty<ModernRaidAssumptionRow>();
+
+    public int TotalIssuesCount { get; init; }
+    public int TotalDependenciesCount { get; init; }
+    public int TotalAssumptionsCount { get; init; }
 }
 

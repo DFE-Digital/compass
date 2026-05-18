@@ -360,24 +360,6 @@ public partial class ModernRaidController
         return list;
     }
 
-    private async Task<List<RiskIssueNamedIntOption>> BuildRiskCreateTierOptionsAsync(CancellationToken cancellationToken)
-    {
-        var all = await _db.RiskTiers.AsNoTracking()
-            .Where(x => x.IsActive)
-            .OrderBy(x => x.SortOrder).ThenBy(x => x.Name)
-            .ToListAsync(cancellationToken);
-
-        var rows = ResolveRaidRiskTierRows(all);
-        var options = new List<RiskIssueNamedIntOption>();
-        if (rows.Tier3 != null)
-            options.Add(new RiskIssueNamedIntOption { Id = rows.Tier3.Id, Name = "Tier 3" });
-        if (rows.Tier2Proposed != null)
-            options.Add(new RiskIssueNamedIntOption { Id = rows.Tier2Proposed.Id, Name = "Tier 2 - Proposed" });
-        if (rows.Tier1Proposed != null)
-            options.Add(new RiskIssueNamedIntOption { Id = rows.Tier1Proposed.Id, Name = "Tier 1 - Proposed" });
-        return options;
-    }
-
     private async Task<int?> GetDefaultRaidIssueStatusIdAsync(CancellationToken cancellationToken)
     {
         var id = await _db.IssueStatuses.AsNoTracking()
@@ -394,66 +376,11 @@ public partial class ModernRaidController
             .FirstOrDefaultAsync(cancellationToken);
     }
 
-    private async Task PrepareRiskEditorLookupsAsync(CancellationToken cancellationToken, int? ownerUserId = null, int? sroUserId = null)
-    {
-        ViewBag.RiskTierOptions = await _db.RiskTiers.AsNoTracking()
-            .Where(x => x.IsActive && !x.IsProposedTier).OrderBy(x => x.SortOrder).ThenBy(x => x.Name)
-            .Select(x => new RiskIssueNamedIntOption { Id = x.Id, Name = x.Name }).ToListAsync(cancellationToken);
-        // Risk create/edit actions replace ViewBag.RiskTierOptions with narrowed lists.
-        ViewBag.RiskLikelihoodOptions = await _db.RiskLikelihoods.AsNoTracking()
-            .Where(x => x.IsActive).OrderBy(x => x.SortOrder)
-            .Select(x => new RiskIssueNamedIntOption { Id = x.Id, Name = x.Label, Description = x.Description, MatrixScore = x.MatrixScore }).ToListAsync(cancellationToken);
-        ViewBag.RiskImpactLevelOptions = await _db.RiskImpactLevels.AsNoTracking()
-            .Where(x => x.IsActive).OrderBy(x => x.SortOrder)
-            .Select(x => new RiskIssueNamedIntOption { Id = x.Id, Name = x.Label, Description = x.Description, MatrixScore = x.MatrixScore }).ToListAsync(cancellationToken);
-        ViewBag.RiskProximityOptions = await _db.RiskProximities.AsNoTracking()
-            .Where(x => x.IsActive).OrderBy(x => x.SortOrder)
-            .Select(x => new RiskIssueNamedIntOption { Id = x.Id, Name = x.Label, Description = x.Description }).ToListAsync(cancellationToken);
-        ViewBag.RiskCategoryOptions = await _db.RiskCategories.AsNoTracking()
-            .Where(x => x.IsActive).OrderBy(x => x.SortOrder)
-            .Select(x => new RiskIssueNamedIntOption { Id = x.Id, Name = x.Label }).ToListAsync(cancellationToken);
-        ViewBag.RiskStatusOptions = await _db.RiskStatuses.AsNoTracking()
-            .Where(x => x.IsActive).OrderBy(x => x.SortOrder)
-            .Select(x => new RiskIssueNamedIntOption { Id = x.Id, Name = x.Label }).ToListAsync(cancellationToken);
-        ViewBag.RiskPriorityOptions = await _db.RiskPriorities.AsNoTracking()
-            .Where(x => x.IsActive).OrderBy(x => x.SortOrder)
-            .Select(x => new RiskIssueNamedIntOption { Id = x.Id, Name = x.Label, Description = x.Description }).ToListAsync(cancellationToken);
-        ViewBag.RiskTreatmentOptions = await _db.RiskTreatments.AsNoTracking()
-            .Where(x => x.IsActive).OrderBy(x => x.SortOrder)
-            .Select(x => new RiskIssueNamedIntOption { Id = x.Id, Name = x.Label, Description = x.Description }).ToListAsync(cancellationToken);
-        ViewBag.ProjectOptions = await RaidEditorProjectOptionsFullAsync(cancellationToken);
-        ViewBag.FipsProductOptions = await RaidFipsProductSelectOptionsAsync(cancellationToken);
-        await PopulateRaidUserPickersAsync(ownerUserId, sroUserId, cancellationToken);
-        if (ViewBag.OwnerUserPicker is UserPickerViewModel oPick)
-            oPick.Label = "Who will own this risk day to day?";
+    private async Task PrepareRiskEditorLookupsAsync(CancellationToken cancellationToken, int? ownerUserId = null, int? sroUserId = null) =>
+        await _raidRiskEditorForm.PrepareRiskEditorLookupsAsync(this, ownerUserId, sroUserId, cancellationToken);
 
-        var likScores = await _db.RiskLikelihoods.AsNoTracking()
-            .Where(x => x.IsActive).ToDictionaryAsync(x => x.Id, x => x.MatrixScore, cancellationToken);
-        var impScores = await _db.RiskImpactLevels.AsNoTracking()
-            .Where(x => x.IsActive).ToDictionaryAsync(x => x.Id, x => x.MatrixScore, cancellationToken);
-        ViewBag.RiskMatrixScoresJson = JsonSerializer.Serialize(new { likelihood = likScores, impact = impScores });
-        await LoadRaidDivisionBusinessAreaOptionsAsync(cancellationToken);
-    }
-
-    private async Task PrepareIssueEditorLookupsAsync(CancellationToken cancellationToken, int? ownerUserId = null, int? sroUserId = null)
-    {
-        ViewBag.IssueSeverityOptions = await _db.IssueSeverities.AsNoTracking()
-            .Where(x => x.IsActive).OrderBy(x => x.SortOrder)
-            .Select(x => new RiskIssueNamedIntOption { Id = x.Id, Name = x.Label }).ToListAsync(cancellationToken);
-        ViewBag.IssuePriorityOptions = await _db.IssuePriorities.AsNoTracking()
-            .Where(x => x.IsActive).OrderBy(x => x.SortOrder)
-            .Select(x => new RiskIssueNamedIntOption { Id = x.Id, Name = x.Label }).ToListAsync(cancellationToken);
-        ViewBag.IssueStatusOptions = await _db.IssueStatuses.AsNoTracking()
-            .Where(x => x.IsActive).OrderBy(x => x.SortOrder)
-            .Select(x => new RiskIssueNamedIntOption { Id = x.Id, Name = x.Label }).ToListAsync(cancellationToken);
-        ViewBag.IssueCategoryOptions = await _db.IssueCategories.AsNoTracking()
-            .Where(x => x.IsActive).OrderBy(x => x.SortOrder)
-            .Select(x => new RiskIssueNamedIntOption { Id = x.Id, Name = x.Label }).ToListAsync(cancellationToken);
-        ViewBag.ProjectOptions = await RaidEditorProjectOptionsFullAsync(cancellationToken);
-        ViewBag.FipsProductOptions = await RaidFipsProductSelectOptionsAsync(cancellationToken);
-        await PopulateRaidUserPickersAsync(ownerUserId, sroUserId, cancellationToken);
-        await LoadRaidDivisionBusinessAreaOptionsAsync(cancellationToken);
-    }
+    private async Task PrepareIssueEditorLookupsAsync(CancellationToken cancellationToken, int? ownerUserId = null, int? sroUserId = null) =>
+        await _raidIssueEditorForm.PrepareIssueEditorLookupsAsync(this, ownerUserId, sroUserId, cancellationToken);
 
     private readonly record struct RaidAssociationBind(string StoredKind, int? ProjectId, int? PrimaryProductId);
 
@@ -612,7 +539,7 @@ public partial class ModernRaidController
         if (string.IsNullOrEmpty(k))
         {
             ModelState.AddModelError("AssociationKind",
-                "Select whether this is associated with a work item, FIPS product, or organisation.");
+                "Select whether this is associated with a work item, a service register product, or organisation.");
             return null;
         }
 
@@ -622,15 +549,15 @@ public partial class ModernRaidController
                 var primaryProductId = primaryProductIdForm is > 0 ? primaryProductIdForm : null;
                 if (!primaryProductId.HasValue)
                 {
-                    ModelState.AddModelError(productFieldKey, "Select a FIPS product.");
+                    ModelState.AddModelError(productFieldKey, "Select a service register product.");
                     return null;
                 }
 
                 var productOk = await _db.Services.AsNoTracking()
-                    .AnyAsync(s => s.ServiceId == primaryProductId.Value, cancellationToken);
+                    .AnyAsync(s => s.ServiceId == primaryProductId.Value && s.IsActive, cancellationToken);
                 if (!productOk)
                 {
-                    ModelState.AddModelError(productFieldKey, "Select a valid FIPS product.");
+                    ModelState.AddModelError(productFieldKey, "Select a valid service register product.");
                     return null;
                 }
 
@@ -659,7 +586,7 @@ public partial class ModernRaidController
 
             default:
                 ModelState.AddModelError("AssociationKind",
-                    "Select whether this is associated with a work item, FIPS product, or organisation.");
+                    "Select whether this is associated with a work item, a service register product, or organisation.");
                 return null;
         }
     }
@@ -706,7 +633,7 @@ public partial class ModernRaidController
             form.AssociationKind = "organisation";
         }
 
-        ViewBag.RiskTierOptions = await BuildRiskCreateTierOptionsAsync(cancellationToken);
+        ViewBag.RiskTierOptions = (await _raidRiskEditorForm.BuildRiskCreateTierOptionsAsync(cancellationToken)).ToList();
         ViewBag.EditorTitle = "Add risk";
         return View("~/Views/Modern/Raid/RiskEditor.cshtml", form);
     }
@@ -717,104 +644,13 @@ public partial class ModernRaidController
     {
         SetRaidChrome("raid-risks");
         await PrepareRiskEditorLookupsAsync(cancellationToken, form.OwnerUserId, form.SroUserId);
-        ViewBag.RiskTierOptions = await BuildRiskCreateTierOptionsAsync(cancellationToken);
+        ViewBag.RiskTierOptions = (await _raidRiskEditorForm.BuildRiskCreateTierOptionsAsync(cancellationToken)).ToList();
         ViewBag.EditorTitle = "Add risk";
 
-        if (string.IsNullOrWhiteSpace(form.Title))
-            ModelState.AddModelError(nameof(form.Title), "Enter a title.");
-        var assocBind = await TryBindRaidAssociationAsync(
-            form.AssociationKind,
-            form.ProjectId,
-            form.PrimaryProductId,
-            nameof(ModernRaidRiskEditorForm.ProjectId),
-            nameof(ModernRaidRiskEditorForm.PrimaryProductId),
-            cancellationToken);
-
-        if (assocBind is not { } a)
+        var risk = await _raidRiskEditorForm.TryCreateRiskFromEditorFormAsync(ModelState, User, form, forceWorkProjectId: null, cancellationToken);
+        if (risk == null)
             return View("~/Views/Modern/Raid/RiskEditor.cshtml", form);
 
-        form.DivisionIds ??= new List<int>();
-        form.BusinessAreaLookupIds ??= new List<int>();
-        if (!ModernRaidRiskCategoryFormHelper.TryBuildCategoryIdList(
-                form.PrimaryRiskCategoryId, form.SecondaryRiskCategoryId, out var riskCategoryIdList, out var catError))
-        {
-            var (key, message) = catError!.Value;
-            ModelState.AddModelError(key, message);
-        }
-
-        DateTime identifiedVal;
-        if (!(form.IdentifiedDay.HasValue || form.IdentifiedMonth.HasValue || form.IdentifiedYear.HasValue))
-        {
-            identifiedVal = DateTime.UtcNow.Date;
-        }
-        else if (!RaidDateFormHelper.TryOptionalDate(form.IdentifiedDay, form.IdentifiedMonth, form.IdentifiedYear, "Identified", ModelState, out var idParsed) || !idParsed.HasValue)
-        {
-            return View("~/Views/Modern/Raid/RiskEditor.cshtml", form);
-        }
-        else
-        {
-            identifiedVal = idParsed.Value;
-        }
-
-        if (!RaidDateFormHelper.TryOptionalDate(form.NextReviewDay, form.NextReviewMonth, form.NextReviewYear, "NextReview", ModelState, out var nextReviewDt))
-            return View("~/Views/Modern/Raid/RiskEditor.cshtml", form);
-
-        if (!ModelState.IsValid)
-            return View("~/Views/Modern/Raid/RiskEditor.cshtml", form);
-
-        var (likelihoodRating, impactRating, riskScore, inherentScore) =
-            await ComputeRaidRiskScoresAsync(form.RiskLikelihoodId, form.RiskImpactLevelId, cancellationToken);
-
-        var createdByUserId = await ResolveCurrentUserIdAsync(cancellationToken);
-
-        var riskStatusId = await GetOpenRiskStatusIdAsync(cancellationToken) ?? await GetDefaultRaidRiskStatusIdAsync(cancellationToken);
-        var riskStatusRow = riskStatusId.HasValue
-            ? await _db.RiskStatuses.AsNoTracking().FirstOrDefaultAsync(x => x.Id == riskStatusId.Value, cancellationToken)
-            : null;
-        var riskTreatment = form.RiskTreatmentId.HasValue
-            ? await _db.RiskTreatments.AsNoTracking().FirstOrDefaultAsync(x => x.Id == form.RiskTreatmentId.Value && x.IsActive, cancellationToken)
-            : null;
-
-        var now = DateTime.UtcNow;
-        var risk = new Risk
-        {
-            ProjectId = a.ProjectId,
-            PrimaryProductId = a.PrimaryProductId,
-            RaidAssociationKind = a.StoredKind,
-            Title = form.Title.Trim(),
-            Description = form.Description,
-            Cause = string.IsNullOrWhiteSpace(form.Cause) ? null : form.Cause.Trim(),
-            ImpactIfRealised = string.IsNullOrWhiteSpace(form.ImpactIfRealised) ? null : form.ImpactIfRealised.Trim(),
-            RiskTierId = form.RiskTierId,
-            RiskStatusId = riskStatusId,
-            RiskPriorityId = form.RiskPriorityId,
-            RiskLikelihoodId = form.RiskLikelihoodId,
-            RiskImpactLevelId = form.RiskImpactLevelId,
-            RiskProximityId = form.RiskProximityId,
-            OwnerUserId = form.OwnerUserId > 0 ? form.OwnerUserId : null,
-            SroUserId = form.SroUserId > 0 ? form.SroUserId : null,
-            ImpactRating = impactRating,
-            LikelihoodRating = likelihoodRating,
-            RiskScore = riskScore,
-            InherentScore = inherentScore,
-            Status = TruncateLowerRaid(riskStatusRow?.Label ?? "new", 20),
-            Response = riskTreatment != null ? TruncateRaid(riskTreatment.Label, 20) : null,
-            ResponseStrategy = form.ResponseStrategy,
-            Notes = form.ResponseStrategy,
-            IdentifiedDate = identifiedVal,
-            NextReviewDate = nextReviewDt,
-            HowIdentified = "RAID register",
-            CreatedByUserId = createdByUserId,
-            CreatedAt = now,
-            UpdatedAt = now
-        };
-
-        _db.Risks.Add(risk);
-        await _db.SaveChangesAsync(cancellationToken);
-        await PersistRiskCategoryLinksAsync(risk, riskCategoryIdList, cancellationToken);
-        await PersistRiskDivisionLinksAsync(risk, form.DivisionIds, cancellationToken);
-        await PersistRiskBusinessAreaLinksAsync(risk, form.BusinessAreaLookupIds, cancellationToken);
-        await _db.SaveChangesAsync(cancellationToken);
         TempData["Message"] = "Risk created.";
         return RedirectToAction(nameof(RiskDetail), new { id = risk.Id });
     }
@@ -850,6 +686,18 @@ public partial class ModernRaidController
             .FirstOrDefaultAsync(r => r.Id == id && !r.IsDeleted, cancellationToken);
         if (risk == null)
             return NotFound();
+
+        var ownerForDisplay = risk.OwnerUser;
+        if (ownerForDisplay == null && !string.IsNullOrWhiteSpace(risk.OwnerEmail))
+        {
+            var ownerEmailNorm = risk.OwnerEmail.Trim().ToLowerInvariant();
+            ownerForDisplay = await _db.Users.AsNoTracking()
+                .FirstOrDefaultAsync(
+                    u => u.Email != null && u.Email.ToLower() == ownerEmailNorm,
+                    cancellationToken);
+        }
+        ViewBag.OwnerForDisplay = ownerForDisplay;
+
         ViewBag.LinkedIssues = await _db.Issues.AsNoTracking()
             .Where(i => !i.IsDeleted && (
                 i.SourceRiskId == id ||
@@ -965,6 +813,14 @@ public partial class ModernRaidController
         {
             ViewBag.PendingRiskTierChange = null;
         }
+
+        var materialisedIssueId = await _db.Issues.AsNoTracking()
+            .Where(i => !i.IsDeleted && i.SourceRiskId == id)
+            .OrderByDescending(i => i.CreatedAt)
+            .Select(i => (int?)i.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+        ViewBag.RiskMaterialisedIssueId = materialisedIssueId;
+        ViewBag.RiskCanMakeIssue = !risk.ClosedDate.HasValue && !materialisedIssueId.HasValue;
 
         return View("~/Views/Modern/Raid/RiskDetail.cshtml", risk);
     }
@@ -1322,6 +1178,84 @@ public partial class ModernRaidController
         return RedirectToAction(nameof(RiskDetail), new { id = riskId, tab = "kris" });
     }
 
+    [HttpGet("risks/{id:int}/make-issue")]
+    public async Task<IActionResult> RiskMakeIssue(int id, CancellationToken cancellationToken = default)
+    {
+        SetRaidChrome("raid-risks");
+        var risk = await _db.Risks.AsNoTracking()
+            .FirstOrDefaultAsync(r => r.Id == id && !r.IsDeleted, cancellationToken);
+        if (risk == null)
+            return NotFound();
+
+        var existingIssue = await _db.Issues.AsNoTracking()
+            .Where(i => !i.IsDeleted && i.SourceRiskId == id)
+            .OrderByDescending(i => i.CreatedAt)
+            .Select(i => new { i.Id })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        var vm = new ModernRaidMakeIssueFromRiskPageVm
+        {
+            RiskId = risk.Id,
+            RiskReference = $"R-{risk.Id:D4}",
+            Title = risk.Title,
+            Description = risk.Description,
+            Cause = risk.Cause,
+            ImpactIfRealised = risk.ImpactIfRealised,
+            RiskIsClosed = risk.ClosedDate.HasValue,
+            HasExistingMaterialisedIssue = existingIssue != null,
+            ExistingIssueId = existingIssue?.Id,
+            ExistingIssueReference = existingIssue != null ? $"I-{existingIssue.Id:D4}" : null
+        };
+
+        return View("~/Views/Modern/Raid/MakeIssueFromRisk.cshtml", vm);
+    }
+
+    [HttpPost("risks/{id:int}/make-issue")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> RiskMakeIssuePost(
+        int id,
+        [FromForm] ModernRaidMakeIssueFromRiskForm form,
+        CancellationToken cancellationToken = default)
+    {
+        SetRaidChrome("raid-risks");
+        form.RiskId = id;
+
+        var risk = await _db.Risks.AsNoTracking()
+            .FirstOrDefaultAsync(r => r.Id == id && !r.IsDeleted, cancellationToken);
+        if (risk == null)
+            return NotFound();
+
+        var issue = await _raidIssueEditorForm.TryCreateIssueFromRiskAsync(ModelState, User, form, cancellationToken);
+        if (issue == null)
+        {
+            var existingIssue = await _db.Issues.AsNoTracking()
+                .Where(i => !i.IsDeleted && i.SourceRiskId == id)
+                .OrderByDescending(i => i.CreatedAt)
+                .Select(i => new { i.Id })
+                .FirstOrDefaultAsync(cancellationToken);
+            var vm = new ModernRaidMakeIssueFromRiskPageVm
+            {
+                RiskId = risk.Id,
+                RiskReference = $"R-{risk.Id:D4}",
+                Title = risk.Title,
+                Description = risk.Description,
+                Cause = risk.Cause,
+                ImpactIfRealised = risk.ImpactIfRealised,
+                RiskIsClosed = risk.ClosedDate.HasValue,
+                HasExistingMaterialisedIssue = existingIssue != null,
+                ExistingIssueId = existingIssue?.Id,
+                ExistingIssueReference = existingIssue != null ? $"I-{existingIssue.Id:D4}" : null
+            };
+            return View("~/Views/Modern/Raid/MakeIssueFromRisk.cshtml", vm);
+        }
+
+        var riskMsg = string.Equals(form.RiskAfterIssue, "keep_open", StringComparison.OrdinalIgnoreCase)
+            ? "Issue created. The risk remains open."
+            : "Issue created. The risk has been closed as materialised.";
+        TempData["Message"] = riskMsg;
+        return RedirectToAction(nameof(IssueDetail), new { id = issue.Id });
+    }
+
     [HttpGet("issues/create")]
     public async Task<IActionResult> IssueCreate(
         [FromQuery] string? associationKind,
@@ -1361,77 +1295,14 @@ public partial class ModernRaidController
         await PrepareIssueEditorLookupsAsync(cancellationToken, form.OwnerUserId, form.SroUserId);
         ViewBag.EditorTitle = "Add issue";
 
-        if (string.IsNullOrWhiteSpace(form.Title))
-            ModelState.AddModelError(nameof(form.Title), "Enter a title.");
-        var assocBind = await TryBindRaidAssociationAsync(
-            form.AssociationKind,
-            form.ProjectId,
-            form.PrimaryProductId,
-            nameof(ModernRaidIssueEditorForm.ProjectId),
-            nameof(ModernRaidIssueEditorForm.PrimaryProductId),
-            cancellationToken);
-        if (!form.SeverityId.HasValue || form.SeverityId <= 0)
-            ModelState.AddModelError(nameof(form.SeverityId), "Select severity.");
-        if (!form.PriorityId.HasValue || form.PriorityId <= 0)
-            ModelState.AddModelError(nameof(form.PriorityId), "Select priority.");
-
-        form.IssueCategoryIds ??= new List<int>();
-        form.DivisionIds ??= new List<int>();
-        form.BusinessAreaLookupIds ??= new List<int>();
-        form.AssuranceItems ??= new List<IssueAssuranceItemForm>();
-
-        if (!RaidDateFormHelper.TryOptionalDate(form.TargetResolutionDay, form.TargetResolutionMonth, form.TargetResolutionYear, "TargetResolution", ModelState, out var targetResolutionDt))
-            return View("~/Views/Modern/Raid/IssueEditor.cshtml", form);
-
-        if (assocBind is not { } a || !ModelState.IsValid)
-            return View("~/Views/Modern/Raid/IssueEditor.cshtml", form);
-
-        var issueStatusId = form.StatusId ?? await GetDefaultRaidIssueStatusIdAsync(cancellationToken);
-        var sevRow = form.SeverityId.HasValue
-            ? await _db.IssueSeverities.AsNoTracking().FirstOrDefaultAsync(x => x.Id == form.SeverityId.Value, cancellationToken)
-            : null;
-        var priRow = form.PriorityId.HasValue
-            ? await _db.IssuePriorities.AsNoTracking().FirstOrDefaultAsync(x => x.Id == form.PriorityId.Value, cancellationToken)
-            : null;
-        var stRow = issueStatusId.HasValue
-            ? await _db.IssueStatuses.AsNoTracking().FirstOrDefaultAsync(x => x.Id == issueStatusId.Value, cancellationToken)
-            : null;
-
-        var now = DateTime.UtcNow;
-        var createdByUserId = await ResolveCurrentUserIdAsync(cancellationToken);
-        var issue = new Issue
+        var issue = await _raidIssueEditorForm.TryCreateIssueFromEditorFormAsync(ModelState, User, form, forceWorkProjectId: null, cancellationToken);
+        if (issue == null)
         {
-            ProjectId = a.ProjectId,
-            PrimaryProductId = a.PrimaryProductId,
-            RaidAssociationKind = a.StoredKind,
-            Title = form.Title.Trim(),
-            Description = form.Description ?? "",
-            StatusId = issueStatusId,
-            SeverityId = form.SeverityId,
-            PriorityId = form.PriorityId,
-            OwnerUserId = form.OwnerUserId > 0 ? form.OwnerUserId : null,
-            SroUserId = form.SroUserId > 0 ? form.SroUserId : null,
-            Severity = TruncateLowerRaid(sevRow?.Label ?? "medium", 10),
-            Priority = priRow != null ? TruncateRaid(priRow.Label, 10) : null,
-            Status = TruncateLowerRaid(stRow?.Label ?? "open", 20),
-            TargetResolutionDate = targetResolutionDt,
-            Workaround = form.Workaround,
-            DetailedCause = form.DetailedCause,
-            AssuranceArrangements = form.AssuranceArrangements,
-            DetectedDate = DateTime.UtcNow.Date,
-            CreatedByUserId = createdByUserId,
-            CreatedAt = now,
-            UpdatedAt = now
-        };
-
-        _db.Issues.Add(issue);
-        await _db.SaveChangesAsync(cancellationToken);
-        await PersistIssueCategoryLinksAsync(issue, form.IssueCategoryIds, cancellationToken);
-        await PersistIssueDivisionLinksAsync(issue, form.DivisionIds, cancellationToken);
-        await PersistIssueBusinessAreaLinksAsync(issue, form.BusinessAreaLookupIds, cancellationToken);
-        if (!await PersistIssueAssuranceEventsAsync(issue.Id, form.AssuranceItems, cancellationToken))
+            if (form.AssuranceItems == null || form.AssuranceItems.Count == 0)
+                form.AssuranceItems = new List<IssueAssuranceItemForm> { new IssueAssuranceItemForm() };
             return View("~/Views/Modern/Raid/IssueEditor.cshtml", form);
-        await _db.SaveChangesAsync(cancellationToken);
+        }
+
         TempData["Message"] = "Issue created.";
         return RedirectToAction(nameof(IssueDetail), new { id = issue.Id });
     }
@@ -1830,11 +1701,28 @@ public partial class ModernRaidController
     }
 
     [HttpGet("assumptions/create")]
-    public async Task<IActionResult> AssumptionCreate(CancellationToken cancellationToken = default)
+    public async Task<IActionResult> AssumptionCreate(int? projectId = null, CancellationToken cancellationToken = default)
     {
         SetRaidChrome("raid-assumptions");
         await PrepareAssumptionCreateLookupsAsync(cancellationToken);
-        return View("~/Views/Modern/Raid/AssumptionCreate.cshtml", new ModernRaidCreateAssumptionForm());
+        int? workId = null;
+        if (projectId is int pid && pid > 0)
+        {
+            var exists = await _db.Projects.AsNoTracking()
+                .AnyAsync(p => p.Id == pid && !p.IsDeleted, cancellationToken);
+            if (exists)
+                workId = pid;
+        }
+
+        var form = workId is int wid && wid > 0
+            ? new ModernRaidCreateAssumptionForm
+            {
+                ProjectId = wid,
+                AssociationKind = "work",
+                ReturnToWorkItemId = wid
+            }
+            : new ModernRaidCreateAssumptionForm();
+        return View("~/Views/Modern/Raid/AssumptionCreate.cshtml", form);
     }
 
     [HttpPost("assumptions/create")]
@@ -1898,6 +1786,19 @@ public partial class ModernRaidController
         await PersistAssumptionBusinessAreaLinksAsync(entity, form.BusinessAreaLookupIds, cancellationToken);
         await _db.SaveChangesAsync(cancellationToken);
         TempData["Message"] = "Assumption added to the register.";
+        if (form.ReturnToWorkItemId is int rwid && rwid > 0)
+        {
+            var back = await _db.Projects.AsNoTracking()
+                .AnyAsync(p => p.Id == rwid && !p.IsDeleted, cancellationToken);
+            if (back)
+            {
+                TempData["SuccessMessage"] = "Assumption added to the register.";
+                var url = Url.Action("Detail", "ModernWork", new { id = rwid, tab = "assumptions" });
+                if (!string.IsNullOrEmpty(url))
+                    return Redirect(url + "#wd-assumptions");
+            }
+        }
+
         return RedirectToAction(nameof(AssumptionDetail), new { id = entity.Id });
     }
 
@@ -2080,22 +1981,10 @@ public partial class ModernRaidController
         var d = await _db.Divisions.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
         if (d == null || !d.IsActive)
             return NotFound();
-        var projectIds = await _db.ProjectDirectorates.AsNoTracking()
-            .Where(pd => pd.DivisionId == id)
-            .Select(pd => pd.ProjectId)
-            .Distinct()
-            .ToListAsync(cancellationToken);
 
-        var risksInDirectorate = _db.Risks.AsNoTracking().Where(r => !r.IsDeleted &&
-            ((r.ProjectId.HasValue && projectIds.Contains(r.ProjectId.Value)) ||
-             r.RiskDivisions.Any(rd => rd.DivisionId == id)));
-
-        ViewBag.DivisionWorkItemCount = projectIds.Count;
-        ViewBag.DivisionRiskCount = await risksInDirectorate.CountAsync(cancellationToken);
-        ViewBag.DivisionOpenRiskCount =
-            await risksInDirectorate.Where(r => r.ClosedDate == null).CountAsync(cancellationToken);
-
-        return View("~/Views/Modern/Raid/DivisionDetail.cshtml", d);
+        var scope = await BuildDirectorateDashboardScopeAsync(d, cancellationToken);
+        var vm = await BuildScopedRaidDashboardViewModelAsync(scope, d.Name ?? "Directorate", cancellationToken);
+        return View("~/Views/Modern/Raid/Dashboard.cshtml", vm);
     }
 
     [HttpGet("divisions/{id:int}")]
@@ -2105,29 +1994,250 @@ public partial class ModernRaidController
                                  $"/modern/raid/directorate/{id}");
     }
 
+    private async Task<ModernRaidBusinessAreaDetailViewModel> BuildModernRaidBusinessAreaDetailViewModelAsync(
+        BusinessAreaLookup ba,
+        string? section,
+        CancellationToken cancellationToken)
+    {
+        var id = ba.Id;
+        var directorateNames = await _db.DivisionBusinessAreas.AsNoTracking()
+            .Where(x => x.BusinessAreaLookupId == id)
+            .Select(x => x.Division.Name)
+            .Distinct()
+            .OrderBy(n => n)
+            .ToListAsync(cancellationToken);
+
+        var leadershipNames = await _db.BusinessAreaLeadershipMembers.AsNoTracking()
+            .Where(m => m.BusinessAreaLookupId == id)
+            .Select(m => m.User.Name ?? m.User.Email ?? "")
+            .Where(s => s != "")
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+        var projectIds = await _db.Projects.AsNoTracking()
+            .Where(p => !p.IsDeleted && p.BusinessAreaId == id)
+            .Select(p => p.Id)
+            .ToListAsync(cancellationToken);
+
+        var activeSection = (section ?? "").Trim().ToLowerInvariant() switch
+        {
+            "issues" => "issues",
+            "dependencies" => "dependencies",
+            "assumptions" => "assumptions",
+            _ => "risks"
+        };
+
+        var riskList = await _db.Risks.AsNoTracking()
+            .Where(r => !r.IsDeleted &&
+                ((r.ProjectId != null && projectIds.Contains(r.ProjectId.Value)) ||
+                 r.RiskBusinessAreas.Any(rba => rba.BusinessAreaLookupId == id)))
+            .AsSplitQuery()
+            .Include(r => r.RiskTier)
+            .Include(r => r.RiskStatus)
+            .Include(r => r.Likelihood)
+            .Include(r => r.ImpactLevel)
+            .Include(r => r.OwnerUser)
+            .Include(r => r.Project).ThenInclude(p => p!.BusinessAreaLookup)
+            .Include(r => r.PrimaryProduct)
+            .Include(r => r.RiskBusinessAreas).ThenInclude(x => x.BusinessAreaLookup)
+            .OrderByDescending(r => r.UpdatedAt)
+            .ToListAsync(cancellationToken);
+
+        var openRisks = new List<ModernRaidRiskRow>();
+        var closedRisks = new List<ModernRaidRiskRow>();
+        foreach (var r in riskList)
+        {
+            var row = new ModernRaidRiskRow(
+                r.Id,
+                r.Title ?? "—",
+                RaidRegisterTableFormatting.FormatRiskBusinessAreaLabels(r),
+                RaidRegisterTableFormatting.BuildRiskRelation(r),
+                r.RiskStatus?.Label ?? r.Status,
+                r.OwnerUser != null ? (r.OwnerUser.Name ?? r.OwnerUser.Email) : r.OwnerEmail,
+                r.Likelihood?.Label ?? r.LikelihoodRating.ToString(),
+                r.ImpactLevel?.Label ?? r.ImpactRating.ToString(),
+                r.RiskScore,
+                r.RiskTier?.Name,
+                Snippet(r.Description, 8000));
+            if (r.ClosedDate == null)
+                openRisks.Add(row);
+            else
+                closedRisks.Add(row);
+        }
+
+        var riskIds = riskList.Select(r => r.Id).ToList();
+
+        var issueList = await _db.Issues.AsNoTracking()
+            .Where(i => !i.IsDeleted &&
+                ((i.ProjectId != null && projectIds.Contains(i.ProjectId.Value)) ||
+                 i.IssueBusinessAreas.Any(iba => iba.BusinessAreaLookupId == id)))
+            .AsSplitQuery()
+            .Include(i => i.StatusLookup)
+            .Include(i => i.PriorityLookup)
+            .Include(i => i.SeverityLookup)
+            .Include(i => i.OwnerUser)
+            .Include(i => i.Project).ThenInclude(p => p!.BusinessAreaLookup)
+            .Include(i => i.PrimaryProduct)
+            .Include(i => i.IssueBusinessAreas).ThenInclude(x => x.BusinessAreaLookup)
+            .OrderByDescending(i => i.UpdatedAt)
+            .ToListAsync(cancellationToken);
+
+        var openIssues = new List<ModernRaidIssueRow>();
+        var closedIssues = new List<ModernRaidIssueRow>();
+        foreach (var i in issueList)
+        {
+            var row = new ModernRaidIssueRow(
+                i.Id,
+                i.Title ?? "—",
+                RaidRegisterTableFormatting.FormatIssueBusinessAreaLabels(i),
+                RaidRegisterTableFormatting.BuildIssueRelation(i),
+                i.StatusLookup?.Label ?? i.Status,
+                i.OwnerUser != null ? (i.OwnerUser.Name ?? i.OwnerUser.Email) : null,
+                i.PriorityLookup?.Label ?? i.Priority,
+                i.SeverityLookup?.Label ?? i.Severity,
+                Snippet(i.Description, 8000));
+            if (i.ClosedDate == null)
+                openIssues.Add(row);
+            else
+                closedIssues.Add(row);
+        }
+
+        var issueIds = issueList.Select(i => i.Id).ToList();
+
+        var depEntities = await _db.Dependencies.AsNoTracking()
+            .Include(d => d.LinkTypeLookup)
+            .Include(d => d.CriticalityLookup)
+            .Where(d =>
+                (d.SourceEntityType == "Project" && projectIds.Contains(d.SourceEntityId)) ||
+                (d.TargetEntityType == "Project" && projectIds.Contains(d.TargetEntityId)) ||
+                (d.SourceEntityType == "Risk" && riskIds.Contains(d.SourceEntityId)) ||
+                (d.TargetEntityType == "Risk" && riskIds.Contains(d.TargetEntityId)) ||
+                (d.SourceEntityType == "Issue" && issueIds.Contains(d.SourceEntityId)) ||
+                (d.TargetEntityType == "Issue" && issueIds.Contains(d.TargetEntityId)))
+            .OrderByDescending(d => d.UpdatedAt)
+            .ToListAsync(cancellationToken);
+
+        var titleMap = await BuildDependencyEndpointTitleMapAsync(depEntities, cancellationToken);
+        string DepLabel(string entityType, int entityId) =>
+            titleMap.TryGetValue((NormalizeRaidEntityType(entityType), entityId), out var tl)
+                ? tl
+                : $"{entityType.Trim()} #{entityId}";
+
+        var openDeps = new List<ModernRaidDependencyRow>();
+        var closedDeps = new List<ModernRaidDependencyRow>();
+        foreach (var d in depEntities)
+        {
+            var row = new ModernRaidDependencyRow(
+                d.Id,
+                d.SourceEntityType,
+                d.SourceEntityId,
+                DepLabel(d.SourceEntityType, d.SourceEntityId),
+                RaidDependencyEntityDetailUrl(d.SourceEntityType, d.SourceEntityId),
+                d.TargetEntityType,
+                d.TargetEntityId,
+                DepLabel(d.TargetEntityType, d.TargetEntityId),
+                RaidDependencyEntityDetailUrl(d.TargetEntityType, d.TargetEntityId),
+                d.DependencyType,
+                d.LinkTypeLookup?.Label,
+                d.CriticalityLookup?.Label,
+                d.Organisation,
+                d.DueDate,
+                d.Description,
+                d.Status,
+                d.UpdatedAt);
+            var depClosed = !string.IsNullOrEmpty(d.Status)
+                            && d.Status.Contains("closed", StringComparison.OrdinalIgnoreCase);
+            if (depClosed)
+                closedDeps.Add(row);
+            else
+                openDeps.Add(row);
+        }
+
+        var closedStatusIds = await _db.AssumptionStatuses.AsNoTracking()
+            .Where(x => x.IsActive && EF.Functions.Like(x.Label, "%closed%"))
+            .Select(x => x.Id)
+            .ToListAsync(cancellationToken);
+
+        var asmList = await _db.Assumptions.AsNoTracking()
+            .Where(a => !a.IsDeleted && a.ProjectId != null && projectIds.Contains(a.ProjectId.Value))
+            .Include(a => a.Project)
+            .Include(a => a.PrimaryProduct)
+            .Include(a => a.CriticalityLookup)
+            .Include(a => a.StatusLookup)
+            .OrderByDescending(a => a.UpdatedAt)
+            .ToListAsync(cancellationToken);
+
+        var openAsm = new List<ModernRaidAssumptionRow>();
+        var closedAsm = new List<ModernRaidAssumptionRow>();
+        foreach (var a in asmList)
+        {
+            var row = new ModernRaidAssumptionRow(
+                a.Id,
+                ToRaidAssociationUiKind(a.RaidAssociationKind, a.ProjectId, a.PrimaryProductId),
+                a.ProjectId,
+                a.Project?.Title,
+                a.PrimaryProduct != null ? (a.PrimaryProduct.DisplayName ?? a.PrimaryProduct.FipsId) : null,
+                Snippet(a.Description, 160),
+                a.CriticalityLookup?.Label,
+                a.StatusLookup?.Label,
+                a.ReviewDate,
+                a.UpdatedAt);
+            var isClosed = a.AssumptionStatusId.HasValue
+                           && closedStatusIds.Count > 0
+                           && closedStatusIds.Contains(a.AssumptionStatusId.Value);
+            if (isClosed)
+                closedAsm.Add(row);
+            else
+                openAsm.Add(row);
+        }
+
+        var openRiskSummary = await _db.Risks.AsNoTracking()
+            .Where(r => !r.IsDeleted &&
+                ((r.ProjectId != null && projectIds.Contains(r.ProjectId.Value)) ||
+                 r.RiskBusinessAreas.Any(rba => rba.BusinessAreaLookupId == id)) &&
+                r.ClosedDate == null)
+            .CountAsync(cancellationToken);
+
+        return new ModernRaidBusinessAreaDetailViewModel
+        {
+            BusinessArea = ba,
+            WorkItemCount = projectIds.Count,
+            TotalRiskCount = riskList.Count,
+            OpenRiskCountSummary = openRiskSummary,
+            OpenIssueCount = openIssues.Count,
+            LinkedDirectoratesSummary = directorateNames.Count == 0
+                ? null
+                : string.Join(", ", directorateNames),
+            LeadershipScopeSummary = leadershipNames.Count == 0
+                ? null
+                : string.Join(", ", leadershipNames),
+            ActiveSection = activeSection,
+            OpenRisks = openRisks,
+            ClosedRisks = closedRisks,
+            OpenIssues = openIssues,
+            ClosedIssues = closedIssues,
+            OpenDependencies = openDeps,
+            ClosedDependencies = closedDeps,
+            OpenAssumptions = openAsm,
+            ClosedAssumptions = closedAsm,
+            TotalIssuesCount = issueList.Count,
+            TotalDependenciesCount = depEntities.Count,
+            TotalAssumptionsCount = asmList.Count
+        };
+    }
+
     [HttpGet("business-areas/{id:int}")]
-    public async Task<IActionResult> BusinessAreaDetail(int id, CancellationToken cancellationToken = default)
+    public async Task<IActionResult> BusinessAreaDetail(int id, string? section, CancellationToken cancellationToken = default)
     {
         SetRaidChrome("raid-business-areas");
         var ba = await _db.BusinessAreaLookups.AsNoTracking()
             .FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
         if (ba == null)
             return NotFound();
-        var projectIds = await _db.Projects.AsNoTracking()
-            .Where(p => !p.IsDeleted && p.BusinessAreaId == id)
-            .Select(p => p.Id)
-            .ToListAsync(cancellationToken);
-        if (projectIds.Count > 0)
-        {
-            ViewBag.BusinessAreaWorkItemCount = projectIds.Count;
-            ViewBag.BusinessAreaRiskCount = await _db.Risks.AsNoTracking()
-                .Where(r => !r.IsDeleted && r.ProjectId.HasValue && projectIds.Contains(r.ProjectId.Value))
-                .CountAsync(cancellationToken);
-            ViewBag.BusinessAreaOpenRiskCount = await _db.Risks.AsNoTracking()
-                .Where(r => !r.IsDeleted && r.ClosedDate == null && r.ProjectId.HasValue && projectIds.Contains(r.ProjectId.Value))
-                .CountAsync(cancellationToken);
-        }
-        return View("~/Views/Modern/Raid/BusinessAreaDetail.cshtml", ba);
+
+        var scope = await BuildBusinessAreaDashboardScopeAsync(ba, cancellationToken);
+        var vm = await BuildScopedRaidDashboardViewModelAsync(scope, ba.Name ?? "Business area", cancellationToken);
+        return View("~/Views/Modern/Raid/Dashboard.cshtml", vm);
     }
 
     /// <summary>Legacy route — portfolios list moved to <see cref="ModernRaidController.BusinessAreas"/>.</summary>

@@ -1,5 +1,6 @@
 @model Compass.Models.FunctionalStandard
 @using Compass.Models
+@using Compass.ViewModels.Modern
 @{
     ViewData["Title"] = Model.Title;
     var inProgressAssessments = ViewBag.InProgressAssessments as List<dynamic> ?? new List<dynamic>();
@@ -17,34 +18,27 @@
 
 <div id="sc-standards-fs-detail">
 
- <div class="dfe-c-flex--between dfe-c-mb-3" style="flex-wrap:wrap;gap:1rem;align-items:flex-start;">
- <div class="dfe-c-page-title" style="margin:0;">
- <div class="dfe-c-page-title__caption">Functional standard</div>
- <h1 class="dfe-c-page-title__heading">@Model.Title</h1>
- <p class="dfe-c-page-title__lede">@totalCriteria criteria across @(Model.Themes?.Count ?? 0) themes</p>
-        </div>
- <div class="dfe-c-flex" style="gap:0.5rem;flex-wrap:wrap;">
-            @if (hasInProgress)
-            {
- <button type="button" class="govuk-button" disabled title="Complete the in-progress assessment first">Start new assessment</button>
-            }
-            else
-            {
- <button type="button" class="govuk-button" data-modal-open="dlg-start-assessment">Start new assessment</button>
-            }
-        </div>
-    </div>
+@{
+  var fsDetailLede = await Html.PartialAsync("_GovukBodyParagraph", $"{totalCriteria} criteria across {(Model.Themes?.Count ?? 0)} themes");
+  var fsDetailActions = await Html.PartialAsync("_FunctionalStandardDetailHeaderActions", Model);
+}
+@await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+  Caption = "Functional standard",
+  Title = Model.Title,
+  Lede = fsDetailLede,
+  Actions = fsDetailActions
+})
 
     @if (!string.IsNullOrWhiteSpace(Model.Description))
     {
- <div class="dfe-c-callout dfe-c-callout--info dfe-c-mb-3">
+ <div class="dfe-c-callout dfe-c-callout--info govuk-!-margin-bottom-3">
  <p class="dfe-c-callout__body">@Model.Description</p>
         </div>
     }
 
     @if (hasInProgress)
     {
- <div class="dfe-c-banner dfe-c-banner--blue dfe-c-mb-3">
+ <div class="dfe-c-banner dfe-c-banner--blue govuk-!-margin-bottom-3">
             An assessment is already in progress. Complete or submit it before starting a new one.
         </div>
     }
@@ -52,31 +46,39 @@
  <h2 class="dfe-c-heading-m dfe-c-mb-2">Assessments in progress</h2>
     @if (inProgressAssessments.Any())
     {
- <div class="dfe-c-table-wrap dfe-c-mb-4">
-            <table>
-                <thead>
-                    <tr>
-                        <th>Assessment</th>
-                        <th>Started by</th>
-                        <th>Started</th>
-                        <th>Progress</th>
- <th><span class="govuk-visually-hidden">Actions</span></th>
+ <div class="dfe-f-table-wrapper dfe-c-mb-4" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+            <table class="govuk-table">
+                <thead class="govuk-table__head">
+                    <tr class="govuk-table__row">
+                        <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Assessment</button>
+        </th>
+                        <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Started by</button>
+        </th>
+                        <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Started</button>
+        </th>
+                        <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Progress</button>
+        </th>
                     </tr>
                 </thead>
-                <tbody>
+                <tbody class="govuk-table__body">
                     @foreach (dynamic item in inProgressAssessments)
                     {
                         FunctionalStandardAssessment assessment = item.Assessment;
                         int completedCount = item.CompletedCount;
                         int totalCount = item.TotalCount;
                         string userName = item.UserName ?? assessment.AssessedBy;
-                        var pct = totalCount > 0 ? (int)Math.Round(100.0 * completedCount / totalCount) : 0;
-                        <tr>
-                            <td><a href="@Url.Action("ConductAssessment", "ModernStandards", new { assessmentId = assessment.Id })"><strong>@assessment.AssessmentName</strong></a></td>
-                            <td>@userName</td>
-                            <td>@assessment.AssessmentDate.ToString("d MMM yyyy")</td>
-                            <td>@completedCount / @totalCount (@(pct)%)</td>
- <td style="text-align:right;"><a class="govuk-link" href="@Url.Action("ConductAssessment", "ModernStandards", new { assessmentId = assessment.Id })">Continue</a></td>
+                        <tr class="govuk-table__row">
+                            <td class="govuk-table__cell"><a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("ConductAssessment", "ModernStandards", new { assessmentId = assessment.Id })"><strong>@assessment.AssessmentName</strong></a></td>
+                            <td class="govuk-table__cell">@userName</td>
+                            <td class="govuk-table__cell">@assessment.AssessmentDate.ToString("d MMM yyyy")</td>
+                            <td class="govuk-table__cell">
+                              @await Html.PartialAsync("~/Views/Modern/Standards/_FsaCriteriaProgressBar.cshtml", (completedCount, totalCount))
+                            </td>
                         </tr>
                     }
                 </tbody>
@@ -91,25 +93,32 @@
  <h2 class="dfe-c-heading-m dfe-c-mb-2">Submitted assessments</h2>
     @if (submittedAssessments.Any())
     {
- <div class="dfe-c-table-wrap dfe-c-mb-4">
-            <table>
-                <thead>
-                    <tr>
-                        <th>Assessment</th>
-                        <th>Submitted</th>
-                        <th>Assessed by</th>
+ <div class="dfe-f-table-wrapper dfe-c-mb-4" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+            <table class="govuk-table">
+                <thead class="govuk-table__head">
+                    <tr class="govuk-table__row">
+                        <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Assessment</button>
+        </th>
+                        <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Submitted</button>
+        </th>
+                        <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Assessed by</button>
+        </th>
  <th><span class="govuk-visually-hidden">Actions</span></th>
                     </tr>
                 </thead>
-                <tbody>
+                <tbody class="govuk-table__body">
                     @foreach (dynamic item in submittedAssessments)
                     {
                         FunctionalStandardAssessment assessment = item.Assessment;
-                        <tr>
-                            <td><a href="@Url.Action("AssessmentSummary", "ModernStandards", new { assessmentId = assessment.Id })"><strong>@assessment.AssessmentName</strong></a></td>
-                            <td>@assessment.SubmittedAt?.ToString("d MMM yyyy")</td>
-                            <td>@assessment.AssessedBy</td>
- <td style="text-align:right;"><a class="govuk-link" href="@Url.Action("AssessmentSummary", "ModernStandards", new { assessmentId = assessment.Id })">View summary</a></td>
+                        <tr class="govuk-table__row">
+                            <td class="govuk-table__cell"><a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("AssessmentSummary", "ModernStandards", new { assessmentId = assessment.Id })"><strong>@assessment.AssessmentName</strong></a></td>
+                            <td class="govuk-table__cell">@assessment.SubmittedAt?.ToString("d MMM yyyy")</td>
+                            <td class="govuk-table__cell">@assessment.AssessedBy</td>
+ <td class="govuk-table__cell" style="text-align:right;"><a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("AssessmentSummary", "ModernStandards", new { assessmentId = assessment.Id })">View summary</a></td>
                         </tr>
                     }
                 </tbody>

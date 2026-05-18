@@ -20,19 +20,28 @@ public partial class ModernManageController : Controller
     private readonly IPermissionService _permission;
     private readonly IFipsBusinessAreaLookupSyncService _fipsBusinessAreaLookupSync;
     private readonly IGlobalFeatureToggleService _globalFeatureToggle;
+    private readonly IProductsApiService _productsApi;
+    private readonly IServiceAssessmentApiService _serviceAssessmentApi;
+    private readonly IConfiguration _configuration;
 
     public ModernManageController(
         CompassDbContext context,
         IFipsProductWriteService fipsProductWrite,
         IPermissionService permission,
         IFipsBusinessAreaLookupSyncService fipsBusinessAreaLookupSync,
-        IGlobalFeatureToggleService globalFeatureToggle)
+        IGlobalFeatureToggleService globalFeatureToggle,
+        IProductsApiService productsApi,
+        IServiceAssessmentApiService serviceAssessmentApi,
+        IConfiguration configuration)
     {
         _context = context;
         _fipsProductWrite = fipsProductWrite;
         _permission = permission;
         _fipsBusinessAreaLookupSync = fipsBusinessAreaLookupSync;
         _globalFeatureToggle = globalFeatureToggle;
+        _productsApi = productsApi;
+        _serviceAssessmentApi = serviceAssessmentApi;
+        _configuration = configuration;
     }
 
     private async Task<IActionResult?> RequireFipsDatabaseAsync()
@@ -74,15 +83,75 @@ public partial class ModernManageController : Controller
         tab switch
         {
             _ when string.Equals(tab, "history", StringComparison.OrdinalIgnoreCase) => "history",
+            _ when string.Equals(tab, "risk", StringComparison.OrdinalIgnoreCase) => "risks",
             _ when string.Equals(tab, "risks", StringComparison.OrdinalIgnoreCase) => "risks",
             _ when string.Equals(tab, "issues", StringComparison.OrdinalIgnoreCase) => "issues",
+            _ when string.Equals(tab, "assumptions", StringComparison.OrdinalIgnoreCase) => "assumptions",
+            _ when string.Equals(tab, "dependencies", StringComparison.OrdinalIgnoreCase) => "dependencies",
+            _ when string.Equals(tab, "accessibility", StringComparison.OrdinalIgnoreCase) => "accessibility",
+            _ when string.Equals(tab, "performance", StringComparison.OrdinalIgnoreCase) => "performance",
+            _ when string.Equals(tab, "assurance", StringComparison.OrdinalIgnoreCase) => "assurance",
+            _ when string.Equals(tab, "details", StringComparison.OrdinalIgnoreCase) => "information",
             _ => "information"
         };
 
-    // ── FIPS product listing ────────────────────────────────────────────────
+    // ── FIPS service register dashboard ─────────────────────────────────────
 
     [HttpGet("")]
     [HttpGet("fips")]
+    [HttpGet("fips/dashboard")]
+    public async Task<IActionResult> FipsDashboard(
+        string? tab,
+        string? search,
+        int? businessAreaId,
+        int? channelId,
+        int? userGroupId,
+        int? typeId,
+        int? phaseId,
+        int? categorisationItemId,
+        int? categorisationGroupId,
+        CancellationToken ct)
+    {
+        var disabled = await RequireFipsDatabaseAsync();
+        if (disabled != null)
+            return disabled;
+
+        if (!string.IsNullOrWhiteSpace(tab)
+            || !string.IsNullOrWhiteSpace(search)
+            || businessAreaId is > 0
+            || channelId is > 0
+            || userGroupId is > 0
+            || typeId is > 0
+            || phaseId is > 0
+            || categorisationItemId is > 0
+            || categorisationGroupId is > 0)
+        {
+            return RedirectToAction(nameof(Fips), new
+            {
+                tab,
+                search,
+                businessAreaId,
+                channelId,
+                userGroupId,
+                typeId,
+                phaseId,
+                categorisationItemId,
+                categorisationGroupId
+            });
+        }
+
+        SetNav("manage-fips-dashboard");
+
+        var fipsBaseUrl = _configuration["fipsProduct:baseUrl"] ?? "https://fips.education.gov.uk";
+        var vm = await FipsManageDashboardBuilder.BuildAsync(
+            _context, CurrentUserEmail, fipsBaseUrl, ct);
+
+        return View("Dashboard", vm);
+    }
+
+    // ── FIPS product listing ────────────────────────────────────────────────
+
+    [HttpGet("fips/products")]
     public async Task<IActionResult> Fips(
         string? tab,
         string? search,
@@ -91,26 +160,33 @@ public partial class ModernManageController : Controller
         int? userGroupId,
         int? typeId,
         int? phaseId,
+        int? categorisationItemId,
+        int? categorisationGroupId,
         CancellationToken ct)
     {
         var disabled = await RequireFipsDatabaseAsync();
         if (disabled != null)
             return disabled;
 
-        SetNav("manage-fips");
+        SetNav("manage-fips-products");
 
-        // Default to full catalogue. "Your products" only lists rows where your email matches a CMDB contact.
-        var activeTab = string.IsNullOrWhiteSpace(tab) ? "all" : tab;
+        // Default to your products; tab "active" = all Status Active products (see FipsProductListingHelper).
+        var activeTab = string.IsNullOrWhiteSpace(tab) ? "my" : tab.Trim().ToLowerInvariant();
+        if (string.Equals(activeTab, "all", StringComparison.OrdinalIgnoreCase)
+            && string.IsNullOrWhiteSpace(search))
+            activeTab = "active";
         var email = CurrentUserEmail;
 
         var vm = await FipsProductListingHelper.BuildProductsViewModelAsync(
-            _context, activeTab, email, search, businessAreaId, channelId, userGroupId, typeId, phaseId, ct);
+            _context, activeTab, email, search, businessAreaId, channelId, userGroupId, typeId, phaseId,
+            categorisationItemId, categorisationGroupId, ct);
         vm.CanSyncFromCmdb = false;
 
-        var baseUrl = Url.Action(nameof(Fips), "ModernManage", new { tab = activeTab }) ?? "/modern/manage/fips";
+        var baseUrl = Url.Action(nameof(Fips), "ModernManage", new { tab = activeTab })
+                      ?? "/modern/manage/fips/products";
         var sf = FipsProductListingHelper.BuildSearchAndFilter(vm, activeTab, baseUrl);
         sf.ActiveChips = SearchAndFilterActiveChipsBuilder.FromViewModel(
-            sf, Url, nameof(Fips), "ModernManage", new { tab = activeTab });
+            sf, Url, nameof(Fips), "ModernManage", new { tab = activeTab, categorisationItemId, categorisationGroupId });
         ViewBag.SearchAndFilter = sf;
 
         return View("Index", vm);
@@ -136,7 +212,7 @@ public partial class ModernManageController : Controller
                 new { id, tab = opsTab, edit });
         }
 
-        SetNav("manage-fips");
+        SetNav("manage-fips-products");
 
         var product = await _context.CMDBProducts
             .Include(p => p.Phase)
@@ -210,7 +286,85 @@ public partial class ModernManageController : Controller
 
         await FipsProductRaidQuery.PopulateRaidListsAsync(_context, vm, product, ct);
 
+        vm.DataCompletion = FipsProductListingHelper.GetDataCompletionSummary(product);
+
+        await PopulateFipsProductExtendedContextAsync(vm, product, ct);
+
         return View("Detail", vm);
+    }
+
+    private async Task PopulateFipsProductExtendedContextAsync(
+        FipsProductDetailViewModel vm,
+        CMDBProduct product,
+        CancellationToken ct)
+    {
+        string? cmsDocId = null;
+        var fipsKey = product.CMDBID?.Trim();
+        try
+        {
+            if (!string.IsNullOrEmpty(fipsKey))
+            {
+                var dto = await _productsApi.GetProductByFipsIdAsync(fipsKey);
+                cmsDocId = dto?.DocumentId;
+            }
+        }
+        catch
+        {
+            // CMS unavailable — fall back to identifiers we already have
+        }
+
+        vm.ResolvedCmsDocumentId = cmsDocId ?? product.Id.ToString();
+
+        var docCandidates = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            product.Id.ToString(),
+            vm.ResolvedCmsDocumentId
+        };
+
+        var subs = await _context.CommissionSubmissions.AsNoTracking()
+            .Include(s => s.Commission)
+            .Where(s =>
+                s.Commission != null &&
+                (docCandidates.Contains(s.ProductDocumentId) ||
+                 (!string.IsNullOrEmpty(fipsKey) && s.FipsId == fipsKey)))
+            .OrderByDescending(s => s.Commission!.EndDate)
+            .Take(40)
+            .ToListAsync(ct);
+
+        vm.PerformanceCommissionRows = subs.Select(s => new FipsProductPerformanceRow(
+            s.CommissionId,
+            s.Commission!.Name,
+            s.Commission.EndDate,
+            s.Commission.DueDate,
+            s.Status)).ToList();
+
+        vm.LinkedProductAccessibility = await _context.ProductAccessibilities.AsNoTracking()
+            .Include(a => a.Issues)
+            .Where(a => !a.IsDeleted && a.IsActive &&
+                        (docCandidates.Contains(a.ProductDocumentId ?? "") ||
+                         (!string.IsNullOrEmpty(fipsKey) && a.FipsId == fipsKey)))
+            .OrderByDescending(a => a.UpdatedAt)
+            .FirstOrDefaultAsync(ct);
+
+        vm.SasReportBaseUrl = (_configuration["FipsSync:Sas:ReportBaseUrl"]
+            ?? "https://service-assessments.education.gov.uk/reports/report").TrimEnd('/');
+
+        var productFipsId = !string.IsNullOrWhiteSpace(product.CMDBID)
+            ? product.CMDBID.Trim()
+            : vm.ResolvedCmsDocumentId ?? product.Id.ToString();
+
+        var sasResponse = await _serviceAssessmentApi.GetAssessmentsByProductIdAsync(productFipsId, ct);
+        var sasRows = sasResponse?.Assessments ?? new List<SasProductAssessmentRow>();
+        vm.ServiceAssessments = sasRows
+            .OrderByDescending(a => a.AssessmentDateTime)
+            .Select(a => new FipsProductServiceAssessmentRow(
+                a.AssessmentID,
+                a.Type,
+                a.Phase,
+                a.Outcome,
+                a.AssessmentDateTime,
+                $"{vm.SasReportBaseUrl}/{a.AssessmentID}"))
+            .ToList();
     }
 
     // ── Update product (managers only) ──────────────────────────────────────
@@ -260,7 +414,7 @@ public partial class ModernManageController : Controller
             typeIds,
             categorisationItemIds,
             null,
-            isEnterpriseService,
+            isEnterpriseService: isEnterpriseService,
             ct);
 
         if (outcome.NotFound)

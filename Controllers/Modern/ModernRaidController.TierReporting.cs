@@ -65,6 +65,9 @@ public partial class ModernRaidController
         i.TargetResolutionDate.HasValue &&
         i.TargetResolutionDate.Value.Date < todayUtc.Date;
 
+    private static string FormatRaidDrillOpenedDate(DateTime dt) =>
+        dt.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
     /// <summary>Aligned to the risk register (no tab, no tier filter).</summary>
     private IQueryable<Risk> RaidTierReportingRiskQuery(
         string? search,
@@ -318,6 +321,7 @@ public partial class ModernRaidController
                 .Include(r => r.Project).ThenInclude(p => p!.BusinessAreaLookup)
                 .Include(r => r.PrimaryProduct)
                 .Include(r => r.OwnerUser)
+                .Include(r => r.RiskTier)
                 .Include(r => r.RiskStatus)
                 .Include(r => r.Likelihood)
                 .Include(r => r.ImpactLevel)
@@ -341,26 +345,19 @@ public partial class ModernRaidController
             title = $"{tier.Name} — risks — {slice.Replace("risk-", "", StringComparison.Ordinal)}";
             items = filtered
                 .Take(500)
-                .Select(r =>
-                {
-                    var rel = RaidRegisterTableFormatting.BuildRiskRelation(r);
-                    return new RaidTierReportingDrillItemVm
+                .Select(r => new RaidTierReportingDrillItemVm
                     {
                         Kind = "risk",
                         Id = r.Id,
                         Title = r.Title,
                         Url = RiskUrl(r.Id),
                         Reference = $"R-{r.Id:D4}",
+                        TierName = r.RiskTier?.Name ?? tier.Name,
                         BusinessAreaLabel = RaidRegisterTableFormatting.FormatRiskBusinessAreaLabels(r),
-                        RelationKind = rel.Kind,
-                        RelationProjectId = rel.ProjectId,
-                        RelationTarget = rel.Target,
-                        Status = r.RiskStatus?.Label ?? r.Status,
-                        Owner = r.OwnerUser != null ? (r.OwnerUser.Name ?? r.OwnerUser.Email) : r.OwnerEmail,
                         LikelihoodLabel = r.Likelihood?.Label ?? r.LikelihoodRating.ToString(),
                         ImpactLabel = r.ImpactLevel?.Label ?? r.ImpactRating.ToString(),
-                        RiskScore = r.RiskScore
-                    };
+                        RiskScore = r.RiskScore,
+                        OpenedDate = FormatRaidDrillOpenedDate(r.IdentifiedDate ?? r.CreatedAt)
                 })
                 .ToList();
         }
@@ -406,24 +403,17 @@ public partial class ModernRaidController
             title = $"{tier.Name} — issues — {slice.Replace("issue-", "", StringComparison.Ordinal)}";
             items = filtered
                 .Take(500)
-                .Select(i =>
-                {
-                    var rel = RaidRegisterTableFormatting.BuildIssueRelation(i);
-                    return new RaidTierReportingDrillItemVm
+                .Select(i => new RaidTierReportingDrillItemVm
                     {
                         Kind = "issue",
                         Id = i.Id,
                         Title = i.Title,
                         Url = IssueUrl(i.Id),
                         Reference = $"I-{i.Id:D4}",
+                        TierName = tier.Name,
                         BusinessAreaLabel = RaidRegisterTableFormatting.FormatIssueBusinessAreaLabels(i),
-                        RelationKind = rel.Kind,
-                        RelationProjectId = rel.ProjectId,
-                        RelationTarget = rel.Target,
-                        Status = i.StatusLookup?.Label ?? i.Status,
-                        Owner = i.OwnerUser != null ? (i.OwnerUser.Name ?? i.OwnerUser.Email) : null,
-                        IssueSeverityLabel = i.SeverityLookup?.Label ?? i.Severity
-                    };
+                        IssueSeverityLabel = i.SeverityLookup?.Label ?? i.Severity,
+                        OpenedDate = FormatRaidDrillOpenedDate(i.DetectedDate)
                 })
                 .ToList();
         }

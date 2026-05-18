@@ -1,0 +1,342 @@
+@model Compass.ViewModels.Modern.ModernRaidNearMissForm
+@using System.Text.Json
+@using Compass.Models
+@using Compass.Models.Modern.Work
+@using Compass.ViewModels.Modern
+@{
+  var types = ViewBag.NearMissTypeOptions as IList<NearMissType> ?? new List<NearMissType>();
+  var seriousness = ViewBag.NearMissSeriousnessOptions as IList<NearMissSeriousness> ?? new List<NearMissSeriousness>();
+  var statuses = ViewBag.NearMissStatusOptions as IList<NearMissStatus> ?? new List<NearMissStatus>();
+  var dirs = ViewBag.DirectorateOptions as List<RiskIssueNamedIntOption> ?? new List<RiskIssueNamedIntOption>();
+  var bas = ViewBag.BusinessAreaOptions as List<RiskIssueNamedIntOption> ?? new List<RiskIssueNamedIntOption>();
+  var tiers = ViewBag.RiskTierOptions as IList<RiskTier> ?? new List<RiskTier>();
+  var rags = ViewBag.RagStatusOptions as IList<RagStatusLookup> ?? new List<RagStatusLookup>();
+  var ownerUsers = ViewBag.NearMissOwnerUsers as IList<User> ?? new List<User>();
+
+  string UserLabel(User u) =>
+      !string.IsNullOrWhiteSpace(u.Name) ? u.Name!.Trim()
+      : string.IsNullOrWhiteSpace($"{u.FirstName} {u.LastName}".Trim()) ? u.Email ?? "User"
+      : $"{u.FirstName} {u.LastName}".Trim();
+
+  var ownersJson = JsonSerializer.Serialize(
+      ownerUsers.Select(u => new { id = u.Id, name = UserLabel(u) }));
+  var actionsJson = JsonSerializer.Serialize(Model.Actions.Select(a => new
+  {
+    day = a.ActionDay,
+    month = a.ActionMonth,
+    year = a.ActionYear,
+    text = a.ActionText ?? "",
+    recordedByUserId = a.RecordedByUserId,
+    recordedByName = a.RecordedByDisplayName ?? ""
+  }));
+  var mitigationsJson = JsonSerializer.Serialize(Model.Mitigations.Select(m => new
+  {
+    day = m.MitigationDay,
+    month = m.MitigationMonth,
+    year = m.MitigationYear,
+    text = m.AssuranceTakenPlace ?? "",
+    recordedByUserId = m.RecordedByUserId,
+    recordedByName = m.RecordedByDisplayName ?? ""
+  }));
+
+  var currentUserId = ViewBag.CurrentUserId as int?;
+  var currentUserName = ViewBag.CurrentUserDisplayName as string ?? "";
+  var ms = ViewData.ModelState;
+  string? Err(string key) => ms.TryGetValue(key, out var st) && st!.Errors.Count > 0 ? st.Errors[0].ErrorMessage : null;
+}
+
+<div id="near-miss-form-root"
+     data-owners="@ownersJson"
+     data-actions="@actionsJson"
+     data-mitigations="@mitigationsJson"
+     data-current-user-id="@(currentUserId?.ToString() ?? "")"
+     data-current-user-name="@currentUserName">
+
+  <div class="govuk-form-group@(Err(nameof(Model.Reference)) != null ? " govuk-form-group--error" : "")">
+    <label class="govuk-label" for="nm-reference">Near miss / unexpected issue ID</label>
+    <div class="govuk-hint">Enter the incident or case reference from your reporting system (for example INC12345678).</div>
+    @if (Err(nameof(Model.Reference)) != null) { <p class="govuk-error-message"><span class="govuk-visually-hidden">Error: </span>@Err(nameof(Model.Reference))</p> }
+    <input class="govuk-input govuk-input--width-20" id="nm-reference" name="@nameof(Model.Reference)" value="@Model.Reference" autocomplete="off" />
+  </div>
+
+  @await Html.PartialAsync("~/Views/Modern/Raid/_RaidGovUkDateInput.cshtml", new RaidGovUkDateFieldVm
+  {
+    NamePrefix = "Logged",
+    Legend = "Date incident logged",
+    Day = Model.LoggedDay,
+    Month = Model.LoggedMonth,
+    Year = Model.LoggedYear,
+    FieldIdPrefix = "nm-logged",
+    FormGroupId = "DateIncidentLogged",
+    HasError = Err("DateIncidentLogged") != null,
+    ErrorMessage = Err("DateIncidentLogged"),
+  })
+
+  <div class="govuk-form-group govuk-!-margin-bottom-6@(Err(nameof(Model.NearMissTypeId)) != null ? " govuk-form-group--error" : "")">
+    <fieldset class="govuk-fieldset">
+      <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Type</legend>
+      @if (Err(nameof(Model.NearMissTypeId)) != null) { <p class="govuk-error-message"><span class="govuk-visually-hidden">Error: </span>@Err(nameof(Model.NearMissTypeId))</p> }
+      <div class="govuk-radios govuk-radios--small" data-module="govuk-radios">
+        @foreach (var o in types)
+        {
+          <div class="govuk-radios__item">
+            <input class="govuk-radios__input" id="nm-type-@o.Id" name="@nameof(Model.NearMissTypeId)" type="radio" value="@o.Id" @(Model.NearMissTypeId == o.Id ? "checked" : null) />
+            <label class="govuk-label govuk-radios__label" for="nm-type-@o.Id">@o.Label</label>
+          </div>
+        }
+      </div>
+    </fieldset>
+  </div>
+
+  <div class="govuk-form-group@(Err(nameof(Model.DirectorateLookupId)) != null ? " govuk-form-group--error" : "")">
+    <label class="govuk-label" for="nm-directorate">Directorate</label>
+    @if (Err(nameof(Model.DirectorateLookupId)) != null) { <p class="govuk-error-message"><span class="govuk-visually-hidden">Error: </span>@Err(nameof(Model.DirectorateLookupId))</p> }
+    <select class="govuk-select" id="nm-directorate" name="@nameof(Model.DirectorateLookupId)">
+      <option value="">Select directorate</option>
+      @foreach (var o in dirs)
+      {
+        <option value="@o.Id" selected="@(Model.DirectorateLookupId == o.Id)">@o.Name</option>
+      }
+    </select>
+  </div>
+
+  <div class="govuk-form-group@(Err(nameof(Model.BusinessAreaLookupId)) != null ? " govuk-form-group--error" : "")">
+    <label class="govuk-label" for="nm-ba">Business area</label>
+    @if (Err(nameof(Model.BusinessAreaLookupId)) != null) { <p class="govuk-error-message"><span class="govuk-visually-hidden">Error: </span>@Err(nameof(Model.BusinessAreaLookupId))</p> }
+    <select class="govuk-select" id="nm-ba" name="@nameof(Model.BusinessAreaLookupId)">
+      <option value="">Select business area</option>
+      @foreach (var o in bas)
+      {
+        <option value="@o.Id" selected="@(Model.BusinessAreaLookupId == o.Id)">@o.Name</option>
+      }
+    </select>
+  </div>
+
+  <div class="govuk-summary-card govuk-!-margin-bottom-6@(Err(nameof(Model.OwnerUserIds)) != null ? " govuk-form-group--error" : "")" id="@nameof(Model.OwnerUserIds)">
+    <div class="govuk-summary-card__title-wrapper">
+      <h2 class="govuk-summary-card__title">Owners</h2>
+    </div>
+    <div class="govuk-summary-card__content">
+      @if (Err(nameof(Model.OwnerUserIds)) != null) { <p class="govuk-error-message"><span class="govuk-visually-hidden">Error: </span>@Err(nameof(Model.OwnerUserIds))</p> }
+      <div class="dfe-f-table-wrapper govuk-!-margin-bottom-2" data-module="dfe-f-table">
+        <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed">
+          <caption class="govuk-table__caption govuk-visually-hidden">Owners added to this near miss</caption>
+          <thead class="govuk-table__head">
+            <tr class="govuk-table__row">
+              <th scope="col" class="govuk-table__header">Name</th>
+              <th scope="col" class="govuk-table__header govuk-table__header--numeric">Actions</th>
+            </tr>
+          </thead>
+          <tbody class="govuk-table__body" id="nm-owners-tbody"></tbody>
+        </table>
+      </div>
+      <p class="govuk-body govuk-!-margin-bottom-2 nm-collection-empty" id="nm-owners-empty">No owners added</p>
+      <div class="dfe-f-toggle govuk-!-margin-bottom-0" data-module="dfe-f-toggle">
+        <div class="dfe-f-toggle__title-wrapper">
+          <h3 class="dfe-f-toggle__heading govuk-!-margin-bottom-0">
+            <button type="button" class="dfe-f-toggle__button" aria-expanded="false" aria-controls="nm-owner-add-content" id="nm-owner-add-toggle">
+              <span class="dfe-f-toggle__icon" aria-hidden="true"></span>
+              <span class="dfe-f-toggle__title">Add an owner</span>
+            </button>
+          </h3>
+        </div>
+        <div id="nm-owner-add-content" class="dfe-f-toggle__content" hidden>
+          <div class="dfe-f-toggle__body">
+            <div id="nm-owner-add-picker" class="user-picker-host">
+              @await Html.PartialAsync("~/Views/Modern/Shared/_UserPicker.cshtml", new UserPickerViewModel
+              {
+                FieldName = "OwnerUserPickerScratch",
+                Label = "Search for a user",
+                UseGovUkStyling = true,
+                InputIdSuffix = "owner-add"
+              })
+            </div>
+            <button type="button" class="govuk-button govuk-!-margin-top-3" id="nm-owner-add-btn">Add to table</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="govuk-form-group">
+    <label class="govuk-label" for="nm-impact">Impact</label>
+    <textarea class="govuk-textarea" id="nm-impact" name="@nameof(Model.Impact)" rows="6" maxlength="4000">@Model.Impact</textarea>
+  </div>
+
+  <div class="govuk-summary-card govuk-!-margin-bottom-6">
+    <div class="govuk-summary-card__title-wrapper">
+      <h2 class="govuk-summary-card__title">Actions</h2>
+    </div>
+    <div class="govuk-summary-card__content">
+      <div class="dfe-f-table-wrapper govuk-!-margin-bottom-2" data-module="dfe-f-table">
+        <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed">
+          <caption class="govuk-table__caption govuk-visually-hidden">Actions recorded for this near miss</caption>
+          <thead class="govuk-table__head">
+            <tr class="govuk-table__row">
+              <th scope="col" class="govuk-table__header">Date</th>
+              <th scope="col" class="govuk-table__header">Action</th>
+              <th scope="col" class="govuk-table__header">Recorded by</th>
+              <th scope="col" class="govuk-table__header govuk-table__header--numeric">Actions</th>
+            </tr>
+          </thead>
+          <tbody class="govuk-table__body" id="nm-actions-tbody"></tbody>
+        </table>
+      </div>
+      <p class="govuk-body govuk-!-margin-bottom-2 nm-collection-empty" id="nm-actions-empty">No actions added</p>
+      <div class="dfe-f-toggle govuk-!-margin-bottom-0" data-module="dfe-f-toggle">
+        <div class="dfe-f-toggle__title-wrapper">
+          <h3 class="dfe-f-toggle__heading govuk-!-margin-bottom-0">
+            <button type="button" class="dfe-f-toggle__button" aria-expanded="false" aria-controls="nm-action-add-content" id="nm-action-add-toggle">
+              <span class="dfe-f-toggle__icon" aria-hidden="true"></span>
+              <span class="dfe-f-toggle__title">Add an action</span>
+            </button>
+          </h3>
+        </div>
+        <div id="nm-action-add-content" class="dfe-f-toggle__content" hidden>
+          <div class="dfe-f-toggle__body">
+            @await Html.PartialAsync("~/Views/Modern/Raid/_RaidGovUkDateInput.cshtml", new RaidGovUkDateFieldVm
+            {
+              NamePrefix = "ActionAdd",
+              Legend = "Date",
+              FieldIdPrefix = "nm-action-add",
+              FormGroupId = "nm-action-add-date",
+              OmitNames = true,
+            })
+            <div class="govuk-form-group">
+              <label class="govuk-label" for="nm-action-add-text">Action</label>
+              <textarea class="govuk-textarea" id="nm-action-add-text" rows="3" maxlength="4000"></textarea>
+            </div>
+            <div id="nm-action-add-picker">
+              @await Html.PartialAsync("~/Views/Modern/Shared/_UserPicker.cshtml", new UserPickerViewModel
+              {
+                FieldName = "ActionRecordedByScratch",
+                Label = "Recorded by (optional — defaults to you)",
+                UseGovUkStyling = true,
+                DefaultUserId = currentUserId,
+                DefaultName = currentUserName,
+                InputIdSuffix = "action-add"
+              })
+            </div>
+            <button type="button" class="govuk-button govuk-!-margin-top-3" id="nm-action-add-btn">Add to table</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="govuk-summary-card govuk-!-margin-bottom-6">
+    <div class="govuk-summary-card__title-wrapper">
+      <h2 class="govuk-summary-card__title">Mitigations</h2>
+    </div>
+    <div class="govuk-summary-card__content">
+      <div class="dfe-f-table-wrapper govuk-!-margin-bottom-2" data-module="dfe-f-table">
+        <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed">
+          <caption class="govuk-table__caption govuk-visually-hidden">Mitigations recorded for this near miss</caption>
+          <thead class="govuk-table__head">
+            <tr class="govuk-table__row">
+              <th scope="col" class="govuk-table__header">Date</th>
+              <th scope="col" class="govuk-table__header">Assurance taken place</th>
+              <th scope="col" class="govuk-table__header">Recorded by</th>
+              <th scope="col" class="govuk-table__header govuk-table__header--numeric">Actions</th>
+            </tr>
+          </thead>
+          <tbody class="govuk-table__body" id="nm-mitigations-tbody"></tbody>
+        </table>
+      </div>
+      <p class="govuk-body govuk-!-margin-bottom-2 nm-collection-empty" id="nm-mitigations-empty">No mitigations added</p>
+      <div class="dfe-f-toggle govuk-!-margin-bottom-0" data-module="dfe-f-toggle">
+        <div class="dfe-f-toggle__title-wrapper">
+          <h3 class="dfe-f-toggle__heading govuk-!-margin-bottom-0">
+            <button type="button" class="dfe-f-toggle__button" aria-expanded="false" aria-controls="nm-mitigation-add-content" id="nm-mitigation-add-toggle">
+              <span class="dfe-f-toggle__icon" aria-hidden="true"></span>
+              <span class="dfe-f-toggle__title">Add a mitigation</span>
+            </button>
+          </h3>
+        </div>
+        <div id="nm-mitigation-add-content" class="dfe-f-toggle__content" hidden>
+          <div class="dfe-f-toggle__body">
+            @await Html.PartialAsync("~/Views/Modern/Raid/_RaidGovUkDateInput.cshtml", new RaidGovUkDateFieldVm
+            {
+              NamePrefix = "MitigationAdd",
+              Legend = "Date",
+              FieldIdPrefix = "nm-mitigation-add",
+              FormGroupId = "nm-mitigation-add-date",
+              OmitNames = true,
+            })
+            <div class="govuk-form-group">
+              <label class="govuk-label" for="nm-mitigation-add-text">Assurance taken place</label>
+              <textarea class="govuk-textarea" id="nm-mitigation-add-text" rows="3" maxlength="4000"></textarea>
+            </div>
+            <div id="nm-mitigation-add-picker">
+              @await Html.PartialAsync("~/Views/Modern/Shared/_UserPicker.cshtml", new UserPickerViewModel
+              {
+                FieldName = "MitigationRecordedByScratch",
+                Label = "Recorded by (optional — defaults to you)",
+                UseGovUkStyling = true,
+                DefaultUserId = currentUserId,
+                DefaultName = currentUserName,
+                InputIdSuffix = "mitigation-add"
+              })
+            </div>
+            <button type="button" class="govuk-button govuk-!-margin-top-3" id="nm-mitigation-add-btn">Add to table</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="govuk-form-group govuk-!-margin-bottom-6@(Err(nameof(Model.NearMissSeriousnessId)) != null ? " govuk-form-group--error" : "")">
+    <fieldset class="govuk-fieldset">
+      <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Seriousness</legend>
+      @if (Err(nameof(Model.NearMissSeriousnessId)) != null) { <p class="govuk-error-message"><span class="govuk-visually-hidden">Error: </span>@Err(nameof(Model.NearMissSeriousnessId))</p> }
+      <div class="govuk-radios govuk-radios--inline">
+        @foreach (var o in seriousness)
+        {
+          <div class="govuk-radios__item">
+            <input class="govuk-radios__input" id="nm-sev-@o.Id" name="@nameof(Model.NearMissSeriousnessId)" type="radio" value="@o.Id" @(Model.NearMissSeriousnessId == o.Id ? "checked" : null) />
+            <label class="govuk-label govuk-radios__label" for="nm-sev-@o.Id">@o.Label</label>
+          </div>
+        }
+      </div>
+    </fieldset>
+  </div>
+
+  <div class="govuk-form-group">
+    <label class="govuk-label" for="nm-rag">Post mitigations RAG</label>
+    <select class="govuk-select" id="nm-rag" name="@nameof(Model.PostMitigationRagStatusLookupId)">
+      <option value="">Not set</option>
+      @foreach (var r in rags)
+      {
+        <option value="@r.Id" selected="@(Model.PostMitigationRagStatusLookupId == r.Id)">@r.Name</option>
+      }
+    </select>
+  </div>
+
+  <div class="govuk-form-group@(Err(nameof(Model.RiskTierId)) != null ? " govuk-form-group--error" : "")">
+    <label class="govuk-label" for="nm-tier">Tier</label>
+    @if (Err(nameof(Model.RiskTierId)) != null) { <p class="govuk-error-message"><span class="govuk-visually-hidden">Error: </span>@Err(nameof(Model.RiskTierId))</p> }
+    <select class="govuk-select" id="nm-tier" name="@nameof(Model.RiskTierId)">
+      <option value="">Select tier</option>
+      @foreach (var t in tiers)
+      {
+        <option value="@t.Id" selected="@(Model.RiskTierId == t.Id)">@t.Name</option>
+      }
+    </select>
+  </div>
+
+  <div class="govuk-form-group govuk-!-margin-bottom-6@(Err(nameof(Model.NearMissStatusId)) != null ? " govuk-form-group--error" : "")">
+    <fieldset class="govuk-fieldset">
+      <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Status</legend>
+      @if (Err(nameof(Model.NearMissStatusId)) != null) { <p class="govuk-error-message"><span class="govuk-visually-hidden">Error: </span>@Err(nameof(Model.NearMissStatusId))</p> }
+      <div class="govuk-radios govuk-radios--small" data-module="govuk-radios">
+        @foreach (var o in statuses)
+        {
+          <div class="govuk-radios__item">
+            <input class="govuk-radios__input" id="nm-st-@o.Id" name="@nameof(Model.NearMissStatusId)" type="radio" value="@o.Id" @(Model.NearMissStatusId == o.Id ? "checked" : null) />
+            <label class="govuk-label govuk-radios__label" for="nm-st-@o.Id">@o.Label</label>
+          </div>
+        }
+      </div>
+    </fieldset>
+  </div>
+</div>

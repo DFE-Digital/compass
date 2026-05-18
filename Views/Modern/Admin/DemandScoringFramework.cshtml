@@ -1,4 +1,6 @@
 @using Compass.Models.DemandPipeline
+@using Compass.ViewModels.Modern
+@using Microsoft.AspNetCore.Html
 @{
   ViewData["Title"] = "Demand scoring framework";
   var bands = ViewBag.DemandScoringBands as List<DemandScoringBandDefinition> ?? new();
@@ -17,11 +19,13 @@
 
 <div class="admin-dsf">
  <p class="govuk-body govuk-!-margin-bottom-2"><a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("Index", "ModernAdmin", new { panel = "scoring-fw" })">← Back to admin hub</a></p>
- <div class="dfe-c-page-title admin-dsf__title">
- <div class="dfe-c-page-title__caption">Pipeline configuration</div>
- <h1 class="dfe-c-page-title__heading">Demand prioritisation scoring framework</h1>
- <p class="dfe-c-page-title__lede">Define bands (0–100), sections, questions, and answer options for the scorecard used when a demand is in the <strong>Scoring</strong> stage. Legacy columns map section totals to Strategic, Urgency, Funding, and RICE for reporting.</p>
-  </div>
+ <div class="admin-dsf__title">
+ @await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+   Caption = "Pipeline configuration",
+   Title = "Demand prioritisation scoring framework",
+   Lede = new HtmlString("<p class=\"govuk-body govuk-!-margin-bottom-0\">Define bands (0–100), sections, questions, and answer options for the scorecard used when a demand is in the <strong>Scoring</strong> stage. Legacy columns map section totals to Strategic, Urgency, Funding, and RICE for reporting.</p>")
+ })
+ </div>
 
   @if (ViewBag.AdminMessage != null)
   {
@@ -38,10 +42,16 @@
  <div class="admin-dsf__stat"><span class="admin-dsf__stat-value">@bands.Count</span><span class="admin-dsf__stat-label">Bands</span></div>
   </div>
 
- <div class="tabs admin-dsf__tabs" role="tablist" aria-label="Framework configuration">
- <a href="@TabUrl("bands")" class="tab @(scoringTab =="bands" ? "on" : "")" role="tab" aria-selected="@(scoringTab == "bands")" aria-controls="d-dsf-bands" id="tab-dsf-bands">Bands (0–100)</a>
- <a href="@TabUrl("sections")" class="tab @(scoringTab =="sections" ? "on" : "")" role="tab" aria-selected="@(scoringTab == "sections")" aria-controls="d-dsf-sections" id="tab-dsf-sections">Sections &amp; questions</a>
-  </div>
+ <nav class="dfe-f-sub-navigation admin-dsf__tabs" aria-label="Framework configuration">
+ <ul class="dfe-f-sub-navigation__list">
+ <li class="dfe-f-sub-navigation__item@(scoringTab == "bands" ? " dfe-f-sub-navigation__item--active" : "")">
+ <a class="dfe-f-sub-navigation__link govuk-link" href="@TabUrl("bands")" id="tab-dsf-bands"@if (scoringTab == "bands") { <text> aria-current="page"</text> }>Bands (0–100)</a>
+ </li>
+ <li class="dfe-f-sub-navigation__item@(scoringTab == "sections" ? " dfe-f-sub-navigation__item--active" : "")">
+ <a class="dfe-f-sub-navigation__link govuk-link" href="@TabUrl("sections")" id="tab-dsf-sections"@if (scoringTab == "sections") { <text> aria-current="page"</text> }>Sections &amp; questions</a>
+ </li>
+ </ul>
+  </nav>
 
  <div id="d-dsf-bands" class="tab-pane @(scoringTab =="bands" ? "on" : "")" role="tabpanel" aria-labelledby="tab-dsf-bands">
     @await Html.PartialAsync("~/Views/Modern/Admin/_DemandScoringFrameworkBands.cshtml", bands)

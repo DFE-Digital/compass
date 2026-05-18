@@ -15,7 +15,6 @@
         hasNonGreenRag = selectedRag != null && !string.Equals(selectedRag.Name, "Green", StringComparison.OrdinalIgnoreCase);
     }
     var work = ViewBag.WorkItem as WorkItem;
-    var wiRef = ViewBag.WorkIdShort as string ?? Model.WorkItemId.ToString("X8").ToUpperInvariant();
     var ms = ViewData.ModelState;
     string? Err(string key) =>
         ms.TryGetValue(key, out var st) && st!.Errors.Count > 0 ? st.Errors[0].ErrorMessage : null;
@@ -28,36 +27,44 @@
  <li class="govuk-breadcrumbs__list-item" aria-current="page">Monthly report</li>
 }
 
-<div id="sc-work-monthly-report">
-  @await Html.PartialAsync("_WorkItemChrome", work)
-
- <div class="dfe-c-page-title">
- <div class="dfe-c-page-title__caption">Work</div>
- <h1 class="dfe-c-page-title__heading">Monthly update submission</h1>
- <p class="dfe-c-page-title__lede">@(string.IsNullOrWhiteSpace(Model.WorkItemReference) ? $"WI-{wiRef}" : Model.WorkItemReference) · @(Model.WorkItemTitle ?? work?.Title ?? "—")</p>
-  </div>
-
-@if (TempData["Message"] != null)
+<div id="sc-work-monthly-report" class="modern-work-page">
+@if (work != null)
 {
- <div class="govuk-notification-banner govuk-notification-banner--success" role="alert" aria-labelledby="govuk-notification-banner-title" data-module="govuk-notification-banner">
+  @await Html.PartialAsync("_WorkItemChrome", work)
+}
+
+<div class="govuk-grid-row modern-work-detail-layout govuk-!-margin-top-4">
+  <div class="govuk-grid-column-one-quarter-from-desktop modern-work-detail-layout__nav">
+    <div class="dfe-f-u-sticky govuk-!-margin-bottom-4 modern-work-detail-layout__nav-inner" style="--dfe-f-sticky-top: 1rem;">
+      @if (work != null)
+      {
+        @await Html.PartialAsync("_WorkItemSideNav", work)
+      }
+    </div>
+  </div>
+  <div class="govuk-grid-column-three-quarters-from-desktop modern-work-detail-main">
+
+<h2 class="govuk-heading-l govuk-!-margin-top-0">Monthly update submission</h2>
+
+@if (TempData["MonthlyReportMessage"] is string monthlySuccess && !string.IsNullOrWhiteSpace(monthlySuccess))
+{
+ <div class="govuk-notification-banner govuk-notification-banner--success" role="alert" aria-labelledby="monthly-report-success-banner-title" data-module="govuk-notification-banner">
  <div class="govuk-notification-banner__header">
- <h2 class="govuk-notification-banner__title" id="govuk-notification-banner-title">Success</h2>
+ <h2 class="govuk-notification-banner__title" id="monthly-report-success-banner-title">Success</h2>
         </div>
- <div class="govuk-notification-banner__content"><p class="govuk-notification-banner__heading">@TempData["Message"]</p></div>
+ <div class="govuk-notification-banner__content"><p class="govuk-notification-banner__heading">@monthlySuccess</p></div>
     </div>
 }
-@if (TempData["Error"] != null)
+@if (TempData["MonthlyReportError"] is string monthlyError && !string.IsNullOrWhiteSpace(monthlyError))
 {
  <div class="govuk-error-summary" data-module="govuk-error-summary">
         <div role="alert">
  <h2 class="govuk-error-summary__title">There is a problem</h2>
- <div class="govuk-error-summary__body"><p>@TempData["Error"]</p></div>
+ <div class="govuk-error-summary__body"><p>@monthlyError</p></div>
         </div>
     </div>
 }
 
- <div class="dfe-c-form-layout">
- <div class="dfe-c-form-layout__main">
  <div class="dfe-c-card dfe-c-card--plain">
 @if (lockedOutsideSubmissionWindow)
 {
@@ -107,6 +114,29 @@
  </ul>
  </div>
  </div>
+ }
+
+ <dl class="govuk-summary-list govuk-summary-list--no-border govuk-!-margin-bottom-6">
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">Reporting period</dt>
+ <dd class="govuk-summary-list__value">@Model.PeriodLabel</dd>
+ </div>
+ @if (Model.UsesExplicitReportingPeriod && Model.SubmissionOpens.HasValue)
+ {
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">Opens</dt>
+ <dd class="govuk-summary-list__value"><span class="dfe-f-u-tabular-numbers">@Model.SubmissionOpens.Value.ToString("ddd d MMM yyyy")</span></dd>
+ </div>
+ }
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">Return due by</dt>
+ <dd class="govuk-summary-list__value"><span class="dfe-f-u-tabular-numbers">@Model.DueDate.ToString("ddd d MMM yyyy")</span></dd>
+ </div>
+ </dl>
+
+ @if (Model.PreviousMonthSubmission != null)
+ {
+   @await Html.PartialAsync("_MonthlyReportLastMonth", Model.PreviousMonthSubmission)
  }
 
  <div class="govuk-form-group @(Err("narrative") != null ? "govuk-form-group--error" : "")">
@@ -209,71 +239,9 @@
             }
         </form>
       </div>
-    </div>
 
- <div class="dfe-c-form-layout__aside">
- <div class="dfe-c-sidebar">
- <div class="dfe-c-scard">
- <div class="dfe-c-scard__title">Submission deadline</div>
- <p class="govuk-body govuk-!-margin-bottom-1"><strong>@Model.DueDate.ToString("d MMM yyyy")</strong></p>
-          @{
-              var daysLeft = (Model.DueDate.Date - DateTime.UtcNow.Date).Days;
-          }
-          @if (!isSubmitted && daysLeft >= 0)
-          {
- <p class="govuk-body govuk-!-font-size-14 govuk-!-margin-bottom-0" style="color:#505a5f;">@daysLeft day@(daysLeft == 1 ? "" : "s") remaining</p>
-          }
-          else if (!isSubmitted && daysLeft < 0)
-          {
- <p class="govuk-body govuk-!-margin-bottom-0" style="color:#d4351c;"><strong>Overdue by @Math.Abs(daysLeft) day@(Math.Abs(daysLeft) == 1 ? "" : "s")</strong></p>
-          }
-        </div>
-
-        @if (Model.PreviousMonth != null)
-        {
-            var prev = Model.PreviousMonth;
- <div class="dfe-c-scard">
- <div class="dfe-c-scard__title">Previous month — @prev.PeriodLabel</div>
-              @if (prev.SubmittedAt.HasValue)
-              {
- <dl class="govuk-summary-list govuk-summary-list--no-border govuk-!-font-size-14" style="margin-bottom:0;">
- <div class="govuk-summary-list__row">
- <dt class="govuk-summary-list__key" style="width:40%;">RAG</dt>
- <dd class="govuk-summary-list__value">@(prev.RagStatusName ?? "—")</dd>
-                      </div>
- <div class="govuk-summary-list__row">
- <dt class="govuk-summary-list__key">Perm FTE</dt>
- <dd class="govuk-summary-list__value">@(prev.PermFte?.ToString("0.##") ?? "—")</dd>
-                      </div>
- <div class="govuk-summary-list__row">
- <dt class="govuk-summary-list__key">MSC</dt>
- <dd class="govuk-summary-list__value">@(prev.MspFte?.ToString("0.##") ?? "—")</dd>
-                      </div>
-                  </dl>
-                  @if (!string.IsNullOrWhiteSpace(prev.Narrative))
-                  {
- <details class="govuk-details govuk-!-margin-top-2 govuk-!-margin-bottom-0" data-module="govuk-details">
- <summary class="govuk-details__summary"><span class="govuk-details__summary-text">Previous narrative</span></summary>
- <div class="govuk-details__text" style="font-size:0.875rem;">@prev.Narrative</div>
-                      </details>
-                  }
-                  @if (!string.IsNullOrWhiteSpace(prev.RagJustification))
-                  {
- <details class="govuk-details govuk-!-margin-top-2 govuk-!-margin-bottom-0" data-module="govuk-details">
- <summary class="govuk-details__summary"><span class="govuk-details__summary-text">Previous RAG justification</span></summary>
- <div class="govuk-details__text" style="font-size:0.875rem;">@prev.RagJustification</div>
-                      </details>
-                  }
-              }
-              else
-              {
- <p class="govuk-body govuk-!-font-size-14 govuk-!-margin-bottom-0" style="color:#505a5f;">No update submitted for @prev.PeriodLabel.</p>
-              }
-            </div>
-        }
-      </div>
-    </div>
   </div>
+</div>
 </div>
 
 @section Scripts {

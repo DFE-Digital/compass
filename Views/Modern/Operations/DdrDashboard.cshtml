@@ -1,0 +1,251 @@
+@model Compass.ViewModels.Modern.ModernOperationsDdrDashboardViewModel
+@using Compass.ViewModels.Modern
+@{
+  ViewData["Title"] = "DDR — Operations";
+  var ddrLede = await Html.PartialAsync("~/Views/Modern/Operations/_OperationsDdrDashboardHeaderLede.cshtml");
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernOperations")">Operations</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">Design decision records</li>
+}
+
+<div class="modern-work-page modern-operations-ddr">
+  @await Html.PartialAsync("~/Views/Modern/Shared/_ModernPageHeader.cshtml", new ModernPageHeaderViewModel {
+    Caption = "Operations",
+    Title = "Design decision records",
+    HeadingClass = "govuk-heading-l",
+    Lede = ddrLede
+  })
+
+  <p class="govuk-body govuk-!-margin-bottom-6 modern-operations-ddr__intro">
+    Record insight classifications and outcomes on each submission. Full discovery and authoring tools stay under
+    <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("Register", "ModernDesignDecisionRecords")">Design decision records</a> in the main navigation.
+  </p>
+
+  <section class="modern-operations-ddr__section govuk-!-margin-bottom-8" aria-labelledby="ddr-queues-heading">
+    <header class="modern-operations-ddr__section-head govuk-!-margin-bottom-4">
+      <p class="govuk-caption-l govuk-!-margin-bottom-1">Queues</p>
+      <h2 id="ddr-queues-heading" class="govuk-heading-m govuk-!-margin-bottom-0">At a glance</h2>
+    </header>
+    <div class="dfe-f-card-grid govuk-!-margin-bottom-0" role="region" aria-label="DDR queue summary">
+      @await Html.PartialAsync("~/Views/Modern/Raid/_RaidDashboardStatCard.cshtml", new Compass.ViewModels.Modern.RaidDashboardStatCardVm
+      {
+        Label = "Awaiting DesignOps insight",
+        Value = Model.PendingDesignOpsInsightCount.ToString("N0"),
+        Trend = "Open oversight queue",
+        Href = Model.OversightPendingInsightUrl,
+        TintClass = "dfe-f-stat-card--tint-blue"
+      })
+      @await Html.PartialAsync("~/Views/Modern/Raid/_RaidDashboardStatCard.cshtml", new Compass.ViewModels.Modern.RaidDashboardStatCardVm
+      {
+        Label = "Submitted DDRs (total)",
+        Value = Model.SubmittedTotalCount.ToString("N0"),
+        Trend = "Open oversight",
+        Href = Model.OversightDashboardUrl,
+        TintClass = "dfe-f-stat-card--tint-teal"
+      })
+      @await Html.PartialAsync("~/Views/Modern/Raid/_RaidDashboardStatCard.cshtml", new Compass.ViewModels.Modern.RaidDashboardStatCardVm
+      {
+        Label = "All DDRs",
+        Value = Model.TotalDdrs.ToString("N0"),
+        Trend = "Browse register",
+        Href = Model.RegisterUrl,
+        TintClass = "dfe-f-stat-card--tint-grey"
+      })
+      @await Html.PartialAsync("~/Views/Modern/Raid/_RaidDashboardStatCard.cshtml", new Compass.ViewModels.Modern.RaidDashboardStatCardVm
+      {
+        Label = "Retrospective records",
+        Value = Model.RetrospectiveCount.ToString("N0"),
+        Trend = "View in register",
+        Href = Model.RegisterRetrospectiveUrl,
+        TintClass = "dfe-f-stat-card--tint-orange"
+      })
+    </div>
+
+  </section>
+
+  @if (Model.PendingInsightPreview.Count > 0)
+  {
+    <section class="modern-operations-ddr__section govuk-!-margin-bottom-8" aria-labelledby="ddr-next-heading">
+      <header class="govuk-!-margin-bottom-4">
+        <h2 id="ddr-next-heading" class="govuk-heading-m govuk-!-margin-bottom-2">Next to review</h2>
+        <p class="govuk-body-s dfe-c-text-muted govuk-!-margin-bottom-0">Submitted records without insight yet — open a reference to classify and record recommendations.</p>
+      </header>
+      <div class="dfe-f-table-wrapper govuk-!-margin-bottom-0" data-module="dfe-f-table">
+        <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+        <table class="govuk-table govuk-!-margin-bottom-0">
+          <caption class="govuk-table__caption govuk-visually-hidden">DDRs awaiting DesignOps insight</caption>
+          <thead class="govuk-table__head">
+            <tr class="govuk-table__row">
+              <th scope="col" class="govuk-table__header" aria-sort="none">
+                <button type="button" class="dfe-f-table-sort-button">Reference</button>
+              </th>
+              <th scope="col" class="govuk-table__header" aria-sort="none">
+                <button type="button" class="dfe-f-table-sort-button">Title</button>
+              </th>
+              <th scope="col" class="govuk-table__header" aria-sort="none">
+                <button type="button" class="dfe-f-table-sort-button">Submitted</button>
+              </th>
+              <th scope="col" class="govuk-table__header">Actions</th>
+            </tr>
+          </thead>
+          <tbody class="govuk-table__body">
+            @foreach (var row in Model.PendingInsightPreview)
+            {
+              <tr class="govuk-table__row">
+                <td class="govuk-table__cell govuk-!-font-tabular-numbers">
+                  <a class="govuk-link govuk-link--no-visited-state govuk-!-font-weight-bold" href="@row.DetailUrl">@row.Reference</a>
+                </td>
+                <td class="govuk-table__cell">@row.ShortTitle</td>
+                <td class="govuk-table__cell govuk-!-font-tabular-numbers">@(row.SubmittedAt.HasValue ? row.SubmittedAt.Value.ToString("d MMM yyyy") : "—")</td>
+                <td class="govuk-table__cell">
+                  <a class="govuk-link govuk-link--no-visited-state" href="@row.DetailUrl">Record outcomes</a>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+  }
+
+  <section class="modern-operations-ddr__section govuk-!-margin-bottom-8" aria-labelledby="ddr-explore-heading">
+    <header class="govuk-!-margin-bottom-4">
+      <p class="govuk-caption-l govuk-!-margin-bottom-1">Analysis</p>
+      <h2 id="ddr-explore-heading" class="govuk-heading-m govuk-!-margin-bottom-2">Explore by dimension</h2>
+      <p class="govuk-body-s dfe-c-text-muted govuk-!-margin-bottom-0">Each row opens the DDR register with filters applied.</p>
+    </header>
+
+    <div class="govuk-grid-row">
+      <div class="govuk-grid-column-one-half-from-desktop govuk-!-margin-bottom-4">
+        <div class="govuk-summary-card modern-operations-ddr__dimension-card">
+          <div class="govuk-summary-card__title-wrapper">
+            <h3 class="govuk-summary-card__title">By category</h3>
+          </div>
+          <div class="govuk-summary-card__content">
+            @if (Model.ByCategory.Count == 0)
+            {
+              <p class="govuk-body-s govuk-!-margin-bottom-0 dfe-c-text-muted">No data.</p>
+            }
+            else
+            {
+              <div class="dfe-f-table-wrapper govuk-!-margin-bottom-0" data-module="dfe-f-table">
+                <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+                <table class="govuk-table govuk-table--small-text-until-tablet govuk-!-margin-bottom-0">
+                  <thead class="govuk-table__head">
+                    <tr class="govuk-table__row">
+                      <th scope="col" class="govuk-table__header" aria-sort="none">
+                        <button type="button" class="dfe-f-table-sort-button">Category</button>
+                      </th>
+                      <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none">
+                        <button type="button" class="dfe-f-table-sort-button">Count</button>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody class="govuk-table__body">
+                    @foreach (var row in Model.ByCategory)
+                    {
+                      <tr class="govuk-table__row">
+                        <td class="govuk-table__cell"><a class="govuk-link govuk-link--no-visited-state" href="@row.RegisterUrl">@row.Label</a></td>
+                        <td class="govuk-table__cell govuk-table__cell--numeric govuk-!-font-tabular-numbers">@row.Count.ToString("N0")</td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            }
+          </div>
+        </div>
+      </div>
+      <div class="govuk-grid-column-one-half-from-desktop govuk-!-margin-bottom-4">
+        <div class="govuk-summary-card modern-operations-ddr__dimension-card">
+          <div class="govuk-summary-card__title-wrapper">
+            <h3 class="govuk-summary-card__title">Deviations by type</h3>
+          </div>
+          <div class="govuk-summary-card__content">
+            @if (Model.ByDeviationType.Count == 0)
+            {
+              <p class="govuk-body-s govuk-!-margin-bottom-0 dfe-c-text-muted">No deviations recorded.</p>
+            }
+            else
+            {
+              <div class="dfe-f-table-wrapper govuk-!-margin-bottom-0" data-module="dfe-f-table">
+                <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+                <table class="govuk-table govuk-table--small-text-until-tablet govuk-!-margin-bottom-0">
+                  <thead class="govuk-table__head">
+                    <tr class="govuk-table__row">
+                      <th scope="col" class="govuk-table__header" aria-sort="none">
+                        <button type="button" class="dfe-f-table-sort-button">Type</button>
+                      </th>
+                      <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none">
+                        <button type="button" class="dfe-f-table-sort-button">Count</button>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody class="govuk-table__body">
+                    @foreach (var row in Model.ByDeviationType)
+                    {
+                      <tr class="govuk-table__row">
+                        <td class="govuk-table__cell"><a class="govuk-link govuk-link--no-visited-state" href="@row.RegisterUrl">@row.Label</a></td>
+                        <td class="govuk-table__cell govuk-table__cell--numeric govuk-!-font-tabular-numbers">@row.Count.ToString("N0")</td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            }
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="govuk-summary-card modern-operations-ddr__dimension-card govuk-!-margin-bottom-6">
+      <div class="govuk-summary-card__title-wrapper">
+        <h3 class="govuk-summary-card__title">By product (FIPS)</h3>
+      </div>
+      <div class="govuk-summary-card__content">
+        @if (Model.ByProduct.Count == 0)
+        {
+          <p class="govuk-body-s govuk-!-margin-bottom-0 dfe-c-text-muted">No DDRs linked to products yet.</p>
+        }
+        else
+        {
+          <div class="dfe-f-table-wrapper govuk-!-margin-bottom-0" data-module="dfe-f-table">
+            <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+            <table class="govuk-table govuk-table--small-text-until-tablet govuk-!-margin-bottom-0">
+              <thead class="govuk-table__head">
+                <tr class="govuk-table__row">
+                  <th scope="col" class="govuk-table__header" aria-sort="none">
+                    <button type="button" class="dfe-f-table-sort-button">Product</button>
+                  </th>
+                  <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none">
+                    <button type="button" class="dfe-f-table-sort-button">DDR links</button>
+                  </th>
+                </tr>
+              </thead>
+              <tbody class="govuk-table__body">
+                @foreach (var row in Model.ByProduct)
+                {
+                  <tr class="govuk-table__row">
+                    <td class="govuk-table__cell"><a class="govuk-link govuk-link--no-visited-state" href="@row.RegisterUrl">@row.Label</a></td>
+                    <td class="govuk-table__cell govuk-table__cell--numeric govuk-!-font-tabular-numbers">@row.Count.ToString("N0")</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </div>
+    </div>
+  </section>
+
+  <section class="modern-operations-ddr__more govuk-!-margin-bottom-2" aria-labelledby="ddr-more-heading">
+    <h2 id="ddr-more-heading" class="govuk-heading-s govuk-!-margin-bottom-2">Related</h2>
+    <ul class="govuk-list govuk-list--bullet govuk-!-margin-bottom-0">
+      <li><a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("Oversight", "ModernDesignDecisionRecords")">DesignOps oversight</a> — filtered queues including deviations and overdue review.</li>
+      <li><a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("Register", "ModernDesignDecisionRecords")">DDR register</a> — search and combine filters.</li>
+    </ul>
+  </section>
+</div>

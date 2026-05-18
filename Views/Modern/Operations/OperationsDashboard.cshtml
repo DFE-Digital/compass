@@ -1,140 +1,314 @@
 @model Compass.ViewModels.Modern.ModernOperationsDashboardViewModel
+@using Compass.ViewModels.Modern
 @{
   ViewData["Title"] = "Operations";
+  var opsDashLede = await Html.PartialAsync("~/Views/Modern/Operations/_OperationsDashboardHeaderLede.cshtml");
+  var queuesClear = Model.AttentionQueueTotal == 0;
 }
 @section Breadcrumbs {
   <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
   <li class="govuk-breadcrumbs__list-item" aria-current="page">Operations</li>
 }
 
-<div class="modern-work-page" style="max-width: 100%; box-sizing: border-box;">
-  <div class="dfe-c-mb-4 dfe-c-flex--between" style="flex-wrap:wrap;align-items:flex-start;gap:1rem;">
-    <div class="dfe-c-page-title" style="margin:0;min-width:0;flex:1;max-width: 100%;">
-      <div class="dfe-c-page-title__caption">Operations</div>
-      <h1 class="dfe-c-page-title__heading">Dashboard</h1>
-      <p class="dfe-c-page-title__lede" style="margin:0.25rem 0 0 0;max-width: 40rem;">
-        Central operations tools: work, demand, performance, RAID tier requests, and the service register. Use the sub-navigation to open each area.
+<div class="modern-work-page modern-operations-dashboard">
+  @await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+    Caption = "Operations",
+    Title = "Dashboard",
+    Lede = opsDashLede
+  })
+
+  <section class="modern-operations-dashboard__snapshot govuk-!-margin-bottom-6" aria-label="Workload snapshot">
+    @if (queuesClear)
+    {
+      <div class="govuk-inset-text modern-operations-dashboard__all-clear govuk-!-margin-bottom-0">
+        <p class="govuk-body govuk-!-margin-bottom-0"><strong>Queues clear</strong> — no new CMS requests, pending RAID tier reviews, or DDR insight tasks on current counts.</p>
+      </div>
+    }
+    else
+    {
+      <div class="dfe-f-card-grid" role="region" aria-label="Queues needing attention">
+        @if (Model.CmsAccessRequestsNewCount > 0)
+        {
+          @await Html.PartialAsync("~/Views/Modern/Operations/_OperationsLinkedStatCard.cshtml", new OperationsLinkedStatCardViewModel {
+            Label = "New CMS requests",
+            Value = Model.CmsAccessRequestsNewCount.ToString("N0"),
+            TrendText = "Open queue",
+            Href = Url.Action("CmsRequests", "ModernOperations", new { tab = "new" }) ?? "#",
+            Title = "Open new CMS access requests",
+            AriaLabel = $"New CMS access requests to review, {Model.CmsAccessRequestsNewCount} requests",
+            Tint = "red",
+            LinkClass = "ops-dashboard-cms-metric"
+          })
+        }
+        @if (ViewBag.ShowRaidNavigation == true && Model.PendingTierChangeCount > 0)
+        {
+          @await Html.PartialAsync("~/Views/Modern/Operations/_OperationsLinkedStatCard.cshtml", new OperationsLinkedStatCardViewModel {
+            Label = "Pending RAID tier reviews",
+            Value = Model.PendingTierChangeCount.ToString("N0"),
+            TrendText = "View queue",
+            Href = Url.Action("RaidEscalations", "ModernOperations", new { tab = "escalations" }) ?? "#",
+            Title = "Open RAID tier reviews",
+            AriaLabel = $"Pending RAID tier reviews, {Model.PendingTierChangeCount} pending",
+            Tint = "orange",
+            LinkClass = "ops-dashboard-raid-metric"
+          })
+        }
+        @if (ViewBag.ShowDdrNavigation == true && Model.PendingDdrDesignOpsInsightCount > 0)
+        {
+          @await Html.PartialAsync("~/Views/Modern/Operations/_OperationsLinkedStatCard.cshtml", new OperationsLinkedStatCardViewModel {
+            Label = "DDR awaiting insight",
+            Value = Model.PendingDdrDesignOpsInsightCount.ToString("N0"),
+            TrendText = "Open DDR dashboard",
+            Href = Url.Action("Ddr", "ModernOperations") ?? "#",
+            Title = "Open DDR operations dashboard",
+            AriaLabel = $"DDR awaiting DesignOps insight, {Model.PendingDdrDesignOpsInsightCount} records",
+            Tint = "blue",
+            LinkClass = "ops-dashboard-ddr-metric"
+          })
+        }
+      </div>
+      <ul class="govuk-list modern-operations-dashboard__jump-links govuk-!-margin-top-3 govuk-!-margin-bottom-0">
+        @if (Model.CmsAccessRequestsNewCount > 0)
+        {
+          <li><a class="govuk-link govuk-link--no-visited-state" href="#ops-queue-cms">CMS access requests</a></li>
+        }
+        @if (ViewBag.ShowRaidNavigation == true && Model.PendingTierChangeCount > 0)
+        {
+          <li><a class="govuk-link govuk-link--no-visited-state" href="#ops-queue-raid">RAID tier requests</a></li>
+        }
+        @if (ViewBag.ShowDdrNavigation == true && Model.PendingDdrDesignOpsInsightCount > 0)
+        {
+          <li><a class="govuk-link govuk-link--no-visited-state" href="#ops-queue-ddr">Design decision records</a></li>
+        }
+      </ul>
+    }
+  </section>
+
+  <section class="modern-operations-dashboard__panel govuk-!-margin-bottom-8" id="ops-tools" aria-labelledby="ops-h-tools">
+    <header class="modern-operations-dashboard__panel-head">
+      <p class="govuk-caption-l govuk-!-margin-bottom-1">Central Operations</p>
+      <h2 id="ops-h-tools" class="govuk-heading-m govuk-!-margin-bottom-2">Management tools</h2>
+      <p class="govuk-body-s dfe-c-text-muted govuk-!-margin-bottom-4 modern-operations-dashboard__intro">
+        Open a tool to work delivery, demand, performance, publishing access, risk governance, and the service register.
       </p>
+    </header>
+    <div class="dfe-f-card-grid" role="region" aria-label="Operations management tools">
+      @await Html.PartialAsync("~/Views/Modern/Operations/_OperationsLinkedStatCard.cshtml", new OperationsLinkedStatCardViewModel {
+        Label = "Manage work",
+        Value = Model.ManageWorkActiveCount.ToString("N0"),
+        TrendText = "Open work register",
+        Href = Url.Action("ManageWork", "ModernOperations") ?? "#",
+        Title = "Manage delivery work",
+        AriaLabel = $"Manage work, {Model.ManageWorkActiveCount} active projects",
+        Tint = "teal",
+        LinkClass = "ops-dashboard-tool-metric"
+      })
+      @if (ViewBag.ShowDemandNavigation == true)
+      {
+        @await Html.PartialAsync("~/Views/Modern/Operations/_OperationsLinkedStatCard.cshtml", new OperationsLinkedStatCardViewModel {
+          Label = "Manage demand",
+          Value = Model.ManageDemandTotalCount.ToString("N0"),
+          TrendText = "Open demand pipeline",
+          Href = Url.Action("ManageDemand", "ModernOperations") ?? "#",
+          Title = "Manage demand pipeline",
+          AriaLabel = $"Manage demand, {Model.ManageDemandTotalCount} requests",
+          Tint = "blue",
+          LinkClass = "ops-dashboard-tool-metric"
+        })
+        @await Html.PartialAsync("~/Views/Modern/Operations/_OperationsLinkedStatCard.cshtml", new OperationsLinkedStatCardViewModel {
+          Label = "Manage triage",
+          Value = Model.ManageTriageUpcomingMeetingsCount.ToString("N0"),
+          TrendText = "Open triage meetings",
+          Href = Url.Action("ManageTriage", "ModernOperations") ?? "#",
+          Title = "Manage triage meetings",
+          AriaLabel = $"Manage triage, {Model.ManageTriageUpcomingMeetingsCount} upcoming meetings",
+          Tint = Model.ManageTriageUpcomingMeetingsCount > 0 ? "orange" : "grey",
+          LinkClass = "ops-dashboard-tool-metric"
+        })
+      }
+      @await Html.PartialAsync("~/Views/Modern/Operations/_OperationsLinkedStatCard.cshtml", new OperationsLinkedStatCardViewModel {
+        Label = "Manage performance",
+        Value = Model.ManagePerformanceActiveCommissionsCount.ToString("N0"),
+        TrendText = "Open performance dashboard",
+        Href = Url.Action("ManagePerformance", "ModernOperations") ?? "#",
+        Title = "Manage performance reporting",
+        AriaLabel = $"Manage performance, {Model.ManagePerformanceActiveCommissionsCount} active commission periods",
+        Tint = "purple",
+        LinkClass = "ops-dashboard-tool-metric"
+      })
+      @if (ViewBag.ShowFipsDatabaseServiceRegister == true)
+      {
+        @await Html.PartialAsync("~/Views/Modern/Operations/_OperationsLinkedStatCard.cshtml", new OperationsLinkedStatCardViewModel {
+          Label = "Service register",
+          Value = Model.ServiceRegisterActiveProductCount.ToString("N0"),
+          TrendText = "Browse products",
+          Href = Url.Action("ServiceRegister", "ModernOperations") ?? "#",
+          Title = "Open service register",
+          AriaLabel = $"Service register, {Model.ServiceRegisterActiveProductCount} active products",
+          Tint = "green",
+          LinkClass = "ops-dashboard-tool-metric"
+        })
+      }
+      @if (ViewBag.ShowRaidNavigation == true)
+      {
+        @await Html.PartialAsync("~/Views/Modern/Operations/_OperationsLinkedStatCard.cshtml", new OperationsLinkedStatCardViewModel {
+          Label = "RAID tier requests",
+          Value = Model.PendingTierChangeCount.ToString("N0"),
+          TrendText = "View queue",
+          Href = Url.Action("RaidEscalations", "ModernOperations") ?? "#",
+          Title = "Open RAID tier change requests",
+          AriaLabel = $"RAID tier requests, {Model.PendingTierChangeCount} pending reviews",
+          Tint = Model.PendingTierChangeCount > 0 ? "red" : "grey",
+          LinkClass = "ops-dashboard-raid-metric"
+        })
+      }
+      @if (ViewBag.ShowDdrNavigation == true)
+      {
+        @await Html.PartialAsync("~/Views/Modern/Operations/_OperationsLinkedStatCard.cshtml", new OperationsLinkedStatCardViewModel {
+          Label = "Design decision records",
+          Value = Model.PendingDdrDesignOpsInsightCount.ToString("N0"),
+          TrendText = "Open DDR dashboard",
+          Href = Url.Action("Ddr", "ModernOperations") ?? "#",
+          Title = "Open DDR operations dashboard",
+          AriaLabel = $"Design decision records, {Model.PendingDdrDesignOpsInsightCount} awaiting insight",
+          Tint = Model.PendingDdrDesignOpsInsightCount > 0 ? "blue" : "grey",
+          LinkClass = "ops-dashboard-ddr-metric"
+        })
+      }
     </div>
-  </div>
+  </section>
 
-  <h2 class="govuk-heading-m">RAID tier requests (at a glance)</h2>
-  <p class="dfe-c-body dfe-c-text-muted govuk-!-margin-bottom-4" style="max-width: 40rem; margin-top:0;">
-    Summarises <a class="govuk-link" href="@Url.Action("RaidEscalations", "ModernOperations")">RAID</a> queues for proposed tier changes. Open RAID for the full list and to review individual requests.
-  </p>
-  <div class="dfe-c-card-grid dfe-c-card-grid--3 dfe-c-mb-3" role="region" aria-label="RAID tier request summary">
-    @if (Model.PendingEscalationsCount > 0)
-    {
-      <a class="dfe-c-metric dfe-c-metric--red ops-dashboard-raid-metric"
-         href="@Url.Action("RaidEscalations", "ModernOperations", new { tab = "escalations" })"
-         title="Open RAID — requested escalations queue"
-         aria-label="Open RAID tier requests, requested escalations, @Model.PendingEscalationsCount pending">
-        <div class="dfe-c-metric__number">@Model.PendingEscalationsCount</div>
-        <div class="dfe-c-metric__label">Requested escalations (pending)</div>
-        <div class="dfe-c-metric__note ops-dashboard-raid-metric__open">View in RAID</div>
-      </a>
-    }
-    else
-    {
-      <div class="dfe-c-metric dfe-c-metric--red">
-        <div class="dfe-c-metric__number">@Model.PendingEscalationsCount</div>
-        <div class="dfe-c-metric__label">Requested escalations (pending)</div>
-      </div>
-    }
-    @if (Model.PendingDeescalationsCount > 0)
-    {
-      <a class="dfe-c-metric dfe-c-metric--amber ops-dashboard-raid-metric"
-         href="@Url.Action("RaidEscalations", "ModernOperations", new { tab = "deescalations" })"
-         title="Open RAID — requested de-escalations queue"
-         aria-label="Open RAID tier requests, requested de-escalations, @Model.PendingDeescalationsCount pending">
-        <div class="dfe-c-metric__number">@Model.PendingDeescalationsCount</div>
-        <div class="dfe-c-metric__label">Requested de-escalations (pending)</div>
-        <div class="dfe-c-metric__note ops-dashboard-raid-metric__open">View in RAID</div>
-      </a>
-    }
-    else
-    {
-      <div class="dfe-c-metric dfe-c-metric--amber">
-        <div class="dfe-c-metric__number">@Model.PendingDeescalationsCount</div>
-        <div class="dfe-c-metric__label">Requested de-escalations (pending)</div>
-      </div>
-    }
-    @if (Model.CurrentlyEscalatedCount > 0)
-    {
-      <a class="dfe-c-metric dfe-c-metric--navy ops-dashboard-raid-metric"
-         href="@Url.Action("RaidEscalations", "ModernOperations", new { tab = "current" })"
-         title="Open RAID — currently escalated risks"
-         aria-label="Open RAID tier requests, currently escalated, @Model.CurrentlyEscalatedCount shown">
-        <div class="dfe-c-metric__number">@Model.CurrentlyEscalatedCount</div>
-        <div class="dfe-c-metric__label">Currently escalated (from approved moves)</div>
-        <div class="dfe-c-metric__note ops-dashboard-raid-metric__open">View in RAID</div>
-      </a>
-    }
-    else
-    {
-      <div class="dfe-c-metric dfe-c-metric--navy">
-        <div class="dfe-c-metric__number">@Model.CurrentlyEscalatedCount</div>
-        <div class="dfe-c-metric__label">Currently escalated (from approved moves)</div>
-      </div>
-    }
-  </div>
-  <style>
-    .ops-dashboard-raid-metric {
-      display: block;
-      text-decoration: none;
-      color: inherit;
-      box-sizing: border-box;
-    }
-    .ops-dashboard-raid-metric:hover {
-      box-shadow: 0 0 0 2px #fd0;
-    }
-    .ops-dashboard-raid-metric:focus,
-    .ops-dashboard-raid-metric:focus-visible {
-      outline: 3px solid #fd0;
-      outline-offset: 0;
-    }
-    .ops-dashboard-raid-metric__open {
-      color: var(--navy, #1d70b8) !important;
-      font-weight: 600;
-      text-decoration: underline;
-      text-underline-offset: 2px;
-    }
-  </style>
-  <p class="govuk-body-s dfe-c-text-muted govuk-!-margin-bottom-6" style="max-width: 40rem;">
-    <strong>Total</strong> pending proposed-tier reviews: <strong>@Model.PendingTierChangeCount</strong>
-  </p>
+  <section class="modern-operations-dashboard__panel govuk-!-margin-bottom-8" id="ops-queue-cms" aria-labelledby="ops-h-cms">
+    <header class="modern-operations-dashboard__panel-head">
+      <p class="govuk-caption-l govuk-!-margin-bottom-1">Publishing access</p>
+      <h2 id="ops-h-cms" class="govuk-heading-m govuk-!-margin-bottom-2">CMS access requests</h2>
+      <p class="govuk-body-s dfe-c-text-muted govuk-!-margin-bottom-4 modern-operations-dashboard__intro">
+        @if (ViewBag.ShowDdrNavigation == true)
+        {
+          <text>Requests for CMS access used to publish and review <a class="govuk-link" href="@Url.Action("Dashboard", "ModernDesignDecisionRecords")">Design Decision Records</a>. </text>
+        }
+        else
+        {
+          <text>Incoming CMS access requests for Central Operations. </text>
+        }
+        Open <a class="govuk-link" href="@Url.Action("CmsRequests", "ModernOperations")">CMS requests</a> to work the queue.
+      </p>
+    </header>
+    <div class="dfe-f-card-grid" role="region" aria-label="CMS access request counts">
+      @await Html.PartialAsync("~/Views/Modern/Operations/_OperationsLinkedStatCard.cshtml", new OperationsLinkedStatCardViewModel {
+        Label = "New (to review)",
+        Value = Model.CmsAccessRequestsNewCount.ToString("N0"),
+        TrendText = "Open queue",
+        Href = Url.Action("CmsRequests", "ModernOperations", new { tab = "new" }) ?? "#",
+        Title = "Open new CMS access requests",
+        AriaLabel = $"CMS access requests, new queue, {Model.CmsAccessRequestsNewCount} requests",
+        Tint = "red",
+        LinkClass = "ops-dashboard-cms-metric"
+      })
+      @await Html.PartialAsync("~/Views/Modern/Operations/_OperationsLinkedStatCard.cshtml", new OperationsLinkedStatCardViewModel {
+        Label = "Completed",
+        Value = Model.CmsAccessRequestsCompletedCount.ToString("N0"),
+        TrendText = "View completed",
+        Href = Url.Action("CmsRequests", "ModernOperations", new { tab = "completed" }) ?? "#",
+        Title = "Open completed CMS access requests",
+        AriaLabel = $"CMS access requests, completed, {Model.CmsAccessRequestsCompletedCount} requests",
+        Tint = "green",
+        LinkClass = "ops-dashboard-cms-metric"
+      })
+      @await Html.PartialAsync("~/Views/Modern/Operations/_OperationsLinkedStatCard.cshtml", new OperationsLinkedStatCardViewModel {
+        Label = "Rejected",
+        Value = Model.CmsAccessRequestsRejectedCount.ToString("N0"),
+        TrendText = "View rejected",
+        Href = Url.Action("CmsRequests", "ModernOperations", new { tab = "rejected" }) ?? "#",
+        Title = "Open rejected CMS access requests",
+        AriaLabel = $"CMS access requests, rejected, {Model.CmsAccessRequestsRejectedCount} requests",
+        Tint = "grey",
+        LinkClass = "ops-dashboard-cms-metric"
+      })
+    </div>
+  </section>
 
-  <h2 class="govuk-heading-m">Tools</h2>
-  <div class="dfe-c-card-grid dfe-c-card-grid--2 dfe-c-mb-3" style="max-width: 56rem;">
-    <div class="dfe-c-card dfe-c-card--plain">
-      <h3 class="govuk-heading-s govuk-!-margin-top-0"><a class="govuk-link" href="@Url.Action("ManageWork", "ModernOperations")">Manage work</a></h3>
-      <p class="govuk-body-s dfe-c-text-muted govuk-!-margin-bottom-0">Search, filter, and support the work register across all programmes.</p>
-    </div>
-    @if (ViewBag.ShowDemandNavigation == true)
-    {
-      <div class="dfe-c-card dfe-c-card--plain">
-        <h3 class="govuk-heading-s govuk-!-margin-top-0"><a class="govuk-link" href="@Url.Action("ManageDemand", "ModernOperations")">Manage demand</a></h3>
-        <p class="govuk-body-s dfe-c-text-muted govuk-!-margin-bottom-0">Pipeline and demand requests for triage and progression.</p>
+  @if (ViewBag.ShowRaidNavigation == true)
+  {
+    <section class="modern-operations-dashboard__panel govuk-!-margin-bottom-8" id="ops-queue-raid" aria-labelledby="ops-h-raid">
+      <header class="modern-operations-dashboard__panel-head">
+        <p class="govuk-caption-l govuk-!-margin-bottom-1">Risk governance</p>
+        <h2 id="ops-h-raid" class="govuk-heading-m govuk-!-margin-bottom-2">RAID tier requests</h2>
+        <p class="govuk-body-s dfe-c-text-muted govuk-!-margin-bottom-4 modern-operations-dashboard__intro">
+          Proposed tier changes from delivery teams. Open <a class="govuk-link" href="@Url.Action("RaidEscalations", "ModernOperations")">RAID</a> for the full list and decisions.
+        </p>
+      </header>
+      <div class="dfe-f-card-grid govuk-!-margin-bottom-3" role="region" aria-label="RAID tier request summary">
+        @await Html.PartialAsync("~/Views/Modern/Operations/_OperationsLinkedStatCard.cshtml", new OperationsLinkedStatCardViewModel {
+          Label = "Requested escalations (pending)",
+          Value = Model.PendingEscalationsCount.ToString("N0"),
+          TrendText = "View queue",
+          Href = Url.Action("RaidEscalations", "ModernOperations", new { tab = "escalations" }) ?? "#",
+          Title = "Open requested escalations queue",
+          AriaLabel = $"Requested escalations pending, {Model.PendingEscalationsCount}",
+          Tint = "red",
+          LinkClass = "ops-dashboard-raid-metric"
+        })
+        @await Html.PartialAsync("~/Views/Modern/Operations/_OperationsLinkedStatCard.cshtml", new OperationsLinkedStatCardViewModel {
+          Label = "Requested de-escalations (pending)",
+          Value = Model.PendingDeescalationsCount.ToString("N0"),
+          TrendText = "View queue",
+          Href = Url.Action("RaidEscalations", "ModernOperations", new { tab = "deescalations" }) ?? "#",
+          Title = "Open requested de-escalations queue",
+          AriaLabel = $"Requested de-escalations pending, {Model.PendingDeescalationsCount}",
+          Tint = "orange",
+          LinkClass = "ops-dashboard-raid-metric"
+        })
+        @await Html.PartialAsync("~/Views/Modern/Operations/_OperationsLinkedStatCard.cshtml", new OperationsLinkedStatCardViewModel {
+          Label = "Currently escalated (from approved moves)",
+          Value = Model.CurrentlyEscalatedCount.ToString("N0"),
+          TrendText = "View queue",
+          Href = Url.Action("RaidEscalations", "ModernOperations", new { tab = "current" }) ?? "#",
+          Title = "Open currently escalated risks",
+          AriaLabel = $"Currently escalated from approved moves, {Model.CurrentlyEscalatedCount}",
+          Tint = "blue",
+          LinkClass = "ops-dashboard-raid-metric"
+        })
+        @await Html.PartialAsync("~/Views/Modern/Operations/_OperationsLinkedStatCard.cshtml", new OperationsLinkedStatCardViewModel {
+          Label = "Active risks (open)",
+          Value = Model.ActiveRisksCount.ToString("N0"),
+          TrendText = "Edit in Operations",
+          Href = Url.Action("RaidEscalations", "ModernOperations", new { tab = "active" }) ?? "#",
+          Title = "Open active risks for Operations edit",
+          AriaLabel = $"Active open risks, {Model.ActiveRisksCount}",
+          Tint = "grey",
+          LinkClass = "ops-dashboard-raid-metric"
+        })
       </div>
-      <div class="dfe-c-card dfe-c-card--plain">
-        <h3 class="govuk-heading-s govuk-!-margin-top-0"><a class="govuk-link" href="@Url.Action("ManageTriage", "ModernOperations")">Manage triage</a></h3>
-        <p class="govuk-body-s dfe-c-text-muted govuk-!-margin-bottom-0">Triage meetings, slots, and outcomes.</p>
+      <p class="govuk-body-s dfe-c-text-muted govuk-!-margin-bottom-0 modern-operations-dashboard__intro">
+        <strong>Total</strong> pending proposed-tier reviews: <strong class="dfe-f-u-tabular-numbers">@Model.PendingTierChangeCount.ToString("N0")</strong>
+      </p>
+    </section>
+  }
+
+  @if (ViewBag.ShowDdrNavigation == true)
+  {
+    <section class="modern-operations-dashboard__panel govuk-!-margin-bottom-8" id="ops-queue-ddr" aria-labelledby="ops-h-ddr">
+      <header class="modern-operations-dashboard__panel-head">
+        <p class="govuk-caption-l govuk-!-margin-bottom-1">Design governance</p>
+        <h2 id="ops-h-ddr" class="govuk-heading-m govuk-!-margin-bottom-2">Design decision records</h2>
+        <p class="govuk-body-s dfe-c-text-muted govuk-!-margin-bottom-4 modern-operations-dashboard__intro">
+          Submitted DDRs awaiting DesignOps insight. Open the dashboard for queues, breakdowns, and outcomes.
+        </p>
+      </header>
+      <div class="dfe-f-card-grid" role="region" aria-label="DDR queue summary">
+        @await Html.PartialAsync("~/Views/Modern/Operations/_OperationsLinkedStatCard.cshtml", new OperationsLinkedStatCardViewModel {
+          Label = "Awaiting insight",
+          Value = Model.PendingDdrDesignOpsInsightCount.ToString("N0"),
+          TrendText = "Open DDR dashboard",
+          Href = Url.Action("Ddr", "ModernOperations") ?? "#",
+          Title = "Open DDR operations dashboard",
+          AriaLabel = $"Design decision records awaiting insight, {Model.PendingDdrDesignOpsInsightCount}",
+          Tint = "blue",
+          LinkClass = "ops-dashboard-ddr-metric"
+        })
       </div>
-    }
-    <div class="dfe-c-card dfe-c-card--plain">
-      <h3 class="govuk-heading-s govuk-!-margin-top-0"><a class="govuk-link" href="@Url.Action("ManagePerformance", "ModernOperations")">Manage performance</a></h3>
-      <p class="govuk-body-s dfe-c-text-muted govuk-!-margin-bottom-0">Commission reporting coverage and return rates.</p>
-    </div>
-    <div class="dfe-c-card dfe-c-card--plain">
-      <h3 class="govuk-heading-s govuk-!-margin-top-0"><a class="govuk-link" href="@Url.Action("RaidEscalations", "ModernOperations")">RAID</a></h3>
-      <p class="govuk-body-s dfe-c-text-muted govuk-!-margin-bottom-0">Approve or reject risk tier (escalation and de-escalation) requests from delivery.</p>
-    </div>
-    @if (ViewBag.ShowFipsDatabaseServiceRegister == true)
-    {
-      <div class="dfe-c-card dfe-c-card--plain">
-        <h3 class="govuk-heading-s govuk-!-margin-top-0"><a class="govuk-link" href="@Url.Action("ServiceRegister", "ModernOperations")">Service register</a></h3>
-        <p class="govuk-body-s dfe-c-text-muted govuk-!-margin-bottom-0">FIPS products, CMDB sync, and catalogue alignment.</p>
-      </div>
-    }
-  </div>
+    </section>
+  }
+
 </div>

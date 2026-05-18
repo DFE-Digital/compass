@@ -104,16 +104,28 @@ function ss(id) {
   if (el) el.classList.add('dfe-c-screen--active');
 
   const group = NAV_MAP[id] || 'home';
-  document.querySelectorAll('.dfe-c-service-nav__link').forEach(a => {
-    a.classList.toggle('dfe-c-service-nav__link--active', a.getAttribute('data-nav') === group);
+  document.querySelectorAll('.dfe-f-header__service-nav a[data-nav]').forEach(a => {
+    const match = a.getAttribute('data-nav') === group;
+    if (match) {
+      a.setAttribute('aria-current', 'page');
+    } else {
+      a.removeAttribute('aria-current');
+    }
   });
 
-  document.querySelectorAll('.dfe-c-sub-nav').forEach(n => n.classList.remove('dfe-c-sub-nav--visible'));
+  document.querySelectorAll('.dfe-f-sub-navigation.dfe-c-sub-nav').forEach(n => n.classList.remove('dfe-c-sub-nav--visible'));
   const subId = SUB_MAP[group];
   if (subId) { const s = document.getElementById(subId); if (s) s.classList.add('dfe-c-sub-nav--visible'); }
 
-  document.querySelectorAll('.dfe-c-sub-nav__link').forEach(a => {
-    a.classList.toggle('dfe-c-sub-nav__link--active', a.getAttribute('data-sub') === id);
+  document.querySelectorAll('.dfe-f-sub-navigation__link[data-sub]').forEach(a => {
+    const token = (a.getAttribute('data-sub') || '').trim();
+    const tokens = token ? token.split(/\s+/).filter(Boolean) : [];
+    const match = tokens.length ? tokens.includes(id) : false;
+    if (match) {
+      a.setAttribute('aria-current', 'page');
+    } else {
+      a.removeAttribute('aria-current');
+    }
   });
 
   const crumbs = BREADCRUMBS[id] || [];

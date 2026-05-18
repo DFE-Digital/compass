@@ -1,5 +1,7 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
+using Compass.Configuration;
 using Compass.Data;
 using Compass.Models;
 using Compass.Services;
@@ -7,6 +9,9 @@ using Compass.Models.Modern.Work;
 using Compass.ViewModels.Dashboard;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Compass.Services.Modern;
 
@@ -18,6 +23,9 @@ public partial class ModernWorkService : IModernWorkService
     private readonly IBusinessAreaAdminService _businessAreaAdmins;
     private readonly IBusinessAreaLeadershipService _businessAreaLeadership;
     private readonly IDirectorateLeadershipService _directorateLeadership;
+    private readonly ILogger<ModernWorkService> _logger;
+    private readonly IOptions<WorkRegisterDiagnosticsOptions> _workRegisterDiagnostics;
+    private readonly IHostEnvironment _hostEnvironment;
 
     public ModernWorkService(
         CompassDbContext db,
@@ -25,7 +33,10 @@ public partial class ModernWorkService : IModernWorkService
         IPermissionService permissionService,
         IBusinessAreaAdminService businessAreaAdmins,
         IBusinessAreaLeadershipService businessAreaLeadership,
-        IDirectorateLeadershipService directorateLeadership)
+        IDirectorateLeadershipService directorateLeadership,
+        ILogger<ModernWorkService> logger,
+        IOptions<WorkRegisterDiagnosticsOptions> workRegisterDiagnostics,
+        IHostEnvironment hostEnvironment)
     {
         _db = db;
         _monthlyUpdateService = monthlyUpdateService;
@@ -33,6 +44,52 @@ public partial class ModernWorkService : IModernWorkService
         _businessAreaAdmins = businessAreaAdmins;
         _businessAreaLeadership = businessAreaLeadership;
         _directorateLeadership = directorateLeadership;
+        _logger = logger;
+        _workRegisterDiagnostics = workRegisterDiagnostics;
+        _hostEnvironment = hostEnvironment;
+    }
+
+    /// <summary>
+    /// Shown as work item &quot;Business area&quot; on modern surfaces: prefer <see cref="Project.BusinessAreaLookup"/>
+    /// (e.g. from service register / product sync), then legacy <see cref="Project.PrimaryOrganizationalGroup"/>.
+    /// </summary>
+    public static string ResolveProjectBusinessAreaDisplayName(Project? p)
+    {
+        if (p == null) return "—";
+        var ba = p.BusinessAreaLookup?.Name?.Trim();
+        if (!string.IsNullOrEmpty(ba)) return ba;
+        var og = p.PrimaryOrganizationalGroup?.Name?.Trim();
+        return !string.IsNullOrEmpty(og) ? og : "—";
+    }
+
+    /// <summary>First day submissions open — from Admin work reporting period when configured.</summary>
+    private DateTime GetMonthlySubmissionWindowOpensOn(int reportingYear, int reportingMonth)
+    {
+        var ex = _monthlyUpdateService.TryGetActiveExplicitReportingPeriod(reportingYear, reportingMonth);
+        if (ex != null)
+            return ex.SubmissionOpens.Date;
+
+        var dim = DateTime.DaysInMonth(reportingYear, reportingMonth);
+        var day = Math.Min(20, dim);
+        return new DateTime(reportingYear, reportingMonth, day, 0, 0, 0, DateTimeKind.Utc).Date;
+    }
+
+    /// <summary>Last day submissions are accepted within the window — explicit closes from Admin, else last calendar day of reporting month (legacy).</summary>
+    private DateTime GetMonthlySubmissionWindowClosesOn(int reportingYear, int reportingMonth)
+    {
+        var ex = _monthlyUpdateService.TryGetActiveExplicitReportingPeriod(reportingYear, reportingMonth);
+        if (ex != null)
+            return ex.SubmissionCloses.Date;
+
+        return new DateTime(reportingYear, reportingMonth, DateTime.DaysInMonth(reportingYear, reportingMonth), 0, 0, 0, DateTimeKind.Utc).Date;
+    }
+
+    /// <summary>Whether today falls in the submission window for the reporting month (Admin explicit dates or legacy day 20 → month end).</summary>
+    private bool IsMonthlySubmissionWindowOpen(DateTime todayUtcDate, int reportingYear, int reportingMonth)
+    {
+        var opens = GetMonthlySubmissionWindowOpensOn(reportingYear, reportingMonth);
+        var closes = GetMonthlySubmissionWindowClosesOn(reportingYear, reportingMonth);
+        return todayUtcDate >= opens && todayUtcDate <= closes;
     }
 
     private static string FormatSroShortName(User? u)
@@ -63,7 +120,10 @@ public partial class ModernWorkService : IModernWorkService
     /// <summary>Sets monthly reporting badge fields for the current calendar month (aligned with work dashboard).</summary>
     private void FillLatestMonthlyDueForRegisterRow(WorkRegisterRow row, Project p, DateTime nowDate, int reportY, int reportM, IUrlHelper url)
     {
-        row.LatestMonthlyPeriodLabel = new DateTime(reportY, reportM, 1).ToString("MMMM yyyy", CultureInfo.GetCultureInfo("en-GB"));
+        var explicitPeriod = _monthlyUpdateService.TryGetActiveExplicitReportingPeriod(reportY, reportM);
+        row.LatestMonthlyPeriodLabel = !string.IsNullOrWhiteSpace(explicitPeriod?.PeriodLabel)
+            ? explicitPeriod!.PeriodLabel.Trim()
+            : new DateTime(reportY, reportM, 1).ToString("MMMM yyyy", CultureInfo.GetCultureInfo("en-GB"));
         row.LatestMonthlyStatusLabel = null;
         row.LatestMonthlyActionLabel = null;
 
@@ -76,9 +136,12 @@ public partial class ModernWorkService : IModernWorkService
             return;
         }
 
-        row.LatestMonthlyDueLabel = new DateTime(reportY, reportM, 1).ToString("MMM", CultureInfo.GetCultureInfo("en-GB")) + " Update";
+        row.LatestMonthlyDueLabel = explicitPeriod != null
+            ? explicitPeriod.PeriodStart.ToString("MMM", CultureInfo.GetCultureInfo("en-GB")) + " Update"
+            : new DateTime(reportY, reportM, 1).ToString("MMM", CultureInfo.GetCultureInfo("en-GB")) + " Update";
 
-        var periodOpen = new DateTime(nowDate.Year, nowDate.Month, 20, 0, 0, 0, DateTimeKind.Utc).Date;
+        var periodOpen = GetMonthlySubmissionWindowOpensOn(reportY, reportM);
+        var windowOpen = IsMonthlySubmissionWindowOpen(nowDate, reportY, reportM);
         var mu = p.MonthlyUpdates?.FirstOrDefault(m => m.Year == reportY && m.Month == reportM);
         var submitted = mu?.SubmittedAt != null;
         var draft = mu != null && mu.SubmittedAt == null;
@@ -92,11 +155,20 @@ public partial class ModernWorkService : IModernWorkService
             return;
         }
 
-        if (nowDate < periodOpen)
+        if (!windowOpen && nowDate < periodOpen)
         {
             row.LatestMonthlyDueAction = "not-due";
             row.LatestMonthlyDueUrl = null;
             row.LatestMonthlyStatusLabel = "Not due";
+            row.LatestMonthlyActionLabel = "";
+            return;
+        }
+
+        if (!windowOpen)
+        {
+            row.LatestMonthlyDueAction = "late";
+            row.LatestMonthlyDueUrl = null;
+            row.LatestMonthlyStatusLabel = draft ? "Draft" : "Late";
             row.LatestMonthlyActionLabel = "";
             return;
         }
@@ -120,6 +192,7 @@ public partial class ModernWorkService : IModernWorkService
         DateTime currentDueDate,
         IUrlHelper url)
     {
+        var currentRag = ProjectCurrentRagResolver.Resolve(p);
         var row = new WorkRegisterRow
         {
             Id = p.Id,
@@ -127,19 +200,23 @@ public partial class ModernWorkService : IModernWorkService
             Title = p.Title.Trim(),
             Status = p.Status ?? "—",
             PrimaryContactName = p.PrimaryContactUser?.Name ?? p.PrimaryContactUser?.Email ?? "—",
-            PortfolioId = p.PrimaryOrganizationalGroupId,
-            PortfolioName = p.PrimaryOrganizationalGroup?.Name ?? "—",
+            PortfolioId = p.BusinessAreaId ?? p.PrimaryOrganizationalGroupId,
+            PortfolioName = ResolveProjectBusinessAreaDisplayName(p),
             PhaseName = p.PhaseLookup?.Name ?? "—",
             PriorityName = p.DeliveryPriority?.Name ?? "—",
-            RagName = p.RagStatusLookup?.Name ?? "—",
-            RagCssClass = p.RagStatusLookup?.CssClass,
-            RagStatusId = p.RagStatusLookupId,
+            RagName = currentRag.Name ?? "—",
+            RagCssClass = currentRag.CssClass,
+            RagStatusId = currentRag.StatusId,
             MilestoneCount = p.Milestones.Count(m => !m.IsDeleted && !string.Equals(m.Status, "complete", StringComparison.OrdinalIgnoreCase)),
             MonthlyUpdateStatus = "—",
             DirectorateSummary = p.Directorates.Count == 0
                 ? null
                 : string.Join(", ", p.Directorates.Select(d => d.Division.Name).Where(n => !string.IsNullOrEmpty(n)).Distinct().OrderBy(n => n)),
-            BusinessAreaName = string.IsNullOrWhiteSpace(p.BusinessAreaLookup?.Name) ? null : p.BusinessAreaLookup.Name.Trim(),
+            BusinessAreaName = !string.IsNullOrWhiteSpace(p.BusinessAreaLookup?.Name)
+                ? p.BusinessAreaLookup!.Name.Trim()
+                : (!string.IsNullOrWhiteSpace(p.PrimaryOrganizationalGroup?.Name)
+                    ? p.PrimaryOrganizationalGroup!.Name.Trim()
+                    : null),
             TagNamesSummary = p.ProjectWorkItemTags == null || p.ProjectWorkItemTags.Count == 0
                 ? null
                 : string.Join(", ", p.ProjectWorkItemTags
@@ -187,8 +264,7 @@ public partial class ModernWorkService : IModernWorkService
             }
             else if (!hasCurrent)
             {
-                var periodOpenDate = new DateTime(nowDate.Year, nowDate.Month, 20, 0, 0, 0, DateTimeKind.Utc).Date;
-                if (nowDate >= periodOpenDate && nowDate <= currentDueDate.Date)
+                if (IsMonthlySubmissionWindowOpen(nowDate, reportY, reportM) && nowDate <= currentDueDate.Date)
                 {
                     row.MonthlyUpdateStatus = "Complete return due by " + currentDueDate.ToString("d MMMM", CultureInfo.GetCultureInfo("en-GB"));
                     row.MonthlyUpdateStatusLink = "add";
@@ -232,6 +308,7 @@ public partial class ModernWorkService : IModernWorkService
             .Where(p => ids.Contains(p.Id))
             .AsSplitQuery()
             .Include(p => p.RagStatusLookup)
+            .Include(p => p.RagHistory).ThenInclude(r => r.RagStatusLookup)
             .Include(p => p.PhaseLookup)
             .Include(p => p.DeliveryPriority)
             .Include(p => p.PrimaryOrganizationalGroup)
@@ -239,7 +316,7 @@ public partial class ModernWorkService : IModernWorkService
             .Include(p => p.BusinessAreaLookup)
             .Include(p => p.Directorates).ThenInclude(d => d.Division)
             .Include(p => p.Milestones)
-            .Include(p => p.MonthlyUpdates)
+            .Include(p => p.MonthlyUpdates).ThenInclude(mu => mu.DraftRagStatusLookup)
             .Include(p => p.SeniorResponsibleOfficers).ThenInclude(s => s.User)
             .Include(p => p.ProjectWorkItemTags).ThenInclude(l => l.WorkItemTagLookup)
             .ToListAsync(cancellationToken);
@@ -255,14 +332,43 @@ public partial class ModernWorkService : IModernWorkService
         return ordered;
     }
 
+    private WorkRegisterDiagnosticsCollector CreateWorkRegisterDiagnostics(
+        bool isMyWork,
+        string? registerTab,
+        int? registerPage,
+        string? monthlyUpdate) =>
+        new(_logger, _workRegisterDiagnostics, _hostEnvironment)
+        {
+            IsMyWork = isMyWork,
+            RegisterTab = registerTab,
+            RegisterPage = registerPage,
+            MonthlyUpdateFilter = monthlyUpdate,
+        };
+
+    private void CompleteWorkRegisterDiagnostics(WorkRegisterDiagnosticsCollector? diag, WorkRegisterViewModel vm)
+    {
+        if (diag is { IsEnabled: true })
+            diag.Complete(vm);
+    }
+
     // IQueryable predicate so EF translates; do not replace with a static bool(Project, ...) inside Where().
-    private static IQueryable<Project> WhereAssignedToUser(IQueryable<Project> query, string emailLower) =>
+    /// <param name="userId">When set, matches keyed roles by user id (covers Entra email drift on ProjectContacts and junction tables).</param>
+    private static IQueryable<Project> WhereAssignedToUser(IQueryable<Project> query, string emailLower, int? userId = null) =>
         query.Where(p =>
-            p.ProjectContacts.Any(pc => pc.Email.ToLower() == emailLower) ||
+            p.ProjectContacts.Any(pc =>
+                pc.Email.ToLower() == emailLower
+                || (userId.HasValue && pc.UserId == userId.Value)) ||
             (p.PrimaryContactUser != null && p.PrimaryContactUser.Email.ToLower() == emailLower) ||
-            p.SeniorResponsibleOfficers.Any(sro => sro.User != null && sro.User.Email.ToLower() == emailLower) ||
-            p.ServiceOwners.Any(so => so.User != null && so.User.Email.ToLower() == emailLower) ||
-            p.PmoContacts.Any(pmo => pmo.User != null && pmo.User.Email.ToLower() == emailLower));
+            (userId.HasValue && p.PrimaryContactUserId == userId.Value) ||
+            p.SeniorResponsibleOfficers.Any(sro =>
+                sro.User != null && sro.User.Email.ToLower() == emailLower
+                || (userId.HasValue && sro.UserId == userId.Value)) ||
+            p.ServiceOwners.Any(so =>
+                so.User != null && so.User.Email.ToLower() == emailLower
+                || (userId.HasValue && so.UserId == userId.Value)) ||
+            p.PmoContacts.Any(pmo =>
+                pmo.User != null && pmo.User.Email.ToLower() == emailLower
+                || (userId.HasValue && pmo.UserId == userId.Value)));
 
     /// <inheritdoc />
     public async Task<bool> CanUserEditWorkItemAsync(int projectId, string userEmail, CancellationToken cancellationToken = default)
@@ -276,16 +382,18 @@ public partial class ModernWorkService : IModernWorkService
             return true;
 
         var emailLower = EmailLower(userEmail);
-        if (await WhereAssignedToUser(
-                _db.Projects.Where(p => p.Id == projectId && !p.IsDeleted),
-                emailLower)
-            .AnyAsync(cancellationToken))
-            return true;
-
         var uid = await _db.Users.AsNoTracking()
             .Where(u => u.Email.ToLower() == emailLower)
             .Select(u => (int?)u.Id)
             .FirstOrDefaultAsync(cancellationToken);
+
+        if (await WhereAssignedToUser(
+                _db.Projects.Where(p => p.Id == projectId && !p.IsDeleted),
+                emailLower,
+                uid)
+            .AnyAsync(cancellationToken))
+            return true;
+
         if (!uid.HasValue)
             return false;
 
@@ -314,6 +422,65 @@ public partial class ModernWorkService : IModernWorkService
         return mu.Narrative;
     }
 
+    private static RagStatus? MapRagStatusFromHistory(ProjectRagHistory rh)
+    {
+        if (rh.RagStatusLookup is { } lookup && !string.IsNullOrWhiteSpace(lookup.Name))
+        {
+            return new RagStatus
+            {
+                Id = lookup.Id,
+                Name = lookup.Name,
+                CssClass = lookup.CssClass,
+                BackgroundColourKey = null,
+                TextColourKey = null
+            };
+        }
+
+        if (!string.IsNullOrWhiteSpace(rh.RagStatus))
+        {
+            return new RagStatus
+            {
+                Id = rh.RagStatusLookupId ?? 0,
+                Name = rh.RagStatus.Trim(),
+                BackgroundColourKey = null,
+                TextColourKey = null
+            };
+        }
+
+        return null;
+    }
+
+    private static void ApplyCurrentRagToWorkItem(Project p, WorkItem w)
+    {
+        var current = ProjectCurrentRagResolver.Resolve(p);
+        if (current.StatusId is > 0)
+            w.RagStatusId = current.StatusId;
+
+        var latest = w.RagHistory.OrderByDescending(r => r.UpdatedAt).ThenByDescending(r => r.Id).FirstOrDefault();
+        if (latest?.RagStatus != null)
+            return;
+
+        var snapshot = ProjectCurrentRagResolver.ToRagStatus(current);
+        if (snapshot == null)
+            return;
+
+        if (latest != null)
+        {
+            latest.RagStatus = snapshot;
+            if (current.StatusId is > 0)
+                latest.RagStatusId = current.StatusId.Value;
+            return;
+        }
+
+        w.RagHistory.Add(new WorkItemRagHistory
+        {
+            WorkItemId = p.Id,
+            RagStatusId = current.StatusId ?? 0,
+            UpdatedAt = p.UpdatedAt,
+            RagStatus = snapshot
+        });
+    }
+
     private static WorkItem MapProjectToWorkItem(Project p)
     {
         var w = new WorkItem
@@ -324,7 +491,7 @@ public partial class ModernWorkService : IModernWorkService
             Title = p.Title,
             Status = p.Status ?? "Active",
             FlagshipProject = p.IsFlagship,
-            PortfolioId = p.PrimaryOrganizationalGroupId,
+            PortfolioId = p.BusinessAreaId ?? p.PrimaryOrganizationalGroupId,
             DeliveryPhaseId = p.PhaseId,
             PriorityId = p.DeliveryPriorityId,
             RagStatusId = p.RagStatusLookupId,
@@ -352,27 +519,29 @@ public partial class ModernWorkService : IModernWorkService
                 Justification = rh.Justification,
                 PathToGreen = rh.PathToGreen,
                 UpdatedAt = rh.ChangedAt,
-                RagStatus = rh.RagStatusLookup == null
-                    ? null
-                    : new RagStatus
-                    {
-                        Id = rh.RagStatusLookup.Id,
-                        Name = rh.RagStatusLookup.Name ?? "",
-                        BackgroundColourKey = null,
-                        TextColourKey = null
-                    }
+                RagStatus = MapRagStatusFromHistory(rh)
             });
         }
 
+        ApplyCurrentRagToWorkItem(p, w);
+
+        var ragHistoryDesc = p.RagHistory
+            .OrderByDescending(r => r.ChangedAt)
+            .ThenByDescending(r => r.Id)
+            .ToList();
+
         foreach (var mu in p.MonthlyUpdates)
         {
-            w.MonthlyUpdates.Add(new MonthlyUpdate
+            var rag = MonthlyUpdateRagResolver.Resolve(mu, ragHistoryDesc, p, null);
+            var monthly = new MonthlyUpdate
             {
                 Id = mu.Id,
                 WorkItemId = p.Id,
                 ReportMonth = new DateTime(mu.Year, mu.Month, 1, 0, 0, 0, DateTimeKind.Utc),
                 Narrative = ComposeProjectMonthlyNarrative(mu),
-                RagStatusId = mu.DraftRagStatusLookupId,
+                RagStatusId = rag.StatusId ?? mu.DraftRagStatusLookupId,
+                RagDisplayName = rag.Name,
+                RagCssClass = rag.CssClass,
                 RagJustification = mu.DraftRagJustification,
                 PathToGreen = mu.DraftPathToGreen,
                 SubmittedAt = mu.SubmittedAt,
@@ -380,7 +549,8 @@ public partial class ModernWorkService : IModernWorkService
                 SubmittedBy = mu.CreatedByName ?? mu.CreatedByUser?.Name,
                 PermFte = mu.MonthlyPermFte,
                 MspFte = mu.MonthlyMspFte
-            });
+            };
+            w.MonthlyUpdates.Add(monthly);
         }
 
         foreach (var m in p.Milestones.Where(x => !x.IsDeleted))
@@ -465,11 +635,13 @@ public partial class ModernWorkService : IModernWorkService
             .Include(x => x.RagHistory).ThenInclude(r => r.RagStatusLookup)
             .Include(x => x.MonthlyUpdates).ThenInclude(mu => mu.CreatedByUser)
             .Include(x => x.MonthlyUpdates).ThenInclude(mu => mu.MonthlyUpdateNarratives)
+            .Include(x => x.MonthlyUpdates).ThenInclude(mu => mu.DraftRagStatusLookup)
             .Include(x => x.Milestones)
             .Include(x => x.RagStatusLookup)
             .Include(x => x.PhaseLookup)
             .Include(x => x.DeliveryPriority)
             .Include(x => x.PrimaryOrganizationalGroup)
+            .Include(x => x.BusinessAreaLookup)
             .Include(x => x.ProjectWorkItemTags).ThenInclude(t => t.WorkItemTagLookup)
             .FirstOrDefaultAsync(cancellationToken);
 
@@ -486,9 +658,10 @@ public partial class ModernWorkService : IModernWorkService
 
         var assignedProjects = await WhereAssignedToUser(
                 _db.Projects.AsNoTracking().Where(p => !p.IsDeleted),
-                emailLower)
+                emailLower,
+                currentUser.Id)
             .Include(p => p.RagHistory).ThenInclude(r => r.RagStatusLookup)
-            .Include(p => p.MonthlyUpdates)
+            .Include(p => p.MonthlyUpdates).ThenInclude(mu => mu.DraftRagStatusLookup)
             .Include(p => p.Milestones)
             .Include(p => p.RagStatusLookup)
             .Include(p => p.PhaseLookup)
@@ -553,7 +726,9 @@ public partial class ModernWorkService : IModernWorkService
             ? new List<Project>()
             : await _db.Projects.AsNoTracking()
                 .Where(p => watchedIds.Contains(p.Id))
+                .Include(p => p.RagStatusLookup)
                 .Include(p => p.RagHistory).ThenInclude(r => r.RagStatusLookup)
+                .Include(p => p.MonthlyUpdates).ThenInclude(mu => mu.DraftRagStatusLookup)
                 .OrderByDescending(p => p.UpdatedAt)
                 .ToListAsync(cancellationToken);
         var watchedItems = watchedProjects.Select(MapProjectToWorkItem).ToList();
@@ -568,7 +743,7 @@ public partial class ModernWorkService : IModernWorkService
             .AsNoTracking()
             .Where(p => !p.IsDeleted && p.Status == "Active" && !workIdsWithCurrentMonthUpdate.Contains(p.Id))
             .Include(p => p.RagHistory).ThenInclude(r => r.RagStatusLookup)
-            .Include(p => p.MonthlyUpdates)
+            .Include(p => p.MonthlyUpdates).ThenInclude(mu => mu.DraftRagStatusLookup)
             .Include(p => p.Milestones)
             .Include(p => p.RagStatusLookup)
             .Include(p => p.PhaseLookup)
@@ -621,16 +796,26 @@ public partial class ModernWorkService : IModernWorkService
             })
             .ToList();
 
-        var mrPeriodLabel = now.ToString("MMMM yyyy", CultureInfo.GetCultureInfo("en-GB"));
-        var mrPeriodTitle = startOfThisMonth.ToString("MMM", CultureInfo.GetCultureInfo("en-GB")) + " Update";
-        DateTime? mrDueDate = null;
+        var reportY = startOfThisMonth.Year;
+        var reportM = startOfThisMonth.Month;
+        var explicitMr = _monthlyUpdateService.TryGetActiveExplicitReportingPeriod(reportY, reportM);
+        var mrPeriodLabel = !string.IsNullOrWhiteSpace(explicitMr?.PeriodLabel)
+            ? explicitMr!.PeriodLabel.Trim()
+            : startOfThisMonth.ToString("MMMM yyyy", CultureInfo.GetCultureInfo("en-GB"));
+        var mrPeriodTitle = explicitMr != null
+            ? explicitMr.PeriodStart.ToString("MMM", CultureInfo.GetCultureInfo("en-GB")) + " Update"
+            : startOfThisMonth.ToString("MMM", CultureInfo.GetCultureInfo("en-GB")) + " Update";
+        DateTime? mrDueDate = explicitMr != null
+            ? explicitMr.SubmissionCloses.Date
+            : _monthlyUpdateService.GetMonthlyUpdateDueDate(reportY, reportM);
         var monthlyUpdateRows = new List<HomeMonthlyUpdateRow>();
         var mrSubmitted = 0;
         var mrDraft = 0;
         var mrMissing = 0;
         var nowDateDash = DateTime.UtcNow.Date;
-        var periodOpenDash = new DateTime(nowDateDash.Year, nowDateDash.Month, 20, 0, 0, 0, DateTimeKind.Utc).Date;
-        var monthlyReportingWindowOpen = nowDateDash >= periodOpenDash;
+        var periodOpenDash = GetMonthlySubmissionWindowOpensOn(reportY, reportM);
+        var monthlyReportingWindowOpen = IsMonthlySubmissionWindowOpen(nowDateDash, reportY, reportM);
+        var awaitingSubmissionOpens = !monthlyReportingWindowOpen && nowDateDash < periodOpenDash;
 
         foreach (var w in assignedActivePaused.Where(x => x.Status == "Active" || x.Status == "Paused").OrderBy(x => x.Title))
         {
@@ -661,9 +846,15 @@ public partial class ModernWorkService : IModernWorkService
                 actionUrl = controller.Url.Action("ViewMonthlyUpdate", "ModernWork", new { id = w.Id, updateId = periodUpdate!.Id }) ?? detailUpdatesUrl;
                 actionLabel = "View";
             }
-            else if (nowDateDash < periodOpenDash)
+            else if (awaitingSubmissionOpens)
             {
                 rowKind = "not-due";
+                actionUrl = "";
+                actionLabel = "";
+            }
+            else if (!monthlyReportingWindowOpen)
+            {
+                rowKind = "late";
                 actionUrl = "";
                 actionLabel = "";
             }
@@ -690,8 +881,9 @@ public partial class ModernWorkService : IModernWorkService
 
             string statusLabel;
             if (submitted) statusLabel = "Submitted";
+            else if (awaitingSubmissionOpens) statusLabel = "Not due";
+            else if (!monthlyReportingWindowOpen) statusLabel = draft ? "Draft" : "Late";
             else if (draft) statusLabel = "Draft";
-            else if (!monthlyReportingWindowOpen) statusLabel = "Not due";
             else statusLabel = "Not started";
 
             monthlyUpdateRows.Add(new HomeMonthlyUpdateRow
@@ -718,15 +910,6 @@ public partial class ModernWorkService : IModernWorkService
         }
 
         var reportingGapCount = monthlyReportingWindowOpen ? mrDraft + mrMissing : 0;
-        var workDashCalloutHeading = $"Monthly reporting — {mrPeriodLabel}";
-        string? workDashCalloutBody = null;
-        if (monthlyReportingWindowOpen && reportingGapCount > 0)
-        {
-            var parts = new List<string>();
-            if (mrMissing > 0) parts.Add($"{mrMissing} not started");
-            if (mrDraft > 0) parts.Add($"{mrDraft} in progress");
-            workDashCalloutBody = string.Join(", ", parts) + ".";
-        }
 
         controller.ViewBag.MainNavSection = "work";
         controller.ViewBag.SubNavItem = "work-dashboard";
@@ -761,16 +944,13 @@ public partial class ModernWorkService : IModernWorkService
         controller.ViewBag.WdMrDaysRemaining = null;
         controller.ViewBag.WdMrWindowOpen = monthlyReportingWindowOpen;
         controller.ViewBag.WdMrWindowOpensOn = periodOpenDash;
+        controller.ViewBag.WdMrAwaitingSubmissionOpens = awaitingSubmissionOpens;
         controller.ViewBag.WdMrSubmitted = mrSubmitted;
         controller.ViewBag.WdMrDraft = mrDraft;
         controller.ViewBag.WdMrMissing = mrMissing;
         controller.ViewBag.WdMrActiveAssignedCount = assignedActivePaused.Count(w => w.Status == "Active" || w.Status == "Paused");
         controller.ViewBag.WdMrExtendedReportingTable = true;
         controller.ViewBag.ReportingTabCount = reportingGapCount;
-        controller.ViewBag.WorkDashCalloutHeading = workDashCalloutHeading;
-        controller.ViewBag.WorkDashCalloutBody = workDashCalloutBody;
-        controller.ViewBag.WorkDashCalloutClass = "dfe-c-callout dfe-c-callout--warning dfe-c-mb-3";
-        controller.ViewBag.WorkDashShowCallout = reportingGapCount > 0;
         controller.ViewBag.CurrentPeriodLabel = mrPeriodLabel;
         controller.ViewBag.CurrentPeriodDueDate = mrDueDate;
     }
@@ -872,6 +1052,9 @@ public partial class ModernWorkService : IModernWorkService
         bool registerSortDesc = false,
         CancellationToken cancellationToken = default)
     {
+        var diag = CreateWorkRegisterDiagnostics(isMyWork, registerTab, registerPage, monthlyUpdate);
+        var phaseSw = Stopwatch.StartNew();
+
         var emailLower = EmailLower(userEmail);
         var neutralQ = _db.Projects.AsNoTracking().Where(p => !p.IsDeleted);
 
@@ -924,13 +1107,15 @@ public partial class ModernWorkService : IModernWorkService
         if (tagIdList.Count > 0)
             neutralQ = neutralQ.Where(p => p.ProjectWorkItemTags.Any(t => tagIdList.Contains(t.WorkItemTagLookupId)));
 
-        var mineScopedQ = WhereAssignedToUser(neutralQ, emailLower);
+        var mineScopedQ = WhereAssignedToUser(neutralQ, emailLower, currentUser.Id);
         var baseQ = isMyWork ? mineScopedQ : neutralQ;
 
         var registerActivePausedCountMine = await mineScopedQ.CountAsync(
             p => p.Status == "Active" || p.Status == "Paused", cancellationToken);
         var registerActivePausedCountOrg = await neutralQ.CountAsync(
             p => p.Status == "Active" || p.Status == "Paused", cancellationToken);
+        if (diag.IsEnabled)
+            diag.Phase("scope_counts", phaseSw.ElapsedMilliseconds);
 
         var sortKeyNorm = NormalizeRegisterSortKey(registerSort);
         var filterTagIdUi = tagIdList.Count == 1 ? tagIdList[0] : (int?)null;
@@ -992,6 +1177,13 @@ public partial class ModernWorkService : IModernWorkService
             })
             .ToListAsync(cancellationToken);
 
+        if (diag.IsEnabled)
+        {
+            diag.Phase("filter_lookups", phaseSw.ElapsedMilliseconds,
+                $"portfolios={portfolios.Count} businessAreas={businessAreas.Count} primaryContacts={primaryContactOpts.Count}");
+            phaseSw.Restart();
+        }
+
         var redRag = await _db.RagStatusLookups.AsNoTracking()
             .Where(r => r.Name != null && r.Name.ToLower() == "red")
             .Select(r => r.Id)
@@ -1003,6 +1195,7 @@ public partial class ModernWorkService : IModernWorkService
 
         if (registerPage.HasValue && string.IsNullOrWhiteSpace(monthlyUpdate))
         {
+            diag.LoadPath = "paginated-db";
             var pageSize = registerPageSize < 1 ? 20 : registerPageSize;
 
             var activeCount = await baseQ.CountAsync(p => p.Status == "Active", cancellationToken);
@@ -1032,12 +1225,25 @@ public partial class ModernWorkService : IModernWorkService
             var pageClamped = Math.Min(Math.Max(1, registerPage.Value), pageCount);
             var skip = (pageClamped - 1) * pageSize;
 
+            if (diag.IsEnabled)
+            {
+                diag.Phase("tab_counts", phaseSw.ElapsedMilliseconds,
+                    $"tab={tabKey} total={total} page={pageClamped}/{pageCount}");
+                phaseSw.Restart();
+            }
+
             var sortedTabQ = ApplyRegisterSort(tabQ, registerSort, registerSortDesc);
             var ids = await sortedTabQ
                 .Skip(skip)
                 .Take(pageSize)
                 .Select(p => p.Id)
                 .ToListAsync(cancellationToken);
+
+            if (diag.IsEnabled)
+            {
+                diag.Phase("page_ids", phaseSw.ElapsedMilliseconds, $"ids={ids.Count}");
+                phaseSw.Restart();
+            }
 
             var firstRiskByProject = new Dictionary<int, (int Id, string Reference)>();
             var pageRows = new List<WorkRegisterRow>();
@@ -1056,6 +1262,13 @@ public partial class ModernWorkService : IModernWorkService
                 }
 
                 var pageProjects = await LoadProjectsForWorkRegisterByIdsAsync(ids, cancellationToken);
+                if (diag.IsEnabled)
+                {
+                    diag.RecordEntityLoad(pageProjects);
+                    diag.Phase("load_projects_graph", phaseSw.ElapsedMilliseconds, $"projects={pageProjects.Count}");
+                    phaseSw.Restart();
+                }
+
                 foreach (var p in pageProjects)
                 {
                     var row = BuildWorkRegisterRow(p, firstRiskByProject, nowDate, reportY, reportM, prevMonthDate, prevMonthLabel, currentPeriodLabel, currentDueDate, url);
@@ -1064,10 +1277,13 @@ public partial class ModernWorkService : IModernWorkService
                 }
             }
 
+            if (diag.IsEnabled)
+                diag.Phase("build_rows", phaseSw.ElapsedMilliseconds, $"rows={pageRows.Count}");
+
             var rowStart = total == 0 ? 0 : skip + 1;
             var rowEnd = total == 0 ? 0 : skip + pageRows.Count;
 
-            return new WorkRegisterViewModel
+            var paginatedVm = new WorkRegisterViewModel
             {
                 PageTitle = isMyWork ? "My work" : "Work register",
                 PageDescription = isMyWork ? "Work assigned to you" : "Active, paused and recently completed work items",
@@ -1117,11 +1333,18 @@ public partial class ModernWorkService : IModernWorkService
                 RegisterDisplayRowEnd = rowEnd,
                 RegisterPageRows = pageRows
             };
+            CompleteWorkRegisterDiagnostics(diag, paginatedVm);
+            return paginatedVm;
         }
+
+        diag.LoadPath = registerPage.HasValue ? "paginated-in-memory" : "full-load";
+        if (diag.IsEnabled)
+            phaseSw.Restart();
 
         var allProjects = await baseQ
             .AsSplitQuery()
             .Include(p => p.RagStatusLookup)
+            .Include(p => p.RagHistory).ThenInclude(r => r.RagStatusLookup)
             .Include(p => p.PhaseLookup)
             .Include(p => p.DeliveryPriority)
             .Include(p => p.PrimaryOrganizationalGroup)
@@ -1129,11 +1352,18 @@ public partial class ModernWorkService : IModernWorkService
             .Include(p => p.BusinessAreaLookup)
             .Include(p => p.Directorates).ThenInclude(d => d.Division)
             .Include(p => p.Milestones)
-            .Include(p => p.MonthlyUpdates)
+            .Include(p => p.MonthlyUpdates).ThenInclude(mu => mu.DraftRagStatusLookup)
             .Include(p => p.SeniorResponsibleOfficers).ThenInclude(s => s.User)
             .Include(p => p.ProjectWorkItemTags).ThenInclude(l => l.WorkItemTagLookup)
             .OrderByDescending(p => p.UpdatedAt)
             .ToListAsync(cancellationToken);
+
+        if (diag.IsEnabled)
+        {
+            diag.RecordEntityLoad(allProjects);
+            diag.Phase("load_all_projects_graph", phaseSw.ElapsedMilliseconds, $"projects={allProjects.Count}");
+            phaseSw.Restart();
+        }
 
         var projectIds = allProjects.Select(p => p.Id).ToList();
         var firstRiskByProjectSlow = new Dictionary<int, (int Id, string Reference)>();
@@ -1203,7 +1433,7 @@ public partial class ModernWorkService : IModernWorkService
             var rowStart = total == 0 ? 0 : skip + 1;
             var rowEnd = total == 0 ? 0 : skip + pageRows.Count;
 
-            return new WorkRegisterViewModel
+            var inMemoryPaginatedVm = new WorkRegisterViewModel
             {
                 PageTitle = isMyWork ? "My work" : "Work register",
                 PageDescription = isMyWork ? "Work assigned to you" : "Active, paused and recently completed work items",
@@ -1253,9 +1483,11 @@ public partial class ModernWorkService : IModernWorkService
                 RegisterDisplayRowEnd = rowEnd,
                 RegisterPageRows = pageRows
             };
+            CompleteWorkRegisterDiagnostics(diag, inMemoryPaginatedVm);
+            return inMemoryPaginatedVm;
         }
 
-        return new WorkRegisterViewModel
+        var fullVm = new WorkRegisterViewModel
         {
             PageTitle = isMyWork ? "My work" : "Work register",
             PageDescription = isMyWork ? "Work assigned to you" : "Active, paused and recently completed work items",
@@ -1296,6 +1528,8 @@ public partial class ModernWorkService : IModernWorkService
             RegisterSortDescending = registerSortDesc,
             FilterTagId = filterTagIdUi
         };
+        CompleteWorkRegisterDiagnostics(diag, fullVm);
+        return fullVm;
     }
 
     public async Task<List<WorkItem>> GetWatchingWorkItemsAsync(
@@ -1365,7 +1599,9 @@ public partial class ModernWorkService : IModernWorkService
             q = q.Where(p => p.Status == status);
 
         var projects = await q
+            .Include(p => p.RagStatusLookup)
             .Include(p => p.RagHistory).ThenInclude(r => r.RagStatusLookup)
+            .Include(p => p.MonthlyUpdates).ThenInclude(mu => mu.DraftRagStatusLookup)
             .Include(p => p.Directorates).ThenInclude(d => d.Division)
             .Include(p => p.BusinessAreaLookup)
             .Include(p => p.ProjectMissions).ThenInclude(pm => pm.Mission)
@@ -1404,12 +1640,46 @@ public partial class ModernWorkService : IModernWorkService
             q = q.Where(p => p.Status == status);
 
         var projects = await q
+            .Include(p => p.RagStatusLookup)
             .Include(p => p.RagHistory).ThenInclude(r => r.RagStatusLookup)
+            .Include(p => p.MonthlyUpdates).ThenInclude(mu => mu.DraftRagStatusLookup)
             .Include(p => p.Directorates).ThenInclude(d => d.Division)
             .Include(p => p.BusinessAreaLookup)
             .OrderBy(p => p.Title)
             .ToListAsync(cancellationToken);
 
         return projects.Select(MapProjectToWorkItem).ToList();
+    }
+
+    private static void EnrichMonthlyUpdateRagDisplay(
+        WorkItem work,
+        Project p,
+        IReadOnlyDictionary<int, RagStatusLookup> ragLookupById)
+    {
+        var historyDesc = p.RagHistory
+            .OrderByDescending(r => r.ChangedAt)
+            .ThenByDescending(r => r.Id)
+            .ToList();
+        var sourceById = p.MonthlyUpdates.ToDictionary(mu => mu.Id);
+
+        foreach (var mu in work.MonthlyUpdates)
+        {
+            if (!sourceById.TryGetValue(mu.Id, out var source))
+                continue;
+
+            var rag = MonthlyUpdateRagResolver.Resolve(source, historyDesc, p, ragLookupById);
+            MonthlyUpdateRagResolver.ApplyDisplay(
+                rag,
+                ragLookupById,
+                (statusId, name, cssClass) =>
+                {
+                    if (statusId is > 0)
+                        mu.RagStatusId = statusId;
+                    if (!string.IsNullOrWhiteSpace(name))
+                        mu.RagDisplayName = name;
+                    if (!string.IsNullOrWhiteSpace(cssClass))
+                        mu.RagCssClass = cssClass;
+                });
+        }
     }
 }

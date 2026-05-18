@@ -1,0 +1,153 @@
+@model Compass.ViewModels.Modern.Ddr.DdrOversightViewModel
+@using Compass.ViewModels.Modern
+@{
+  ViewData["Title"] = "DDR oversight queue";
+
+  string StatusBadgeClass(string status) => status switch
+  {
+    "Draft" => "dfe-f-badge dfe-f-badge--grey dfe-f-badge--small",
+    "Proposed" => "dfe-f-badge dfe-f-badge--blue dfe-f-badge--small",
+    "In use" => "dfe-f-badge dfe-f-badge--green dfe-f-badge--small",
+    "Under review" => "dfe-f-badge dfe-f-badge--orange dfe-f-badge--small",
+    "Approved" => "dfe-f-badge dfe-f-badge--teal dfe-f-badge--small",
+    "Rejected" => "dfe-f-badge dfe-f-badge--red dfe-f-badge--small",
+    "Superseded" => "dfe-f-badge dfe-f-badge--purple dfe-f-badge--small",
+    "Retired" => "dfe-f-badge dfe-f-badge--grey dfe-f-badge--small",
+    _ => "dfe-f-badge dfe-f-badge--grey dfe-f-badge--small",
+  };
+
+  var filters = new (string Key, string Label)[] {
+    ("new", "New submissions"),
+    ("pending-insight", "Awaiting insight"),
+    ("deviations", "Deviations"),
+    ("accessibility", "Accessibility"),
+    ("no-classification", "No classification"),
+    ("overdue", "Overdue review"),
+    ("all", "All records"),
+  };
+
+  string ActiveFilterLabel(string key) => key.Trim().ToLowerInvariant() switch
+  {
+    "new" => "New submissions",
+    "pending-insight" => "Awaiting insight",
+    "deviations" => "Deviations",
+    "accessibility" => "Accessibility",
+    "no-classification" => "No classification",
+    "overdue" => "Overdue review",
+    "all" => "All records",
+    _ => key,
+  };
+  var activeFilterLabel = ActiveFilterLabel(Model.ActiveFilter ?? "");
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Register", "ModernDesignDecisionRecords")">Design decision records</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">Oversight</li>
+}
+
+<div class="modern-work-page ddr-oversight">
+
+@{
+  var ddrOversightLede = await Html.PartialAsync("~/Views/Modern/DesignDecisionRecords/_DdrOversightHeaderLede.cshtml");
+}
+@await Html.PartialAsync("~/Views/Modern/Shared/_ModernPageHeader.cshtml", new ModernPageHeaderViewModel {
+  Caption = "Design decision records",
+  Title = "DesignOps oversight queue",
+  HeadingClass = "govuk-heading-l",
+  Lede = ddrOversightLede
+})
+
+<nav class="dfe-f-sub-navigation govuk-!-margin-bottom-4" aria-label="Filter DDR oversight queue">
+  <ul class="dfe-f-sub-navigation__list">
+    @foreach (var f in filters)
+    {
+      var isActive = string.Equals(Model.ActiveFilter, f.Key, StringComparison.OrdinalIgnoreCase);
+      var count = Model.Counts.TryGetValue(f.Key, out var c) ? c : 0;
+      var url = Url.Action("Oversight", "ModernDesignDecisionRecords", new { filter = f.Key });
+      <li class="dfe-f-sub-navigation__item@(isActive ? " dfe-f-sub-navigation__item--active" : "")">
+        <a class="dfe-f-sub-navigation__link govuk-link govuk-link--no-visited-state" href="@url"@if (isActive) { <text> aria-current="page"</text> }>@f.Label (@count.ToString("N0"))</a>
+      </li>
+    }
+  </ul>
+</nav>
+
+<p class="govuk-body govuk-!-margin-bottom-4" id="ddr-oversight-summary">
+  <span class="govuk-!-font-tabular-numbers govuk-!-font-weight-bold">@Model.Rows.Count.ToString("N0")</span>
+  <span> record@(Model.Rows.Count == 1 ? "" : "s")</span>
+  <span class="dfe-c-text-muted"> · Filter: @activeFilterLabel</span>
+  <span class="dfe-c-text-muted"> · Up to 200 shown, newest first</span>
+</p>
+
+<section class="ddr-oversight__results govuk-!-margin-top-2" aria-labelledby="ddr-oversight-results-heading">
+  <h2 class="govuk-heading-m govuk-!-margin-bottom-4" id="ddr-oversight-results-heading">Queue</h2>
+
+@if (Model.Rows.Count == 0)
+{
+  <div class="ddr-register__empty ddr-register__empty--inform">
+    <h3 class="govuk-heading-s govuk-!-margin-top-2">No DDRs match this filter</h3>
+    <p class="govuk-body govuk-!-margin-bottom-0">Choose another filter above, or open the <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("Register", "ModernDesignDecisionRecords")">full register</a> to search.</p>
+  </div>
+}
+else
+{
+  <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+    <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+    <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed">
+      <caption class="govuk-table__caption govuk-visually-hidden">DDR oversight queue</caption>
+      <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+          <th scope="col" class="govuk-table__header" aria-sort="none">
+            <button type="button" class="dfe-f-table-sort-button">Reference</button>
+          </th>
+          <th scope="col" class="govuk-table__header" aria-sort="none">
+            <button type="button" class="dfe-f-table-sort-button">Title</button>
+          </th>
+          <th scope="col" class="govuk-table__header" aria-sort="none">
+            <button type="button" class="dfe-f-table-sort-button">Category</button>
+          </th>
+          <th scope="col" class="govuk-table__header" aria-sort="none">
+            <button type="button" class="dfe-f-table-sort-button">Status</button>
+          </th>
+          <th scope="col" class="govuk-table__header" aria-sort="none">
+            <button type="button" class="dfe-f-table-sort-button">Deviation</button>
+          </th>
+          <th scope="col" class="govuk-table__header" aria-sort="none">
+            <button type="button" class="dfe-f-table-sort-button">Author</button>
+          </th>
+          <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none">
+            <button type="button" class="dfe-f-table-sort-button">Updated</button>
+          </th>
+        </tr>
+      </thead>
+      <tbody class="govuk-table__body">
+        @foreach (var row in Model.Rows)
+        {
+          <tr class="govuk-table__row">
+            <td class="govuk-table__cell">
+              <a class="govuk-link govuk-link--no-visited-state govuk-link--no-underline govuk-!-font-weight-bold" href="@Url.Action("Detail", "ModernDesignDecisionRecords", new { reference = row.Reference })">@row.Reference</a>
+            </td>
+            <td class="govuk-table__cell">@row.ShortTitle</td>
+            <td class="govuk-table__cell">@row.Category</td>
+            <td class="govuk-table__cell"><span class="@StatusBadgeClass(row.Status)">@row.Status</span></td>
+            <td class="govuk-table__cell">
+              @if (row.DeviationFlag)
+              {
+                <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--red">Yes</span>
+              }
+              else
+              {
+                <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--grey">No</span>
+              }
+            </td>
+            <td class="govuk-table__cell">@(string.IsNullOrWhiteSpace(row.AuthorDisplayName) ? "—" : row.AuthorDisplayName)</td>
+            <td class="govuk-table__cell govuk-table__cell--numeric govuk-!-font-tabular-numbers ddr-register__muted">@row.UpdatedAt.ToString("d MMM yyyy")</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+}
+</section>
+
+</div>

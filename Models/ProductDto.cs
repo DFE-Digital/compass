@@ -89,6 +89,14 @@ public class ProductDto
     
     [System.Text.Json.Serialization.JsonIgnore]
     public EntraUserDto? UserResearcher => UserResearchers?.FirstOrDefault();
+
+    /// <summary>FIPS service register enrichment (not from CMS API).</summary>
+    [JsonIgnore]
+    public string? BusinessArea { get; set; }
+
+    /// <summary>FIPS service register type labels (comma-separated).</summary>
+    [JsonIgnore]
+    public string? ProductType { get; set; }
 }
 
 public class CategoryValueDto

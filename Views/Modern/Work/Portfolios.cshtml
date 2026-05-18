@@ -1,5 +1,6 @@
 @model Compass.Models.Modern.Work.WorkPortfoliosViewModel
 @using Compass.Models.Modern.Work
+@using Compass.ViewModels.Modern
 @{
     ViewData["Title"] = "Portfolios";
     string McCss(int p) => p >= 85 ? "var(--rag-g)" : p >= 50 ? "var(--rag-a)" : "var(--rag-r)";
@@ -11,16 +12,16 @@
 }
 
 <div id="sc-work-portfolios">
- <div class="dfe-c-flex--between dfe-c-mb-3" style="flex-wrap:wrap;gap:1rem;">
- <div class="dfe-c-page-title" style="margin:0;">
- <div class="dfe-c-page-title__caption">Work</div>
- <h1 class="dfe-c-page-title__heading">Portfolios</h1>
- <p class="dfe-c-page-title__lede">@Model.LedePeriodLabel</p>
-    </div>
- <div class="dfe-c-export-group" style="margin:0;">
- <a class="govuk-button govuk-button--outline-blue" href="@Url.Action("ExportPortfolios", "ModernWork")">Export</a>
-    </div>
-  </div>
+@{
+  var portfoliosActions = await Html.PartialAsync("_PortfoliosHeaderActions");
+  var portfoliosLede = await Html.PartialAsync("_GovukBodyParagraph", Model.LedePeriodLabel ?? "");
+}
+@await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+  Caption = "Work",
+  Title = "Portfolios",
+  Lede = portfoliosLede,
+  Actions = portfoliosActions
+})
 
   @if (Model.Rows.Count == 0)
   {
@@ -28,80 +29,97 @@
   }
   else
   {
- <div class="dfe-c-grid dfe-c-grid--3 dfe-c-mb-3">
- <div class="dfe-c-metric dfe-c-metric--grey">
- <div class="dfe-c-metric__number">@Model.TotalWorkItems</div>
- <div class="dfe-c-metric__label">Total work items</div>
+ <div class="dfe-f-card-grid govuk-!-margin-bottom-3">
+ <div class="dfe-f-stat-card dfe-f-stat-card--tint-grey">
+ <p class="govuk-body-s dfe-f-stat-card__label">Total work items</p>
+ <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@Model.TotalWorkItems</p>
       </div>
- <div class="dfe-c-metric dfe-c-metric--red">
- <div class="dfe-c-metric__number" style="color:var(--rag-r);">@Model.RedWorkCount</div>
- <div class="dfe-c-metric__label">Red across portfolios</div>
+ <div class="dfe-f-stat-card dfe-f-stat-card--tint-red">
+ <p class="govuk-body-s dfe-f-stat-card__label">Red across portfolios</p>
+ <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@Model.RedWorkCount</p>
       </div>
- <div class="dfe-c-metric dfe-c-metric--amber">
- <div class="dfe-c-metric__number" style="color:@McCss(Model.MonthlyCompliancePercent);">@Model.MonthlyCompliancePercent%</div>
- <div class="dfe-c-metric__label">Monthly update compliance</div>
+ <div class="dfe-f-stat-card dfe-f-stat-card--tint-orange">
+ <p class="govuk-body-s dfe-f-stat-card__label">Monthly update compliance</p>
+ <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@Model.MonthlyCompliancePercent%</p>
       </div>
     </div>
 
- <div class="dfe-c-table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Portfolio</th>
-            <th>Directorate</th>
-            <th>Head of portfolio</th>
-            <th>Work items</th>
-            <th>RAG breakdown</th>
-            <th>RAG</th>
-            <th>Monthly updates</th>
-            <th>Open risks</th>
+ <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+      <table class="govuk-table">
+        <thead class="govuk-table__head">
+          <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Portfolio</button>
+        </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Directorate</button>
+        </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Head of portfolio</button>
+        </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Work items</button>
+        </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">RAG breakdown</button>
+        </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">RAG</button>
+        </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Monthly updates</button>
+        </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Open risks</button>
+        </th>
           </tr>
         </thead>
-        <tbody>
+        <tbody class="govuk-table__body">
         @foreach (var row in Model.Rows)
         {
           var ragTotal = row.RagGreen + row.RagAmber + row.RagRed;
-          <tr>
-            <td>
-              <a href="@Url.Action("Dashboard", "Reporting", new { section = "portfolio", portfolioId = row.PortfolioId })" style="font-weight:700;">@row.Name</a>
+          <tr class="govuk-table__row">
+            <td class="govuk-table__cell">
+              <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("Dashboard", "Reporting", new { section = "portfolio", portfolioId = row.PortfolioId })">@row.Name</a>
               @if (!string.IsNullOrWhiteSpace(row.Description))
               {
-                <div style="font-size:0.8125rem;color:var(--grey-4);">@row.Description</div>
+                <div>@row.Description</div>
               }
             </td>
-            <td>@row.DirectorateDisplay</td>
-            <td>@(row.HeadOfPortfolioDisplay ?? "—")</td>
-            <td>@row.WorkItemCount</td>
-            <td>
+            <td class="govuk-table__cell">@row.DirectorateDisplay</td>
+            <td class="govuk-table__cell">@(row.HeadOfPortfolioDisplay ?? "—")</td>
+            <td class="govuk-table__cell">@row.WorkItemCount</td>
+            <td class="govuk-table__cell">
               @if (ragTotal == 0)
               {
  <span class="dfe-c-text-muted">—</span>
               }
               else
               {
-                <div style="display:flex;gap:2px;height:0.5rem;border-radius:1px;overflow:hidden;width:6rem;">
+                <div>
                   @if (row.RagGreen > 0)
                   {
-                    <div style="flex:@row.RagGreen;background:var(--rag-g);"></div>
+                    <div></div>
                   }
                   @if (row.RagAmber > 0)
                   {
-                    <div style="flex:@row.RagAmber;background:var(--rag-a);"></div>
+                    <div></div>
                   }
                   @if (row.RagRed > 0)
                   {
-                    <div style="flex:@row.RagRed;background:var(--rag-r);"></div>
+                    <div></div>
                   }
                 </div>
-                <div style="font-size:0.75rem;color:var(--grey-4);margin-top:0.25rem;">@row.RagGreen G · @row.RagAmber A · @row.RagRed R</div>
+                <div>@row.RagGreen G · @row.RagAmber A · @row.RagRed R</div>
               }
             </td>
- <td><span class="dfe-c-rag @row.PortfolioRagClass">@row.PortfolioRagLabel</span></td>
-            <td><strong style="color:@row.MonthlyComplianceCssVar;">@row.MonthlyCompliancePercent%</strong></td>
-            <td>
+ <td class="govuk-table__cell"><span class="dfe-c-rag @row.PortfolioRagClass">@row.PortfolioRagLabel</span></td>
+            <td class="govuk-table__cell"><strong>@row.MonthlyCompliancePercent%</strong></td>
+            <td class="govuk-table__cell">
               @if (row.OpenRisksCount > 0)
               {
-                <a href="@Url.RouteUrl("risks-issues-section", new { action = "Register" })" style="color:var(--blue);">@row.OpenRisksCount</a>
+                <a class="govuk-link govuk-link--no-visited-state" href="@Url.RouteUrl("risks-issues-section", new { action = "Register" })">@row.OpenRisksCount</a>
               }
               else
               {

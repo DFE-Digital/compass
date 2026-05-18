@@ -1,5 +1,6 @@
 @using System.Globalization
 @model Compass.ViewModels.Modern.ServiceLineFormViewModel
+@using Compass.ViewModels.Modern
 @{
     ViewData["Title"] = (Model.IsNew ? "Add" : "Edit") + " service line — Compass";
     var divSelected = Model.SelectedDivisionIds.ToHashSet();
@@ -15,7 +16,7 @@
 
 @section Breadcrumbs {
  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
- <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Fips", "ModernManage")">Service Register</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("FipsDashboard", "ModernManage")">Service register</a></li>
  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("ServiceLines", "ModernManage")">Service lines</a></li>
  <li class="govuk-breadcrumbs__list-item" aria-current="page">@(Model.IsNew ? "Add" : "Edit")</li>
 }
@@ -38,21 +39,15 @@
     background: transparent; border: 0; font: inherit; cursor: pointer;
   }
   .service-line-pick__result-btn:hover, .service-line-pick__result-btn:focus { background: #f3f2f1; outline: 3px solid #fd0; outline-offset: 0; }
-  .service-line-pick__row {
-    display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.75rem;
-    padding: 0.5rem 0; border-bottom: 1px solid #b1b4b6; margin: 0; list-style: none;
-  }
-  .service-line-pick__row:last-child { border-bottom: 0; }
-  .service-line-pick__row-label { flex: 1; min-width: 10rem; }
   .rpt-aside h2 { font-size: 1.125rem; margin: 0 0 0.5rem; }
   .rpt-aside p:last-child { margin-bottom: 0; }
 </style>
 }
 
-<div class="dfe-c-page-title dfe-c-mb-4">
- <div class="dfe-c-page-title__caption">Service Register</div>
- <h1 class="dfe-c-page-title__heading">@(Model.IsNew ? "Add service line" : "Edit service line")</h1>
-</div>
+@await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+  Caption = "Service Register",
+  Title = Model.IsNew ? "Add service line" : "Edit service line"
+})
 
 @if (!ViewData.ModelState.IsValid)
 {
@@ -89,10 +84,10 @@
  <textarea class="govuk-textarea" id="Description" name="Description" rows="5" aria-describedby="Description-hint">@Model.Description</textarea>
     </div>
 
- <fieldset class="govuk-fieldset govuk-!-margin-bottom-4">
+ <fieldset class="govuk-fieldset govuk-!-margin-bottom-6" id="sl-directorates">
  <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Directorates</legend>
  <div class="govuk-hint" id="div-hint">Select the directorates this service line covers.</div>
- <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes" style="max-height:14rem;overflow-y:auto;border:1px solid #b1b4b6;padding:0.75rem;" aria-describedby="div-hint">
+ <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes" aria-describedby="div-hint">
  @foreach (var o in Model.DivisionOptions)
  {
  var id = int.Parse(o.Value, CultureInfo.InvariantCulture);
@@ -112,10 +107,10 @@
         </div>
     </fieldset>
 
- <fieldset class="govuk-fieldset govuk-!-margin-bottom-4">
+ <fieldset class="govuk-fieldset govuk-!-margin-bottom-6" id="sl-business-areas">
  <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Business areas</legend>
  <div class="govuk-hint" id="ba-hint">Select the business areas this line applies to.</div>
- <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes" style="max-height:14rem;overflow-y:auto;border:1px solid #b1b4b6;padding:0.75rem;" aria-describedby="ba-hint">
+ <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes" aria-describedby="ba-hint">
  @foreach (var o in Model.BusinessAreaOptions)
  {
  var id = int.Parse(o.Value, CultureInfo.InvariantCulture);
@@ -136,61 +131,101 @@
     </fieldset>
 
   <h2 class="govuk-heading-m" id="sl-fips-heading">FIPS (service register) products</h2>
-  <p class="govuk-body-s govuk-!-text-secondary govuk-!-margin-bottom-2">Search the in-app service register, then add each product to the list. Remove items you no longer need.</p>
-  <div class="js-service-line-pick service-line-pick govuk-!-margin-bottom-4"
+  <p class="govuk-hint govuk-!-margin-bottom-2">Search the in-app service register, then add each product. Remove opens a confirmation dialog.</p>
+  <div class="js-service-line-pick service-line-pick govuk-!-margin-bottom-6"
        data-sl-search-url="@pickProductsUrl"
        data-sl-field-name="ProductIds"
        data-sl-id-kind="guid"
+       data-sl-confirm-title="Remove product?"
+       data-sl-confirm-body="This product will be removed from the service line. You can search and add it again before saving."
        data-module="">
- <div class="govuk-form-group govuk-!-margin-bottom-1">
+ <div class="govuk-form-group govuk-!-margin-bottom-2">
         <label class="govuk-label" for="sl-fips-search">Add a FIPS product</label>
-  <p class="govuk-hint" id="sl-fips-hint">Type at least 2 characters. Choose a result to add it to the list below.</p>
+  <div class="govuk-hint" id="sl-fips-hint">Type at least 2 characters. Choose a result to add it to the table below.</div>
  <div class="service-line-pick__combo">
  <input class="govuk-input js-sl-search" id="sl-fips-search" name="sl_fips_query" type="search" aria-describedby="sl-fips-hint" aria-autocomplete="list" autocomplete="off" />
  <div class="js-sl-results service-line-pick__results" id="sl-fips-results" hidden></div>
         </div>
     </div>
+
  <h3 class="govuk-heading-s" id="sl-fips-sel-lbl">Selected FIPS products</h3>
- <p class="govuk-body-s govuk-!-text-secondary govuk-!-margin-bottom-0" id="sl-fips-empty" style="@(Model.InitialProducts.Count > 0 ? "display:none" : null)">None added yet.</p>
- <ul class="js-sl-selected service-line-pick__selected govuk-!-margin-0" id="sl-fips-selected" role="list" aria-labelledby="sl-fips-sel-lbl" style="@(Model.InitialProducts.Count == 0 ? "display:none" : null)">
+ <p class="govuk-body-s dfe-c-text-muted govuk-!-margin-bottom-0" id="sl-fips-empty" style="@(Model.InitialProducts.Count > 0 ? "display:none" : null)">None added yet.</p>
+ <div id="sl-fips-table-wrap" class="dfe-f-table-wrapper govuk-!-margin-bottom-0" data-module="dfe-f-table" style="@(Model.InitialProducts.Count == 0 ? "display:none" : null)">
+ <table class="govuk-table govuk-table--small-text-until-tablet">
+ <caption class="govuk-table__caption govuk-table__caption--m govuk-visually-hidden">Selected FIPS products</caption>
+ <thead class="govuk-table__head">
+ <tr class="govuk-table__row">
+ <th scope="col" class="govuk-table__header">Product</th>
+ <th scope="col" class="govuk-table__header govuk-!-width-one-quarter govuk-!-text-align-right">Action</th>
+ </tr>
+ </thead>
+ <tbody id="sl-fips-selected" class="govuk-table__body js-sl-selected" aria-labelledby="sl-fips-sel-lbl">
     @foreach (var p in Model.InitialProducts)
     {
-  <li class="service-line-pick__row" data-id="@p.Id">
+ <tr data-id="@p.Id">
+ <td class="govuk-table__cell">
   <input type="hidden" name="ProductIds" value="@p.Id" />
-  <span class="service-line-pick__row-label">@p.Label</span>
-  <button type="button" class="govuk-link service-line-pick__remove js-sl-remove" aria-label="Remove @p.Label">Remove</button>
-  </li>
+  @p.Label
+ </td>
+ <td class="govuk-table__cell govuk-!-text-align-right">
+  <a href="#" class="govuk-link js-sl-remove govuk-link--no-visited-state" aria-label="Remove @p.Label">Remove</a>
+ </td>
+ </tr>
     }
-  </ul>
+ </tbody>
+ </table>
+ </div>
   </div>
 
-  <h2 class="govuk-heading-m" id="sl-wrk-heading" style="padding-top:0.5rem;">Work items</h2>
-  <p class="govuk-body-s govuk-!-text-secondary govuk-!-margin-bottom-2">Search by title or work code, add to the list, and remove as needed.</p>
-  <div class="js-service-line-pick service-line-pick govuk-!-margin-bottom-4"
+  <h2 class="govuk-heading-m" id="sl-wrk-heading">Work items</h2>
+  <p class="govuk-hint govuk-!-margin-bottom-2">Search by title or work code, then add each item. Remove opens a confirmation dialog.</p>
+  <div class="js-service-line-pick service-line-pick govuk-!-margin-bottom-6"
        data-sl-search-url="@pickWorkUrl"
        data-sl-field-name="ProjectIds"
        data-sl-id-kind="int"
+       data-sl-confirm-title="Remove work item?"
+       data-sl-confirm-body="This work item will be removed from the service line. You can search and add it again before saving."
        data-module="">
- <div class="govuk-form-group govuk-!-margin-bottom-1">
+ <div class="govuk-form-group govuk-!-margin-bottom-2">
   <label class="govuk-label" for="sl-wrk-search">Add a work item</label>
-  <p class="govuk-hint" id="sl-wrk-hint">Type at least 2 characters.</p>
+  <div class="govuk-hint" id="sl-wrk-hint">Type at least 2 characters.</div>
  <div class="service-line-pick__combo">
   <input class="govuk-input js-sl-search" id="sl-wrk-search" name="sl_wk_query" type="search" aria-describedby="sl-wrk-hint" aria-autocomplete="list" autocomplete="off" />
  <div class="js-sl-results service-line-pick__results" id="sl-wrk-results" hidden></div>
   </div>
   </div>
-  <h3 class="govuk-heading-s" id="sl-wrk-sel-lbl">Selected work items</h3>
-  <p class="govuk-body-s govuk-!-text-secondary govuk-!-margin-bottom-0" id="sl-wrk-empty" style="@(Model.InitialWork.Count > 0 ? "display:none" : null)">None added yet.</p>
-  <ul class="js-sl-selected service-line-pick__selected govuk-!-margin-0" id="sl-wrk-selected" role="list" aria-labelledby="sl-wrk-sel-lbl" style="@(Model.InitialWork.Count == 0 ? "display:none" : null)">
+
+ <h3 class="govuk-heading-s" id="sl-wrk-sel-lbl">Selected work items</h3>
+ <p class="govuk-body-s dfe-c-text-muted govuk-!-margin-bottom-0" id="sl-wrk-empty" style="@(Model.InitialWork.Count > 0 ? "display:none" : null)">None added yet.</p>
+ <div id="sl-wrk-table-wrap" class="dfe-f-table-wrapper govuk-!-margin-bottom-0" data-module="dfe-f-table" style="@(Model.InitialWork.Count == 0 ? "display:none" : null)">
+ <table class="govuk-table govuk-table--small-text-until-tablet">
+ <caption class="govuk-table__caption govuk-table__caption--m govuk-visually-hidden">Selected work items</caption>
+ <thead class="govuk-table__head">
+ <tr class="govuk-table__row">
+ <th scope="col" class="govuk-table__header">Work item</th>
+ <th scope="col" class="govuk-table__header govuk-!-width-one-quarter govuk-!-text-align-right">Action</th>
+ </tr>
+ </thead>
+ <tbody id="sl-wrk-selected" class="govuk-table__body js-sl-selected" aria-labelledby="sl-wrk-sel-lbl">
     @foreach (var w in Model.InitialWork)
     {
-  <li class="service-line-pick__row" data-id="@w.Id">
+ <tr data-id="@w.Id">
+ <td class="govuk-table__cell">
   <input type="hidden" name="ProjectIds" value="@w.Id" />
-  <span class="service-line-pick__row-label">@w.Label</span>
-  <button type="button" class="govuk-link service-line-pick__remove js-sl-remove" aria-label="Remove @w.Label">Remove</button>
-  </li>
+  @w.Label
+  @if (!string.IsNullOrWhiteSpace(w.Subtitle))
+  {
+   <div class="govuk-body-s dfe-c-text-muted modern-work-table__meta">@w.Subtitle</div>
+  }
+ </td>
+ <td class="govuk-table__cell govuk-!-text-align-right">
+  <a href="#" class="govuk-link js-sl-remove govuk-link--no-visited-state" aria-label="Remove @w.Label">Remove</a>
+ </td>
+ </tr>
     }
-  </ul>
+ </tbody>
+ </table>
+ </div>
   </div>
 
  <div class="govuk-button-group">
@@ -214,7 +249,7 @@
   <h3 class="govuk-heading-s govuk-!-margin-top-4" id="sl-fips-title">FIPS products</h3>
   <p class="govuk-body-s">Only products stored in the Compass FIPS / service register can be added. Use search to find them; inactive or retired items may be excluded from search if configured.</p>
   <h3 class="govuk-heading-s govuk-!-margin-top-4">Work items</h3>
-  <p class="govuk-body-s">Search by <strong>title</strong> or <strong>project code</strong>. You can add several work items and change the list at any time before saving.</p>
+  <p class="govuk-body-s">Search by <strong>title</strong> or <strong>project code</strong>. Selected items show the work ID (for example <strong>WI-00000123</strong>) like the work register.</p>
   </aside>
   </div>
 </div>
@@ -223,28 +258,30 @@
   <script src="~/modern/js/service-line-pickers.js" asp-append-version="true" nonce="@(Context.Items["Nonce"]?.ToString() ?? "")"></script>
   <script nonce="@(Context.Items["Nonce"]?.ToString() ?? "")">
     (function () {
-      function setVis(emptyEl, listEl) {
-        if (!listEl) return;
-        var n = listEl.querySelectorAll('li').length;
+      function setVis(emptyEl, tbodyEl, wrapEl) {
+        if (!tbodyEl) return;
+        var n = tbodyEl.querySelectorAll('tr').length;
         if (n === 0) {
           if (emptyEl) { emptyEl.style.display = ''; }
-          listEl.style.display = 'none';
+          if (wrapEl) { wrapEl.style.display = 'none'; }
         } else {
           if (emptyEl) { emptyEl.style.display = 'none'; }
-          listEl.style.display = '';
+          if (wrapEl) { wrapEl.style.display = ''; }
         }
       }
       var emptyF = document.getElementById('sl-fips-empty');
-      var listF = document.getElementById('sl-fips-selected');
+      var tbodyF = document.getElementById('sl-fips-selected');
+      var wrapF = document.getElementById('sl-fips-table-wrap');
       var emptyW = document.getElementById('sl-wrk-empty');
-      var listW = document.getElementById('sl-wrk-selected');
-      function wire(list, emptyLabel) {
-        if (!list) return;
-        var ro = new MutationObserver(function () { setVis(emptyLabel, list); });
-        ro.observe(list, { childList: true, subtree: true });
+      var tbodyW = document.getElementById('sl-wrk-selected');
+      var wrapW = document.getElementById('sl-wrk-table-wrap');
+      function wire(tbody, emptyLabel, wrap) {
+        if (!tbody) return;
+        var ro = new MutationObserver(function () { setVis(emptyLabel, tbody, wrap); });
+        ro.observe(tbody, { childList: true, subtree: true });
       }
-      wire(listF, emptyF);
-      wire(listW, emptyW);
+      wire(tbodyF, emptyF, wrapF);
+      wire(tbodyW, emptyW, wrapW);
     })();
   </script>
 }

@@ -1,0 +1,83 @@
+@model Compass.ViewModels.Modern.StandardsManagementViewModel
+@{
+  string StatusBadgeClass(string status) => status switch
+  {
+    "Approved" => "dfe-f-badge--green",
+    "Rejected" => "dfe-f-badge--red",
+    _ => "dfe-f-badge--blue"
+  };
+}
+
+<div class="dfe-c-mb-4" id="standard-products-mgmt">
+  <div class="dfe-c-section-header">
+    <h2 class="dfe-c-heading-m">Standard products</h2>
+    <a href="@Url.Action("ManagementProductNew", "ModernStandards")" class="govuk-button">Add product</a>
+  </div>
+  <p class="govuk-body-s govuk-!-margin-bottom-3">Products approved or tolerated for use with DDT standards. These are not the same as FIPS service register products.</p>
+
+  @if (Model.Products.Count == 0)
+  {
+    <p class="dfe-c-body muted">No standard products yet.</p>
+  }
+  else
+  {
+    <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+      <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+      <table class="govuk-table">
+        <thead class="govuk-table__head">
+          <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header"><button type="button" class="dfe-f-table-sort-button">Product</button></th>
+            <th scope="col" class="govuk-table__header"><button type="button" class="dfe-f-table-sort-button">Provider</button></th>
+            <th scope="col" class="govuk-table__header"><button type="button" class="dfe-f-table-sort-button">Version</button></th>
+            <th scope="col" class="govuk-table__header"><button type="button" class="dfe-f-table-sort-button">DfE product</button></th>
+            <th scope="col" class="govuk-table__header"><button type="button" class="dfe-f-table-sort-button">Status</button></th>
+            <th scope="col" class="govuk-table__header"><button type="button" class="dfe-f-table-sort-button">Standards</button></th>
+            <th scope="col" class="govuk-table__header"><span class="govuk-visually-hidden">Actions</span></th>
+          </tr>
+        </thead>
+        <tbody class="govuk-table__body">
+          @foreach (var product in Model.Products)
+          {
+            <tr class="govuk-table__row">
+              <td class="govuk-table__cell">
+                <strong>@product.Name</strong>
+                @if (!string.IsNullOrWhiteSpace(product.Description))
+                {
+                  <br /><span class="govuk-body-s dfe-c-text-muted">@(product.Description.Length > 80 ? product.Description[..80] + "…" : product.Description)</span>
+                }
+              </td>
+              <td class="govuk-table__cell">@(string.IsNullOrWhiteSpace(product.Provider) ? "—" : product.Provider)</td>
+              <td class="govuk-table__cell">@(string.IsNullOrWhiteSpace(product.Version) ? "—" : product.Version)</td>
+              <td class="govuk-table__cell">@(string.IsNullOrWhiteSpace(product.DfeProductName) ? "—" : product.DfeProductName)</td>
+              <td class="govuk-table__cell">
+                <span class="dfe-f-badge dfe-f-badge--small @StatusBadgeClass(product.ApprovalStatus)">@product.ApprovalStatus</span>
+              </td>
+              <td class="govuk-table__cell">@product.LinkedStandardsCount</td>
+              <td class="govuk-table__cell">
+                <a class="govuk-link govuk-link--no-visited-state govuk-!-margin-right-2" href="@Url.Action("ManagementProductEdit", "ModernStandards", new { id = product.Id })">Edit</a>
+                @if (product.ApprovalStatus == "Pending")
+                {
+                  <form method="post" action="@Url.Action("ManagementProductApprove", "ModernStandards", new { id = product.Id })" class="govuk-!-display-inline">
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="govuk-link govuk-link--no-visited-state govuk-!-margin-right-2" style="border:0;background:none;padding:0;cursor:pointer;text-decoration:underline;">Approve</button>
+                  </form>
+                  <form method="post" action="@Url.Action("ManagementProductReject", "ModernStandards", new { id = product.Id })" class="govuk-!-display-inline">
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="govuk-link govuk-link--no-visited-state govuk-!-margin-right-2" style="border:0;background:none;padding:0;cursor:pointer;text-decoration:underline;">Reject</button>
+                  </form>
+                }
+                @if (product.LinkedStandardsCount == 0)
+                {
+                  <form method="post" action="@Url.Action("ManagementProductDelete", "ModernStandards", new { id = product.Id })" class="govuk-!-display-inline" onsubmit="return confirm('Delete this product?');">
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="govuk-link govuk-link--no-visited-state" style="border:0;background:none;padding:0;cursor:pointer;text-decoration:underline;color:#d4351c;">Delete</button>
+                  </form>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</div>

@@ -2,6 +2,7 @@
 @using Compass.Models
 @using Compass.Models.Modern.Work
 @using Compass.ViewModels.Modern
+@using Microsoft.AspNetCore.Html
 @{
   ViewData["Title"] = ViewBag.EditorTitle as string ?? "Issue";
   var st = ViewBag.IssueStatusOptions as List<RiskIssueNamedIntOption> ?? new List<RiskIssueNamedIntOption>();
@@ -15,33 +16,66 @@
   var assoc = Model.AssociationKind ?? "work";
   var isEdit = Model.Id.HasValue;
   var ms = ViewData.ModelState;
+  var issueWorkCtx = ViewBag.RaidIssueEditorWorkItemContext as RaidIssueEditorWorkItemContext;
+  string? formPostAction;
+  if (issueWorkCtx != null && !isEdit)
+    formPostAction = issueWorkCtx.FormPostAction;
+  else if (isEdit)
+    formPostAction = Url.Action("IssueEditPost", "ModernRaid", new { id = Model!.Id!.Value });
+  else
+    formPostAction = Url.Action("IssueCreatePost", "ModernRaid");
 
   string? RaidErr(string key) =>
       ms.TryGetValue(key, out var stErr) && stErr!.Errors.Count > 0 ? stErr.Errors[0].ErrorMessage : null;
 }
 
 @section Breadcrumbs {
+  @if (issueWorkCtx != null)
+  {
+    <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+    <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernWork")">Work</a></li>
+    <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@issueWorkCtx.WorkDetailUrl">@issueWorkCtx.WorkTitle</a></li>
+    <li class="govuk-breadcrumbs__list-item" aria-current="page">@ViewData["Title"]</li>
+  }
+  else
+  {
   <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
   <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernRaid")">RAID</a></li>
   <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Issues", "ModernRaid")">Issues</a></li>
   <li class="govuk-breadcrumbs__list-item" aria-current="page">@ViewData["Title"]</li>
+  }
+}
+
+@{
+  var workItemChrome = ViewBag.WorkItem as WorkItem;
+}
+@if (workItemChrome != null)
+{
+  @await Html.PartialAsync("~/Views/Modern/Shared/_WorkItemChrome.cshtml", workItemChrome)
 }
 
 <div id="sc-raid-issue-editor" class="modern-work-page">
-<p class="dfe-c-body dfe-c-mb-3">
-  <a href="@(isEdit ? Url.Action("IssueDetail", "ModernRaid", new { id = Model.Id }) : Url.Action("Issues", "ModernRaid"))" class="dfe-c-link">← @(isEdit ? "Back to issue" : "Back to issues")</a>
+<p class="dfe-c-body govuk-!-margin-bottom-3">
+  <a href="@(issueWorkCtx != null ? issueWorkCtx.CancelUrl : (isEdit ? Url.Action("IssueDetail", "ModernRaid", new { id = Model.Id }) : Url.Action("Issues", "ModernRaid")))" class="dfe-c-link">← @(issueWorkCtx != null ? "Back to issues" : (isEdit ? "Back to issue" : "Back to issues"))</a>
 </p>
 
-<div class="dfe-c-page-title">
-  <div class="dfe-c-page-title__caption">RAID</div>
-  <h1 class="dfe-c-page-title__heading">@ViewBag.EditorTitle</h1>
-  <p class="dfe-c-page-title__lede">Record or update an issue for the RAID register. Associate it with a work item, FIPS product, or organisation-wide scope.</p>
-</div>
+@{
+  var editorTitleStr = ViewBag.EditorTitle as string ?? "";
+  var issueEditorLede = issueWorkCtx != null
+    ? "Use the same RAID register fields as when adding an issue from the RAID area. This issue is recorded against the current work item."
+    : "Record or update an issue for the RAID register. Associate it with a work item, a service register product, or organisation-wide scope.";
+  var headerCaption = issueWorkCtx != null ? "Work item" : "RAID";
+}
+@await Html.PartialAsync("~/Views/Modern/Shared/_ModernPageHeader.cshtml", new ModernPageHeaderViewModel {
+  Caption = headerCaption,
+  Title = editorTitleStr,
+  Lede = new HtmlString($"<p class=\"govuk-body govuk-!-margin-bottom-0\">{issueEditorLede}</p>")
+})
 
-<div class="dfe-c-form-layout">
-  <div class="dfe-c-form-layout__main">
+<div class="govuk-grid-row">
+  <div class="govuk-grid-column-three-quarters">
     <div class="dfe-c-card dfe-c-card--plain">
-      <form method="post" novalidate action="@(isEdit ? Url.Action("IssueEditPost", "ModernRaid", new { id = Model!.Id!.Value }) : Url.Action("IssueCreatePost", "ModernRaid"))">
+      <form method="post" novalidate action="@formPostAction">
         @Html.AntiForgeryToken()
 
         @if (!ViewData.ModelState.IsValid)
@@ -62,6 +96,19 @@
         </div>
         }
 
+        @if (issueWorkCtx != null)
+        {
+        <div class="govuk-form-group govuk-!-margin-bottom-6" data-raid-field="association" id="raid-issue-edit-association">
+          <div class="govuk-inset-text govuk-!-margin-top-0">
+            <p class="govuk-body govuk-!-margin-bottom-2"><strong>Associated with work item</strong></p>
+            <p class="govuk-body govuk-!-margin-bottom-0">@issueWorkCtx.WorkTitle</p>
+          </div>
+          <input type="hidden" name="AssociationKind" value="work" />
+          <input type="hidden" name="ProjectId" value="@issueWorkCtx.ProjectId" />
+        </div>
+        }
+        else
+        {
         <div class="govuk-form-group govuk-!-margin-bottom-6" data-raid-field="association" id="raid-issue-edit-association">
           <fieldset class="govuk-fieldset" aria-describedby="raid-issue-association-hint">
             <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Associated with</legend>
@@ -87,12 +134,13 @@
 
             <div class="govuk-radios__item">
               <input class="govuk-radios__input" id="raid-issue-assoc-product" name="AssociationKind" type="radio" value="product" data-aria-controls="conditional-raid-issue-assoc-product" @(assoc == "product" ? "checked" : null) />
-              <label class="govuk-label govuk-radios__label" for="raid-issue-assoc-product">Product (FIPS)</label>
+              <label class="govuk-label govuk-radios__label" for="raid-issue-assoc-product">Service register product</label>
             </div>
             <div class="govuk-radios__conditional@(assoc != "product" ? " govuk-radios__conditional--hidden" : null)" id="conditional-raid-issue-assoc-product">
               <div class="govuk-form-group govuk-!-margin-bottom-0">
-                <label class="govuk-label" for="PrimaryProductId">FIPS product</label>
-                <select class="govuk-select govuk-!-width-full" id="PrimaryProductId" name="PrimaryProductId">
+                <label class="govuk-label" for="PrimaryProductId">Product</label>
+                <div id="issue-PrimaryProductId-hint" class="govuk-hint">From the Operations service register (active services).</div>
+                <select class="govuk-select govuk-!-width-full" id="PrimaryProductId" name="PrimaryProductId" aria-describedby="issue-PrimaryProductId-hint">
                   <option value="">— Select —</option>
                   @foreach (var o in fp)
                   {
@@ -109,14 +157,13 @@
             </div>
             <div class="govuk-radios__conditional@(assoc != "organisation" ? " govuk-radios__conditional--hidden" : null)" id="conditional-raid-issue-assoc-org">
               <div class="govuk-form-group govuk-!-margin-bottom-0">
-                <div class="govuk-inset-text govuk-!-margin-bottom-0">
-                  This is an issue which is not associated with any specific product or work item. This could relate to people or funding for example.
-                </div>
+                <p class="govuk-body-s govuk-!-margin-bottom-0">This is an issue which is not associated with any specific product or work item. This could relate to people or funding for example.</p>
               </div>
             </div>
             </div>
           </fieldset>
         </div>
+        }
 
         @if (isEdit)
         {
@@ -400,13 +447,13 @@
           }
           else
           {
-            <a class="govuk-button govuk-button--secondary" href="@Url.Action("Issues", "ModernRaid")">Cancel</a>
+            <a class="govuk-button govuk-button--secondary" href="@(issueWorkCtx != null ? issueWorkCtx.CancelUrl : Url.Action("Issues", "ModernRaid"))">Cancel</a>
           }
         </div>
       </form>
     </div>
   </div>
-  <div class="dfe-c-form-layout__aside">
+  <div class="govuk-grid-column-one-quarter">
     @await Html.PartialAsync("~/Views/Modern/Raid/_RaidEditorGuidanceAside.cshtml", new RaidEditorGuidanceAsideVm { Mode = "issue" })
   </div>
 </div>

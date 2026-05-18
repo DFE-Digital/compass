@@ -9,12 +9,9 @@
     var activityTypeName = ViewBag.ActivityTypeName as string ?? "—";
     var riskAppetiteName = ViewBag.RiskAppetiteName as string ?? "—";
     var riskAppetiteOptions = ViewBag.RiskAppetiteOptions as List<LookupOption> ?? new List<LookupOption>();
-    var primaryContactName = ViewBag.PrimaryContactName as string ?? "—";
-    var budgetOwnerName = ViewBag.BudgetOwnerName as string ?? "—";
     var linkedDemand = ViewBag.LinkedDemand as DemandRequest;
     var linkedBusinessCase = ViewBag.LinkedBusinessCase as BusinessCase;
     var latestRag = ViewBag.LatestRag as WorkItemRagHistory ?? Model.RagHistory?.OrderByDescending(r => r.UpdatedAt).FirstOrDefault();
-    var isWatching = ViewBag.IsWatching as bool? ?? false;
     var monthlyReportDue = ViewBag.MonthlyReportDue as bool? ?? false;
     var currentPeriodLabel = ViewBag.CurrentPeriodLabel as string;
     var currentPeriodDueDate = ViewBag.CurrentPeriodDueDate as DateTime?;
@@ -39,42 +36,16 @@
         .ToList() ?? new List<string>();
     var workTags = Model.Tags ?? new List<WorkItemTagRef>();
     var hasStrategicAlignment = priorityOutcomeNames.Count > 0 || missionPillarNames.Count > 0;
-    string MilestoneStatusBadgeClass(string? progressName) {
-        if (string.IsNullOrEmpty(progressName)) return "rag-badge rag-none";
-        var n = progressName.Trim().ToLowerInvariant();
-        if (n.Contains("reached") && n.Contains("late")) return "rag-badge rag-red";
-        if (n.Contains("completed")) return "rag-badge rag-blue";
-        if (n.Contains("at risk")) return "rag-badge rag-amber";
-        if (n.Contains("not started")) return "rag-badge rag-none";
-        if (n.Contains("in progress") || n.Contains("on track")) return "rag-badge rag-green";
-        return "rag-badge rag-none";
-    }
-    var compassDetailUrl = Url.Action("Detail", "ModernWork", new { id = Model.Id }, Context.Request.Scheme, Context.Request.Host.Value);
-    string KeyPersonDisplayName(AppUser? u) {
-        if (u == null) return "—";
-        var firstLast = (u.FirstName ?? "").Trim() + " " + (u.LastName ?? "").Trim();
-        return !string.IsNullOrWhiteSpace(firstLast) ? firstLast.Trim() : (u.Name ?? "—");
-    }
-    string? TeamsChatUrl(AppUser? u) {
-        if (u == null || string.IsNullOrWhiteSpace(u.Email)) return null;
-        var first = u.FirstName ?? "";
-        /* Put URL on its own line so Teams is more likely to render it as a clickable link in the sent message */
-        var msg = "HI " + first + ", can you help me with " + Model.Title + " in COMPASS please." + "\n\n" + compassDetailUrl;
-        return "https://teams.microsoft.com/l/chat/0/0?users=" + Uri.EscapeDataString(u.Email) + "&message=" + Uri.EscapeDataString(msg);
-    }
-    var primaryContactUser = ViewBag.PrimaryContactUser as AppUser;
-    var budgetOwnerUser = ViewBag.BudgetOwnerUser as AppUser;
-    var keyPeoplePanelItems = ViewBag.KeyPeoplePanelItems as List<(string Key, string Label)> ?? new List<(string Key, string Label)>();
-    int? ContactRoleTypeIdFromKey(string key) => key.StartsWith("ContactRoleType:", StringComparison.Ordinal) && int.TryParse(key.Substring(16), out var id) ? id : null;
-    List<AppUser?> PeopleForKeyPeopleItem(string itemKey, string itemLabel) {
-        if (Model.Contacts == null || !Model.Contacts.Any()) return new List<AppUser?>();
-        if (itemKey.StartsWith("CustomRole:", StringComparison.Ordinal))
-            return Model.Contacts.Where(c => c.ContactRoleTypeId == 5 && string.Equals(c.RoleName, itemLabel, StringComparison.Ordinal)).Select(c => c.AppUser).Where(u => u != null).ToList();
-        var roleId = ContactRoleTypeIdFromKey(itemKey);
-        if (!roleId.HasValue) return new List<AppUser?>();
-        return Model.Contacts.Where(c => c.ContactRoleTypeId == roleId.Value).Select(c => c.AppUser).Where(u => u != null).ToList();
-    }
     var today = DateTime.UtcNow.Date;
+    int WorkOverviewPreviewEnd(string t)
+    {
+        if (string.IsNullOrWhiteSpace(t)) return 0;
+        var s = t.Trim();
+        var idx = s.IndexOf('.');
+        var endAtDot = idx >= 0 ? idx + 1 : int.MaxValue;
+        var cap = Math.Min(s.Length, 200);
+        return Math.Min(cap, endAtDot);
+    }
     string DateWithRelativeDays(DateTime? d) {
         if (!d.HasValue) return "—";
         var date = d.Value.Date;
@@ -90,26 +61,10 @@
         var pastDue = (Model.Status == "Active" || Model.Status == "Paused") && date < today;
         return date.ToString("d MMMM yyyy") + part + (pastDue ? " — Past due date" : "");
     }
-    // Single risk appetite tag: conservative (low / cautious) → balanced → open (high).
-    string RiskAppetiteTagClass(string? name, List<LookupOption> opts, int? riskAppetiteId) {
-        if (string.IsNullOrWhiteSpace(name) || name == "—" || !riskAppetiteId.HasValue)
-            return "risk-appetite-tag risk-appetite-tag--none";
-        var selected = opts.FirstOrDefault(o => o.Id == riskAppetiteId.Value);
-        var label = (selected?.Name ?? selected?.Value ?? name).Trim();
-        if (string.IsNullOrEmpty(label)) return "risk-appetite-tag risk-appetite-tag--none";
-        var n = label.ToLowerInvariant();
-        if (n.Contains("averse") || n.Contains("minimal") || n.Contains("cautious")) return "risk-appetite-tag risk-appetite-tag--conservative";
-        if (n.Contains("medium") || n.Contains("moderate") || n.Contains("balanced")) return "risk-appetite-tag risk-appetite-tag--balanced";
-        if (n.Contains("open") || n.Contains("elevated")) return "risk-appetite-tag risk-appetite-tag--open";
-        if (n.Contains("high")) return "risk-appetite-tag risk-appetite-tag--open";
-        if (n.Contains("low")) return "risk-appetite-tag risk-appetite-tag--conservative";
-        var idx = opts.FindIndex(o => o.Id == riskAppetiteId.Value);
-        if (idx < 0 || opts.Count <= 1) return "risk-appetite-tag risk-appetite-tag--balanced";
-        var band = idx * 3 / opts.Count;
-        if (band == 0) return "risk-appetite-tag risk-appetite-tag--conservative";
-        if (band >= 2) return "risk-appetite-tag risk-appetite-tag--open";
-        return "risk-appetite-tag risk-appetite-tag--balanced";
-    }
+    var workEditUrl = $"/modern/work/{Model.Id}/edit";
+    var workEditTagsUrl = $"/modern/work/{Model.Id}/tags/edit";
+    var workEditStrategicUrl = $"/modern/work/{Model.Id}/strategic-alignment/edit";
+    var workEditMultiDeptUrl = $"/modern/work/{Model.Id}/multi-dept/edit";
 }
 @section Breadcrumbs {
  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="/">Home</a></li>
@@ -120,48 +75,107 @@
 
   @await Html.PartialAsync("_WorkItemChrome", Model)
 
-
+<div id="sc-work-detail" class="govuk-grid-row modern-work-detail-layout govuk-!-margin-top-4">
+  <div class="govuk-grid-column-one-quarter-from-desktop modern-work-detail-layout__nav">
+    <div class="dfe-f-u-sticky govuk-!-margin-bottom-4 modern-work-detail-layout__nav-inner" style="--dfe-f-sticky-top: 1rem;">
+      @await Html.PartialAsync("_WorkItemSideNav", Model)
+    </div>
+  </div>
+  <div class="govuk-grid-column-three-quarters-from-desktop modern-work-detail-main">
+@if (TempData["SuccessMessage"] is string wdSuccess && !string.IsNullOrWhiteSpace(wdSuccess))
+{
+ <div class="govuk-notification-banner govuk-notification-banner--success govuk-!-margin-bottom-3" role="region" aria-labelledby="wd-success-banner-title">
+ <div class="govuk-notification-banner__header">
+ <h2 class="govuk-notification-banner__title" id="wd-success-banner-title">Success</h2>
+      </div>
+ <div class="govuk-notification-banner__content">
+ <p class="govuk-notification-banner__heading govuk-!-margin-bottom-0">@wdSuccess</p>
+      </div>
+    </div>
+}
+@if (TempData["ErrorMessage"] is string wdErr && !string.IsNullOrWhiteSpace(wdErr))
+{
+ <div class="govuk-error-summary govuk-!-margin-bottom-3" data-module="govuk-error-summary" role="alert" aria-labelledby="wd-err-summary-title">
+ <h2 class="govuk-error-summary__title" id="wd-err-summary-title">There is a problem</h2>
+ <div class="govuk-error-summary__body">
+ <ul class="govuk-list govuk-error-summary__list"><li>@wdErr</li></ul>
+      </div>
+    </div>
+}
 
   <!-- OVERVIEW TAB -->
-  @{
-    var contactRoleTypesList = ViewBag.ContactRoleTypes as List<Compass.Models.Modern.Work.ContactRoleType> ?? new List<Compass.Models.Modern.Work.ContactRoleType>();
-  }
  <div id="wd-overview" class="tab-pane on">
- <div class="dfe-c-grid dfe-c-grid--content">
-      <div>
-        @{ var canEdit = ViewBag.CanEditWorkItem as bool? ?? false; }
- <dl class="govuk-summary-list">
- <div class="govuk-summary-list__row@(canEdit ?"" : " govuk-summary-list__row--no-actions")">
+ @{ var canEdit = ViewBag.CanEditWorkItem as bool? ?? false; }
+ <div class="modern-work-detail-overview-stack">
+ <div class="govuk-summary-card">
+ <div class="govuk-summary-card__title-wrapper">
+ <h2 class="govuk-summary-card__title">Overview</h2>
+      @if (canEdit)
+      {
+ <ul class="govuk-summary-card__actions">
+ <li class="govuk-summary-card__action">
+ <a href="@workEditUrl" class="govuk-link govuk-link--no-visited-state">Edit</a>
+ </li>
+ </ul>
+      }
+        </div>
+ <div class="govuk-summary-card__content">
+ <dl class="govuk-summary-list govuk-!-margin-bottom-0">
+ <div class="govuk-summary-list__row govuk-summary-list__row--no-actions">
  <dt class="govuk-summary-list__key">Title</dt>
  <dd class="govuk-summary-list__value">@Model.Title</dd>
-            @if (canEdit)
-            {
- <dd class="govuk-summary-list__actions">
- <button type="button" class="govuk-link" data-dialog="dlg-work-title">Change<span class="govuk-visually-hidden"> title</span></button>
-              </dd>
-            }
           </div>
- <div class="govuk-summary-list__row@(canEdit ?"" : " govuk-summary-list__row--no-actions")">
+ <div class="govuk-summary-list__row govuk-summary-list__row--no-actions">
  <dt class="govuk-summary-list__key">Problem statement</dt>
- <dd class="govuk-summary-list__value">@(string.IsNullOrEmpty(Model.ProblemStatement) ? "—" : Model.ProblemStatement)</dd>
-            @if (canEdit)
-            {
- <dd class="govuk-summary-list__actions">
- <button type="button" class="govuk-link" data-dialog="dlg-work-problem">Change<span class="govuk-visually-hidden"> problem statement</span></button>
-              </dd>
-            }
+ <dd class="govuk-summary-list__value">
+              @if (string.IsNullOrWhiteSpace(Model.ProblemStatement))
+              {
+                <text>—</text>
+              }
+              else
+              {
+                var psW = Model.ProblemStatement.Trim();
+                var psEnd = WorkOverviewPreviewEnd(psW);
+                var psMore = psW.Length > psEnd;
+                <span class="govuk-body">@psW.Substring(0, psEnd)</span>
+                @if (psMore)
+                {
+ <details class="govuk-details govuk-!-margin-top-2 govuk-!-margin-bottom-0" data-module="govuk-details">
+ <summary class="govuk-details__summary">
+ <span class="govuk-details__summary-text">View more</span>
+                  </summary>
+ <div class="govuk-details__text govuk-!-margin-top-2 govuk-!-margin-bottom-0">@psW.Substring(psEnd).TrimStart()</div>
+                  </details>
+                }
+              }
+            </dd>
           </div>
- <div class="govuk-summary-list__row@(canEdit ?"" : " govuk-summary-list__row--no-actions")">
+ <div class="govuk-summary-list__row govuk-summary-list__row--no-actions">
  <dt class="govuk-summary-list__key">Aim</dt>
- <dd class="govuk-summary-list__value">@(string.IsNullOrEmpty(Model.Aim) ? "—" : Model.Aim)</dd>
-            @if (canEdit)
-            {
- <dd class="govuk-summary-list__actions">
- <button type="button" class="govuk-link" data-dialog="dlg-work-aim">Change<span class="govuk-visually-hidden"> aim</span></button>
-              </dd>
-            }
+ <dd class="govuk-summary-list__value">
+              @if (string.IsNullOrWhiteSpace(Model.Aim))
+              {
+                <text>—</text>
+              }
+              else
+              {
+                var aimW = Model.Aim.Trim();
+                var aimEnd = WorkOverviewPreviewEnd(aimW);
+                var aimMore = aimW.Length > aimEnd;
+                <span class="govuk-body">@aimW.Substring(0, aimEnd)</span>
+                @if (aimMore)
+                {
+ <details class="govuk-details govuk-!-margin-top-2 govuk-!-margin-bottom-0" data-module="govuk-details">
+ <summary class="govuk-details__summary">
+ <span class="govuk-details__summary-text">View more</span>
+                  </summary>
+ <div class="govuk-details__text govuk-!-margin-top-2 govuk-!-margin-bottom-0">@aimW.Substring(aimEnd).TrimStart()</div>
+                  </details>
+                }
+              }
+            </dd>
           </div>
- <div class="govuk-summary-list__row@(canEdit ?"" : " govuk-summary-list__row--no-actions")">
+ <div class="govuk-summary-list__row govuk-summary-list__row--no-actions">
  <dt class="govuk-summary-list__key">Tags</dt>
  <dd class="govuk-summary-list__value">
               @if (workTags.Count == 0)
@@ -172,292 +186,142 @@
               {
                 @foreach (var tg in workTags)
                 {
- <span class="dfe-c-tag dfe-c-tag--grey govuk-!-margin-right-1 govuk-!-margin-bottom-1" title="@(tg.Description ?? "")">@tg.Name</span>
+ <span class="dfe-f-badge dfe-f-badge--grey govuk-!-margin-right-1 govuk-!-margin-bottom-1" title="@(tg.Description ?? "")">@tg.Name</span>
                 }
               }
             </dd>
-            @if (canEdit)
-            {
- <dd class="govuk-summary-list__actions">
- <a class="govuk-link" href="@Url.Action("EditWorkTags", "ModernWork", new { id = Model.Id })">Change<span class="govuk-visually-hidden"> tags</span></a>
-              </dd>
-            }
           </div>
- <div class="govuk-summary-list__row@(canEdit ?"" : " govuk-summary-list__row--no-actions")">
- <dt class="govuk-summary-list__key">Strategic alignment</dt>
- <dd class="govuk-summary-list__value">
-              @if (!hasStrategicAlignment)
-              {
-                <text>—</text>
-              }
-              else
-              {
-                @if (priorityOutcomeNames.Count > 0)
-                {
- <p class="govuk-body govuk-!-margin-bottom-1"><strong>Priority outcomes</strong></p>
- <ul class="govuk-list govuk-list--bullet @(missionPillarNames.Count> 0 ?"govuk-!-margin-bottom-3" : "govuk-!-margin-bottom-0")">
-                    @foreach (var name in priorityOutcomeNames)
-                    {
-                      <li>@name</li>
-                    }
-                  </ul>
-                }
-                @if (missionPillarNames.Count > 0)
-                {
- <p class="govuk-body govuk-!-margin-bottom-1"><strong>Mission pillars</strong></p>
- <ul class="govuk-list govuk-list--bullet govuk-!-margin-bottom-0">
-                    @foreach (var name in missionPillarNames)
-                    {
-                      <li>@name</li>
-                    }
-                  </ul>
-                }
-              }
-            </dd>
-            @if (canEdit)
-            {
- <dd class="govuk-summary-list__actions">
- <a class="govuk-link" href="@Url.Action("EditStrategicAlignment", "ModernWork", new { id = Model.Id })">Change<span class="govuk-visually-hidden"> strategic alignment</span></a>
-              </dd>
-            }
+ <div class="govuk-summary-list__row govuk-summary-list__row--no-actions">
+ <dt class="govuk-summary-list__key">Business area</dt>
+ <dd class="govuk-summary-list__value">@portfolioName</dd>
           </div>
- <div class="govuk-summary-list__row@(canEdit ?"" : " govuk-summary-list__row--no-actions")">
+ <div class="govuk-summary-list__row govuk-summary-list__row--no-actions">
+ <dt class="govuk-summary-list__key">Priority</dt>
+ <dd class="govuk-summary-list__value">@priorityName</dd>
+          </div>
+ <div class="govuk-summary-list__row govuk-summary-list__row--no-actions">
  <dt class="govuk-summary-list__key">Flagship project</dt>
  <dd class="govuk-summary-list__value">@(Model.FlagshipProject ? "Yes" : "No")</dd>
-            @if (canEdit)
-            {
- <dd class="govuk-summary-list__actions">
- <button type="button" class="govuk-link" data-dialog="dlg-work-flagship">Change<span class="govuk-visually-hidden"> flagship project</span></button>
-              </dd>
-            }
           </div>
- <div class="govuk-summary-list__row@(canEdit ?"" : " govuk-summary-list__row--no-actions")">
+ <div class="govuk-summary-list__row govuk-summary-list__row--no-actions">
  <dt class="govuk-summary-list__key">Subject to spend control</dt>
  <dd class="govuk-summary-list__value">@(Model.SubjectToSpendControl ? "Yes" : "No")</dd>
-            @if (canEdit)
-            {
- <dd class="govuk-summary-list__actions">
- <button type="button" class="govuk-link" data-dialog="dlg-work-spend">Change<span class="govuk-visually-hidden"> subject to spend control</span></button>
-              </dd>
-            }
           </div>
- <div class="govuk-summary-list__row@(canEdit ?"" : " govuk-summary-list__row--no-actions")">
+ <div class="govuk-summary-list__row govuk-summary-list__row--no-actions">
  <dt class="govuk-summary-list__key">Risk appetite</dt>
  <dd class="govuk-summary-list__value">
               @if (Model.RiskAppetiteId.HasValue && !string.IsNullOrWhiteSpace(riskAppetiteName) && riskAppetiteName != "—")
               {
- <span class="@RiskAppetiteTagClass(riskAppetiteName, riskAppetiteOptions, Model.RiskAppetiteId)">@riskAppetiteName</span>
+ <span class="@WorkBadgeCss.RiskAppetiteDfeFrontendBadgeClass(riskAppetiteName, riskAppetiteOptions, Model.RiskAppetiteId)">@riskAppetiteName</span>
               }
               else
               {
                 <text>—</text>
               }
             </dd>
-            @if (canEdit)
-            {
- <dd class="govuk-summary-list__actions">
- <button type="button" class="govuk-link" data-dialog="dlg-work-risk-appetite">Change<span class="govuk-visually-hidden"> risk appetite</span></button>
-              </dd>
-            }
           </div>
- <div class="govuk-summary-list__row@(canEdit ?"" : " govuk-summary-list__row--no-actions")">
+ <div class="govuk-summary-list__row govuk-summary-list__row--no-actions">
  <dt class="govuk-summary-list__key">Multi-dept cooperation</dt>
  <dd class="govuk-summary-list__value">@(Model.GovernmentDepartments?.Any() == true ? string.Join(", ", Model.GovernmentDepartments.Select(g => g.GovernmentDepartment?.Title).Where(n => n != null)) : "—")</dd>
-            @if (canEdit)
-            {
- <dd class="govuk-summary-list__actions">
- <a class="govuk-link" href="@Url.Action("EditMultiDeptCooperation", "ModernWork", new { id = Model.Id })">Change<span class="govuk-visually-hidden"> multi-dept cooperation</span></a>
-              </dd>
-            }
           </div>
- <div class="govuk-summary-list__row@(canEdit ?"" : " govuk-summary-list__row--no-actions")">
+ <div class="govuk-summary-list__row govuk-summary-list__row--no-actions">
  <dt class="govuk-summary-list__key">Start date</dt>
  <dd class="govuk-summary-list__value">@DateWithRelativeDays(Model.StartDate)</dd>
-            @if (canEdit)
-            {
- <dd class="govuk-summary-list__actions">
- <button type="button" class="govuk-link" data-dialog="dlg-work-start-date">Change<span class="govuk-visually-hidden"> start date</span></button>
-              </dd>
-            }
           </div>
- <div class="govuk-summary-list__row@(canEdit ?"" : " govuk-summary-list__row--no-actions")">
+ <div class="govuk-summary-list__row govuk-summary-list__row--no-actions">
  <dt class="govuk-summary-list__key">Target end date</dt>
  <dd class="govuk-summary-list__value">@TargetEndDateWithPastDue(Model.TargetEndDate)</dd>
-            @if (canEdit)
-            {
- <dd class="govuk-summary-list__actions">
- <button type="button" class="govuk-link" data-dialog="dlg-work-target-end">Change<span class="govuk-visually-hidden"> target end date</span></button>
-              </dd>
-            }
           </div>
  <div class="govuk-summary-list__row">
  <dt class="govuk-summary-list__key">Current RAG</dt>
- <dd class="govuk-summary-list__value">@if (!string.IsNullOrEmpty(currentRagName)) { <span class="@WorkBadgeCss.RagDfeTagClass(currentRagCssClass, currentRagName)">@currentRagName.ToUpperInvariant()</span> } else { <text>—</text> }</dd>
+ <dd class="govuk-summary-list__value">@if (!string.IsNullOrEmpty(currentRagName)) { <span class="@WorkBadgeCss.RagDfeFrontendBadgeClass(currentRagCssClass, currentRagName)">@currentRagName.ToUpperInvariant()</span> } else { <text>—</text> }</dd>
  <dd class="govuk-summary-list__actions">
- <a class="govuk-link" href="@(Url.Action("Detail", "ModernWork", new { id = Model.Id }))#wd-updates">Updated via monthly updates</a>
+ <a class="govuk-link govuk-link--no-visited-state" href="@(Url.Action("Detail", "ModernWork", new { id = Model.Id }))#wd-updates">Updated via monthly updates</a>
             </dd>
           </div>
         </dl>
-      </div>
- <div class="dfe-c-sidebar">
- <div class="dfe-c-scard" style="border-top:3px solid #003a69;">
- <div class="dfe-c-scard__title">Follow this work item</div>
-          @if (isWatching)
+        </div>
+ </div>
+
+ @if (hasStrategicAlignment || canEdit)
+ {
+ <div class="govuk-summary-card govuk-!-margin-top-6">
+ <div class="govuk-summary-card__title-wrapper">
+ <h2 class="govuk-summary-card__title">Strategic alignment</h2>
+      @if (canEdit)
+      {
+ <ul class="govuk-summary-card__actions">
+ <li class="govuk-summary-card__action">
+ <a href="@workEditStrategicUrl" class="govuk-link govuk-link--no-visited-state">Edit</a>
+ </li>
+ </ul>
+      }
+    </div>
+ <div class="govuk-summary-card__content">
+ <dl class="govuk-summary-list govuk-!-margin-bottom-0">
+ <div class="govuk-summary-list__row govuk-summary-list__row--no-actions">
+ <dt class="govuk-summary-list__key">Priority outcomes</dt>
+ <dd class="govuk-summary-list__value">
+          @if (priorityOutcomeNames.Count == 0)
           {
- <p class="dfe-c-body-s dfe-c-mb-2" style="color:var(--govuk-success-colour,#00703c);font-weight:600;">Watching</p>
-            <form method="post" action="@Url.Action("Unwatch", "ModernWork", new { id = Model.Id })">
-              @Html.AntiForgeryToken()
- <button type="submit" class="govuk-button govuk-button--secondary govuk-button--sm">Remove from watchlist</button>
-            </form>
+            <text>—</text>
           }
           else
           {
-            <form method="post" action="@Url.Action("Watch", "ModernWork", new { id = Model.Id })">
-              @Html.AntiForgeryToken()
- <button type="submit" class="govuk-button govuk-button--sm">Add to watchlist</button>
-            </form>
+ <ul class="govuk-list govuk-list--bullet govuk-!-margin-bottom-0">
+              @foreach (var name in priorityOutcomeNames)
+              {
+                <li>@name</li>
+              }
+            </ul>
           }
-        </div>
- <div class="dfe-c-scard" style="border-top:3px solid #003a69;">
- <div class="dfe-c-scard__title">Key info</div>
- <dl class="dfe-c-kv"><dt>Status</dt><dd><span class="@WorkBadgeCss.StatusDfeTagClass(ViewBag.WorkStatusDisplayName as string ?? Model.Status)">@(ViewBag.WorkStatusDisplayName as string ?? Model.Status ?? "—")</span>
-            @if (ViewBag.CanChangeStatus as bool? == true)
-            {
-              <a href="@Url.Action("ChangeStatus", "ModernWork", new { id = Model.Id })" class="govuk-link" style="margin-left:0.5rem;font-size:13px;">Change</a>
-            }
-          </dd></dl>
- <dl class="dfe-c-kv"><dt>Directorate</dt><dd>
-            @if (Model.Directorates?.Any() == true)
-            {
-              @string.Join(", ", Model.Directorates.Select(x => x.Division?.Name ?? x.Directorate?.Name).Where(n => n != null))
-            }
-            else
-            { <span>—</span> }
-          </dd></dl>
- <dl class="dfe-c-kv"><dt>Business area</dt><dd>@(portfolioName)</dd></dl>
- <dl class="dfe-c-kv"><dt>Priority</dt><dd><span class="@WorkBadgeCss.PriorityDfeTagClass(priorityName)">@(priorityName)</span>@if (!string.IsNullOrWhiteSpace(Model.PriorityChangeReason)) { <span class="dfe-c-body dfe-c-d-block dfe-c-mt-2 dfe-c-form__hint" style="font-size:14px;">Reason for change: @Model.PriorityChangeReason</span> }</dd></dl>
- <dl class="dfe-c-kv"><dt>Activity type</dt><dd>@(activityTypeName)</dd></dl>
- <dl class="dfe-c-kv"><dt>Phase</dt><dd>
-            @if (!string.IsNullOrWhiteSpace(deliveryPhaseName) && deliveryPhaseName != "—")
-            {
- <span class="@WorkBadgeCss.PhaseDfeTagClass(deliveryPhaseName)">@deliveryPhaseName.ToUpperInvariant()</span>
-            }
-            else
-            {
-              <span>—</span>
-            }
-          </dd></dl>
-          @if (canEdit)
+        </dd>
+ </div>
+ <div class="govuk-summary-list__row govuk-summary-list__row--no-actions">
+ <dt class="govuk-summary-list__key">Mission pillars</dt>
+ <dd class="govuk-summary-list__value">
+          @if (missionPillarNames.Count == 0)
           {
- <div style="margin-top:10px;"><a href="@Url.Action("Edit", "ModernWork", new { id = Model.Id })" class="dfe-c-link" style="font-size:13px;color:var(--blue);">Edit key info →</a></div>
+            <text>—</text>
           }
-        </div>
- <div class="dfe-c-scard wd-key-people-card" style="border-top:3px solid #003a69;">
- <div class="wd-key-people-card__title-row">
- <div class="dfe-c-scard__title">Key people</div>
-            @if (canEdit)
-            {
- <a href="@Url.Action("EditPeople", "ModernWork", new { id = Model.Id })" class="govuk-link">Manage<span class="govuk-visually-hidden"> key people</span></a>
-            }
-          </div>
-          @foreach (var item in keyPeoplePanelItems)
+          else
           {
-            if (item.Key == "PrimaryContact")
-            {
- <dl class="dfe-c-kv"><dt>@item.Label</dt><dd>
-              @if (primaryContactUser != null)
+ <ul class="govuk-list govuk-list--bullet govuk-!-margin-bottom-0">
+              @foreach (var name in missionPillarNames)
               {
-                var pcName = KeyPersonDisplayName(primaryContactUser);
-                var pcUrl = TeamsChatUrl(primaryContactUser);
- <span class="wd-key-person-line">
-                  @if (pcUrl != null)
- { <a href="@pcUrl" class="dfe-c-link" target="_blank" rel="noopener noreferrer"><strong>@pcName</strong></a> }
-                  else
-                  { <strong>@pcName</strong> }
-                  @if (!string.IsNullOrWhiteSpace(primaryContactUser.Email))
- { <span class="dfe-c-body-s muted dfe-c-d-block">@primaryContactUser.Email</span> }
-                </span>
+                <li>@name</li>
               }
-              else
-              { <strong>—</strong> }
-              </dd></dl>
-            }
-            else if (item.Key == "BudgetOwner")
-            {
- <dl class="dfe-c-kv"><dt>@item.Label</dt><dd>
-              @if (budgetOwnerUser != null)
-              {
-                var boName = KeyPersonDisplayName(budgetOwnerUser);
-                var boUrl = TeamsChatUrl(budgetOwnerUser);
- <span class="wd-key-person-line">
-                  @if (boUrl != null)
- { <a href="@boUrl" class="dfe-c-link" target="_blank" rel="noopener noreferrer"><strong>@boName</strong></a> }
-                  else
-                  { <strong>@boName</strong> }
-                  @if (!string.IsNullOrWhiteSpace(budgetOwnerUser.Email))
- { <span class="dfe-c-body-s muted dfe-c-d-block">@budgetOwnerUser.Email</span> }
-                </span>
-              }
-              else
-              { <strong>@budgetOwnerName</strong> }
-              </dd></dl>
-            }
-            else
-            {
-              var peopleInRole = PeopleForKeyPeopleItem(item.Key, item.Label);
- <dl class="dfe-c-kv"><dt>@item.Label</dt><dd>
-              @if (peopleInRole.Any())
-              {
-                @foreach (var u in peopleInRole)
-                {
-                  var name = KeyPersonDisplayName(u);
-                  var url = TeamsChatUrl(u);
- <span class="wd-key-person-line">
-                  @if (url != null)
- { <a href="@url" class="dfe-c-link" target="_blank" rel="noopener noreferrer"><strong>@name</strong></a> }
-                  else
-                  { <strong>@name</strong> }
-                  @if (!string.IsNullOrWhiteSpace(u?.Email))
- { <span class="dfe-c-body-s muted dfe-c-d-block">@u.Email</span> }
-                  </span>
-                }
-              }
-              else
-              { <strong>—</strong> }
-              </dd></dl>
-            }
+            </ul>
           }
-        </div>
+        </dd>
+ </div>
+      </dl>
+    </div>
+ </div>
+ }
+
+ @await Html.PartialAsync("_WorkItemKeyContactsSummaryCard", Model)
+
         @if (linkedDemand != null || linkedBusinessCase != null)
         {
- <div class="dfe-c-scard" style="border-top:3px solid #003a69;">
- <div class="dfe-c-scard__title">Dependencies</div>
- @if (linkedDemand != null) { <dl class="dfe-c-kv"><dt>Demand</dt><dd><a href="@Url.Action("Detail", "Demand", new { id = linkedDemand.Id })">@linkedDemand.Reference →</a></dd></dl> }
- @if (linkedBusinessCase != null) { <dl class="dfe-c-kv"><dt>Business case</dt><dd><a href="@Url.Action("Detail", "Horizon", new { id = linkedBusinessCase.Id })">@linkedBusinessCase.BusinessCaseId →</a></dd></dl> }
- <div style="margin-top:10px;"><a href="@(Url.Action("Detail", "ModernWork", new { id = Model.Id }))#wd-dependencies" class="manage-links-deps-link" style="font-size:13px;color:var(--blue);">Manage links &amp; dependencies →</a></div>
+ <div class="govuk-summary-card govuk-!-margin-top-6">
+ <div class="govuk-summary-card__title-wrapper">
+ <h2 class="govuk-summary-card__title">Dependencies</h2>
         </div>
+ <div class="govuk-summary-card__content">
+ @if (linkedDemand != null) { <dl class="dfe-c-kv"><dt>Demand</dt><dd><a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("Detail", "Demand", new { id = linkedDemand.Id })">@linkedDemand.Reference →</a></dd></dl> }
+ @if (linkedBusinessCase != null) { <dl class="dfe-c-kv"><dt>Business case</dt><dd><a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("Detail", "Horizon", new { id = linkedBusinessCase.Id })">@linkedBusinessCase.BusinessCaseId →</a></dd></dl> }
+ <p class="govuk-body govuk-!-margin-bottom-0"><a href="@(Url.Action("Detail", "ModernWork", new { id = Model.Id }))#wd-dependencies" class="govuk-link govuk-link--no-visited-state">Dependencies</a> and <a href="@(Url.Action("Detail", "ModernWork", new { id = Model.Id }))#wd-assumptions" class="govuk-link govuk-link--no-visited-state">assumptions</a> are managed on this work item.</p>
+        </div>
+ </div>
         }
-      </div>
-    </div>
-  </div>
-  @if (canEdit)
-  {
-  @await Html.PartialAsync("_WorkOverviewEditModals", Model)
-  }
-
+ </div>
+ </div>
   <!-- MILESTONES TAB -->
  <div id="wd-milestones" class="tab-pane">
     @{
-      var milestoneTab = ViewBag.MilestoneTab as string ?? "inprogress";
+      var canEditMilestones = ViewBag.CanEditWorkItem as bool? ?? false;
     }
- <div class="dfe-c-flex--between mb4" style="flex-wrap:wrap;gap:12px;align-items:center;">
-      <div>
-        <h2 style="margin:0;">Milestones</h2>
-      </div>
-      <div style="display:flex;gap:8px;align-items:center;">
- <a href="@Url.Content($"~/modern/work/{Model.Id}/milestone/add")" class="govuk-button">Add milestone</a>
-      </div>
-    </div>
     @if (Model.Milestones != null && Model.Milestones.Any())
     {
       var nowUtc = DateTime.UtcNow.Date;
@@ -475,39 +339,48 @@
         .ToList();
       var inProgressItems = allMilestoneItems.Where(x => !x.isCompleted).OrderBy(x => x.isOverdue ? 0 : 1).ThenBy(x => x.m.DueDate).ThenBy(x => x.m.ActualDate ?? DateTime.MinValue).ToList();
       var completedItems = allMilestoneItems.Where(x => x.isCompleted).OrderByDescending(x => x.m.ActualDate ?? x.m.DueDate).ToList();
- <div id="milestone-tabs-bar" class="tabs wd-tabs" role="tablist" aria-label="Milestones sections" style="margin-top:16px;margin-bottom:12px;">
- <a href="@(Url.Action("Detail", "ModernWork", new { id = Model.Id, milestonestab = "inprogress" }))#wd-milestones" class="tab @(milestoneTab =="inprogress" ? "on" : "")" role="tab" aria-selected="@(milestoneTab == "inprogress")" aria-controls="d-milestones-inprogress" id="tab-milestones-inprogress">In progress (@inProgressItems.Count)</a>
- <a href="@(Url.Action("Detail", "ModernWork", new { id = Model.Id, milestonestab = "complete" }))#wd-milestones" class="tab @(milestoneTab =="complete" ? "on" : "")" role="tab" aria-selected="@(milestoneTab == "complete")" aria-controls="d-milestones-complete" id="tab-milestones-complete">Complete (@completedItems.Count)</a>
-      </div>
- <div id="d-milestones-inprogress" class="tab-pane @(milestoneTab =="inprogress" ? "on" : "")" role="tabpanel" style="padding-top:0;">
-        @if (inProgressItems.Any())
-        {
- <div class="dfe-c-table-wrap dfe-c-mb-3">
- <table class="data-table work-milestones-table">
-              <thead>
-                <tr>
-                  <th>Milestone</th>
-                  <th>Status</th>
-                  <th>Baseline</th>
-                  <th>Due</th>
-                  <th>Actual</th>
+      var completePanelId = $"wd-milestones-complete-panel-{Model.Id}";
+      var completeToggleId = $"wd-milestones-complete-toggle-{Model.Id}";
+ <div class="govuk-summary-card govuk-!-margin-top-0 wd-milestones-summary-card">
+ <div class="govuk-summary-card__title-wrapper">
+ <h2 class="govuk-summary-card__title">Milestones</h2>
+      @if (canEditMilestones)
+      {
+ <ul class="govuk-summary-card__actions">
+ <li class="govuk-summary-card__action">
+ <a href="@Url.Content($"~/modern/work/{Model.Id}/milestone/add")" class="govuk-link govuk-link--no-visited-state">Add milestone</a>
+ </li>
+ </ul>
+      }
+    </div>
+ <div class="govuk-summary-card__content">
+ <h3 class="govuk-heading-s govuk-!-margin-top-0 govuk-!-margin-bottom-3">In progress</h3>
+      @if (inProgressItems.Any())
+      {
+ <div class="dfe-f-table-wrapper govuk-!-margin-bottom-0" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+ <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed work-milestones-table govuk-!-margin-bottom-0">
+ <caption class="govuk-table__caption govuk-table__caption--m govuk-visually-hidden">In progress milestones</caption>
+              <thead class="govuk-table__head">
+                <tr class="govuk-table__row">
+                  <th scope="col" class="govuk-table__header">Milestone</th>
+                  <th scope="col" class="govuk-table__header">Status</th>
+                  <th scope="col" class="govuk-table__header">Due date</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody class="govuk-table__body">
                 @foreach (var item in inProgressItems)
                 {
                   var m = item.m;
                   var progressName = item.progressName;
-                  var badgeClass = MilestoneStatusBadgeClass(progressName);
+                  var badgeClass = WorkBadgeCss.MilestoneProgressDfeFrontendBadgeClass(progressName);
                   var milestoneEditHref = Url.Content($"~/modern/work/{Model.Id}/milestone/{m.Id}/edit");
- <tr class="@(item.isOverdue ?"work-milestones-table__row--overdue" : "")">
-                    <td>
- <a href="@milestoneEditHref" class="dfe-c-link dfe-c-fw-bold">@m.Name</a>
+ <tr class="@(item.isOverdue ? "govuk-table__row work-milestones-table__row--overdue" : "govuk-table__row")">
+                    <td class="govuk-table__cell">
+ <a href="@milestoneEditHref" class="govuk-link govuk-link--no-visited-state govuk-!-font-weight-bold">@m.Name</a>
                     </td>
- <td><span class="@badgeClass" style="white-space:nowrap;">@progressName</span></td>
-                    <td style="white-space:nowrap;">@(m.BaselineDueDate?.ToString("d MMM yyyy") ?? "—")</td>
-                    <td style="white-space:nowrap;">@(item.isOverdue ? Html.Raw($"<strong class=\"work-milestones-table__due--overdue\">{m.DueDate.ToString("d MMM yyyy")}</strong>") : Html.Raw(m.DueDate.ToString("d MMM yyyy")))</td>
-                    <td style="white-space:nowrap;">@(m.ActualDate?.ToString("d MMM yyyy") ?? "—")</td>
+ <td class="govuk-table__cell"><span class="@badgeClass dfe-f-badge--small" style="white-space:nowrap;">@progressName</span></td>
+                    <td class="govuk-table__cell govuk-!-font-weight-regular" style="white-space:nowrap;">@if (item.isOverdue) {<span class="work-milestones-table__due--overdue">@m.DueDate.ToString("d MMM yyyy")</span>} else {@m.DueDate.ToString("d MMM yyyy")}</td>
                   </tr>
                 }
               </tbody>
@@ -516,53 +389,75 @@
         }
         else
         {
- <p class="dfe-c-body muted" style="margin-top:16px;">No in-progress milestones.</p>
+ <p class="govuk-body govuk-!-margin-bottom-0">No in-progress milestones.</p>
         }
-      </div>
- <div id="d-milestones-complete" class="tab-pane @(milestoneTab =="complete" ? "on" : "")" role="tabpanel" style="padding-top:0;">
-        @if (completedItems.Any())
-        {
- <div class="dfe-c-table-wrap dfe-c-mb-3">
- <table class="data-table work-milestones-table">
-              <thead>
-                <tr>
-                  <th>Milestone</th>
-                  <th>Status</th>
-                  <th>Baseline</th>
-                  <th>Due</th>
-                  <th>Actual</th>
+    </div>
+ </div>
+      @if (completedItems.Any())
+      {
+ <div class="dfe-f-toggle govuk-!-margin-top-6" data-module="dfe-f-toggle">
+ <div class="dfe-f-toggle__title-wrapper">
+ <h3 class="dfe-f-toggle__heading govuk-!-margin-bottom-0">
+ <button type="button" class="dfe-f-toggle__button" aria-expanded="false" aria-controls="@completePanelId" id="@completeToggleId">
+ <span class="dfe-f-toggle__icon" aria-hidden="true"></span>
+ <span class="dfe-f-toggle__title">Complete (@completedItems.Count)</span>
+            </button>
+          </h3>
+        </div>
+ <div id="@completePanelId" class="dfe-f-toggle__content" hidden>
+ <div class="dfe-f-toggle__body">
+ <div class="dfe-f-table-wrapper govuk-!-margin-bottom-0" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+ <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed work-milestones-table govuk-!-margin-bottom-0">
+ <caption class="govuk-table__caption govuk-table__caption--m govuk-visually-hidden">Completed milestones</caption>
+              <thead class="govuk-table__head">
+                <tr class="govuk-table__row">
+                  <th scope="col" class="govuk-table__header">Milestone</th>
+                  <th scope="col" class="govuk-table__header">Status</th>
+                  <th scope="col" class="govuk-table__header">Due date</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody class="govuk-table__body">
                 @foreach (var item in completedItems)
                 {
                   var m = item.m;
                   var progressName = item.progressName;
-                  var badgeClass = MilestoneStatusBadgeClass(progressName);
+                  var badgeClass = WorkBadgeCss.MilestoneProgressDfeFrontendBadgeClass(progressName);
                   var milestoneEditHref = Url.Content($"~/modern/work/{Model.Id}/milestone/{m.Id}/edit");
-                  <tr>
-                    <td>
- <a href="@milestoneEditHref" class="dfe-c-link dfe-c-fw-bold">@m.Name</a>
+                  <tr class="govuk-table__row">
+                    <td class="govuk-table__cell">
+ <a href="@milestoneEditHref" class="govuk-link govuk-link--no-visited-state govuk-!-font-weight-bold">@m.Name</a>
                     </td>
- <td><span class="@badgeClass" style="white-space:nowrap;">@progressName</span></td>
-                    <td style="white-space:nowrap;">@(m.BaselineDueDate?.ToString("d MMM yyyy") ?? "—")</td>
-                    <td style="white-space:nowrap;">@m.DueDate.ToString("d MMM yyyy")</td>
-                    <td style="white-space:nowrap;">@(m.ActualDate?.ToString("d MMM yyyy") ?? "—")</td>
+ <td class="govuk-table__cell"><span class="@badgeClass dfe-f-badge--small" style="white-space:nowrap;">@progressName</span></td>
+                    <td class="govuk-table__cell govuk-!-font-weight-regular" style="white-space:nowrap;">@m.DueDate.ToString("d MMM yyyy")</td>
                   </tr>
                 }
               </tbody>
             </table>
           </div>
-        }
-        else
-        {
- <p class="dfe-c-body muted" style="margin-top:16px;">No completed milestones.</p>
-        }
+        </div>
+        </div>
       </div>
+      }
     }
     else
     {
- <p class="dfe-c-body muted">No milestones yet.</p>
+ <div class="govuk-summary-card govuk-!-margin-top-0 wd-milestones-summary-card">
+ <div class="govuk-summary-card__title-wrapper">
+ <h2 class="govuk-summary-card__title">Milestones</h2>
+      @if (canEditMilestones)
+      {
+ <ul class="govuk-summary-card__actions">
+ <li class="govuk-summary-card__action">
+ <a href="@Url.Content($"~/modern/work/{Model.Id}/milestone/add")" class="govuk-link govuk-link--no-visited-state">Add milestone</a>
+ </li>
+ </ul>
+      }
+    </div>
+ <div class="govuk-summary-card__content">
+ <p class="govuk-body govuk-!-margin-bottom-0">No milestones yet.</p>
+      </div>
+ </div>
     }
   </div>
 
@@ -575,43 +470,64 @@
     var ragBgByStatusId = ViewBag.RagBgByStatusId as Dictionary<int, string?> ?? new Dictionary<int, string?>();
     var ragTextByStatusId = ViewBag.RagTextByStatusId as Dictionary<int, string?> ?? new Dictionary<int, string?>();
     var fallbackRagByUpdateId = ViewBag.FallbackRagByUpdateId as Dictionary<int, int> ?? new Dictionary<int, int>();
+    var ragCssByStatusId = ViewBag.RagCssClassByStatusId as Dictionary<int, string?> ?? new Dictionary<int, string?>();
+    string MonthlyUpdateRagLabel(MonthlyUpdate? update, int? ragId, Dictionary<int, string> names)
+    {
+        if (update != null && !string.IsNullOrWhiteSpace(update.RagDisplayName))
+            return update.RagDisplayName!;
+        if (ragId is > 0 && names.TryGetValue(ragId.Value, out var label))
+            return label;
+        return "—";
+    }
   }
  <div id="wd-updates" class="tab-pane">
     @if (TempData["Error"] is string errMsg && !string.IsNullOrEmpty(errMsg))
     {
- <div class="dfe-c-error-summary dfe-c-mb-3" aria-labelledby="error-summary-title" role="alert" data-module="dfe-c-error-summary">
- <h2 class="dfe-c-error-summary__title" id="error-summary-title">There is a problem</h2>
- <div class="dfe-c-error-summary__body">
- <ul class="dfe-c-list dfe-c-error-summary__list">
+ <div class="govuk-error-summary govuk-!-margin-bottom-3" data-module="govuk-error-summary" role="alert" aria-labelledby="wd-updates-error-summary-title">
+ <h2 class="govuk-error-summary__title" id="wd-updates-error-summary-title">There is a problem</h2>
+ <div class="govuk-error-summary__body">
+ <ul class="govuk-list govuk-error-summary__list">
             <li>@errMsg</li>
           </ul>
         </div>
       </div>
     }
  <div class="mb4">
-      <h2 style="margin:0;">Monthly updates</h2>
+      <h2 class="govuk-heading-m govuk-!-margin-bottom-0">Monthly updates</h2>
       @if (!monthlyReportDue || currentPeriodLabel == null)
       {
- <p class="dfe-c-body-s muted dfe-c-mb-0 dfe-c-mt-2">Submit a return by choosing a period from the table below when submissions are open.</p>
+ <p class="dfe-c-body-s muted dfe-c-mt-2">Submit a return by choosing a period from the table below when submissions are open.</p>
       }
     </div>
     @if (reportingPeriodsList.Any())
     {
  <div class="overflow-x-auto">
- <div class="dfe-c-table-wrap">
- <table class="data-table" style="table-layout:auto;">
-          <thead>
-            <tr>
-              <th>Period</th>
-              <th>Due date</th>
-              <th>Status</th>
-              <th>RAG rating</th>
-              <th>Submitted date</th>
-              <th>Submitted by</th>
-              <th>Actions</th>
+ <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+ <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed" style="table-layout:auto;">
+          <thead class="govuk-table__head">
+            <tr class="govuk-table__row">
+              <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Period</button>
+        </th>
+              <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Due date</button>
+        </th>
+              <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Status</button>
+        </th>
+              <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">RAG rating</button>
+        </th>
+              <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Submitted date</button>
+        </th>
+              <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Submitted by</button>
+        </th>
             </tr>
           </thead>
-          <tbody>
+          <tbody class="govuk-table__body">
             @foreach (var period in reportingPeriodsList)
             {
               var parts = period.PeriodKey.Split('-');
@@ -623,20 +539,20 @@
               var isUpcoming = submittedUpdate == null;
               var canSubmit = isUpcoming && string.Equals(period.UpdateStatus, "Due", System.StringComparison.OrdinalIgnoreCase) && period.WindowAllowsEditing;
               var canContinueDraft = isDraft && period.WindowAllowsEditing;
-              var periodMonthName = period.PeriodLabel?.Split(' ').FirstOrDefault() ?? new DateTime(periodYear, periodMonth > 0 ? periodMonth : 1, 1).ToString("MMMM");
               var effectiveRagId = submittedUpdate != null ? (submittedUpdate.RagStatusId ?? (fallbackRagByUpdateId.TryGetValue(submittedUpdate.Id, out var fid) ? fid : (int?)null)) : null;
-              var uRagName = effectiveRagId.HasValue && effectiveRagId.Value != 0 && ragStatusesDict.TryGetValue(effectiveRagId.Value, out var ur) ? ur : "—";
+              var uRagName = MonthlyUpdateRagLabel(submittedUpdate, effectiveRagId, ragStatusesDict);
+              var uRagCss = submittedUpdate?.RagCssClass
+                  ?? (effectiveRagId is > 0 && ragCssByStatusId.TryGetValue(effectiveRagId.Value, out var css) ? css : null);
               var submittedByDisplay = submittedUpdate != null && submittedUpdate.SubmittedByUserId.HasValue && monthlyUpdateSubmittedByNames.TryGetValue(submittedUpdate.SubmittedByUserId.Value, out var sb) ? sb : (submittedUpdate?.SubmittedBy ?? "—");
               var uRagBg = effectiveRagId.HasValue && effectiveRagId.Value != 0 && ragBgByStatusId.TryGetValue(effectiveRagId.Value, out var ubg) ? ubg : null;
               var uRagText = effectiveRagId.HasValue && effectiveRagId.Value != 0 && ragTextByStatusId.TryGetValue(effectiveRagId.Value, out var utx) ? utx : null;
-              <tr style="cursor:default;">
- <td>@if (isSubmitted) { <a href="@Url.Action("ViewMonthlyUpdate", "ModernWork", new { id = Model.Id, updateId = submittedUpdate!.Id })" class="dfe-c-link dfe-c-fw-bold">@period.PeriodLabel</a> } else if (canContinueDraft) { <a href="@Url.Action("MonthlyReport", "ModernWork", new { id = Model.Id, year = submittedUpdate!.ReportMonth.Year, month = submittedUpdate.ReportMonth.Month })" class="dfe-c-link dfe-c-fw-bold">@period.PeriodLabel</a> } else if (canSubmit) { <a href="@Url.Action("AddMonthlyUpdate", "ModernWork", new { id = Model.Id, periodKey = period.PeriodKey })" class="dfe-c-link dfe-c-fw-bold">@period.PeriodLabel</a> } else { @period.PeriodLabel }</td>
-                <td>@(period.SubmissionCloses?.ToString("d MMM yyyy") ?? period.DueDate.ToString("d MMM yyyy"))</td>
- <td>@if (isSubmitted) { <span>Submitted</span> } else if (isDraft && canContinueDraft) { <span class="wd-updates-badge wd-updates-badge--blue">Continue return</span> } else if (isDraft && !canContinueDraft) { <span class="dfe-c-body-s muted">Outside submission window</span> } else if (canSubmit) { <span class="wd-updates-badge wd-updates-badge--red">@(periodMonthName) not submitted</span> } else { <span>@period.UpdateStatus</span> }</td>
- <td>@if (submittedUpdate != null) { @if (!string.IsNullOrEmpty(uRagBg) || !string.IsNullOrEmpty(uRagText)) { <span class="rag-badge" style="@(string.IsNullOrEmpty(uRagBg) ? "" : "background-color: var(--govuk-colour-" + uRagBg + ");")@(string.IsNullOrEmpty(uRagText) ? "" : " color: var(--govuk-colour-" + uRagText + ");")">@uRagName</span> } else { <span class="@WorkBadgeCss.RagDfeTagClass(null, uRagName)">@uRagName</span> } } else { <text>—</text> }</td>
-                <td>@(submittedUpdate?.SubmittedAt?.ToString("d MMM yyyy") ?? "—")</td>
-                <td>@submittedByDisplay</td>
- <td>@if (canSubmit && isUpcoming) { <a href="@Url.Action("AddMonthlyUpdate", "ModernWork", new { id = Model.Id, periodKey = period.PeriodKey })" class="dfe-c-link">Submit</a> } else if (isDraft && canContinueDraft) { <a href="@Url.Action("MonthlyReport", "ModernWork", new { id = Model.Id, year = submittedUpdate!.ReportMonth.Year, month = submittedUpdate.ReportMonth.Month })" class="dfe-c-link">Continue return</a> } else if (isSubmitted) { <a href="@Url.Action("ViewMonthlyUpdate", "ModernWork", new { id = Model.Id, updateId = submittedUpdate!.Id })" class="dfe-c-link">View</a> } else { <span style="color:#505a5f;">—</span> }</td>
+              <tr class="govuk-table__row" style="cursor:default;">
+ <td class="govuk-table__cell">@if (isSubmitted) { <a href="@Url.Action("ViewMonthlyUpdate", "ModernWork", new { id = Model.Id, updateId = submittedUpdate!.Id })" class="govuk-link govuk-link--no-visited-state govuk-!-font-weight-bold">@period.PeriodLabel</a> } else if (canContinueDraft) { <a href="@Url.Action("MonthlyReport", "ModernWork", new { id = Model.Id, year = submittedUpdate!.ReportMonth.Year, month = submittedUpdate.ReportMonth.Month })" class="govuk-link govuk-link--no-visited-state govuk-!-font-weight-bold">@period.PeriodLabel</a> } else if (canSubmit) { <a href="@Url.Action("AddMonthlyUpdate", "ModernWork", new { id = Model.Id, periodKey = period.PeriodKey })" class="govuk-link govuk-link--no-visited-state govuk-!-font-weight-bold">@period.PeriodLabel</a> } else { @period.PeriodLabel }</td>
+                <td class="govuk-table__cell">@(period.SubmissionCloses?.ToString("d MMM yyyy") ?? period.DueDate.ToString("d MMM yyyy"))</td>
+ <td class="govuk-table__cell">@if (isSubmitted) { <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--green">Submitted</span> } else if (isDraft && canContinueDraft) { <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--blue">Continue return</span> } else if (isDraft && !canContinueDraft) { <span class="govuk-hint govuk-!-margin-bottom-0">Outside submission window</span> } else if (canSubmit) { <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--red">Not submitted</span> } else { <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--grey">@period.UpdateStatus</span> }</td>
+ <td class="govuk-table__cell">@if (isSubmitted) { <span class="@WorkBadgeCss.RagDfeFrontendBadgeClass(uRagCss, uRagName == "—" ? null : uRagName) dfe-f-badge--small">@(string.IsNullOrEmpty(uRagName) || uRagName == "—" ? "—" : uRagName.ToUpperInvariant())</span> } else if (isDraft && !string.IsNullOrWhiteSpace(uRagName) && uRagName != "—") { <span class="@WorkBadgeCss.RagDfeFrontendBadgeClass(uRagCss, uRagName) dfe-f-badge--small">@uRagName.ToUpperInvariant()</span> } else { <text>—</text> }</td>
+                <td class="govuk-table__cell">@(submittedUpdate?.SubmittedAt?.ToString("d MMM yyyy") ?? "—")</td>
+                <td class="govuk-table__cell">@submittedByDisplay</td>
               </tr>
             }
           </tbody>
@@ -646,34 +562,43 @@
     }
     else if (updatesList.Any())
     {
- <p class="dfe-c-body-s muted dfe-c-mb-2">No reporting periods are configured. Add periods in <a href="@Url.Action("WorkReporting", "ModernAdmin")" class="dfe-c-link">Admin → Work reporting</a>.</p>
+ <p class="dfe-c-body-s muted dfe-c-mb-2">No reporting periods are configured. Add periods in <a href="@Url.Action("WorkReporting", "ModernAdmin")" class="govuk-link govuk-link--no-visited-state">Admin → Work reporting</a>.</p>
  <h3 class="dfe-c-heading-m dfe-c-mb-2">Previously submitted updates</h3>
  <div class="overflow-x-auto">
- <div class="dfe-c-table-wrap">
- <table class="data-table" style="table-layout:auto;">
-          <thead>
-            <tr>
-              <th>Report period</th>
-              <th>RAG rating</th>
-              <th>Submitted date</th>
-              <th>Submitted by</th>
-              <th>Actions</th>
+ <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+ <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed" style="table-layout:auto;">
+          <thead class="govuk-table__head">
+            <tr class="govuk-table__row">
+              <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Report period</button>
+        </th>
+              <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">RAG rating</button>
+        </th>
+              <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Submitted date</button>
+        </th>
+              <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Submitted by</button>
+        </th>
             </tr>
           </thead>
-          <tbody>
+          <tbody class="govuk-table__body">
             @foreach (var u in updatesList)
             {
               var effectiveRagId2 = u.RagStatusId ?? (fallbackRagByUpdateId.TryGetValue(u.Id, out var fid2) ? fid2 : (int?)null);
-              var uRagName = effectiveRagId2.HasValue && effectiveRagId2.Value != 0 && ragStatusesDict.TryGetValue(effectiveRagId2.Value, out var ur) ? ur : "—";
+              var uRagName = MonthlyUpdateRagLabel(u, effectiveRagId2, ragStatusesDict);
+              var uRagCss2 = u.RagCssClass
+                  ?? (effectiveRagId2 is > 0 && ragCssByStatusId.TryGetValue(effectiveRagId2.Value, out var css2) ? css2 : null);
               var submittedByDisplay = u.SubmittedByUserId.HasValue && monthlyUpdateSubmittedByNames.TryGetValue(u.SubmittedByUserId.Value, out var sb) ? sb : (u.SubmittedBy ?? "—");
               var uRagBg2 = effectiveRagId2.HasValue && effectiveRagId2.Value != 0 && ragBgByStatusId.TryGetValue(effectiveRagId2.Value, out var ubg2) ? ubg2 : null;
               var uRagText2 = effectiveRagId2.HasValue && effectiveRagId2.Value != 0 && ragTextByStatusId.TryGetValue(effectiveRagId2.Value, out var utx2) ? utx2 : null;
-              <tr>
- <td><a href="@Url.Action("ViewMonthlyUpdate", "ModernWork", new { id = Model.Id, updateId = u.Id })" class="dfe-c-link dfe-c-fw-bold">@u.ReportMonth.ToString("MMMM yyyy")</a></td>
- <td>@if (!string.IsNullOrEmpty(uRagBg2) || !string.IsNullOrEmpty(uRagText2)) { <span class="rag-badge" style="@(string.IsNullOrEmpty(uRagBg2) ? "" : "background-color: var(--govuk-colour-" + uRagBg2 + ");")@(string.IsNullOrEmpty(uRagText2) ? "" : " color: var(--govuk-colour-" + uRagText2 + ");")">@uRagName</span> } else { <span class="@WorkBadgeCss.RagDfeTagClass(null, uRagName)">@uRagName</span> }</td>
-                <td>@(u.SubmittedAt?.ToString("d MMM yyyy") ?? "—")</td>
-                <td>@submittedByDisplay</td>
- <td><a href="@Url.Action("ViewMonthlyUpdate", "ModernWork", new { id = Model.Id, updateId = u.Id })" class="dfe-c-link">View</a></td>
+              <tr class="govuk-table__row">
+ <td class="govuk-table__cell"><a href="@Url.Action("ViewMonthlyUpdate", "ModernWork", new { id = Model.Id, updateId = u.Id })" class="govuk-link govuk-link--no-visited-state govuk-!-font-weight-bold">@u.ReportMonth.ToString("MMMM yyyy")</a></td>
+ <td class="govuk-table__cell"><span class="@WorkBadgeCss.RagDfeFrontendBadgeClass(uRagCss2, uRagName == "—" ? null : uRagName) dfe-f-badge--small">@(string.IsNullOrEmpty(uRagName) || uRagName == "—" ? "—" : uRagName.ToUpperInvariant())</span></td>
+                <td class="govuk-table__cell">@(u.SubmittedAt?.ToString("d MMM yyyy") ?? "—")</td>
+                <td class="govuk-table__cell">@submittedByDisplay</td>
               </tr>
             }
           </tbody>
@@ -683,250 +608,146 @@
     }
     else
     {
- <p class="dfe-c-body muted">No reporting periods are configured. Add periods in <a href="@Url.Action("WorkReporting", "ModernAdmin")" class="dfe-c-link">Admin → Work reporting</a>. No monthly updates have been submitted yet.</p>
+ <p class="dfe-c-body muted">No reporting periods are configured. Add periods in <a href="@Url.Action("WorkReporting", "ModernAdmin")" class="govuk-link govuk-link--no-visited-state">Admin → Work reporting</a>. No monthly updates have been submitted yet.</p>
     }
   </div>
 
   <!-- CONTACTS TAB -->
  <div id="wd-contacts" class="tab-pane">
- <div class="dfe-c-grid dfe-c-grid--content">
-      <div>
-        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.75rem;margin:0 0 0.5rem 0;">
- <h2 style="margin:0;">Contacts</h2>
-      @if (canEdit)
-      {
- <a href="@Url.Action("AddContact", "ModernWork", new { id = Model.Id })" class="govuk-button">Add contact</a>
-      }
-        </div>
- <p class="dfe-c-body muted dfe-c-mb-3">Role ownership for this work item.</p>
-
- <div class="overflow-x-auto dfe-c-mb-0">
- <table class="govuk-table govuk-!-margin-bottom-0">
- <thead class="govuk-table__head">
-            <tr class="govuk-table__row">
- <th scope="col" class="govuk-table__header" style="width:22%;">Role</th>
- <th scope="col" class="govuk-table__header" style="width:53%;">Name</th>
- <th scope="col" class="govuk-table__header govuk-!-text-align-right" style="width:25%;">Change</th>
-            </tr>
-          </thead>
- <tbody class="govuk-table__body">
-            <tr class="govuk-table__row">
- <th scope="row" class="govuk-table__header">Primary contact</th>
- <td class="govuk-table__cell">
-              @if (primaryContactUser != null)
-              {
-                var pcDisplayName = KeyPersonDisplayName(primaryContactUser);
-                var pcChatUrl = TeamsChatUrl(primaryContactUser);
-                if (pcChatUrl != null) { <a href="@pcChatUrl" class="govuk-link govuk-!-font-weight-bold" target="_blank" rel="noopener noreferrer">@pcDisplayName</a> }
-                else { <strong>@pcDisplayName</strong> }
-                if (!string.IsNullOrWhiteSpace(primaryContactUser.Email)) { <br /><span class="govuk-hint govuk-!-margin-bottom-0 dfe-c-body-s">@primaryContactUser.Email</span> }
-              }
-              else
-              {
-                <span class="muted">—</span>
-              }
-            </td>
- <td class="govuk-table__cell govuk-!-text-align-right">
-          @if (canEdit)
-          {
- <a class="govuk-link" href="@Url.Action("SetPrimaryContact", "ModernWork", new { id = Model.Id })">Change<span class="govuk-visually-hidden"> primary contact</span></a>
-          }
-          else
-          {
-            <span class="muted">—</span>
-          }
-            </td>
-          </tr>
-            <tr class="govuk-table__row">
- <th scope="row" class="govuk-table__header">Budget owner</th>
- <td class="govuk-table__cell">
-              @if (budgetOwnerUser != null)
-              {
-                var boDisplayName = KeyPersonDisplayName(budgetOwnerUser);
-                var boChatUrl = TeamsChatUrl(budgetOwnerUser);
-                if (boChatUrl != null) { <a href="@boChatUrl" class="govuk-link govuk-!-font-weight-bold" target="_blank" rel="noopener noreferrer">@boDisplayName</a> }
-                else { <strong>@boDisplayName</strong> }
-                if (!string.IsNullOrWhiteSpace(budgetOwnerUser.Email)) { <br /><span class="govuk-hint govuk-!-margin-bottom-0 dfe-c-body-s">@budgetOwnerUser.Email</span> }
-              }
-              else
-              {
-                <strong>@budgetOwnerName</strong>
-              }
-            </td>
- <td class="govuk-table__cell govuk-!-text-align-right">
-          @if (canEdit)
-          {
- <a class="govuk-link" href="@Url.Action("SetBudgetOwner", "ModernWork", new { id = Model.Id })">Change<span class="govuk-visually-hidden"> budget owner</span></a>
-          }
-          else
-          {
-            <span class="muted">—</span>
-          }
-            </td>
-          </tr>
-
-          @foreach (var item in keyPeoplePanelItems.Where(i => i.Key != "PrimaryContact" && i.Key != "BudgetOwner"))
-          {
-            var peopleInRole = PeopleForKeyPeopleItem(item.Key, item.Label);
-            var contactRoleTypeId = ContactRoleTypeIdFromKey(item.Key);
-            var addHref = contactRoleTypeId.HasValue
-                ? Url.Action("AddContact", "ModernWork", new { id = Model.Id, contactRoleTypeId = contactRoleTypeId.Value, returnTo = "EditPeople" })
-                : Url.Action("AddContact", "ModernWork", new { id = Model.Id, contactRoleTypeId = 5, customRoleName = item.Label, returnTo = "EditPeople" });
-            <tr class="govuk-table__row">
- <th scope="row" class="govuk-table__header">@item.Label</th>
- <td class="govuk-table__cell">
-                @if (peopleInRole.Any())
-                {
-                  var first = true;
-                  foreach (var u in peopleInRole)
-                  {
-                    var name = KeyPersonDisplayName(u);
-                    var url = TeamsChatUrl(u);
-                    if (!first) { <br /><br /> }
-                    if (url != null) { <a href="@url" class="govuk-link govuk-!-font-weight-bold" target="_blank" rel="noopener noreferrer">@name</a> }
-                    else { <strong>@name</strong> }
-                    if (!string.IsNullOrWhiteSpace(u?.Email)) { <br /><span class="govuk-hint govuk-!-margin-bottom-0 dfe-c-body-s">@u?.Email</span> }
-                    first = false;
-                  }
-                }
-                else
-                {
-                  <span class="muted">—</span>
-                }
-              </td>
- <td class="govuk-table__cell govuk-!-text-align-right">
-            @if (canEdit)
-            {
- <a class="govuk-link" href="@addHref">Change<span class="govuk-visually-hidden"> @item.Label</span></a>
-            }
-            else
-            {
-              <span class="muted">—</span>
-            }
-            </td>
-            </tr>
-          }
-        </tbody>
-        </table>
-      </div>
-
-      @if (canEdit)
-      {
- <div class="dfe-c-button-row dfe-c-mt-3">
- <a href="@Url.Action("EditPeople", "ModernWork", new { id = Model.Id })" class="govuk-button govuk-button--secondary">Manage contacts</a>
-        </div>
-      }
-      </div>
- <div class="dfe-c-sidebar">
- <div class="dfe-c-scard" style="border-top:3px solid #003a69;">
- <div class="dfe-c-scard__title">About contacts</div>
- <p class="dfe-c-body-s dfe-c-mb-1">Each row shows a role and the current person assigned. Use <strong>Change</strong> beside a role to update ownership.</p>
- <p class="dfe-c-body-s dfe-c-mb-0">Primary contact is the day-to-day lead, and SRO is the senior accountable owner.</p>
-        </div>
-      </div>
-    </div>
+ @{
+   ViewBag.KeyContactsSummaryTitle = "Contacts";
+   ViewBag.KeyContactsSummaryCardTopMargin = "govuk-!-margin-top-4";
+ }
+ @await Html.PartialAsync("_WorkItemKeyContactsSummaryCard", Model)
+ @{
+   ViewBag.KeyContactsSummaryTitle = null;
+   ViewBag.KeyContactsSummaryCardTopMargin = null;
+ }
   </div>
 
-  <!-- GOVERNANCE TAB -->
- <div id="wd-governance" class="tab-pane">
- <div class="dfe-c-grid dfe-c-grid--content">
-      <div>
-        <h2 style="margin:0 0 0.5rem 0;">Governance</h2>
- <p class="dfe-c-body muted dfe-c-mb-3">Strategic alignment and governance arrangements for this work item.</p>
-
- <dl class="govuk-summary-list dfe-c-mb-4">
- <div class="govuk-summary-list__row@(canEdit ?"" : " govuk-summary-list__row--no-actions")">
- <dt class="govuk-summary-list__key">Strategic alignment</dt>
+  <!-- STRATEGIC ALIGNMENT TAB -->
+ <div id="wd-strategic-alignment" class="tab-pane">
+ <div class="govuk-summary-card govuk-!-margin-top-0">
+ <div class="govuk-summary-card__title-wrapper">
+ <h2 class="govuk-summary-card__title">Strategic alignment</h2>
+      @if (canEdit)
+      {
+ <ul class="govuk-summary-card__actions">
+ <li class="govuk-summary-card__action">
+ <a href="@workEditStrategicUrl" class="govuk-link govuk-link--no-visited-state">Edit</a>
+ </li>
+ </ul>
+      }
+    </div>
+ <div class="govuk-summary-card__content">
+ <dl class="govuk-summary-list govuk-!-margin-bottom-0">
+ <div class="govuk-summary-list__row@(canEdit ? "" : " govuk-summary-list__row--no-actions")">
+ <dt class="govuk-summary-list__key">Priority outcomes</dt>
  <dd class="govuk-summary-list__value">
-              @if (!hasStrategicAlignment)
- { <span class="muted">—</span> }
+              @if (priorityOutcomeNames.Count == 0)
+              {
+ <span class="muted">—</span>
+              }
               else
               {
-                @if (priorityOutcomeNames.Count > 0)
-                {
- <p class="govuk-body govuk-!-margin-bottom-1"><strong>Priority outcomes</strong></p>
- <ul class="govuk-list govuk-list--bullet @(missionPillarNames.Count> 0 ?"govuk-!-margin-bottom-3" : "govuk-!-margin-bottom-0")">
-                    @foreach (var name in priorityOutcomeNames) { <li>@name</li> }
-                  </ul>
-                }
-                @if (missionPillarNames.Count > 0)
-                {
- <p class="govuk-body govuk-!-margin-bottom-1"><strong>Mission pillars</strong></p>
  <ul class="govuk-list govuk-list--bullet govuk-!-margin-bottom-0">
-                    @foreach (var name in missionPillarNames) { <li>@name</li> }
-                  </ul>
-                }
+                  @foreach (var name in priorityOutcomeNames)
+                  {
+                    <li>@name</li>
+                  }
+                </ul>
               }
             </dd>
-            @if (canEdit)
-            {
- <dd class="govuk-summary-list__actions">
- <a class="govuk-link" href="@Url.Action("EditStrategicAlignment", "ModernWork", new { id = Model.Id })">Change<span class="govuk-visually-hidden"> strategic alignment</span></a>
-              </dd>
-            }
-          </div>
- <div class="govuk-summary-list__row@(canEdit ?"" : " govuk-summary-list__row--no-actions")">
+
+        @if (canEdit)
+        {
+          <dd class="govuk-summary-list__actions">
+            <a class="govuk-link govuk-link--no-visited-state" href="@(workEditStrategicUrl)#edit-priority-outcomes">Change<span class="govuk-visually-hidden"> priority outcomes</span></a>
+          </dd>
+        }
+ </div>
+ <div class="govuk-summary-list__row@(canEdit ? "" : " govuk-summary-list__row--no-actions")">
+ <dt class="govuk-summary-list__key">Mission pillars</dt>
+ <dd class="govuk-summary-list__value">
+              @if (missionPillarNames.Count == 0)
+              {
+ <span class="muted">—</span>
+              }
+              else
+              {
+ <ul class="govuk-list govuk-list--bullet govuk-!-margin-bottom-0">
+                  @foreach (var name in missionPillarNames)
+                  {
+                    <li>@name</li>
+                  }
+                </ul>
+              }
+            </dd>
+
+        @if (canEdit)
+        {
+          <dd class="govuk-summary-list__actions">
+            <a class="govuk-link govuk-link--no-visited-state" href="@(workEditStrategicUrl)#edit-mission-pillars">Change<span class="govuk-visually-hidden"> mission pillars</span></a>
+          </dd>
+        }
+ </div>
+ <div class="govuk-summary-list__row@(canEdit ? "" : " govuk-summary-list__row--no-actions")">
  <dt class="govuk-summary-list__key">Flagship project</dt>
  <dd class="govuk-summary-list__value">@(Model.FlagshipProject ? "Yes" : "No")</dd>
-            @if (canEdit)
-            {
- <dd class="govuk-summary-list__actions">
- <button type="button" class="govuk-link" data-dialog="dlg-work-flagship">Change<span class="govuk-visually-hidden"> flagship project</span></button>
-              </dd>
-            }
+        @if (canEdit)
+        {
+          <dd class="govuk-summary-list__actions">
+            <a class="govuk-link govuk-link--no-visited-state" href="@(workEditStrategicUrl)#edit-flagship">Change<span class="govuk-visually-hidden"> flagship project</span></a>
+          </dd>
+        }
           </div>
- <div class="govuk-summary-list__row@(canEdit ?"" : " govuk-summary-list__row--no-actions")">
+ <div class="govuk-summary-list__row@(canEdit ? "" : " govuk-summary-list__row--no-actions")">
  <dt class="govuk-summary-list__key">Subject to spend control</dt>
  <dd class="govuk-summary-list__value">@(Model.SubjectToSpendControl ? "Yes" : "No")</dd>
-            @if (canEdit)
-            {
- <dd class="govuk-summary-list__actions">
- <button type="button" class="govuk-link" data-dialog="dlg-work-spend">Change<span class="govuk-visually-hidden"> subject to spend control</span></button>
-              </dd>
-            }
+        @if (canEdit)
+        {
+          <dd class="govuk-summary-list__actions">
+            <a class="govuk-link govuk-link--no-visited-state" href="@(workEditStrategicUrl)#edit-spend-control">Change<span class="govuk-visually-hidden"> subject to spend control</span></a>
+          </dd>
+        }
           </div>
- <div class="govuk-summary-list__row@(canEdit ?"" : " govuk-summary-list__row--no-actions")">
+ <div class="govuk-summary-list__row@(canEdit ? "" : " govuk-summary-list__row--no-actions")">
  <dt class="govuk-summary-list__key">Risk appetite</dt>
  <dd class="govuk-summary-list__value">
               @if (Model.RiskAppetiteId.HasValue && !string.IsNullOrWhiteSpace(riskAppetiteName) && riskAppetiteName != "—")
               {
- <span class="@RiskAppetiteTagClass(riskAppetiteName, riskAppetiteOptions, Model.RiskAppetiteId)">@riskAppetiteName</span>
+ <span class="@WorkBadgeCss.RiskAppetiteDfeFrontendBadgeClass(riskAppetiteName, riskAppetiteOptions, Model.RiskAppetiteId)">@riskAppetiteName</span>
               }
               else
               {
                 <text>—</text>
               }
             </dd>
-            @if (canEdit)
-            {
- <dd class="govuk-summary-list__actions">
- <button type="button" class="govuk-link" data-dialog="dlg-work-risk-appetite">Change<span class="govuk-visually-hidden"> risk appetite</span></button>
-              </dd>
-            }
+        @if (canEdit)
+        {
+          <dd class="govuk-summary-list__actions">
+            <a class="govuk-link govuk-link--no-visited-state" href="@(workEditStrategicUrl)#edit-risk-appetite">Change<span class="govuk-visually-hidden"> risk appetite</span></a>
+          </dd>
+        }
           </div>
- <div class="govuk-summary-list__row@(canEdit ?"" : " govuk-summary-list__row--no-actions")">
+ <div class="govuk-summary-list__row@(canEdit ? "" : " govuk-summary-list__row--no-actions")">
  <dt class="govuk-summary-list__key">Multi-dept cooperation</dt>
  <dd class="govuk-summary-list__value">@(Model.GovernmentDepartments?.Any() == true ? string.Join(", ", Model.GovernmentDepartments.Select(g => g.GovernmentDepartment?.Title).Where(n => n != null)) : "—")</dd>
-            @if (canEdit)
-            {
- <dd class="govuk-summary-list__actions">
- <a class="govuk-link" href="@Url.Action("EditMultiDeptCooperation", "ModernWork", new { id = Model.Id })">Change<span class="govuk-visually-hidden"> multi-dept cooperation</span></a>
-              </dd>
-            }
+        @if (canEdit)
+        {
+          <dd class="govuk-summary-list__actions">
+            <a class="govuk-link govuk-link--no-visited-state" href="@workEditMultiDeptUrl">Change<span class="govuk-visually-hidden"> multi-dept cooperation</span></a>
+          </dd>
+        }
           </div>
         </dl>
-      </div>
- <div class="dfe-c-sidebar">
- <div class="dfe-c-scard" style="border-top:3px solid #003a69;">
- <div class="dfe-c-scard__title">Governance</div>
- <p class="dfe-c-body-s dfe-c-mb-0">Strategic alignment, flagship status, spend control and risk appetite are governance fields that affect how this work is tracked and reported.</p>
-        </div>
-      </div>
-    </div>
-  </div>
+ </div>
+ </div>
+ </div>
 
   <!-- RISKS & ISSUES TAB -->
   @{
+    var raidEnabled = ViewBag.ShowRaidNavigation == true;
     var riskOrIssues = Model.RiskOrIssues?.OrderBy(r => r.ReferenceNumber).ToList() ?? new List<WorkItemRiskOrIssue>();
     var allRisks = riskOrIssues.Where(r => string.Equals(r.Type, "Risk", StringComparison.OrdinalIgnoreCase)).ToList();
     var allIssues = riskOrIssues.Where(r => string.Equals(r.Type, "Issue", StringComparison.OrdinalIgnoreCase)).ToList();
@@ -934,559 +755,322 @@
     var openRisks = allRisks.Where(r => !string.Equals(r.Status, "Closed", StringComparison.OrdinalIgnoreCase)).ToList();
     var closedRisks = allRisks.Where(r => string.Equals(r.Status, "Closed", StringComparison.OrdinalIgnoreCase)).ToList();
     var closedIssues = allIssues.Where(r => string.Equals(r.Status, "Closed", StringComparison.OrdinalIgnoreCase)).ToList();
-    var riskStatuses = allRisks.Select(r => r.Status).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(s => s).ToList();
-    var issueStatuses = allIssues.Select(r => r.Status).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(s => s).ToList();
-    string RiTierPillClass(string? t) {
-      if (!string.IsNullOrEmpty(t) && t.Contains("2")) return "ri-tier-pill ri-tier-pill--2";
-      return "ri-tier-pill ri-tier-pill--default";
-    }
     string WorkRiskIssueDetailHref(WorkItemRiskOrIssue r) =>
         string.Equals(r.Type, "Issue", StringComparison.OrdinalIgnoreCase)
             ? (Url.Action("IssueDetail", "ModernRaid", new { id = r.Id }) ?? "")
             : (Url.Action("RiskDetail", "ModernRaid", new { id = r.Id }) ?? "");
-    var workRaidRelation = new RaidRegisterRelationParts(RaidRegisterRelationKinds.Work, Model.Id, Model.Title);
-    string WdRaidRegScoreClass(int? score)
-    {
-      if (score is null) return "raid-reg-score";
-      return score.Value >= 20 ? "raid-reg-score raid-reg-score--highest"
-          : score.Value >= 15 ? "raid-reg-score raid-reg-score--elevated"
-          : score.Value >= 8 ? "raid-reg-score raid-reg-score--medium"
-          : "raid-reg-score raid-reg-score--lower";
-    }
   }
+  @if (raidEnabled)
+  {
  <div id="wd-risks" class="tab-pane">
- <div class="tabs wd-tabs" role="tablist" aria-label="Risks and issues sections" id="ri-tabs-bar" style="margin-bottom:0;">
- <button type="button" class="tab on" role="tab" aria-selected="true" aria-controls="ri-pane-risks" id="ri-tab-risks" data-ri-tab="ri-pane-risks">Risks (@allRisks.Count)</button>
- <button type="button" class="tab" role="tab" aria-selected="false" aria-controls="ri-pane-issues" id="ri-tab-issues" data-ri-tab="ri-pane-issues">Issues (@allIssues.Count)</button>
-    </div>
-
-    <!-- RISKS PANE -->
- <div id="ri-pane-risks" class="tab-pane on" role="tabpanel" style="padding-top:0;">
- <div id="ri-risk-search-and-filter" class="wd-ri-search-filter dfe-c-mb-0" style="padding:16px 0 12px;">
- <div class="filter-toolbar">
- <div class="filter-toolbar__search-wrap">
- <input type="search" id="ri-risk-search" placeholder="Search risks…" class="filter-search" autocomplete="off" aria-label="Search risks" data-ri-filter="risk">
- <button type="button" class="govuk-button govuk-button--secondary filter-toolbar__search-submit" id="ri-risk-search-submit" data-ri-filter="risk">Search</button>
-          </div>
- <button type="button" class="filter-toggle-btn" id="ri-risk-filter-btn" aria-expanded="false" aria-controls="ri-risk-filter-panel">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="flex-shrink:0;" aria-hidden="true"><path d="M1 3h14v1.5l-5 5V14l-4-2V9.5L1 4.5V3z"></path></svg>
- <span class="filter-toggle-label">Filter</span>
-          </button>
- <div class="dfe-c-flex" style="gap:8px;flex-wrap:wrap;align-items:center;">
- <a href="@Url.Action("LogRisk", "ModernWork", new { id = Model.Id })" class="govuk-button govuk-button--sm" style="margin-bottom:0;">Add risk</a>
- <a href="@Url.Action("RiskCreate", "ModernRaid", new { associationKind = "work", projectId = Model.Id })" class="govuk-link govuk-link--no-visited-state govuk-!-font-size-16">Full RAID editor</a>
-          </div>
-        </div>
- <div class="filter-panel filter-panel--allwork" id="ri-risk-filter-panel">
- <div class="filter-panel__grid">
-            <div>
-              <label for="ri-risk-status">Status</label>
- <select id="ri-risk-status" class="govuk-select" data-ri-filter="risk">
-                <option value="">All statuses</option>
-                @foreach (var s in riskStatuses) { <option value="@s">@s</option> }
-              </select>
-            </div>
-          </div>
- <div class="filter-panel__actions">
- <button type="button" class="govuk-button" data-ri-apply="risk">Apply filters</button>
- <a href="#" class="govuk-link" role="button" data-ri-clear="risk">Clear filters</a>
-          </div>
-        </div>
-      </div>
+ <div class="modern-work-detail-section-head__title-row govuk-!-margin-bottom-3">
+ <h2 class="govuk-heading-m govuk-!-margin-top-0 govuk-!-margin-bottom-0">Risks</h2>
+ <div class="modern-work-detail-section-head__actions">
+ <a href="@Url.Action("LogRisk", "ModernWork", new { id = Model.Id })" class="govuk-button govuk-!-margin-bottom-0">Add risk</a>
+ </div>
+ </div>
       @if (allRisks.Any())
       {
- <div class="dfe-c-table-wrap dfe-c-mb-3">
- <table id="ri-risks-table" class="work-ri-table work-ri-raid">
-        <thead>
-          <tr>
-            <th>Risk</th>
-            <th>Business area</th>
-            <th>Tier</th>
-            <th>Relation</th>
-            <th>Status</th>
-            <th>Owner</th>
-            <th>Likelihood</th>
-            <th>Impact</th>
-            <th>Score (inherent)</th>
+ <div class="dfe-f-table-wrapper govuk-!-margin-bottom-0" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+ <table id="ri-risks-table" class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed work-ri-table work-ri-raid">
+        <caption class="govuk-table__caption govuk-table__caption--m govuk-visually-hidden">Risks for this work item</caption>
+        <thead class="govuk-table__head">
+          <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header">Risk</th>
+            <th scope="col" class="govuk-table__header">Tier</th>
+            <th scope="col" class="govuk-table__header">Status</th>
+            <th scope="col" class="govuk-table__header">Owner</th>
+            <th scope="col" class="govuk-table__header govuk-table__header--numeric">Score (/25)</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody class="govuk-table__body">
             @foreach (var r in openRisks.Concat(closedRisks))
             {
               var ownerName = r.OwnerUser?.Name ?? r.OwnerUser?.Email ?? r.UpdatedBy ?? "—";
               var isClosed = string.Equals(r.Status, "Closed", StringComparison.OrdinalIgnoreCase) || r.ClosedAt.HasValue;
               var riskRowClosed = (r.Status ?? "").Contains("closed", StringComparison.OrdinalIgnoreCase) || isClosed;
               var riskDetailUrl = WorkRiskIssueDetailHref(r);
-            <tr class="work-ri-table__row--clickable@(isClosed ? " work-ri-table__row--closed" : "")" data-ri-title="@r.Title.ToLowerInvariant()" data-ri-status="@r.Status" data-ri-href="@riskDetailUrl">
+            <tr class="work-ri-table__row--clickable@(isClosed ? " work-ri-table__row--closed" : "")" data-ri-href="@riskDetailUrl">
               @await Html.PartialAsync("~/Views/Modern/Raid/_RaidRegisterItemTitleCell.cshtml", new RaidRegisterItemTitleVm(riskDetailUrl, r.Title, $"R-{r.Id:D4}"))
- <td class="work-ri-raid__ba">@(string.IsNullOrEmpty(r.BusinessAreaLabel) ? "—" : r.BusinessAreaLabel)</td>
- <td><span class="@RiTierPillClass(r.Tier)">@(r.Tier ?? "Tier 3")</span></td>
- @await Html.PartialAsync("~/Views/Modern/Raid/_RaidRegisterRelationCell.cshtml", workRaidRelation)
- <td><span class="dfe-c-tag @(!riskRowClosed ? "dfe-c-tag--blue" : "dfe-c-tag--green")">@((r.Status ?? "—").ToUpperInvariant())</span></td>
- <td class="work-ri-raid__td-muted">@ownerName</td>
- <td class="work-ri-raid__td-muted">@(r.LikelihoodLabel ?? "—")</td>
- <td class="work-ri-raid__td-muted">@(r.ImpactLabel ?? "—")</td>
- <td class="work-ri-raid__score" style="text-align:right;">@if (r.RiskScore is int s) { <span class="@WdRaidRegScoreClass(s)">@s</span> } else { <span class="work-ri-raid__td-muted">—</span> }</td>
+ <td class="govuk-table__cell"><span class="@WorkBadgeCss.RaidTierDfeFrontendBadgeClass(r.Tier)">@(r.Tier ?? "Tier 3")</span></td>
+ <td class="govuk-table__cell"><span class="@WorkBadgeCss.RaidOpenClosedDfeFrontendBadgeClass(riskRowClosed) dfe-f-badge--small">@((r.Status ?? "—").ToUpperInvariant())</span></td>
+ <td class="govuk-table__cell">@ownerName</td>
+ <td class="govuk-table__cell govuk-table__cell--numeric">@if (r.RiskScore is int s) { var scoreAria = $"Risk score {s} out of 25"; <span class="@WorkBadgeCss.RaidRiskScoreDfeFrontendBadgeClass(s) dfe-f-u-tabular-numbers" aria-label="@scoreAria"><span aria-hidden="true">@s/25</span></span> } else { <span class="work-ri-raid__td-muted">—</span> }</td>
             </tr>
             }
         </tbody>
         </table>
  </div>
- <p class="dfe-c-body muted dfe-c-mb-3" id="ri-risks-empty" style="display:none;">No risks match your search.</p>
       }
       else
       {
- <p class="dfe-c-body muted dfe-c-mb-3">No risks logged.</p>
+ <p class="dfe-c-body muted govuk-!-margin-bottom-3">No risks logged.</p>
       }
-    </div>
+ </div>
 
-    <!-- ISSUES PANE -->
- <div id="ri-pane-issues" class="tab-pane" role="tabpanel" style="padding-top:0;">
- <div id="ri-issue-search-and-filter" class="wd-ri-search-filter dfe-c-mb-0" style="padding:16px 0 12px;">
- <div class="filter-toolbar">
- <div class="filter-toolbar__search-wrap">
- <input type="search" id="ri-issue-search" placeholder="Search issues…" class="filter-search" autocomplete="off" aria-label="Search issues" data-ri-filter="issue">
- <button type="button" class="govuk-button govuk-button--secondary filter-toolbar__search-submit" id="ri-issue-search-submit" data-ri-filter="issue">Search</button>
-          </div>
- <button type="button" class="filter-toggle-btn" id="ri-issue-filter-btn" aria-expanded="false" aria-controls="ri-issue-filter-panel">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="flex-shrink:0;" aria-hidden="true"><path d="M1 3h14v1.5l-5 5V14l-4-2V9.5L1 4.5V3z"></path></svg>
- <span class="filter-toggle-label">Filter</span>
-          </button>
- <div class="dfe-c-flex" style="gap:8px;flex-wrap:wrap;align-items:center;">
- <a href="@Url.Action("LogIssue", "ModernWork", new { id = Model.Id })" class="govuk-button govuk-button--sm" style="margin-bottom:0;">Add issue</a>
- <a href="@Url.Action("IssueCreate", "ModernRaid", new { associationKind = "work", projectId = Model.Id })" class="govuk-link govuk-link--no-visited-state govuk-!-font-size-16">Full RAID editor</a>
-          </div>
-        </div>
- <div class="filter-panel filter-panel--allwork" id="ri-issue-filter-panel">
- <div class="filter-panel__grid">
-            <div>
-              <label for="ri-issue-status">Status</label>
- <select id="ri-issue-status" class="govuk-select" data-ri-filter="issue">
-                <option value="">All statuses</option>
-                @foreach (var s in issueStatuses) { <option value="@s">@s</option> }
-              </select>
-            </div>
-          </div>
- <div class="filter-panel__actions">
- <button type="button" class="govuk-button" data-ri-apply="issue">Apply filters</button>
- <a href="#" class="govuk-link" role="button" data-ri-clear="issue">Clear filters</a>
-          </div>
-        </div>
-      </div>
+ <div id="wd-issues" class="tab-pane">
+ <div class="modern-work-detail-section-head__title-row govuk-!-margin-bottom-3">
+ <h2 class="govuk-heading-m govuk-!-margin-top-0 govuk-!-margin-bottom-0">Issues</h2>
+ <div class="modern-work-detail-section-head__actions">
+ <a href="@Url.Action("LogIssue", "ModernWork", new { id = Model.Id })" class="govuk-button govuk-!-margin-bottom-0">Add issue</a>
+ </div>
+ </div>
       @if (allIssues.Any())
       {
- <div class="dfe-c-table-wrap dfe-c-mb-3">
- <table id="ri-issues-table" class="work-ri-table work-ri-table--issue work-ri-raid">
-        <thead>
-          <tr>
-            <th>Issue</th>
-            <th>Business area</th>
-            <th>Relation</th>
-            <th>Status</th>
-            <th>Owner</th>
-            <th>Priority</th>
-            <th>Severity</th>
+ <div class="dfe-f-table-wrapper govuk-!-margin-bottom-0" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+ <table id="ri-issues-table" class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed work-ri-table work-ri-table--issue work-ri-raid">
+        <caption class="govuk-table__caption govuk-table__caption--m govuk-visually-hidden">Issues for this work item</caption>
+        <thead class="govuk-table__head">
+          <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header">Issue</th>
+            <th scope="col" class="govuk-table__header">Status</th>
+            <th scope="col" class="govuk-table__header">Priority</th>
+            <th scope="col" class="govuk-table__header">Severity</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody class="govuk-table__body">
             @foreach (var r in openIssues.Concat(closedIssues))
             {
-              var ownerName = r.OwnerUser?.Name ?? r.OwnerUser?.Email ?? r.UpdatedBy ?? "—";
               var isClosed = string.Equals(r.Status, "Closed", StringComparison.OrdinalIgnoreCase) || r.ClosedAt.HasValue;
               var issueRowClosed = (r.Status ?? "").Contains("closed", StringComparison.OrdinalIgnoreCase) || isClosed;
               var sev = r.IssueSeverityLabel ?? r.Priority ?? "—";
               var pri = r.IssuePriorityLabel ?? "—";
               var issueDetailUrl = WorkRiskIssueDetailHref(r);
-            <tr class="work-ri-table__row--issue work-ri-table__row--clickable@(isClosed ? " work-ri-table__row--closed" : "")" data-ri-title="@r.Title.ToLowerInvariant()" data-ri-status="@r.Status" data-ri-href="@issueDetailUrl">
+            <tr class="work-ri-table__row--issue work-ri-table__row--clickable@(isClosed ? " work-ri-table__row--closed" : "")" data-ri-href="@issueDetailUrl">
               @await Html.PartialAsync("~/Views/Modern/Raid/_RaidRegisterItemTitleCell.cshtml", new RaidRegisterItemTitleVm(issueDetailUrl, r.Title, $"I-{r.Id:D4}"))
- <td class="work-ri-raid__ba">@(string.IsNullOrEmpty(r.BusinessAreaLabel) ? "—" : r.BusinessAreaLabel)</td>
- @await Html.PartialAsync("~/Views/Modern/Raid/_RaidRegisterRelationCell.cshtml", workRaidRelation)
- <td><span class="dfe-c-tag @(!issueRowClosed ? "dfe-c-tag--blue" : "dfe-c-tag--green")">@((r.Status ?? "—").ToUpperInvariant())</span></td>
- <td class="work-ri-raid__td-muted">@ownerName</td>
- <td><span class="dfe-c-tag @((pri ?? "").Contains("critical", StringComparison.OrdinalIgnoreCase) ? "dfe-c-tag--red" : (pri ?? "").Contains("high", StringComparison.OrdinalIgnoreCase) ? "dfe-c-tag--amber" : "dfe-c-tag--grey")">@((pri ?? "—").ToUpperInvariant())</span></td>
- <td><span class="dfe-c-tag @((sev ?? "").Contains("critical", StringComparison.OrdinalIgnoreCase) ? "dfe-c-tag--red" : (sev ?? "").Contains("major", StringComparison.OrdinalIgnoreCase) ? "dfe-c-tag--amber" : "dfe-c-tag--green")">@((sev ?? "—").ToUpperInvariant())</span></td>
+ <td class="govuk-table__cell"><span class="@WorkBadgeCss.RaidOpenClosedDfeFrontendBadgeClass(issueRowClosed) dfe-f-badge--small">@((r.Status ?? "—").ToUpperInvariant())</span></td>
+ <td class="govuk-table__cell"><span class="@WorkBadgeCss.RaidPriorityLabelDfeFrontendBadgeClass(pri) dfe-f-badge--small">@((pri ?? "—").ToUpperInvariant())</span></td>
+ <td class="govuk-table__cell"><span class="@WorkBadgeCss.RaidSeverityLabelDfeFrontendBadgeClass(sev) dfe-f-badge--small">@((sev ?? "—").ToUpperInvariant())</span></td>
             </tr>
             }
         </tbody>
         </table>
  </div>
- <p class="dfe-c-body muted dfe-c-mb-3" id="ri-issues-empty" style="display:none;">No issues match your search.</p>
       }
       else
       {
- <p class="dfe-c-body muted dfe-c-mb-3">No issues logged.</p>
+ <p class="dfe-c-body muted govuk-!-margin-bottom-3">No issues logged.</p>
       }
-    </div>
-  </div>
+ </div>
+  }
 
   <!-- DEPENDENCIES TAB (More) -->
   @{
     var dependencyTargetPortfolioNames = ViewBag.DependencyTargetPortfolioNames as Dictionary<int, string> ?? new Dictionary<int, string>();
   }
  <div id="wd-dependencies" class="tab-pane">
- <div class="dfe-c-flex--between mb4">
-      <h2 style="margin:0;">Dependencies</h2>
- <a href="@Url.Action("AddDependency", "ModernWork", new { id = Model.Id })" class="govuk-button govuk-button--secondary govuk-button--sm">Add dependency</a>
-    </div>
+ <h2 class="govuk-heading-m govuk-!-margin-top-0 govuk-!-margin-bottom-4">Dependencies</h2>
     @{
       var inDeps = Model.Dependencies?.Where(d => string.Equals(d.Direction, "In", StringComparison.OrdinalIgnoreCase)).ToList() ?? new List<WorkItemDependency>();
       var outDeps = Model.Dependencies?.Where(d => string.Equals(d.Direction, "Out", StringComparison.OrdinalIgnoreCase)).ToList() ?? new List<WorkItemDependency>();
     }
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
-      <div>
-        <h3 style="background:#003a69;color:#fff;padding:10px 14px;font-size:15px;margin-bottom:0;">⬆ In-dependencies (upstream)</h3>
-        <p style="font-size:13px;color:#505a5f;padding:8px 0 12px;">Things this work item depends on.</p>
+ <div class="govuk-summary-card govuk-!-margin-bottom-4">
+ <div class="govuk-summary-card__title-wrapper">
+ <h3 class="govuk-summary-card__title">In-dependencies (upstream)</h3>
+ <ul class="govuk-summary-card__actions">
+ <li class="govuk-summary-card__action">
+ <a href="@Url.Action("AddDependency", "ModernWork", new { id = Model.Id })" class="govuk-link govuk-link--no-visited-state">Add dependency</a>
+ </li>
+ </ul>
+ </div>
+ <div class="govuk-summary-card__content">
+ <p class="govuk-body govuk-!-margin-bottom-3">Things this work item depends on.</p>
         @if (inDeps.Any())
         {
+ <div class="dfe-f-table-wrapper govuk-!-margin-bottom-0" data-module="dfe-f-table">
+ <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+ <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed">
+ <caption class="govuk-table__caption govuk-table__caption--m govuk-visually-hidden">In-dependencies</caption>
+ <thead class="govuk-table__head">
+ <tr class="govuk-table__row">
+ <th scope="col" class="govuk-table__header">Type</th>
+ <th scope="col" class="govuk-table__header">Dependency</th>
+ <th scope="col" class="govuk-table__header">Business area</th>
+ <th scope="col" class="govuk-table__header govuk-table__header--numeric">Action</th>
+              </tr>
+            </thead>
+ <tbody class="govuk-table__body">
           @foreach (var d in inDeps)
           {
             var depTitle = d.IsInternal && d.TargetWorkItem != null ? d.TargetWorkItem.Title : (d.ExternalDescription ?? "—");
             var depPortfolioName = d.IsInternal && d.TargetWorkItem != null && d.TargetWorkItem.PortfolioId.HasValue && dependencyTargetPortfolioNames.TryGetValue(d.TargetWorkItem.PortfolioId.Value, out var pn) ? pn : null;
-            <div style="border:1px solid #dee0e2;overflow:hidden;margin-bottom:10px;">
-              <div style="display:grid;grid-template-columns:auto 1fr auto;gap:0;align-items:stretch;">
-                <div style="background:@(d.IsInternal ? "#e3f5eb" : "#fde8e4");width:6px;"></div>
-                <div style="padding:12px 14px;">
-                  <div style="display:flex;gap:8px;align-items:center;margin-bottom:4px;">
-                    <span style="background:@(d.IsInternal ? "#d2e2f1" : "#fde8e4");color:@(d.IsInternal ? "#003078" : "#942514");padding:2px 7px;font-size:11px;font-weight:700;">@(d.IsInternal ? "INTERNAL" : "EXTERNAL")</span>
-                  </div>
-                  @if (d.IsInternal && d.TargetWorkItem != null)
-                  {
- <div style="font-weight:700;font-size:15px;"><a href="@Url.Action("Detail", "ModernWork", new { id = d.TargetWorkItem.Id })" class="dfe-c-link">@depTitle</a></div>
-                    @if (!string.IsNullOrEmpty(depPortfolioName))
-                    {
-                      <div style="font-size:13px;color:#505a5f;margin-top:4px;">@depPortfolioName</div>
-                    }
-                  }
-                  else
-                  {
-                    <div style="font-weight:700;font-size:15px;">@depTitle</div>
-                  }
-                </div>
-                <div style="padding:12px;display:flex;gap:10px;align-items:center;">
-                  <form method="post" action="@Url.Action("RemoveDependency", "ModernWork", new { id = Model.Id })" style="display:inline;" data-confirm-title="Remove dependency" data-confirm-message="Remove this dependency link?">
+ <tr class="govuk-table__row">
+ <td class="govuk-table__cell">
+                @if (d.IsInternal)
+                {
+ <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--blue">Internal</span>
+                }
+                else
+                {
+ <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--orange">External</span>
+                }
+              </td>
+ <td class="govuk-table__cell">
+                @if (d.IsInternal && d.TargetWorkItem != null)
+                {
+ <a href="@Url.Action("Detail", "ModernWork", new { id = d.TargetWorkItem.Id })" class="govuk-link govuk-link--no-visited-state">@depTitle</a>
+                }
+                else
+                {
+                  @depTitle
+                }
+              </td>
+ <td class="govuk-table__cell">@(string.IsNullOrEmpty(depPortfolioName) ? "—" : depPortfolioName)</td>
+ <td class="govuk-table__cell govuk-table__cell--numeric">
+ <form method="post" action="@Url.Action("RemoveDependency", "ModernWork", new { id = Model.Id })" class="govuk-!-margin-bottom-0" data-confirm-title="Remove dependency" data-confirm-message="Remove this dependency link?">
                     @Html.AntiForgeryToken()
                     <input type="hidden" name="dependencyId" value="@d.Id" />
- <button type="submit" class="dfe-c-link" style="background:none;border:none;padding:0;font-size:13px;color:var(--govuk-error-colour);cursor:pointer;text-decoration:underline;">Remove</button>
+ <button type="submit" class="govuk-link govuk-link--no-visited-state" style="background:none;border:none;padding:0;color:var(--govuk-error-colour,#d4351c);cursor:pointer;text-decoration:underline;">Remove<span class="govuk-visually-hidden"> dependency @depTitle</span></button>
                   </form>
-                </div>
-              </div>
-            </div>
+              </td>
+            </tr>
           }
+            </tbody>
+          </table>
+        </div>
         }
-        else { <p style="font-size:13px;color:#505a5f;">None recorded.</p> }
-      </div>
-      <div>
-        <h3 style="background:#003a69;color:#fff;padding:10px 14px;font-size:15px;margin-bottom:0;">⬇ Out-dependencies (downstream)</h3>
-        <p style="font-size:13px;color:#505a5f;padding:8px 0 12px;">Work items that depend on this.</p>
+        else
+        {
+ <p class="govuk-body govuk-!-margin-bottom-0">None recorded.</p>
+        }
+ </div>
+ </div>
+ <div class="govuk-summary-card">
+ <div class="govuk-summary-card__title-wrapper">
+ <h3 class="govuk-summary-card__title">Out-dependencies (downstream)</h3>
+ <ul class="govuk-summary-card__actions">
+ <li class="govuk-summary-card__action">
+ <a href="@Url.Action("AddDependency", "ModernWork", new { id = Model.Id })" class="govuk-link govuk-link--no-visited-state">Add dependency</a>
+ </li>
+ </ul>
+ </div>
+ <div class="govuk-summary-card__content">
+ <p class="govuk-body govuk-!-margin-bottom-3">Work items that depend on this.</p>
         @if (outDeps.Any())
         {
+ <div class="dfe-f-table-wrapper govuk-!-margin-bottom-0" data-module="dfe-f-table">
+ <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+ <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed">
+ <caption class="govuk-table__caption govuk-table__caption--m govuk-visually-hidden">Out-dependencies</caption>
+ <thead class="govuk-table__head">
+ <tr class="govuk-table__row">
+ <th scope="col" class="govuk-table__header">Type</th>
+ <th scope="col" class="govuk-table__header">Dependency</th>
+ <th scope="col" class="govuk-table__header">Business area</th>
+ <th scope="col" class="govuk-table__header govuk-table__header--numeric">Action</th>
+              </tr>
+            </thead>
+ <tbody class="govuk-table__body">
           @foreach (var d in outDeps)
           {
             var depTitle = d.IsInternal && d.TargetWorkItem != null ? d.TargetWorkItem.Title : (d.ExternalDescription ?? "—");
             var depPortfolioName = d.IsInternal && d.TargetWorkItem != null && d.TargetWorkItem.PortfolioId.HasValue && dependencyTargetPortfolioNames.TryGetValue(d.TargetWorkItem.PortfolioId.Value, out var pn2) ? pn2 : null;
-            <div style="border:1px solid #dee0e2;overflow:hidden;margin-bottom:10px;">
-              <div style="display:grid;grid-template-columns:auto 1fr auto;gap:0;align-items:stretch;">
-                <div style="background:#fff7e0;width:6px;"></div>
-                <div style="padding:12px 14px;">
-                  <div style="display:flex;gap:8px;align-items:center;margin-bottom:4px;">
-                    <span style="background:#d2e2f1;color:#003078;padding:2px 7px;font-size:11px;font-weight:700;">@(d.IsInternal ? "INTERNAL" : "EXTERNAL")</span>
-                  </div>
-                  @if (d.IsInternal && d.TargetWorkItem != null)
-                  {
- <div style="font-weight:700;font-size:15px;"><a href="@Url.Action("Detail", "ModernWork", new { id = d.TargetWorkItem.Id })" class="dfe-c-link">@depTitle</a></div>
-                    @if (!string.IsNullOrEmpty(depPortfolioName))
-                    {
-                      <div style="font-size:13px;color:#505a5f;margin-top:4px;">@depPortfolioName</div>
-                    }
-                  }
-                  else
-                  {
-                    <div style="font-weight:700;font-size:15px;">@depTitle</div>
-                  }
-                </div>
-                <div style="padding:12px;display:flex;gap:10px;align-items:center;">
-                  <form method="post" action="@Url.Action("RemoveDependency", "ModernWork", new { id = Model.Id })" style="display:inline;" data-confirm-title="Remove dependency" data-confirm-message="Remove this dependency link?">
-                    @Html.AntiForgeryToken()
-                    <input type="hidden" name="dependencyId" value="@d.Id" />
- <button type="submit" class="dfe-c-link" style="background:none;border:none;padding:0;font-size:13px;color:var(--govuk-error-colour);cursor:pointer;text-decoration:underline;">Remove</button>
-                  </form>
-                </div>
-              </div>
-            </div>
-          }
-        }
-        else { <p style="font-size:13px;color:#505a5f;">None recorded.</p> }
-      </div>
-    </div>
-  </div>
-
-  <!-- LINKED RECORDS TAB (More) -->
- <div id="wd-links" class="tab-pane">
-    <h2 style="margin-bottom:16px;">Linked records</h2>
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;">
-      @if (linkedBusinessCase != null)
-      {
- <div class="dfe-c-card" style="border-top:4px solid #00897B;">
-          <h3>Business case</h3>
- <div class="kv"><dt>Reference</dt><dd><strong>@linkedBusinessCase.BusinessCaseId</strong></dd></div>
- <div class="kv"><dt>Title</dt><dd>@linkedBusinessCase.Title</dd></div>
- <div style="margin-top:12px;"><a href="@Url.Action("Detail", "Horizon", new { id = linkedBusinessCase.Id })" class="govuk-button govuk-button--secondary govuk-button--sm">View business case →</a></div>
-        </div>
-      }
-      @if (linkedDemand != null)
-      {
- <div class="dfe-c-card" style="border-top:4px solid #003a69;">
-          <h3>Demand record</h3>
- <div class="kv"><dt>Reference</dt><dd><strong>@linkedDemand.Reference</strong></dd></div>
- <div class="kv"><dt>Title</dt><dd>@linkedDemand.Title</dd></div>
- <div style="margin-top:12px;"><a href="@Url.Action("Detail", "Demand", new { id = linkedDemand.Id })" class="govuk-button govuk-button--secondary govuk-button--sm">View demand →</a></div>
-        </div>
-      }
- <div class="dfe-c-card" style="border-top:4px solid #b1b4b6;">
-        <h3>Add retrospective link</h3>
-        <p style="font-size:13px;color:#505a5f;margin-bottom:12px;">Link this work item to an existing demand or business case.</p>
- <a href="@(Url.Action("Detail", "ModernWork", new { id = Model.Id }))#wd-dependencies" class="govuk-button govuk-button--secondary govuk-button--sm">Manage links &amp; dependencies →</a>
-      </div>
-    </div>
-  </div>
-
-  <!-- AUDIT TRAIL TAB (More) -->
- <div id="wd-audit" class="tab-pane">
-    <h2 style="margin-bottom:16px;">Audit trail</h2>
-    @{
-      var lifecycleEntries = ViewBag.LifecycleAuditEntries as List<Compass.Models.Modern.Work.LifecycleAuditEntry> ?? new List<Compass.Models.Modern.Work.LifecycleAuditEntry>();
-      var auditEntries = ViewBag.WorkItemAuditEntries as List<Compass.Models.Modern.Work.AuditLog> ?? new List<Compass.Models.Modern.Work.AuditLog>();
-      var auditChangedByDisplay = ViewBag.AuditChangedByDisplay as Dictionary<string, string> ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-      string AuditWho(string? by) => by != null && auditChangedByDisplay.TryGetValue(by, out var name) ? name : by ?? "—";
-    }
-    <div id="wd-audit-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:300;align-items:center;justify-content:center;" role="dialog" aria-modal="true" aria-labelledby="wd-audit-modal-title">
-      <div style="background:#fff;max-width:480px;width:90%;max-height:85vh;overflow:auto;padding:24px;box-shadow:0 4px 24px rgba(0,0,0,0.2);">
- <h3 id="wd-audit-modal-title" class="dfe-c-heading-m" style="margin-top:0;">Change details</h3>
- <dl class="dfe-c-summary-list dfe-c-summary-list--no-border" style="margin-bottom:20px;">
- <div class="dfe-c-summary-list__row"><dt class="dfe-c-summary-list__key">Event</dt><dd class="dfe-c-summary-list__value" id="wd-audit-modal-type">—</dd></div>
- <div class="dfe-c-summary-list__row"><dt class="dfe-c-summary-list__key">When</dt><dd class="dfe-c-summary-list__value" id="wd-audit-modal-when">—</dd></div>
- <div class="dfe-c-summary-list__row"><dt class="dfe-c-summary-list__key">Who</dt><dd class="dfe-c-summary-list__value" id="wd-audit-modal-who">—</dd></div>
- <div class="dfe-c-summary-list__row" id="wd-audit-modal-previous-row" style="display:none;"><dt class="dfe-c-summary-list__key">Previous</dt><dd class="dfe-c-summary-list__value" id="wd-audit-modal-previous">—</dd></div>
- <div class="dfe-c-summary-list__row"><dt class="dfe-c-summary-list__key">New / value</dt><dd class="dfe-c-summary-list__value" id="wd-audit-modal-new" style="white-space:pre-wrap;word-break:break-word;">—</dd></div>
-        </dl>
- <button type="button" class="govuk-button" id="wd-audit-modal-close">Close</button>
-      </div>
-    </div>
- <div class="dfe-c-table-wrap">
- <table style="table-layout:fixed;width:100%;">
- <thead>
- <tr>
- <th style="width:40%;">Event</th>
- <th style="width:28%;">When</th>
- <th style="width:32%;min-width:0;overflow:hidden;text-overflow:ellipsis;">Who</th>
-        </tr>
-      </thead>
- <tbody>
-        @if (lifecycleEntries.Any())
-        {
-          var idx = 0;
-          foreach (var e in lifecycleEntries)
-          {
- <tr style="@(e.Highlight ? "background:#e3f5eb;border-left:3px solid #00703c;" : (idx % 2 == 1 ? "background:#f8f9fa;" : ""))">
- <td style="font-size:14px;">
-                @if (!string.IsNullOrEmpty(e.LinkUrl))
+ <tr class="govuk-table__row">
+ <td class="govuk-table__cell">
+                @if (d.IsInternal)
                 {
- <a href="@e.LinkUrl" class="dfe-c-link"><strong>@e.Event</strong></a>
-                  @if (!string.IsNullOrEmpty(e.LinkText)) { <text> — </text><span style="font-size:12px;color:#505a5f;">@e.LinkText</span> }
+ <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--blue">Internal</span>
                 }
                 else
                 {
-                  <strong>@e.Event</strong>
+ <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--orange">External</span>
                 }
               </td>
- <td style="font-size:13px;color:#505a5f;">@e.When.ToString("d MMM yyyy · HH:mm")</td>
- <td class="--who" style="font-size:13px;max-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="@e.Who">@e.Who</td>
-            </tr>
-            idx++;
-          }
-        }
-        else if (auditEntries.Any())
-        {
-          var auditData = auditEntries.Select(a => new { type = a.ChangeType ?? "", when = a.ChangedAt.ToString("d MMM yyyy · HH:mm"), who = AuditWho(a.ChangedBy), previous = a.PreviousValue ?? "", @new = a.NewValue ?? "" }).ToList();
-          <script>window.WD_AUDIT_ENTRIES = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(auditData));</script>
-          var idx = 0;
-          foreach (var a in auditEntries)
-          {
-            var whoDisplay = AuditWho(a.ChangedBy);
- <tr style="@(idx % 2 == 1 ? "background:#f8f9fa;" : "")">
- <td style="font-size:14px;">
- <button type="button" class="dfe-c-link wd-audit-row-btn" style="background:none;border:none;padding:0;text-align:left;cursor:pointer;text-decoration:underline;color:var(--dfe-c-link-colour);" data-audit-index="@idx"><strong>@(a.ChangeType ?? "—").</strong> @(a.NewValue ?? a.PreviousValue ?? "—")</button>
+ <td class="govuk-table__cell">
+                @if (d.IsInternal && d.TargetWorkItem != null)
+                {
+ <a href="@Url.Action("Detail", "ModernWork", new { id = d.TargetWorkItem.Id })" class="govuk-link govuk-link--no-visited-state">@depTitle</a>
+                }
+                else
+                {
+                  @depTitle
+                }
               </td>
- <td style="font-size:13px;color:#505a5f;">@a.ChangedAt.ToString("d MMM yyyy · HH:mm")</td>
- <td class="--who" style="font-size:13px;max-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="@whoDisplay">@whoDisplay</td>
+ <td class="govuk-table__cell">@(string.IsNullOrEmpty(depPortfolioName) ? "—" : depPortfolioName)</td>
+ <td class="govuk-table__cell govuk-table__cell--numeric">
+ <form method="post" action="@Url.Action("RemoveDependency", "ModernWork", new { id = Model.Id })" class="govuk-!-margin-bottom-0" data-confirm-title="Remove dependency" data-confirm-message="Remove this dependency link?">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="dependencyId" value="@d.Id" />
+ <button type="submit" class="govuk-link govuk-link--no-visited-state" style="background:none;border:none;padding:0;color:var(--govuk-error-colour,#d4351c);cursor:pointer;text-decoration:underline;">Remove<span class="govuk-visually-hidden"> dependency @depTitle</span></button>
+                  </form>
+              </td>
             </tr>
-            idx++;
           }
+            </tbody>
+          </table>
+        </div>
         }
         else
         {
- <tr>
- <td style="font-size:14px;"><strong>Work item updated.</strong></td>
- <td style="font-size:13px;color:#505a5f;">@Model.UpdatedAt.ToString("d MMM yyyy · HH:mm")</td>
- <td class="--who" style="font-size:13px;max-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="@AuditWho(Model.UpdatedBy)">@AuditWho(Model.UpdatedBy)</td>
-          </tr>
- <tr style="background:#f8f9fa;">
- <td style="font-size:14px;"><strong>Work item created.</strong> @(linkedDemand != null ? "Linked to " + linkedDemand.Reference + "." : "") @(linkedBusinessCase != null ? "Linked to " + linkedBusinessCase.BusinessCaseId + "." : "")</td>
- <td style="font-size:13px;color:#505a5f;">@Model.CreatedAt.ToString("d MMM yyyy · HH:mm")</td>
- <td class="--who" style="font-size:13px;max-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="@AuditWho(Model.CreatedBy)">@AuditWho(Model.CreatedBy)</td>
-          </tr>
+ <p class="govuk-body govuk-!-margin-bottom-0">None recorded.</p>
         }
-      </tbody>
-    </table>
+ </div>
  </div>
   </div>
 
+  @{
+    var workAsm = Model.Assumptions?.OrderByDescending(x => x.Id).ToList() ?? new List<WorkItemAssumptionRef>();
+  }
+ <div id="wd-assumptions" class="tab-pane">
+ <div class="modern-work-detail-section-head__title-row govuk-!-margin-bottom-3">
+ <h2 class="govuk-heading-m govuk-!-margin-top-0 govuk-!-margin-bottom-0">Assumptions</h2>
+ <div class="modern-work-detail-section-head__actions">
+ <a href="@Url.Action("AssumptionCreate", "ModernRaid", new { projectId = Model.Id })" class="govuk-button govuk-!-margin-bottom-0">Add assumption</a>
+ </div>
+ </div>
+      @if (workAsm.Count > 0)
+      {
+ <div class="dfe-f-table-wrapper govuk-!-margin-bottom-0" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+ <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed work-ri-table work-ri-raid">
+        <caption class="govuk-table__caption govuk-table__caption--m govuk-visually-hidden">Assumptions for this work item</caption>
+        <thead class="govuk-table__head">
+          <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header">Assumption</th>
+            <th scope="col" class="govuk-table__header">Criticality</th>
+            <th scope="col" class="govuk-table__header">Status</th>
+          </tr>
+        </thead>
+        <tbody class="govuk-table__body">
+            @foreach (var a in workAsm)
+            {
+              var desc = (a.Description ?? "").Trim();
+              var snip = desc.Length > 200 ? desc.Substring(0, 197) + "…" : desc;
+              var asmHref = $"/modern/raid/assumptions/{a.Id}";
+            <tr class="govuk-table__row">
+              <td class="govuk-table__cell">
+                <a class="govuk-link govuk-link--no-visited-state govuk-!-font-weight-bold" href="@asmHref">@snip</a>
+                <div class="govuk-body-s govuk-!-margin-top-1 govuk-!-margin-bottom-0" style="color:#505a5f;">A-@(a.Id.ToString("D4"))</div>
+              </td>
+ <td class="govuk-table__cell"><span class="@WorkBadgeCss.RaidAssumptionCriticalityDfeFrontendBadgeClass(a.Criticality) dfe-f-badge--small">@((a.Criticality ?? "—").ToUpperInvariant())</span></td>
+ <td class="govuk-table__cell govuk-body-s">@(string.IsNullOrWhiteSpace(a.Status) ? "—" : a.Status)</td>
+            </tr>
+            }
+        </tbody>
+        </table>
+ </div>
+      }
+      else
+      {
+ <p class="dfe-c-body muted govuk-!-margin-bottom-3">No assumptions recorded.</p>
+      }
+ <p class="govuk-body-s govuk-!-margin-top-2 govuk-!-margin-bottom-0"><a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("Assumptions", "ModernRaid")">View assumptions register</a></p>
+ </div>
+
+</div>
+</div>
 
 @section Scripts {
 <script nonce="@Context.Items["Nonce"]">
-window.openWorkOverviewDialog = function (id) {
-  var d = document.getElementById(id);
-  if (!d) return;
-  if (typeof d.showModal === 'function') {
-    d.showModal();
-  } else {
-    d.setAttribute('open', '');
-  }
-  if (window.GOVUKFrontend && typeof window.GOVUKFrontend.initAll === 'function') {
-    window.GOVUKFrontend.initAll();
-  }
-};
 (function() {
-  document.querySelectorAll('[data-dialog]').forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      window.openWorkOverviewDialog(btn.getAttribute('data-dialog'));
-    });
-  });
-  document.querySelectorAll('.js-work-overview-dialog-close').forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      var dlg = btn.closest('dialog');
-      if (dlg && typeof dlg.close === 'function') dlg.close();
-    });
-  });
-  window.switchRiTab = function(btn, paneId) {
-    document.querySelectorAll('#ri-tabs-bar .tab').forEach(function(t){ t.classList.remove('on'); t.setAttribute('aria-selected','false'); });
-    document.querySelectorAll('#wd-risks > .tab-pane').forEach(function(p){ p.classList.remove('on'); });
-    if (btn) { btn.classList.add('on'); btn.setAttribute('aria-selected','true'); }
-    var p = document.getElementById(paneId);
-    if (p) p.classList.add('on');
-  };
-  window.filterRiTable = function(searchId, statusId, tableId, emptyId) {
-    var q = (document.getElementById(searchId)?.value || '').toLowerCase();
-    var st = document.getElementById(statusId)?.value || '';
-    var tbl = document.getElementById(tableId);
-    var empty = document.getElementById(emptyId);
-    if (!tbl) return;
-    var rows = tbl.querySelectorAll('tbody tr');
-    var visible = 0;
-    rows.forEach(function(row) {
-      var title = row.getAttribute('data-ri-title') || '';
-      var status = row.getAttribute('data-ri-status') || '';
-      var matchSearch = !q || title.indexOf(q) !== -1;
-      var matchStatus = !st || status === st;
-      if (matchSearch && matchStatus) { row.style.display = ''; visible++; }
-      else { row.style.display = 'none'; }
-    });
-    if (empty) empty.style.display = visible === 0 ? '' : 'none';
-  };
-  window.riCloseFilterPanel = function(panelId, btnId) {
-    var panel = document.getElementById(panelId);
-    var btn = document.getElementById(btnId);
-    if (panel) panel.classList.remove('open');
-    if (btn) {
-      btn.classList.remove('active');
-      btn.setAttribute('aria-expanded', 'false');
-      var label = btn.querySelector('.filter-toggle-label');
-      if (label) label.textContent = 'Filter';
-    }
-  };
-  window.riClearRiskFilters = function() {
-    var s = document.getElementById('ri-risk-search');
-    var st = document.getElementById('ri-risk-status');
-    if (s) s.value = '';
-    if (st) st.value = '';
-    filterRiTable('ri-risk-search','ri-risk-status','ri-risks-table','ri-risks-empty');
-    riCloseFilterPanel('ri-risk-filter-panel','ri-risk-filter-btn');
-  };
-  window.riClearIssueFilters = function() {
-    var s = document.getElementById('ri-issue-search');
-    var st = document.getElementById('ri-issue-status');
-    if (s) s.value = '';
-    if (st) st.value = '';
-    filterRiTable('ri-issue-search','ri-issue-status','ri-issues-table','ri-issues-empty');
-    riCloseFilterPanel('ri-issue-filter-panel','ri-issue-filter-btn');
-  };
-
-  // Bind risks/issues tab buttons
-  document.querySelectorAll('[data-ri-tab]').forEach(function(btn) {
-    btn.addEventListener('click', function() { switchRiTab(btn, btn.getAttribute('data-ri-tab')); });
-  });
-  // Bind risk filter: search input, search button, status select
-  var riRiskSearch = document.getElementById('ri-risk-search');
-  var riRiskSubmit = document.getElementById('ri-risk-search-submit');
-  var riRiskStatus = document.getElementById('ri-risk-status');
-  function doRiskFilter() { filterRiTable('ri-risk-search','ri-risk-status','ri-risks-table','ri-risks-empty'); }
-  if (riRiskSearch) riRiskSearch.addEventListener('input', doRiskFilter);
-  if (riRiskSubmit) riRiskSubmit.addEventListener('click', doRiskFilter);
-  if (riRiskStatus) riRiskStatus.addEventListener('change', doRiskFilter);
-  // Bind issue filter: search input, search button, status select
-  var riIssueSearch = document.getElementById('ri-issue-search');
-  var riIssueSubmit = document.getElementById('ri-issue-search-submit');
-  var riIssueStatus = document.getElementById('ri-issue-status');
-  function doIssueFilter() { filterRiTable('ri-issue-search','ri-issue-status','ri-issues-table','ri-issues-empty'); }
-  if (riIssueSearch) riIssueSearch.addEventListener('input', doIssueFilter);
-  if (riIssueSubmit) riIssueSubmit.addEventListener('click', doIssueFilter);
-  if (riIssueStatus) riIssueStatus.addEventListener('change', doIssueFilter);
-  // Bind apply/clear filter buttons
-  document.querySelectorAll('[data-ri-apply="risk"]').forEach(function(btn) {
-    btn.addEventListener('click', function() { doRiskFilter(); riCloseFilterPanel('ri-risk-filter-panel','ri-risk-filter-btn'); });
-  });
-  document.querySelectorAll('[data-ri-clear="risk"]').forEach(function(btn) {
-    btn.addEventListener('click', function(e) { e.preventDefault(); riClearRiskFilters(); });
-  });
-  document.querySelectorAll('[data-ri-apply="issue"]').forEach(function(btn) {
-    btn.addEventListener('click', function() { doIssueFilter(); riCloseFilterPanel('ri-issue-filter-panel','ri-issue-filter-btn'); });
-  });
-  document.querySelectorAll('[data-ri-clear="issue"]').forEach(function(btn) {
-    btn.addEventListener('click', function(e) { e.preventDefault(); riClearIssueFilters(); });
-  });
-  // Bind clickable table rows
   document.querySelectorAll('[data-ri-href]').forEach(function(row) {
     row.addEventListener('click', function(e) {
-      if (e.target.closest('a')) return; // let link clicks work normally
+      if (e.target.closest('a')) return;
       window.location.href = row.getAttribute('data-ri-href');
     });
   });
-
-  (function auditModal() {
-    var modal = document.getElementById('wd-audit-modal');
-    var closeBtn = document.getElementById('wd-audit-modal-close');
-    if (!modal || !closeBtn) return;
-    function showModal(entry) {
-      if (!entry) return;
-      document.getElementById('wd-audit-modal-type').textContent = entry.type || '—';
-      document.getElementById('wd-audit-modal-when').textContent = entry.when || '—';
-      document.getElementById('wd-audit-modal-who').textContent = entry.who || '—';
-      var prevRow = document.getElementById('wd-audit-modal-previous-row');
-      var prevEl = document.getElementById('wd-audit-modal-previous');
-      if (entry.previous) { prevRow.style.display = ''; prevEl.textContent = entry.previous; } else { prevRow.style.display = 'none'; }
-      document.getElementById('wd-audit-modal-new').textContent = (entry['new'] !== undefined && entry['new'] !== null ? entry['new'] : '—');
-      modal.style.display = 'flex';
-    }
-    function hideModal() { modal.style.display = 'none'; }
-    document.querySelectorAll('.wd-audit-row-btn').forEach(function(btn) {
-      btn.addEventListener('click', function() {
-        var idx = parseInt(btn.getAttribute('data-audit-index'), 10);
-        if (typeof window.WD_AUDIT_ENTRIES !== 'undefined' && window.WD_AUDIT_ENTRIES[idx]) showModal(window.WD_AUDIT_ENTRIES[idx]);
-      });
-    });
-    closeBtn.addEventListener('click', hideModal);
-    modal.addEventListener('click', function(e) { if (e.target === modal) hideModal(); });
-  })();
 })();
 </script>
 }

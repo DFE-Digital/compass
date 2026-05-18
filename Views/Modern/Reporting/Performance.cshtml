@@ -3,6 +3,7 @@
 @using System.Linq
 @using Compass.Models
 @using Compass.ViewModels
+@using Compass.ViewModels.Modern
 @model ModernReportingPerformancePageViewModel
 @{
   ViewData["Title"] = "Performance report";
@@ -29,11 +30,14 @@
 }
 
 <div class="mr-dash">
-  <div class="dfe-c-page-title" style="margin-bottom:0.75rem;">
-    <div class="dfe-c-page-title__caption">Reporting</div>
-    <h1 class="dfe-c-page-title__heading">Performance report</h1>
-    <p class="dfe-c-body dfe-c-text-muted" style="margin:0;">Closed commission rounds: return and metric completion for the product catalogue, with a business area breakdown (same scope as <em>All products</em> in the commission workspace).</p>
-  </div>
+  @{
+    var perfHeaderLede = await Html.PartialAsync("_ReportingPerformanceHeaderLede");
+  }
+  @await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+    Caption = "Reporting",
+    Title = "Performance report",
+    Lede = perfHeaderLede
+  })
 
   @if (TempData["ErrorMessage"] != null)
   {
@@ -149,38 +153,38 @@
 
   <section class="mr-section" id="perf-s-summary" aria-labelledby="perf-h-summary">
     <h2 id="perf-h-summary" class="mr-section__heading">Summary</h2>
-    <div class="dfe-c-grid dfe-c-grid--4">
-      <div class="dfe-c-metric">
-        <div class="dfe-c-metric__number">@d.ProductsInScope</div>
-        <div class="dfe-c-metric__label">Products in scope</div>
+    <div class="dfe-f-card-grid">
+      <div class="dfe-f-stat-card dfe-f-stat-card--tint-grey">
+        <p class="govuk-body-s dfe-f-stat-card__label">Products in scope</p>
+        <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@d.ProductsInScope</p>
       </div>
-      <div class="dfe-c-metric">
-        <div class="dfe-c-metric__number">@d.Returned</div>
-        <div class="dfe-c-metric__label">Returned (submitted + late)</div>
+      <div class="dfe-f-stat-card dfe-f-stat-card--tint-grey">
+        <p class="govuk-body-s dfe-f-stat-card__label">Returned (submitted + late)</p>
+        <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@d.Returned</p>
       </div>
-      <div class="dfe-c-metric">
-        <div class="dfe-c-metric__number">@d.ReturnRatePercent%</div>
-        <div class="dfe-c-metric__label">Return rate</div>
+      <div class="dfe-f-stat-card dfe-f-stat-card--tint-grey">
+        <p class="govuk-body-s dfe-f-stat-card__label">Return rate</p>
+        <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@d.ReturnRatePercent%</p>
       </div>
-      <div class="dfe-c-metric">
-        <div class="dfe-c-metric__number">@d.MetricCompletionPercent%</div>
-        <div class="dfe-c-metric__label">Metric completion</div>
+      <div class="dfe-f-stat-card dfe-f-stat-card--tint-grey">
+        <p class="govuk-body-s dfe-f-stat-card__label">Metric completion</p>
+        <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@d.MetricCompletionPercent%</p>
       </div>
-      <div class="dfe-c-metric">
-        <div class="dfe-c-metric__number">@d.NotStarted</div>
-        <div class="dfe-c-metric__label">Not started</div>
+      <div class="dfe-f-stat-card dfe-f-stat-card--tint-grey">
+        <p class="govuk-body-s dfe-f-stat-card__label">Not started</p>
+        <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@d.NotStarted</p>
       </div>
-      <div class="dfe-c-metric">
-        <div class="dfe-c-metric__number">@d.InProgress</div>
-        <div class="dfe-c-metric__label">In progress</div>
+      <div class="dfe-f-stat-card dfe-f-stat-card--tint-grey">
+        <p class="govuk-body-s dfe-f-stat-card__label">In progress</p>
+        <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@d.InProgress</p>
       </div>
-      <div class="dfe-c-metric dfe-c-metric--green">
-        <div class="dfe-c-metric__number">@d.Submitted</div>
-        <div class="dfe-c-metric__label">Submitted on time</div>
+      <div class="dfe-f-stat-card dfe-f-stat-card--tint-green">
+        <p class="govuk-body-s dfe-f-stat-card__label">Submitted on time</p>
+        <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@d.Submitted</p>
       </div>
-      <div class="dfe-c-metric dfe-c-metric--red">
-        <div class="dfe-c-metric__number">@d.Late</div>
-        <div class="dfe-c-metric__label">Late</div>
+      <div class="dfe-f-stat-card dfe-f-stat-card--tint-red">
+        <p class="govuk-body-s dfe-f-stat-card__label">Late</p>
+        <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@d.Late</p>
       </div>
     </div>
     <div class="govuk-inset-text govuk-!-margin-top-4 govuk-!-margin-bottom-0">
@@ -197,15 +201,20 @@
     <button type="button" class="govuk-button govuk-button--secondary" id="perf-collapse-all">Collapse all sections</button>
   </div>
 
-  <div class="mr-report-section-panel dfe-c-collapsible dfe-c-collapsible--open govuk-!-margin-bottom-3">
-    <button type="button" class="dfe-c-collapsible__trigger" aria-expanded="true">
-      <span class="dfe-c-collapsible__icon">−</span>
-      <span>Business area summary</span>
-      <span class="dfe-c-collapsible__status"><span class="govuk-tag govuk-tag--grey">@panelBaCount</span></span>
-    </button>
-    <div class="dfe-c-collapsible__body">
+  <div class="mr-report-section-panel dfe-f-toggle govuk-!-margin-bottom-3" data-module="dfe-f-toggle">
+    <div class="dfe-f-toggle__title-wrapper">
+      <h2 class="dfe-f-toggle__heading">
+        <button type="button" class="dfe-f-toggle__button" aria-expanded="true" aria-controls="perf-toggle-ba-content" id="perf-toggle-ba-button">
+          <span class="dfe-f-toggle__icon" aria-hidden="true"></span>
+          <span class="dfe-f-toggle__title">Business area summary</span>
+          <span class="mr-toggle-panel__meta"><span class="govuk-tag govuk-tag--grey">@panelBaCount</span></span>
+        </button>
+      </h2>
+    </div>
+    <div id="perf-toggle-ba-content" class="dfe-f-toggle__content">
+      <div class="dfe-f-toggle__body govuk-body">
       <div class="mr-single-page-block" role="region" aria-labelledby="perf-h-ba">
-        <h2 id="perf-h-ba" class="govuk-visually-hidden">Business area summary</h2>
+        <h2 class="govuk-visually-hidden" id="perf-h-ba">Business area summary</h2>
         @if (hasActiveFilters)
         {
           <p class="dfe-c-body-s dfe-c-text-muted govuk-!-margin-bottom-2" style="margin-top:-0.25rem;">
@@ -218,7 +227,7 @@
             {
               <span>@(string.IsNullOrEmpty(filterBaName) ? " to " : " and ") directorate <strong>@filterDirName</strong></span>
             }
-            . <a class="dfe-c-link" href="@Url.Action("Performance", "ModernReporting", new { commissionId = m.SelectedCommissionId })">Clear filters</a>
+            . <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("Performance", "ModernReporting", new { commissionId = m.SelectedCommissionId })">Clear filters</a>
           </p>
         }
         else
@@ -236,17 +245,18 @@
         else
         {
           <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
-            <div class="dfe-c-table-wrap">
-              <table class="mr-ba-table" id="perf-business-area-table">
+            <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+              <table class="govuk-table mr-ba-table" id="perf-business-area-table">
                 <caption class="govuk-visually-hidden">Completion by business area</caption>
-                <thead>
-                  <tr>
+                <thead class="govuk-table__head">
+                  <tr class="govuk-table__row">
                     <th scope="col" rowspan="2" class="mr-ba-table__fixed mr-ba-table__area-col">Business area</th>
                     <th scope="col" rowspan="2" class="mr-ba-table__num-hdr">Prod</th>
                     <th scope="col" colspan="3" class="mr-ba-table__group mr-ba-table__group--ms">Return &amp; completion</th>
                     <th scope="col" colspan="4" class="mr-ba-table__group mr-ba-table__group--pri">Submission status</th>
                   </tr>
-                  <tr>
+                  <tr class="govuk-table__row">
                     <th class="mr-ba-table__sub mr-ba-table__sub--ms" scope="col">Ret</th>
                     <th class="mr-ba-table__sub mr-ba-table__sub--ms" scope="col">Ret %</th>
                     <th class="mr-ba-table__sub mr-ba-table__sub--ms" scope="col">Met %</th>
@@ -256,10 +266,10 @@
                     <th class="mr-ba-table__sub mr-ba-table__sub--pri" scope="col">Late</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody class="govuk-table__body">
                   @foreach (var row in baRows)
                   {
-                    <tr>
+                    <tr class="govuk-table__row">
                       <th scope="row" class="mr-ba-table__fixed mr-ba-table__area-col">@row.BusinessArea</th>
                       <td class="mr-ba-table__num"><span class="mr-ba-num mr-ba-num--strong">@row.Total</span></td>
                       <td class="mr-ba-table__cell--ms mr-ba-table__num"><span class="mr-ba-num @(row.Returned > 0 ? "mr-ba-num--highlight" : "mr-ba-num--muted")">@row.Returned</span></td>
@@ -290,36 +300,42 @@
           </div>
         }
       </div>
+      </div>
     </div>
   </div>
 
-  <div class="mr-report-section-panel dfe-c-collapsible dfe-c-collapsible--open govuk-!-margin-bottom-3">
-    <button type="button" class="dfe-c-collapsible__trigger" aria-expanded="true">
-      <span class="dfe-c-collapsible__icon">−</span>
-      <span>Return and completion detail</span>
-      <span class="dfe-c-collapsible__status"><span class="govuk-tag govuk-tag--grey">@d.ProductsInScope</span></span>
-    </button>
-    <div class="dfe-c-collapsible__body">
-      <section class="mr-section" style="margin-top:0.5rem;" aria-labelledby="perf-h-returns" id="perf-s-returns">
-        <h2 id="perf-h-returns" class="govuk-visually-hidden">Return and completion detail</h2>
+  <div class="mr-report-section-panel dfe-f-toggle govuk-!-margin-bottom-3" data-module="dfe-f-toggle">
+    <div class="dfe-f-toggle__title-wrapper">
+      <h2 class="dfe-f-toggle__heading">
+        <button type="button" class="dfe-f-toggle__button" aria-expanded="true" aria-controls="perf-toggle-returns-content" id="perf-toggle-returns-button">
+          <span class="dfe-f-toggle__icon" aria-hidden="true"></span>
+          <span class="dfe-f-toggle__title">Return and completion detail</span>
+          <span class="mr-toggle-panel__meta"><span class="govuk-tag govuk-tag--grey">@d.ProductsInScope</span></span>
+        </button>
+      </h2>
+    </div>
+    <div id="perf-toggle-returns-content" class="dfe-f-toggle__content">
+      <div class="dfe-f-toggle__body govuk-body">
+      <section class="mr-section" style="margin-top:0.5rem;" aria-labelledby="perf-h-returns-heading" id="perf-s-returns">
+        <h2 class="govuk-visually-hidden" id="perf-h-returns-heading">Return and completion detail</h2>
         <p class="dfe-c-body-s dfe-c-text-muted" style="margin-top:-0.5rem;margin-bottom:1rem;">Status breakdown for <strong>@commissionTitle</strong>.</p>
         <div class="mr-submission-summary">
-          <div class="dfe-c-grid dfe-c-grid--4">
-            <div class="dfe-c-metric dfe-c-metric--green">
-              <div class="dfe-c-metric__number">@d.Submitted</div>
-              <div class="dfe-c-metric__label">Submitted on time</div>
+          <div class="dfe-f-card-grid">
+            <div class="dfe-f-stat-card dfe-f-stat-card--tint-green">
+              <p class="govuk-body-s dfe-f-stat-card__label">Submitted on time</p>
+              <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@d.Submitted</p>
             </div>
-            <div class="dfe-c-metric">
-              <div class="dfe-c-metric__number">@d.InProgress</div>
-              <div class="dfe-c-metric__label">In progress</div>
+            <div class="dfe-f-stat-card dfe-f-stat-card--tint-grey">
+              <p class="govuk-body-s dfe-f-stat-card__label">In progress</p>
+              <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@d.InProgress</p>
             </div>
-            <div class="dfe-c-metric dfe-c-metric--red">
-              <div class="dfe-c-metric__number">@d.Late</div>
-              <div class="dfe-c-metric__label">Late</div>
+            <div class="dfe-f-stat-card dfe-f-stat-card--tint-red">
+              <p class="govuk-body-s dfe-f-stat-card__label">Late</p>
+              <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@d.Late</p>
             </div>
-            <div class="dfe-c-metric">
-              <div class="dfe-c-metric__number">@d.NotStarted</div>
-              <div class="dfe-c-metric__label">Not started</div>
+            <div class="dfe-f-stat-card dfe-f-stat-card--tint-grey">
+              <p class="govuk-body-s dfe-f-stat-card__label">Not started</p>
+              <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@d.NotStarted</p>
             </div>
           </div>
           <div class="mr-progress-bar govuk-!-margin-top-3" role="group" aria-label="Return rate — share of in-scope products that returned metrics">
@@ -332,12 +348,13 @@
           </div>
         </div>
       </section>
+      </div>
     </div>
   </div>
 
   <div class="govuk-button-group govuk-!-margin-top-6">
     <a class="govuk-button govuk-button--secondary" href="@Url.Action("Commission", "ModernPerformance", new { commissionId = c!.Id, tab = "all" })">Open commission workspace (all products)</a>
-    <a class="dfe-c-link" href="@Url.Action("Index", "ModernPerformance")">Performance — Commissions</a>
+    <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("Index", "ModernPerformance")">Performance — Commissions</a>
   </div>
     }
   }
@@ -384,6 +401,14 @@
   .mr-toolbar__filters .govuk-button { flex: 0 0 auto; }
   .mr-toolbar__filters .govuk-select { max-width: 100%; }
   .mr-toolbar__filters .govuk-button { margin-bottom: 0; }
+  .mr-toggle-panel__meta {
+    margin-left: auto;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .mr-report-section-panel.dfe-f-toggle { margin-bottom: 0; }
   #perf-report-commission { flex: 1 1 26rem; min-width: 22rem; max-width: 36rem; }
   #perf-report-ba, #perf-report-directorate { width: 18rem; min-width: 15rem; max-width: 24rem; }
   #perf-filter-apply { min-width: 5.5rem; }
@@ -468,17 +493,9 @@
   <script nonce="@Context.Items["Nonce"]">
     document.addEventListener('DOMContentLoaded', function () {
       function reportSectionPanelsSetExpanded(expanded) {
-        document.querySelectorAll('.mr-report-section-panel').forEach(function (panel) {
-          var btn = panel.querySelector('.dfe-c-collapsible__trigger');
-          var icon = btn ? btn.querySelector('.dfe-c-collapsible__icon') : null;
-          if (expanded) {
-            panel.classList.add('dfe-c-collapsible--open');
-            if (icon) icon.textContent = '\u2212';
-            if (btn) btn.setAttribute('aria-expanded', 'true');
-          } else {
-            panel.classList.remove('dfe-c-collapsible--open');
-            if (icon) icon.textContent = '+';
-            if (btn) btn.setAttribute('aria-expanded', 'false');
+        document.querySelectorAll('.mr-report-section-panel.dfe-f-toggle').forEach(function (el) {
+          if (window.DfeFrontend && typeof window.DfeFrontend.setToggleExpanded === 'function') {
+            window.DfeFrontend.setToggleExpanded(el, expanded);
           }
         });
       }

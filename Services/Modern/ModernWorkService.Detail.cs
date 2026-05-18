@@ -34,6 +34,7 @@ public partial class ModernWorkService
             .Include(x => x.RagHistory).ThenInclude(r => r.RagStatusLookup)
             .Include(x => x.MonthlyUpdates).ThenInclude(mu => mu.CreatedByUser)
             .Include(x => x.MonthlyUpdates).ThenInclude(mu => mu.MonthlyUpdateNarratives)
+            .Include(x => x.MonthlyUpdates).ThenInclude(mu => mu.DraftRagStatusLookup)
             .Include(x => x.Milestones)
             .Include(x => x.Risks).ThenInclude(r => r.OwnerUser)
             .Include(x => x.Risks).ThenInclude(r => r.RiskTier)
@@ -171,6 +172,7 @@ public partial class ModernWorkService
                 WorkItemId = p.Id,
                 ContactRoleTypeId = roleId,
                 RoleName = roleId == 5 ? pc.Role : null,
+                DisplayName = pc.Name ?? "",
                 AppUser = pc.User
             });
         }
@@ -268,6 +270,7 @@ public partial class ModernWorkService
             var projRows = await _db.Projects.AsNoTracking()
                 .Where(p => projectIdsForLookup.Contains(p.Id))
                 .Include(p => p.PrimaryOrganizationalGroup)
+                .Include(p => p.BusinessAreaLookup)
                 .ToListAsync(cancellationToken);
             foreach (var pr in projRows)
                 projectsById[pr.Id] = pr;
@@ -280,6 +283,7 @@ public partial class ModernWorkService
                 d.TargetEntityType == "Project" && d.TargetEntityId != projectId &&
                 projectsById.TryGetValue(d.TargetEntityId, out var tp))
             {
+                var targetPortfolioId = tp.BusinessAreaId ?? tp.PrimaryOrganizationalGroupId;
                 work.Dependencies.Add(new WorkItemDependency
                 {
                     Id = d.Id,
@@ -291,11 +295,15 @@ public partial class ModernWorkService
                     {
                         Id = tp.Id,
                         Title = tp.Title ?? "",
-                        PortfolioId = tp.PrimaryOrganizationalGroupId
+                        PortfolioId = targetPortfolioId
                     }
                 });
-                if (tp.PrimaryOrganizationalGroupId.HasValue && tp.PrimaryOrganizationalGroup != null)
-                    depPortfolioNames[tp.PrimaryOrganizationalGroupId.Value] = tp.PrimaryOrganizationalGroup.Name ?? "";
+                if (targetPortfolioId.HasValue)
+                {
+                    var label = ModernWorkService.ResolveProjectBusinessAreaDisplayName(tp);
+                    if (label != "—")
+                        depPortfolioNames[targetPortfolioId.Value] = label;
+                }
             }
             else if (d.SourceEntityType == "Project" && d.SourceEntityId == projectId &&
                      string.Equals(d.TargetEntityType, "External", StringComparison.OrdinalIgnoreCase))
@@ -314,6 +322,7 @@ public partial class ModernWorkService
                      d.SourceEntityType == "Project" && d.SourceEntityId != projectId &&
                      projectsById.TryGetValue(d.SourceEntityId, out var sp))
             {
+                var sourcePortfolioId = sp.BusinessAreaId ?? sp.PrimaryOrganizationalGroupId;
                 work.Dependencies.Add(new WorkItemDependency
                 {
                     Id = d.Id,
@@ -325,11 +334,15 @@ public partial class ModernWorkService
                     {
                         Id = sp.Id,
                         Title = sp.Title ?? "",
-                        PortfolioId = sp.PrimaryOrganizationalGroupId
+                        PortfolioId = sourcePortfolioId
                     }
                 });
-                if (sp.PrimaryOrganizationalGroupId.HasValue && sp.PrimaryOrganizationalGroup != null)
-                    depPortfolioNames[sp.PrimaryOrganizationalGroupId.Value] = sp.PrimaryOrganizationalGroup.Name ?? "";
+                if (sourcePortfolioId.HasValue)
+                {
+                    var label = ModernWorkService.ResolveProjectBusinessAreaDisplayName(sp);
+                    if (label != "—")
+                        depPortfolioNames[sourcePortfolioId.Value] = label;
+                }
             }
             else if (d.TargetEntityType == "Project" && d.TargetEntityId == projectId &&
                      string.Equals(d.SourceEntityType, "External", StringComparison.OrdinalIgnoreCase))
@@ -348,9 +361,28 @@ public partial class ModernWorkService
 
         controller.ViewBag.DependencyTargetPortfolioNames = depPortfolioNames;
 
+        work.Assumptions.Clear();
+        var asmRows = await _db.Assumptions.AsNoTracking()
+            .Where(a => !a.IsDeleted && a.ProjectId == projectId)
+            .Include(a => a.CriticalityLookup)
+            .Include(a => a.StatusLookup)
+            .OrderByDescending(a => a.UpdatedAt)
+            .ToListAsync(cancellationToken);
+        foreach (var a in asmRows)
+        {
+            work.Assumptions.Add(new WorkItemAssumptionRef
+            {
+                Id = a.Id,
+                Description = a.Description ?? "",
+                Criticality = a.CriticalityLookup?.Label,
+                Status = a.StatusLookup?.Label
+            });
+        }
+
         var assignedCanEdit = await WhereAssignedToUser(
                 _db.Projects.Where(proj => proj.Id == projectId && !proj.IsDeleted),
-                emailLower)
+                emailLower,
+                currentUser.Id)
             .AnyAsync(cancellationToken);
         var opsFullAccess = await _permissionService.IsCentralOperationsAdminOrSuperAdminAsync(userEmail);
         var baIds = BusinessAreaAdminHelper.GetBusinessAreaLookupIdsForProject(p);
@@ -372,6 +404,9 @@ public partial class ModernWorkService
             .OrderBy(r => r.SortOrder)
             .ToListAsync(cancellationToken);
         var ragStatusesDict = ragRows.ToDictionary(r => r.Id, r => r.Name);
+        var ragLookupById = await _db.RagStatusLookups.AsNoTracking()
+            .ToDictionaryAsync(r => r.Id, cancellationToken);
+        EnrichMonthlyUpdateRagDisplay(work, p, ragLookupById);
         var ragBgByStatusId = new Dictionary<int, string?>();
         var ragTextByStatusId = new Dictionary<int, string?>();
 
@@ -425,8 +460,9 @@ public partial class ModernWorkService
             lastBy = lastSubmitted.CreatedByName ?? lastSubmitted.CreatedByUser?.Name;
         }
 
-        var latestRag = work.RagHistory.OrderByDescending(r => r.UpdatedAt).FirstOrDefault();
-        var currentRagName = p.RagStatusLookup?.Name ?? latestRag?.RagStatus?.Name;
+        var latestRag = work.RagHistory.OrderByDescending(r => r.UpdatedAt).ThenByDescending(r => r.Id).FirstOrDefault();
+        var currentRag = ProjectCurrentRagResolver.Resolve(p);
+        var currentRagName = currentRag.Name ?? latestRag?.RagStatus?.Name;
 
         var milestoneProgressNames = work.Milestones
             .Where(m => !m.IsDeleted)
@@ -455,7 +491,7 @@ public partial class ModernWorkService
         var updatesByYearMonth = p.MonthlyUpdates
             .ToLookup(mu => (mu.Year, mu.Month));
         var currentMonth = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1);
-        for (var i = -18; i <= 3; i++)
+        for (var i = -18; i <= 1; i++)
         {
             var dt = new DateTime(reportY, reportM, 1).AddMonths(i);
             var y = dt.Year;
@@ -508,9 +544,13 @@ public partial class ModernWorkService
             "updates" => "updates",
             "milestones" => "milestones",
             "risks" => "risks",
+            "issues" => "issues",
+            "contacts" => "contacts",
+            "governance" => "strategicalignment", // legacy tab param
+            "strategicalignment" => "strategicalignment",
             "dependencies" => "dependencies",
-            "links" => "links",
-            "audit" => "audit",
+            "assumptions" => "assumptions",
+            "links" => "dependencies",
             _ => "overview"
         };
 
@@ -524,7 +564,7 @@ public partial class ModernWorkService
 
         controller.ViewBag.MainNavSection = "work";
         controller.ViewBag.SubNavItem = "work-allwork";
-        controller.ViewBag.PortfolioName = p.PrimaryOrganizationalGroup?.Name ?? "—";
+        controller.ViewBag.PortfolioName = ResolveProjectBusinessAreaDisplayName(p);
         controller.ViewBag.PriorityName = p.DeliveryPriority?.Name ?? "—";
         controller.ViewBag.DeliveryPhaseName = p.PhaseLookup?.Name ?? "—";
         controller.ViewBag.ActivityTypeName = p.ActivityTypeLookup?.Name ?? "—";
@@ -608,21 +648,8 @@ public partial class ModernWorkService
         controller.ViewBag.RagBgByStatusId = ragBgByStatusId;
         controller.ViewBag.RagTextByStatusId = ragTextByStatusId;
 
-        var ragHistoryDesc = await _db.ProjectRagHistories.AsNoTracking()
-            .Where(r => r.ProjectId == projectId)
-            .OrderByDescending(r => r.ChangedAt)
-            .ThenByDescending(r => r.Id)
-            .ToListAsync(cancellationToken);
-        var fallbackRagByUpdateId = new Dictionary<int, int>();
-        foreach (var mu in p.MonthlyUpdates.Where(m => m.SubmittedAt.HasValue && !m.DraftRagStatusLookupId.HasValue))
-        {
-            var row = MonthlyUpdateSubmittedRagResolver.Resolve(ragHistoryDesc, mu.SubmittedAt!.Value);
-            if (row?.RagStatusLookupId is int rid && rid > 0)
-                fallbackRagByUpdateId[mu.Id] = rid;
-        }
-
-        controller.ViewBag.FallbackRagByUpdateId = fallbackRagByUpdateId;
-        controller.ViewBag.WorkItemAuditEntries = new List<Compass.Models.AuditLog>();
+        controller.ViewBag.FallbackRagByUpdateId = new Dictionary<int, int>();
+        controller.ViewBag.RagCssClassByStatusId = ragLookupById.ToDictionary(kv => kv.Key, kv => kv.Value.CssClass);
         controller.ViewBag.WorkChromeSection = section;
         controller.ViewBag.WorkChromeTabsAsLinks = true;
         controller.ViewBag.MilestoneCount = work.Milestones.Count(m => !m.IsDeleted);
@@ -632,7 +659,7 @@ public partial class ModernWorkService
         controller.ViewBag.CurrentPeriodKey = reportY + "-" + reportM;
         controller.ViewBag.CurrentRagBackgroundColourKey = null;
         controller.ViewBag.CurrentRagTextColourKey = null;
-        controller.ViewBag.CurrentRagCssClass = p.RagStatusLookup?.CssClass;
+        controller.ViewBag.CurrentRagCssClass = currentRag.CssClass;
         controller.ViewBag.WorkIdShort = work.Id.ToString("D8", CultureInfo.InvariantCulture);
 
         return work;

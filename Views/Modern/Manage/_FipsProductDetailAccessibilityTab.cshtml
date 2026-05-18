@@ -1,0 +1,94 @@
+@model FipsProductDetailViewModel
+@{
+  var acc = Model.LinkedProductAccessibility;
+}
+
+<div id="d-fips-accessibility" class="tab-pane @(Model.ActiveDetailTab == "accessibility" ? "on" : "")" role="tabpanel">
+  <h2 class="govuk-heading-m govuk-!-margin-top-0">Accessibility</h2>
+  <p class="govuk-body govuk-!-margin-bottom-6">Accessibility statement and issue tracking for this product.</p>
+
+  @if (acc == null)
+  {
+    <p class="govuk-body govuk-!-margin-bottom-0">No accessibility enrolment matched this catalogue entry (by CMS document id or FIPS product code).</p>
+  }
+  else
+  {
+    <div class="govuk-summary-card govuk-!-margin-bottom-6">
+      <div class="govuk-summary-card__title-wrapper">
+        <h3 class="govuk-summary-card__title">Accessibility profile</h3>
+      </div>
+      <div class="govuk-summary-card__content">
+        <dl class="govuk-summary-list govuk-!-margin-bottom-0">
+          <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">WCAG target</dt>
+            <dd class="govuk-summary-list__value">@acc.WcagVersion @acc.WcagLevel</dd>
+          </div>
+          <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">Statement URL</dt>
+            <dd class="govuk-summary-list__value">
+              @if (!string.IsNullOrWhiteSpace(acc.StatementUrl))
+              {
+                <a class="govuk-link govuk-link--no-visited-state" href="@acc.StatementUrl" target="_blank" rel="noopener noreferrer">@acc.StatementUrl</a>
+              }
+              else
+              {
+                <span>—</span>
+              }
+            </dd>
+          </div>
+          <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">Statement installed</dt>
+            <dd class="govuk-summary-list__value">@(acc.StatementInstalled ? "Yes" : "No")</dd>
+          </div>
+          <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">Verified</dt>
+            <dd class="govuk-summary-list__value">
+              @if (acc.VerifiedAt.HasValue)
+              {
+                @acc.VerifiedAt.Value.ToString("d MMM yyyy")@(!string.IsNullOrWhiteSpace(acc.VerifiedBy) ? $" — {acc.VerifiedBy}" : "")
+              }
+              else
+              {
+                <span>—</span>
+              }
+            </dd>
+          </div>
+          <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">Open issues</dt>
+            <dd class="govuk-summary-list__value">@(acc.Issues.Count(i => !string.Equals(i.Status, "resolved", StringComparison.OrdinalIgnoreCase) && !string.Equals(i.Status, "wont_fix", StringComparison.OrdinalIgnoreCase)))</dd>
+          </div>
+        </dl>
+      </div>
+    </div>
+
+    var issueRows = acc.Issues.OrderByDescending(i => i.IdentifiedDate).Take(40).ToList();
+    @if (issueRows.Count > 0)
+    {
+      <h3 class="govuk-heading-s govuk-!-margin-bottom-2">Recorded issues</h3>
+      <div class="dfe-f-table-wrapper govuk-!-margin-bottom-0" data-module="dfe-f-table">
+        <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+        <table class="govuk-table govuk-!-margin-bottom-0">
+          <thead class="govuk-table__head">
+            <tr class="govuk-table__row">
+              <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Summary</button></th>
+              <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Type</button></th>
+              <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Status</button></th>
+              <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Identified</button></th>
+            </tr>
+          </thead>
+          <tbody class="govuk-table__body">
+            @foreach (var iss in issueRows)
+            {
+              <tr class="govuk-table__row">
+                <td class="govuk-table__cell">@(string.IsNullOrWhiteSpace(iss.IssueTitle) ? "—" : iss.IssueTitle)</td>
+                <td class="govuk-table__cell">@iss.IssueType</td>
+                <td class="govuk-table__cell">@iss.Status</td>
+                <td class="govuk-table__cell">@iss.IdentifiedDate.ToString("d MMM yyyy")</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  }
+</div>

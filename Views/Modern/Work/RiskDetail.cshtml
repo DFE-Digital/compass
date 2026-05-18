@@ -1,5 +1,6 @@
 @model Compass.Models.Modern.Work.WorkItemRiskOrIssue
 @using Compass.Models.Modern.Work
+@using Compass.ViewModels.Modern
 @{
     var work = Model.WorkItem;
     var workId = Model.WorkItemId;
@@ -19,10 +20,12 @@
 <div id="sc-work-riskdetail">
   @await Html.PartialAsync("_WorkItemChrome", work)
 
- <div class="dfe-c-page-title">
- <div class="dfe-c-page-title__caption">WI-@workIdShort · @(work?.Title) · Risk &amp; issue log</div>
-    <h1>@riRef — @Model.Title</h1>
-  </div>
+ @await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+   Caption = $"WI-{workIdShort} · {work?.Title} · Risk & issue log",
+   Title = $"{riRef} — {Model.Title}",
+   HeadingTag = "h2",
+   HeadingClass = "govuk-heading-l"
+ })
 
   <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:3px;margin-bottom:24px;">
     <div style="padding:12px;background:#fff7e0;border-top:4px solid #f47738;text-align:center;">
@@ -63,11 +66,19 @@
     </div>
   }
 
- <div id="risk-detail-tabs" class="tabs">
- <button type="button" class="tab on" onclick="switchTab(this,'rd-detail')">Detail</button>
- <button type="button" class="tab" onclick="switchTab(this,'rd-kri')">Key risk indicators @if (Model.Kris?.Count> 0) { <span style="background:#d4351c;color:#fff;font-size:11px;font-weight:700;padding:1px 6px;border-radius:2px;margin-left:4px;">@Model.Kris.Count</span> }</button>
- <button type="button" class="tab" onclick="switchTab(this,'rd-history')">History &amp; comments</button>
-  </div>
+ <nav id="risk-detail-tabs" class="tabs dfe-f-sub-navigation govuk-!-margin-bottom-4" aria-label="Risk sections">
+ <ul class="dfe-f-sub-navigation__list">
+ <li class="dfe-f-sub-navigation__item dfe-f-sub-navigation__item--active">
+ <button type="button" class="dfe-f-sub-navigation__link govuk-link tab on" onclick="switchTab(this,'rd-detail')">Detail</button>
+ </li>
+ <li class="dfe-f-sub-navigation__item">
+ <button type="button" class="dfe-f-sub-navigation__link govuk-link tab" onclick="switchTab(this,'rd-kri')">Key risk indicators @if (Model.Kris?.Count> 0) { <span style="background:#d4351c;color:#fff;font-size:11px;font-weight:700;padding:1px 6px;border-radius:2px;margin-left:4px;">@Model.Kris.Count</span> }</button>
+ </li>
+ <li class="dfe-f-sub-navigation__item">
+ <button type="button" class="dfe-f-sub-navigation__link govuk-link tab" onclick="switchTab(this,'rd-history')">History &amp; comments</button>
+ </li>
+ </ul>
+  </nav>
 
  <div id="rd-detail" class="tab-pane on">
     <div style="padding:10px 16px;background:#f3f2f1;border:1px solid #dee0e2;border-left:4px solid #b1b4b6;margin-bottom:20px;font-size:13px;color:#505a5f;">
@@ -175,8 +186,13 @@
 <script>
   function switchTab(btn, paneId) {
     document.querySelectorAll('#risk-detail-tabs .tab').forEach(function(t){ t.classList.remove('on'); });
+    document.querySelectorAll('#risk-detail-tabs .dfe-f-sub-navigation__item').forEach(function(li){ li.classList.remove('dfe-f-sub-navigation__item--active'); });
     document.querySelectorAll('#rd-detail, #rd-kri, #rd-history').forEach(function(p){ p.classList.remove('on'); });
-    if (btn) btn.classList.add('on');
+    if (btn) {
+      btn.classList.add('on');
+      var li = btn.closest('.dfe-f-sub-navigation__item');
+      if (li) li.classList.add('dfe-f-sub-navigation__item--active');
+    }
     var p = document.getElementById(paneId);
     if (p) p.classList.add('on');
   }

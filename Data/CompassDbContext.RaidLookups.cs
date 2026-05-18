@@ -45,4 +45,8 @@ public partial class CompassDbContext
     public DbSet<AssumptionCriticality> AssumptionCriticalities { get; set; }
     public DbSet<DependencyCriticality> DependencyCriticalities { get; set; }
     public DbSet<DependencyLinkType> DependencyLinkTypes { get; set; }
+
+    public DbSet<NearMissType> NearMissTypes { get; set; }
+    public DbSet<NearMissSeriousness> NearMissSeriousnesses { get; set; }
+    public DbSet<NearMissStatus> NearMissStatuses { get; set; }
 }

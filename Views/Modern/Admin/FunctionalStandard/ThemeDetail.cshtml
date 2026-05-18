@@ -1,4 +1,7 @@
 @model Compass.Models.FunctionalStandardTheme
+@using Compass.ViewModels.Modern
+@using Microsoft.AspNetCore.Html
+@using System.Net
 @{
     ViewData["Title"] = $"Theme {Model.ThemeId} — {Model.Title}";
     var standard = Model.FunctionalStandard!;
@@ -14,11 +17,11 @@
 }
 
 <div class="admin-hub">
-    <div class="dfe-c-page-title dfe-c-mb-3">
-        <div class="dfe-c-page-title__caption">@standard.Title — Theme @Model.ThemeId</div>
-        <h1 class="dfe-c-page-title__heading">@Model.Title</h1>
-        <p class="dfe-c-page-title__lede"><a class="govuk-link govuk-link--no-visited-state" href="@StdUrl()">Back to @standard.Title</a></p>
-    </div>
+    @await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+        Caption = $"{standard.Title} — Theme {Model.ThemeId}",
+        Title = Model.Title,
+        Lede = new HtmlString($"<p class=\"govuk-body govuk-!-margin-bottom-0\"><a class=\"govuk-link govuk-link--no-visited-state\" href=\"{StdUrl()}\">Back to {WebUtility.HtmlEncode(standard.Title)}</a></p>")
+    })
 
     @if (ViewBag.AdminMessage != null)
     {
@@ -63,30 +66,35 @@
         <a class="govuk-button govuk-!-margin-bottom-0" href="@Url.Action("FsPracticeAreaCreate", "ModernAdmin", new { standardId = standard.Id, themeId = Model.ThemeId })">Add practice area</a>
     </div>
 
-    <div class="dfe-c-table-wrap">
-        <table>
-            <thead>
-                <tr>
-                    <th data-sort-bound="1" class="sortable">ID</th>
-                    <th>Title</th>
-                    <th>Criteria</th>
-                    <th><span class="govuk-visually-hidden">Actions</span></th>
+    <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+        <table class="govuk-table">
+            <thead class="govuk-table__head">
+                <tr class="govuk-table__row">
+                    <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">ID</button></th>
+                    <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Title</button>
+        </th>
+                    <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Criteria</button>
+        </th>
+                    <th scope="col" class="govuk-table__header govuk-table__header--numeric"><span class="govuk-visually-hidden">Actions</span></th>
                 </tr>
             </thead>
-            <tbody>
+            <tbody class="govuk-table__body">
                 @if (!Model.PracticeAreas.Any())
                 {
-                    <tr><td colspan="4" class="dfe-c-text-muted">No practice areas yet.</td></tr>
+                    <tr class="govuk-table__row"><td colspan="4" class="dfe-c-text-muted">No practice areas yet.</td></tr>
                 }
                 else
                 {
                     foreach (var pa in Model.PracticeAreas.OrderBy(p => p.PracticeAreaId))
                     {
-                        <tr>
-                            <td>@pa.PracticeAreaId</td>
-                            <td><strong>@pa.Title</strong></td>
-                            <td>@pa.Criteria.Count</td>
-                            <td style="text-align:right;white-space:nowrap;">
+                        <tr class="govuk-table__row">
+                            <td class="govuk-table__cell">@pa.PracticeAreaId</td>
+                            <td class="govuk-table__cell"><strong>@pa.Title</strong></td>
+                            <td class="govuk-table__cell">@pa.Criteria.Count</td>
+                            <td class="govuk-table__cell" style="text-align:right;white-space:nowrap;">
                                 <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("FsPracticeAreaDetail", "ModernAdmin", new { standardId = standard.Id, themeId = Model.ThemeId, paId = pa.Id })">Manage</a>
                             </td>
                         </tr>

@@ -28,7 +28,7 @@ public sealed class FipsProductWriteService : IFipsProductWriteService
         int[]? typeIds,
         int[]? categorisationItemIds = null,
         int? reportingContactUserId = null,
-        bool isEnterpriseService = false,
+        bool? isEnterpriseService = null,
         CancellationToken cancellationToken = default)
     {
         var product = await _db.CMDBProducts
@@ -71,11 +71,11 @@ public sealed class FipsProductWriteService : IFipsProductWriteService
             changes.Add("Product URL");
         }
 
-        if (product.IsEnterpriseService != isEnterpriseService)
+        if (isEnterpriseService is bool enterpriseValue && product.IsEnterpriseService != enterpriseValue)
         {
             LogAudit(product.Id, actorEmail, changedBy, "update", "IsEnterpriseService",
-                product.IsEnterpriseService.ToString(), isEnterpriseService.ToString());
-            product.IsEnterpriseService = isEnterpriseService;
+                product.IsEnterpriseService.ToString(), enterpriseValue.ToString());
+            product.IsEnterpriseService = enterpriseValue;
             changes.Add("Enterprise service");
         }
 

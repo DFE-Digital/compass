@@ -24,101 +24,100 @@
     .raid-reg-score--medium { background: #f5e6c8; color: #0b0c0c; }
     .raid-reg-score--lower { background: #dceedd; color: #0b0c0c; }
   </style>
- <div class="dfe-c-flex--between dfe-c-mb-3" style="flex-wrap:wrap;gap:0.75rem;align-items:center;">
- <h2 class="govuk-heading-m" style="margin:0;">Risks</h2>
- <a class="govuk-button" href="@addRiskUrl">Add risk</a>
+  <div class="dfe-c-flex--between govuk-!-margin-bottom-3 govuk-!-padding-bottom-2" style="flex-wrap:wrap;gap:0.75rem;align-items:center;border-bottom:1px solid #b1b4b6;">
+    <h2 class="govuk-heading-m govuk-!-margin-bottom-0">Risks</h2>
+    <a class="govuk-button govuk-!-margin-bottom-0" href="@addRiskUrl">Add risk</a>
   </div>
- <div class="dfe-c-table-wrap">
- <table id="fips-product-risks-table" class="govuk-!-margin-bottom-0">
-    <thead>
-      <tr>
-        <th data-sort-bound="1" class="sortable">Risk</th>
-        <th data-sort-bound="1" class="sortable">Business area</th>
-        <th data-sort-bound="1" class="sortable">Tier</th>
-        <th data-sort-bound="1" class="sortable">Relation</th>
-        <th data-sort-bound="1" class="sortable">Status</th>
-        <th data-sort-bound="1" class="sortable">Owner</th>
-        <th data-sort-bound="1" class="sortable">Likelihood</th>
-        <th data-sort-bound="1" class="sortable">Impact</th>
-        <th data-sort-bound="1" class="sortable">Score (inherent)</th>
-      </tr>
-    </thead>
-    <tbody>
-      @if (Model.ProductRisks.Count == 0)
-      {
-        <tr>
- <td colspan="9" class="govuk-body" style="color:#505a5f;">—</td>
-        </tr>
-      }
-      else
-      {
-        @foreach (var r in Model.ProductRisks)
-        {
-          var riskDetailUrl = Url.Action("RiskDetail", "ModernRaid", new { id = r.Id }) ?? "#";
-          var rel = new RaidRegisterRelationParts(r.RelationKind, r.RelationProjectId, r.RelationTarget);
-          <tr style="@(r.IsClosed ? "opacity:0.75;" : "")">
-            @await Html.PartialAsync("~/Views/Modern/Raid/_RaidRegisterItemTitleCell.cshtml", new RaidRegisterItemTitleVm(riskDetailUrl, r.Title, $"R-{r.Id:D4}"))
- <td class="govuk-body-s">@(string.IsNullOrEmpty(r.BusinessAreaLabel) ? "—" : r.BusinessAreaLabel)</td>
- <td class="govuk-body-s">@(string.IsNullOrWhiteSpace(r.TierName) ? "—" : r.TierName)</td>
-            @await Html.PartialAsync("~/Views/Modern/Raid/_RaidRegisterRelationCell.cshtml", rel)
- <td><span class="dfe-c-tag @((r.Status ?? "").Contains("closed", StringComparison.OrdinalIgnoreCase) ? "dfe-c-tag--green" : "dfe-c-tag--blue")">@((r.Status ?? "—").ToUpperInvariant())</span></td>
- <td class="govuk-body-s">@(r.OwnerLabel ?? "—")</td>
- <td class="govuk-body-s">@(r.LikelihoodLabel ?? "—")</td>
- <td class="govuk-body-s">@(r.ImpactLabel ?? "—")</td>
- <td class="govuk-body-s govuk-!-text-align-right">
- <span class="@RaidRegisterScoreClass(r.Score ?? 0)">@(r.Score)</span>
-            </td>
+  @if (Model.ProductRisks.Count == 0)
+  {
+    <p class="govuk-body govuk-!-margin-bottom-0">No risks recorded.</p>
+  }
+  else
+  {
+    <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+      <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+      <table id="fips-product-risks-table" class="govuk-table govuk-!-margin-bottom-0">
+        <caption class="govuk-visually-hidden">Risks linked to this product</caption>
+        <thead class="govuk-table__head">
+          <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Risk</button></th>
+            <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Business area</button></th>
+            <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Tier</button></th>
+            <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Relation</button></th>
+            <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Status</button></th>
+            <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Owner</button></th>
+            <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Likelihood</button></th>
+            <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Impact</button></th>
+            <th scope="col" class="govuk-table__header govuk-!-text-align-right" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Score (inherent)</button></th>
           </tr>
-        }
-      }
-    </tbody>
-  </table>
-  </div>
+        </thead>
+        <tbody class="govuk-table__body">
+          @foreach (var r in Model.ProductRisks)
+          {
+            var riskDetailUrl = Url.Action("RiskDetail", "ModernRaid", new { id = r.Id }) ?? "#";
+            var rel = new RaidRegisterRelationParts(r.RelationKind, r.RelationProjectId, r.RelationTarget);
+            var sc = r.Score ?? 0;
+            <tr class="govuk-table__row" style="@(r.IsClosed ? "opacity:0.75;" : "")">
+              @await Html.PartialAsync("~/Views/Modern/Raid/_RaidRegisterItemTitleCell.cshtml", new RaidRegisterItemTitleVm(riskDetailUrl, r.Title, $"R-{r.Id:D4}"))
+              <td class="govuk-body-s">@(string.IsNullOrEmpty(r.BusinessAreaLabel) ? "—" : r.BusinessAreaLabel)</td>
+              <td class="govuk-body-s">@(string.IsNullOrWhiteSpace(r.TierName) ? "—" : r.TierName)</td>
+              @await Html.PartialAsync("~/Views/Modern/Raid/_RaidRegisterRelationCell.cshtml", rel)
+              <td class="govuk-table__cell"><span class="dfe-c-tag @((r.Status ?? "").Contains("closed", StringComparison.OrdinalIgnoreCase) ? "dfe-c-tag--green" : "dfe-c-tag--blue")">@((r.Status ?? "—").ToUpperInvariant())</span></td>
+              <td class="govuk-body-s">@(r.OwnerLabel ?? "—")</td>
+              <td class="govuk-body-s">@(r.LikelihoodLabel ?? "—")</td>
+              <td class="govuk-body-s">@(r.ImpactLabel ?? "—")</td>
+              <td class="govuk-body-s govuk-!-text-align-right"><span class="@RaidRegisterScoreClass(sc)">@(r.Score.HasValue ? r.Score.ToString() : "—")</span></td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
 </div>
 
 <div id="d-fips-issues" class="tab-pane @(detailTab == "issues" ? "on" : "")" role="tabpanel">
- <div class="dfe-c-flex--between dfe-c-mb-3" style="flex-wrap:wrap;gap:0.75rem;align-items:center;">
- <h2 class="govuk-heading-m" style="margin:0;">Issues</h2>
- <a class="govuk-button" href="@addIssueUrl">Add issue</a>
+  <div class="dfe-c-flex--between govuk-!-margin-bottom-3 govuk-!-padding-bottom-2" style="flex-wrap:wrap;gap:0.75rem;align-items:center;border-bottom:1px solid #b1b4b6;">
+    <h2 class="govuk-heading-m govuk-!-margin-bottom-0">Issues</h2>
+    <a class="govuk-button govuk-!-margin-bottom-0" href="@addIssueUrl">Add issue</a>
   </div>
- <div class="dfe-c-table-wrap">
- <table id="fips-product-issues-table" class="govuk-!-margin-bottom-0">
-    <thead>
-      <tr>
-        <th data-sort-bound="1" class="sortable">Issue</th>
-        <th data-sort-bound="1" class="sortable">Business area</th>
-        <th data-sort-bound="1" class="sortable">Relation</th>
-        <th data-sort-bound="1" class="sortable">Status</th>
-        <th data-sort-bound="1" class="sortable">Owner</th>
-        <th data-sort-bound="1" class="sortable">Priority</th>
-        <th data-sort-bound="1" class="sortable">Severity</th>
-      </tr>
-    </thead>
-    <tbody>
-      @if (Model.ProductIssues.Count == 0)
-      {
-        <tr>
- <td colspan="7" class="govuk-body" style="color:#505a5f;">—</td>
-        </tr>
-      }
-      else
-      {
-        @foreach (var i in Model.ProductIssues)
-        {
-          var issueDetailUrl = Url.Action("IssueDetail", "ModernRaid", new { id = i.Id }) ?? "#";
-          var rel = new RaidRegisterRelationParts(i.RelationKind, i.RelationProjectId, i.RelationTarget);
-          <tr style="@(i.IsClosed ? "opacity:0.75;" : "")">
-            @await Html.PartialAsync("~/Views/Modern/Raid/_RaidRegisterItemTitleCell.cshtml", new RaidRegisterItemTitleVm(issueDetailUrl, i.Title, $"I-{i.Id:D4}"))
- <td class="govuk-body-s">@(string.IsNullOrEmpty(i.BusinessAreaLabel) ? "—" : i.BusinessAreaLabel)</td>
-            @await Html.PartialAsync("~/Views/Modern/Raid/_RaidRegisterRelationCell.cshtml", rel)
- <td><span class="dfe-c-tag @((i.Status ?? "").Contains("closed", StringComparison.OrdinalIgnoreCase) ? "dfe-c-tag--green" : "dfe-c-tag--blue")">@((i.Status ?? "—").ToUpperInvariant())</span></td>
- <td class="govuk-body-s">@(i.OwnerLabel ?? "—")</td>
- <td><span class="dfe-c-tag @((i.PriorityLabel ?? "").Contains("critical", StringComparison.OrdinalIgnoreCase) ? "dfe-c-tag--red" : (i.PriorityLabel ?? "").Contains("high", StringComparison.OrdinalIgnoreCase) ? "dfe-c-tag--amber" : "dfe-c-tag--grey")">@((i.PriorityLabel ?? "—").ToUpperInvariant())</span></td>
- <td><span class="dfe-c-tag @((i.SeverityName ?? "").Contains("critical", StringComparison.OrdinalIgnoreCase) ? "dfe-c-tag--red" : (i.SeverityName ?? "").Contains("major", StringComparison.OrdinalIgnoreCase) ? "dfe-c-tag--amber" : "dfe-c-tag--green")">@((i.SeverityName ?? "—").ToUpperInvariant())</span></td>
+  @if (Model.ProductIssues.Count == 0)
+  {
+    <p class="govuk-body govuk-!-margin-bottom-0">No issues recorded.</p>
+  }
+  else
+  {
+    <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+      <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+      <table id="fips-product-issues-table" class="govuk-table govuk-!-margin-bottom-0">
+        <caption class="govuk-visually-hidden">Issues linked to this product</caption>
+        <thead class="govuk-table__head">
+          <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Issue</button></th>
+            <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Business area</button></th>
+            <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Relation</button></th>
+            <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Status</button></th>
+            <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Owner</button></th>
+            <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Priority</button></th>
+            <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Severity</button></th>
           </tr>
-        }
-      }
-    </tbody>
-  </table>
-  </div>
+        </thead>
+        <tbody class="govuk-table__body">
+          @foreach (var i in Model.ProductIssues)
+          {
+            var issueDetailUrl = Url.Action("IssueDetail", "ModernRaid", new { id = i.Id }) ?? "#";
+            var rel = new RaidRegisterRelationParts(i.RelationKind, i.RelationProjectId, i.RelationTarget);
+            <tr class="govuk-table__row" style="@(i.IsClosed ? "opacity:0.75;" : "")">
+              @await Html.PartialAsync("~/Views/Modern/Raid/_RaidRegisterItemTitleCell.cshtml", new RaidRegisterItemTitleVm(issueDetailUrl, i.Title, $"I-{i.Id:D4}"))
+              <td class="govuk-body-s">@(string.IsNullOrEmpty(i.BusinessAreaLabel) ? "—" : i.BusinessAreaLabel)</td>
+              @await Html.PartialAsync("~/Views/Modern/Raid/_RaidRegisterRelationCell.cshtml", rel)
+              <td class="govuk-table__cell"><span class="dfe-c-tag @((i.Status ?? "").Contains("closed", StringComparison.OrdinalIgnoreCase) ? "dfe-c-tag--green" : "dfe-c-tag--blue")">@((i.Status ?? "—").ToUpperInvariant())</span></td>
+              <td class="govuk-body-s">@(i.OwnerLabel ?? "—")</td>
+              <td class="govuk-table__cell"><span class="dfe-c-tag @((i.PriorityLabel ?? "").Contains("critical", StringComparison.OrdinalIgnoreCase) ? "dfe-c-tag--red" : (i.PriorityLabel ?? "").Contains("high", StringComparison.OrdinalIgnoreCase) ? "dfe-c-tag--amber" : "dfe-c-tag--grey")">@((i.PriorityLabel ?? "—").ToUpperInvariant())</span></td>
+              <td class="govuk-table__cell"><span class="dfe-c-tag @((i.SeverityName ?? "").Contains("critical", StringComparison.OrdinalIgnoreCase) ? "dfe-c-tag--red" : (i.SeverityName ?? "").Contains("major", StringComparison.OrdinalIgnoreCase) ? "dfe-c-tag--amber" : "dfe-c-tag--green")">@((i.SeverityName ?? "—").ToUpperInvariant())</span></td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
 </div>

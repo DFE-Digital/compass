@@ -1,0 +1,43 @@
+@{
+  ViewData["Title"] = "RAID monthly review";
+  var storageKey = ViewBag.RaidReviewStorageKey as string ?? "compass.raidReview.businessAreaIds";
+  var setupUrl = Url.Action("ReviewSetup", "ModernRaid") ?? "/modern/raid/review/setup";
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernRaid")">RAID</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">Monthly review</li>
+}
+
+<div class="govuk-grid-row">
+  <div class="govuk-grid-column-full">
+    <p class="govuk-body" id="raid-review-start-status">Loading your review…</p>
+  </div>
+</div>
+
+@section Scripts {
+  <script nonce="@(Context.Items["Nonce"]?.ToString() ?? "")">
+    (function () {
+      var key = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(storageKey));
+      var setupUrl = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(setupUrl));
+      var params = new URLSearchParams(window.location.search);
+      if (params.get('setup') === '1') {
+        window.location.replace(setupUrl);
+        return;
+      }
+      try {
+        var raw = localStorage.getItem(key);
+        var ids = raw ? JSON.parse(raw) : [];
+        if (Array.isArray(ids) && ids.length > 0) {
+          var ba = ids.filter(function (x) { return Number(x) > 0; }).join(',');
+          if (ba) {
+            window.location.replace('/modern/raid/review/overview?ba=' + encodeURIComponent(ba));
+            return;
+          }
+        }
+      } catch (e) { /* ignore */ }
+      window.location.replace(setupUrl);
+    })();
+  </script>
+}

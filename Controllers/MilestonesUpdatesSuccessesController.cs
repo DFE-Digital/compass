@@ -1086,6 +1086,13 @@ public class MilestonesUpdatesSuccessesController : Controller
             return RedirectToAction(redirectAction, new { projectId = projectId.Value, year = year.Value, month = month.Value });
         }
 
+        var ragStatusLookup = await _context.RagStatusLookups
+            .FirstOrDefaultAsync(r => r.Name == ragStatus && r.IsActive);
+
+        monthlyUpdate.DraftRagStatusLookupId = ragStatusLookup?.Id;
+        monthlyUpdate.DraftRagJustification = ragJustification;
+        monthlyUpdate.DraftPathToGreen = isNotGreen ? pathToGreen : null;
+
         // Update RAG status if changed
         if (ragChanged)
         {
@@ -1093,6 +1100,7 @@ public class MilestonesUpdatesSuccessesController : Controller
             var ragHistory = new ProjectRagHistory
             {
                 ProjectId = projectId.Value,
+                RagStatusLookupId = ragStatusLookup?.Id,
                 RagStatus = ragStatus,
                 Justification = ragJustification,
                 PathToGreen = pathToGreen,
@@ -1104,6 +1112,7 @@ public class MilestonesUpdatesSuccessesController : Controller
         }
 
         // Update project RAG status
+        project.RagStatusLookupId = ragStatusLookup?.Id;
         project.RagStatus = ragStatus;
         project.RagJustification = ragJustification;
         if (isNotGreen)

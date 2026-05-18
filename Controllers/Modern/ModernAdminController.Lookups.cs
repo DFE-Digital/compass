@@ -20,7 +20,8 @@ public partial class ModernAdminController
         "issue-statuses", "issue-priorities", "issue-severities",
         "decision-statuses", "decision-priorities", "decision-outcomes", "decision-implementation-statuses",
         "raid-evidence-types", "governance-boards",         "demand-request-statuses", "triage-outcome-stages",
-        "assumption-statuses", "assumption-criticalities", "dependency-criticalities", "dependency-link-types"
+        "assumption-statuses", "assumption-criticalities", "dependency-criticalities", "dependency-link-types",
+        "near-miss-types", "near-miss-seriousness", "near-miss-statuses"
     };
 
     [HttpGet("lookup/{panel}/create")]
@@ -101,6 +102,9 @@ public partial class ModernAdminController
         "assumption-criticalities" => "assumption criticality",
         "dependency-criticalities" => "dependency criticality",
         "dependency-link-types" => "dependency link type",
+        "near-miss-types" => "near miss type",
+        "near-miss-seriousness" => "near miss seriousness level",
+        "near-miss-statuses" => "near miss status",
         _ => "item"
     };
 
@@ -350,6 +354,7 @@ public partial class ModernAdminController
             case "decision-statuses": case "decision-priorities": case "decision-outcomes": case "decision-implementation-statuses":
             case "raid-evidence-types": case "governance-boards": case "demand-request-statuses": case "triage-outcome-stages":
             case "assumption-statuses": case "assumption-criticalities": case "dependency-criticalities": case "dependency-link-types":
+            case "near-miss-types": case "near-miss-seriousness": case "near-miss-statuses":
                 var raidDef = FindRaidDef(p);
                 if (raidDef == null) return null;
                 if (id is null)

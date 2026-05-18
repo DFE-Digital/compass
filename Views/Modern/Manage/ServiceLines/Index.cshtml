@@ -1,11 +1,12 @@
 @model Compass.ViewModels.Modern.ServiceLineListViewModel
+@using Compass.ViewModels.Modern
 @{
     ViewData["Title"] = "Service lines — Compass";
 }
 
 @section Breadcrumbs {
  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
- <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Fips", "ModernManage")">Service Register</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("FipsDashboard", "ModernManage")">Service register</a></li>
  <li class="govuk-breadcrumbs__list-item" aria-current="page">Service lines</li>
 }
 
@@ -21,16 +22,18 @@
     </div>
 }
 
-<div class="dfe-c-flex--between dfe-c-mb-3" style="flex-wrap:wrap;gap:1rem;align-items:flex-end;">
- <div class="dfe-c-page-title" style="margin:0;">
- <div class="dfe-c-page-title__caption">Service Register</div>
- <h1 class="dfe-c-page-title__heading">Service lines</h1>
-    </div>
- @if (Model.CanEdit)
- {
- <a class="govuk-button" href="@Url.Action("ServiceLineNew", "ModernManage")">Add service line</a>
-    }
-</div>
+@{
+  Microsoft.AspNetCore.Html.IHtmlContent? slIndexActions = null;
+  if (Model.CanEdit)
+  {
+    slIndexActions = await Html.PartialAsync("_ServiceLinesIndexHeaderActions", Model);
+  }
+}
+@await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+  Caption = "Service Register",
+  Title = "Service lines",
+  Actions = slIndexActions
+})
 
 <p class="govuk-body govuk-!-margin-bottom-4">Group directorates, business areas, service register products, and work items for portfolio reporting.</p>
 
@@ -40,30 +43,43 @@
 }
 else
 {
- <div class="dfe-c-table-wrap">
- <table>
+ <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+ <table class="govuk-table">
  <caption class="govuk-visually-hidden">Service lines</caption>
-                <thead>
-                    <tr>
- <th scope="col">Name</th>
- <th scope="col">Directorates</th>
- <th scope="col">Business areas</th>
- <th scope="col">Products</th>
- <th scope="col">Work items</th>
- <th scope="col">Updated</th>
+                <thead class="govuk-table__head">
+                    <tr class="govuk-table__row">
+ <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Name</button>
+        </th>
+ <th scope="col" class="govuk-table__header govuk-!-text-align-centre" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Directorates</button>
+        </th>
+ <th scope="col" class="govuk-table__header govuk-!-text-align-centre" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Business areas</button>
+        </th>
+ <th scope="col" class="govuk-table__header govuk-!-text-align-centre" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Products</button>
+        </th>
+ <th scope="col" class="govuk-table__header govuk-!-text-align-centre" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Work items</button>
+        </th>
+ <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Updated</button>
+        </th>
                     </tr>
                 </thead>
-                <tbody>
+                <tbody class="govuk-table__body">
                 @foreach (var r in Model.Rows)
                 {
-                    <tr>
-                        <td>
- <a href="@Url.Action("ServiceLineDetail", "ModernManage", new { slug = r.Slug })" class="dfe-c-link dfe-c-fw-bold">@r.Name</a>
+                    <tr class="govuk-table__row">
+                        <td class="govuk-table__cell">
+ <a href="@Url.Action("ServiceLineDetail", "ModernManage", new { slug = r.Slug })" class="govuk-link govuk-link--no-visited-state govuk-!-font-weight-bold">@r.Name</a>
                         </td>
-                        <td>@r.Directorates</td>
-                        <td>@r.BusinessAreas</td>
-                        <td>@r.Products</td>
-                        <td>@r.WorkItems</td>
+                        <td class="govuk-table__cell govuk-!-text-align-centre">@r.Directorates</td>
+                        <td class="govuk-table__cell govuk-!-text-align-centre">@r.BusinessAreas</td>
+                        <td class="govuk-table__cell govuk-!-text-align-centre">@r.Products</td>
+                        <td class="govuk-table__cell govuk-!-text-align-centre">@r.WorkItems</td>
                         <td class="govuk-body-s">@r.UpdatedAt.ToString("d MMM yyyy")</td>
                     </tr>
                 }

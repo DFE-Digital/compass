@@ -21,6 +21,18 @@ public interface IMonthlyUpdateService
     /// When no explicit period exists, returns true so legacy deadline rules continue to apply.
     /// </summary>
     bool IsMonthlyReportEditingAllowed(int reportingYear, int reportingMonth);
+
+    /// <summary>First day of the submission window (inclusive). Explicit Admin dates, else day 20 of the reporting month.</summary>
+    DateTime GetSubmissionWindowOpens(int reportingYear, int reportingMonth);
+
+    /// <summary>Last day of the submission window (inclusive). Explicit Admin closes, else last day of the reporting month.</summary>
+    DateTime GetSubmissionWindowCloses(int reportingYear, int reportingMonth);
+
+    /// <summary>
+    /// Reporting period for home / work dashboards: prefers the calendar month when its submission window is open,
+    /// then the previous month if still open, otherwise the legacy applicable-period heuristic.
+    /// </summary>
+    (int Year, int Month) ResolveDashboardReportingPeriod(DateTime utcNow);
 }
 
 public enum UpdateSubmissionStatus

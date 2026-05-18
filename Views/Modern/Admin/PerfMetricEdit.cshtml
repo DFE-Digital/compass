@@ -1,4 +1,7 @@
 @model Compass.ViewModels.Modern.PerfMetricRow
+@using Compass.ViewModels.Modern
+@using Microsoft.AspNetCore.Html
+@using System.Net
 @{
   ViewData["Title"] = "Edit metric";
   var perfError = ViewBag.PerfError as string;
@@ -12,18 +15,21 @@
 }
 
 <div id="sc-admin-pm-edit" class="dfe-c-mb-4">
- <div class="dfe-c-page-title dfe-c-mb-3">
- <div class="dfe-c-page-title__caption">Admin</div>
- <h1 class="dfe-c-page-title__heading">Edit metric</h1>
- <p class="dfe-c-page-title__lede">Update the definition for <code>@Model.Identifier</code>.</p>
-  </div>
+ @{
+   var pmEditLede = new HtmlString($"<p class=\"govuk-body govuk-!-margin-bottom-0\">Update the definition for <code>{WebUtility.HtmlEncode(Model.Identifier)}</code>.</p>");
+ }
+ @await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+   Caption = "Admin",
+   Title = "Edit metric",
+   Lede = pmEditLede
+ })
 
  <div class="dfe-c-form-layout">
  <div class="dfe-c-form-layout__main">
 
       @if (!string.IsNullOrWhiteSpace(adminMessage))
       {
- <div class="govuk-notification-banner govuk-notification-banner--success dfe-c-mb-3" role="region" aria-labelledby="pm-notif-title">
+ <div class="govuk-notification-banner govuk-notification-banner--success govuk-!-margin-bottom-3" role="region" aria-labelledby="pm-notif-title">
  <div class="govuk-notification-banner__header">
  <h2 class="govuk-notification-banner__title" id="pm-notif-title">Success</h2>
           </div>
@@ -103,21 +109,7 @@
  <input class="govuk-input govuk-input--width-4" id="validFromMonth" name="validFromMonth" type="number" min="1" max="12" value="@Model.ValidFromMonth" aria-describedby="validFromMonth-hint" />
           </div>
 
- <hr class="govuk-section-break govuk-section-break--l govuk-section-break--visible" />
-
- <h2 class="govuk-heading-m">Applicability</h2>
-
- <div class="govuk-form-group">
- <label class="govuk-label govuk-label--s" for="applicablePhases">Applicable phases <span class="govuk-hint" style="display:inline;font-size:inherit;">(optional)</span></label>
- <div id="applicablePhases-hint" class="govuk-hint">Comma-separated list of phases, e.g. <code>Live, Beta</code>. Leave blank for all phases.</div>
- <input class="govuk-input" id="applicablePhases" name="applicablePhases" type="text" value="@Model.ApplicablePhases" maxlength="500" aria-describedby="applicablePhases-hint" />
-          </div>
-
- <div class="govuk-form-group">
- <label class="govuk-label govuk-label--s" for="applicableTypes">Applicable product types <span class="govuk-hint" style="display:inline;font-size:inherit;">(optional)</span></label>
- <div id="applicableTypes-hint" class="govuk-hint">Comma-separated list of product types, e.g. <code>Service, Platform</code>. Leave blank for all types.</div>
- <input class="govuk-input" id="applicableTypes" name="applicableTypes" type="text" value="@Model.ApplicableTypes" maxlength="500" aria-describedby="applicableTypes-hint" />
-          </div>
+          @await Html.PartialAsync("_PerfMetricAdvancedFields", Model)
 
  <div class="govuk-button-group">
  <button type="submit" class="govuk-button" data-module="govuk-button">Save changes</button>
@@ -132,8 +124,8 @@
  <h2 class="govuk-heading-m">Status</h2>
  <p class="govuk-body">
           This metric is currently
- @if (Model.IsDisabled) { <span class="dfe-c-tag dfe-c-tag--grey">Disabled</span> }
- else { <span class="dfe-c-tag dfe-c-tag--green">Active</span> }
+ @if (Model.IsDisabled) { <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--grey">Disabled</span> }
+ else { <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--green">Active</span> }
         </p>
  <p class="govuk-hint">@(Model.IsDisabled ? "Disabled metrics are hidden from new submissions. Re-enable to make them available again." : "Active metrics appear in new submissions. Disable to hide from future submissions without deleting historical data.")</p>
         <form method="post" action="@Url.Action("PerfMetricToggle", "ModernAdmin", new { id = Model.Id })">
@@ -174,3 +166,42 @@
     </div>
   </div>
 </div>
+
+
+@section Scripts {
+  <script nonce="@Context.Items["Nonce"]">
+    (function () {
+      var valueTypeSelect = document.getElementById("valueType");
+      var rulesTextarea = document.getElementById("validationRulesJson");
+      if (!valueTypeSelect || !rulesTextarea) return;
+
+      valueTypeSelect.addEventListener("change", function () {
+        var valueType = valueTypeSelect.value;
+        var currentRules = {};
+        try {
+          currentRules = JSON.parse(rulesTextarea.value || "{}");
+        } catch (e) {
+          currentRules = { required: true, allowNull: false };
+        }
+
+        if (valueType === "1") {
+          currentRules.minimumValue = 0;
+          currentRules.maximumValue = 100000000;
+          delete currentRules.decimalPlaces;
+        } else if (valueType === "2") {
+          currentRules.minimumValue = 0;
+          currentRules.maximumValue = 100000000;
+        } else if (valueType === "3") {
+          currentRules.minimumValue = 0;
+          currentRules.maximumValue = 100;
+        } else {
+          delete currentRules.minimumValue;
+          delete currentRules.maximumValue;
+          delete currentRules.decimalPlaces;
+        }
+
+        rulesTextarea.value = JSON.stringify(currentRules, null, 2);
+      });
+    })();
+  </script>
+}

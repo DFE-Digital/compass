@@ -1,6 +1,10 @@
 @model Compass.Models.Modern.Work.WorkItemDependency
+@using System.Globalization
+@using Compass.Models.Modern.Work
+@using Compass.ViewModels.Modern
 @{
-    var work = ViewBag.WorkItem as Compass.Models.Modern.Work.WorkItem;
+    var work = ViewBag.WorkItem as WorkItem;
+    var wiRef = ViewBag.WorkIdShort as string ?? work?.Id.ToString("D8", CultureInfo.InvariantCulture) ?? "";
     var workItemsSelectList = ViewBag.WorkItemsSelectList as Microsoft.AspNetCore.Mvc.Rendering.SelectList ?? new Microsoft.AspNetCore.Mvc.Rendering.SelectList(new List<object>(), "Id", "Title");
     var postedTarget = ViewBag.PostedTargetWorkItemId as int?;
     var directionIn = !string.Equals(Model.Direction, "Out", StringComparison.OrdinalIgnoreCase);
@@ -11,20 +15,35 @@
     string? keyErrorMsg = ViewData.ModelState[""]?.Errors?.FirstOrDefault()?.ErrorMessage;
 }
 @section Breadcrumbs {
- <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="/">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernWork")">Work</a></li>
  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Detail", "ModernWork", new { id = Model.WorkItemId })">@(work?.Title ?? "Work")</a></li>
  <li class="govuk-breadcrumbs__list-item" aria-current="page">Add dependency</li>
 }
 
 <div id="sc-work-adddependency">
-  @await Html.PartialAsync("_WorkItemChrome", ViewBag.WorkItem as Compass.Models.Modern.Work.WorkItem)
+  @await Html.PartialAsync("_WorkItemChrome", work)
 
- <div class="dfe-c-page-title">
- <div class="dfe-c-page-title__caption">@(work?.Title ?? "Work")</div>
- <h1 class="dfe-c-page-title__heading">Add dependency</h1>
- <p class="dfe-c-page-title__lede">Record an upstream or downstream dependency — either a link to another work item or an external dependency.</p>
+<div class="govuk-grid-row modern-work-detail-layout govuk-!-margin-top-4">
+  <div class="govuk-grid-column-one-quarter-from-desktop modern-work-detail-layout__nav">
+    <div class="dfe-f-u-sticky govuk-!-margin-bottom-4 modern-work-detail-layout__nav-inner" style="--dfe-f-sticky-top: 1rem;">
+      @if (work != null)
+      {
+        @await Html.PartialAsync("_WorkItemSideNav", work)
+      }
+    </div>
   </div>
+  <div class="govuk-grid-column-three-quarters-from-desktop modern-work-detail-main">
+@{
+  var addDepLede = await Html.PartialAsync("_GovukBodyParagraph", "Record an upstream or downstream dependency — either a link to another work item or an external dependency.");
+}
+@await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+  Caption = string.IsNullOrEmpty(wiRef) ? (work?.Title ?? "Work") : $"WI-{wiRef} · {work?.Title ?? "Work"}",
+  Title = "Add dependency",
+  HeadingTag = "h2",
+  HeadingClass = "govuk-heading-l",
+  Lede = addDepLede
+})
 
  <div class="dfe-c-form-layout">
  <div class="dfe-c-form-layout__main">
@@ -125,7 +144,7 @@
 
  <div class="govuk-button-group">
  <button type="submit" class="govuk-button">Add dependency</button>
- <a href="@Url.Action("Detail", "ModernWork", new { id = Model.WorkItemId })#wd-dependencies" class="govuk-button govuk-button--secondary">Cancel</a>
+ <a href="@Url.Action("Detail", "ModernWork", new { id = Model.WorkItemId })#wd-dependencies" class="govuk-link govuk-link--no-visited-state govuk-!-margin-left-3">Cancel</a>
         </div>
         </form>
       </div>
@@ -151,6 +170,8 @@
       </div>
     </div>
   </div>
+  </div>
+</div>
 </div>
 
 @section Scripts {

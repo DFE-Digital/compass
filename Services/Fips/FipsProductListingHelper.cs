@@ -19,13 +19,15 @@ public static class FipsProductListingHelper
         int? userGroupId,
         int? typeId,
         int? phaseId,
+        int? categorisationItemId = null,
+        int? categorisationGroupId = null,
         CancellationToken cancellationToken = default)
     {
         var email = currentUserEmail ?? string.Empty;
         var emailNorm = email.Trim().ToLower();
         var useSqlServer = IsSqlServerProvider(context);
 
-        var totalProductsInDatabase = await TryCountCmdbProductsRowsAsync(context, cancellationToken);
+        var isSearchResults = !string.IsNullOrWhiteSpace(search);
 
         // Do not UseInclude on CMDBProducts for the list: materializing the full entity SELECTs every mapped
         // column (e.g. IsEnterpriseService). A missing or mismatched column then fails the whole list.
@@ -50,8 +52,7 @@ public static class FipsProductListingHelper
                             SELECT DISTINCT p.Id AS Value
                             FROM CMDBProducts AS p
                             INNER JOIN CMDBProductContacts AS c ON c.CMDBProductId = p.Id
-                            WHERE p.[Status] NOT IN ({(int)CMDBProductStatus.Inactive}, {(int)CMDBProductStatus.Rejected})
-                              AND c.UserEmail IS NOT NULL
+                            WHERE c.UserEmail IS NOT NULL
                               AND LOWER(LTRIM(RTRIM(c.UserEmail))) = {emailNorm}
                             """)
                         .ToListAsync(cancellationToken);
@@ -64,8 +65,7 @@ public static class FipsProductListingHelper
                             SELECT COUNT(DISTINCT p.Id) AS Value
                             FROM CMDBProducts AS p
                             INNER JOIN CMDBProductContacts AS c ON c.CMDBProductId = p.Id
-                            WHERE p.[Status] NOT IN ({(int)CMDBProductStatus.Inactive}, {(int)CMDBProductStatus.Rejected})
-                              AND c.UserEmail IS NOT NULL
+                            WHERE c.UserEmail IS NOT NULL
                               AND LOWER(LTRIM(RTRIM(c.UserEmail))) = {emailNorm}
                             """)
                         .FirstAsync(cancellationToken);
@@ -82,12 +82,11 @@ public static class FipsProductListingHelper
             try
             {
                 myCount = await context.CMDBProducts
-                    .Where(p => p.Status != CMDBProductStatus.Inactive &&
-                                p.Status != CMDBProductStatus.Rejected &&
-                                context.CMDBProductContacts.Any(c =>
-                                    c.CMDBProductId == p.Id &&
-                                    c.UserEmail != null &&
-                                    c.UserEmail.ToLower() == emailNorm))
+                    .Where(p =>
+                        context.CMDBProductContacts.Any(c =>
+                            c.CMDBProductId == p.Id &&
+                            c.UserEmail != null &&
+                            c.UserEmail.ToLower() == emailNorm))
                     .CountAsync(cancellationToken);
             }
             catch
@@ -96,24 +95,31 @@ public static class FipsProductListingHelper
             }
         }
 
-        IQueryable<CMDBProduct> tabQuery = activeTab switch
-        {
-            "my" when string.IsNullOrWhiteSpace(emailNorm) => query.Where(_ => false),
-            "my" when useSqlServer => myProductIdsForTab is { Count: > 0 }
-                ? query.Where(p => myProductIdsForTab.Contains(p.Id))
-                : query.Where(_ => false),
-            "my" => query.Where(p => p.Status != CMDBProductStatus.Inactive &&
-                                     p.Status != CMDBProductStatus.Rejected &&
-                                     context.CMDBProductContacts.Any(c =>
-                                         c.CMDBProductId == p.Id &&
-                                         c.UserEmail != null &&
-                                         c.UserEmail.ToLower() == emailNorm)),
-            "all" => query,
-            "new" => query.Where(p => p.Status == CMDBProductStatus.New),
-            "inactive" => query.Where(p => p.Status == CMDBProductStatus.Rejected),
-            "retired" => query.Where(p => p.Status == CMDBProductStatus.Inactive),
-            _ => query
-        };
+        // Tabs: see Service register sub-nav. Search runs across all statuses (tab "search").
+        IQueryable<CMDBProduct> tabQuery = isSearchResults
+            ? query
+            : activeTab switch
+            {
+                "my" when string.IsNullOrWhiteSpace(emailNorm) => query.Where(_ => false),
+                "my" when useSqlServer => myProductIdsForTab is { Count: > 0 }
+                    ? query.Where(p => myProductIdsForTab.Contains(p.Id))
+                    : query.Where(_ => false),
+                "my" => query.Where(p =>
+                    context.CMDBProductContacts.Any(c =>
+                        c.CMDBProductId == p.Id &&
+                        c.UserEmail != null &&
+                        c.UserEmail.ToLower() == emailNorm)),
+                "active" => ActiveProducts(query),
+                "all" => query,
+                "search" => query,
+                "enterprise" => EnterpriseActive(query),
+                "new" => query.Where(p => p.Status == CMDBProductStatus.New),
+                "inactive" => query.Where(p =>
+                    p.Status == CMDBProductStatus.Inactive ||
+                    p.Status == CMDBProductStatus.Rejected),
+                "retired" => query.Where(p => p.Status == CMDBProductStatus.Inactive),
+                _ => ActiveProducts(query)
+            };
 
         if (!string.IsNullOrWhiteSpace(search))
         {
@@ -134,8 +140,33 @@ public static class FipsProductListingHelper
             tabQuery = tabQuery.Where(p => p.Types.Any(t => t.FipsTypeId == typeId.Value));
         if (phaseId is > 0)
             tabQuery = tabQuery.Where(p => p.PhaseId == phaseId.Value);
+        if (categorisationItemId is > 0)
+            tabQuery = tabQuery.Where(p =>
+                p.CategorisationItems.Any(ci => ci.FipsCategorisationItemId == categorisationItemId.Value));
+        if (categorisationGroupId is > 0)
+            tabQuery = tabQuery.Where(p =>
+                p.CategorisationItems.Any(ci =>
+                    ci.FipsCategorisationItem.FipsCategorisationGroupId == categorisationGroupId.Value));
 
         var products = await LoadFipsProductRowsAsync(tabQuery, context, cancellationToken);
+
+        string? categorisationItemName = null;
+        if (categorisationItemId is > 0)
+        {
+            categorisationItemName = await context.FipsCategorisationItems.AsNoTracking()
+                .Where(i => i.Id == categorisationItemId.Value)
+                .Select(i => i.Name)
+                .FirstOrDefaultAsync(cancellationToken);
+        }
+
+        string? categorisationGroupName = null;
+        if (categorisationGroupId is > 0)
+        {
+            categorisationGroupName = await context.FipsCategorisationGroups.AsNoTracking()
+                .Where(g => g.Id == categorisationGroupId.Value)
+                .Select(g => g.Name)
+                .FirstOrDefaultAsync(cancellationToken);
+        }
 
         var businessAreaLookups = await context.BusinessAreaLookups
             .AsNoTracking()
@@ -154,9 +185,10 @@ public static class FipsProductListingHelper
                 .GroupBy(p => p.Status)
                 .Select(g => new { Status = g.Key, Count = g.Count() })
                 .ToListAsync(cancellationToken);
-            allProductsCount = allCounts.Sum(c => c.Count);
             newProductsCount = allCounts.Where(c => c.Status == CMDBProductStatus.New).Sum(c => c.Count);
-            inactiveProductsCount = allCounts.Where(c => c.Status == CMDBProductStatus.Rejected).Sum(c => c.Count);
+            inactiveProductsCount = allCounts.Where(c =>
+                    c.Status == CMDBProductStatus.Rejected || c.Status == CMDBProductStatus.Inactive)
+                .Sum(c => c.Count);
             retiredCount = allCounts.Where(c => c.Status == CMDBProductStatus.Inactive).Sum(c => c.Count);
         }
         catch
@@ -164,18 +196,55 @@ public static class FipsProductListingHelper
             // Count may fail if Status column is unavailable; leave zeros.
         }
 
+        var enterpriseProductsCount = 0;
+        var catalogueProductsCount = 0;
+        try
+        {
+            allProductsCount = await ActiveProducts(context.CMDBProducts.AsNoTracking())
+                .CountAsync(cancellationToken);
+        }
+        catch
+        {
+            // IsEnterpriseService or Status missing — badge stays 0.
+        }
+
+        try
+        {
+            enterpriseProductsCount = await EnterpriseActive(context.CMDBProducts.AsNoTracking())
+                .CountAsync(cancellationToken);
+        }
+        catch
+        {
+            // IsEnterpriseService or Status missing — badge stays 0.
+        }
+
+        try
+        {
+            catalogueProductsCount = await context.CMDBProducts.AsNoTracking().CountAsync(cancellationToken);
+        }
+        catch
+        {
+            // Count may fail if optional columns are unavailable.
+        }
+
         return new FipsProductsViewModel
         {
-            ActiveTab = activeTab,
+            ActiveTab = isSearchResults ? "search" : activeTab,
+            IsSearchResults = isSearchResults,
             Search = search,
             BusinessAreaId = businessAreaId,
             ChannelId = channelId,
             UserGroupId = userGroupId,
             TypeId = typeId,
             PhaseId = phaseId,
-            TotalProductsInDatabase = totalProductsInDatabase,
+            CategorisationItemId = categorisationItemId,
+            CategorisationItemName = categorisationItemName,
+            CategorisationGroupId = categorisationGroupId,
+            CategorisationGroupName = categorisationGroupName,
             MyProductsCount = myCount,
             AllProductsCount = allProductsCount,
+            CatalogueProductsCount = catalogueProductsCount,
+            EnterpriseProductsCount = enterpriseProductsCount,
             NewProductsCount = newProductsCount,
             InactiveProductsCount = inactiveProductsCount,
             RetiredCount = retiredCount,
@@ -187,6 +256,84 @@ public static class FipsProductListingHelper
             PhaseOptions = await context.PhaseLookups.Where(x => x.IsActive).OrderBy(x => x.SortOrder).ToListAsync(cancellationToken),
             BusinessAreaLookups = businessAreaLookups,
         };
+    }
+
+    /// <summary>
+    /// Products where the user is a CMDB contact — same set as <c>/modern/manage/fips/products?tab=my</c>.
+    /// Used by the modern home dashboard when the FIPS service register is enabled.
+    /// </summary>
+    public static async Task<List<ProductDto>> BuildMyProductDtosForDashboardAsync(
+        CompassDbContext context,
+        string currentUserEmail,
+        CancellationToken cancellationToken = default)
+    {
+        var vm = await BuildProductsViewModelAsync(
+            context,
+            "my",
+            currentUserEmail,
+            search: null,
+            businessAreaId: null,
+            channelId: null,
+            userGroupId: null,
+            typeId: null,
+            phaseId: null,
+            categorisationItemId: null,
+            categorisationGroupId: null,
+            cancellationToken);
+
+        if (vm.Products.Count == 0)
+            return [];
+
+        var ids = vm.Products.Select(p => p.Id).ToList();
+        var cmdbKeys = await context.CMDBProducts.AsNoTracking()
+            .Where(p => ids.Contains(p.Id))
+            .Select(p => new { p.Id, p.CMDBID })
+            .ToDictionaryAsync(p => p.Id, p => p.CMDBID, cancellationToken);
+
+        return vm.Products
+            .Select(row =>
+            {
+                cmdbKeys.TryGetValue(row.Id, out var cmdbId);
+                var fipsKey = cmdbId?.Trim();
+                return new ProductDto
+                {
+                    Title = row.Title,
+                    DocumentId = row.Id.ToString(),
+                    FipsId = fipsKey,
+                    CmdbSysId = fipsKey,
+                    Phase = row.PhaseName,
+                    BusinessArea = row.BusinessAreaDisplay,
+                    ProductType = row.TypesDisplay
+                };
+            })
+            .OrderBy(p => p.Title)
+            .ToList();
+    }
+
+    /// <summary>Tab badge counts for service register sub-navigation (no product rows).</summary>
+    public static async Task<FipsProductsViewModel> BuildSubNavModelAsync(
+        CompassDbContext context,
+        string activeTab,
+        string currentUserEmail,
+        CancellationToken cancellationToken = default)
+    {
+        var vm = await BuildProductsViewModelAsync(
+            context,
+            "active",
+            currentUserEmail,
+            search: null,
+            businessAreaId: null,
+            channelId: null,
+            userGroupId: null,
+            typeId: null,
+            phaseId: null,
+            categorisationItemId: null,
+            categorisationGroupId: null,
+            cancellationToken);
+        vm.ActiveTab = activeTab;
+        vm.Products = [];
+        vm.CanSyncFromCmdb = false;
+        return vm;
     }
 
     /// <summary>
@@ -362,6 +509,14 @@ public static class FipsProductListingHelper
         return map;
     }
 
+    /// <summary>Active tab: all products with status Active (includes enterprise; enterprise tab is the subset).</summary>
+    private static IQueryable<CMDBProduct> ActiveProducts(IQueryable<CMDBProduct> query) =>
+        query.Where(p => p.Status == CMDBProductStatus.Active);
+
+    /// <summary>Enterprise tab: status Active and enterprise flag.</summary>
+    private static IQueryable<CMDBProduct> EnterpriseActive(IQueryable<CMDBProduct> query) =>
+        query.Where(p => p.IsEnterpriseService && p.Status == CMDBProductStatus.Active);
+
     private static bool IsSqlServerProvider(CompassDbContext context) =>
         context.Database.ProviderName?.Contains("SqlServer", StringComparison.OrdinalIgnoreCase) == true;
 
@@ -398,17 +553,44 @@ public static class FipsProductListingHelper
         return score;
     }
 
+    /// <summary>Detail page: completion % and outstanding labels aligned with <see cref="CalculateQualityScore"/>.</summary>
+    public static FipsDataCompletionSummary GetDataCompletionSummary(CMDBProduct p)
+    {
+        const int max = 7;
+        var outstanding = new List<string>();
+        if (!p.PhaseId.HasValue)
+            outstanding.Add("Phase");
+        if (p.Types.Count == 0)
+            outstanding.Add("Type");
+        if (p.BusinessAreas.Count == 0)
+            outstanding.Add("Business area");
+        if (p.UserGroups.Count == 0)
+            outstanding.Add("User group");
+        if (p.Channels.Count == 0)
+            outstanding.Add("Channel");
+        if (!p.Contacts.Any(c =>
+                string.Equals(c.FipsContactRole?.Name, "Service Owner", StringComparison.OrdinalIgnoreCase)))
+            outstanding.Add("Service owner contact");
+        if (!p.Contacts.Any(c =>
+                string.Equals(c.FipsContactRole?.Name, "Senior Responsible Officer", StringComparison.OrdinalIgnoreCase)))
+            outstanding.Add("Senior Responsible Officer (SRO) contact");
+
+        var score = max - outstanding.Count;
+        var pct = max > 0 ? (int)Math.Round(100.0 * score / max) : 0;
+        return new FipsDataCompletionSummary(score, max, pct, outstanding);
+    }
+
     public static SearchAndFilterViewModel BuildSearchAndFilter(FipsProductsViewModel vm, string tab, string formActionBaseUrl)
     {
         return new SearchAndFilterViewModel
         {
             IdPrefix = "fips",
-            SearchPlaceholder = "Search products…",
+            SearchPlaceholder = "Search all products…",
             SearchValue = vm.Search,
             FormActionUrl = formActionBaseUrl,
             FormMethod = "get",
             ClearUrl = formActionBaseUrl,
-            HiddenFields = new List<KeyValuePair<string, string>> { new("tab", tab) },
+            HiddenFields = BuildHiddenFields(tab, vm),
             Fields = new List<SearchAndFilterFieldViewModel>
             {
                 new()
@@ -448,5 +630,15 @@ public static class FipsProductListingHelper
                 }
             }
         };
+    }
+
+    private static List<KeyValuePair<string, string>> BuildHiddenFields(string tab, FipsProductsViewModel vm)
+    {
+        var fields = new List<KeyValuePair<string, string>> { new("tab", tab) };
+        if (vm.CategorisationItemId is > 0)
+            fields.Add(new("categorisationItemId", vm.CategorisationItemId.Value.ToString()));
+        if (vm.CategorisationGroupId is > 0)
+            fields.Add(new("categorisationGroupId", vm.CategorisationGroupId.Value.ToString()));
+        return fields;
     }
 }

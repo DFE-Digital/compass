@@ -2,6 +2,7 @@
 @using Compass.Models
 @using Compass.Models.Modern.Work
 @using Compass.ViewModels.Modern
+@using Microsoft.AspNetCore.Html
 @{
   ViewData["Title"] = "Add assumption";
   var crit = ViewBag.AssumptionCriticalityOptions as IList<AssumptionCriticality> ?? new List<AssumptionCriticality>();
@@ -27,26 +28,46 @@
 @section Breadcrumbs {
   <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
   <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernRaid")">RAID</a></li>
-  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Assumptions", "ModernRaid")">Assumptions</a></li>
+  @if (Model.ReturnToWorkItemId.HasValue && Model.ReturnToWorkItemId.Value > 0)
+  {
+    <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Detail", "ModernWork", new { id = Model.ReturnToWorkItemId.Value, tab = "assumptions" })#wd-assumptions">Work item</a></li>
+  }
+  else
+  {
+    <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Assumptions", "ModernRaid")">Assumptions</a></li>
+  }
   <li class="govuk-breadcrumbs__list-item" aria-current="page">Add assumption</li>
 }
 
 <div id="sc-raid-assumption-create" class="modern-work-page">
-<p class="dfe-c-body dfe-c-mb-3">
-  <a href="@Url.Action("Assumptions", "ModernRaid")" class="dfe-c-link">← Back to assumptions</a>
+<p class="dfe-c-body govuk-!-margin-bottom-3">
+  @if (Model.ReturnToWorkItemId.HasValue && Model.ReturnToWorkItemId.Value > 0)
+  {
+    <a href="@Url.Action("Detail", "ModernWork", new { id = Model.ReturnToWorkItemId.Value, tab = "assumptions" })#wd-assumptions" class="dfe-c-link">← Back to work item</a>
+  }
+  else
+  {
+    <a href="@Url.Action("Assumptions", "ModernRaid")" class="dfe-c-link">← Back to assumptions</a>
+  }
 </p>
 
-<div class="dfe-c-page-title">
-  <div class="dfe-c-page-title__caption">RAID</div>
-  <h1 class="dfe-c-page-title__heading">Add assumption</h1>
-  <p class="dfe-c-page-title__lede">Capture an assumption for the RAID register and link it to work, a product, or organisation-wide scope.</p>
-</div>
+@await Html.PartialAsync("~/Views/Modern/Shared/_ModernPageHeader.cshtml", new ModernPageHeaderViewModel {
+  Caption = "RAID",
+  Title = "Add assumption",
+  Lede = (Model.ReturnToWorkItemId ?? 0) > 0
+    ? new HtmlString("<p class=\"govuk-body govuk-!-margin-bottom-0\">Add an assumption for this work item. You can still change scope to a service register product or organisation-wide if needed.</p>")
+    : new HtmlString("<p class=\"govuk-body govuk-!-margin-bottom-0\">Capture an assumption for the RAID register and link it to work, a service register product, or organisation-wide scope.</p>")
+})
 
-<div class="dfe-c-form-layout">
-  <div class="dfe-c-form-layout__main">
+<div class="govuk-grid-row">
+  <div class="govuk-grid-column-three-quarters">
     <div class="dfe-c-card dfe-c-card--plain">
       <form method="post" novalidate action="@Url.Action("AssumptionCreatePost", "ModernRaid")">
         @Html.AntiForgeryToken()
+        @if (Model.ReturnToWorkItemId.HasValue && Model.ReturnToWorkItemId.Value > 0)
+        {
+          <input type="hidden" name="@nameof(Model.ReturnToWorkItemId)" value="@Model.ReturnToWorkItemId.Value" />
+        }
 
         @if (!ViewData.ModelState.IsValid)
         {
@@ -94,16 +115,17 @@
 
             <div class="govuk-radios__item">
               <input class="govuk-radios__input" id="raid-asm-assoc-product" name="AssociationKind" type="radio" value="product" data-aria-controls="raid-asm-cond-product" @(assoc == "product" ? "checked" : null) />
-              <label class="govuk-label govuk-radios__label" for="raid-asm-assoc-product">Product (FIPS)</label>
+              <label class="govuk-label govuk-radios__label" for="raid-asm-assoc-product">Service register product</label>
             </div>
             <div class="govuk-radios__conditional@(assoc != "product" ? " govuk-radios__conditional--hidden" : null)" id="raid-asm-cond-product">
               <div class="govuk-form-group govuk-!-margin-bottom-0@(productErr != null ? " govuk-form-group--error" : "")" id="@nameof(Model.PrimaryProductId)">
-                <label class="govuk-label" for="raid-asm-product-select">FIPS product</label>
+                <label class="govuk-label" for="raid-asm-product-select">Product</label>
+                <div id="raid-asm-product-hint" class="govuk-hint">From the Operations service register (active services).</div>
                 @if (productErr != null)
                 {
                   <p class="govuk-error-message"><span class="govuk-visually-hidden">Error: </span>@productErr</p>
                 }
-                <select class="govuk-select govuk-!-width-full@(productErr != null ? " govuk-select--error" : "")" id="raid-asm-product-select" name="@nameof(Model.PrimaryProductId)">
+                <select class="govuk-select govuk-!-width-full@(productErr != null ? " govuk-select--error" : "")" id="raid-asm-product-select" name="@nameof(Model.PrimaryProductId)" aria-describedby="raid-asm-product-hint">
                   <option value="">— Select —</option>
                   @foreach (var o in fp)
                   {
@@ -239,7 +261,7 @@
       </form>
     </div>
   </div>
-  <div class="dfe-c-form-layout__aside">
+  <div class="govuk-grid-column-one-quarter">
     @await Html.PartialAsync("~/Views/Modern/Raid/_RaidGuidanceAside.cshtml", "assumption")
   </div>
 </div>

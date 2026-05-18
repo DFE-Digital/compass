@@ -198,6 +198,10 @@ public partial class CompassDbContext : DbContext
     public DbSet<ProjectObjective> ProjectObjectives { get; set; }
     public DbSet<Dependency> Dependencies { get; set; }
     public DbSet<Assumption> Assumptions { get; set; }
+    public DbSet<NearMiss> NearMisses { get; set; }
+    public DbSet<NearMissOwner> NearMissOwners { get; set; }
+    public DbSet<NearMissAction> NearMissActions { get; set; }
+    public DbSet<NearMissMitigation> NearMissMitigations { get; set; }
     public DbSet<ProjectProduct> ProjectProducts { get; set; }
     public DbSet<ProjectDraft> ProjectDrafts { get; set; }
 
@@ -265,6 +269,7 @@ public partial class CompassDbContext : DbContext
     public DbSet<AssumptionDivision> AssumptionDivisions { get; set; }
     public DbSet<AssumptionBusinessArea> AssumptionBusinessAreas { get; set; }
     public DbSet<RaidEscalationTierChangeRequest> RaidEscalationTierChangeRequests { get; set; }
+    public DbSet<Compass.Models.Raid.RaidMonthlyReview> RaidMonthlyReviews { get; set; }
 
     /// <summary>CMS access requests (Design histories, DDT manual, etc.) for Operations.</summary>
     public DbSet<CmsAccessRequest> CmsAccessRequests { get; set; }
@@ -370,6 +375,22 @@ public partial class CompassDbContext : DbContext
     public DbSet<ServiceLineBusinessArea> ServiceLineBusinessAreas { get; set; }
     public DbSet<ServiceLineProduct> ServiceLineProducts { get; set; }
     public DbSet<ServiceLineProject> ServiceLineProjects { get; set; }
+
+    // Design Decision Records (DDR). Tables share the `ddr_` prefix per ddr.md §2.
+    public DbSet<Compass.Models.Ddr.DesignDecisionRecord> DesignDecisionRecords { get; set; } = default!;
+    public DbSet<Compass.Models.Ddr.DdrAlternative> DdrAlternatives { get; set; } = default!;
+    public DbSet<Compass.Models.Ddr.DdrEvidence> DdrEvidences { get; set; } = default!;
+    public DbSet<Compass.Models.Ddr.DdrProductLink> DdrProductLinks { get; set; } = default!;
+    public DbSet<Compass.Models.Ddr.DdrWorkItemLink> DdrWorkItemLinks { get; set; } = default!;
+    public DbSet<Compass.Models.Ddr.DdrStandardLink> DdrStandardLinks { get; set; } = default!;
+    public DbSet<Compass.Models.Ddr.DdrComponentPatternLink> DdrComponentPatternLinks { get; set; } = default!;
+    public DbSet<Compass.Models.Ddr.DdrRelatedRecord> DdrRelatedRecords { get; set; } = default!;
+    public DbSet<Compass.Models.Ddr.DdrComment> DdrComments { get; set; } = default!;
+    public DbSet<Compass.Models.Ddr.DdrInsightClassification> DdrInsightClassifications { get; set; } = default!;
+    public DbSet<Compass.Models.Ddr.DdrRecommendedFollowUp> DdrRecommendedFollowUps { get; set; } = default!;
+    public DbSet<Compass.Models.Ddr.DdrGitHubIssueLink> DdrGitHubIssueLinks { get; set; } = default!;
+    public DbSet<Compass.Models.Ddr.DdrAuditEvent> DdrAuditEvents { get; set; } = default!;
+    public DbSet<Compass.Models.Ddr.DdrFeatureSetting> DdrFeatureSettings { get; set; } = default!;
 
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
@@ -679,6 +700,15 @@ public partial class CompassDbContext : DbContext
             .WithMany()
             .HasForeignKey(m => m.BusinessAreaLookupId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<Compass.Models.Raid.RaidMonthlyReview>()
+            .HasIndex(x => new { x.RecordType, x.RecordId, x.ReviewYear, x.ReviewMonth })
+            .IsUnique();
+        modelBuilder.Entity<Compass.Models.Raid.RaidMonthlyReview>()
+            .HasOne(x => x.ReviewedByUser)
+            .WithMany()
+            .HasForeignKey(x => x.ReviewedByUserId)
+            .OnDelete(DeleteBehavior.Restrict);
 
         modelBuilder.Entity<DivisionUser>()
             .HasIndex(m => new { m.UserId, m.DivisionId })
@@ -1247,6 +1277,44 @@ public partial class CompassDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(x => x.BusinessAreaLookupId)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<NearMiss>(e =>
+        {
+            e.HasIndex(x => x.Reference).IsUnique();
+            e.Property(x => x.Reference).HasMaxLength(50).IsRequired();
+            e.Property(x => x.Impact).HasMaxLength(4000);
+        });
+
+        modelBuilder.Entity<NearMissOwner>(e =>
+        {
+            e.HasKey(x => new { x.NearMissId, x.UserId });
+            e.HasOne(x => x.NearMiss)
+                .WithMany(n => n.NearMissOwners)
+                .HasForeignKey(x => x.NearMissId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.User)
+                .WithMany()
+                .HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<NearMissAction>(e =>
+        {
+            e.Property(x => x.ActionText).HasMaxLength(4000).IsRequired();
+            e.HasOne(x => x.NearMiss)
+                .WithMany(n => n.NearMissActions)
+                .HasForeignKey(x => x.NearMissId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<NearMissMitigation>(e =>
+        {
+            e.Property(x => x.AssuranceTakenPlace).HasMaxLength(4000).IsRequired();
+            e.HasOne(x => x.NearMiss)
+                .WithMany(n => n.NearMissMitigations)
+                .HasForeignKey(x => x.NearMissId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<Issue>()
@@ -3420,6 +3488,170 @@ public partial class CompassDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(x => x.ProjectId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ----- Design Decision Records (DDR) -----
+        // ddr.md §2 mandates the `ddr_` prefix on every DDR table.
+        modelBuilder.Entity<Compass.Models.Ddr.DesignDecisionRecord>(e =>
+        {
+            e.ToTable("ddr_record");
+            e.HasIndex(x => x.Reference).IsUnique();
+            e.HasIndex(x => x.Status);
+            e.HasIndex(x => x.Category);
+            e.HasIndex(x => x.DeviationFlag);
+            e.HasIndex(x => x.ReviewDate);
+            e.HasIndex(x => x.CreatedAt);
+            // Long-form text columns must allow more than the project's default string length (450).
+            e.Property(x => x.ContextProblemStatement).HasColumnType("nvarchar(max)");
+            e.Property(x => x.Decision).HasColumnType("nvarchar(max)");
+            e.Property(x => x.Rationale).HasColumnType("nvarchar(max)");
+            e.Property(x => x.ConsequencesTradeoffs).HasColumnType("nvarchar(max)");
+            e.Property(x => x.DeviationDetails).HasColumnType("nvarchar(max)");
+            e.Property(x => x.RetrospectiveContext).HasColumnType("nvarchar(max)");
+            e.Property(x => x.CurrentValidityRationale).HasColumnType("nvarchar(max)");
+            e.Property(x => x.MessageToDesignOps).HasColumnType("nvarchar(max)");
+        });
+
+        modelBuilder.Entity<Compass.Models.Ddr.DdrAlternative>(e =>
+        {
+            e.ToTable("ddr_alternative");
+            e.HasIndex(x => x.DesignDecisionRecordId);
+            e.Property(x => x.AlternativeText).HasColumnType("nvarchar(max)");
+            e.Property(x => x.Outcome).HasColumnType("nvarchar(max)");
+            e.HasOne(x => x.DesignDecisionRecord)
+                .WithMany(r => r.Alternatives)
+                .HasForeignKey(x => x.DesignDecisionRecordId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<Compass.Models.Ddr.DdrEvidence>(e =>
+        {
+            e.ToTable("ddr_evidence");
+            e.HasIndex(x => x.DesignDecisionRecordId);
+            e.Property(x => x.EvidenceSummary).HasColumnType("nvarchar(max)");
+            e.HasOne(x => x.DesignDecisionRecord)
+                .WithMany(r => r.Evidence)
+                .HasForeignKey(x => x.DesignDecisionRecordId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<Compass.Models.Ddr.DdrProductLink>(e =>
+        {
+            e.ToTable("ddr_record_product_link");
+            e.HasIndex(x => new { x.DesignDecisionRecordId, x.FipsProductId }).IsUnique();
+            e.HasIndex(x => x.FipsProductId);
+            e.HasOne(x => x.DesignDecisionRecord)
+                .WithMany(r => r.ProductLinks)
+                .HasForeignKey(x => x.DesignDecisionRecordId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<Compass.Models.Ddr.DdrWorkItemLink>(e =>
+        {
+            e.ToTable("ddr_record_work_item_link");
+            e.HasIndex(x => new { x.DesignDecisionRecordId, x.WorkItemId }).IsUnique();
+            e.HasIndex(x => x.WorkItemId);
+            e.HasOne(x => x.DesignDecisionRecord)
+                .WithMany(r => r.WorkItemLinks)
+                .HasForeignKey(x => x.DesignDecisionRecordId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<Compass.Models.Ddr.DdrStandardLink>(e =>
+        {
+            e.ToTable("ddr_standard_link");
+            e.HasIndex(x => x.DesignDecisionRecordId);
+            e.HasOne(x => x.DesignDecisionRecord)
+                .WithMany(r => r.StandardLinks)
+                .HasForeignKey(x => x.DesignDecisionRecordId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<Compass.Models.Ddr.DdrComponentPatternLink>(e =>
+        {
+            e.ToTable("ddr_component_pattern_link");
+            e.HasIndex(x => x.DesignDecisionRecordId);
+            e.HasOne(x => x.DesignDecisionRecord)
+                .WithMany(r => r.ComponentPatternLinks)
+                .HasForeignKey(x => x.DesignDecisionRecordId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<Compass.Models.Ddr.DdrRelatedRecord>(e =>
+        {
+            e.ToTable("ddr_related_record");
+            e.HasIndex(x => x.DesignDecisionRecordId);
+            e.HasIndex(x => x.RelatedDesignDecisionRecordId);
+            e.HasOne(x => x.DesignDecisionRecord)
+                .WithMany(r => r.RelatedRecords)
+                .HasForeignKey(x => x.DesignDecisionRecordId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<Compass.Models.Ddr.DdrComment>(e =>
+        {
+            e.ToTable("ddr_comment");
+            e.HasIndex(x => x.DesignDecisionRecordId);
+            e.HasIndex(x => x.CreatedAt);
+            e.Property(x => x.CommentText).HasColumnType("nvarchar(max)");
+            e.HasOne(x => x.DesignDecisionRecord)
+                .WithMany(r => r.Comments)
+                .HasForeignKey(x => x.DesignDecisionRecordId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<Compass.Models.Ddr.DdrInsightClassification>(e =>
+        {
+            e.ToTable("ddr_insight_classification");
+            e.HasIndex(x => x.DesignDecisionRecordId);
+            e.HasIndex(x => x.Classification);
+            e.HasOne(x => x.DesignDecisionRecord)
+                .WithMany(r => r.InsightClassifications)
+                .HasForeignKey(x => x.DesignDecisionRecordId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<Compass.Models.Ddr.DdrRecommendedFollowUp>(e =>
+        {
+            e.ToTable("ddr_recommended_follow_up");
+            e.HasIndex(x => x.DesignDecisionRecordId);
+            e.HasIndex(x => x.Status);
+            e.Property(x => x.Notes).HasColumnType("nvarchar(max)");
+            e.HasOne(x => x.DesignDecisionRecord)
+                .WithMany(r => r.RecommendedFollowUps)
+                .HasForeignKey(x => x.DesignDecisionRecordId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<Compass.Models.Ddr.DdrGitHubIssueLink>(e =>
+        {
+            e.ToTable("ddr_github_issue_link");
+            e.HasIndex(x => x.DesignDecisionRecordId);
+            e.HasOne(x => x.DesignDecisionRecord)
+                .WithMany(r => r.GitHubIssueLinks)
+                .HasForeignKey(x => x.DesignDecisionRecordId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<Compass.Models.Ddr.DdrAuditEvent>(e =>
+        {
+            e.ToTable("ddr_audit_event");
+            e.HasIndex(x => x.DesignDecisionRecordId);
+            e.HasIndex(x => x.CreatedAt);
+            e.Property(x => x.PreviousValue).HasColumnType("nvarchar(max)");
+            e.Property(x => x.NewValue).HasColumnType("nvarchar(max)");
+            e.HasOne(x => x.DesignDecisionRecord)
+                .WithMany(r => r.AuditEvents)
+                .HasForeignKey(x => x.DesignDecisionRecordId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<Compass.Models.Ddr.DdrFeatureSetting>(e =>
+        {
+            e.ToTable("ddr_feature_setting");
+            e.HasIndex(x => x.SettingKey);
+            e.HasIndex(x => x.UpdatedAt);
+            e.Property(x => x.Reason).HasColumnType("nvarchar(max)");
         });
 
     }

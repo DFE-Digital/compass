@@ -2,6 +2,7 @@
 @using Compass.Models
 @using Compass.Models.Modern.Work
 @using Compass.ViewModels.Modern
+@using Microsoft.AspNetCore.Html
 @{
   ViewData["Title"] = "Edit assumption";
   var crit = ViewBag.AssumptionCriticalityOptions as IList<AssumptionCriticality> ?? new List<AssumptionCriticality>();
@@ -33,18 +34,18 @@
 }
 
 <div id="sc-raid-assumption-edit" class="modern-work-page">
-<p class="dfe-c-body dfe-c-mb-3">
+<p class="dfe-c-body govuk-!-margin-bottom-3">
   <a href="@Url.Action("AssumptionDetail", "ModernRaid", new { id = aid })" class="dfe-c-link">← Back to assumption</a>
 </p>
 
-<div class="dfe-c-page-title">
-  <div class="dfe-c-page-title__caption">RAID</div>
-  <h1 class="dfe-c-page-title__heading">Edit assumption</h1>
-  <p class="dfe-c-page-title__lede">Update this assumption and how it is scoped in the RAID register.</p>
-</div>
+@await Html.PartialAsync("~/Views/Modern/Shared/_ModernPageHeader.cshtml", new ModernPageHeaderViewModel {
+  Caption = "RAID",
+  Title = "Edit assumption",
+  Lede = new HtmlString("<p class=\"govuk-body govuk-!-margin-bottom-0\">Update this assumption and how it is scoped in the RAID register (work item, service register product, or organisation-wide).</p>")
+})
 
-<div class="dfe-c-form-layout">
-  <div class="dfe-c-form-layout__main">
+<div class="govuk-grid-row">
+  <div class="govuk-grid-column-three-quarters">
     <div class="dfe-c-card dfe-c-card--plain">
       <form method="post" novalidate action="@Url.Action("AssumptionEditPost", "ModernRaid", new { id = aid })">
         @Html.AntiForgeryToken()
@@ -96,16 +97,17 @@
 
             <div class="govuk-radios__item">
               <input class="govuk-radios__input" id="raid-asm-edit-assoc-product" name="AssociationKind" type="radio" value="product" data-aria-controls="raid-asm-edit-cond-product" @(assoc == "product" ? "checked" : null) />
-              <label class="govuk-label govuk-radios__label" for="raid-asm-edit-assoc-product">Product (FIPS)</label>
+              <label class="govuk-label govuk-radios__label" for="raid-asm-edit-assoc-product">Service register product</label>
             </div>
             <div class="govuk-radios__conditional@(assoc != "product" ? " govuk-radios__conditional--hidden" : null)" id="raid-asm-edit-cond-product">
               <div class="govuk-form-group govuk-!-margin-bottom-0@(productErr != null ? " govuk-form-group--error" : "")" id="@nameof(Model.PrimaryProductId)">
-                <label class="govuk-label" for="raid-asm-edit-product-select">FIPS product</label>
+                <label class="govuk-label" for="raid-asm-edit-product-select">Product</label>
+                <div id="raid-asm-edit-product-hint" class="govuk-hint">From the Operations service register (active services).</div>
                 @if (productErr != null)
                 {
                   <p class="govuk-error-message"><span class="govuk-visually-hidden">Error: </span>@productErr</p>
                 }
-                <select class="govuk-select govuk-!-width-full@(productErr != null ? " govuk-select--error" : "")" id="raid-asm-edit-product-select" name="@nameof(Model.PrimaryProductId)">
+                <select class="govuk-select govuk-!-width-full@(productErr != null ? " govuk-select--error" : "")" id="raid-asm-edit-product-select" name="@nameof(Model.PrimaryProductId)" aria-describedby="raid-asm-edit-product-hint">
                   <option value="">— Select —</option>
                   @foreach (var o in fp)
                   {
@@ -243,7 +245,7 @@
       </form>
     </div>
   </div>
-  <div class="dfe-c-form-layout__aside">
+  <div class="govuk-grid-column-one-quarter">
     @await Html.PartialAsync("~/Views/Modern/Raid/_RaidGuidanceAside.cshtml", "assumption")
   </div>
 </div>

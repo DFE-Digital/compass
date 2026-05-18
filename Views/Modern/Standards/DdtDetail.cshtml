@@ -1,5 +1,6 @@
 @model Compass.Models.DdtStandard
 @using Compass.Helpers
+@using Compass.ViewModels.Modern
 @using System.Text.Json
 @using System.Globalization
 @{
@@ -47,6 +48,8 @@
     if (approvedProducts.Any() || toleratedProducts.Any()) sections.Add(("products", "Products"));
     if (Model.Owners.Any() || Model.Contacts.Any()) sections.Add(("people", "People"));
     if (relatedStandards.Any()) sections.Add(("related", "Related standards"));
+
+    var contentsNavId = "ddt-detail-contents-nav";
 }
 
 @section Breadcrumbs {
@@ -56,52 +59,92 @@
  <li class="govuk-breadcrumbs__list-item" aria-current="page">@Model.Title</li>
 }
 
-<div id="sc-standards-ddt-detail">
+@{
+  var ddtCaption = $"Standards — DDT-{Model.Id}" + (!string.IsNullOrWhiteSpace(Model.LegacyReference) ? $" ({Model.LegacyReference})" : "");
+  var toolbar = ViewBag.Toolbar as DdtStandardDetailToolbarViewModel ?? new DdtStandardDetailToolbarViewModel { StandardId = Model.Id };
+  var headerActions = await Html.PartialAsync("_DdtDetailHeaderActions", toolbar);
+}
+@await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+  BackLinkHref = Url.Action("DdtStandards", "ModernStandards"),
+  BackLinkText = "Back to register",
+  Caption = ddtCaption,
+  Title = Model.Title,
+  Actions = headerActions
+})
 
- <div class="dfe-c-flex--between dfe-c-mb-3" style="flex-wrap:wrap;gap:1rem;align-items:flex-start;">
- <div class="dfe-c-page-title" style="margin:0;">
- <div class="dfe-c-page-title__caption">
-                Standards &mdash; DDT-@Model.Id
-                @if (!string.IsNullOrWhiteSpace(Model.LegacyReference))
-                {
- <span class="dfe-c-text-muted">(@Model.LegacyReference)</span>
-                }
-            </div>
- <h1 class="dfe-c-page-title__heading">@Model.Title</h1>
- <p class="dfe-c-page-title__lede">
- <span class="@StageBadgeClass(Model.Stage)">@StageBadgeLabel(Model.Stage)</span>
-                <span style="margin-left:0.5rem;">Version @Model.Version</span>
-            </p>
-        </div>
- <div class="dfe-c-flex" style="gap:0.5rem;flex-wrap:wrap;">
- <a href="@Url.Action("DdtStandards", "ModernStandards")" class="govuk-button govuk-button--secondary">Back to register</a>
-        </div>
+@if (TempData["SuccessMessage"] != null)
+{
+  <div class="govuk-notification-banner govuk-notification-banner--success govuk-!-margin-bottom-4" role="region">
+    <div class="govuk-notification-banner__header">
+      <h2 class="govuk-notification-banner__title">Success</h2>
     </div>
+    <div class="govuk-notification-banner__content">
+      <p class="govuk-notification-banner__heading">@TempData["SuccessMessage"]</p>
+    </div>
+  </div>
+}
+@if (TempData["ErrorMessage"] != null)
+{
+  <div class="govuk-error-summary govuk-!-margin-bottom-4" role="alert">
+    <h2 class="govuk-error-summary__title">There is a problem</h2>
+    <div class="govuk-error-summary__body"><p>@TempData["ErrorMessage"]</p></div>
+  </div>
+}
 
-    @if (Model.LegalStandard)
+@{
+  var workflow = ViewBag.Workflow as Compass.ViewModels.Modern.DdtStandardWorkflowContextViewModel;
+}
+@if (workflow != null && Model.Stage != "Published")
+{
+  @await Html.PartialAsync("_DdtWorkflowBanner", workflow)
+  @await Html.PartialAsync("_DdtWorkflowActions", workflow)
+}
+
+@if (Model.LegalStandard)
+{
+<div class="govuk-warning-text govuk-!-margin-bottom-6">
+  <span class="govuk-warning-text__icon" aria-hidden="true">!</span>
+  <strong class="govuk-warning-text__text">
+    <span class="govuk-visually-hidden">Warning</span>
+    Legal requirement — you are breaking the law if you do not meet this standard.
+    @if (!string.IsNullOrWhiteSpace(Model.LegalBasis))
     {
- <div class="dfe-c-banner dfe-c-banner--red dfe-c-mb-3">
-            <strong>Legal requirement</strong> &mdash; You are breaking the law if you do not meet this standard.
-            @if (!string.IsNullOrWhiteSpace(Model.LegalBasis))
-            {
- <span class="dfe-c-text-muted" style="margin-left:0.5rem;">See <a href="#legal-basis">legal basis</a> below.</span>
-            }
-        </div>
+      <span class="govuk-!-margin-left-2">See <a class="govuk-link govuk-link--no-visited-state" href="#legal-basis">legal basis</a> below.</span>
     }
+  </strong>
+</div>
+}
 
- <div class="dfe-c-section-nav dfe-c-mb-3" id="ddt-section-nav">
-        @foreach (var s in sections)
-        {
- <a href="#@s.Id" class="dfe-c-section-nav__link">@s.Label</a>
-        }
+<div class="ddt-standard-detail govuk-!-margin-top-2">
+  <div class="govuk-grid-row ddt-standard-detail-layout">
+    <div class="govuk-grid-column-one-quarter-from-desktop">
+      <div class="dfe-f-u-sticky govuk-!-margin-bottom-4" style="--dfe-f-sticky-top: 1rem;">
+        <nav class="dfe-f-side-navigation ddt-standard-detail-side-nav"
+                 aria-label="Page contents"
+                 data-module="dfe-f-side-navigation">
+                <button type="button"
+                        class="dfe-f-side-navigation__toggle"
+                        aria-controls="@contentsNavId"
+                        aria-expanded="false">Contents</button>
+                <ul id="@contentsNavId" class="dfe-f-side-navigation__list" hidden>
+                    @foreach (var s in sections)
+                    {
+                        <li class="dfe-f-side-navigation__item">
+                            <a class="dfe-f-side-navigation__link govuk-link govuk-link--no-visited-state govuk-link--no-underline"
+                               href="#@s.Id">@s.Label</a>
+                        </li>
+                    }
+                </ul>
+        </nav>
+      </div>
     </div>
+    <div class="govuk-grid-column-three-quarters-from-desktop ddt-standard-detail-main">
 
- <div class="dfe-c-grid dfe-c-grid--sidebar">
-        <div>
-
- <section id="overview" class="dfe-c-mb-4">
- <h2 class="dfe-c-section-heading">Overview</h2>
- <dl class="govuk-summary-list">
+      <section id="overview" class="ddt-standard-detail-section">
+        <div class="dfe-c-card dfe-c-card--plain ddt-standard-detail-section__card">
+          <h2 class="govuk-heading-m ddt-standard-detail-section__heading">Overview</h2>
+          <div class="ddt-standard-detail-section__body">
+            <dl class="govuk-summary-list">
  <div class="govuk-summary-list__row">
  <dt class="govuk-summary-list__key">Reference</dt>
  <dd class="govuk-summary-list__value">
@@ -114,7 +157,10 @@
                     </div>
  <div class="govuk-summary-list__row">
  <dt class="govuk-summary-list__key">Version</dt>
- <dd class="govuk-summary-list__value">@Model.Version</dd>
+ <dd class="govuk-summary-list__value">
+   @Model.Version
+   <a class="govuk-link govuk-!-margin-left-2 govuk-link--no-visited-state" href="@Url.Action("DdtHistory", "ModernStandards", new { id = Model.Id })">View history</a>
+ </dd>
                     </div>
  <div class="govuk-summary-list__row">
  <dt class="govuk-summary-list__key">Status</dt>
@@ -125,11 +171,13 @@
  <div class="govuk-summary-list__row">
  <dt class="govuk-summary-list__key">Categories</dt>
  <dd class="govuk-summary-list__value">
-                                @foreach (var cat in Model.Categories.OrderBy(c => c.Category.Name))
-                                {
- <span class="dfe-c-tag dfe-c-tag--grey" style="margin-right:0.25rem;margin-bottom:0.25rem;">@cat.Category.Name</span>
-                                }
-                            </dd>
+              <ul class="ddt-standard-detail__tag-list">
+                @foreach (var cat in Model.Categories.OrderBy(c => c.Category.Name))
+                {
+                  <li><span class="dfe-c-tag dfe-c-tag--grey">@cat.Category.Name</span></li>
+                }
+              </ul>
+            </dd>
                         </div>
                     }
                     @if (Model.SubCategories.Any())
@@ -139,7 +187,7 @@
  <dd class="govuk-summary-list__value">
                                 @foreach (var sc in Model.SubCategories.OrderBy(s => s.SubCategory.Name))
                                 {
-                                    <span style="margin-right:0.5rem;">@sc.SubCategory.Name</span>
+                                    <span class="govuk-!-margin-right-2">@sc.SubCategory.Name</span>
                                 }
                             </dd>
                         </div>
@@ -179,127 +227,154 @@
  <dd class="govuk-summary-list__value"><span class="dfe-c-tag dfe-c-tag--green">APPROVED</span></dd>
                         </div>
                     }
-                </dl>
-            </section>
+            </dl>
+          </div>
+        </div>
+      </section>
 
-            @if (!string.IsNullOrWhiteSpace(Model.Summary))
-            {
- <section id="summary" class="dfe-c-mb-4">
- <h2 class="dfe-c-section-heading">Summary</h2>
- <div class="dfe-c-prose">
-                        <p>@Model.Summary</p>
-                    </div>
-                </section>
-            }
+      @if (!string.IsNullOrWhiteSpace(Model.Summary))
+      {
+        <section id="summary" class="ddt-standard-detail-section">
+          <div class="dfe-c-card dfe-c-card--plain ddt-standard-detail-section__card">
+            <h2 class="govuk-heading-m ddt-standard-detail-section__heading">Summary</h2>
+            <div class="ddt-standard-detail-section__body">
+              <p class="govuk-body">@Model.Summary</p>
+            </div>
+          </div>
+        </section>
+      }
 
-            @if (!string.IsNullOrWhiteSpace(Model.Purpose))
-            {
- <section id="purpose" class="dfe-c-mb-4">
- <h2 class="dfe-c-section-heading">Purpose</h2>
- <div class="dfe-c-prose">
-                        @Html.Raw(MarkdownHelper.ToHtml(Model.Purpose))
-                    </div>
-                </section>
-            }
+      @if (!string.IsNullOrWhiteSpace(Model.Purpose))
+      {
+        <section id="purpose" class="ddt-standard-detail-section">
+          <div class="dfe-c-card dfe-c-card--plain ddt-standard-detail-section__card">
+            <h2 class="govuk-heading-m ddt-standard-detail-section__heading">Purpose</h2>
+            <div class="ddt-standard-detail-section__body ddt-standard-detail__prose">
+              @Html.Raw(MarkdownHelper.ToHtml(Model.Purpose))
+            </div>
+          </div>
+        </section>
+      }
 
-            @if (criteriaList.Any())
-            {
- <section id="criteria" class="dfe-c-mb-4">
- <h2 class="dfe-c-section-heading">Criteria</h2>
- <p class="dfe-c-body">You meet this standard when all the following are achieved:</p>
- <ol class="dfe-c-criteria-list">
-                        @for (var i = 0; i < criteriaList.Count; i++)
-                        {
- <li class="dfe-c-criteria-list__item">
- <span class="dfe-c-criteria-list__number">@(i + 1)</span>
- <span class="dfe-c-criteria-list__text">@criteriaList[i]</span>
-                            </li>
-                        }
-                    </ol>
-                </section>
-            }
+      @if (criteriaList.Any())
+      {
+        <section id="criteria" class="ddt-standard-detail-section">
+          <div class="dfe-c-card dfe-c-card--plain ddt-standard-detail-section__card">
+            <h2 class="govuk-heading-m ddt-standard-detail-section__heading">Criteria</h2>
+            <div class="ddt-standard-detail-section__body ddt-standard-detail__criteria">
+              <p class="govuk-body">You meet this standard when all the following are achieved:</p>
+              <ol class="govuk-list govuk-list--number">
+                @foreach (var item in criteriaList)
+                {
+                  <li>@item</li>
+                }
+              </ol>
+            </div>
+          </div>
+        </section>
+      }
 
-            @if (!string.IsNullOrWhiteSpace(Model.HowToMeet))
-            {
- <section id="how-to-meet" class="dfe-c-mb-4">
- <h2 class="dfe-c-section-heading">How to meet this standard</h2>
- <div class="dfe-c-prose">
-                        @Html.Raw(MarkdownHelper.ToHtml(Model.HowToMeet))
-                    </div>
-                </section>
-            }
+      @if (!string.IsNullOrWhiteSpace(Model.HowToMeet))
+      {
+        <section id="how-to-meet" class="ddt-standard-detail-section">
+          <div class="dfe-c-card dfe-c-card--plain ddt-standard-detail-section__card">
+            <h2 class="govuk-heading-m ddt-standard-detail-section__heading">How to meet this standard</h2>
+            <div class="ddt-standard-detail-section__body ddt-standard-detail__prose">
+              @Html.Raw(MarkdownHelper.ToHtml(Model.HowToMeet))
+            </div>
+          </div>
+        </section>
+      }
 
-            @if (!string.IsNullOrWhiteSpace(Model.Governance))
-            {
- <section id="governance" class="dfe-c-mb-4">
- <h2 class="dfe-c-section-heading">Governance</h2>
- <div class="dfe-c-prose">
-                        @Html.Raw(MarkdownHelper.ToHtml(Model.Governance))
-                    </div>
-                    @if (Model.GovernanceApproval)
-                    {
- <p class="dfe-c-mt-2"><span class="dfe-c-tag dfe-c-tag--green">GOVERNANCE APPROVED</span></p>
-                    }
-                </section>
-            }
+      @if (!string.IsNullOrWhiteSpace(Model.Governance))
+      {
+        <section id="governance" class="ddt-standard-detail-section">
+          <div class="dfe-c-card dfe-c-card--plain ddt-standard-detail-section__card">
+            <h2 class="govuk-heading-m ddt-standard-detail-section__heading">Governance</h2>
+            <div class="ddt-standard-detail-section__body ddt-standard-detail__prose">
+              @Html.Raw(MarkdownHelper.ToHtml(Model.Governance))
+              @if (Model.GovernanceApproval)
+              {
+                <p class="govuk-!-margin-top-4 govuk-!-margin-bottom-0"><span class="dfe-c-tag dfe-c-tag--green">Governance approved</span></p>
+              }
+            </div>
+          </div>
+        </section>
+      }
 
-            @if (!string.IsNullOrWhiteSpace(Model.LegalBasis))
-            {
- <section id="legal-basis" class="dfe-c-mb-4">
- <h2 class="dfe-c-section-heading">Legal basis</h2>
- <div class="dfe-c-prose">
-                        <p>@Model.LegalBasis</p>
-                    </div>
-                </section>
-            }
+      @if (!string.IsNullOrWhiteSpace(Model.LegalBasis))
+      {
+        <section id="legal-basis" class="ddt-standard-detail-section">
+          <div class="dfe-c-card dfe-c-card--plain ddt-standard-detail-section__card">
+            <h2 class="govuk-heading-m ddt-standard-detail-section__heading">Legal basis</h2>
+            <div class="ddt-standard-detail-section__body">
+              <p class="govuk-body">@Model.LegalBasis</p>
+            </div>
+          </div>
+        </section>
+      }
 
-            @if (!string.IsNullOrWhiteSpace(Model.RelatedGuidance))
-            {
- <section id="related-guidance" class="dfe-c-mb-4">
- <h2 class="dfe-c-section-heading">Related guidance</h2>
- <div class="dfe-c-prose">
-                        @Html.Raw(MarkdownHelper.ToHtml(Model.RelatedGuidance))
-                    </div>
-                </section>
-            }
+      @if (!string.IsNullOrWhiteSpace(Model.RelatedGuidance))
+      {
+        <section id="related-guidance" class="ddt-standard-detail-section">
+          <div class="dfe-c-card dfe-c-card--plain ddt-standard-detail-section__card">
+            <h2 class="govuk-heading-m ddt-standard-detail-section__heading">Related guidance</h2>
+            <div class="ddt-standard-detail-section__body ddt-standard-detail__prose">
+              @Html.Raw(MarkdownHelper.ToHtml(Model.RelatedGuidance))
+            </div>
+          </div>
+        </section>
+      }
 
-            @if (Model.Phases.Any())
-            {
- <section id="phases" class="dfe-c-mb-4">
- <h2 class="dfe-c-section-heading">Applicable phases</h2>
- <div class="dfe-c-flex" style="gap:0.5rem;flex-wrap:wrap;">
-                        @foreach (var phase in Model.Phases.OrderBy(p => p.PhaseLookup?.SortOrder ?? 0))
-                        {
- <span class="dfe-c-tag dfe-c-tag--blue">@(phase.PhaseLookup?.Name ?? "Phase")</span>
-                        }
-                    </div>
-                </section>
-            }
+      @if (Model.Phases.Any())
+      {
+        <section id="phases" class="ddt-standard-detail-section">
+          <div class="dfe-c-card dfe-c-card--plain ddt-standard-detail-section__card">
+            <h2 class="govuk-heading-m ddt-standard-detail-section__heading">Applicable phases</h2>
+            <div class="ddt-standard-detail-section__body">
+              <ul class="ddt-standard-detail__tag-list">
+                @foreach (var phase in Model.Phases.OrderBy(p => p.PhaseLookup?.SortOrder ?? 0))
+                {
+                  <li><span class="dfe-c-tag dfe-c-tag--blue">@(phase.PhaseLookup?.Name ?? "Phase")</span></li>
+                }
+              </ul>
+            </div>
+          </div>
+        </section>
+      }
 
-            @if (approvedProducts.Any() || toleratedProducts.Any())
-            {
- <section id="products" class="dfe-c-mb-4">
- <h2 class="dfe-c-section-heading">Products</h2>
-
-                    @if (approvedProducts.Any())
-                    {
- <h3 class="dfe-c-subsection-heading">Approved products</h3>
- <div class="dfe-c-table-wrap">
-                            <table>
-                                <thead>
-                                    <tr>
-                                        <th>Product</th>
-                                        <th>Provider</th>
-                                        <th>Description</th>
+      @if (approvedProducts.Any() || toleratedProducts.Any())
+      {
+        <section id="products" class="ddt-standard-detail-section">
+          <div class="dfe-c-card dfe-c-card--plain ddt-standard-detail-section__card">
+            <h2 class="govuk-heading-m ddt-standard-detail-section__heading">Products</h2>
+            <div class="ddt-standard-detail-section__body">
+              @if (approvedProducts.Any())
+              {
+                <h3 class="govuk-heading-s ddt-standard-detail-section__subheading">Approved products</h3>
+ <div class="dfe-f-table-wrapper govuk-!-margin-bottom-6" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+                            <table class="govuk-table">
+                                <thead class="govuk-table__head">
+                                    <tr class="govuk-table__row">
+                                        <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Product</button>
+        </th>
+                                        <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Provider</button>
+        </th>
+                                        <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Description</button>
+        </th>
                                     </tr>
                                 </thead>
-                                <tbody>
+                                <tbody class="govuk-table__body">
                                     @foreach (var p in approvedProducts)
                                     {
-                                        <tr>
-                                            <td>@p.Name</td>
-                                            <td>@(p.Provider ?? "—")</td>
-                                            <td>@(p.Description ?? "—")</td>
+                                        <tr class="govuk-table__row">
+                                            <td class="govuk-table__cell">@p.Name</td>
+                                            <td class="govuk-table__cell">@(p.Provider ?? "—")</td>
+                                            <td class="govuk-table__cell">@(p.Description ?? "—")</td>
                                         </tr>
                                     }
                                 </tbody>
@@ -307,43 +382,53 @@
                         </div>
                     }
 
-                    @if (toleratedProducts.Any())
-                    {
- <h3 class="dfe-c-subsection-heading">Tolerated products</h3>
- <div class="dfe-c-table-wrap">
-                            <table>
-                                <thead>
-                                    <tr>
-                                        <th>Product</th>
-                                        <th>Provider</th>
-                                        <th>Description</th>
+              @if (toleratedProducts.Any())
+              {
+                <h3 class="govuk-heading-s ddt-standard-detail-section__subheading">Tolerated products</h3>
+ <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+                            <table class="govuk-table">
+                                <thead class="govuk-table__head">
+                                    <tr class="govuk-table__row">
+                                        <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Product</button>
+        </th>
+                                        <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Provider</button>
+        </th>
+                                        <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Description</button>
+        </th>
                                     </tr>
                                 </thead>
-                                <tbody>
+                                <tbody class="govuk-table__body">
                                     @foreach (var p in toleratedProducts)
                                     {
-                                        <tr>
-                                            <td>@p.Name</td>
-                                            <td>@(p.Provider ?? "—")</td>
-                                            <td>@(p.Description ?? "—")</td>
+                                        <tr class="govuk-table__row">
+                                            <td class="govuk-table__cell">@p.Name</td>
+                                            <td class="govuk-table__cell">@(p.Provider ?? "—")</td>
+                                            <td class="govuk-table__cell">@(p.Description ?? "—")</td>
                                         </tr>
                                     }
                                 </tbody>
                             </table>
                         </div>
-                    }
-                </section>
-            }
+              }
+            </div>
+          </div>
+        </section>
+      }
 
-            @if (Model.Owners.Any() || Model.Contacts.Any())
-            {
- <section id="people" class="dfe-c-mb-4">
- <h2 class="dfe-c-section-heading">People</h2>
-
-                    @if (Model.Owners.Any())
-                    {
- <h3 class="dfe-c-subsection-heading">Owners</h3>
- <dl class="govuk-summary-list">
+      @if (Model.Owners.Any() || Model.Contacts.Any())
+      {
+        <section id="people" class="ddt-standard-detail-section">
+          <div class="dfe-c-card dfe-c-card--plain ddt-standard-detail-section__card">
+            <h2 class="govuk-heading-m ddt-standard-detail-section__heading">People</h2>
+            <div class="ddt-standard-detail-section__body">
+              @if (Model.Owners.Any())
+              {
+                <h3 class="govuk-heading-s ddt-standard-detail-section__subheading">Owners</h3>
+                <dl class="govuk-summary-list govuk-!-margin-bottom-4">
                             @foreach (var owner in Model.Owners.Where(o => o.User != null))
                             {
  <div class="govuk-summary-list__row">
@@ -354,10 +439,10 @@
                         </dl>
                     }
 
-                    @if (Model.Contacts.Any())
-                    {
- <h3 class="dfe-c-subsection-heading">Contacts</h3>
- <dl class="govuk-summary-list">
+              @if (Model.Contacts.Any())
+              {
+                <h3 class="govuk-heading-s ddt-standard-detail-section__subheading">Contacts</h3>
+                <dl class="govuk-summary-list govuk-!-margin-bottom-0">
                             @foreach (var contact in Model.Contacts.Where(c => c.User != null))
                             {
  <div class="govuk-summary-list__row">
@@ -365,193 +450,71 @@
  <dd class="govuk-summary-list__value">@(contact.User.Email ?? "—")</dd>
                                 </div>
                             }
-                        </dl>
-                    }
-                </section>
-            }
-        </div>
-
-        <aside>
-            @if (relatedStandards.Any())
-            {
- <section id="related" class="dfe-c-mb-4">
- <h3 class="dfe-c-sidebar-heading">Related standards</h3>
- <ul class="dfe-c-sidebar-list">
-                        @foreach (var rs in relatedStandards)
-                        {
-                            <li>
-                                <a href="@Url.Action("DdtDetail", "ModernStandards", new { id = rs.Id })">@rs.Title</a>
- <span class="dfe-c-text-muted dfe-c-text-small">v@(rs.Version)</span>
-                            </li>
-                        }
-                    </ul>
-                </section>
-            }
-
- <section class="dfe-c-mb-4">
- <h3 class="dfe-c-sidebar-heading">Details</h3>
- <dl class="dfe-c-sidebar-dl">
-                    <dt>Created</dt>
-                    <dd>@Model.DraftCreated.ToString("d MMMM yyyy", culture)</dd>
-                    @if (Model.CreatorUser != null)
-                    {
-                        <dt>Created by</dt>
-                        <dd>@Model.CreatorUser.Name</dd>
-                    }
-                    <dt>Last updated</dt>
-                    <dd>@Model.UpdatedAt.ToString("d MMMM yyyy", culture)</dd>
-                    @if (!string.IsNullOrWhiteSpace(Model.StandardUuid))
-                    {
-                        <dt>UUID</dt>
- <dd class="dfe-c-text-small dfe-c-text-muted" style="word-break:break-all;">@Model.StandardUuid</dd>
-                    }
                 </dl>
-            </section>
-        </aside>
+              }
+            </div>
+          </div>
+        </section>
+      }
+
+      @if (relatedStandards.Any())
+      {
+        <section id="related" class="ddt-standard-detail-section">
+          <div class="dfe-c-card dfe-c-card--plain ddt-standard-detail-section__card">
+            <h2 class="govuk-heading-m ddt-standard-detail-section__heading">Related standards</h2>
+            <div class="ddt-standard-detail-section__body">
+              <ul class="govuk-list ddt-standard-detail__related-list">
+                @foreach (var rs in relatedStandards)
+                {
+                  <li>
+                    <a href="@Url.Action("DdtDetail", "ModernStandards", new { id = rs.Id })" class="govuk-link govuk-!-font-weight-bold govuk-link--no-visited-state">@rs.Title</a>
+                    <span class="dfe-c-text-muted govuk-body-s"> v@(rs.Version)</span>
+                  </li>
+                }
+              </ul>
+            </div>
+          </div>
+        </section>
+      }
     </div>
+  </div>
 </div>
 
-<style>
-    .dfe-c-criteria-list {
-        list-style: none;
-        padding: 0;
-        margin: 0;
-        counter-reset: none;
-    }
-    .dfe-c-criteria-list__item {
-        display: flex;
-        gap: 0.75rem;
-        padding: 0.75rem 0;
-        border-bottom: 1px solid #b1b4b6;
-        align-items: flex-start;
-    }
-    .dfe-c-criteria-list__item:last-child {
-        border-bottom: none;
-    }
-    .dfe-c-criteria-list__number {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: 2rem;
-        height: 2rem;
-        border-radius: 50%;
-        background: #1d70b8;
-        color: #fff;
-        font-weight: 700;
-        font-size: 0.875rem;
-        flex-shrink: 0;
-    }
-    .dfe-c-criteria-list__text {
-        flex: 1;
-        padding-top: 0.25rem;
-    }
-    .dfe-c-section-nav {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.25rem 0;
-        border-bottom: 2px solid #b1b4b6;
-        padding-bottom: 0;
-    }
-    .dfe-c-section-nav__link {
-        display: inline-block;
-        padding: 0.5rem 1rem;
-        font-size: 0.875rem;
-        color: #1d70b8;
-        text-decoration: none;
-        border-bottom: 3px solid transparent;
-        margin-bottom: -2px;
-    }
-    .dfe-c-section-nav__link:hover {
-        color: #003078;
-        border-bottom-color: #003078;
-    }
-    .dfe-c-grid--sidebar {
-        display: grid;
-        grid-template-columns: 1fr 280px;
-        gap: 2rem;
-    }
-    @@media (max-width: 768px) {
-        .dfe-c-grid--sidebar {
-            grid-template-columns: 1fr;
-        }
-    }
-    .dfe-c-section-heading {
-        font-size: 1.5rem;
-        font-weight: 700;
-        margin: 0 0 1rem 0;
-        padding-bottom: 0.5rem;
-        border-bottom: 2px solid #1d70b8;
-    }
-    .dfe-c-subsection-heading {
-        font-size: 1.125rem;
-        font-weight: 700;
-        margin: 1rem 0 0.75rem 0;
-        color: #0b0c0c;
-    }
-    .dfe-c-prose {
-        line-height: 1.6;
-    }
-    .dfe-c-prose p {
-        margin: 0 0 1rem 0;
-    }
-    .dfe-c-prose ul,
-    .dfe-c-prose ol {
-        margin: 0 0 1rem 0;
-        padding-left: 1.25rem;
-    }
-    .dfe-c-prose li {
-        margin-bottom: 0.25rem;
-    }
-    .dfe-c-sidebar-heading {
-        font-size: 1rem;
-        font-weight: 700;
-        margin: 0 0 0.75rem 0;
-        padding-bottom: 0.5rem;
-        border-bottom: 2px solid #b1b4b6;
-    }
-    .dfe-c-sidebar-list {
-        list-style: none;
-        padding: 0;
-        margin: 0;
-    }
-    .dfe-c-sidebar-list li {
-        padding: 0.5rem 0;
-        border-bottom: 1px solid #f3f2f1;
-    }
-    .dfe-c-sidebar-list li:last-child {
-        border-bottom: none;
-    }
-    .dfe-c-sidebar-list a {
-        font-size: 0.9375rem;
-        text-decoration: underline;
-        color: #1d70b8;
-    }
-    .dfe-c-sidebar-dl {
-        margin: 0;
-    }
-    .dfe-c-sidebar-dl dt {
-        font-size: 0.875rem;
-        font-weight: 700;
-        color: #505a5f;
-        margin: 0.75rem 0 0.125rem 0;
-    }
-    .dfe-c-sidebar-dl dt:first-child {
-        margin-top: 0;
-    }
-    .dfe-c-sidebar-dl dd {
-        margin: 0 0 0.25rem 0;
-        font-size: 0.9375rem;
-    }
-    .dfe-c-banner {
-        padding: 0.75rem 1rem;
-        border-left: 4px solid;
-    }
-    .dfe-c-banner--red {
-        border-left-color: #d4351c;
-        background: #fef7f5;
-        color: #942514;
-    }
-    .dfe-c-text-small {
-        font-size: 0.8125rem;
-    }
-</style>
+<dialog id="ddt-edit-denied-modal"
+        class="dfe-f-modal govuk-!-margin-0"
+        data-module="dfe-f-modal"
+        aria-labelledby="ddt-edit-denied-title"
+        aria-describedby="ddt-edit-denied-description"
+        aria-modal="true">
+  <div class="dfe-f-modal__panel">
+    <header class="dfe-f-modal__header">
+      <h2 id="ddt-edit-denied-title" class="govuk-heading-m dfe-f-modal__title">You cannot edit this standard</h2>
+      <button type="button" class="dfe-f-modal__close" data-dfe-modal-close aria-label="Close"><span class="dfe-f-modal__close-x" aria-hidden="true">×</span></button>
+    </header>
+    <div class="dfe-f-modal__body" id="ddt-edit-denied-description">
+      <p class="govuk-body">
+        You are not a named owner or contact on the standard, or a member of the standards forum — you cannot edit the standard.
+        Contact <strong>@toolbar.OwnerContactDisplay</strong> to make changes.
+      </p>
+    </div>
+    <footer class="dfe-f-modal__footer">
+      <button type="button" class="govuk-button govuk-button--secondary" data-dfe-modal-close>Close</button>
+    </footer>
+  </div>
+</dialog>
+
+@section Scripts {
+<script>
+  (function () {
+    var btn = document.getElementById('ddt-edit-no-access');
+    var dialog = document.getElementById('ddt-edit-denied-modal');
+    if (!btn || !dialog) return;
+    btn.addEventListener('click', function () {
+      if (typeof dialog.showModal === 'function') dialog.showModal();
+    });
+    dialog.querySelectorAll('[data-dfe-modal-close]').forEach(function (el) {
+      el.addEventListener('click', function () { dialog.close(); });
+    });
+  })();
+</script>
+}

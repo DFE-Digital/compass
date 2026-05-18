@@ -1,0 +1,53 @@
+@model Compass.ViewModels.Modern.RaidReviewPreviousMonthViewModel
+@using System.Globalization
+@{
+  var enGb = CultureInfo.GetCultureInfo("en-GB");
+}
+<section class="raid-review-previous" aria-labelledby="raid-review-previous-heading">
+  <h4 class="govuk-heading-s govuk-!-margin-bottom-2" id="raid-review-previous-heading">@Model.PreviousMonthLabel review</h4>
+
+  @if (!Model.HadReview)
+  {
+    <p class="govuk-body govuk-hint govuk-!-margin-bottom-0">This item was not marked as reviewed in @Model.PreviousMonthLabel.</p>
+  }
+  else if (string.IsNullOrWhiteSpace(Model.MonthlyComment))
+  {
+    <p class="govuk-body govuk-hint govuk-!-margin-bottom-0">
+      Reviewed
+      @if (Model.ReviewedAtUtc.HasValue)
+      {
+        <text>on @Model.ReviewedAtUtc.Value.ToString("d MMMM yyyy", enGb)</text>
+      }
+      @if (!string.IsNullOrWhiteSpace(Model.ReviewerDisplay))
+      {
+        <text> by @Model.ReviewerDisplay</text>
+      }
+      <text>, but no comment was recorded.</text>
+    </p>
+  }
+  else
+  {
+    <div class="raid-review-previous__comment">
+      @if (Model.ReviewedAtUtc.HasValue || !string.IsNullOrWhiteSpace(Model.ReviewerDisplay))
+      {
+        <p class="govuk-body-s govuk-!-margin-bottom-2 raid-review-previous__meta">
+          @if (Model.ReviewedAtUtc.HasValue)
+          {
+            <span>@Model.ReviewedAtUtc.Value.ToString("d MMMM yyyy", enGb)</span>
+          }
+          @if (!string.IsNullOrWhiteSpace(Model.ReviewerDisplay))
+          {
+            <span> · @Model.ReviewerDisplay</span>
+          }
+        </p>
+      }
+      <p class="govuk-body govuk-!-margin-bottom-0">@Model.MonthlyComment</p>
+    </div>
+  }
+
+  @if (!string.IsNullOrWhiteSpace(Model.ChangesSincePreviousReview))
+  {
+    <h4 class="govuk-heading-s govuk-!-margin-top-4 govuk-!-margin-bottom-2">Changes since then</h4>
+    <p class="govuk-body govuk-!-margin-bottom-0">@Model.ChangesSincePreviousReview</p>
+  }
+</section>

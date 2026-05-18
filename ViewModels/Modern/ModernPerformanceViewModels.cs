@@ -19,6 +19,17 @@ public class ModernPerformanceCommissionListRow
     public bool IsNotYetOpen { get; set; }
 }
 
+/// <summary>Product scope tabs on commission detail, submit, submission, and bulk flows (mine / business area / directorate / all).</summary>
+public class PerformanceCommissionScopeNavViewModel
+{
+    public int CommissionId { get; set; }
+    /// <summary>mine | businessarea | directorate | all</summary>
+    public string Tab { get; set; } = "mine";
+    public string? BusinessArea { get; set; }
+    public string? Directorate { get; set; }
+    public string? Search { get; set; }
+}
+
 public class ModernPerformanceCommissionDetailViewModel
 {
     public Commission Commission { get; set; } = new();

@@ -348,8 +348,10 @@ document.addEventListener('DOMContentLoaded', function () {
   var SUBNAV_MAP = {
     'demand': 'subnav-demand',
     'work': 'subnav-work',
+    'raid': 'subnav-raid',
     'products-services': 'subnav-products-services',
     'performance': 'subnav-performance',
+    'manage': 'subnav-manage',
     'operations': 'subnav-operations',
     'risks': 'subnav-risks',
     'standards': 'subnav-standards',
@@ -361,25 +363,35 @@ document.addEventListener('DOMContentLoaded', function () {
   };
 
   function showSubnav(group) {
-    document.querySelectorAll('.sub-nav').forEach(function (n) {
-      n.classList.remove('visible');
+    document.querySelectorAll('.dfe-f-sub-navigation.dfe-c-sub-nav').forEach(function (n) {
+      n.classList.remove('dfe-c-sub-nav--visible');
     });
     var subId = SUBNAV_MAP[group];
     if (subId) {
       var subEl = document.getElementById(subId);
-      if (subEl) subEl.classList.add('visible');
+      if (subEl) subEl.classList.add('dfe-c-sub-nav--visible');
     }
-    document.querySelectorAll('.dfe-c-service-nav__link').forEach(function (a) {
-      a.classList.toggle('active', a.getAttribute('data-nav') === group);
+    document.querySelectorAll('.dfe-f-header__service-nav a[data-nav]').forEach(function (a) {
+      var match = a.getAttribute('data-nav') === group;
+      if (match) {
+        a.setAttribute('aria-current', 'page');
+      } else {
+        a.removeAttribute('aria-current');
+      }
     });
   }
 
   function setSubNavActive(subId) {
     if (!subId) return;
-    document.querySelectorAll('.sub-nav__link').forEach(function (a) {
+    document.querySelectorAll('.dfe-f-sub-navigation__link[data-sub]').forEach(function (a) {
       var dataSub = (a.getAttribute('data-sub') || '').trim();
       var ids = dataSub ? dataSub.split(/\s+/).filter(Boolean) : [];
-      a.classList.toggle('active', ids.indexOf(subId) !== -1);
+      var match = ids.indexOf(subId) !== -1;
+      if (match) {
+        a.setAttribute('aria-current', 'page');
+      } else {
+        a.removeAttribute('aria-current');
+      }
     });
   }
 
@@ -708,12 +720,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
 // Modern work item detail: tab panels + URL hash (tabs are <a href="...#wd-…">; hashchange alone is unreliable in some cases)
 (function () {
-  var WD_ALL_PANES = ['wd-overview', 'wd-updates', 'wd-risks', 'wd-milestones', 'wd-contacts', 'wd-governance', 'wd-dependencies', 'wd-links', 'wd-audit'];
-  var WD_MORE_TABS = ['wd-links', 'wd-audit'];
-  var WD_MORE_LABELS = { 'wd-links': 'Linked records', 'wd-audit': 'Audit trail' };
+  var WD_ALL_PANES = ['wd-overview', 'wd-updates', 'wd-risks', 'wd-issues', 'wd-milestones', 'wd-contacts', 'wd-strategic-alignment', 'wd-dependencies', 'wd-assumptions'];
 
   function isWorkDetailPage() {
-    return !!document.querySelector('.tabs.wd-tabs');
+    return !!document.querySelector('.wd-work-detail-tabs');
   }
 
   /** Click targets can be a Text node (no .closest); resolve to an Element. */
@@ -860,37 +870,33 @@ document.addEventListener('DOMContentLoaded', function () {
     });
     pane.classList.add('on');
 
-    var primaryTabIds = ['wd-tab-overview', 'wd-tab-updates', 'wd-tab-risks', 'wd-tab-milestones', 'wd-tab-contacts', 'wd-tab-governance', 'wd-tab-dependencies'];
-    primaryTabIds.forEach(function (id) {
-      var t = document.getElementById(id);
-      if (t) t.classList.remove('on');
-    });
-
-    var moreBtn = document.getElementById('wd-more-btn');
-    var moreLabel = document.getElementById('wd-more-active-label');
-    var moreName = document.getElementById('wd-more-active-name');
-
-    if (moreBtn) moreBtn.classList.remove('on');
-    if (moreLabel) moreLabel.style.display = 'none';
-
-    if (WD_MORE_TABS.indexOf(panelId) >= 0 && moreBtn) {
-      moreBtn.classList.add('on');
-      if (moreLabel) moreLabel.style.display = 'inline';
-      if (moreName) moreName.textContent = WD_MORE_LABELS[panelId] || '';
-      WD_MORE_TABS.forEach(function (id) {
-        var suffix = id.replace('wd-', '');
-        var a = document.getElementById('wd-tab-' + suffix);
-        if (a) a.style.background = id === panelId ? '#e8f0f6' : '';
+    var nav = document.querySelector('.wd-work-detail-tabs');
+    if (nav) {
+      nav.querySelectorAll('.dfe-f-side-navigation__item--current').forEach(function (li) {
+        li.classList.remove('dfe-f-side-navigation__item--current');
       });
-    } else {
-      var primaryBtn = document.getElementById('wd-tab-' + panelId.replace('wd-', ''));
-      if (primaryBtn) primaryBtn.classList.add('on');
-      WD_MORE_TABS.forEach(function (id) {
-        var suffix = id.replace('wd-', '');
-        var a = document.getElementById('wd-tab-' + suffix);
-        if (a) a.style.background = '';
+      nav.querySelectorAll('.dfe-f-sub-navigation__item--active').forEach(function (li) {
+        li.classList.remove('dfe-f-sub-navigation__item--active');
       });
     }
+
+    var suffix = panelId.replace('wd-', '');
+    var tabLink = document.getElementById('wd-tab-' + suffix);
+    if (tabLink && nav) {
+      var li = tabLink.closest('.dfe-f-side-navigation__item') || tabLink.closest('.dfe-f-sub-navigation__item');
+      if (li) {
+        if (li.classList.contains('dfe-f-side-navigation__item')) {
+          li.classList.add('dfe-f-side-navigation__item--current');
+        } else {
+          li.classList.add('dfe-f-sub-navigation__item--active');
+        }
+      }
+    }
+
+    var moreBtn = document.getElementById('wd-more-btn');
+    if (moreBtn) moreBtn.classList.remove('on');
+    var moreLabel = document.getElementById('wd-more-active-label');
+    if (moreLabel) moreLabel.style.display = 'none';
 
     setWdMoreOpen(false);
   }
@@ -898,6 +904,12 @@ document.addEventListener('DOMContentLoaded', function () {
   function applyHashFromLocation() {
     if (!isWorkDetailPage()) return;
     var raw = (window.location.hash || '').replace(/^#/, '').trim();
+    if (raw === 'wd-governance') {
+      raw = 'wd-strategic-alignment';
+      try {
+        history.replaceState(null, '', '#' + raw);
+      } catch (e) { /* ignore */ }
+    }
     var panelId = raw && WD_ALL_PANES.indexOf(raw) >= 0 ? raw : 'wd-overview';
     syncWorkDetailTab(panelId);
   }
@@ -920,11 +932,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   document.addEventListener('click', function (e) {
     var el = wdEventElement(e);
-    // Risks / Issues sub-tabs on work detail (#ri-tabs-bar) — not primary section navigation.
-    if (el && el.closest && el.closest('#ri-tabs-bar')) return;
-    // Milestone sub-tabs (In progress / Complete) — server-roundtrip links, not JS tabs.
-    if (el && el.closest && el.closest('#milestone-tabs-bar')) return;
-    // Use the innermost <a> that received the click — not closest ancestor with "#" in href.
+    var a = el && el.closest && el.closest('a[href]');
     // Otherwise a tab link (…#wd-risks) above in the tree could steal clicks meant for real navigations.
     var a = el && el.closest && el.closest('a[href]');
     if (!a || !isWorkDetailPage()) return;

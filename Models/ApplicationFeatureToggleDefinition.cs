@@ -35,6 +35,18 @@ public sealed record ApplicationFeatureToggleDefinition(
                 Label: "FIPS service register",
                 Hint: "When On, Service register and FIPS admin configuration use the **synced database** (CMDB products in Compass). When Off, that area is disabled and FIPS product data should be taken from the **CMS** (Strapi).",
                 DefaultEnabled: true),
+            new(
+                Code: FeatureCodes.Raid,
+                Name: "RAID",
+                Label: "RAID",
+                Hint: "RAID area (/modern/raid), the Risks & Issues tab on work items, RAID panes on products (Service register and Operations), Operations RAID escalations, and the Reporting → RAID intelligence area.",
+                DefaultEnabled: true),
+            new(
+                Code: FeatureCodes.Ddr,
+                Name: "Design Decision Records",
+                Label: "Design Decision Records (DDRs)",
+                Hint: "DDR area (/modern/design-decision-records), DDR panels on FIPS products and work items, the Reporting → Design decision records area, and the DesignOps oversight queue. Default Off — turn on for teams piloting DDRs.",
+                DefaultEnabled: false),
         };
 
     public static HashSet<string> AllowedCodes { get; } =

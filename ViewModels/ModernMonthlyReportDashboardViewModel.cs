@@ -92,6 +92,23 @@ public class ModernMonthlyReportDashboardViewModel
 
     /// <summary>When not filtered, platform <see cref="AissPlatformSummary.IssueCriteria"/>; when filtered to one BA, that row’s <see cref="AissByBusinessAreaRow.IssueCriteria"/>.</summary>
     public AissIssueCriteriaBlock? AccessibilityIssueCriteria { get; set; }
+
+    public MonthlyReportRaidSummary RaidSummary { get; set; } = new();
+
+    public MonthlyReportIntelligence Intelligence { get; set; } = new();
+}
+
+/// <summary>Open RAID counts for the monthly report, scoped to the same BA/directorate filters as the page.</summary>
+public class MonthlyReportRaidSummary
+{
+    public int OpenRisks { get; set; }
+    public int OpenIssues { get; set; }
+    public int OpenNearMisses { get; set; }
+    public int HighRisks { get; set; }
+    public int RisksReviewOverdue { get; set; }
+    public int OpenCriticalIssues { get; set; }
+
+    public int TotalOpen => OpenRisks + OpenIssues + OpenNearMisses;
 }
 
 /// <summary>Per–business-area monthly return progress for the selected period.</summary>
@@ -151,6 +168,12 @@ public class BusinessAreaProjectItem
 {
     public int Id { get; set; }
     public string Title { get; set; } = "";
+    /// <summary>Short description — typically the work item aim.</summary>
+    public string? Summary { get; set; }
+    public string? PathToGreen { get; set; }
+    public string? RagJustification { get; set; }
+    /// <summary>Latest submitted monthly return narrative text.</summary>
+    public string? LatestMonthlyUpdateNarrative { get; set; }
     public string Rag { get; set; } = "";
     public string Priority { get; set; } = "";
     public bool SubmittedUpdate { get; set; }

@@ -1,0 +1,57 @@
+@model Compass.ViewModels.ModernRaidReportingViewModel
+@{
+  var m = Model;
+  var raidMxLikLabels = new[] { "Very unlikely", "Unlikely", "Possible", "Likely", "Very likely" };
+  var raidMxImpLabels = new[] { "Negligible", "Marginal", "Moderate", "Critical", "Crisis" };
+  int Cell(int impact, int likelihood) => m.RiskLikelihoodImpactGrid[5 - likelihood][impact - 1];
+  string Tone(int impact, int likelihood)
+  {
+    var c = Cell(impact, likelihood);
+    if (c == 0) return "z";
+    var score = impact * likelihood;
+    if (score >= 20) return "r";
+    if (score >= 15) return "ar";
+    if (score >= 8) return "ag";
+    return "g";
+  }
+  string Bg(string t) => t switch { "z" => "#f3f2f1", "r" => "#c00", "ar" => "#e0761e", "ag" => "#f5e6c8", _ => "#dceedd" };
+  string Fg(string t) => t == "z" ? "#b1b4b6" : (t is "r" or "ar") ? "#fff" : "#0b0c0c";
+}
+<div class="raid-matrix-scroll">
+  <table class="govuk-table raid-report-risk-matrix" aria-label="Open risk counts by impact and likelihood">
+    <caption class="govuk-visually-hidden">Open risks by impact and likelihood</caption>
+    <thead class="govuk-table__head">
+      <tr class="govuk-table__row">
+        <th class="raid-matrix-corner" scope="col">Impact ↓ / Likelihood →</th>
+        @for (var lh = 0; lh < 5; lh++) { <th class="raid-matrix-metric" scope="col" style="text-align:center;">@raidMxLikLabels[lh]</th> }
+        <th class="raid-matrix-metric raid-matrix-metric--total" scope="col" style="text-align:center;">Total</th>
+      </tr>
+    </thead>
+    <tbody class="govuk-table__body">
+      @{ var colSum = new int[5]; }
+      @for (var impactIdx = 0; impactIdx < 5; impactIdx++)
+      {
+        var impactRating = 5 - impactIdx;
+        var rowSum = 0;
+        <tr class="govuk-table__row">
+          <th class="raid-matrix-corner" scope="row" style="background:var(--grey-1);">@raidMxImpLabels[impactRating - 1]</th>
+          @for (var colIdx = 0; colIdx < 5; colIdx++)
+          {
+            var likRating = colIdx + 1;
+            var c = Cell(impactRating, likRating);
+            colSum[colIdx] += c;
+            rowSum += c;
+            var ton = Tone(impactRating, likRating);
+            <td class="raid-matrix-metric" style="text-align:center;background:@Bg(ton);color:@Fg(ton);">@(c == 0 ? "—" : c.ToString())</td>
+          }
+          <td class="raid-matrix-metric raid-matrix-metric--total" style="text-align:center;background:#f4f4f4;"><strong>@rowSum</strong></td>
+        </tr>
+      }
+      <tr class="govuk-table__row">
+        <th class="raid-matrix-corner" scope="row" style="background:var(--grey-1);">Total</th>
+        @for (var ii = 0; ii < 5; ii++) { <td class="raid-matrix-metric raid-matrix-metric--total" style="text-align:center;background:#f4f4f4;"><strong>@colSum[ii]</strong></td> }
+        <td class="raid-matrix-metric raid-matrix-metric--total" style="text-align:center;background:#e8e8e8;"><strong>@m.RiskMatrixTotal</strong></td>
+      </tr>
+    </tbody>
+  </table>
+</div>

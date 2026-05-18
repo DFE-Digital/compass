@@ -35,6 +35,9 @@ public sealed class ModernRaidCreateAssumptionForm
 
     /// <summary>Multiple business areas from admin lookup (checkboxes).</summary>
     public List<int> BusinessAreaLookupIds { get; set; } = new();
+
+    /// <summary>When set, successful create redirects back to this work item’s Assumptions tab.</summary>
+    public int? ReturnToWorkItemId { get; set; }
 }
 
 public sealed class ModernRaidRiskEditorForm
@@ -111,6 +114,31 @@ public sealed class IssueAssuranceItemForm
 
     /// <summary>Decision taken or expected.</summary>
     public string? DecisionSummary { get; set; }
+}
+
+/// <summary>Create an issue from an existing risk (materialisation).</summary>
+public sealed class ModernRaidMakeIssueFromRiskForm
+{
+    public int RiskId { get; set; }
+
+    /// <summary><c>close</c> marks the risk materialised/closed; <c>keep_open</c> leaves the risk open.</summary>
+    public string RiskAfterIssue { get; set; } = "close";
+
+    public string? MaterialisationNote { get; set; }
+}
+
+public sealed class ModernRaidMakeIssueFromRiskPageVm
+{
+    public int RiskId { get; set; }
+    public string RiskReference { get; init; } = "";
+    public string Title { get; init; } = "";
+    public string? Description { get; init; }
+    public string? Cause { get; init; }
+    public string? ImpactIfRealised { get; init; }
+    public bool RiskIsClosed { get; init; }
+    public bool HasExistingMaterialisedIssue { get; init; }
+    public int? ExistingIssueId { get; init; }
+    public string? ExistingIssueReference { get; init; }
 }
 
 public sealed class ModernRaidIssueEditorForm
@@ -232,6 +260,37 @@ public sealed record RiskLinkedIssueCardVm(
     DateTime UpdatedAt,
     string LinkRelationship);
 
+/// <summary>Read-only risk context for Operations edit (<c>ViewBag.OperationsRiskSummary</c>).</summary>
+public sealed class OperationsRiskEditorSummaryVm
+{
+    public string Reference { get; init; } = "";
+    public string Title { get; init; } = "";
+    public string? TierName { get; init; }
+    public string? StatusLabel { get; init; }
+    public int RiskScore { get; init; }
+    public string InherentLabel { get; init; } = "—";
+}
+
+/// <summary>When set on <see cref="Microsoft.AspNetCore.Mvc.Controller.ViewBag"/>, <c>RiskEditor.cshtml</c> posts to the work log-risk action and hides association controls.</summary>
+public sealed class RaidRiskEditorWorkItemContext
+{
+    public required int ProjectId { get; init; }
+    public required string WorkTitle { get; init; }
+    public required string FormPostAction { get; init; }
+    public required string CancelUrl { get; init; }
+    public required string WorkDetailUrl { get; init; }
+}
+
+/// <summary>When set on <see cref="Microsoft.AspNetCore.Mvc.Controller.ViewBag"/>, <c>IssueEditor.cshtml</c> posts to the work log-issue action and hides association controls.</summary>
+public sealed class RaidIssueEditorWorkItemContext
+{
+    public required int ProjectId { get; init; }
+    public required string WorkTitle { get; init; }
+    public required string FormPostAction { get; init; }
+    public required string CancelUrl { get; init; }
+    public required string WorkDetailUrl { get; init; }
+}
+
 public static class ModernRaidRiskCategoryFormHelper
 {
     public static bool TryBuildCategoryIdList(
@@ -260,4 +319,67 @@ public static class ModernRaidRiskCategoryFormHelper
         error = null;
         return true;
     }
+}
+
+public sealed class ModernRaidNearMissForm
+{
+    public int? Id { get; set; }
+
+    [Required]
+    [MaxLength(50)]
+    [Display(Name = "Near miss / unexpected issue ID")]
+    public string? Reference { get; set; }
+
+    public int? LoggedDay { get; set; }
+    public int? LoggedMonth { get; set; }
+    public int? LoggedYear { get; set; }
+
+    public int? NearMissTypeId { get; set; }
+    public int? DirectorateLookupId { get; set; }
+    public int? BusinessAreaLookupId { get; set; }
+
+    public List<int> OwnerUserIds { get; set; } = new();
+
+    [MaxLength(4000)]
+    public string? Impact { get; set; }
+
+    public int? NearMissSeriousnessId { get; set; }
+    public int? PostMitigationRagStatusLookupId { get; set; }
+    public int? RiskTierId { get; set; }
+    public int? NearMissStatusId { get; set; }
+
+    public List<ModernRaidNearMissActionFormRow> Actions { get; set; } = new();
+    public List<ModernRaidNearMissMitigationFormRow> Mitigations { get; set; } = new();
+}
+
+public sealed class ModernRaidNearMissActionFormRow
+{
+    public int? Id { get; set; }
+    public int? ActionDay { get; set; }
+    public int? ActionMonth { get; set; }
+    public int? ActionYear { get; set; }
+
+    [MaxLength(4000)]
+    public string? ActionText { get; set; }
+
+    public int? RecordedByUserId { get; set; }
+
+    /// <summary>Display only — repopulates the actions table on validation errors.</summary>
+    public string? RecordedByDisplayName { get; set; }
+}
+
+public sealed class ModernRaidNearMissMitigationFormRow
+{
+    public int? Id { get; set; }
+    public int? MitigationDay { get; set; }
+    public int? MitigationMonth { get; set; }
+    public int? MitigationYear { get; set; }
+
+    [MaxLength(4000)]
+    public string? AssuranceTakenPlace { get; set; }
+
+    public int? RecordedByUserId { get; set; }
+
+    /// <summary>Display only — repopulates the mitigations table on validation errors.</summary>
+    public string? RecordedByDisplayName { get; set; }
 }

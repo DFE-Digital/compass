@@ -300,7 +300,8 @@ public partial class ModernRaidController
                 r.Likelihood?.Label ?? r.LikelihoodRating.ToString(),
                 r.ImpactLevel?.Label ?? r.ImpactRating.ToString(),
                 r.RiskScore,
-                r.RiskTier?.Name));
+                r.RiskTier?.Name,
+                Snippet(r.Description, 8000)));
         }
 
         var statusRaw = await _db.RiskStatuses.AsNoTracking()
@@ -379,6 +380,7 @@ public partial class ModernRaidController
     public async Task<IActionResult> Risks(
         string? search,
         int? projectId,
+        int? divisionId,
         int? riskStatusId,
         int? riskTierId,
         string? tab,
@@ -397,7 +399,7 @@ public partial class ModernRaidController
 
         var vm = await BuildRiskRegisterAsync(
             search, projectId, riskStatusId, riskTierId, tab, openOnly,
-            divisionId: null,
+            divisionId: divisionId,
             effectiveBusinessAreaId: effectiveBa,
             raidBusinessAreaExplicitNone: explicitNone,
             raidBusinessAreaFromSavedPreference: fromSaved,
@@ -481,6 +483,7 @@ public partial class ModernRaidController
     public async Task<IActionResult> Issues(
         string? search,
         int? projectId,
+        int? divisionId,
         int? issueStatusId,
         int? severityId,
         string? tab,
@@ -517,6 +520,15 @@ public partial class ModernRaidController
                 (i.ProjectId != null &&
                  _db.Projects.Any(p => p.Id == i.ProjectId && p.BusinessAreaId == baId)) ||
                 i.IssueBusinessAreas.Any(iba => iba.BusinessAreaLookupId == baId));
+        }
+
+        if (divisionId is > 0)
+        {
+            var did = divisionId.Value;
+            qBase = qBase.Where(i =>
+                (i.ProjectId != null &&
+                 _db.ProjectDirectorates.Any(pd => pd.ProjectId == i.ProjectId && pd.DivisionId == did)) ||
+                i.IssueDivisions.Any(idv => idv.DivisionId == did));
         }
 
         var activeTab = (tab ?? "").Trim().ToLowerInvariant() switch
@@ -577,7 +589,8 @@ public partial class ModernRaidController
                 i.StatusLookup?.Label ?? i.Status,
                 i.OwnerUser != null ? (i.OwnerUser.Name ?? i.OwnerUser.Email) : null,
                 i.PriorityLookup?.Label ?? i.Priority,
-                i.SeverityLookup?.Label ?? i.Severity));
+                i.SeverityLookup?.Label ?? i.Severity,
+                Snippet(i.Description, 8000)));
         }
 
         var stRaw = await _db.IssueStatuses.AsNoTracking()
@@ -691,6 +704,9 @@ public partial class ModernRaidController
         };
 
         var total = await q.CountAsync(cancellationToken);
+        var totalPages = total <= 0 ? 1 : (int)Math.Ceiling(total / (double)RaidDefaultPageSize);
+        page = Math.Min(Math.Max(page, 1), totalPages);
+
         var list = await q
             .OrderByDescending(d => d.UpdatedAt)
             .Skip((page - 1) * RaidDefaultPageSize)
@@ -706,9 +722,11 @@ public partial class ModernRaidController
             d.SourceEntityType,
             d.SourceEntityId,
             Label(d.SourceEntityType, d.SourceEntityId),
+            RaidDependencyEntityDetailUrl(d.SourceEntityType, d.SourceEntityId),
             d.TargetEntityType,
             d.TargetEntityId,
             Label(d.TargetEntityType, d.TargetEntityId),
+            RaidDependencyEntityDetailUrl(d.TargetEntityType, d.TargetEntityId),
             d.DependencyType,
             d.LinkTypeLookup?.Label,
             d.CriticalityLookup?.Label,

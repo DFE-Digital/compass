@@ -1,4 +1,6 @@
 @model Compass.Models.Division
+@using Compass.ViewModels.Modern
+@using Microsoft.AspNetCore.Html
 @{
   ViewData["Title"] = "Directorate — " + Model.Name;
   var workItemCount = ViewBag.DivisionWorkItemCount as int? ?? 0;
@@ -14,22 +16,22 @@
 }
 
 <div class="dfe-c-page modern-work-page">
-  <div class="dfe-c-flex--between dfe-c-mb-3" style="flex-wrap:wrap;gap:0.75rem;">
-    <div class="dfe-c-page-title" style="margin:0;">
-      <div class="dfe-c-page-title__caption">RAID · Directorate #@Model.Id</div>
-      <h1 class="dfe-c-page-title__heading">@Model.Name</h1>
-      <p class="dfe-c-page-title__lede">Directorate-level risk profile: work items linked to this directorate and risks tagged to it on the RAID record.</p>
-    </div>
-    <div class="dfe-c-flex" style="gap:0.5rem;">
-      <a href="@Url.Action("Directorate", "ModernRaid", new { divisionId = Model.Id })" class="govuk-button">Risks for this directorate</a>
-      <a href="@Url.Action("Directorate", "ModernRaid")" class="govuk-button govuk-button--secondary">All directorates</a>
-    </div>
-  </div>
+  @{
+    var divisionDetailActions = new HtmlString(
+      $"<div class=\"dfe-c-flex\" style=\"gap:0.5rem;\"><a href=\"{Url.Action("Directorate", "ModernRaid", new { divisionId = Model.Id }) ?? "#"}\" class=\"govuk-button\">Risks for this directorate</a><a href=\"{Url.Action("Directorate", "ModernRaid") ?? "#"}\" class=\"govuk-button govuk-button--secondary\">All directorates</a></div>");
+    var divisionLede = new HtmlString("<p class=\"govuk-body govuk-!-margin-bottom-0\">Directorate-level risk profile: work items linked to this directorate and risks tagged to it on the RAID record.</p>");
+  }
+  @await Html.PartialAsync("~/Views/Modern/Shared/_ModernPageHeader.cshtml", new ModernPageHeaderViewModel {
+    Caption = $"RAID · Directorate #{Model.Id}",
+    Title = Model.Name,
+    Lede = divisionLede,
+    Actions = divisionDetailActions
+  })
 
   <div class="dfe-c-grid" style="grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:1rem;">
-    <div class="dfe-c-card"><div class="dfe-c-page-title__caption">Linked work items</div><strong>@workItemCount</strong></div>
-    <div class="dfe-c-card"><div class="dfe-c-page-title__caption">Total risks</div><strong>@riskCount</strong></div>
-    <div class="dfe-c-card"><div class="dfe-c-page-title__caption">Open risks</div><strong>@openRiskCount</strong></div>
+    <div class="dfe-c-card"><p class="govuk-body-s govuk-!-margin-bottom-1 govuk-!-margin-top-0" style="color:#505a5f;">Linked work items</p><strong>@workItemCount</strong></div>
+    <div class="dfe-c-card"><p class="govuk-body-s govuk-!-margin-bottom-1 govuk-!-margin-top-0" style="color:#505a5f;">Total risks</p><strong>@riskCount</strong></div>
+    <div class="dfe-c-card"><p class="govuk-body-s govuk-!-margin-bottom-1 govuk-!-margin-top-0" style="color:#505a5f;">Open risks</p><strong>@openRiskCount</strong></div>
   </div>
 
   <dl class="govuk-summary-list govuk-!-margin-bottom-9">

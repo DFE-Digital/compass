@@ -9,7 +9,7 @@ public static class FipsCmdbSyncRuleEvaluator
 {
     private static readonly TimeSpan RegexTimeout = TimeSpan.FromMilliseconds(250);
 
-    public static CMDBProductStatus? EvaluateFirstMatch(
+    public static CMDBProductStatus? EvaluateFirstStatusMatch(
         IReadOnlyList<FipsCmdbSyncRule> rules,
         CmdbEntry entry,
         string entryJson,
@@ -19,7 +19,7 @@ public static class FipsCmdbSyncRuleEvaluator
     {
         foreach (var rule in rules)
         {
-            if (!rule.IsActive || string.IsNullOrWhiteSpace(rule.Pattern))
+            if (!IsStatusRule(rule) || !rule.IsActive || string.IsNullOrWhiteSpace(rule.Pattern))
                 continue;
             var haystack = BuildHaystack(rule.FieldScope, entry, entryJson, product, titleForProduct);
             if (haystack == null)
@@ -30,6 +30,36 @@ public static class FipsCmdbSyncRuleEvaluator
 
         return null;
     }
+
+    /// <summary>Returns true if any active enterprise rule matches (sets <see cref="CMDBProduct.IsEnterpriseService"/> during sync).</summary>
+    public static bool EvaluateSetsEnterpriseService(
+        IReadOnlyList<FipsCmdbSyncRule> rules,
+        CmdbEntry entry,
+        string entryJson,
+        CMDBProduct product,
+        string titleForProduct,
+        ILogger logger)
+    {
+        foreach (var rule in rules)
+        {
+            if (!IsEnterpriseRule(rule) || !rule.IsActive || string.IsNullOrWhiteSpace(rule.Pattern))
+                continue;
+            var haystack = BuildHaystack(rule.FieldScope, entry, entryJson, product, titleForProduct);
+            if (haystack == null)
+                continue;
+            if (RuleMatches(rule, haystack, logger))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool IsStatusRule(FipsCmdbSyncRule rule) =>
+        string.IsNullOrWhiteSpace(rule.Action)
+        || string.Equals(rule.Action, FipsCmdbSyncRuleActions.SetStatus, StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsEnterpriseRule(FipsCmdbSyncRule rule) =>
+        string.Equals(rule.Action, FipsCmdbSyncRuleActions.SetEnterpriseService, StringComparison.OrdinalIgnoreCase);
 
     private static string? BuildHaystack(
         string scope,

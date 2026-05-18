@@ -1,8 +1,15 @@
 /**
- * Shows "Generating report" while export/download requests run.
+ * Shows "Generating report" (or per-link copy) while export/download requests run.
  * Intercepts same-origin GET downloads (Excel, CSV, etc.) and completes via fetch + blob so the overlay stays visible.
  */
 (function () {
+  var defaultModalTitle = 'Generating report';
+  var defaultModalHint = 'Please wait — your download will start when the file is ready.';
+  /** @type {HTMLElement | null} */
+  var titleElCached = null;
+  /** @type {HTMLElement | null} */
+  var hintElCached = null;
+
   function getOverlay() {
     return document.getElementById('generating-report-overlay');
   }
@@ -11,10 +18,20 @@
     return document.getElementById('generating-report-dialog');
   }
 
-  function show() {
+  /**
+   * @param {string | null | undefined} title
+   * @param {string | null | undefined} hint
+   */
+  function show(title, hint) {
     var overlay = getOverlay();
     var dialog = getDialog();
     if (!overlay || !dialog) return;
+    if (titleElCached) {
+      titleElCached.textContent = title != null && String(title).trim() !== '' ? String(title).trim() : defaultModalTitle;
+    }
+    if (hintElCached) {
+      hintElCached.textContent = hint != null && String(hint).trim() !== '' ? String(hint).trim() : defaultModalHint;
+    }
     overlay.style.display = 'flex';
     overlay.setAttribute('aria-hidden', 'false');
     dialog.style.display = 'block';
@@ -29,6 +46,8 @@
     overlay.setAttribute('aria-hidden', 'true');
     dialog.style.display = 'none';
     document.documentElement.style.overflow = '';
+    if (titleElCached) titleElCached.textContent = defaultModalTitle;
+    if (hintElCached) hintElCached.textContent = defaultModalHint;
   }
 
   /** @param {URL} url */
@@ -39,7 +58,8 @@
     // Exports hub navigation only — not a file download
     if (pathLower === '/exports' || pathLower === '/exports/') return false;
 
-    if (pathLower.startsWith('/exports/download')) return true;
+    // /Exports/Download* (Excel) and /Exports/DownloadDemandRegisterCsv — works with path base and camel-cased actions
+    if (pathLower.includes('/exports/') && pathLower.includes('download')) return true;
     if (pathLower.includes('export-register')) return true;
     if (pathLower.includes('/export/')) return true;
 
@@ -47,6 +67,15 @@
     if (tail.endsWith('/export')) return true;
 
     return false;
+  }
+
+  /** @param {Element | null | undefined} el */
+  function readModalCopy(el) {
+    if (!el || !el.getAttribute) return { title: null, hint: null };
+    return {
+      title: el.getAttribute('data-generating-modal-title'),
+      hint: el.getAttribute('data-generating-modal-hint')
+    };
   }
 
   /** @param {HTMLAnchorElement} a */
@@ -81,10 +110,12 @@
 
   /**
    * @param {string} url
+   * @param {Element | null | undefined} sourceEl anchor or form (optional modal copy)
    * @returns {Promise<void>}
    */
-  function downloadViaFetch(url) {
-    show();
+  function downloadViaFetch(url, sourceEl) {
+    var copy = readModalCopy(sourceEl);
+    show(copy.title, copy.hint);
     return fetch(url, {
       method: 'GET',
       credentials: 'same-origin',
@@ -139,6 +170,13 @@
     var overlay = getOverlay();
     if (!overlay) return;
 
+    titleElCached = document.getElementById('generating-report-title');
+    hintElCached =
+      document.getElementById('generating-report-hint') ||
+      /** @type {HTMLElement | null} */ (document.querySelector('.generating-report-dialog__hint'));
+    if (titleElCached && titleElCached.textContent.trim()) defaultModalTitle = titleElCached.textContent.trim();
+    if (hintElCached && hintElCached.textContent.trim()) defaultModalHint = hintElCached.textContent.trim();
+
     document.addEventListener(
       'click',
       function (e) {
@@ -149,7 +187,7 @@
         var href = a.getAttribute('href');
         if (!href || href.charAt(0) === '#') return;
         e.preventDefault();
-        downloadViaFetch(a.href);
+        downloadViaFetch(a.href, a);
       },
       true
     );
@@ -168,7 +206,7 @@
           var actionForced = submitterForced && submitterForced.getAttribute('formaction');
           var actionUrlForced = actionForced || form.getAttribute('action') || window.location.pathname + window.location.search;
           e.preventDefault();
-          downloadViaFetch(buildFormGetUrl(form, actionUrlForced));
+          downloadViaFetch(buildFormGetUrl(form, actionUrlForced), submitterForced || form);
           return;
         }
 
@@ -185,7 +223,7 @@
 
         e.preventDefault();
         var full = buildFormGetUrl(form, actionUrl);
-        downloadViaFetch(full);
+        downloadViaFetch(full, submitter || form);
       },
       true
     );

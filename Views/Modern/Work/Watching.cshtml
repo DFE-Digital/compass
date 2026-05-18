@@ -1,6 +1,7 @@
 @model IEnumerable<Compass.Models.Modern.Work.WorkItem>
 @using System.Linq
 @using Compass.Models.Modern.Work
+@using Compass.ViewModels.Modern
 @{
     ViewData["Title"] = "Watching";
     var items = Model?.ToList() ?? new List<WorkItem>();
@@ -17,15 +18,6 @@
     var filterSearch = ViewBag.Search as string;
     var filterStatus = ViewBag.StatusFilter as string;
     var businessAreaByProjectId = ViewBag.BusinessAreaByProjectId as Dictionary<int, string> ?? new Dictionary<int, string>();
-    var monthlyColHeader = ViewBag.WatchingMonthlyColumnHeader as string ?? "Monthly update";
-    string PriorityTagClass(string? name) {
-        if (string.IsNullOrEmpty(name)) return "dfe-c-tag dfe-c-tag--grey";
-        var s = name.ToLowerInvariant();
-        if (s.Contains("high") || s.Contains("critical")) return "dfe-c-tag dfe-c-tag--red";
-        if (s.Contains("medium")) return "dfe-c-tag dfe-c-tag--amber";
-        if (s.Contains("low")) return "dfe-c-tag dfe-c-tag--green";
-        return "dfe-c-tag dfe-c-tag--grey";
-    }
 }
 @section Breadcrumbs {
  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
@@ -34,13 +26,14 @@
 }
 
 <div id="sc-work-watching" class="modern-work-page">
- <div class="dfe-c-flex--between dfe-c-mb-3" style="flex-wrap:wrap;gap:1rem;">
- <div class="dfe-c-page-title" style="margin:0;">
- <div class="dfe-c-page-title__caption">Work</div>
- <h1 class="dfe-c-page-title__heading">Watching</h1>
- <p class="dfe-c-page-title__lede">@(count == 0 ? "Work items you have opted to watch appear here." : $"{count} work item{(count == 1 ? "" : "s")} on your watch list")</p>
-    </div>
-  </div>
+@{
+  var watchingLede = await Html.PartialAsync("_WorkWatchingHeaderLede", count);
+}
+@await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+  Caption = "Work",
+  Title = "Watching",
+  Lede = watchingLede
+})
 
  <form method="get" action="@Url.Action("Watching", "ModernWork")" id="watching-register-form" class="dfe-c-mb-3">
     <div id="search-and-filter">
@@ -110,7 +103,7 @@
         </div>
  <div class="filter-panel__actions">
  <button type="submit" class="govuk-button">Apply filters</button>
- <a href="@Url.Action("Watching", "ModernWork")" class="govuk-link">Clear filters</a>
+ <a href="@Url.Action("Watching", "ModernWork")" class="govuk-link govuk-link--no-visited-state">Clear filters</a>
         </div>
       </div>
     </div>
@@ -122,21 +115,32 @@
   }
   else
   {
- <div class="dfe-c-table-wrap">
-      <table class="modern-work-table" id="work-watching-table">
-        <thead>
-          <tr>
-            <th scope="col">Work item</th>
-            <th scope="col">Business area</th>
-            <th scope="col">Priority</th>
-            <th scope="col">RAG</th>
-            <th scope="col">Primary contact</th>
-            <th scope="col">Tags</th>
-            <th scope="col">Status</th>
-            <th scope="col">@monthlyColHeader</th>
+<div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+    <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+      <table class="govuk-table modern-work-table" id="work-watching-table">
+        <thead class="govuk-table__head">
+          <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Work item</button>
+        </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Business area</button>
+        </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Priority</button>
+        </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">RAG</button>
+        </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Primary contact</button>
+        </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Status</button>
+        </th>
           </tr>
         </thead>
-        <tbody>
+        <tbody class="govuk-table__body">
         @foreach (var w in items)
         {
           var latestRag = w.RagHistory?.OrderByDescending(r => r.UpdatedAt).FirstOrDefault();
@@ -144,35 +148,31 @@
           var priorityName = w.PriorityId.HasValue && priorityNames.TryGetValue(w.PriorityId.Value, out var pr) ? pr : null;
           var pcName = ViewBag.PrimaryContactById is Dictionary<int, string> pcMap && pcMap.TryGetValue(w.Id, out var pc) ? pc : "—";
           var baName = businessAreaByProjectId.TryGetValue(w.Id, out var ba) ? ba : "—";
-          var tagSummary = w.Tags == null || w.Tags.Count == 0 ? null : string.Join(", ", w.Tags.OrderBy(t => t.Name).Select(t => t.Name));
-          <tr>
-            <td>
- <a href="@Url.Action("Detail", "ModernWork", new { id = w.Id })">@w.Title</a>
- <div class="dfe-c-body-s dfe-c-text-muted" style="margin-top:0.25rem;line-height:1.3;">
+          <tr class="govuk-table__row">
+            <td class="govuk-table__cell">
+ <a href="@Url.Action("Detail", "ModernWork", new { id = w.Id })" class="govuk-link govuk-link--no-visited-state">@w.Title</a>
+ <div class="govuk-body-s dfe-t-u-text-muted modern-work-table__meta">
  WI-@w.Id.ToString("D8")@if (!string.IsNullOrEmpty(phaseName)) { <span aria-hidden="true"> · </span><span>@phaseName</span> }
               </div>
             </td>
-            <td>@baName</td>
-            <td>
+            <td class="govuk-table__cell">@baName</td>
+            <td class="govuk-table__cell">
               @if (!string.IsNullOrEmpty(priorityName))
               {
- <span class="@PriorityTagClass(priorityName)">@priorityName.ToUpperInvariant()</span>
+ <span class="@WorkBadgeCss.PriorityDfeFrontendBadgeClass(priorityName)">@priorityName.ToUpperInvariant()</span>
               }
               else
               {
  <span class="dfe-c-text-muted">—</span>
               }
             </td>
-            <td>@await Html.PartialAsync("_WorkRagBadge", latestRag)</td>
-            <td>@pcName</td>
- <td class="dfe-c-body-s">@(string.IsNullOrEmpty(tagSummary) ? "—" : tagSummary)</td>
- <td><span class="@WorkBadgeCss.StatusDfeTagClass(w.Status)">@w.Status</span></td>
- <td><span class="dfe-c-text-muted">—</span></td>
+            <td class="govuk-table__cell">@await Html.PartialAsync("_WorkRagBadge", latestRag)</td>
+            <td class="govuk-table__cell">@pcName</td>
+ <td class="govuk-table__cell"><span class="@WorkBadgeCss.StatusDfeFrontendBadgeClass(w.Status)">@w.Status</span></td>
           </tr>
         }
         </tbody>
       </table>
     </div>
- <p class="dfe-c-text-muted" style="margin:0.875rem 0 0;">Showing @count work item@(count == 1 ? "" : "s")</p>
   }
 </div>

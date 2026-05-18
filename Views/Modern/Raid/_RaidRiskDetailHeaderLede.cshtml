@@ -1,0 +1,62 @@
+@model Compass.Models.Risk
+@using System.Globalization
+@using System.Linq
+@using Compass.Models
+@{
+  var tierBadgeStep = ViewBag.TierBadgeStep is int ts ? ts : 2;
+  var updatedByDisplay = ViewBag.RiskDetailUpdatedByDisplay as string ?? "—";
+  var riskCatLabels = Model.RiskRiskCategories?
+    .Select(x => x.RiskCategory?.Label)
+    .Where(x => !string.IsNullOrWhiteSpace(x))
+    .Distinct()
+    .ToList() ?? new List<string?>();
+  if (riskCatLabels.Count == 0 && Model.RiskCategory?.Label != null)
+    riskCatLabels = new List<string?> { Model.RiskCategory.Label };
+
+  var riskStatusLabelForDisplay = (Model.RiskStatus?.Label ?? Model.Status ?? "").Trim();
+  string TierBadgeDisplayText() =>
+    Model.RiskTier == null
+      ? ""
+      : string.Equals(riskStatusLabelForDisplay, "Proposed", StringComparison.OrdinalIgnoreCase)
+        ? Model.RiskTier.Name.ToUpperInvariant() + " PROPOSED RISK"
+        : Model.RiskTier.Name.ToUpperInvariant();
+
+  string TierTagClass() =>
+    Model.RiskTier == null
+      ? "dfe-c-tag dfe-c-tag--grey"
+      : tierBadgeStep switch
+      {
+        1 => "dfe-c-tag dfe-c-tag--red",
+        2 => "dfe-c-tag dfe-c-tag--yellow",
+        3 => "dfe-c-tag dfe-c-tag--green",
+        _ => "dfe-c-tag dfe-c-tag--amber"
+      };
+
+  string StatusTagClass()
+  {
+    var s = (Model.RiskStatus?.Label ?? Model.Status ?? "").ToLowerInvariant();
+    if (s.Contains("escalat")) return "dfe-c-tag dfe-c-tag--red";
+    if (s.Contains("closed")) return "dfe-c-tag dfe-c-tag--green";
+    return "dfe-c-tag dfe-c-tag--blue";
+  }
+}
+<div class="dfe-c-flex" style="gap:0.5rem;flex-wrap:wrap;align-items:center;">
+  @if (Model.RiskTier != null)
+  {
+    <span class="@TierTagClass()">@TierBadgeDisplayText()</span>
+  }
+  else
+  {
+    <span class="dfe-c-tag dfe-c-tag--grey">UNASSIGNED</span>
+  }
+  <span class="@StatusTagClass()">@(Model.RiskStatus?.Label ?? Model.Status ?? "Open")</span>
+  @foreach (var c in riskCatLabels)
+  {
+    <span class="dfe-c-tag dfe-c-tag--teal">@c?.ToUpperInvariant()</span>
+  }
+  <span style="font-size:0.875rem;color:var(--grey-4);">
+    Proximity: @(Model.Proximity?.Label ?? "Not set")
+    <span aria-hidden="true">&nbsp;·&nbsp;</span>
+    Updated @Model.UpdatedAt.ToString("d MMM yyyy", CultureInfo.InvariantCulture) by @updatedByDisplay
+  </span>
+</div>

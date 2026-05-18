@@ -99,6 +99,14 @@ public class ReturnStatusService : IReturnStatusService
         return date;
     }
 
+    public DateTime GetLastWorkingDayOfMonth(int year, int month)
+    {
+        var date = new DateTime(year, month, DateTime.DaysInMonth(year, month));
+        while (!IsWorkingDay(date))
+            date = date.AddDays(-1);
+        return date;
+    }
+
     private List<DateTime> GetUkBankHolidays(int year)
     {
         // Comprehensive list of UK bank holidays

@@ -1,0 +1,259 @@
+@model Compass.ViewModels.Modern.Ddr.DdrReportingViewModel
+@using Compass.ViewModels.Modern
+@{
+  ViewData["Title"] = "DDR reporting";
+
+  var productCoveragePct = Model.TotalProducts > 0
+    ? Math.Round(100.0 * Model.ProductsWithDdrs / Model.TotalProducts, 1)
+    : 0;
+
+  string TagClass(string status) => status switch
+  {
+    "Draft" => "govuk-tag govuk-tag--grey",
+    "Proposed" => "govuk-tag govuk-tag--blue",
+    "In use" => "govuk-tag govuk-tag--green",
+    "Under review" => "govuk-tag govuk-tag--orange",
+    "Approved" => "govuk-tag govuk-tag--turquoise",
+    "Rejected" => "govuk-tag govuk-tag--red",
+    "Superseded" => "govuk-tag govuk-tag--purple",
+    "Retired" => "govuk-tag govuk-tag--grey",
+    _ => "govuk-tag govuk-tag--grey",
+  };
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernReporting")">Reporting</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">Design decision records</li>
+}
+
+@{
+  var ddrReportingLede = await Html.PartialAsync("~/Views/Modern/Reporting/_DdrReportingHeaderLede.cshtml");
+  var ddrReportingActions = await Html.PartialAsync("~/Views/Modern/Reporting/_DdrReportingHeaderActions.cshtml");
+}
+@await Html.PartialAsync("~/Views/Modern/Shared/_ModernPageHeader.cshtml", new ModernPageHeaderViewModel {
+  Caption = "Reporting",
+  Title = "Design decision records",
+  HeadingClass = "govuk-heading-l",
+  Lede = ddrReportingLede,
+  Actions = ddrReportingActions
+})
+
+@* ── KPI tiles ─────────────────────────────────────────────────────────── *@
+<div class="govuk-grid-row govuk-!-margin-top-2">
+  <div class="govuk-grid-column-one-quarter">
+    <div class="govuk-summary-card">
+      <div class="govuk-summary-card__title-wrapper">
+        <h2 class="govuk-summary-card__title">Total DDRs</h2>
+      </div>
+      <div class="govuk-summary-card__content">
+        <p class="govuk-heading-xl govuk-!-margin-bottom-0">@Model.TotalDdrs</p>
+        <p class="govuk-body-s govuk-!-margin-bottom-0" style="color:#505a5f;">All time, excluding deleted</p>
+      </div>
+    </div>
+  </div>
+  <div class="govuk-grid-column-one-quarter">
+    <div class="govuk-summary-card">
+      <div class="govuk-summary-card__title-wrapper">
+        <h2 class="govuk-summary-card__title">This month</h2>
+      </div>
+      <div class="govuk-summary-card__content">
+        <p class="govuk-heading-xl govuk-!-margin-bottom-0">@Model.DdrsThisMonth</p>
+        <p class="govuk-body-s govuk-!-margin-bottom-0" style="color:#505a5f;">Created since the 1st</p>
+      </div>
+    </div>
+  </div>
+  <div class="govuk-grid-column-one-quarter">
+    <div class="govuk-summary-card">
+      <div class="govuk-summary-card__title-wrapper">
+        <h2 class="govuk-summary-card__title">Deviations</h2>
+      </div>
+      <div class="govuk-summary-card__content">
+        <p class="govuk-heading-xl govuk-!-margin-bottom-0">@Model.DeviationsCount</p>
+        <p class="govuk-body-s govuk-!-margin-bottom-0" style="color:#505a5f;">DDRs flagged as deviating</p>
+      </div>
+    </div>
+  </div>
+  <div class="govuk-grid-column-one-quarter">
+    <div class="govuk-summary-card">
+      <div class="govuk-summary-card__title-wrapper">
+        <h2 class="govuk-summary-card__title">Overdue review</h2>
+      </div>
+      <div class="govuk-summary-card__content">
+        <p class="govuk-heading-xl govuk-!-margin-bottom-0">@Model.OverdueReviewCount</p>
+        <p class="govuk-body-s govuk-!-margin-bottom-0" style="color:#505a5f;">Open DDRs past review date</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="govuk-grid-row">
+  <div class="govuk-grid-column-one-half">
+    <div class="govuk-summary-card">
+      <div class="govuk-summary-card__title-wrapper">
+        <h2 class="govuk-summary-card__title">DDRs by status</h2>
+      </div>
+      <div class="govuk-summary-card__content">
+        @if (Model.ByStatus.Count == 0)
+        {
+          <p class="govuk-body govuk-!-margin-bottom-0" style="color:#505a5f;">No data.</p>
+        }
+        else
+        {
+          <table class="govuk-table">
+            <thead class="govuk-table__head">
+              <tr class="govuk-table__row">
+                <th scope="col" class="govuk-table__header">Status</th>
+                <th scope="col" class="govuk-table__header govuk-table__header--numeric">Count</th>
+              </tr>
+            </thead>
+            <tbody class="govuk-table__body">
+              @foreach (var kv in Model.ByStatus.OrderByDescending(x => x.Value))
+              {
+                <tr class="govuk-table__row">
+                  <td class="govuk-table__cell"><span class="@TagClass(kv.Key)">@kv.Key</span></td>
+                  <td class="govuk-table__cell govuk-table__cell--numeric govuk-!-font-tabular-numbers">@kv.Value</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+      </div>
+    </div>
+  </div>
+  <div class="govuk-grid-column-one-half">
+    <div class="govuk-summary-card">
+      <div class="govuk-summary-card__title-wrapper">
+        <h2 class="govuk-summary-card__title">DDRs by category</h2>
+      </div>
+      <div class="govuk-summary-card__content">
+        @if (Model.ByCategory.Count == 0)
+        {
+          <p class="govuk-body govuk-!-margin-bottom-0" style="color:#505a5f;">No data.</p>
+        }
+        else
+        {
+          <table class="govuk-table">
+            <thead class="govuk-table__head">
+              <tr class="govuk-table__row">
+                <th scope="col" class="govuk-table__header">Category</th>
+                <th scope="col" class="govuk-table__header govuk-table__header--numeric">Count</th>
+              </tr>
+            </thead>
+            <tbody class="govuk-table__body">
+              @foreach (var kv in Model.ByCategory.OrderByDescending(x => x.Value))
+              {
+                <tr class="govuk-table__row">
+                  <td class="govuk-table__cell">@kv.Key</td>
+                  <td class="govuk-table__cell govuk-table__cell--numeric govuk-!-font-tabular-numbers">@kv.Value</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="govuk-grid-row">
+  <div class="govuk-grid-column-one-half">
+    <div class="govuk-summary-card">
+      <div class="govuk-summary-card__title-wrapper">
+        <h2 class="govuk-summary-card__title">Deviations by type</h2>
+      </div>
+      <div class="govuk-summary-card__content">
+        @if (Model.DeviationsByType.Count == 0)
+        {
+          <p class="govuk-body govuk-!-margin-bottom-0" style="color:#505a5f;">No deviations recorded.</p>
+        }
+        else
+        {
+          <table class="govuk-table">
+            <thead class="govuk-table__head">
+              <tr class="govuk-table__row">
+                <th scope="col" class="govuk-table__header">Type</th>
+                <th scope="col" class="govuk-table__header govuk-table__header--numeric">Count</th>
+              </tr>
+            </thead>
+            <tbody class="govuk-table__body">
+              @foreach (var kv in Model.DeviationsByType.OrderByDescending(x => x.Value))
+              {
+                <tr class="govuk-table__row">
+                  <td class="govuk-table__cell">@kv.Key</td>
+                  <td class="govuk-table__cell govuk-table__cell--numeric govuk-!-font-tabular-numbers">@kv.Value</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+      </div>
+    </div>
+  </div>
+  <div class="govuk-grid-column-one-half">
+    <div class="govuk-summary-card">
+      <div class="govuk-summary-card__title-wrapper">
+        <h2 class="govuk-summary-card__title">Coverage and lifecycle</h2>
+      </div>
+      <div class="govuk-summary-card__content">
+        <dl class="govuk-summary-list">
+          <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">Products with at least one DDR</dt>
+            <dd class="govuk-summary-list__value govuk-!-font-tabular-numbers">@Model.ProductsWithDdrs of @Model.TotalProducts (@productCoveragePct%)</dd>
+          </div>
+          <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">Retrospective records</dt>
+            <dd class="govuk-summary-list__value govuk-!-font-tabular-numbers">@Model.RetrospectiveCount</dd>
+          </div>
+          <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">Deviations</dt>
+            <dd class="govuk-summary-list__value govuk-!-font-tabular-numbers">@Model.DeviationsCount</dd>
+          </div>
+          <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">Overdue review</dt>
+            <dd class="govuk-summary-list__value govuk-!-font-tabular-numbers">@Model.OverdueReviewCount</dd>
+          </div>
+        </dl>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="govuk-grid-row">
+  <div class="govuk-grid-column-full">
+    <div class="govuk-summary-card">
+      <div class="govuk-summary-card__title-wrapper">
+        <h2 class="govuk-summary-card__title">DesignOps insights</h2>
+      </div>
+      <div class="govuk-summary-card__content">
+        @if (Model.InsightCounts.Count == 0)
+        {
+          <p class="govuk-body govuk-!-margin-bottom-0" style="color:#505a5f;">
+            No insights have been classified yet. Insights are recorded by DesignOps during review and
+            highlight reusable patterns, guidance gaps, and other portfolio-wide signals.
+          </p>
+        }
+        else
+        {
+          <table class="govuk-table">
+            <thead class="govuk-table__head">
+              <tr class="govuk-table__row">
+                <th scope="col" class="govuk-table__header">Classification</th>
+                <th scope="col" class="govuk-table__header govuk-table__header--numeric">Count</th>
+              </tr>
+            </thead>
+            <tbody class="govuk-table__body">
+              @foreach (var kv in Model.InsightCounts.OrderByDescending(x => x.Value))
+              {
+                <tr class="govuk-table__row">
+                  <td class="govuk-table__cell">@kv.Key</td>
+                  <td class="govuk-table__cell govuk-table__cell--numeric govuk-!-font-tabular-numbers">@kv.Value</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+      </div>
+    </div>
+  </div>
+</div>

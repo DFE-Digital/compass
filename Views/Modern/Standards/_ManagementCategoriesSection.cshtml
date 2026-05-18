@@ -1,0 +1,151 @@
+@model Compass.ViewModels.Modern.StandardsManagementViewModel
+
+<div class="dfe-c-mb-4" id="standard-categories-mgmt">
+  <div class="dfe-c-section-header">
+    <h2 class="dfe-c-heading-m">Categories</h2>
+    <a href="@Url.Action("ManagementCategoryNew", "ModernStandards")" class="govuk-button">Add category</a>
+  </div>
+  <p class="govuk-body-s govuk-!-margin-bottom-3">Top-level categories and sub-category values used when classifying DDT standards. Expand a category to view values or edit.</p>
+
+  @if (Model.Categories.Count == 0)
+  {
+    <p class="dfe-c-body muted">No categories configured yet.</p>
+  }
+  else
+  {
+    @foreach (var category in Model.Categories)
+    {
+      var activeSubCount = category.SubCategories.Count(sc => sc.IsActive);
+      var catPanelId = $"std-cat-panel-{category.Id}";
+      var catBtnId = $"std-cat-btn-{category.Id}";
+
+      <div class="dfe-f-toggle govuk-!-margin-bottom-3" data-module="dfe-f-toggle" id="std-cat-toggle-@category.Id">
+        <div class="dfe-f-toggle__title-wrapper">
+          <h2 class="dfe-f-toggle__heading govuk-!-margin-bottom-0">
+            <button type="button" class="dfe-f-toggle__button" aria-expanded="false" aria-controls="@catPanelId" id="@catBtnId">
+              <span class="dfe-f-toggle__icon" aria-hidden="true"></span>
+              <span class="dfe-f-toggle__title">@category.Name</span>
+              <span class="mr-toggle-panel__meta">
+                @if (!category.IsActive)
+                {
+                  <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--red govuk-!-margin-right-2">Inactive</span>
+                }
+                <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--blue">@activeSubCount @(activeSubCount == 1 ? "value" : "values")</span>
+              </span>
+            </button>
+          </h2>
+        </div>
+        <div id="@catPanelId" class="dfe-f-toggle__content" hidden>
+          <div class="dfe-f-toggle__body govuk-body">
+            @if (!string.IsNullOrWhiteSpace(category.Description))
+            {
+              <p class="govuk-body govuk-!-margin-bottom-3 dfe-c-text-muted">@category.Description</p>
+            }
+
+            <h3 class="govuk-heading-s">Edit category</h3>
+            <form method="post" action="@Url.Action("ManagementCategoryUpdate", "ModernStandards", new { id = category.Id })" class="govuk-!-margin-bottom-4">
+              @Html.AntiForgeryToken()
+              <div class="govuk-form-group">
+                <label class="govuk-label" for="cat-name-@category.Id">Name</label>
+                <input class="govuk-input" id="cat-name-@category.Id" name="name" type="text" value="@category.Name" required maxlength="200" />
+              </div>
+              <div class="govuk-form-group">
+                <label class="govuk-label" for="cat-desc-@category.Id">Description</label>
+                <textarea class="govuk-textarea" id="cat-desc-@category.Id" name="description" rows="2" maxlength="1000">@category.Description</textarea>
+              </div>
+              <div class="govuk-form-group">
+                <label class="govuk-label" for="cat-sort-@category.Id">Sort order</label>
+                <input class="govuk-input govuk-input--width-4" id="cat-sort-@category.Id" name="sortOrder" type="number" value="@category.SortOrder" />
+              </div>
+              <div class="govuk-button-group">
+                <button type="submit" class="govuk-button govuk-button--secondary">Save category</button>
+                <button type="submit"
+                        class="govuk-button govuk-button--warning"
+                        formaction="@Url.Action("ManagementCategoryToggle", "ModernStandards", new { id = category.Id })"
+                        formmethod="post">@(category.IsActive ? "Deactivate" : "Activate")</button>
+              </div>
+            </form>
+
+            <h3 class="govuk-heading-s">Sub-category values</h3>
+            @if (category.SubCategories.Count == 0)
+            {
+              <p class="govuk-body-s dfe-c-text-muted govuk-!-margin-bottom-3">No sub-categories yet.</p>
+            }
+            else
+            {
+              @foreach (var sub in category.SubCategories)
+              {
+                var subPanelId = $"std-sub-panel-{sub.Id}";
+                var subBtnId = $"std-sub-btn-{sub.Id}";
+
+                <div class="dfe-f-toggle govuk-!-margin-bottom-3" data-module="dfe-f-toggle" id="std-sub-toggle-@sub.Id">
+                  <div class="dfe-f-toggle__title-wrapper">
+                    <h3 class="dfe-f-toggle__heading govuk-!-margin-bottom-0">
+                      <button type="button" class="dfe-f-toggle__button" aria-expanded="false" aria-controls="@subPanelId" id="@subBtnId">
+                        <span class="dfe-f-toggle__icon" aria-hidden="true"></span>
+                        <span class="dfe-f-toggle__title">@sub.Name</span>
+                        @if (!sub.IsActive)
+                        {
+                          <span class="mr-toggle-panel__meta"><span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--red">Inactive</span></span>
+                        }
+                      </button>
+                    </h3>
+                  </div>
+                  <div id="@subPanelId" class="dfe-f-toggle__content" hidden>
+                    <div class="dfe-f-toggle__body govuk-body">
+                      @if (!string.IsNullOrWhiteSpace(sub.Description))
+                      {
+                        <p class="govuk-body-s dfe-c-text-muted govuk-!-margin-bottom-3">@sub.Description</p>
+                      }
+                      <form method="post" action="@Url.Action("ManagementSubCategoryUpdate", "ModernStandards", new { id = sub.Id })">
+                        @Html.AntiForgeryToken()
+                        <div class="govuk-form-group">
+                          <label class="govuk-label" for="sub-name-@sub.Id">Name</label>
+                          <input class="govuk-input" id="sub-name-@sub.Id" name="name" type="text" value="@sub.Name" required maxlength="200" />
+                        </div>
+                        <div class="govuk-form-group">
+                          <label class="govuk-label" for="sub-desc-@sub.Id">Description</label>
+                          <textarea class="govuk-textarea" id="sub-desc-@sub.Id" name="description" rows="2" maxlength="1000">@sub.Description</textarea>
+                        </div>
+                        <div class="govuk-form-group">
+                          <label class="govuk-label" for="sub-sort-@sub.Id">Sort order</label>
+                          <input class="govuk-input govuk-input--width-4" id="sub-sort-@sub.Id" name="sortOrder" type="number" value="@sub.SortOrder" />
+                        </div>
+                        <div class="govuk-button-group">
+                          <button type="submit" class="govuk-button govuk-button--secondary">Save</button>
+                          <button type="submit"
+                                  class="govuk-button govuk-button--warning"
+                                  formaction="@Url.Action("ManagementSubCategoryToggle", "ModernStandards", new { id = sub.Id })"
+                                  formmethod="post">@(sub.IsActive ? "Deactivate" : "Activate")</button>
+                        </div>
+                      </form>
+                    </div>
+                  </div>
+                </div>
+              }
+            }
+
+            <h3 class="govuk-heading-s govuk-!-margin-top-4">Add sub-category</h3>
+            <form method="post" action="@Url.Action("ManagementSubCategoryCreate", "ModernStandards")">
+              @Html.AntiForgeryToken()
+              <input type="hidden" name="categoryId" value="@category.Id" />
+              <div class="govuk-form-group">
+                <label class="govuk-label" for="new-sub-name-@category.Id">Name</label>
+                <input class="govuk-input" id="new-sub-name-@category.Id" name="name" type="text" required maxlength="200" />
+              </div>
+              <div class="govuk-form-group">
+                <label class="govuk-label" for="new-sub-desc-@category.Id">Description</label>
+                <textarea class="govuk-textarea" id="new-sub-desc-@category.Id" name="description" rows="2" maxlength="1000"></textarea>
+              </div>
+              <div class="govuk-form-group">
+                <label class="govuk-label" for="new-sub-sort-@category.Id">Sort order</label>
+                <input class="govuk-input govuk-input--width-4" id="new-sub-sort-@category.Id" name="sortOrder" type="number" value="0" />
+              </div>
+              <button type="submit" class="govuk-button govuk-button--secondary">Add sub-category</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    }
+  }
+</div>

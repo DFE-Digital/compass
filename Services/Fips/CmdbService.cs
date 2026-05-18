@@ -8,6 +8,11 @@ namespace Compass.Services.Fips;
 
 public class CmdbService : ICmdbService
 {
+    private static readonly JsonSerializerOptions CmdbEntryJsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true
+    };
+
     private readonly HttpClient _httpClient;
     private readonly FipsSyncConfiguration _config;
     private readonly ILogger<CmdbService> _logger;
@@ -59,7 +64,7 @@ public class CmdbService : ICmdbService
             foreach (var row in resultEl.EnumerateArray())
             {
                 var raw = row.GetRawText();
-                var entry = JsonSerializer.Deserialize<CmdbEntry>(raw);
+                var entry = JsonSerializer.Deserialize<CmdbEntry>(raw, CmdbEntryJsonOptions);
                 if (entry != null)
                 {
                     entry.RecordJson = raw;
@@ -80,7 +85,7 @@ public class CmdbService : ICmdbService
             return null;
 
         var raw = resultEl.GetRawText();
-        var entry = JsonSerializer.Deserialize<CmdbEntry>(raw);
+        var entry = JsonSerializer.Deserialize<CmdbEntry>(raw, CmdbEntryJsonOptions);
         if (entry != null)
             entry.RecordJson = raw;
         return entry;

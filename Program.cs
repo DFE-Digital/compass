@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
 using Azure.Identity;
 using Microsoft.Identity.Web;
@@ -17,6 +18,10 @@ using System.IO;
 using System.Linq;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Serve library static web assets (/_content/<packageId>/...) from referenced NuGet packages
+// such as DfEDigital.Frontend.AspNetCore — required for dfe.min.css, dfe-frontend.iife.min.js, logos.
+builder.WebHost.UseStaticWebAssets();
 
 // Check for finding retired CMDB entries that are active in CMS
 if (args.Length > 0 && args[0] == "--find-retired-mismatch")
@@ -268,6 +273,17 @@ builder.Logging.AddFile("logs/compass-{Date}.log");
 // Add services to the container
 builder.Services.AddRazorPages();
 
+// Development: persist DP keys so TempData cookies and other protected payloads survive dotnet restarts
+// (avoids "payload was invalid" when the in-memory key ring changes).
+if (builder.Environment.IsDevelopment())
+{
+    var keysDir = Path.Combine(builder.Environment.ContentRootPath, "DataProtection-Keys");
+    Directory.CreateDirectory(keysDir);
+    builder.Services.AddDataProtection()
+        .PersistKeysToFileSystem(new DirectoryInfo(keysDir))
+        .SetApplicationName("Compass");
+}
+
 // Configure authentication with Entra ID
 builder.Services.AddAuthentication(OpenIdConnectDefaults.AuthenticationScheme)
     .AddMicrosoftIdentityWebApp(builder.Configuration.GetSection("AzureAd"));
@@ -400,6 +416,8 @@ builder.Services.AddScoped<ICompassNotificationSettingsService, CompassNotificat
 builder.Services.AddScoped<IGlobalFeatureToggleService, GlobalFeatureToggleService>();
 builder.Services.AddScoped<Compass.Filters.DemandFeatureGateFilter>();
 builder.Services.AddScoped<Compass.Filters.StandardsFeatureGateFilter>();
+builder.Services.AddScoped<Compass.Filters.RaidFeatureGateFilter>();
+builder.Services.AddScoped<Compass.Filters.DdrFeatureGateFilter>();
 builder.Services.AddScoped<IUserDirectoryService, UserDirectoryService>();
 builder.Services.AddScoped<IProjectImportService, ProjectImportService>();
 builder.Services.AddScoped<IAuditContextProvider, HttpAuditContextProvider>();
@@ -409,12 +427,19 @@ builder.Services.AddScoped<INotificationRuleService, NotificationRuleService>();
 builder.Services.AddScoped<IAccessibilityTrainingService, AccessibilityTrainingService>();
 builder.Services.AddScoped<Compass.Services.DemandTriage.IDemandTriageService, Compass.Services.DemandTriage.DemandTriageService>();
 builder.Services.AddScoped<Compass.Services.Dashboard.IHomeDashboardViewModelBuilder, Compass.Services.Dashboard.HomeDashboardViewModelBuilder>();
+builder.Services.Configure<Compass.Configuration.WorkRegisterDiagnosticsOptions>(
+    builder.Configuration.GetSection(Compass.Configuration.WorkRegisterDiagnosticsOptions.SectionName));
 builder.Services.AddScoped<Compass.Services.Modern.IModernWorkService, Compass.Services.Modern.ModernWorkService>();
 builder.Services.AddScoped<ModernMonthlyReportService>();
+builder.Services.AddScoped<ModernRaidReviewProgressService>();
 builder.Services.AddScoped<ModernRaidReportingService>();
+builder.Services.AddScoped<ModernRaidReportService>();
 builder.Services.AddScoped<Compass.Services.Raid.IOperationsRiskEditService, Compass.Services.Raid.OperationsRiskEditService>();
+builder.Services.AddScoped<Compass.Services.Raid.IRaidRiskEditorFormService, Compass.Services.Raid.RaidRiskEditorFormService>();
+builder.Services.AddScoped<Compass.Services.Raid.IRaidIssueEditorFormService, Compass.Services.Raid.RaidIssueEditorFormService>();
 builder.Services.AddScoped<CommissionReportingAnalyticsService>();
 builder.Services.AddScoped<Compass.Services.DemandPipeline.IDemandScoringFrameworkService, Compass.Services.DemandPipeline.DemandScoringFrameworkService>();
+builder.Services.AddScoped<Compass.Services.DdtStandards.IDdtStandardsWorkflowService, Compass.Services.DdtStandards.DdtStandardsWorkflowService>();
 
 // Register HttpClientFactory for PerformanceReportingManagementController
 builder.Services.AddHttpClient();
@@ -431,6 +456,7 @@ builder.Services.AddHttpClient<Compass.Services.Fips.IStrapiService, Compass.Ser
 builder.Services.AddScoped<Compass.Services.Fips.IFipsSyncOrchestrator, Compass.Services.Fips.FipsSyncOrchestrator>();
 builder.Services.AddScoped<Compass.Services.Fips.IFipsCmdbProductSyncService, Compass.Services.Fips.FipsCmdbProductSyncService>();
 builder.Services.AddScoped<Compass.Services.Fips.IFipsProductWriteService, Compass.Services.Fips.FipsProductWriteService>();
+builder.Services.AddScoped<Compass.Services.Fips.IFipsCompletionBulkImportService, Compass.Services.Fips.FipsCompletionBulkImportService>();
 builder.Services.AddScoped<Compass.Services.Fips.IFipsBusinessAreaLookupSyncService, Compass.Services.Fips.FipsBusinessAreaLookupSyncService>();
 builder.Services.AddHttpClient<Compass.Services.Aiss.IAissSummaryService, Compass.Services.Aiss.AissSummaryService>()
     .SetHandlerLifetime(TimeSpan.FromMinutes(5));
@@ -538,6 +564,8 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
+app.UseStatusCodePagesWithReExecute("/Home/NotFound");
+
 // Configure HTTPS redirection
 // Skip in development since we're running on HTTP only (localhost:5500)
 if (!app.Environment.IsDevelopment())
@@ -561,6 +589,12 @@ app.Use(async (context, next) =>
     var nonce = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(16));
     context.Items["Nonce"] = nonce;
 
+    var req = context.Request;
+    // Iframe embed (?embed=1): allow same-origin framing for work edit modals. Do not read Request.Form here
+    // (would consume the body before MVC model binding on POST).
+    var isEmbedRequest =
+        string.Equals(req.Query["embed"].FirstOrDefault(), "1", StringComparison.Ordinal);
+
     // connect-src: note CSP host wildcards match one subdomain label only — e.g.
     // *.applicationinsights.azure.com does NOT match region.in.applicationinsights.azure.com.
     var connectSrc =
@@ -576,10 +610,11 @@ app.Use(async (context, next) =>
         "https://browser.events.data.microsoft.com https://*.events.data.microsoft.com " +
         "https://web.vortex.data.microsoft.com " +
         "https://*.livediagnostics.monitor.azure.com wss://*.livediagnostics.monitor.azure.com";
-    if (app.Environment.IsDevelopment())
+    // Local / non-prod: same as Development launch profile and Properties/launchSettings "Test" profile.
+    if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Test"))
     {
         connectSrc += " ws://localhost:* ws://127.0.0.1:* wss://localhost:* wss://127.0.0.1:*";
-        // Development-only: allow external telemetry/tooling endpoints that vary by region/tenant.
+        // Non-production: allow external telemetry/tooling endpoints that vary by region/tenant.
         // Keep production CSP strict and explicitly allow-listed.
         connectSrc += " https: http: wss: ws:";
     }
@@ -594,7 +629,7 @@ app.Use(async (context, next) =>
         "img-src 'self' data: https:; " +
         "font-src 'self' data: https://rsms.me https://fonts.gstatic.com https://cdnjs.cloudflare.com; " +
         $"connect-src {connectSrc}; " +
-        "frame-ancestors 'none'; " +
+        (isEmbedRequest ? "frame-ancestors 'self'; " : "frame-ancestors 'none'; ") +
         "base-uri 'self'; " +
         "form-action 'self'; " +
         "object-src 'none'";
@@ -604,7 +639,7 @@ app.Use(async (context, next) =>
     }
     context.Response.Headers["Content-Security-Policy"] = csp;
 
-    context.Response.Headers["X-Frame-Options"] = "DENY";
+    context.Response.Headers["X-Frame-Options"] = isEmbedRequest ? "SAMEORIGIN" : "DENY";
     context.Response.Headers["X-Content-Type-Options"] = "nosniff";
     context.Response.Headers["X-XSS-Protection"] = "1; mode=block";
     context.Response.Headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
@@ -613,6 +648,8 @@ app.Use(async (context, next) =>
 });
 
 app.UseRouting();
+
+app.UseMiddleware<Compass.Middleware.WorkRegisterResponseDiagnosticsMiddleware>();
 
 // API token authentication and logging (must be before UseAuthentication for API routes)
 app.UseMiddleware<ApiAuthenticationMiddleware>();

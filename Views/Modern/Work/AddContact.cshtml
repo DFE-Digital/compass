@@ -1,117 +1,281 @@
 @model Compass.Models.Modern.Work.WorkItemContact
+@using Compass.Models.Modern.Work
+@using Compass.ViewModels.Modern
+@using System.Linq
 @{
-    var work = ViewBag.WorkItem as Compass.Models.Modern.Work.WorkItem;
-    var roleTypes = (List<Compass.Models.Modern.Work.ContactRoleType>)ViewBag.ContactRoleTypes ?? new List<Compass.Models.Modern.Work.ContactRoleType>();
+    var work = ViewBag.WorkItem as WorkItem;
+    var roleTypes = (List<ContactRoleType>)ViewBag.ContactRoleTypes ?? new List<ContactRoleType>();
     var customRolePrefill = ViewBag.CustomRoleName as string;
+    var formKind = ViewBag.ContactFormKind as string ?? "Add";
+    var isAdd = formKind == "Add";
+    var isEditPrimary = formKind == "EditPrimary";
+    var isEditBudget = formKind == "EditBudget";
+    var isEditContact = formKind == "EditContact";
+    var returnTo = ViewBag.ReturnTo as string ?? "detail";
+    var returnToEdit = ViewBag.ReturnToEditPeople as bool? == true;
     var showCustomRole = Model.ContactRoleTypeId == 5 || !string.IsNullOrWhiteSpace(customRolePrefill);
-    ViewData["Title"] = "Add contact";
+    var rolePreset = Model.ContactRoleTypeId.HasValue && (isAdd || isEditContact);
+    var pageTitle = isEditPrimary ? "Change primary contact"
+        : isEditBudget ? "Change budget owner"
+        : isEditContact ? "Change contact"
+        : "Add contact";
+    var submitLabel = isAdd ? "Add contact" : "Save changes";
+    var ledeText = isEditPrimary
+        ? "Choose who is the primary contact for this work item."
+        : isEditBudget
+            ? "Set whether the budget owner is the same as the SRO, or assign a business area."
+            : isEditContact
+                ? "Change who holds this role on the work item."
+                : "Add a contact and role for this work item. Select Other (custom role) to type a bespoke role title.";
+    ViewData["Title"] = pageTitle;
+    bool HasErr(string field) => ViewData.ModelState[field]?.Errors?.Any() == true;
+    string? ErrMsg(string field) => ViewData.ModelState[field]?.Errors?.FirstOrDefault()?.ErrorMessage;
+    var cancelUrl = returnToEdit
+        ? Url.Action("EditPeople", "ModernWork", new { id = Model.WorkItemId })
+        : Url.Action("Detail", "ModernWork", new { id = Model.WorkItemId }) + "#wd-contacts";
+    var primaryUserId = ViewBag.PrimaryContactUserId as int? ?? ViewBag.ExistingContactUserId as int?;
+    var primaryUserName = ViewBag.PrimaryContactUserName as string ?? ViewBag.ExistingContactUserName as string;
+    var primaryUserEmail = ViewBag.PrimaryContactUserEmail as string ?? ViewBag.ExistingContactUserEmail as string;
     var userPicker = new Compass.Models.UserPickerViewModel
     {
         FieldName = "AppUserId",
-        Label = "Contact user",
-        Hint = "Search by name or email and choose one person.",
+        Label = isEditPrimary ? "Primary contact" : "Contact user",
+        Hint = isEditPrimary
+            ? "The person responsible for day-to-day management and communications."
+            : "Search by name or email and choose one person.",
         DefaultSummaryText = "No user selected.",
+        DefaultUserId = primaryUserId,
+        DefaultName = primaryUserName,
+        DefaultEmail = primaryUserEmail,
         UseGovUkStyling = true
     };
-    var returnToEdit = ViewBag.ReturnToEditPeople as bool? == true;
-    var cancelUrl = returnToEdit
-        ? Url.Action("EditPeople", "ModernWork", new { id = Model.WorkItemId })
-        : Url.Action("Detail", "ModernWork", new { id = Model.WorkItemId });
+    var budgetSameAsSro = ViewBag.BudgetOwnerSameAsSro as bool? ?? true;
+    var firstSroName = ViewBag.FirstSroName as string;
+    var selectedBusinessAreaId = ViewBag.SelectedBusinessAreaLookupId as int?;
+    var businessAreas = ViewBag.BusinessAreaOptions as List<LookupOption> ?? new List<LookupOption>();
+    string? RoleDisplayName(int? roleTypeId, string? roleName)
+    {
+        if (roleTypeId is >= 1 and <= 4)
+            return roleTypes.FirstOrDefault(r => r.Id == roleTypeId)?.Name ?? "Contact";
+        return string.IsNullOrWhiteSpace(roleName) ? "Custom role" : roleName;
+    }
+    var formPostAction = isAdd ? "AddContactPost" : "EditContactPost";
 }
 @section Breadcrumbs {
  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="/">Home</a></li>
  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernWork")">Work</a></li>
  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Detail", "ModernWork", new { id = Model.WorkItemId })">@(work?.Title ?? "Work")</a></li>
-    @if (returnToEdit)
-    {
- <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("EditPeople", "ModernWork", new { id = Model.WorkItemId })">Edit key people</a></li>
-    }
- <li class="govuk-breadcrumbs__list-item" aria-current="page">Add contact</li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">@pageTitle</li>
 }
 
-<div id="sc-work-addcontact">
-  @await Html.PartialAsync("_WorkItemChrome", ViewBag.WorkItem as Compass.Models.Modern.Work.WorkItem)
+<div id="sc-work-addcontact" class="modern-work-page">
+  @await Html.PartialAsync("_WorkItemChrome", work)
 
- <div class="dfe-c-page-title govuk-!-margin-bottom-5">
- <div class="dfe-c-page-title__caption">Work</div>
- <h1 class="dfe-c-page-title__heading">Add contact</h1>
- <p class="dfe-c-page-title__lede">@((work?.Title ?? "Work item"))</p>
+<div class="govuk-grid-row modern-work-detail-layout govuk-!-margin-top-4">
+  <div class="govuk-grid-column-one-quarter-from-desktop modern-work-detail-layout__nav">
+    <div class="dfe-f-u-sticky govuk-!-margin-bottom-4 modern-work-detail-layout__nav-inner" style="--dfe-f-sticky-top: 1rem;">
+      @await Html.PartialAsync("_WorkItemSideNav", work)
+    </div>
   </div>
+  <div class="govuk-grid-column-three-quarters-from-desktop modern-work-detail-main">
+@{
+  var pageLede = await Html.PartialAsync("_GovukBodyParagraph", ledeText);
+}
+@await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+  Caption = "Work",
+  Title = pageTitle,
+  HeadingTag = "h2",
+  HeadingClass = "govuk-heading-l",
+  Lede = pageLede
+})
 
-  @if (TempData["Error"] is string err && !string.IsNullOrWhiteSpace(err))
+  @if (!ViewData.ModelState.IsValid)
   {
- <div class="govuk-error-summary" role="alert" data-module="govuk-error-summary">
- <h2 class="govuk-error-summary__title">There is a problem</h2>
+ <div class="govuk-error-summary" data-module="govuk-error-summary" role="alert" aria-labelledby="addcontact-error-summary-title">
+ <h2 class="govuk-error-summary__title" id="addcontact-error-summary-title">There is a problem</h2>
  <div class="govuk-error-summary__body">
  <ul class="govuk-list govuk-error-summary__list">
-          <li><a href="#addcontact-role-type">@err</a></li>
+          @foreach (var kv in ViewData.ModelState)
+          {
+            if (kv.Value?.Errors == null || kv.Value.Errors.Count == 0) { continue; }
+            foreach (var e in kv.Value.Errors)
+            {
+              var anchorId = string.IsNullOrEmpty(kv.Key)
+                ? "addcontact-role-type"
+                : kv.Key == "AppUserId"
+                  ? "user-picker-AppUserId"
+                  : kv.Key == "CustomRole"
+                    ? "CustomRole"
+                    : kv.Key == "ContactRoleTypeId"
+                      ? "addcontact-role-type"
+                      : kv.Key == "BusinessAreaLookupId"
+                        ? "BudgetAreaLookupId"
+                        : kv.Key;
+              <li><a href="#@anchorId">@e.ErrorMessage</a></li>
+            }
+          }
         </ul>
       </div>
     </div>
   }
 
- <div class="dfe-c-form-layout">
+ <div class="dfe-c-form-layout dfe-c-form-layout--full-main">
  <div class="dfe-c-form-layout__main">
  <div class="dfe-c-card dfe-c-card--plain">
- <p class="govuk-body">Add a contact and role for this work item. Select <strong>Other (custom role)</strong> to type a bespoke role title.</p>
+ <p class="govuk-body">@ledeText</p>
 
- <form asp-controller="ModernWork" asp-action="AddContactPost" asp-route-id="@Model.WorkItemId" method="post" class="dfe-c-mb-0" novalidate>
+ <form asp-controller="ModernWork" asp-action="@formPostAction" asp-route-id="@Model.WorkItemId" method="post" class="dfe-c-mb-0" novalidate>
           @Html.AntiForgeryToken()
-          @if (returnToEdit) { <input type="hidden" name="returnTo" value="EditPeople" /> }
+          <input type="hidden" name="returnTo" value="@returnTo" />
+          @if (!isAdd)
+          {
+            <input type="hidden" name="kind" value="@(isEditPrimary ? "primary" : isEditBudget ? "budget" : "")" />
+            @if (isEditContact)
+            {
+              <input type="hidden" name="contactId" value="@Model.Id" />
+            }
+          }
 
+          @if (isEditPrimary || isEditContact || isAdd)
+          {
+ <div id="edit-add-contact">
+            @if (isEditContact)
+            {
  <div class="govuk-form-group">
- <label class="govuk-label govuk-label--m" asp-for="ContactRoleTypeId">Contact role</label>
- <div class="govuk-hint">Choose a standard role, or select <strong>Other</strong> to enter a custom one.</div>
- <select class="govuk-select govuk-!-width-one-half" asp-for="ContactRoleTypeId" id="addcontact-role-type">
-              <option value="0">Select role</option>
-              @foreach (var rt in roleTypes)
+ <label class="govuk-label govuk-label--m">Role</label>
+ <p class="govuk-body govuk-!-margin-bottom-0"><strong>@RoleDisplayName(Model.ContactRoleTypeId, Model.RoleName)</strong></p>
+              @if (Model.ContactRoleTypeId == 5 && !string.IsNullOrWhiteSpace(Model.RoleName))
               {
-                <option value="@rt.Id">@rt.Name</option>
+                <input type="hidden" name="CustomRole" value="@Model.RoleName" />
               }
-            </select>
-          </div>
+              @if (Model.ContactRoleTypeId.HasValue)
+              {
+                <input type="hidden" name="ContactRoleTypeId" value="@Model.ContactRoleTypeId" />
+              }
+            </div>
+            }
 
- <div class="govuk-form-group" id="addcontact-custom-role-wrap" style="@(showCustomRole ? "" : "display:none;")">
+            @if (isAdd && rolePreset)
+            {
+              <input type="hidden" name="ContactRoleTypeId" value="@Model.ContactRoleTypeId" />
+              @if (Model.ContactRoleTypeId == 5 && !string.IsNullOrWhiteSpace(customRolePrefill))
+              {
+                <input type="hidden" name="CustomRole" value="@customRolePrefill" />
+              }
+            }
+
+            @if (isAdd && !rolePreset)
+            {
+ <div class="govuk-form-group @(HasErr("ContactRoleTypeId") ? "govuk-form-group--error" : "")">
+ <label class="govuk-label govuk-label--m" asp-for="ContactRoleTypeId" id="addcontact-role-type-label">Contact role</label>
+ <div class="govuk-hint" id="addcontact-role-hint">Choose a standard role, or select <strong>Other</strong> to enter a custom one.</div>
+              @if (HasErr("ContactRoleTypeId"))
+              {
+ <p id="ContactRoleTypeId-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span>@ErrMsg("ContactRoleTypeId")</p>
+              }
+ <select class="govuk-select govuk-!-width-one-half @(HasErr("ContactRoleTypeId") ? "govuk-select--error" : "")" asp-for="ContactRoleTypeId" id="addcontact-role-type" aria-describedby="addcontact-role-hint @(HasErr("ContactRoleTypeId") ? "ContactRoleTypeId-error" : "")">
+                <option value="">Select role</option>
+                @foreach (var rt in roleTypes)
+                {
+                  <option value="@rt.Id">@rt.Name</option>
+                }
+              </select>
+            </div>
+
+ <div class="govuk-form-group @(HasErr("CustomRole") ? "govuk-form-group--error" : "") @(showCustomRole ? "" : "addcontact-custom-role-wrap--hidden")" id="addcontact-custom-role-wrap">
  <label class="govuk-label govuk-label--m" for="CustomRole">Custom role name</label>
  <div id="addcontact-custom-hint" class="govuk-hint">Enter the exact title to display, for example “Design lead”.</div>
- <input class="govuk-input govuk-!-width-one-half" type="text" name="CustomRole" id="CustomRole" value="@customRolePrefill" maxlength="100" autocomplete="off" />
-          </div>
+              @if (HasErr("CustomRole"))
+              {
+ <p id="CustomRole-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span>@ErrMsg("CustomRole")</p>
+              }
+ <input class="govuk-input govuk-!-width-one-half @(HasErr("CustomRole") ? "govuk-input--error" : "")" type="text" name="CustomRole" id="CustomRole" value="@customRolePrefill" maxlength="100" autocomplete="off" aria-describedby="addcontact-custom-hint @(HasErr("CustomRole") ? "CustomRole-error" : "")" />
+            </div>
+            }
 
-          @await Html.PartialAsync("_UserPicker", userPicker)
+ <div id="edit-contact-user" class="user-picker-wrapper--full-width">
+              @await Html.PartialAsync("~/Views/Modern/Shared/_UserPicker.cshtml", userPicker)
+            </div>
+ </div>
+          }
+
+          @if (isEditBudget)
+          {
+ <div id="edit-budget-owner">
+ <fieldset class="govuk-fieldset govuk-!-margin-bottom-4">
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Budget owner</legend>
+ <div class="govuk-hint govuk-!-margin-bottom-3">Defaults to the SRO when no separate business area is assigned.</div>
+ <div class="govuk-radios" data-module="govuk-radios">
+ <div class="govuk-radios__item">
+ <input class="govuk-radios__input" id="SameAsSro_True" name="SameAsSro" type="radio" value="true" @(budgetSameAsSro ? "checked" : null) />
+ <label class="govuk-label govuk-radios__label" for="SameAsSro_True">Same as SRO@(string.IsNullOrWhiteSpace(firstSroName) ? "" : $" — {firstSroName}")</label>
+                </div>
+ <div class="govuk-radios__item">
+ <input class="govuk-radios__input" id="SameAsSro_False" name="SameAsSro" type="radio" value="false" @(!budgetSameAsSro ? "checked" : null) />
+ <label class="govuk-label govuk-radios__label" for="SameAsSro_False">Assign a business area</label>
+                </div>
+              </div>
+            </fieldset>
+ <div class="govuk-form-group @(HasErr("BusinessAreaLookupId") ? "govuk-form-group--error" : "")" id="budget-area-picker" style="@(budgetSameAsSro ? "display:none;" : "")">
+ <label class="govuk-label govuk-label--m" for="BudgetAreaLookupId">Business area</label>
+ <div class="govuk-hint">Select the business area accountable for the budget.</div>
+              @if (HasErr("BusinessAreaLookupId"))
+              {
+ <p id="BusinessAreaLookupId-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span>@ErrMsg("BusinessAreaLookupId")</p>
+              }
+ <select class="govuk-select govuk-!-width-one-half @(HasErr("BusinessAreaLookupId") ? "govuk-select--error" : "")" name="BusinessAreaLookupId" id="BudgetAreaLookupId">
+                <option value="">Select business area</option>
+                @foreach (var area in businessAreas)
+                {
+                  <option value="@area.Id" selected="@(selectedBusinessAreaId == area.Id)">@area.Name</option>
+                }
+              </select>
+            </div>
+ </div>
+          }
 
  <div class="dfe-c-button-group">
- <button type="submit" class="govuk-button" data-module="govuk-button">Add contact</button>
+ <button type="submit" class="govuk-button" data-module="govuk-button">@submitLabel</button>
  <a href="@cancelUrl" class="govuk-link">Cancel</a>
           </div>
         </form>
-      </div>
-    </div>
 
- <div class="dfe-c-form-layout__aside">
- <div class="dfe-c-sidebar">
- <div class="dfe-c-scard">
- <div class="dfe-c-scard__title">Guidance</div>
- <p class="govuk-body govuk-!-font-size-16 govuk-!-margin-bottom-1"><strong>Use custom roles sparingly</strong></p>
- <p class="govuk-body-s govuk-!-margin-bottom-0">Prefer standard roles where possible so reports and ownership views stay consistent across work items.</p>
-        </div>
+          @if (isEditContact && Model.Id > 0)
+          {
+ <div class="govuk-!-margin-top-8 govuk-!-padding-top-6" style="border-top:1px solid #b1b4b6;">
+ <h3 class="govuk-heading-s govuk-!-margin-bottom-2">Remove contact</h3>
+ <p class="govuk-body govuk-!-margin-bottom-3">Remove this person from the work item. They will no longer appear in the contacts list for <strong>@RoleDisplayName(Model.ContactRoleTypeId, Model.RoleName)</strong>. This cannot be undone.</p>
+ <form asp-controller="ModernWork" asp-action="RemoveContact" asp-route-id="@Model.WorkItemId" asp-route-contactId="@Model.Id" method="post" data-confirm-title="Remove contact" data-confirm-message="Remove this person from the work item?">
+              @Html.AntiForgeryToken()
+              <input type="hidden" name="returnTo" value="@returnTo" />
+ <button type="submit" class="govuk-button govuk-button--warning" data-module="govuk-button">Remove contact</button>
+            </form>
+          </div>
+          }
       </div>
     </div>
   </div>
+  </div>
+</div>
 </div>
 
 @section Scripts {
-<script>
-(function(){
-  var sel = document.getElementById('addcontact-role-type');
-  var wrap = document.getElementById('addcontact-custom-role-wrap');
-  var customRole = document.getElementById('CustomRole');
-  function toggle() {
-    if (!sel || !wrap) return;
-    var v = sel.value;
-    wrap.style.display = (v === '5') ? 'block' : 'none';
-    if (customRole) customRole.required = (v === '5');
+<script src="~/modern/js/work-add-contact.js" asp-append-version="true" nonce="@Context.Items["Nonce"]"></script>
+@if (isEditBudget)
+{
+<script nonce="@Context.Items["Nonce"]">
+(function () {
+  function toggleBudgetArea() {
+    var picker = document.getElementById('budget-area-picker');
+    if (!picker) return;
+    var sameAsSro = document.querySelector('input[name="SameAsSro"]:checked');
+    picker.style.display = sameAsSro && sameAsSro.value === 'false' ? 'block' : 'none';
   }
-  if (sel) { sel.addEventListener('change', toggle); toggle(); }
+  document.querySelectorAll('input[name="SameAsSro"]').forEach(function (r) {
+    r.addEventListener('change', toggleBudgetArea);
+  });
+  toggleBudgetArea();
 })();
 </script>
+}
 }

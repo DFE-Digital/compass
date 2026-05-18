@@ -124,7 +124,29 @@ public class ServiceAssessmentApiService : IServiceAssessmentApiService
         await GetSasJsonAsync<SasActionsByStandardResponse>(
             "assessments/published/actions-by-standard", cancellationToken);
 
-    private async Task<T?> GetSasJsonAsync<T>(string relativePath, CancellationToken cancellationToken) where T : class
+    public async Task<SasAssessorsSummaryResponse?> GetAssessorsSummaryAsync(
+        CancellationToken cancellationToken = default) =>
+        await GetSasJsonAsync<SasAssessorsSummaryResponse>(
+            "assessors/summary", cancellationToken);
+
+    public async Task<SasProductAssessmentsResponse?> GetAssessmentsByProductIdAsync(
+        string productFipsId,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(productFipsId))
+            return null;
+
+        var encodedId = Uri.EscapeDataString(productFipsId.Trim());
+        return await GetSasJsonAsync<SasProductAssessmentsResponse>(
+            $"product/{encodedId}",
+            cancellationToken,
+            notFoundIsEmpty: true);
+    }
+
+    private async Task<T?> GetSasJsonAsync<T>(
+        string relativePath,
+        CancellationToken cancellationToken,
+        bool notFoundIsEmpty = false) where T : class
     {
         try
         {
@@ -143,6 +165,9 @@ public class ServiceAssessmentApiService : IServiceAssessmentApiService
             var response = await _httpClient.SendAsync(request, cancellationToken);
             if (!response.IsSuccessStatusCode)
             {
+                if (notFoundIsEmpty && response.StatusCode == System.Net.HttpStatusCode.NotFound)
+                    return null;
+
                 var body = await response.Content.ReadAsStringAsync(cancellationToken);
                 _logger.LogWarning(
                     "Service assessment API {Path} returned {Status}: {Body}",
@@ -156,6 +181,11 @@ public class ServiceAssessmentApiService : IServiceAssessmentApiService
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             throw;
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogError(ex, "Error deserializing service assessment API response for {Path}", relativePath);
+            return null;
         }
         catch (Exception ex)
         {

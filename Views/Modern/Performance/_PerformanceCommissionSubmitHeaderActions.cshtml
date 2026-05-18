@@ -1,0 +1,39 @@
+@model Compass.ViewModels.Modern.ModernPerformanceCommissionSubmitViewModel
+@using Compass.Models
+@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
+@{
+  var c = Model.Commission;
+  var sub = Model.Submission;
+  var fipsBaseUrl = Configuration["fipsProduct:baseUrl"] ?? "https://fips.education.gov.uk";
+  string? fipsProductUrl = null;
+  if (!string.IsNullOrEmpty(Model.Product.DocumentId))
+    fipsProductUrl = $"{fipsBaseUrl.TrimEnd('/')}/product/{Model.Product.DocumentId}";
+  else if (!string.IsNullOrEmpty(Model.Product.FipsId))
+    fipsProductUrl = $"{fipsBaseUrl.TrimEnd('/')}/product/{Model.Product.FipsId}";
+
+  string statusLabel = sub.Status switch
+  {
+    CommissionSubmissionStatus.NotStarted => "Not started",
+    CommissionSubmissionStatus.InProgress => "In progress",
+    CommissionSubmissionStatus.Submitted => "Submitted",
+    CommissionSubmissionStatus.Late => "Late",
+    _ => sub.Status.ToString()
+  };
+  string statusBadgeClass = sub.Status switch
+  {
+    CommissionSubmissionStatus.Submitted => "dfe-f-badge--green",
+    CommissionSubmissionStatus.Late => "dfe-f-badge--red",
+    CommissionSubmissionStatus.InProgress => "dfe-f-badge--blue",
+    _ => "dfe-f-badge--grey"
+  };
+}
+<div style="display:flex;flex-direction:column;align-items:flex-end;gap:0.5rem;width:100%;">
+ <span class="dfe-f-badge @statusBadgeClass">@statusLabel</span>
+ <div class="dfe-c-flex dfe-c-flex--wrap" style="gap:0.5rem;justify-content:flex-end;">
+    @if (!string.IsNullOrEmpty(fipsProductUrl))
+    {
+ <a class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0" href="@fipsProductUrl" target="_blank" rel="noopener noreferrer">View in FIPS</a>
+    }
+ <a class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0" href="@Url.Action("Commission", "ModernPerformance", new { commissionId = c.Id, tab = Model.ReturnTab })">Back to @c.Name</a>
+  </div>
+</div>

@@ -1,0 +1,588 @@
+@model ServiceRegisterSyncSettingsViewModel
+@using Compass.Models.Fips
+@using Compass.Services.Fips
+@using Compass.ViewModels.Modern
+@{
+    ViewData["Title"] = "Sync";
+    var rules = Model.Rules;
+    string TargetStatusLabel(CMDBProductStatus s) => s switch
+    {
+        CMDBProductStatus.Rejected => "Rejected",
+        CMDBProductStatus.Inactive => "Retired (inactive)",
+        _ => s.ToString()
+    };
+    string MatchKindLabel(string k) => k == FipsCmdbSyncRuleMatchKinds.Regex
+        ? "Regular expression"
+        : "Contains (case-insensitive)";
+    string ActionLabel(string a) => string.Equals(a, FipsCmdbSyncRuleActions.SetEnterpriseService, StringComparison.OrdinalIgnoreCase)
+        ? "Enterprise service: Yes"
+        : "Set status";
+    string EffectLabel(FipsCmdbSyncRule r) => string.Equals(r.Action, FipsCmdbSyncRuleActions.SetEnterpriseService, StringComparison.OrdinalIgnoreCase)
+        ? "Enterprise service: Yes"
+        : TargetStatusLabel(r.TargetStatus);
+
+    var rulesForManage = rules.Select(r => new
+    {
+        id = r.Id,
+        name = r.Name ?? "",
+        fieldScope = r.FieldScope,
+        matchKind = MatchKindLabel(r.MatchKind),
+        pattern = r.Pattern,
+        action = ActionLabel(r.Action),
+        effect = EffectLabel(r),
+        sortOrder = r.SortOrder,
+        isActive = r.IsActive
+    }).ToList();
+}
+
+@section Breadcrumbs {
+    <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+    <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernOperations")">Operations</a></li>
+    <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("ServiceRegister", "ModernOperations")">Service register</a></li>
+    <li class="govuk-breadcrumbs__list-item" aria-current="page">Sync</li>
+}
+
+@{
+    var syncSettingsLede = await Html.PartialAsync("_ServiceRegisterSyncSettingsHeaderLede");
+    var syncSettingsActions = await Html.PartialAsync("_ServiceRegisterSyncSettingsHeaderActions");
+}
+@await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+    Caption = "Operations",
+    Title = "Sync",
+    Lede = syncSettingsLede,
+    Actions = syncSettingsActions
+})
+
+@await Html.PartialAsync("_ServiceRegisterSubNav", Model.SubNav)
+
+@if (TempData["Success"] != null)
+{
+    <div class="govuk-notification-banner govuk-notification-banner--success govuk-!-margin-bottom-4" role="region" aria-labelledby="fips-sync-success-title">
+        <div class="govuk-notification-banner__header">
+            <h2 class="govuk-notification-banner__title" id="fips-sync-success-title">Success</h2>
+        </div>
+        <div class="govuk-notification-banner__content">
+            <p class="govuk-notification-banner__heading">@TempData["Success"]</p>
+        </div>
+    </div>
+}
+@if (TempData["Error"] != null)
+{
+    <div class="govuk-error-summary govuk-!-margin-bottom-3" role="alert">
+        <h2 class="govuk-error-summary__title">There is a problem</h2>
+        <div class="govuk-error-summary__body">@TempData["Error"]</div>
+    </div>
+}
+
+<div class="dfe-f-toggle-group govuk-!-margin-bottom-6" data-module="dfe-f-toggle-group">
+  <div class="dfe-f-toggle-group__controls govuk-body-s govuk-!-margin-bottom-2">
+    <button type="button" class="dfe-f-toggle-group__action" data-dfe-toggle-expand-all>Expand all</button>
+    <span class="dfe-f-toggle-group__separator" aria-hidden="true"> · </span>
+    <button type="button" class="dfe-f-toggle-group__action" data-dfe-toggle-collapse-all>Collapse all</button>
+  </div>
+  <div class="dfe-f-toggle-group__items">
+    @if (Model.CanSyncFromCmdb)
+    {
+      <div class="dfe-f-toggle" data-module="dfe-f-toggle">
+        <div class="dfe-f-toggle__title-wrapper">
+          <h2 class="dfe-f-toggle__heading govuk-!-margin-bottom-0">
+            <button type="button" class="dfe-f-toggle__button" aria-expanded="true" aria-controls="fips-sync-panel-bulk" id="fips-sync-toggle-bulk">
+              <span class="dfe-f-toggle__icon" aria-hidden="true"></span>
+              <span class="dfe-f-toggle__title">Bulk sync from CMDB</span>
+            </button>
+          </h2>
+        </div>
+        <div id="fips-sync-panel-bulk" class="dfe-f-toggle__content">
+          <div class="dfe-f-toggle__body">
+            <p class="govuk-body-s govuk-!-margin-bottom-3" style="color:#505a5f;">Update every matching FIPS product from CMDB. Applies sync rules below. Product categories are not updated — manage those separately in Compass.</p>
+            <form id="fips-cmdb-bulk-sync-antiforgery" method="post" class="govuk-!-margin-bottom-0" aria-hidden="true">
+              @Html.AntiForgeryToken()
+            </form>
+            <button type="button" class="govuk-button" id="fips-cmdb-bulk-sync-start" aria-haspopup="dialog">Sync from CMDB</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="dfe-f-toggle" data-module="dfe-f-toggle">
+        <div class="dfe-f-toggle__title-wrapper">
+          <h2 class="dfe-f-toggle__heading govuk-!-margin-bottom-0">
+            <button type="button" class="dfe-f-toggle__button" aria-expanded="false" aria-controls="fips-sync-panel-reset" id="fips-sync-toggle-reset">
+              <span class="dfe-f-toggle__icon" aria-hidden="true"></span>
+              <span class="dfe-f-toggle__title">Reset product data for CMDB resync</span>
+            </button>
+          </h2>
+        </div>
+        <div id="fips-sync-panel-reset" class="dfe-f-toggle__content" hidden>
+          <div class="dfe-f-toggle__body">
+            <div class="govuk-warning-text govuk-!-margin-bottom-4">
+              <span class="govuk-warning-text__icon" aria-hidden="true">!</span>
+              <strong class="govuk-warning-text__text">
+                <span class="govuk-warning-text__assistive">Warning</span>
+                This cannot be undone. Clears status, phase, business area, product URL, type, channel, and enterprise service on every non-retired product.
+              </strong>
+            </div>
+            <p class="govuk-body-s govuk-!-margin-bottom-3" style="color:#505a5f;">Titles, CMDB descriptions, contacts, user descriptions, and product categories are not changed. Retired (inactive) products are skipped. Run <strong>Sync from CMDB</strong> afterwards to reapply CMDB data and sync rules.</p>
+            <form method="post"
+                  action="@Url.Action("ServiceRegisterResetProductsForCmdb", "ModernOperations")"
+                  class="govuk-!-margin-bottom-0"
+                  data-confirm-title="Reset all product data for CMDB resync?"
+                  data-confirm-message="This clears status, phase, business area, product URL, type, channel, and enterprise service on all non-retired products. This cannot be undone.">
+              @Html.AntiForgeryToken()
+              <button type="submit" class="govuk-button govuk-button--warning">Reset all products</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    }
+
+    @await Html.PartialAsync("_ServiceRegisterSyncImportToggle", Model)
+
+    <div class="dfe-f-toggle" data-module="dfe-f-toggle">
+      <div class="dfe-f-toggle__title-wrapper">
+        <h2 class="dfe-f-toggle__heading govuk-!-margin-bottom-0">
+          <button type="button" class="dfe-f-toggle__button" aria-expanded="false" aria-controls="fips-sync-panel-add-rule" id="fips-sync-toggle-add-rule">
+            <span class="dfe-f-toggle__icon" aria-hidden="true"></span>
+            <span class="dfe-f-toggle__title">Add rule</span>
+          </button>
+        </h2>
+      </div>
+      <div id="fips-sync-panel-add-rule" class="dfe-f-toggle__content" hidden>
+        <div class="dfe-f-toggle__body">
+          <form method="post" action="@Url.Action("ServiceRegisterSyncSettingsAdd", "ModernOperations")" class="govuk-!-margin-bottom-0">
+            @Html.AntiForgeryToken()
+            <div class="govuk-form-group">
+              <label class="govuk-label" for="rule-name">Name (optional)</label>
+              <input class="govuk-input govuk-!-width-two-thirds" id="rule-name" name="name" type="text" maxlength="200" autocomplete="off" />
+            </div>
+            <div class="govuk-form-group">
+              <label class="govuk-label" for="rule-action">When matched</label>
+              <select class="govuk-select" id="rule-action" name="ruleAction">
+                <option value="@FipsCmdbSyncRuleActions.SetStatus" selected>Set status</option>
+                <option value="@FipsCmdbSyncRuleActions.SetEnterpriseService">Set enterprise service to Yes</option>
+              </select>
+            </div>
+            <div class="govuk-form-group">
+              <label class="govuk-label" for="rule-fieldScope">Field</label>
+              <select class="govuk-select" id="rule-fieldScope" name="fieldScope">
+                @foreach (var s in FipsCmdbSyncRuleScopes.All)
+                {
+                  if (s == FipsCmdbSyncRuleScopes.ParentName)
+                  {
+                    <option value="@s" selected>@s</option>
+                  }
+                  else
+                  {
+                    <option value="@s">@s</option>
+                  }
+                }
+              </select>
+            </div>
+            <div class="govuk-form-group">
+              <label class="govuk-label" for="rule-matchKind">Match</label>
+              <select class="govuk-select" id="rule-matchKind" name="matchKind">
+                <option value="@FipsCmdbSyncRuleMatchKinds.Contains" selected>Contains (case-insensitive)</option>
+                <option value="@FipsCmdbSyncRuleMatchKinds.Regex">Regular expression</option>
+              </select>
+            </div>
+            <div class="govuk-form-group">
+              <label class="govuk-label" for="rule-pattern">Pattern</label>
+              <div class="govuk-hint" id="rule-pattern-hint">
+                Examples: <code>(PP)</code> in <strong>Title</strong>; <strong>ServiceClassification</strong> + <code>Business Service</code>; <strong>ParentName</strong> + <code>End User Computing</code>.
+              </div>
+              <input class="govuk-input" id="rule-pattern" name="pattern" type="text" maxlength="2000" required aria-describedby="rule-pattern-hint" autocomplete="off" />
+            </div>
+            <div class="govuk-form-group" id="rule-status-group">
+              <label class="govuk-label" for="rule-targetStatus">Set status to</label>
+              <select class="govuk-select" id="rule-targetStatus" name="targetStatus">
+                <option value="@((int)CMDBProductStatus.Rejected)" selected>Rejected</option>
+                <option value="@((int)CMDBProductStatus.Inactive)">Retired (inactive)</option>
+              </select>
+            </div>
+            <div class="govuk-form-group">
+              <label class="govuk-label" for="rule-sortOrder">Sort order</label>
+              <div class="govuk-hint" id="rule-sort-hint">Lower numbers run first. Status rules: first match wins. Enterprise rules: any match sets the flag.</div>
+              <input class="govuk-input govuk-input--width-5" id="rule-sortOrder" name="sortOrder" type="number" value="10" aria-describedby="rule-sort-hint" />
+            </div>
+            <div class="govuk-checkboxes govuk-!-margin-bottom-4" data-module="govuk-checkboxes">
+              <div class="govuk-checkboxes__item">
+                <input class="govuk-checkboxes__input" id="rule-isActive" name="isActive" type="checkbox" value="true" checked />
+                <label class="govuk-label govuk-checkboxes__label" for="rule-isActive">Active</label>
+              </div>
+            </div>
+            <button type="submit" class="govuk-button">Add rule</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+@await Html.PartialAsync("_ServiceRegisterSyncImportResults", Model)
+
+<h2 class="govuk-heading-m">Rules</h2>
+@if (rules.Count > 0)
+{
+    <script type="application/json" id="fips-sync-rules-json">@Html.Raw(Json.Serialize(rulesForManage))</script>
+}
+@if (rules.Count == 0)
+{
+    <p class="govuk-body">No rules yet. Open <strong>Add rule</strong> above to create one, then run <strong>Bulk sync from CMDB</strong>.</p>
+}
+else
+{
+    <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+        <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+        <table class="govuk-table">
+            <caption class="govuk-visually-hidden">CMDB sync rules</caption>
+            <thead class="govuk-table__head">
+                <tr class="govuk-table__row">
+                    <th scope="col" class="govuk-table__header" aria-sort="none">
+                        <button type="button" class="dfe-f-table-sort-button">Order</button>
+                    </th>
+                    <th scope="col" class="govuk-table__header" aria-sort="none">
+                        <button type="button" class="dfe-f-table-sort-button">Active</button>
+                    </th>
+                    <th scope="col" class="govuk-table__header" aria-sort="none">
+                        <button type="button" class="dfe-f-table-sort-button">Name</button>
+                    </th>
+                    <th scope="col" class="govuk-table__header" aria-sort="none">
+                        <button type="button" class="dfe-f-table-sort-button">Field</button>
+                    </th>
+                    <th scope="col" class="govuk-table__header" aria-sort="none">
+                        <button type="button" class="dfe-f-table-sort-button">Match</button>
+                    </th>
+                    <th scope="col" class="govuk-table__header" aria-sort="none">
+                        <button type="button" class="dfe-f-table-sort-button">Pattern</button>
+                    </th>
+                    <th scope="col" class="govuk-table__header" aria-sort="none">
+                        <button type="button" class="dfe-f-table-sort-button">Effect</button>
+                    </th>
+                    <th scope="col" class="govuk-table__header" aria-sort="none">
+                        <span class="govuk-visually-hidden">Actions</span>
+                    </th>
+                </tr>
+            </thead>
+            <tbody class="govuk-table__body">
+                @foreach (var r in rules)
+                {
+                    <tr class="govuk-table__row">
+                        <td class="govuk-table__cell">@r.SortOrder</td>
+                        <td class="govuk-table__cell">@(r.IsActive ? "Yes" : "No")</td>
+                        <td class="govuk-table__cell">@(string.IsNullOrWhiteSpace(r.Name) ? "—" : r.Name)</td>
+                        <td class="govuk-table__cell">@r.FieldScope</td>
+                        <td class="govuk-table__cell">@r.MatchKind</td>
+                        <td class="govuk-table__cell" style="max-width:18rem;word-break:break-word;">@r.Pattern</td>
+                        <td class="govuk-table__cell">@EffectLabel(r)</td>
+                        <td class="govuk-table__cell">
+                            <button type="button"
+                                    class="govuk-link govuk-link--no-visited-state fips-sync-rule-manage-open"
+                                    data-rule-id="@r.Id">
+                                Manage
+                            </button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@if (Model.CanSyncFromCmdb)
+{
+  @await Html.PartialAsync("~/Views/Modern/Shared/_ServiceRegisterBulkSyncModals.cshtml")
+}
+
+<dialog id="fips-sync-rule-manage-modal"
+        class="dfe-f-modal govuk-!-margin-0"
+        data-module="dfe-f-modal"
+        aria-labelledby="fips-sync-rule-manage-title"
+        aria-describedby="fips-sync-rule-manage-desc"
+        aria-modal="true"
+        role="dialog">
+    <div class="dfe-f-modal__panel">
+        <header class="dfe-f-modal__header">
+            <h2 id="fips-sync-rule-manage-title" class="govuk-heading-m dfe-f-modal__title">Manage rule</h2>
+            <button type="button" class="dfe-f-modal__close" data-dfe-modal-close aria-label="Close">
+                <span class="dfe-f-modal__close-x" aria-hidden="true">×</span>
+            </button>
+        </header>
+        <div class="dfe-f-modal__body" id="fips-sync-rule-manage-desc">
+            <dl class="govuk-summary-list govuk-summary-list--no-border" id="fips-sync-rule-manage-summary"></dl>
+            <div class="govuk-button-group govuk-!-margin-top-4 govuk-!-margin-bottom-0" id="fips-sync-rule-manage-actions">
+                <form method="post"
+                      id="fips-sync-rule-toggle-form"
+                      class="govuk-!-margin-bottom-0"
+                      data-confirm-title=""
+                      data-confirm-message="">
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0" id="fips-sync-rule-toggle-btn">Disable</button>
+                </form>
+                <form method="post"
+                      id="fips-sync-rule-delete-form"
+                      class="govuk-!-margin-bottom-0"
+                      data-confirm-title="Delete this rule?"
+                      data-confirm-message="This cannot be undone. The rule will be removed permanently.">
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="govuk-button govuk-button--warning govuk-!-margin-bottom-0">Delete</button>
+                </form>
+            </div>
+        </div>
+        <footer class="dfe-f-modal__footer">
+            <button type="button" class="govuk-button govuk-button--secondary" data-dfe-modal-close>Close</button>
+        </footer>
+    </div>
+</dialog>
+
+@section Scripts {
+    <script nonce="@Context.Items["Nonce"]">
+        (function () {
+            var setEnterpriseAction = @Html.Raw(Json.Serialize(FipsCmdbSyncRuleActions.SetEnterpriseService));
+            var ruleActionEl = document.getElementById('rule-action');
+            var ruleStatusGroup = document.getElementById('rule-status-group');
+            function syncRuleActionFields() {
+                if (!ruleActionEl || !ruleStatusGroup) return;
+                ruleStatusGroup.hidden = ruleActionEl.value === setEnterpriseAction;
+            }
+            if (ruleActionEl) {
+                ruleActionEl.addEventListener('change', syncRuleActionFields);
+                syncRuleActionFields();
+            }
+
+            var toggleUrlTemplate = @Html.Raw(Json.Serialize(Url.Action("ServiceRegisterSyncSettingsToggle", "ModernOperations", new { id = 99999 })));
+            var deleteUrlTemplate = @Html.Raw(Json.Serialize(Url.Action("ServiceRegisterSyncSettingsDelete", "ModernOperations", new { id = 99999 })));
+            var manageDlg = document.getElementById('fips-sync-rule-manage-modal');
+            var summaryEl = document.getElementById('fips-sync-rule-manage-summary');
+            var toggleForm = document.getElementById('fips-sync-rule-toggle-form');
+            var toggleBtn = document.getElementById('fips-sync-rule-toggle-btn');
+            var deleteForm = document.getElementById('fips-sync-rule-delete-form');
+
+            function initDfe() {
+                if (window.DfeFrontend && typeof window.DfeFrontend.initAll === 'function') {
+                    window.DfeFrontend.initAll();
+                }
+            }
+
+            function rowHtml(label, value) {
+                return '<div class="govuk-summary-list__row">' +
+                    '<dt class="govuk-summary-list__key">' + label + '</dt>' +
+                    '<dd class="govuk-summary-list__value">' + value + '</dd>' +
+                    '</div>';
+            }
+
+            function escapeHtml(s) {
+                var d = document.createElement('div');
+                d.textContent = s;
+                return d.innerHTML;
+            }
+
+            function urlWithId(template, id) {
+                return template.replace('99999', String(id));
+            }
+
+            var rulesById = {};
+            var rulesJsonEl = document.getElementById('fips-sync-rules-json');
+            if (rulesJsonEl) {
+                try {
+                    var rulesList = JSON.parse(rulesJsonEl.textContent || '[]');
+                    rulesList.forEach(function (r) { rulesById[r.id] = r; });
+                } catch (e) { /* ignore */ }
+            }
+
+            function openManageRule(rule) {
+                if (!rule || !manageDlg || !summaryEl) return;
+
+                var displayName = rule.name ? escapeHtml(rule.name) : '—';
+                summaryEl.innerHTML =
+                    rowHtml('Name', displayName) +
+                    rowHtml('Sort order', escapeHtml(String(rule.sortOrder))) +
+                    rowHtml('Active', rule.isActive ? 'Yes' : 'No') +
+                    rowHtml('Field', escapeHtml(rule.fieldScope)) +
+                    rowHtml('Match', escapeHtml(rule.matchKind)) +
+                    rowHtml('Pattern', '<span style="word-break:break-word;">' + escapeHtml(rule.pattern) + '</span>') +
+                    rowHtml('When matched', escapeHtml(rule.action)) +
+                    rowHtml('Effect', escapeHtml(rule.effect));
+
+                if (toggleForm && toggleBtn) {
+                    toggleForm.action = urlWithId(toggleUrlTemplate, rule.id);
+                    if (rule.isActive) {
+                        toggleBtn.textContent = 'Disable';
+                        toggleForm.setAttribute('data-confirm-title', 'Disable this rule?');
+                        toggleForm.setAttribute('data-confirm-message', 'The rule will no longer apply during CMDB sync.');
+                    } else {
+                        toggleBtn.textContent = 'Enable';
+                        toggleForm.setAttribute('data-confirm-title', 'Enable this rule?');
+                        toggleForm.setAttribute('data-confirm-message', 'The rule will apply again during CMDB sync.');
+                    }
+                }
+                if (deleteForm) {
+                    deleteForm.action = urlWithId(deleteUrlTemplate, rule.id);
+                }
+
+                if (typeof manageDlg.showModal === 'function') {
+                    manageDlg.showModal();
+                } else {
+                    manageDlg.setAttribute('open', '');
+                }
+                initDfe();
+            }
+
+            document.addEventListener('click', function (e) {
+                var btn = e.target.closest('.fips-sync-rule-manage-open');
+                if (!btn) return;
+                e.preventDefault();
+                var ruleId = parseInt(btn.getAttribute('data-rule-id'), 10);
+                if (!ruleId) return;
+                openManageRule(rulesById[ruleId]);
+            });
+        })();
+    </script>
+    @if (Model.CanSyncFromCmdb)
+    {
+        <script nonce="@Context.Items["Nonce"]">
+            (function () {
+                var streamUrl = @Html.Raw(Json.Serialize(Url.Action("ServiceRegisterSyncStream", "ModernOperations")));
+                var startBtn = document.getElementById('fips-cmdb-bulk-sync-start');
+                var confirmModal = document.getElementById('fips-cmdb-bulk-sync-confirm-modal');
+                var confirmProceed = document.getElementById('fips-cmdb-bulk-sync-confirm-proceed');
+                var modal = document.getElementById('fips-cmdb-bulk-sync-modal');
+                var live = document.getElementById('fips-cmdb-bulk-sync-live');
+                var progress = document.getElementById('fips-cmdb-bulk-sync-progress');
+                var countEl = document.getElementById('fips-cmdb-bulk-sync-count');
+                var summary = document.getElementById('fips-cmdb-bulk-sync-summary');
+                var closeBtn = document.getElementById('fips-cmdb-bulk-sync-close');
+                var dismissBtn = document.getElementById('fips-cmdb-bulk-sync-dismiss');
+                var tokenForm = document.getElementById('fips-cmdb-bulk-sync-antiforgery');
+                var headerCloseBtn = document.getElementById('fips-cmdb-bulk-sync-header-close');
+                if (!startBtn || !confirmModal || !modal || !tokenForm) return;
+
+                var syncFinished = false;
+                var abortController = null;
+
+                function getToken() {
+                    var input = tokenForm.querySelector('input[name="__RequestVerificationToken"]');
+                    return input ? input.value : '';
+                }
+
+                function openModal() {
+                    syncFinished = false;
+                    abortController = new AbortController();
+                    try { modal.showModal(); } catch (e) {}
+                    summary.style.display = 'none';
+                    summary.textContent = '';
+                    closeBtn.style.display = 'none';
+                    dismissBtn.disabled = false;
+                    dismissBtn.textContent = 'Cancel';
+                    progress.value = 0;
+                    countEl.textContent = '';
+                    live.textContent = 'Starting…';
+                    startBtn.disabled = true;
+                }
+
+                function endModal(success) {
+                    syncFinished = true;
+                    abortController = null;
+                    startBtn.disabled = false;
+                    dismissBtn.textContent = 'Close';
+                    if (success) closeBtn.style.display = '';
+                }
+
+                function applyProgress(data) {
+                    if (data.message) live.textContent = data.message;
+                    if (data.processed != null && data.total != null && data.total > 0) {
+                        progress.value = Math.min(100, Math.round((data.processed / data.total) * 100));
+                        countEl.textContent = 'Processed ' + data.processed + ' of ' + data.total + ' CMDB rows.';
+                    } else if (data.phase === 'preparing' || data.phase === 'loading_cmdb') {
+                        progress.removeAttribute('value');
+                    }
+                }
+
+                function buildSummary(r) {
+                    var lines = [];
+                    lines.push('Created ' + (r.created || 0) + ' product(s), updated ' + r.updated + '. Status set by sync rules: ' + r.statusSetByRules + '.');
+                    lines.push('Skipped — retired in Compass: ' + r.skippedRetired + '; no sys_id: ' + r.skippedNoSysId + '.');
+                    if (r.errors > 0) {
+                        lines.push('Errors: ' + r.errors + '.');
+                        if (r.errorSamples && r.errorSamples.length) lines.push(r.errorSamples.join(' '));
+                    }
+                    return lines.join(' ');
+                }
+
+                function closeProgressModal() {
+                    if (!syncFinished && abortController) abortController.abort();
+                    try { modal.close(); } catch (e) {}
+                }
+
+                dismissBtn.addEventListener('click', closeProgressModal);
+                if (headerCloseBtn) headerCloseBtn.addEventListener('click', closeProgressModal);
+                closeBtn.addEventListener('click', function () { window.location.reload(); });
+
+                function startBulkStreamSync() {
+                    openModal();
+                    var body = new URLSearchParams();
+                    body.set('__RequestVerificationToken', getToken());
+                    fetch(streamUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'text/event-stream' },
+                        body: body,
+                        signal: abortController.signal
+                    }).then(function (res) {
+                        if (!res.ok) {
+                            live.textContent = 'Sync could not start (' + res.status + ').';
+                            endModal(false);
+                            return null;
+                        }
+                        return res.body.getReader();
+                    }).then(function (reader) {
+                        if (!reader) return;
+                        var decoder = new TextDecoder();
+                        var buffer = '';
+                        function pump() {
+                            return reader.read().then(function (result) {
+                                if (result.done) return;
+                                buffer += decoder.decode(result.value, { stream: true });
+                                var parts = buffer.split('\n\n');
+                                buffer = parts.pop() || '';
+                                for (var i = 0; i < parts.length; i++) {
+                                    var block = parts[i].trim();
+                                    if (block.indexOf('data: ') !== 0) continue;
+                                    var data;
+                                    try { data = JSON.parse(block.slice(6)); } catch (e) { continue; }
+                                    if (data.phase === 'complete' && data.success && data.result) {
+                                        progress.value = 100;
+                                        countEl.textContent = '';
+                                        live.textContent = 'Sync finished.';
+                                        summary.style.display = '';
+                                        summary.textContent = buildSummary(data.result);
+                                        endModal(true);
+                                    } else if (data.phase === 'error') {
+                                        live.textContent = data.message || 'Sync failed.';
+                                        endModal(false);
+                                    } else {
+                                        applyProgress(data);
+                                    }
+                                }
+                                return pump();
+                            });
+                        }
+                        return pump();
+                    }).catch(function (err) {
+                        live.textContent = (err && err.name === 'AbortError') ? 'Sync cancelled.' : 'Network error during sync.';
+                        endModal(false);
+                    });
+                }
+
+                startBtn.addEventListener('click', function () {
+                    try { confirmModal.showModal(); } catch (e) {}
+                    if (confirmProceed) setTimeout(function () { confirmProceed.focus(); }, 0);
+                });
+                if (confirmProceed) {
+                    confirmProceed.addEventListener('click', function () {
+                        try { confirmModal.close(); } catch (e) {}
+                        startBulkStreamSync();
+                    });
+                }
+                initDfe();
+            })();
+        </script>
+    }
+}

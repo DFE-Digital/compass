@@ -1,54 +1,684 @@
-@model Compass.Models.BusinessAreaLookup
+@model Compass.ViewModels.Modern.ModernRaidBusinessAreaDetailViewModel
+@using System
+@using System.Linq
+@using System.Text.Json
+@using Compass.Models.Modern.Work
+@using Compass.ViewModels.Modern
+@using Microsoft.AspNetCore.Html
 @{
-  ViewData["Title"] = "Business area — " + Model.Name;
-  var workItemCount = ViewBag.BusinessAreaWorkItemCount as int? ?? 0;
-  var riskCount = ViewBag.BusinessAreaRiskCount as int? ?? 0;
-  var openRiskCount = ViewBag.BusinessAreaOpenRiskCount as int? ?? 0;
+  var ba = Model.BusinessArea;
+  ViewData["Title"] = "Business area — " + ba.Name;
+  var sec = Model.ActiveSection;
+  string RaidRegisterScoreClass(int score) =>
+    score >= 20 ? "raid-reg-score raid-reg-score--highest"
+    : score >= 15 ? "raid-reg-score raid-reg-score--elevated"
+    : score >= 8 ? "raid-reg-score raid-reg-score--medium"
+    : "raid-reg-score raid-reg-score--lower";
+  string SectionUrl(string s) => Url.Action("BusinessAreaDetail", "ModernRaid", new { id = ba.Id, section = s }) ?? "#";
+
+  var jsonOpts = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+  var riskModalItems = Model.OpenRisks.Concat(Model.ClosedRisks).DistinctBy(r => r.Id).Select(r => new
+  {
+    id = r.Id,
+    kind = "risk",
+    title = r.Title,
+    reference = $"R-{r.Id:D4}",
+    summary = r.DescriptionSummary ?? "",
+    detailUrl = Url.Action("RiskDetail", "ModernRaid", new { id = r.Id }) ?? "#",
+    editUrl = Url.Action("RiskEdit", "ModernRaid", new { id = r.Id }) ?? "#"
+  }).ToList();
+  var issueModalItems = Model.OpenIssues.Concat(Model.ClosedIssues).DistinctBy(i => i.Id).Select(i => new
+  {
+    id = i.Id,
+    kind = "issue",
+    title = i.Title,
+    reference = $"I-{i.Id:D4}",
+    summary = i.DescriptionSummary ?? "",
+    detailUrl = Url.Action("IssueDetail", "ModernRaid", new { id = i.Id }) ?? "#",
+    editUrl = Url.Action("IssueEdit", "ModernRaid", new { id = i.Id }) ?? "#"
+  }).ToList();
+  var riskModalJson = JsonSerializer.Serialize(riskModalItems, jsonOpts);
+  var issueModalJson = JsonSerializer.Serialize(issueModalItems, jsonOpts);
 }
 
 @section Breadcrumbs {
   <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
   <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernRaid")">RAID</a></li>
   <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("BusinessAreas", "ModernRaid")">Business areas</a></li>
-  <li class="govuk-breadcrumbs__list-item" aria-current="page">@Model.Name</li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">@ba.Name</li>
 }
 
-<div class="dfe-c-page modern-work-page">
-  <div class="dfe-c-flex--between dfe-c-mb-3" style="flex-wrap:wrap;gap:0.75rem;">
-    <div class="dfe-c-page-title" style="margin:0;">
-      <div class="dfe-c-page-title__caption">RAID · Business area #@Model.Id</div>
-      <h1 class="dfe-c-page-title__heading">@Model.Name</h1>
-      <p class="dfe-c-page-title__lede">Business area-level risk profile for linked work items.</p>
+<div class="modern-work-page raid-ba-dashboard">
+  <style>
+    .raid-ba-dashboard .raid-ba-dashboard-shell {
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+    }
+    .raid-ba-dashboard .raid-ba-dashboard-shell .dfe-f-table-wrapper { margin-bottom: 0; }
+    .raid-ba-dashboard .raid-ba-data-table { margin-bottom: 0; }
+    .raid-ba-dashboard .raid-ba-data-table thead .govuk-table__header {
+      background: #f3f2f1;
+      border-bottom: 2px solid #0b0c0c;
+      font-weight: 700;
+      vertical-align: bottom;
+    }
+    .raid-ba-dashboard .raid-ba-data-table tbody tr:nth-child(even) { background: #fafafa; }
+    .raid-ba-dashboard .raid-ba-data-table tbody td,
+    .raid-ba-dashboard .raid-ba-data-table tbody th { vertical-align: middle; }
+    .raid-reg-score { display: inline-block; min-width: 2.5rem; padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-weight: 700; font-variant-numeric: tabular-nums; text-align: center; line-height: 1.25; box-shadow: inset 0 0 0 1px rgba(11, 12, 12, 0.12); }
+    .raid-reg-score--highest { background: #c00; color: #fff; }
+    .raid-reg-score--elevated { background: #e0761e; color: #0b0c0c; }
+    .raid-reg-score--medium { background: #f5e6c8; color: #0b0c0c; }
+    .raid-reg-score--lower { background: #f3f2f1; color: #0b0c0c; }
+    .raid-ba-dialog::backdrop { background: rgba(11, 12, 12, 0.45); }
+    .raid-ba-dialog { border: 2px solid #0b0c0c; border-radius: 0; max-width: 40rem; width: 92vw; padding: 0; }
+    .raid-ba-dialog .raid-ba-dialog__inner { max-height: 85vh; overflow: auto; }
+    .raid-ba-modal-open { text-decoration: underline; text-underline-offset: 2px; }
+    .raid-ba-modal-open:hover { text-decoration-thickness: max(3px, 0.1875rem); }
+  </style>
+
+  @await Html.PartialAsync("~/Views/Modern/Shared/_ModernPageHeader.cshtml", new ModernPageHeaderViewModel {
+    Caption = $"RAID · Business area #{ba.Id}",
+    Title = ba.Name,
+    Lede = new HtmlString("<p class=\"govuk-body govuk-!-margin-bottom-0\">Dashboard for RAID items scoped to this business area: leadership, directorate links, and registers below.</p>")
+  })
+
+  <div class="dfe-f-card-grid dfe-c-mb-4" role="region" aria-label="RAID summary for this business area">
+    <div class="dfe-f-stat-card dfe-f-stat-card--tint-blue">
+      <p class="govuk-body-s dfe-f-stat-card__label">Linked work items</p>
+      <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@Model.WorkItemCount</p>
     </div>
-    <div class="dfe-c-flex" style="gap:0.5rem;">
-      <a href="@Url.Action("BusinessAreas", "ModernRaid", new { businessAreaId = Model.Id })" class="govuk-button">Risks for this business area</a>
-      <a href="@Url.Action("Index", "ModernAdmin", new { panel = "business-areas" })" class="govuk-button govuk-button--secondary">Manage in settings</a>
-      <a href="@Url.Action("BusinessAreas", "ModernRaid")" class="govuk-button govuk-button--secondary">All business areas</a>
+    <div class="dfe-f-stat-card dfe-f-stat-card--tint-orange">
+      <p class="govuk-body-s dfe-f-stat-card__label">Open risks</p>
+      <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@Model.OpenRiskCountSummary</p>
+    </div>
+    <div class="dfe-f-stat-card dfe-f-stat-card--tint-teal">
+      <p class="govuk-body-s dfe-f-stat-card__label">Open issues</p>
+      <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@Model.OpenIssueCount</p>
+    </div>
+    <div class="dfe-f-stat-card dfe-f-stat-card--tint-grey">
+      <p class="govuk-body-s dfe-f-stat-card__label">Total risks</p>
+      <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@Model.TotalRiskCount</p>
     </div>
   </div>
 
-  <div class="dfe-c-grid" style="grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:1rem;">
-    <div class="dfe-c-card"><div class="dfe-c-page-title__caption">Linked work items</div><strong>@workItemCount</strong></div>
-    <div class="dfe-c-card"><div class="dfe-c-page-title__caption">Total risks</div><strong>@riskCount</strong></div>
-    <div class="dfe-c-card"><div class="dfe-c-page-title__caption">Open risks</div><strong>@openRiskCount</strong></div>
+  <div class="govuk-grid-row govuk-!-margin-bottom-6">
+    <div class="govuk-grid-column-two-thirds">
+      <div class="govuk-inset-text govuk-!-margin-bottom-0">
+        <h2 class="govuk-heading-s govuk-!-margin-top-0">About this business area</h2>
+        <p class="govuk-body govuk-!-margin-bottom-2">@(string.IsNullOrWhiteSpace(ba.Description) ? "No description has been recorded for this business area." : ba.Description)</p>
+        <h3 class="govuk-heading-s govuk-!-margin-bottom-1">Leadership scope</h3>
+        <p class="govuk-body-s govuk-!-margin-bottom-2">Deputy directors and leadership contacts assigned in Admin for this business area (used for performance and RAID governance context).</p>
+        <p class="govuk-body govuk-!-margin-bottom-0">@(string.IsNullOrWhiteSpace(Model.LeadershipScopeSummary) ? "— No leadership contacts recorded." : Model.LeadershipScopeSummary)</p>
+        @if (!string.IsNullOrWhiteSpace(Model.LinkedDirectoratesSummary))
+        {
+          <h3 class="govuk-heading-s govuk-!-margin-top-4 govuk-!-margin-bottom-1">Directorate</h3>
+          <p class="govuk-body govuk-!-margin-bottom-0">@Model.LinkedDirectoratesSummary</p>
+        }
+        else
+        {
+          <h3 class="govuk-heading-s govuk-!-margin-top-4 govuk-!-margin-bottom-1">Directorate</h3>
+          <p class="govuk-body govuk-!-margin-bottom-0">— This business area is not linked to a directorate (division) in Admin.</p>
+        }
+      </div>
+    </div>
+    <div class="govuk-grid-column-one-third">
+      <h2 class="govuk-heading-s">Record</h2>
+      <dl class="govuk-summary-list">
+        <div class="govuk-summary-list__row">
+          <dt class="govuk-summary-list__key">Sort order</dt>
+          <dd class="govuk-summary-list__value">@ba.SortOrder</dd>
+        </div>
+        <div class="govuk-summary-list__row">
+          <dt class="govuk-summary-list__key">Active</dt>
+          <dd class="govuk-summary-list__value">@(ba.IsActive ? "Yes" : "No")</dd>
+        </div>
+        <div class="govuk-summary-list__row">
+          <dt class="govuk-summary-list__key">Updated</dt>
+          <dd class="govuk-summary-list__value">@ba.UpdatedAt.ToString("d MMM yyyy HH:mm") UTC</dd>
+        </div>
+      </dl>
+    </div>
   </div>
 
-  <dl class="govuk-summary-list govuk-!-margin-bottom-9">
-    <div class="govuk-summary-list__row">
-      <dt class="govuk-summary-list__key">Description</dt>
-      <dd class="govuk-summary-list__value govuk-body">@(string.IsNullOrEmpty(Model.Description) ? "—" : Model.Description)</dd>
+  <nav class="dfe-f-sub-navigation govuk-!-margin-bottom-3" aria-label="RAID registers for this business area">
+    <ul class="dfe-f-sub-navigation__list" style="flex-wrap:wrap;">
+      <li class="dfe-f-sub-navigation__item@(sec == "risks" ? " dfe-f-sub-navigation__item--active" : "")">
+        <a href="@SectionUrl("risks")" class="dfe-f-sub-navigation__link govuk-link govuk-link--no-visited-state" id="raid-ba-nav-risks"@if (sec == "risks") { <text> aria-current="page"</text> }>Risks <span class="dfe-c-fw-regular">(@Model.TotalRiskCount)</span></a>
+      </li>
+      <li class="dfe-f-sub-navigation__item@(sec == "issues" ? " dfe-f-sub-navigation__item--active" : "")">
+        <a href="@SectionUrl("issues")" class="dfe-f-sub-navigation__link govuk-link govuk-link--no-visited-state" id="raid-ba-nav-issues"@if (sec == "issues") { <text> aria-current="page"</text> }>Issues <span class="dfe-c-fw-regular">(@Model.TotalIssuesCount)</span></a>
+      </li>
+      <li class="dfe-f-sub-navigation__item@(sec == "dependencies" ? " dfe-f-sub-navigation__item--active" : "")">
+        <a href="@SectionUrl("dependencies")" class="dfe-f-sub-navigation__link govuk-link govuk-link--no-visited-state" id="raid-ba-nav-deps"@if (sec == "dependencies") { <text> aria-current="page"</text> }>Dependencies <span class="dfe-c-fw-regular">(@Model.TotalDependenciesCount)</span></a>
+      </li>
+      <li class="dfe-f-sub-navigation__item@(sec == "assumptions" ? " dfe-f-sub-navigation__item--active" : "")">
+        <a href="@SectionUrl("assumptions")" class="dfe-f-sub-navigation__link govuk-link govuk-link--no-visited-state" id="raid-ba-nav-asm"@if (sec == "assumptions") { <text> aria-current="page"</text> }>Assumptions <span class="dfe-c-fw-regular">(@Model.TotalAssumptionsCount)</span></a>
+      </li>
+    </ul>
+  </nav>
+
+  @if (sec == "risks")
+  {
+    <h2 class="govuk-heading-m govuk-!-margin-bottom-3">Open risks</h2>
+    @if (Model.OpenRisks.Count == 0)
+    {
+      <p class="govuk-body govuk-!-margin-bottom-4">No open risks for this business area.</p>
+    }
+    else
+    {
+      <div class="raid-ba-dashboard-shell govuk-!-margin-bottom-4">
+        <div class="dfe-f-table-wrapper govuk-!-margin-bottom-0" data-module="dfe-f-table">
+          <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+          <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed raid-ba-data-table govuk-!-margin-bottom-0" id="raid-ba-open-risks">
+            <caption class="govuk-visually-hidden">Open risks for this business area</caption>
+            <thead class="govuk-table__head">
+              <tr class="govuk-table__row">
+                <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Risk</button></th>
+                <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Business area</button></th>
+                <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Tier</button></th>
+                <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Relation</button></th>
+                <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Status</button></th>
+                <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Owner</button></th>
+                <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Likelihood</button></th>
+                <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Impact</button></th>
+                <th scope="col" class="govuk-table__header govuk-!-text-align-right" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Score (inherent)</button></th>
+              </tr>
+            </thead>
+            <tbody class="govuk-table__body">
+              @foreach (var r in Model.OpenRisks)
+              {
+                var statusClosed = (r.Status ?? "").Contains("closed", StringComparison.OrdinalIgnoreCase);
+                <tr class="govuk-table__row">
+                  <td class="govuk-table__cell">
+                    <button type="button" class="govuk-link raid-ba-modal-open govuk-!-font-weight-bold" style="background:none;border:0;padding:0;cursor:pointer;text-align:left;" data-kind="risk" data-id="@r.Id">@r.Title</button>
+                    <div class="dfe-c-body-s dfe-c-text-muted govuk-!-margin-top-1" style="line-height:1.3;">R-@r.Id.ToString("D4")</div>
+                  </td>
+                  <td class="govuk-table__cell govuk-body-s">@(string.IsNullOrEmpty(r.BusinessAreaLabel) ? "—" : r.BusinessAreaLabel)</td>
+                  <td class="govuk-table__cell govuk-body-s"><span class="@WorkBadgeCss.RaidTierDfeFrontendBadgeClass(r.Tier)">@(string.IsNullOrWhiteSpace(r.Tier) ? "—" : r.Tier)</span></td>
+                  @await Html.PartialAsync("~/Views/Modern/Raid/_RaidRegisterRelationCell.cshtml", r.Relation)
+                  <td class="govuk-table__cell govuk-body-s"><span class="@WorkBadgeCss.RaidOpenClosedDfeFrontendBadgeClass(statusClosed) dfe-f-badge--small">@((r.Status ?? "—").ToUpperInvariant())</span></td>
+                  <td class="govuk-table__cell govuk-body-s">@(r.Owner ?? "—")</td>
+                  <td class="govuk-table__cell govuk-body-s"><span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--grey">@(r.LikelihoodLabel ?? "—")</span></td>
+                  <td class="govuk-table__cell govuk-body-s"><span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--grey">@(r.ImpactLabel ?? "—")</span></td>
+                  <td class="govuk-table__cell govuk-body-s govuk-!-text-align-right"><span class="@RaidRegisterScoreClass(r.RiskScore)">@r.RiskScore</span></td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+    }
+
+    @if (Model.ClosedRisks.Count > 0)
+    {
+      <div class="dfe-f-toggle govuk-!-margin-bottom-6" data-module="dfe-f-toggle">
+        <div class="dfe-f-toggle__title-wrapper">
+          <h2 class="dfe-f-toggle__heading">
+            <button type="button" id="raid-ba-@(ba.Id)-closed-risks-button" class="dfe-f-toggle__button" aria-expanded="false" aria-controls="raid-ba-@(ba.Id)-closed-risks-content">
+              <span class="dfe-f-toggle__icon" aria-hidden="true"></span>
+              <span class="dfe-f-toggle__title">Closed risks (@Model.ClosedRisks.Count)</span>
+            </button>
+          </h2>
+        </div>
+        <div id="raid-ba-@(ba.Id)-closed-risks-content" class="dfe-f-toggle__content" hidden>
+          <div class="dfe-f-toggle__body">
+            <div class="raid-ba-dashboard-shell">
+              <div class="dfe-f-table-wrapper govuk-!-margin-bottom-0" data-module="dfe-f-table">
+                <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+                <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed raid-ba-data-table govuk-!-margin-bottom-0" id="raid-ba-closed-risks">
+                  <caption class="govuk-visually-hidden">Closed risks for this business area</caption>
+                  <thead class="govuk-table__head">
+                    <tr class="govuk-table__row">
+                      <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Risk</button></th>
+                      <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Business area</button></th>
+                      <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Tier</button></th>
+                      <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Relation</button></th>
+                      <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Status</button></th>
+                      <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Owner</button></th>
+                      <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Likelihood</button></th>
+                      <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Impact</button></th>
+                      <th scope="col" class="govuk-table__header govuk-!-text-align-right" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Score (inherent)</button></th>
+                    </tr>
+                  </thead>
+                  <tbody class="govuk-table__body">
+                    @foreach (var r in Model.ClosedRisks)
+                    {
+                      var statusClosed = (r.Status ?? "").Contains("closed", StringComparison.OrdinalIgnoreCase);
+                      <tr class="govuk-table__row">
+                        <td class="govuk-table__cell">
+                          <button type="button" class="govuk-link raid-ba-modal-open govuk-!-font-weight-bold" style="background:none;border:0;padding:0;cursor:pointer;text-align:left;" data-kind="risk" data-id="@r.Id">@r.Title</button>
+                          <div class="dfe-c-body-s dfe-c-text-muted govuk-!-margin-top-1" style="line-height:1.3;">R-@r.Id.ToString("D4")</div>
+                        </td>
+                        <td class="govuk-table__cell govuk-body-s">@(string.IsNullOrEmpty(r.BusinessAreaLabel) ? "—" : r.BusinessAreaLabel)</td>
+                        <td class="govuk-table__cell govuk-body-s"><span class="@WorkBadgeCss.RaidTierDfeFrontendBadgeClass(r.Tier)">@(string.IsNullOrWhiteSpace(r.Tier) ? "—" : r.Tier)</span></td>
+                        @await Html.PartialAsync("~/Views/Modern/Raid/_RaidRegisterRelationCell.cshtml", r.Relation)
+                        <td class="govuk-table__cell govuk-body-s"><span class="@WorkBadgeCss.RaidOpenClosedDfeFrontendBadgeClass(statusClosed) dfe-f-badge--small">@((r.Status ?? "—").ToUpperInvariant())</span></td>
+                        <td class="govuk-table__cell govuk-body-s">@(r.Owner ?? "—")</td>
+                        <td class="govuk-table__cell govuk-body-s"><span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--grey">@(r.LikelihoodLabel ?? "—")</span></td>
+                        <td class="govuk-table__cell govuk-body-s"><span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--grey">@(r.ImpactLabel ?? "—")</span></td>
+                        <td class="govuk-table__cell govuk-body-s govuk-!-text-align-right"><span class="@RaidRegisterScoreClass(r.RiskScore)">@r.RiskScore</span></td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    }
+  }
+  else if (sec == "issues")
+  {
+    <h2 class="govuk-heading-m govuk-!-margin-bottom-3">Open issues</h2>
+    @if (Model.OpenIssues.Count == 0)
+    {
+      <p class="govuk-body govuk-!-margin-bottom-4">No open issues for this business area.</p>
+    }
+    else
+    {
+      <div class="raid-ba-dashboard-shell govuk-!-margin-bottom-4">
+        <div class="dfe-f-table-wrapper govuk-!-margin-bottom-0" data-module="dfe-f-table">
+          <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+          <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed raid-ba-data-table govuk-!-margin-bottom-0" id="raid-ba-open-issues">
+            <caption class="govuk-visually-hidden">Open issues for this business area</caption>
+            <thead class="govuk-table__head">
+              <tr class="govuk-table__row">
+                <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Issue</button></th>
+                <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Business area</button></th>
+                <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Relation</button></th>
+                <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Status</button></th>
+                <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Owner</button></th>
+                <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Priority</button></th>
+                <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Severity</button></th>
+              </tr>
+            </thead>
+            <tbody class="govuk-table__body">
+              @foreach (var i in Model.OpenIssues)
+              {
+                var statusClosed = (i.Status ?? "").Contains("closed", StringComparison.OrdinalIgnoreCase);
+                <tr class="govuk-table__row">
+                  <td class="govuk-table__cell">
+                    <button type="button" class="govuk-link raid-ba-modal-open govuk-!-font-weight-bold" style="background:none;border:0;padding:0;cursor:pointer;text-align:left;" data-kind="issue" data-id="@i.Id">@i.Title</button>
+                    <div class="dfe-c-body-s dfe-c-text-muted govuk-!-margin-top-1" style="line-height:1.3;">I-@i.Id.ToString("D4")</div>
+                  </td>
+                  <td class="govuk-table__cell govuk-body-s">@(string.IsNullOrEmpty(i.BusinessAreaLabel) ? "—" : i.BusinessAreaLabel)</td>
+                  @await Html.PartialAsync("~/Views/Modern/Raid/_RaidRegisterRelationCell.cshtml", i.Relation)
+                  <td class="govuk-table__cell govuk-body-s"><span class="@WorkBadgeCss.RaidOpenClosedDfeFrontendBadgeClass(statusClosed) dfe-f-badge--small">@((i.Status ?? "—").ToUpperInvariant())</span></td>
+                  <td class="govuk-table__cell govuk-body-s">@(i.Owner ?? "—")</td>
+                  <td class="govuk-table__cell govuk-body-s"><span class="@WorkBadgeCss.RaidPriorityLabelDfeFrontendBadgeClass(i.Priority) dfe-f-badge--small">@((i.Priority ?? "—").ToUpperInvariant())</span></td>
+                  <td class="govuk-table__cell govuk-body-s"><span class="@WorkBadgeCss.RaidSeverityLabelDfeFrontendBadgeClass(i.Severity) dfe-f-badge--small">@((i.Severity ?? "—").ToUpperInvariant())</span></td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+    }
+
+    @if (Model.ClosedIssues.Count > 0)
+    {
+      <div class="dfe-f-toggle govuk-!-margin-bottom-6" data-module="dfe-f-toggle">
+        <div class="dfe-f-toggle__title-wrapper">
+          <h2 class="dfe-f-toggle__heading">
+            <button type="button" id="raid-ba-@(ba.Id)-closed-issues-button" class="dfe-f-toggle__button" aria-expanded="false" aria-controls="raid-ba-@(ba.Id)-closed-issues-content">
+              <span class="dfe-f-toggle__icon" aria-hidden="true"></span>
+              <span class="dfe-f-toggle__title">Closed issues (@Model.ClosedIssues.Count)</span>
+            </button>
+          </h2>
+        </div>
+        <div id="raid-ba-@(ba.Id)-closed-issues-content" class="dfe-f-toggle__content" hidden>
+          <div class="dfe-f-toggle__body">
+            <div class="raid-ba-dashboard-shell">
+              <div class="dfe-f-table-wrapper govuk-!-margin-bottom-0" data-module="dfe-f-table">
+                <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+                <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed raid-ba-data-table govuk-!-margin-bottom-0" id="raid-ba-closed-issues">
+                  <caption class="govuk-visually-hidden">Closed issues for this business area</caption>
+                  <thead class="govuk-table__head">
+                    <tr class="govuk-table__row">
+                      <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Issue</button></th>
+                      <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Business area</button></th>
+                      <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Relation</button></th>
+                      <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Status</button></th>
+                      <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Owner</button></th>
+                      <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Priority</button></th>
+                      <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Severity</button></th>
+                    </tr>
+                  </thead>
+                  <tbody class="govuk-table__body">
+                    @foreach (var i in Model.ClosedIssues)
+                    {
+                      var statusClosed = (i.Status ?? "").Contains("closed", StringComparison.OrdinalIgnoreCase);
+                      <tr class="govuk-table__row">
+                        <td class="govuk-table__cell">
+                          <button type="button" class="govuk-link raid-ba-modal-open govuk-!-font-weight-bold" style="background:none;border:0;padding:0;cursor:pointer;text-align:left;" data-kind="issue" data-id="@i.Id">@i.Title</button>
+                          <div class="dfe-c-body-s dfe-c-text-muted govuk-!-margin-top-1" style="line-height:1.3;">I-@i.Id.ToString("D4")</div>
+                        </td>
+                        <td class="govuk-table__cell govuk-body-s">@(string.IsNullOrEmpty(i.BusinessAreaLabel) ? "—" : i.BusinessAreaLabel)</td>
+                        @await Html.PartialAsync("~/Views/Modern/Raid/_RaidRegisterRelationCell.cshtml", i.Relation)
+                        <td class="govuk-table__cell govuk-body-s"><span class="@WorkBadgeCss.RaidOpenClosedDfeFrontendBadgeClass(statusClosed) dfe-f-badge--small">@((i.Status ?? "—").ToUpperInvariant())</span></td>
+                        <td class="govuk-table__cell govuk-body-s">@(i.Owner ?? "—")</td>
+                        <td class="govuk-table__cell govuk-body-s"><span class="@WorkBadgeCss.RaidPriorityLabelDfeFrontendBadgeClass(i.Priority) dfe-f-badge--small">@((i.Priority ?? "—").ToUpperInvariant())</span></td>
+                        <td class="govuk-table__cell govuk-body-s"><span class="@WorkBadgeCss.RaidSeverityLabelDfeFrontendBadgeClass(i.Severity) dfe-f-badge--small">@((i.Severity ?? "—").ToUpperInvariant())</span></td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    }
+  }
+  else if (sec == "dependencies")
+  {
+    <h2 class="govuk-heading-m govuk-!-margin-bottom-3">Open dependencies</h2>
+    @if (Model.OpenDependencies.Count == 0)
+    {
+      <p class="govuk-body govuk-!-margin-bottom-4">No open dependencies linked to this business area scope.</p>
+    }
+    else
+    {
+      <div class="raid-ba-dashboard-shell govuk-!-margin-bottom-4">
+        <div class="dfe-f-table-wrapper govuk-!-margin-bottom-0" data-module="dfe-f-table">
+          <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+          <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed raid-ba-data-table govuk-!-margin-bottom-0" id="raid-ba-open-deps">
+            <caption class="govuk-visually-hidden">Open dependencies for this business area scope</caption>
+            <thead class="govuk-table__head">
+              <tr class="govuk-table__row">
+                <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">From</button></th>
+                <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">To</button></th>
+                <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Link / type</button></th>
+                <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Criticality</button></th>
+                <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Due</button></th>
+                <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Status</button></th>
+              </tr>
+            </thead>
+            <tbody class="govuk-table__body">
+              @foreach (var d in Model.OpenDependencies)
+              {
+                var depStatusClosed = (d.Status ?? "").Contains("closed", StringComparison.OrdinalIgnoreCase);
+                <tr class="govuk-table__row">
+                  <td class="govuk-table__cell govuk-body-s">
+                    <div class="govuk-!-font-weight-bold">@d.SourceType</div>
+                    <div><a class="govuk-link govuk-!-font-weight-bold govuk-link--no-visited-state" href="/modern/raid/dependencies/@d.Id">@(d.SourceTitle ?? ($"{d.SourceType} #{d.SourceId}"))</a></div>
+                    <div class="dfe-c-body-s dfe-c-text-muted govuk-!-margin-top-1" style="line-height:1.3;">D-@d.Id.ToString("D4")</div>
+                  </td>
+                  <td class="govuk-table__cell govuk-body-s">
+                    <div class="govuk-!-font-weight-bold">@d.TargetType</div>
+                    <div>@(d.TargetTitle ?? ($"{d.TargetType} #{d.TargetId}"))</div>
+                  </td>
+                  <td class="govuk-table__cell govuk-body-s">@(d.LinkTypeLabel ?? d.DependencyType ?? "—")</td>
+                  <td class="govuk-table__cell govuk-body-s"><span class="@WorkBadgeCss.RaidDependencyCriticalityDfeFrontendBadgeClass(d.CriticalityLabel) dfe-f-badge--small">@((d.CriticalityLabel ?? "—").ToUpperInvariant())</span></td>
+                  <td class="govuk-table__cell govuk-body-s">@(d.DueDate.HasValue ? d.DueDate.Value.ToString("d MMM yyyy") : "—")</td>
+                  <td class="govuk-table__cell govuk-body-s"><span class="@WorkBadgeCss.RaidOpenClosedDfeFrontendBadgeClass(depStatusClosed) dfe-f-badge--small">@((d.Status ?? "—").ToUpperInvariant())</span></td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+    }
+
+    @if (Model.ClosedDependencies.Count > 0)
+    {
+      <div class="dfe-f-toggle govuk-!-margin-bottom-6" data-module="dfe-f-toggle">
+        <div class="dfe-f-toggle__title-wrapper">
+          <h2 class="dfe-f-toggle__heading">
+            <button type="button" id="raid-ba-@(ba.Id)-closed-deps-button" class="dfe-f-toggle__button" aria-expanded="false" aria-controls="raid-ba-@(ba.Id)-closed-deps-content">
+              <span class="dfe-f-toggle__icon" aria-hidden="true"></span>
+              <span class="dfe-f-toggle__title">Closed dependencies (@Model.ClosedDependencies.Count)</span>
+            </button>
+          </h2>
+        </div>
+        <div id="raid-ba-@(ba.Id)-closed-deps-content" class="dfe-f-toggle__content" hidden>
+          <div class="dfe-f-toggle__body">
+            <div class="raid-ba-dashboard-shell">
+              <div class="dfe-f-table-wrapper govuk-!-margin-bottom-0" data-module="dfe-f-table">
+                <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+                <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed raid-ba-data-table govuk-!-margin-bottom-0" id="raid-ba-closed-deps">
+                  <caption class="govuk-visually-hidden">Closed dependencies for this business area scope</caption>
+                  <thead class="govuk-table__head">
+                    <tr class="govuk-table__row">
+                      <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">From</button></th>
+                      <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">To</button></th>
+                      <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Link / type</button></th>
+                      <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Criticality</button></th>
+                      <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Due</button></th>
+                      <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Status</button></th>
+                    </tr>
+                  </thead>
+                  <tbody class="govuk-table__body">
+                    @foreach (var d in Model.ClosedDependencies)
+                    {
+                      var depStatusClosed = (d.Status ?? "").Contains("closed", StringComparison.OrdinalIgnoreCase);
+                      <tr class="govuk-table__row">
+                        <td class="govuk-table__cell govuk-body-s">
+                          <div class="govuk-!-font-weight-bold">@d.SourceType</div>
+                          <div><a class="govuk-link govuk-!-font-weight-bold govuk-link--no-visited-state" href="/modern/raid/dependencies/@d.Id">@(d.SourceTitle ?? ($"{d.SourceType} #{d.SourceId}"))</a></div>
+                          <div class="dfe-c-body-s dfe-c-text-muted govuk-!-margin-top-1" style="line-height:1.3;">D-@d.Id.ToString("D4")</div>
+                        </td>
+                        <td class="govuk-table__cell govuk-body-s">
+                          <div class="govuk-!-font-weight-bold">@d.TargetType</div>
+                          <div>@(d.TargetTitle ?? ($"{d.TargetType} #{d.TargetId}"))</div>
+                        </td>
+                        <td class="govuk-table__cell govuk-body-s">@(d.LinkTypeLabel ?? d.DependencyType ?? "—")</td>
+                        <td class="govuk-table__cell govuk-body-s"><span class="@WorkBadgeCss.RaidDependencyCriticalityDfeFrontendBadgeClass(d.CriticalityLabel) dfe-f-badge--small">@((d.CriticalityLabel ?? "—").ToUpperInvariant())</span></td>
+                        <td class="govuk-table__cell govuk-body-s">@(d.DueDate.HasValue ? d.DueDate.Value.ToString("d MMM yyyy") : "—")</td>
+                        <td class="govuk-table__cell govuk-body-s"><span class="@WorkBadgeCss.RaidOpenClosedDfeFrontendBadgeClass(depStatusClosed) dfe-f-badge--small">@((d.Status ?? "—").ToUpperInvariant())</span></td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    }
+  }
+  else if (sec == "assumptions")
+  {
+    <h2 class="govuk-heading-m govuk-!-margin-bottom-3">Open assumptions</h2>
+    @if (Model.OpenAssumptions.Count == 0)
+    {
+      <p class="govuk-body govuk-!-margin-bottom-4">No open assumptions for work items in this business area.</p>
+    }
+    else
+    {
+      <div class="raid-ba-dashboard-shell govuk-!-margin-bottom-4">
+        <div class="dfe-f-table-wrapper govuk-!-margin-bottom-0" data-module="dfe-f-table">
+          <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+          <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed raid-ba-data-table govuk-!-margin-bottom-0" id="raid-ba-open-asm">
+            <caption class="govuk-visually-hidden">Open assumptions for this business area</caption>
+            <thead class="govuk-table__head">
+              <tr class="govuk-table__row">
+                <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Assumption</button></th>
+                <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Associated with</button></th>
+                <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Criticality</button></th>
+                <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Status</button></th>
+                <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Review</button></th>
+                <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Updated</button></th>
+              </tr>
+            </thead>
+            <tbody class="govuk-table__body">
+              @foreach (var a in Model.OpenAssumptions)
+              {
+                var asmStatusClosed = (a.Status ?? "").Contains("closed", StringComparison.OrdinalIgnoreCase);
+                <tr class="govuk-table__row">
+                  <td class="govuk-table__cell">
+                    <a class="govuk-link govuk-!-font-weight-bold govuk-link--no-visited-state" href="/modern/raid/assumptions/@a.Id">@a.DescriptionSnippet</a>
+                    <div class="dfe-c-body-s dfe-c-text-muted govuk-!-margin-top-1" style="line-height:1.3;">A-@a.Id.ToString("D4")</div>
+                  </td>
+                  <td class="govuk-table__cell govuk-body-s">
+                    @if (a.AssociationUi == "work" && a.ProjectId.HasValue && !string.IsNullOrEmpty(a.ProjectTitle))
+                    {
+                      <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("Detail", "ModernWork", new { id = a.ProjectId })">@a.ProjectTitle</a>
+                    }
+                    else if (a.AssociationUi == "product")
+                    {
+                      @(a.ProductLabel ?? "—")
+                    }
+                    else
+                    {
+                      @:Organisation
+                    }
+                  </td>
+                  <td class="govuk-table__cell govuk-body-s"><span class="@WorkBadgeCss.RaidAssumptionCriticalityDfeFrontendBadgeClass(a.Criticality) dfe-f-badge--small">@((a.Criticality ?? "—").ToUpperInvariant())</span></td>
+                  <td class="govuk-table__cell govuk-body-s"><span class="@WorkBadgeCss.RaidOpenClosedDfeFrontendBadgeClass(asmStatusClosed) dfe-f-badge--small">@((a.Status ?? "—").ToUpperInvariant())</span></td>
+                  <td class="govuk-table__cell govuk-body-s">@(a.ReviewDate.HasValue ? a.ReviewDate.Value.ToString("d MMM yyyy") : "—")</td>
+                  <td class="govuk-table__cell govuk-body-s">@a.Updated.ToString("d MMM yyyy")</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+    }
+
+    @if (Model.ClosedAssumptions.Count > 0)
+    {
+      <div class="dfe-f-toggle govuk-!-margin-bottom-6" data-module="dfe-f-toggle">
+        <div class="dfe-f-toggle__title-wrapper">
+          <h2 class="dfe-f-toggle__heading">
+            <button type="button" id="raid-ba-@(ba.Id)-closed-asm-button" class="dfe-f-toggle__button" aria-expanded="false" aria-controls="raid-ba-@(ba.Id)-closed-asm-content">
+              <span class="dfe-f-toggle__icon" aria-hidden="true"></span>
+              <span class="dfe-f-toggle__title">Closed assumptions (@Model.ClosedAssumptions.Count)</span>
+            </button>
+          </h2>
+        </div>
+        <div id="raid-ba-@(ba.Id)-closed-asm-content" class="dfe-f-toggle__content" hidden>
+          <div class="dfe-f-toggle__body">
+            <div class="raid-ba-dashboard-shell">
+              <div class="dfe-f-table-wrapper govuk-!-margin-bottom-0" data-module="dfe-f-table">
+                <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+                <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed raid-ba-data-table govuk-!-margin-bottom-0" id="raid-ba-closed-asm">
+                  <caption class="govuk-visually-hidden">Closed assumptions for this business area</caption>
+                  <thead class="govuk-table__head">
+                    <tr class="govuk-table__row">
+                      <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Assumption</button></th>
+                      <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Associated with</button></th>
+                      <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Criticality</button></th>
+                      <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Status</button></th>
+                      <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Review</button></th>
+                      <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Updated</button></th>
+                    </tr>
+                  </thead>
+                  <tbody class="govuk-table__body">
+                    @foreach (var a in Model.ClosedAssumptions)
+                    {
+                      var asmStatusClosed = (a.Status ?? "").Contains("closed", StringComparison.OrdinalIgnoreCase);
+                      <tr class="govuk-table__row">
+                        <td class="govuk-table__cell">
+                          <a class="govuk-link govuk-!-font-weight-bold govuk-link--no-visited-state" href="/modern/raid/assumptions/@a.Id">@a.DescriptionSnippet</a>
+                          <div class="dfe-c-body-s dfe-c-text-muted govuk-!-margin-top-1" style="line-height:1.3;">A-@a.Id.ToString("D4")</div>
+                        </td>
+                        <td class="govuk-table__cell govuk-body-s">
+                          @if (a.AssociationUi == "work" && a.ProjectId.HasValue && !string.IsNullOrEmpty(a.ProjectTitle))
+                          {
+                            <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("Detail", "ModernWork", new { id = a.ProjectId })">@a.ProjectTitle</a>
+                          }
+                          else if (a.AssociationUi == "product")
+                          {
+                            @(a.ProductLabel ?? "—")
+                          }
+                          else
+                          {
+                            @:Organisation
+                          }
+                        </td>
+                        <td class="govuk-table__cell govuk-body-s"><span class="@WorkBadgeCss.RaidAssumptionCriticalityDfeFrontendBadgeClass(a.Criticality) dfe-f-badge--small">@((a.Criticality ?? "—").ToUpperInvariant())</span></td>
+                        <td class="govuk-table__cell govuk-body-s"><span class="@WorkBadgeCss.RaidOpenClosedDfeFrontendBadgeClass(asmStatusClosed) dfe-f-badge--small">@((a.Status ?? "—").ToUpperInvariant())</span></td>
+                        <td class="govuk-table__cell govuk-body-s">@(a.ReviewDate.HasValue ? a.ReviewDate.Value.ToString("d MMM yyyy") : "—")</td>
+                        <td class="govuk-table__cell govuk-body-s">@a.Updated.ToString("d MMM yyyy")</td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    }
+  }
+
+  <dialog id="raid-ba-item-dialog" class="raid-ba-dialog" aria-labelledby="raid-ba-dialog-title" aria-modal="true">
+    <div class="raid-ba-dialog__inner govuk-!-padding-4">
+      <h2 class="govuk-heading-m" id="raid-ba-dialog-title"></h2>
+      <p class="govuk-body-s dfe-c-text-muted govuk-!-margin-bottom-2" id="raid-ba-dialog-ref"></p>
+      <h3 class="govuk-heading-s govuk-!-margin-bottom-1">Description</h3>
+      <p class="govuk-body" id="raid-ba-dialog-summary" style="white-space: pre-wrap;"></p>
+      <div class="govuk-button-group govuk-!-margin-top-4">
+        <a class="govuk-button" id="raid-ba-dialog-edit" href="#">Update status, tier, and details</a>
+        <a class="govuk-button govuk-button--secondary" id="raid-ba-dialog-detail" href="#">Open full record</a>
+        <button type="button" class="govuk-button govuk-button--secondary" id="raid-ba-dialog-close">Close</button>
+      </div>
     </div>
-    <div class="govuk-summary-list__row">
-      <dt class="govuk-summary-list__key">Sort order</dt>
-      <dd class="govuk-summary-list__value">@Model.SortOrder</dd>
-    </div>
-    <div class="govuk-summary-list__row">
-      <dt class="govuk-summary-list__key">Active</dt>
-      <dd class="govuk-summary-list__value">@(Model.IsActive ? "Yes" : "No")</dd>
-    </div>
-    <div class="govuk-summary-list__row">
-      <dt class="govuk-summary-list__key">Updated</dt>
-      <dd class="govuk-summary-list__value">@Model.UpdatedAt.ToString("d MMM yyyy HH:mm") UTC</dd>
-    </div>
-  </dl>
+  </dialog>
+
+  <script type="application/json" id="raid-ba-risk-modal-json">@Html.Raw(riskModalJson)</script>
+  <script type="application/json" id="raid-ba-issue-modal-json">@Html.Raw(issueModalJson)</script>
 </div>
+
+@section Scripts {
+<script nonce="@Context.Items["Nonce"]">
+(function () {
+  function parseJson(id) {
+    var el = document.getElementById(id);
+    if (!el || !el.textContent) return [];
+    try { return JSON.parse(el.textContent); } catch (e) { return []; }
+  }
+  var risks = parseJson("raid-ba-risk-modal-json");
+  var issues = parseJson("raid-ba-issue-modal-json");
+  var dlg = document.getElementById("raid-ba-item-dialog");
+  if (!dlg) return;
+  var titleEl = document.getElementById("raid-ba-dialog-title");
+  var refEl = document.getElementById("raid-ba-dialog-ref");
+  var summaryEl = document.getElementById("raid-ba-dialog-summary");
+  var editEl = document.getElementById("raid-ba-dialog-edit");
+  var detailEl = document.getElementById("raid-ba-dialog-detail");
+  var closeBtn = document.getElementById("raid-ba-dialog-close");
+
+  function findItem(kind, id) {
+    var list = kind === "risk" ? risks : issues;
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].id === id) return list[i];
+    }
+    return null;
+  }
+
+  function openModal(kind, id) {
+    var item = findItem(kind, id);
+    if (!item) return;
+    titleEl.textContent = item.title || "—";
+    refEl.textContent = item.reference || "";
+    summaryEl.textContent = (item.summary && item.summary.length) ? item.summary : "No description recorded.";
+    editEl.setAttribute("href", item.editUrl || "#");
+    detailEl.setAttribute("href", item.detailUrl || "#");
+    if (typeof dlg.showModal === "function") dlg.showModal();
+    else window.location.href = item.detailUrl || "#";
+  }
+
+  document.querySelectorAll(".raid-ba-modal-open").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var kind = btn.getAttribute("data-kind");
+      var id = parseInt(btn.getAttribute("data-id"), 10);
+      if (!kind || isNaN(id)) return;
+      openModal(kind, id);
+    });
+  });
+
+  if (closeBtn) {
+    closeBtn.addEventListener("click", function () {
+      if (typeof dlg.close === "function") dlg.close();
+    });
+  }
+})();
+</script>
+}

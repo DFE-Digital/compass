@@ -1,7 +1,8 @@
 /**
- * Autocomplete + removable list for Service line form (FIPS products + work items).
+ * Autocomplete + removable table rows for Service line form (FIPS products + work items).
  * Expects a root .js-service-line-pick with data-sl-search-url, data-sl-field-name (ProductIds | ProjectIds),
- * and child elements: .js-sl-search, .js-sl-results, .js-sl-selected.
+ * data-sl-confirm-title, data-sl-confirm-body (for DfE confirm modal),
+ * and child elements: .js-sl-search, .js-sl-results, tbody.js-sl-selected.
  */
 (function () {
     const DEBOUNCE_MS = 300;
@@ -21,6 +22,10 @@
             this.searchUrl = root.dataset.slSearchUrl || "";
             this.fieldName = root.dataset.slFieldName || "ProductIds";
             this.isGuid = (root.dataset.slIdKind || "guid") === "guid";
+            this.confirmTitle = root.dataset.slConfirmTitle || "Remove item?";
+            this.confirmBody =
+                root.dataset.slConfirmBody ||
+                "This item will be removed from the list. You can add it again before saving.";
             this.searchInput = root.querySelector(".js-sl-search");
             this.resultsEl = root.querySelector(".js-sl-results");
             this.selectedEl = root.querySelector(".js-sl-selected");
@@ -36,10 +41,19 @@
                 });
             }
             this.selectedEl?.addEventListener("click", (e) => {
-                const btn = e.target.closest(".js-sl-remove");
-                if (!btn) return;
-                const li = btn.closest("li");
-                if (li) li.remove();
+                const removeEl = e.target.closest(".js-sl-remove");
+                if (!removeEl) return;
+                e.preventDefault();
+                const row = removeEl.closest("tr");
+                if (!row || !this.selectedEl?.contains(row)) return;
+                const doRemove = () => {
+                    row.remove();
+                };
+                if (typeof window.showConfirmModal === "function") {
+                    window.showConfirmModal(this.confirmTitle, this.confirmBody, doRemove);
+                } else {
+                    doRemove();
+                }
             });
             document.addEventListener("click", this.boundDocClick);
         }
@@ -132,7 +146,7 @@
                         ? "<span class='service-line-pick__result-sub'> — " + esc(String(sub)) + "</span>"
                         : "");
                 btn.addEventListener("click", () => {
-                    this.addItem(id, title);
+                    this.addItem(id, title, sub);
                     this.hideResults();
                     if (this.searchInput) this.searchInput.value = "";
                 });
@@ -149,28 +163,38 @@
             this.resultsEl.appendChild(ul);
         }
 
-        addItem(id, label) {
+        addItem(id, label, subtitle) {
             if (!this.selectedEl) return;
             if (this.getSelectedIds().has(id)) return;
-            const li = document.createElement("li");
-            li.className = "service-line-pick__row";
-            li.dataset.id = id;
+            const tr = document.createElement("tr");
+            tr.dataset.id = id;
+            const tdName = document.createElement("td");
+            tdName.className = "govuk-table__cell";
             const hid = document.createElement("input");
             hid.type = "hidden";
             hid.name = this.fieldName;
             hid.value = id;
-            const span = document.createElement("span");
-            span.className = "service-line-pick__row-label";
-            span.textContent = label;
-            const rem = document.createElement("button");
-            rem.type = "button";
-            rem.className = "govuk-link service-line-pick__remove js-sl-remove";
+            tdName.appendChild(hid);
+            const nameSpan = document.createElement("span");
+            nameSpan.textContent = label;
+            tdName.appendChild(nameSpan);
+            if (subtitle) {
+                const meta = document.createElement("div");
+                meta.className = "govuk-body-s dfe-c-text-muted modern-work-table__meta";
+                meta.textContent = subtitle;
+                tdName.appendChild(meta);
+            }
+            const tdAct = document.createElement("td");
+            tdAct.className = "govuk-table__cell govuk-!-text-align-right";
+            const rem = document.createElement("a");
+            rem.href = "#";
+            rem.className = "govuk-link js-sl-remove";
             rem.setAttribute("aria-label", "Remove " + label);
             rem.textContent = "Remove";
-            li.appendChild(hid);
-            li.appendChild(span);
-            li.appendChild(rem);
-            this.selectedEl.appendChild(li);
+            tdAct.appendChild(rem);
+            tr.appendChild(tdName);
+            tr.appendChild(tdAct);
+            this.selectedEl.appendChild(tr);
         }
 
         hideResults() {

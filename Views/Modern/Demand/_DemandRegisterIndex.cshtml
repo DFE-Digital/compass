@@ -1,4 +1,5 @@
 @model IEnumerable<DemandPipelineRequest>
+@using Compass.ViewModels.Modern
 @{
   var list = Model?.ToList() ?? new List<DemandPipelineRequest>();
   var count = list.Count;
@@ -73,30 +74,42 @@
 }
 
 <div id="sc-demand-index">
- <div class="dfe-c-flex--between dfe-c-mb-3" style="flex-wrap:wrap;gap:1rem;">
- <div class="dfe-c-page-title" style="margin:0;">
- <div class="dfe-c-page-title__caption">Demand pipeline</div>
- <h1 class="dfe-c-page-title__heading">Demand register</h1>
- <p class="dfe-c-page-title__lede">@totalInTab request@(totalInTab == 1 ? "" : "s") across @(
-        currentTab == "all" ? "active stages" :
-        currentTab == "drafts" ? "drafts" :
-        currentTab == "indelivery" ? "in delivery" :
-        currentTab == "rejected" ? "rejected" :
-        currentTab == "paused" ? "paused" : "this view")</p>
-    </div>
- <div class="dfe-c-flex" style="gap:0.5rem;flex-wrap:wrap;">
- <a href="@Url.Action("BusinessCaseNew", "ModernDemand")" class="govuk-button govuk-button--secondary">Add business case</a>
- <a href="@Url.Action("Submit", "ModernDemand")" class="govuk-button">Add demand</a>
-    </div>
-  </div>
+@{
+  var demandRegisterActions = await Html.PartialAsync("_DemandRegisterHeaderActions");
+  var demandRegisterLedeText = $"{totalInTab} request{(totalInTab == 1 ? "" : "s")} across " + (
+      currentTab == "all" ? "active stages" :
+      currentTab == "drafts" ? "drafts" :
+      currentTab == "indelivery" ? "in delivery" :
+      currentTab == "rejected" ? "rejected" :
+      currentTab == "paused" ? "paused" : "this view");
+  var demandRegisterLede = await Html.PartialAsync("_GovukBodyParagraph", demandRegisterLedeText);
+}
+@await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+  Caption = "Demand pipeline",
+  Title = "Demand register",
+  Lede = demandRegisterLede,
+  Actions = demandRegisterActions
+})
 
- <div class="tabs dfe-c-mb-3" role="tablist" aria-label="Demand register sections">
- <a href="@Url.Action(actionName, "ModernDemand", new { tab = (string?)null })" class="tab @(currentTab =="all" ? "on" : "")" role="tab" aria-selected="@(currentTab == "all")" aria-controls="d-demand-panel" id="tab-demand-all">Active demand (@cAll)</a>
- <a href="@Url.Action(actionName, "ModernDemand", new { tab = "drafts" })" class="tab @(currentTab =="drafts" ? "on" : "")" role="tab" aria-selected="@(currentTab == "drafts")" aria-controls="d-demand-panel" id="tab-demand-drafts">Drafts (@cDrafts)</a>
- <a href="@Url.Action(actionName, "ModernDemand", new { tab = "indelivery" })" class="tab @(currentTab =="indelivery" ? "on" : "")" role="tab" aria-selected="@(currentTab == "indelivery")" aria-controls="d-demand-panel" id="tab-demand-indelivery">In delivery (@cIndel)</a>
- <a href="@Url.Action(actionName, "ModernDemand", new { tab = "rejected" })" class="tab @(currentTab =="rejected" ? "on" : "")" role="tab" aria-selected="@(currentTab == "rejected")" aria-controls="d-demand-panel" id="tab-demand-rejected">Rejected (@cRej)</a>
- <a href="@Url.Action(actionName, "ModernDemand", new { tab = "paused" })" class="tab @(currentTab =="paused" ? "on" : "")" role="tab" aria-selected="@(currentTab == "paused")" aria-controls="d-demand-panel" id="tab-demand-paused">Paused (@cPaused)</a>
-  </div>
+ <nav class="dfe-f-sub-navigation govuk-!-margin-bottom-3" aria-label="Demand register sections">
+ <ul class="dfe-f-sub-navigation__list">
+ <li class="dfe-f-sub-navigation__item@(currentTab == "all" ? " dfe-f-sub-navigation__item--active" : "")">
+ <a class="dfe-f-sub-navigation__link govuk-link govuk-link--no-visited-state" href="@Url.Action(actionName, "ModernDemand", new { tab = (string?)null })" id="tab-demand-all"@if (currentTab == "all") { <text> aria-current="page"</text> }>Active demand (@cAll)</a>
+ </li>
+ <li class="dfe-f-sub-navigation__item@(currentTab == "drafts" ? " dfe-f-sub-navigation__item--active" : "")">
+ <a class="dfe-f-sub-navigation__link govuk-link govuk-link--no-visited-state" href="@Url.Action(actionName, "ModernDemand", new { tab = "drafts" })" id="tab-demand-drafts"@if (currentTab == "drafts") { <text> aria-current="page"</text> }>Drafts (@cDrafts)</a>
+ </li>
+ <li class="dfe-f-sub-navigation__item@(currentTab == "indelivery" ? " dfe-f-sub-navigation__item--active" : "")">
+ <a class="dfe-f-sub-navigation__link govuk-link govuk-link--no-visited-state" href="@Url.Action(actionName, "ModernDemand", new { tab = "indelivery" })" id="tab-demand-indelivery"@if (currentTab == "indelivery") { <text> aria-current="page"</text> }>In delivery (@cIndel)</a>
+ </li>
+ <li class="dfe-f-sub-navigation__item@(currentTab == "rejected" ? " dfe-f-sub-navigation__item--active" : "")">
+ <a class="dfe-f-sub-navigation__link govuk-link govuk-link--no-visited-state" href="@Url.Action(actionName, "ModernDemand", new { tab = "rejected" })" id="tab-demand-rejected"@if (currentTab == "rejected") { <text> aria-current="page"</text> }>Rejected (@cRej)</a>
+ </li>
+ <li class="dfe-f-sub-navigation__item@(currentTab == "paused" ? " dfe-f-sub-navigation__item--active" : "")">
+ <a class="dfe-f-sub-navigation__link govuk-link govuk-link--no-visited-state" href="@Url.Action(actionName, "ModernDemand", new { tab = "paused" })" id="tab-demand-paused"@if (currentTab == "paused") { <text> aria-current="page"</text> }>Paused (@cPaused)</a>
+ </li>
+ </ul>
+  </nav>
 
  <form method="get" action="@Url.Action(actionName, "ModernDemand")" id="demand-register-filter-form" class="dfe-c-mb-3">
     @if (currentTab != "all") { <input type="hidden" name="tab" value="@currentTab" /> }
@@ -149,7 +162,7 @@
         </div>
  <div class="filter-panel__actions">
  <button type="submit" class="govuk-button">Apply filters</button>
- <a href="@Url.Action(actionName, "ModernDemand", new { tab = TabQ() })" class="govuk-link">Clear filters</a>
+ <a href="@Url.Action(actionName, "ModernDemand", new { tab = TabQ() })" class="govuk-link govuk-link--no-visited-state">Clear filters</a>
         </div>
       </div>
     </div>
@@ -163,32 +176,51 @@
   }
   else
   {
- <div class="dfe-c-table-wrap">
-      <table>
-        <thead><tr><th>Request</th><th>Business area</th><th>SRO</th><th>Status</th><th>Score</th><th>Band</th><th>Outcome</th><th>Submitted by</th><th>Submitted</th></tr></thead>
-        <tbody>
+ <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+      <table class="govuk-table">
+        <thead class="govuk-table__head"><tr class="govuk-table__row"><th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Request</button>
+        </th><th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Business area</button>
+        </th><th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">SRO</button>
+        </th><th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Status</button>
+        </th><th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Score</button>
+        </th><th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Band</button>
+        </th><th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Outcome</button>
+        </th><th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Submitted by</button>
+        </th><th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Submitted</button>
+        </th></tr></thead>
+        <tbody class="govuk-table__body">
           @foreach (var d in list)
           {
             var rowHref = d.Status == "Draft"
               ? Url.Action("Submit", "ModernDemand", new { id = d.Id })
               : Url.Action("RequestDetail", "ModernDemand", new { id = d.Id });
-            <tr>
-              <td>
+            <tr class="govuk-table__row">
+              <td class="govuk-table__cell">
                 @if (d.Status == "Draft")
                 {
-                  <a href="@Url.Action("Submit", "ModernDemand", new { id = d.Id })">@(string.IsNullOrEmpty(d.Title) ? "Untitled draft" : d.Title)</a>
- <span class="dfe-c-table-ref">@d.Reference · <a href="@Url.Action("Submit", "ModernDemand", new { id = d.Id })" onclick="event.stopPropagation();">Continue editing</a></span>
+                  <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("Submit", "ModernDemand", new { id = d.Id })">@(string.IsNullOrEmpty(d.Title) ? "Untitled draft" : d.Title)</a>
+ <span class="dfe-c-table-ref">@d.Reference · <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("Submit", "ModernDemand", new { id = d.Id })" onclick="event.stopPropagation();">Continue editing</a></span>
                 }
                 else
                 {
-                  <a href="@Url.Action("RequestDetail", "ModernDemand", new { id = d.Id })"><strong>@d.Title</strong></a>
+                  <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("RequestDetail", "ModernDemand", new { id = d.Id })"><strong>@d.Title</strong></a>
  <span class="dfe-c-table-ref">@d.Reference</span>
                 }
               </td>
-              <td>@(d.DepartmentGroup ?? "—")</td>
-              <td>@(d.Sro ?? "—")</td>
- <td><span class="dfe-c-tag @StatusTagMod(d.Status)">@StatusTagLabel(d.Status)</span></td>
-              <td>
+              <td class="govuk-table__cell">@(d.DepartmentGroup ?? "—")</td>
+              <td class="govuk-table__cell">@(d.Sro ?? "—")</td>
+ <td class="govuk-table__cell"><span class="dfe-c-tag @StatusTagMod(d.Status)">@StatusTagLabel(d.Status)</span></td>
+              <td class="govuk-table__cell">
                 @if (d.TotalScore.HasValue)
                 {
                   <strong style="color:@ScoreColour(d.TotalScore)">@d.TotalScore</strong>
@@ -198,7 +230,7 @@
  <span class="dfe-c-text-muted">—</span>
                 }
               </td>
-              <td>
+              <td class="govuk-table__cell">
                 @if (!string.IsNullOrEmpty(d.SuggestedBand) && !string.IsNullOrEmpty(BandClass(d.SuggestedBand)))
                 {
  <span class="@BandClass(d.SuggestedBand)">@BandDisplay(d.SuggestedBand)</span>
@@ -208,7 +240,7 @@
  <span class="dfe-c-text-muted">—</span>
                 }
               </td>
-              <td>
+              <td class="govuk-table__cell">
                 @if (!string.IsNullOrEmpty(d.TriageOutcome) && !string.IsNullOrEmpty(OutcomeTagLabel(d.TriageOutcome)))
                 {
  <span class="dfe-c-tag @OutcomeTagMod(d.TriageOutcome)">@OutcomeTagLabel(d.TriageOutcome)</span>
@@ -218,8 +250,8 @@
  <span class="dfe-c-text-muted">—</span>
                 }
               </td>
-              <td>@(d.SubmittedBy ?? "—")</td>
-              <td>@(d.SubmittedDate?.ToString("d MMM yyyy") ?? "—")</td>
+              <td class="govuk-table__cell">@(d.SubmittedBy ?? "—")</td>
+              <td class="govuk-table__cell">@(d.SubmittedDate?.ToString("d MMM yyyy") ?? "—")</td>
             </tr>
           }
         </tbody>

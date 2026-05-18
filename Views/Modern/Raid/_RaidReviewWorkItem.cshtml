@@ -1,0 +1,207 @@
+@model Compass.ViewModels.Modern.ModernRaidReviewWorkItemRowViewModel
+@using System.Globalization
+@{
+  var item = Model.Item;
+  var workPage = Model.Page;
+  var enGb = CultureInfo.GetCultureInfo("en-GB");
+  var rowId = $"raid-review-{item.Kind}-{item.Id}";
+  var panelId = $"{rowId}-panel";
+  var saveUrl = item.Kind == "risk"
+    ? Url.Action("ReviewSaveRisk", "ModernRaid", new { id = item.Id })
+    : Url.Action("ReviewSaveIssue", "ModernRaid", new { id = item.Id });
+  var closeUrl = item.Kind == "risk"
+    ? Url.Action("ReviewCloseRisk", "ModernRaid", new { id = item.Id })
+    : Url.Action("ReviewCloseIssue", "ModernRaid", new { id = item.Id });
+  var closeFormId = $"{rowId}-close-form";
+  var kindLabel = item.Kind == "risk" ? "Risk" : "Issue";
+  var closeButtonLabel = item.Kind == "risk" ? "Close risk" : "Close issue";
+  var detailKindLabel = item.Kind == "risk" ? "risk" : "issue";
+  var scoreMetaLabel = item.Kind == "risk" ? "Score" : "Priority / Severity";
+  var scoreMetaValue = item.Kind == "risk"
+    ? $"{item.LikelihoodLabel} × {item.ImpactLabel} ({item.RiskScore})"
+    : item.SeverityOrPriorityLabel + (item.ImpactLabel != null ? $" · {item.ImpactLabel}" : "");
+}
+<article class="raid-review-row dfe-f-toggle@(item.ReviewedThisMonth ? " raid-review-row--reviewed" : "")"
+         id="@rowId"
+         data-raid-review-row
+         data-kind="@item.Kind"
+         data-id="@item.Id"
+         data-module="dfe-f-toggle"
+         aria-expanded="false">
+  <div class="raid-review-row__header">
+    <button type="button"
+            class="raid-review-row__header-btn dfe-f-toggle__button"
+            data-raid-review-toggle
+            aria-expanded="false"
+            aria-controls="@panelId"
+            id="@($"{rowId}-toggle")">
+      <span class="raid-review-row__toggle-cell">
+        <span class="dfe-f-toggle__icon" aria-hidden="true"></span>
+      </span>
+      <span class="raid-review-row__main">
+        <span class="raid-review-row__type-line">
+          <span class="raid-review-row__kind">@kindLabel</span>
+          <span class="raid-review-row__sep" aria-hidden="true">|</span>
+          <span class="raid-review-row__ref">@item.Reference</span>
+          <span class="raid-review-row__status govuk-!-margin-left-auto">
+            @if (item.ReviewedThisMonth)
+            {
+              <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--green">Reviewed</span>
+            }
+            else
+            {
+              <span class="dfe-f-badge dfe-f-badge--small">Not reviewed</span>
+            }
+          </span>
+        </span>
+        <span class="raid-review-row__title">@item.Title</span>
+        <span class="raid-review-row__meta" role="list">
+          @if (!string.IsNullOrWhiteSpace(item.Tier))
+          {
+            <span class="raid-review-row__meta-item" role="listitem">
+              <span class="raid-review-row__meta-label">Tier</span>
+              <span class="raid-review-row__meta-value">@item.Tier</span>
+            </span>
+          }
+          <span class="raid-review-row__meta-item" role="listitem">
+            <span class="raid-review-row__meta-label">Opened</span>
+            <span class="raid-review-row__meta-value">@item.OpenedDate.ToString("d MMM yyyy", enGb)</span>
+          </span>
+          <span class="raid-review-row__meta-item" role="listitem">
+            <span class="raid-review-row__meta-label">Owner</span>
+            <span class="raid-review-row__meta-value">@(item.Owner ?? "—")</span>
+          </span>
+          <span class="raid-review-row__meta-item" role="listitem">
+            <span class="raid-review-row__meta-label">@scoreMetaLabel</span>
+            <span class="raid-review-row__meta-value">@scoreMetaValue</span>
+          </span>
+        </span>
+      </span>
+    </button>
+  </div>
+  <div id="@panelId" class="raid-review-row__panel dfe-f-toggle__content" data-raid-review-panel hidden>
+    <div class="dfe-f-toggle__body">
+      <section class="raid-review-panel-section">
+        @if (!string.IsNullOrWhiteSpace(item.Description))
+        {
+          <p class="govuk-body">@item.Description</p>
+        }
+        <p class="govuk-body-s govuk-!-margin-bottom-0"><a class="govuk-link" href="@item.DetailHref">Open full record</a></p>
+      </section>
+
+      <section class="raid-review-panel-section">
+        <h3 class="govuk-heading-s govuk-!-margin-bottom-2">Last month&apos;s review</h3>
+        <div data-raid-review-timeline class="govuk-hint">Expand this item to load the previous month&apos;s review comment.</div>
+      </section>
+
+      <section class="raid-review-panel-section">
+        <h3 class="govuk-heading-s govuk-!-margin-bottom-2">@workPage.ReviewMonthLabel review</h3>
+        <div class="govuk-inset-text govuk-!-margin-bottom-4">
+          To escalate or de-escalate tier, or make other structural changes to this @detailKindLabel, use the
+          <a class="govuk-link" href="@item.DetailHref">full @detailKindLabel detail page</a>.
+          You can update likelihood, impact, priority, and add a monthly comment here.
+        </div>
+        <form method="post" action="@saveUrl" class="govuk-!-margin-top-0">
+          @Html.AntiForgeryToken()
+          <input type="hidden" name="Ba" value="@workPage.BusinessAreaQuery" />
+          @if (item.Kind == "risk")
+          {
+            <div class="govuk-grid-row">
+              <div class="govuk-grid-column-one-third">
+                <div class="govuk-form-group">
+                  <label class="govuk-label" for="@($"{rowId}-lik")">Likelihood</label>
+                  <select class="govuk-select" id="@($"{rowId}-lik")" name="RiskLikelihoodId">
+                    <option value="">— No change —</option>
+                    @foreach (var o in workPage.RiskLikelihoodOptions)
+                    {
+                      <option value="@o.Id" selected="@(item.RiskLikelihoodId == o.Id ? "selected" : null)">@o.Name</option>
+                    }
+                  </select>
+                </div>
+              </div>
+              <div class="govuk-grid-column-one-third">
+                <div class="govuk-form-group">
+                  <label class="govuk-label" for="@($"{rowId}-imp")">Impact</label>
+                  <select class="govuk-select" id="@($"{rowId}-imp")" name="RiskImpactLevelId">
+                    <option value="">— No change —</option>
+                    @foreach (var o in workPage.RiskImpactOptions)
+                    {
+                      <option value="@o.Id" selected="@(item.RiskImpactLevelId == o.Id ? "selected" : null)">@o.Name</option>
+                    }
+                  </select>
+                </div>
+              </div>
+              <div class="govuk-grid-column-one-third">
+                <div class="govuk-form-group">
+                  <label class="govuk-label" for="@($"{rowId}-pri")">Priority</label>
+                  <select class="govuk-select" id="@($"{rowId}-pri")" name="RiskPriorityId">
+                    <option value="">— No change —</option>
+                    @foreach (var o in workPage.RiskPriorityOptions)
+                    {
+                      <option value="@o.Id" selected="@(item.RiskPriorityId == o.Id ? "selected" : null)">@o.Name</option>
+                    }
+                  </select>
+                </div>
+              </div>
+            </div>
+          }
+          else
+          {
+            <div class="govuk-grid-row">
+              <div class="govuk-grid-column-one-half">
+                <div class="govuk-form-group">
+                  <label class="govuk-label" for="@($"{rowId}-sev")">Severity</label>
+                  <select class="govuk-select" id="@($"{rowId}-sev")" name="IssueSeverityId">
+                    <option value="">— No change —</option>
+                    @foreach (var o in workPage.IssueSeverityOptions)
+                    {
+                      <option value="@o.Id" selected="@(item.IssueSeverityId == o.Id ? "selected" : null)">@o.Name</option>
+                    }
+                  </select>
+                </div>
+              </div>
+              <div class="govuk-grid-column-one-half">
+                <div class="govuk-form-group">
+                  <label class="govuk-label" for="@($"{rowId}-ipri")">Priority</label>
+                  <select class="govuk-select" id="@($"{rowId}-ipri")" name="IssuePriorityId">
+                    <option value="">— No change —</option>
+                    @foreach (var o in workPage.IssuePriorityOptions)
+                    {
+                      <option value="@o.Id" selected="@(item.IssuePriorityId == o.Id ? "selected" : null)">@o.Name</option>
+                    }
+                  </select>
+                </div>
+              </div>
+            </div>
+          }
+          <div class="govuk-form-group govuk-!-margin-top-4">
+            <label class="govuk-label" for="@($"{rowId}-comment")">Comment for this month</label>
+            <div class="govuk-hint">Optional. Record what you checked or decided in this monthly review.</div>
+            <textarea class="govuk-textarea" id="@($"{rowId}-comment")" name="MonthlyComment" rows="4">@item.ExistingMonthlyComment</textarea>
+          </div>
+          <div class="govuk-button-group govuk-!-margin-bottom-0">
+            <button type="submit" class="govuk-button">Save and mark reviewed</button>
+            <button type="button"
+                    class="govuk-button govuk-button--secondary"
+                    data-raid-review-close
+                    data-close-form="@closeFormId"
+                    data-close-ref="@item.Reference"
+                    data-close-label="@closeButtonLabel">
+              @closeButtonLabel
+            </button>
+          </div>
+        </form>
+        <form method="post"
+              action="@closeUrl"
+              id="@closeFormId"
+              class="govuk-!-display-none"
+              hidden
+              aria-hidden="true">
+          @Html.AntiForgeryToken()
+          <input type="hidden" name="Ba" value="@workPage.BusinessAreaQuery" />
+          <input type="hidden" name="ClosureComment" value="" data-raid-review-close-comment-field />
+        </form>
+      </section>
+    </div>
+  </div>
+</article>

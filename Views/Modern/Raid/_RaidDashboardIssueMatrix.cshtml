@@ -1,0 +1,111 @@
+@model Compass.ViewModels.Modern.ModernRaidDashboardViewModel
+@using System.Linq
+@{
+  var maxIssueMxCell = Model.IssuePrioritySeverityGrid.Count == 0
+    ? 0
+    : Model.IssuePrioritySeverityGrid.Max(row => row.Count == 0 ? 0 : row.Max());
+  string IssueMxIntensityClass(int c)
+  {
+    if (c == 0) return "mr-mx__cell mr-mx__cell--zero";
+    if (maxIssueMxCell <= 0) return "mr-mx__cell mr-mx__cell--neutral";
+    var t = (double)c / maxIssueMxCell;
+    if (t >= 0.85) return "mr-mx__cell mr-mx__cell--critical";
+    if (t >= 0.55) return "mr-mx__cell mr-mx__cell--high";
+    if (t >= 0.28) return "mr-mx__cell mr-mx__cell--medium";
+    return "mr-mx__cell mr-mx__cell--low";
+  }
+  var issueMxGrand = Model.IssuePrioritySeverityGrid.Sum(r => r.Sum());
+  var scopeLabel = Model.ScopeKind == Compass.ViewModels.Modern.RaidDashboardScopeKind.Directorate ? "directorate" : "business area";
+}
+
+<article class="dfe-f-card raid-dash-matrix-card" id="raid-issue-matrix" role="region" aria-labelledby="raid-issue-matrix-title">
+  <div class="dfe-f-card__inner">
+    <header class="dfe-f-card__header">
+      <h2 class="govuk-heading-m dfe-f-card__heading govuk-!-margin-top-0" id="raid-issue-matrix-title">Issues by severity and priority</h2>
+    </header>
+    <div class="dfe-f-card__body govuk-body govuk-!-margin-bottom-0">
+      <p class="govuk-body-s govuk-!-margin-bottom-3">
+        @(Model.IsScoped ? $"Open issues in this {scopeLabel}" : "Your open issues") — shading shows relative concentration.
+      </p>
+      @if (Model.IssueMatrixExcludedCount > 0)
+      {
+        <p class="govuk-body-s govuk-!-margin-bottom-3"><strong>@Model.IssueMatrixExcludedCount</strong> open issue(s) lack severity or priority and are excluded.</p>
+      }
+      @if (Model.IssueMatrixSeverityColumns.Count == 0 || Model.IssueMatrixPriorityRows.Count == 0)
+      {
+        <p class="govuk-body govuk-!-margin-bottom-0">Configure active issue severities and priorities to populate this matrix.</p>
+      }
+      else if (Model.OpenIssueCount == 0)
+      {
+        <p class="govuk-body govuk-!-margin-bottom-0">No open issues in this view.</p>
+      }
+      else
+      {
+        <ul class="raid-matrix-legend govuk-!-margin-bottom-3" aria-label="Issue matrix concentration legend">
+          <li class="raid-matrix-legend__item"><span class="raid-matrix-legend__swatch" style="background:#f8d7da;" aria-hidden="true"></span><span>Highest concentration</span></li>
+          <li class="raid-matrix-legend__item"><span class="raid-matrix-legend__swatch" style="background:#fff0e0;" aria-hidden="true"></span><span>Elevated</span></li>
+          <li class="raid-matrix-legend__item"><span class="raid-matrix-legend__swatch" style="background:#fff7e0;" aria-hidden="true"></span><span>Moderate</span></li>
+          <li class="raid-matrix-legend__item"><span class="raid-matrix-legend__swatch" style="background:#e3f5eb;" aria-hidden="true"></span><span>Lower</span></li>
+        </ul>
+        <div class="dfe-f-table-wrapper mr-matrix-scroll" data-module="dfe-f-table">
+          <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+          <table class="govuk-table govuk-table--small-text-until-tablet mr-mx">
+            <caption class="govuk-visually-hidden">Open issues by priority and severity</caption>
+            <thead class="govuk-table__head">
+              <tr class="govuk-table__row">
+                <th class="mr-mx__corner" scope="col">
+                  <span class="mr-mx__corner-label mr-mx__corner-label--col">Severity →</span>
+                  <span class="mr-mx__corner-label mr-mx__corner-label--row">Priority ↓</span>
+                </th>
+                @foreach (var s in Model.IssueMatrixSeverityColumns)
+                {
+                  <th scope="col" class="mr-mx__col-hdr">@s.Label</th>
+                }
+                <th scope="col" class="govuk-table__header mr-mx__col-hdr mr-mx__col-hdr--total">Total</th>
+              </tr>
+            </thead>
+            <tbody class="govuk-table__body">
+              @for (var pi = 0; pi < Model.IssueMatrixPriorityRows.Count; pi++)
+              {
+                var rowSum = 0;
+                for (var si = 0; si < Model.IssueMatrixSeverityColumns.Count; si++)
+                  rowSum += Model.IssuePrioritySeverityGrid[pi][si];
+                <tr class="govuk-table__row">
+                  <th scope="row" class="mr-mx__row-hdr">@Model.IssueMatrixPriorityRows[pi].Label</th>
+                  @for (var si = 0; si < Model.IssueMatrixSeverityColumns.Count; si++)
+                  {
+                    var c = Model.IssuePrioritySeverityGrid[pi][si];
+                    <td class="@IssueMxIntensityClass(c)">
+                      @if (c > 0)
+                      {
+                        <span class="raid-mx-issue-val"><span class="mr-mx__count">@c</span></span>
+                      }
+                      else
+                      {
+                        <span class="raid-mx-issue-val raid-mx-issue-val--empty"><span class="mr-mx__empty" aria-hidden="true">–</span><span class="govuk-visually-hidden">0</span></span>
+                      }
+                    </td>
+                  }
+                  <td class="mr-mx__cell mr-mx__cell--total"><strong>@rowSum</strong></td>
+                </tr>
+              }
+            </tbody>
+            <tfoot>
+              <tr class="govuk-table__row">
+                <th scope="row" class="mr-mx__row-hdr mr-mx__row-hdr--total">Total</th>
+                @for (var si = 0; si < Model.IssueMatrixSeverityColumns.Count; si++)
+                {
+                  var colSum = 0;
+                  for (var pi = 0; pi < Model.IssueMatrixPriorityRows.Count; pi++)
+                    colSum += Model.IssuePrioritySeverityGrid[pi][si];
+                  <td class="mr-mx__cell mr-mx__cell--total"><strong>@colSum</strong></td>
+                }
+                <td class="mr-mx__cell mr-mx__cell--grand"><strong>@issueMxGrand</strong></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      }
+    </div>
+  </div>
+</article>

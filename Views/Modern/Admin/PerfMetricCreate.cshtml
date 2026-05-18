@@ -1,4 +1,6 @@
 @model Compass.ViewModels.Modern.PerfMetricRow
+@using Compass.ViewModels.Modern
+@using Microsoft.AspNetCore.Html
 @{
   ViewData["Title"] = "Create metric";
   var perfError = ViewBag.PerfError as string;
@@ -11,11 +13,11 @@
 }
 
 <div id="sc-admin-pm-create" class="dfe-c-mb-4">
- <div class="dfe-c-page-title dfe-c-mb-3">
- <div class="dfe-c-page-title__caption">Admin</div>
- <h1 class="dfe-c-page-title__heading">Create metric</h1>
- <p class="dfe-c-page-title__lede">Add a new performance metric that products will report against.</p>
-  </div>
+ @await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+   Caption = "Admin",
+   Title = "Create metric",
+   Lede = new HtmlString("<p class=\"govuk-body govuk-!-margin-bottom-0\">Add a new performance metric that products will report against.</p>")
+ })
 
  <div class="dfe-c-form-layout">
  <div class="dfe-c-form-layout__main">
@@ -89,21 +91,7 @@
  <input class="govuk-input govuk-input--width-4" id="validFromMonth" name="validFromMonth" type="number" min="1" max="12" value="@Model.ValidFromMonth" aria-describedby="validFromMonth-hint" />
           </div>
 
- <hr class="govuk-section-break govuk-section-break--l govuk-section-break--visible" />
-
- <h2 class="govuk-heading-m">Applicability</h2>
-
- <div class="govuk-form-group">
- <label class="govuk-label govuk-label--s" for="applicablePhases">Applicable phases <span class="govuk-hint" style="display:inline;font-size:inherit;">(optional)</span></label>
- <div id="applicablePhases-hint" class="govuk-hint">Comma-separated list of phases this metric applies to, e.g. <code>Live, Beta</code>. Leave blank to apply to all phases.</div>
- <input class="govuk-input" id="applicablePhases" name="applicablePhases" type="text" value="@Model.ApplicablePhases" maxlength="500" aria-describedby="applicablePhases-hint" />
-          </div>
-
- <div class="govuk-form-group">
- <label class="govuk-label govuk-label--s" for="applicableTypes">Applicable product types <span class="govuk-hint" style="display:inline;font-size:inherit;">(optional)</span></label>
- <div id="applicableTypes-hint" class="govuk-hint">Comma-separated list of product types, e.g. <code>Service, Platform</code>. Leave blank to apply to all types.</div>
- <input class="govuk-input" id="applicableTypes" name="applicableTypes" type="text" value="@Model.ApplicableTypes" maxlength="500" aria-describedby="applicableTypes-hint" />
-          </div>
+          @await Html.PartialAsync("_PerfMetricAdvancedFields", Model)
 
  <div class="govuk-button-group">
  <button type="submit" class="govuk-button" data-module="govuk-button">Create metric</button>
@@ -136,10 +124,49 @@
           <ul style="font-size:0.8125rem;color:var(--grey-4);padding-left:1.25rem;margin:0;line-height:1.6;">
             <li style="margin-bottom:0.25rem;">New metrics are <strong style="color:var(--black);">active</strong> by default. You can disable them later from the edit page.</li>
             <li style="margin-bottom:0.25rem;">Phase and type filters restrict which products see this metric during submission.</li>
-            <li>If unsure, leave phase and type fields blank to apply to all products.</li>
+            <li>If unsure, leave all phase and type checkboxes unticked to apply to all products.</li>
           </ul>
         </div>
       </div>
     </div>
   </div>
 </div>
+
+
+@section Scripts {
+  <script nonce="@Context.Items["Nonce"]">
+    (function () {
+      var valueTypeSelect = document.getElementById("valueType");
+      var rulesTextarea = document.getElementById("validationRulesJson");
+      if (!valueTypeSelect || !rulesTextarea) return;
+
+      valueTypeSelect.addEventListener("change", function () {
+        var valueType = valueTypeSelect.value;
+        var currentRules = {};
+        try {
+          currentRules = JSON.parse(rulesTextarea.value || "{}");
+        } catch (e) {
+          currentRules = { required: true, allowNull: false };
+        }
+
+        if (valueType === "1") {
+          currentRules.minimumValue = 0;
+          currentRules.maximumValue = 100000000;
+          delete currentRules.decimalPlaces;
+        } else if (valueType === "2") {
+          currentRules.minimumValue = 0;
+          currentRules.maximumValue = 100000000;
+        } else if (valueType === "3") {
+          currentRules.minimumValue = 0;
+          currentRules.maximumValue = 100;
+        } else {
+          delete currentRules.minimumValue;
+          delete currentRules.maximumValue;
+          delete currentRules.decimalPlaces;
+        }
+
+        rulesTextarea.value = JSON.stringify(currentRules, null, 2);
+      });
+    })();
+  </script>
+}

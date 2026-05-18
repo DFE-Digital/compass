@@ -1,5 +1,6 @@
 @model ModernPerformanceCommissionSubmitViewModel
 @using Compass.Models
+@using Compass.ViewModels.Modern
 @inject Microsoft.Extensions.Configuration.IConfiguration Configuration
 @{
   ViewData["Title"] = "Enter metrics — " + Model.Product.Title;
@@ -47,18 +48,21 @@
   </div>
 }
 
-<a class="govuk-back-link" href="@Url.Action("Commission", "ModernPerformance", new { commissionId = c.Id, tab = Model.ReturnTab })">Back to @c.Name</a>
+@{
+  var commissionSubmitLede = await Html.PartialAsync("_PerformanceCommissionSubmitHeaderLede", Model);
+  var commissionSubmitActions = await Html.PartialAsync("_PerformanceCommissionSubmitHeaderActions", Model);
+}
+@await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+  Caption = "Commission",
+  Title = Model.Product.Title,
+  Lede = commissionSubmitLede,
+  Actions = commissionSubmitActions
+})
 
-<div class="dfe-c-page-title dfe-c-mb-4">
- <div class="dfe-c-page-title__caption">Commission</div>
- <h1 class="dfe-c-page-title__heading govuk-!-margin-bottom-2">@Model.Product.Title</h1>
- <p class="govuk-body dfe-c-mb-1"><strong>Reporting period:</strong> @CommissionDisplay.FormatPeriod(c.StartDate, c.EndDate)</p>
- <p class="govuk-body dfe-c-mb-1"><strong>Due date:</strong> @CommissionDisplay.FormatDueDate(c.DueDate)</p>
-  @if (Model.IsPastDue)
-  {
- <p class="govuk-body-s dfe-c-text-muted">This commission is past due — returns are read-only.</p>
-  }
-</div>
+@await Html.PartialAsync("_PerformanceCommissionScopeSubNav", new PerformanceCommissionScopeNavViewModel {
+  CommissionId = c.Id,
+  Tab = Model.ReturnTab
+})
 
 @if (Model.HasNoProductTypes)
 {
@@ -69,27 +73,34 @@
       This product does not have any types assigned.
       @if (!string.IsNullOrEmpty(fipsProductUrl))
       {
- <span class="govuk-body"><a class="govuk-link" href="@fipsProductUrl" target="_blank" rel="noopener noreferrer">Visit the FIPS entry</a> and request categories to be updated via &quot;Propose a change&quot;.</span>
+ <span class="govuk-body"><a class="govuk-link govuk-link--no-visited-state" href="@fipsProductUrl" target="_blank" rel="noopener noreferrer">Visit the FIPS entry</a> and request categories to be updated via &quot;Propose a change&quot;.</span>
       }
     </strong>
   </div>
 }
 else
 {
- <div class="dfe-c-table-wrap dfe-c-mb-4">
-    <table>
-      <thead>
-        <tr>
-          <th scope="col">Metric</th>
-          <th scope="col">Value</th>
-          <th scope="col">Status</th>
+ <div class="dfe-f-table-wrapper dfe-c-mb-4" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+    <table class="govuk-table">
+      <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+          <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Metric</button>
+        </th>
+          <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Value</button>
+        </th>
+          <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Status</button>
+        </th>
         </tr>
       </thead>
-      <tbody>
+      <tbody class="govuk-table__body">
       @foreach (var metricValue in Model.MetricValues)
       {
-        <tr id="row-@metricValue.Id">
-          <td>
+        <tr class="govuk-table__row" id="row-@metricValue.Id">
+          <td class="govuk-table__cell">
             <button type="button"
  class="govuk-link govuk-link--no-visited-state dfe-c-metric-edit-btn"
                     style="background:none;border:none;padding:0;cursor:pointer;text-align:left;font:inherit;color:#1d70b8;"
@@ -110,7 +121,7 @@ else
  <div class="govuk-body-s dfe-c-text-muted govuk-!-margin-top-1">@metricValue.PerformanceMetric.Description</div>
             }
           </td>
-          <td>
+          <td class="govuk-table__cell">
  <span id="display-@metricValue.Id" class="govuk-body">
               @if (metricValue.IsNotCaptured)
               {
@@ -130,7 +141,7 @@ else
               }
             </span>
           </td>
-          <td>
+          <td class="govuk-table__cell">
             @if (metricValue.IsComplete)
             {
  <span class="dfe-c-tag dfe-c-tag--green">Complete</span>
@@ -221,9 +232,13 @@ else
 
 @Html.AntiForgeryToken()
 
-<div id="metric-edit-overlay" class="confirm-modal-overlay" role="presentation" aria-hidden="true" style="display: none;">
- <div id="metric-edit-dialog" class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="metric-edit-title" style="display: none; max-width: 40rem;">
- <h2 id="metric-edit-title" class="confirm-modal__title">Edit metric</h2>
+<dialog id="metric-edit-dialog" class="dfe-f-modal govuk-!-margin-0" data-module="dfe-f-modal" aria-labelledby="metric-edit-title" aria-describedby="metric-edit-description" aria-modal="true" role="dialog">
+ <div class="dfe-f-modal__panel">
+ <header class="dfe-f-modal__header">
+ <h2 id="metric-edit-title" class="govuk-heading-m dfe-f-modal__title">Edit metric</h2>
+ <button type="button" class="dfe-f-modal__close" data-dfe-modal-close aria-label="Close"><span class="dfe-f-modal__close-x" aria-hidden="true">×</span></button>
+    </header>
+ <div class="dfe-f-modal__body" id="metric-edit-description">
  <div id="metric-readonly-notice" class="govuk-inset-text govuk-!-margin-bottom-3" hidden>
  <p class="govuk-body govuk-!-margin-bottom-0">This return cannot be edited.</p>
     </div>
@@ -246,12 +261,13 @@ else
  <textarea class="govuk-textarea" id="metric-not-captured-reason" rows="3"></textarea>
  <p id="metric-not-captured-reason-error" class="govuk-error-message" hidden></p>
     </div>
- <div class="confirm-modal__actions">
- <button type="button" class="govuk-button" id="metric-edit-save">Save</button>
- <button type="button" class="govuk-button govuk-button--secondary" id="metric-edit-cancel">Cancel</button>
     </div>
+ <footer class="dfe-f-modal__footer">
+ <button type="button" class="govuk-button" id="metric-edit-save">Save</button>
+ <button type="button" class="govuk-button govuk-button--secondary" data-dfe-modal-close id="metric-edit-cancel">Cancel</button>
+    </footer>
   </div>
-</div>
+</dialog>
 
 @section Scripts {
   <script nonce="@Context.Items["Nonce"]">
@@ -259,23 +275,20 @@ else
       var saveUrl = @Json.Serialize(saveMetricUrl);
       var tokenEl = document.querySelector('input[name="__RequestVerificationToken"]');
       var token = tokenEl ? tokenEl.value : '';
-      var overlay = document.getElementById('metric-edit-overlay');
       var dialog = document.getElementById('metric-edit-dialog');
       var currentMetricId = null;
       var currentRowBtn = null;
 
-      function showOverlay() {
-        overlay.style.display = 'flex';
-        overlay.setAttribute('aria-hidden', 'false');
-        dialog.style.display = 'block';
+      function showDialog() {
+        if (!dialog || typeof dialog.showModal !== 'function') return;
+        dialog.showModal();
+        if (typeof window.DfeFrontend !== 'undefined' && typeof window.DfeFrontend.initAll === 'function') {
+          window.DfeFrontend.initAll();
+        }
         document.getElementById('metric-edit-value').focus();
       }
-      function hideOverlay() {
-        overlay.style.display = 'none';
-        overlay.setAttribute('aria-hidden', 'true');
-        dialog.style.display = 'none';
-        currentMetricId = null;
-        currentRowBtn = null;
+      function hideDialog() {
+        if (dialog && typeof dialog.close === 'function') dialog.close();
       }
 
       function parseRules(rulesJson) {
@@ -418,17 +431,16 @@ else
             }
           };
 
-          showOverlay();
+          showDialog();
         });
       });
 
-      document.getElementById('metric-edit-cancel').addEventListener('click', hideOverlay);
-      overlay.addEventListener('click', function (e) {
-        if (e.target === overlay) hideOverlay();
-      });
-      document.addEventListener('keydown', function (e) {
-        if (overlay.style.display === 'flex' && e.key === 'Escape') hideOverlay();
-      });
+      if (dialog) {
+        dialog.addEventListener('close', function () {
+          currentMetricId = null;
+          currentRowBtn = null;
+        });
+      }
 
       document.getElementById('metric-edit-save').addEventListener('click', function () {
         if (!currentMetricId || !saveUrl) return;
@@ -480,6 +492,7 @@ else
           .then(function (r) { return r.json(); })
           .then(function (data) {
             if (data && data.success) {
+              hideDialog();
               window.location.reload();
             } else {
               errEl.textContent = (data && data.message) ? data.message : 'Error saving value';

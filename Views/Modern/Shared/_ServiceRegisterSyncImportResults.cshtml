@@ -1,0 +1,65 @@
+@model ServiceRegisterSyncSettingsViewModel
+@using Compass.Services.Fips
+
+@if (Model.LastImportResult is { } import)
+{
+  <h2 class="govuk-heading-m govuk-!-margin-top-6">Import results</h2>
+  <p class="govuk-body-s" style="color:#505a5f;">
+    @import.UpdatedCount updated · @import.SkippedCount skipped · @import.FailedCount failed (@import.TotalRows rows)
+  </p>
+  <div class="dfe-f-table-wrapper govuk-!-margin-bottom-6" data-module="dfe-f-table">
+    <table class="govuk-table govuk-table--small-text-until-tablet">
+      <caption class="govuk-visually-hidden">Import row outcomes</caption>
+      <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+          <th scope="col" class="govuk-table__header">Row</th>
+          <th scope="col" class="govuk-table__header">Product</th>
+          <th scope="col" class="govuk-table__header">FIPS ID</th>
+          <th scope="col" class="govuk-table__header">Outcome</th>
+        </tr>
+      </thead>
+      <tbody class="govuk-table__body">
+        @foreach (var row in import.Rows)
+        {
+          <tr class="govuk-table__row">
+            <td class="govuk-table__cell">@row.RowNumber</td>
+            <td class="govuk-table__cell">@(string.IsNullOrWhiteSpace(row.ProductTitle) ? "—" : row.ProductTitle)</td>
+            <td class="govuk-table__cell">@(string.IsNullOrWhiteSpace(row.FipsId) ? "—" : row.FipsId)</td>
+            <td class="govuk-table__cell">
+              @if (row.Success)
+              {
+                <span class="dfe-c-tag dfe-c-tag--green">Updated</span>
+              }
+              else if (row.Errors.Count > 0)
+              {
+                <span class="dfe-c-tag dfe-c-tag--red">Failed</span>
+              }
+              else
+              {
+                <span class="dfe-c-tag dfe-c-tag--grey">Skipped</span>
+              }
+              @if (row.Messages.Count > 0)
+              {
+                <ul class="govuk-list govuk-!-margin-top-1 govuk-!-margin-bottom-0">
+                  @foreach (var m in row.Messages)
+                  {
+                    <li class="govuk-body-s">@m</li>
+                  }
+                </ul>
+              }
+              @if (row.Errors.Count > 0)
+              {
+                <ul class="govuk-list govuk-!-margin-top-1 govuk-!-margin-bottom-0">
+                  @foreach (var e in row.Errors)
+                  {
+                    <li class="govuk-body-s" style="color:#d4351c;">@e</li>
+                  }
+                </ul>
+              }
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+}

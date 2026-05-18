@@ -1,0 +1,63 @@
+@model Compass.ViewModels.RaidReportTabPanelViewModel
+@{
+  var panel = Model.Panel;
+  var tableTitle = Model.TableTitle;
+}
+
+<section class="raid-report__stats govuk-!-margin-bottom-4" aria-label="Summary statistics">
+  <div class="raid-report__stat-grid">
+    @foreach (var stat in panel.Stats)
+    {
+      <article class="dfe-f-stat-card @stat.Tint">
+        <p class="govuk-body-s dfe-f-stat-card__label">@stat.Label</p>
+        <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@stat.Value</p>
+      </article>
+    }
+  </div>
+</section>
+
+<section class="raid-report__table" aria-labelledby="raid-report-table-heading">
+  <h2 class="govuk-heading-m govuk-!-margin-bottom-3" id="raid-report-table-heading">
+    @tableTitle <span class="govuk-body-s govuk-!-font-weight-regular">(@panel.Count)</span>
+  </h2>
+
+  @if (panel.Rows.Count == 0)
+  {
+    <p class="govuk-body">No entries match the current scope and filters.</p>
+  }
+  else
+  {
+    <div class="govuk-table-responsive">
+      <table class="govuk-table govuk-table--small-text-until-tablet raid-report__register-table">
+        <thead class="govuk-table__head">
+          <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header">Reference</th>
+            <th scope="col" class="govuk-table__header">Title</th>
+            @foreach (var header in panel.TableHeaders)
+            {
+              <th scope="col" class="govuk-table__header">@header</th>
+            }
+          </tr>
+        </thead>
+        <tbody class="govuk-table__body">
+          @foreach (var row in panel.Rows)
+          {
+            var detailUrl = Url.Action(row.DetailAction, row.DetailController, new { id = row.Id }) ?? "#";
+            <tr class="govuk-table__row">
+              <td class="govuk-table__cell dfe-f-u-tabular-numbers">
+                <a class="govuk-link govuk-link--no-visited-state" href="@detailUrl">@row.Reference</a>
+              </td>
+              <td class="govuk-table__cell">
+                <a class="govuk-link govuk-link--no-visited-state" href="@detailUrl">@row.Title</a>
+              </td>
+              @foreach (var cell in row.Cells)
+              {
+                <td class="govuk-table__cell">@cell</td>
+              }
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</section>

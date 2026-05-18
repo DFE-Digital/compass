@@ -16,6 +16,8 @@ public class RagStatus
     public string? Description { get; set; }
     public string? BackgroundColourKey { get; set; }
     public string? TextColourKey { get; set; }
+    /// <summary>Admin tag modifier from <see cref="RagStatusLookup.CssClass"/>.</summary>
+    public string? CssClass { get; set; }
 }
 
 /// <summary>Placeholder type for ViewBag casts in work chrome (optional linked demand).</summary>

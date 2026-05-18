@@ -293,6 +293,23 @@ public static class RaidLookupSeedData
                 Item("POL", "Policy", null, 50),
                 Item("DATA", "Data", null, 60),
                 Item("OPS", "Operational", null, 70)
+            },
+            ["near-miss-types"] = new[]
+            {
+                Item("NM", "Near miss", null, 10),
+                Item("UI", "Unexpected issue", null, 20)
+            },
+            ["near-miss-seriousness"] = new[]
+            {
+                Item("1", "1", "Lowest seriousness", 10),
+                Item("2", "2", null, 20),
+                Item("3", "3", null, 30),
+                Item("4", "4", "Highest seriousness", 40)
+            },
+            ["near-miss-statuses"] = new[]
+            {
+                Item("OPEN", "Open", null, 10),
+                Item("CLOSED", "Closed", null, 20)
             }
         };
 

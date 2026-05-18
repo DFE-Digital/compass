@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Security.Claims;
 using Compass.Data;
 using Compass.Models;
@@ -25,7 +26,13 @@ public sealed class GlobalFeatureToggleService : IGlobalFeatureToggleService
             .FirstOrDefaultAsync(f => f.Code == normalized);
 
         if (row == null)
+        {
+            var def = ApplicationFeatureToggleDefinition.All
+                .FirstOrDefault(d => string.Equals(d.Code, normalized, StringComparison.OrdinalIgnoreCase));
+            if (def != null)
+                return def.DefaultEnabled;
             return true;
+        }
 
         return row.AccessMode switch
         {

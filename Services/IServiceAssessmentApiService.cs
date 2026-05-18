@@ -7,6 +7,12 @@ public interface IServiceAssessmentApiService
     Task<SasPublishedSummaryResponse?> GetPublishedSummaryAsync(CancellationToken cancellationToken = default);
 
     Task<SasActionsByStandardResponse?> GetPublishedActionsByStandardAsync(CancellationToken cancellationToken = default);
+
+    Task<SasAssessorsSummaryResponse?> GetAssessorsSummaryAsync(CancellationToken cancellationToken = default);
+
+    Task<SasProductAssessmentsResponse?> GetAssessmentsByProductIdAsync(
+        string productFipsId,
+        CancellationToken cancellationToken = default);
 }
 
 public class ServiceAssessmentResponse

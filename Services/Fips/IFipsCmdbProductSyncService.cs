@@ -17,10 +17,11 @@ public sealed class FipsCmdbSyncProgressUpdate
 
 public sealed class FipsCmdbProductSyncResult
 {
+    public int Created { get; set; }
     public int Updated { get; set; }
     public int SkippedRetired { get; set; }
     public int SkippedNoSysId { get; set; }
-    /// <summary>No Compass row with matching <see cref="CMDBProduct.CMDBID"/> — entries are never inserted by sync.</summary>
+    /// <summary>Reserved; sync now creates Compass rows for unmatched CMDB sys_ids.</summary>
     public int SkippedNoLocalMatch { get; set; }
     /// <summary>Rows whose status was set by an active <see cref="FipsCmdbSyncRule"/> during this run.</summary>
     public int StatusSetByRules { get; set; }
@@ -38,8 +39,8 @@ public sealed class FipsCmdbSingleProductSyncResult
 public interface IFipsCmdbProductSyncService
 {
     /// <summary>
-    /// Updates existing <see cref="CMDBProduct"/> rows where <see cref="CMDBProduct.CMDBID"/> matches an active CMDB service offering.
-    /// Updates title, CMDB description, and CMDB-sourced contacts only. Does not create new products or change other fields.
+    /// Imports active CMDB service offerings into <see cref="CMDBProduct"/> rows (create when no local match, otherwise update).
+    /// Updates title, CMDB description, and CMDB-sourced contacts only; does not change categories, phase, or other Compass-only fields on existing rows.
     /// Inactive (retired) Compass products are skipped. A JSON snapshot of each CMDB row is stored on the product; optional rules may set status to Rejected or Inactive.
     /// </summary>
     Task<FipsCmdbProductSyncResult> SyncActiveServiceOfferingsAsync(
@@ -52,4 +53,18 @@ public interface IFipsCmdbProductSyncService
     /// Skips when the product is <see cref="CMDBProductStatus.Inactive"/> (same as bulk behaviour).
     /// </summary>
     Task<FipsCmdbSingleProductSyncResult> SyncSingleProductAsync(Guid compassProductId, string triggeredByEmail, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Clears Compass-managed register fields on all non-retired products so a subsequent CMDB sync can reapply rules.
+    /// Does not change title, CMDB description, contacts, categories, or user description.
+    /// </summary>
+    Task<FipsCmdbProductResetResult> ResetAllProductsForCmdbResyncAsync(
+        string triggeredByEmail,
+        CancellationToken cancellationToken = default);
+}
+
+public sealed class FipsCmdbProductResetResult
+{
+    public int ProductsReset { get; set; }
+    public int SkippedInactive { get; set; }
 }

@@ -1,10 +1,17 @@
 @model Compass.ViewModels.Modern.PerfReportingHubViewModel
+@using Compass.ViewModels.Modern
+@using Compass.Services
+@using Microsoft.AspNetCore.Html
 @{
     ViewData["Title"] = "Performance reporting";
     string P(string id) => Url.Action("PerformanceReporting", "ModernAdmin", new { panel = id }) ?? "#";
     var cur = Model.Panel;
     var navGroupReporting = cur is "metrics" or "commissions" or "due-overrides";
     var navGroupScope = cur == "product-exclusions";
+    var perfTodayUtc = DateTime.UtcNow.Date;
+    IHtmlContent? perfHeaderActions = cur == "commissions"
+        ? new HtmlString($"<div class=\"dfe-c-flex\" style=\"gap:0.5rem;flex-wrap:wrap;align-items:center;\"><a class=\"govuk-button\" href=\"{Url.Action("PerfCommissionCreateForm", "ModernAdmin") ?? "#"}\">Create commission</a></div>")
+        : null;
 }
 
 @section Breadcrumbs {
@@ -14,11 +21,12 @@
 }
 
 <div class="admin-hub">
- <div class="dfe-c-page-title">
- <div class="dfe-c-page-title__caption">Administration</div>
- <h1 class="dfe-c-page-title__heading">Performance reporting</h1>
- <p class="dfe-c-page-title__lede">Metrics, commissions, due dates, and reporting scope</p>
-  </div>
+ @await Html.PartialAsync("~/Views/Modern/Shared/_ModernPageHeader.cshtml", new ModernPageHeaderViewModel {
+   Caption = "Administration",
+   Title = "Performance reporting",
+   Lede = new HtmlString("<p class=\"govuk-body govuk-!-margin-bottom-0\">Metrics, commissions, due dates, and reporting scope</p>"),
+   Actions = perfHeaderActions
+ })
 
   <div style="display:grid;grid-template-columns:17rem 1fr;gap:1.5rem;align-items:start;">
     @* ── Sidebar (same pattern as Admin → Configuration areas) ── *@
@@ -31,9 +39,9 @@
           <span>Reporting &amp; deadlines</span>
         </summary>
  <div class="admin-nav-group__body">
- <a class="admin-nav-link @(cur =="metrics" ? "admin-nav-link--active" : "")" href="@P("metrics")">Metrics</a>
- <a class="admin-nav-link @(cur =="commissions" ? "admin-nav-link--active" : "")" href="@P("commissions")">Commissions</a>
- <a class="admin-nav-link @(cur =="due-overrides" ? "admin-nav-link--active" : "")" href="@P("due-overrides")">Due date overrides</a>
+ <a class="govuk-link admin-nav-link @(cur == "metrics" ? "admin-nav-link--active" : "")" href="@P("metrics")">Metrics</a>
+ <a class="govuk-link admin-nav-link @(cur == "commissions" ? "admin-nav-link--active" : "")" href="@P("commissions")">Commissions</a>
+ <a class="govuk-link admin-nav-link @(cur == "due-overrides" ? "admin-nav-link--active" : "")" href="@P("due-overrides")">Due date overrides</a>
         </div>
       </details>
  <details class="admin-nav-group @(navGroupScope ?"admin-nav-group--open" : "")" id="ang-perf-scope" @(navGroupScope ? "open" : null)>
@@ -43,7 +51,7 @@
           <span>Scope &amp; exclusions</span>
         </summary>
  <div class="admin-nav-group__body">
- <a class="admin-nav-link @(cur =="product-exclusions" ? "admin-nav-link--active" : "")" href="@P("product-exclusions")">Product exclusions</a>
+ <a class="govuk-link admin-nav-link @(cur == "product-exclusions" ? "admin-nav-link--active" : "")" href="@P("product-exclusions")">Product exclusions</a>
         </div>
       </details>
     </nav>
@@ -59,7 +67,7 @@
       }
       @if (ViewBag.AdminMessage != null)
       {
- <div class="govuk-notification-banner govuk-notification-banner--success dfe-c-mb-3" role="region" aria-labelledby="perf-notif-title">
+ <div class="govuk-notification-banner govuk-notification-banner--success govuk-!-margin-bottom-3" role="region" aria-labelledby="perf-notif-title">
  <div class="govuk-notification-banner__header">
  <h2 class="govuk-notification-banner__title" id="perf-notif-title">Success</h2>
           </div>
@@ -81,37 +89,38 @@
               </div>
  <a class="govuk-button" href="@Url.Action("PerfMetricCreateForm", "ModernAdmin")">Create metric</a>
             </div>
- <div class="dfe-c-table-wrap">
-              <table >
-                <thead>
-                  <tr>
- <th data-sort-bound="1" class="sortable">Identifier</th>
- <th data-sort-bound="1" class="sortable">Title</th>
- <th data-sort-bound="1" class="sortable">Type</th>
- <th data-sort-bound="1" class="sortable">Valid from</th>
- <th data-sort-bound="1" class="sortable">Phases</th>
- <th data-sort-bound="1" class="sortable">Status</th>
- <th><span class="govuk-visually-hidden">Actions</span></th>
+ <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+              <table class="govuk-table govuk-table--small dfe-f-table--condensed">
+                <thead class="govuk-table__head">
+                  <tr class="govuk-table__row">
+ <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Identifier</button></th>
+ <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Title</button></th>
+ <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Type</button></th>
+ <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Valid from</button></th>
+ <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Phases</button></th>
+ <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Status</button></th>
+ <th scope="col" class="govuk-table__header govuk-table__header--numeric"><span class="govuk-visually-hidden">Actions</span></th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody class="govuk-table__body">
                   @if (Model.Metrics.Count == 0)
                   {
- <tr><td colspan="7"><span class="dfe-c-text-muted">No metrics yet. Use <strong>Create metric</strong> to add one.</span></td></tr>
+ <tr class="govuk-table__row"><td class="govuk-table__cell" colspan="7"><span class="dfe-c-text-muted">No metrics yet. Use <strong>Create metric</strong> to add one.</span></td></tr>
                   }
                   @foreach (var m in Model.Metrics)
                   {
-                    <tr>
-                      <td><code>@m.Identifier</code></td>
-                      <td><strong>@m.Title</strong></td>
-                      <td>@m.ValueType</td>
-                      <td>@m.ValidFrom</td>
-                      <td>@(string.IsNullOrEmpty(m.ApplicablePhases) ? "All" : m.ApplicablePhases)</td>
-                      <td>
- @if (m.IsDisabled) { <span class="dfe-c-tag dfe-c-tag--grey">Disabled</span> }
- else { <span class="dfe-c-tag dfe-c-tag--green">Active</span> }
+                    <tr class="govuk-table__row">
+                      <td class="govuk-table__cell"><code>@m.Identifier</code></td>
+                      <td class="govuk-table__cell"><strong>@m.Title</strong></td>
+                      <td class="govuk-table__cell">@m.ValueType</td>
+                      <td class="govuk-table__cell">@m.ValidFrom</td>
+                      <td class="govuk-table__cell">@(string.IsNullOrEmpty(m.ApplicablePhases) ? "All" : m.ApplicablePhases)</td>
+                      <td class="govuk-table__cell">
+ @if (m.IsDisabled) { <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--grey">Disabled</span> }
+ else { <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--green">Active</span> }
                       </td>
-                      <td style="text-align:right;white-space:nowrap;">
+                      <td class="govuk-table__cell" style="text-align:right;white-space:nowrap;">
  <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("PerfMetricEditForm", "ModernAdmin", new { id = m.Id })">Edit</a>
                       </td>
                     </tr>
@@ -124,44 +133,54 @@
 
         @* ════════════ COMMISSIONS ════════════ *@
         case "commissions":
- <div class="admin-panel">
- <div class="dfe-c-flex dfe-c-flex--between dfe-c-mb-2" style="align-items:flex-start;flex-wrap:wrap;gap:0.75rem;">
-              <div>
- <h2 class="govuk-heading-m govuk-!-margin-top-0" style="margin-bottom:0.25rem;">Commissions</h2>
- <p class="govuk-body govuk-hint govuk-!-margin-bottom-0">Reporting periods when products must submit performance data.</p>
-              </div>
- <a class="govuk-button" href="@Url.Action("PerfCommissionCreateForm", "ModernAdmin")">Create commission</a>
+ <div class="admin-panel" id="sc-perf-commissions">
+ <div class="dfe-c-mb-2">
+ <h2 class="govuk-heading-m" style="margin:0;">Commission periods</h2>
+ <p class="govuk-body govuk-hint govuk-!-margin-bottom-0 govuk-!-margin-top-1">Same layout as monthly work reporting: period bounds, submission opens, and submission closes. When a period is active and today falls between submission opens and closes, products can submit returns. Quarter is optional metadata.</p>
             </div>
- <div class="dfe-c-table-wrap">
-              <table >
-                <thead>
-                  <tr>
- <th data-sort-bound="1" class="sortable">Name</th>
- <th data-sort-bound="1" class="sortable">Quarter</th>
- <th data-sort-bound="1" class="sortable">Period</th>
- <th data-sort-bound="1" class="sortable">Opens</th>
- <th data-sort-bound="1" class="sortable">Due</th>
- <th data-sort-bound="1" class="sortable">Subs</th>
- <th data-sort-bound="1" class="sortable">Active</th>
- <th><span class="govuk-visually-hidden">Actions</span></th>
+ <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+              <table class="govuk-table govuk-table--small dfe-f-table--condensed">
+                <thead class="govuk-table__head">
+                  <tr class="govuk-table__row">
+ <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Name</button></th>
+ <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Quarter</button></th>
+ <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Period bounds</button></th>
+ <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Submission opens</button></th>
+ <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Submission closes</button></th>
+ <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Status</button></th>
+ <th scope="col" class="govuk-table__header govuk-table__header--numeric"><span class="govuk-visually-hidden">Actions</span></th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody class="govuk-table__body">
                   @if (Model.Commissions.Count == 0)
                   {
- <tr><td colspan="8"><span class="dfe-c-text-muted">No commissions yet. Use <strong>Create commission</strong> to add one.</span></td></tr>
+ <tr class="govuk-table__row"><td class="govuk-table__cell" colspan="7"><span class="dfe-c-text-muted">No commission periods yet. Use <strong>Create commission</strong> in the page header to add one.</span></td></tr>
                   }
                   @foreach (var c in Model.Commissions)
                   {
-                    <tr>
-                      <td><strong>@c.Name</strong></td>
-                      <td>@(c.Quarter ?? "—")</td>
-                      <td>@c.StartDate.ToString("d MMM yy") – @c.EndDate.ToString("d MMM yy")</td>
-                      <td>@c.OpenDate.ToString("d MMM yy")</td>
-                      <td>@c.DueDate.ToString("d MMM yy")</td>
-                      <td style="text-align:right;">@c.SubmissionCount</td>
- <td>@if (c.IsActive) { <span class="dfe-c-tag dfe-c-tag--green">Yes</span> } else { <span class="dfe-c-tag dfe-c-tag--grey">No</span> }</td>
-                      <td style="text-align:right;white-space:nowrap;">
+                    var commissionLive = c.IsActive && perfTodayUtc >= c.OpenDate.Date && perfTodayUtc <= c.DueDate.Date;
+                    <tr class="govuk-table__row">
+                      <td class="govuk-table__cell"><strong>@c.Name</strong></td>
+                      <td class="govuk-table__cell">@(string.IsNullOrWhiteSpace(c.Quarter) ? "—" : c.Quarter)</td>
+                      <td class="govuk-table__cell">@c.StartDate.ToString("d MMM yyyy") – @c.EndDate.ToString("d MMM yyyy")</td>
+                      <td class="govuk-table__cell">@c.OpenDate.ToString("d MMM yyyy")</td>
+                      <td class="govuk-table__cell">@c.DueDate.ToString("d MMM yyyy")</td>
+                      <td class="govuk-table__cell">
+                        @if (!c.IsActive)
+                        {
+ <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--grey">Inactive</span>
+                        }
+                        else if (commissionLive)
+                        {
+ <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--green">Submission open</span>
+                        }
+                        else
+                        {
+ <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--blue">Active</span>
+                        }
+                      </td>
+                      <td class="govuk-table__cell" style="text-align:right;white-space:nowrap;">
  <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("PerfCommissionEditForm", "ModernAdmin", new { id = c.Id })">Edit</a>
                       </td>
                     </tr>
@@ -177,30 +196,31 @@
  <div class="admin-panel">
  <h2 class="govuk-heading-m govuk-!-margin-top-0 govuk-!-margin-bottom-2">Due date overrides</h2>
  <p class="govuk-body govuk-hint govuk-!-margin-bottom-4">Override the default due date for specific reporting periods (e.g. bank holiday adjustments).</p>
- <div class="dfe-c-table-wrap">
-              <table >
-                <thead>
-                  <tr>
- <th data-sort-bound="1" class="sortable">Period</th>
- <th data-sort-bound="1" class="sortable">Due date</th>
- <th data-sort-bound="1" class="sortable">Reason</th>
- <th data-sort-bound="1" class="sortable">Active</th>
- <th><span class="govuk-visually-hidden">Actions</span></th>
+ <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+              <table class="govuk-table govuk-table--small dfe-f-table--condensed">
+                <thead class="govuk-table__head">
+                  <tr class="govuk-table__row">
+ <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Period</button></th>
+ <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Due date</button></th>
+ <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Reason</button></th>
+ <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Active</button></th>
+ <th scope="col" class="govuk-table__header govuk-table__header--numeric"><span class="govuk-visually-hidden">Actions</span></th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody class="govuk-table__body">
                   @if (Model.DueDateOverrides.Count == 0)
                   {
- <tr><td colspan="5"><span class="dfe-c-text-muted">No overrides.</span></td></tr>
+ <tr class="govuk-table__row"><td class="govuk-table__cell" colspan="5"><span class="dfe-c-text-muted">No overrides.</span></td></tr>
                   }
                   @foreach (var d in Model.DueDateOverrides)
                   {
-                    <tr>
-                      <td><strong>@d.ReportingYear-@d.ReportingMonth.ToString("D2")</strong></td>
-                      <td>@d.DueDate.ToString("d MMM yyyy")</td>
-                      <td>@(d.Reason ?? "—")</td>
- <td>@if (d.IsActive) { <span class="dfe-c-tag dfe-c-tag--green">Yes</span> } else { <span class="dfe-c-tag dfe-c-tag--grey">No</span> }</td>
-                      <td style="text-align:right;">
+                    <tr class="govuk-table__row">
+                      <td class="govuk-table__cell"><strong>@d.ReportingYear-@d.ReportingMonth.ToString("D2")</strong></td>
+                      <td class="govuk-table__cell">@d.DueDate.ToString("d MMM yyyy")</td>
+                      <td class="govuk-table__cell">@(d.Reason ?? "—")</td>
+ <td class="govuk-table__cell">@if (d.IsActive) { <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--green">Yes</span> } else { <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--grey">No</span> }</td>
+                      <td class="govuk-table__cell" style="text-align:right;">
                         <form method="post" action="@Url.Action("PerfDueOverrideDelete", "ModernAdmin", new { id = d.Id })" style="display:inline;">@Html.AntiForgeryToken()
  <button type="submit" class="govuk-button govuk-button--warning govuk-button--small govuk-!-margin-bottom-0" data-confirm="Remove this override?">Delete</button>
                         </form>
@@ -228,50 +248,55 @@
         case "product-exclusions":
  <div class="admin-panel">
  <h2 class="govuk-heading-m govuk-!-margin-top-0 govuk-!-margin-bottom-2">Product exclusions</h2>
- <p class="govuk-body govuk-hint govuk-!-margin-bottom-4">Exclude specific products from mandatory performance reporting. Use the FIPS product document ID. End date is optional (leave blank for open-ended).</p>
+ <p class="govuk-body govuk-hint govuk-!-margin-bottom-4">Exclude active Service Register products from mandatory performance reporting. End date is optional (leave blank for open-ended).</p>
 
- <div class="dfe-c-table-wrap">
-              <table >
-                <thead>
-                  <tr>
- <th data-sort-bound="1" class="sortable">Product</th>
- <th data-sort-bound="1" class="sortable">Document ID</th>
- <th data-sort-bound="1" class="sortable">Reason</th>
- <th data-sort-bound="1" class="sortable">From</th>
- <th data-sort-bound="1" class="sortable">Until</th>
- <th data-sort-bound="1" class="sortable">Status</th>
-                    <th>Actions</th>
+ <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+              <table class="govuk-table govuk-table--small dfe-f-table--condensed">
+                <thead class="govuk-table__head">
+                  <tr class="govuk-table__row">
+ <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Product</button></th>
+ <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Document ID</button></th>
+ <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Reason</button></th>
+ <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">From</button></th>
+ <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Until</button></th>
+ <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Status</button></th>
+                    <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Actions</button>
+        </th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody class="govuk-table__body">
                   @if (Model.ProductExclusions.Count == 0)
                   {
- <tr><td colspan="7"><span class="dfe-c-text-muted">No product exclusions yet. Add one using the form below.</span></td></tr>
+ <tr class="govuk-table__row"><td class="govuk-table__cell" colspan="7"><span class="dfe-c-text-muted">No product exclusions yet. Add one using the form below.</span></td></tr>
                   }
                   @foreach (var p in Model.ProductExclusions)
                   {
                     if (Model.EditId == p.Id)
                     {
-                      <tr>
-                        <td colspan="7">
+                      <tr class="govuk-table__row">
+                        <td class="govuk-table__cell" colspan="7">
                           <form method="post" action="@Url.Action("PerfProductExclusionEdit", "ModernAdmin", new { id = p.Id })" novalidate>
                             @Html.AntiForgeryToken()
  <fieldset class="govuk-fieldset">
- <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Edit exclusion: <code>@p.ProductDocumentId</code></legend>
- <div class="govuk-grid-row">
- <div class="govuk-grid-column-one-third-from-desktop">
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Edit exclusion: @(p.ProductName ?? p.ProductDocumentId)</legend>
  <div class="govuk-form-group">
- <label class="govuk-label" for="pe-edit-doc-@p.Id">Document ID</label>
- <span class="govuk-hint">FIPS product document identifier</span>
- <input class="govuk-input govuk-!-width-full" id="pe-edit-doc-@p.Id" name="productDocumentId" type="text" value="@p.ProductDocumentId" required maxlength="100" autocomplete="off" />
-                                  </div>
-                                </div>
- <div class="govuk-grid-column-two-thirds-from-desktop">
- <div class="govuk-form-group">
- <label class="govuk-label" for="pe-edit-name-@p.Id">Product name <span class="govuk-hint govuk-!-display-inline">(optional)</span></label>
- <input class="govuk-input govuk-!-width-full" id="pe-edit-name-@p.Id" name="productName" type="text" value="@p.ProductName" maxlength="255" />
-                                  </div>
-                                </div>
+ <label class="govuk-label" for="pe-edit-product-@p.Id">Product</label>
+ <select class="govuk-select govuk-!-width-full" id="pe-edit-product-@p.Id" name="productDocumentId" required>
+   <option value="">Select a product</option>
+   @foreach (var opt in Model.ServiceRegisterProductOptions)
+   {
+     if (string.Equals(opt.ProductDocumentId, p.ProductDocumentId, StringComparison.OrdinalIgnoreCase))
+     {
+       <option value="@opt.ProductDocumentId" selected="selected">@opt.Label</option>
+     }
+     else
+     {
+       <option value="@opt.ProductDocumentId">@opt.Label</option>
+     }
+   }
+ </select>
                               </div>
  <div class="govuk-form-group">
  <label class="govuk-label" for="pe-edit-reason-@p.Id">Reason</label>
@@ -314,17 +339,17 @@
                     }
                     else
                     {
-                      <tr>
-                        <td><strong>@(p.ProductName ?? "—")</strong></td>
-                        <td><code>@p.ProductDocumentId</code></td>
-                        <td>@p.ExclusionReason</td>
-                        <td>@p.ExclusionFrom</td>
-                        <td>@(p.ExclusionUntil ?? "Open-ended")</td>
-                        <td>
- @if (p.IsActive) { <span class="dfe-c-tag dfe-c-tag--green">Active</span> }
- else { <span class="dfe-c-tag dfe-c-tag--grey">Inactive</span> }
+                      <tr class="govuk-table__row">
+                        <td class="govuk-table__cell"><strong>@(p.ProductName ?? "—")</strong></td>
+                        <td class="govuk-table__cell"><code>@p.ProductDocumentId</code></td>
+                        <td class="govuk-table__cell">@p.ExclusionReason</td>
+                        <td class="govuk-table__cell">@p.ExclusionFrom</td>
+                        <td class="govuk-table__cell">@(p.ExclusionUntil ?? "Open-ended")</td>
+                        <td class="govuk-table__cell">
+ @if (p.IsActive) { <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--green">Active</span> }
+ else { <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--grey">Inactive</span> }
                         </td>
-                        <td style="text-align:right;">
+                        <td class="govuk-table__cell" style="text-align:right;">
  <div class="govuk-button-group govuk-button-group--inline" style="justify-content:flex-end;flex-wrap:wrap;">
  <a class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0" href="@Url.Action("PerformanceReporting", "ModernAdmin", new { panel = "product-exclusions", editId = p.Id })">Edit</a>
  <form method="post" action="@Url.Action("PerfProductExclusionToggle", "ModernAdmin", new { id = p.Id })" style="display:inline;" class="govuk-!-margin-bottom-0">
@@ -349,20 +374,15 @@
  <p class="govuk-hint govuk-!-margin-bottom-4">The exclusion applies from the first day of the “from” month. Optionally set an end month; leave end fields empty if the exclusion has no fixed end.</p>
               <form method="post" action="@Url.Action("PerfProductExclusionCreate", "ModernAdmin")" novalidate>
                 @Html.AntiForgeryToken()
- <div class="govuk-grid-row">
- <div class="govuk-grid-column-one-third-from-desktop">
  <div class="govuk-form-group">
- <label class="govuk-label" for="pe-new-doc">Document ID</label>
- <span class="govuk-hint">FIPS product document ID</span>
- <input class="govuk-input govuk-!-width-full" id="pe-new-doc" name="productDocumentId" type="text" required maxlength="100" autocomplete="off" />
-                    </div>
-                  </div>
- <div class="govuk-grid-column-two-thirds-from-desktop">
- <div class="govuk-form-group">
- <label class="govuk-label" for="pe-new-name">Product name <span class="govuk-hint govuk-!-display-inline">(optional)</span></label>
- <input class="govuk-input govuk-!-width-full" id="pe-new-name" name="productName" type="text" maxlength="255" />
-                    </div>
-                  </div>
+ <label class="govuk-label" for="pe-new-product">Product</label>
+ <select class="govuk-select govuk-!-width-full" id="pe-new-product" name="productDocumentId" required>
+   <option value="">Select a product</option>
+   @foreach (var opt in Model.ServiceRegisterProductOptions)
+   {
+     <option value="@opt.ProductDocumentId">@opt.Label</option>
+   }
+ </select>
                 </div>
  <div class="govuk-form-group">
  <label class="govuk-label" for="pe-new-reason">Reason</label>
@@ -401,7 +421,7 @@
           break;
 
         default:
- <div class="admin-panel"><p class="dfe-c-text-muted">Select a configuration area. <a href="@P("metrics")">Back to Metrics</a>.</p></div>
+ <div class="admin-panel"><p class="dfe-c-text-muted">Select a configuration area. <a class="govuk-link govuk-link--no-visited-state" href="@P("metrics")">Back to Metrics</a>.</p></div>
           break;
       }
     </div>

@@ -64,6 +64,179 @@ public static class RiskAuditTimelineBuilder
             .ToList();
     }
 
+    /// <summary>Single plain-English paragraph summarising risk field changes since a point in time (for monthly review).</summary>
+    public static async Task<string?> BuildPlainEnglishSummarySinceAsync(
+        CompassDbContext db,
+        int riskId,
+        DateTime sinceUtc,
+        CancellationToken cancellationToken = default)
+    {
+        var riskIdStr = riskId.ToString();
+        var logs = await db.AuditLogs.AsNoTracking()
+            .Where(a => a.Entity == nameof(Risk) && a.EntityId == riskIdStr && a.Action == "Update" && a.ChangedUtc > sinceUtc)
+            .OrderBy(a => a.ChangedUtc)
+            .Take(40)
+            .ToListAsync(cancellationToken);
+
+        if (logs.Count == 0)
+            return null;
+
+        var lk = await LoadLookupsAsync(db, cancellationToken);
+        var lines = new List<ChangeLine>();
+        foreach (var log in logs)
+        {
+            var before = ParseJsonDict(log.BeforeJson);
+            var after = ParseJsonDict(log.AfterJson);
+            lines.AddRange(DiffRisk(before, after, lk));
+        }
+
+        lines = lines
+            .DistinctBy(l => l.Text, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        return ConsolidateChangeLinesToParagraph(lines);
+    }
+
+    private static string? ConsolidateChangeLinesToParagraph(List<ChangeLine> lines)
+    {
+        if (lines.Count == 0)
+            return null;
+
+        var sentences = new List<string>();
+
+        var scoreLine = lines.FirstOrDefault(l =>
+            l.Text.Contains("Risk score", StringComparison.OrdinalIgnoreCase));
+        if (scoreLine != null)
+            sentences.Add(PlainScoreChange(scoreLine.Text));
+
+        var likelihoodLine = lines.FirstOrDefault(l =>
+            l.Text.StartsWith("Likelihood:", StringComparison.OrdinalIgnoreCase));
+        var impactLine = lines.FirstOrDefault(l =>
+            l.Text.StartsWith("Impact level:", StringComparison.OrdinalIgnoreCase));
+        if (likelihoodLine != null || impactLine != null)
+        {
+            if (likelihoodLine != null && impactLine != null)
+                sentences.Add($"{PlainArrowChange("Likelihood", likelihoodLine.Text)} {PlainArrowChange("Impact", impactLine.Text)}".Trim());
+            else if (likelihoodLine != null)
+                sentences.Add(PlainArrowChange("Likelihood", likelihoodLine.Text));
+            else
+                sentences.Add(PlainArrowChange("Impact", impactLine!.Text));
+        }
+
+        var statusLine = lines.FirstOrDefault(l =>
+            l.Text.StartsWith("Status:", StringComparison.OrdinalIgnoreCase));
+        if (statusLine != null)
+            sentences.Add($"Status was set to {ExtractArrowTo(statusLine.Text)}.");
+
+        var tierLine = lines.FirstOrDefault(l =>
+            l.Text.StartsWith("Tier:", StringComparison.OrdinalIgnoreCase));
+        if (tierLine != null)
+            sentences.Add($"Governance tier was changed ({ExtractArrowFrom(tierLine.Text)}).");
+
+        var proximityLine = lines.FirstOrDefault(l =>
+            l.Text.StartsWith("Proximity:", StringComparison.OrdinalIgnoreCase));
+        if (proximityLine != null)
+            sentences.Add($"How soon this might happen was updated ({ExtractArrowFrom(proximityLine.Text)}).");
+
+        var priorityLine = lines.FirstOrDefault(l =>
+            l.Text.StartsWith("Priority:", StringComparison.OrdinalIgnoreCase));
+        if (priorityLine != null)
+            sentences.Add($"Priority was changed ({ExtractArrowFrom(priorityLine.Text)}).");
+
+        if (lines.Any(l => l.Text.Contains("Ownership", StringComparison.OrdinalIgnoreCase)))
+            sentences.Add("The owner or senior responsible officer was changed.");
+
+        if (lines.Any(l => l.Text.Contains("Association", StringComparison.OrdinalIgnoreCase)))
+            sentences.Add("Which work item or product this is linked to was changed.");
+
+        if (lines.Any(l => l.Text.Contains("Identified date", StringComparison.OrdinalIgnoreCase)
+                         || l.Text.Contains("Next review date", StringComparison.OrdinalIgnoreCase)))
+            sentences.Add("Review or identification dates were updated.");
+
+        if (lines.Any(l => l.Text.Contains("Description", StringComparison.OrdinalIgnoreCase)
+                         || l.Text.Contains("Title", StringComparison.OrdinalIgnoreCase)
+                         || l.Text.Contains("Cause", StringComparison.OrdinalIgnoreCase)
+                         || l.Text.Contains("Impact if realised", StringComparison.OrdinalIgnoreCase)))
+            sentences.Add("The written description or background detail was updated.");
+
+        if (lines.Any(l => l.Text.Contains("Mitigation", StringComparison.OrdinalIgnoreCase)
+                         || l.Text.Contains("response", StringComparison.OrdinalIgnoreCase)))
+            sentences.Add("The planned response or mitigation was updated.");
+
+        var covered = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var s in sentences) covered.Add(s);
+
+        var remaining = lines.Count(l => !IsLineCoveredBySentences(l, sentences));
+        if (remaining > 0 && sentences.Count < 4)
+            sentences.Add(remaining == 1
+                ? "One other detail on the record was updated."
+                : $"{remaining} other details on the record were updated.");
+
+        if (sentences.Count == 0)
+            return "The record was updated, but no major rating or status fields changed.";
+
+        return string.Join(" ", sentences.Take(5));
+    }
+
+    private static bool IsLineCoveredBySentences(ChangeLine line, List<string> sentences)
+    {
+        var t = line.Text;
+        if (t.Contains("Risk score", StringComparison.OrdinalIgnoreCase)) return true;
+        if (t.StartsWith("Likelihood:", StringComparison.OrdinalIgnoreCase)) return true;
+        if (t.StartsWith("Impact level:", StringComparison.OrdinalIgnoreCase)) return true;
+        if (t.StartsWith("Status:", StringComparison.OrdinalIgnoreCase)) return true;
+        if (t.StartsWith("Tier:", StringComparison.OrdinalIgnoreCase)) return true;
+        if (t.StartsWith("Proximity:", StringComparison.OrdinalIgnoreCase)) return true;
+        if (t.StartsWith("Priority:", StringComparison.OrdinalIgnoreCase)) return true;
+        if (t.Contains("Ownership", StringComparison.OrdinalIgnoreCase)) return true;
+        if (t.Contains("Association", StringComparison.OrdinalIgnoreCase)) return true;
+        if (t.Contains("Identified date", StringComparison.OrdinalIgnoreCase)) return true;
+        if (t.Contains("Next review date", StringComparison.OrdinalIgnoreCase)) return true;
+        if (t.Contains("Description", StringComparison.OrdinalIgnoreCase)) return true;
+        if (t.Contains("Title", StringComparison.OrdinalIgnoreCase)) return true;
+        if (t.Contains("Mitigation", StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
+    }
+
+    private static string PlainScoreChange(string text)
+    {
+        var arrow = ExtractArrowFrom(text);
+        if (string.IsNullOrEmpty(arrow))
+            return "The overall risk score was updated.";
+        var parts = arrow.Split('→', StringSplitOptions.TrimEntries);
+        if (parts.Length == 2 && int.TryParse(parts[0], out var from) && int.TryParse(parts[1], out var to))
+        {
+            if (to < from)
+                return $"The overall risk score was reduced from {from} to {to}.";
+            if (to > from)
+                return $"The overall risk score was increased from {from} to {to}.";
+            return $"The overall risk score stayed at {to}.";
+        }
+        return $"The overall risk score was changed ({arrow}).";
+    }
+
+    private static string ExtractArrowFrom(string text)
+    {
+        var idx = text.IndexOf(':');
+        return idx >= 0 ? text[(idx + 1)..].Trim() : text;
+    }
+
+    private static string ExtractArrowTo(string text)
+    {
+        var arrow = ExtractArrowFrom(text);
+        var parts = arrow.Split('→', StringSplitOptions.TrimEntries);
+        return parts.Length == 2 ? parts[1] : arrow;
+    }
+
+    private static string PlainArrowChange(string label, string lineText)
+    {
+        var arrow = ExtractArrowFrom(lineText);
+        var parts = arrow.Split('→', StringSplitOptions.TrimEntries);
+        if (parts.Length == 2)
+            return $"{label} went from {parts[0]} to {parts[1]}.";
+        return $"{label} was updated.";
+    }
+
     private sealed record Lookups(
         IReadOnlyDictionary<int, string> Likelihood,
         IReadOnlyDictionary<int, string> Impact,
@@ -162,7 +335,9 @@ public static class RiskAuditTimelineBuilder
 
         foreach (var key in keys)
         {
-            if (string.Equals(key, "UpdatedAt", StringComparison.Ordinal))
+            if (string.Equals(key, "UpdatedAt", StringComparison.OrdinalIgnoreCase))
+                continue;
+            if (key is "ImpactRating" or "LikelihoodRating" or "InherentScore")
                 continue;
 
             before.TryGetValue(key, out var b);
@@ -206,8 +381,6 @@ public static class RiskAuditTimelineBuilder
                 $"Impact level: {Fk(lk.Impact, before)} → {Fk(lk.Impact, after)}", true),
             "RiskScore" => new ChangeLine(
                 $"Risk score: {ElementToString(before)} → {ElementToString(after)}", true),
-            "ImpactRating" or "LikelihoodRating" => new ChangeLine(
-                $"{key}: {ElementToString(before)} → {ElementToString(after)}", true),
             "RiskStatusId" => new ChangeLine(
                 $"Status: {Fk(lk.Status, before)} → {Fk(lk.Status, after)}", true),
             "RiskTierId" => new ChangeLine(

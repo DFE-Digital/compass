@@ -1,0 +1,102 @@
+@model Compass.Models.FunctionalStandardAssessment
+@using Compass.Helpers
+@{
+  var isSubmitted = Model.SubmittedAt.HasValue;
+  var isReadOnly = ViewBag.IsReadOnly as bool? ?? false;
+  var exportWordHref = ViewBag.ConductExportWordHref as string ?? "#";
+  var standardTitle = Model.FunctionalStandard?.Title ?? "Functional standard";
+
+  var (totalCriteriaCount, completedCriteriaCount, fullyMetCount, partiallyMetCount, notMetCount) =
+      FunctionalAssessmentProgress.CountAgainstStandardTree(Model);
+  var unansweredCount = totalCriteriaCount - completedCriteriaCount;
+  var progressPct = totalCriteriaCount > 0 ? (int)Math.Round(100.0 * completedCriteriaCount / totalCriteriaCount) : 0;
+  var displayPct = totalCriteriaCount > 0 && completedCriteriaCount > 0 && progressPct < 2 ? 2 : progressPct;
+}
+
+<div class="work-item-masthead fsa-conduct-masthead govuk-!-margin-bottom-6">
+  <p class="govuk-body govuk-!-margin-bottom-2">
+    <a class="govuk-link govuk-back-link govuk-!-margin-bottom-0 govuk-link--no-visited-state" href="@Url.Action("FunctionalStandardDashboard", "ModernStandards", new { id = Model.FunctionalStandardId })">Back to standard</a>
+  </p>
+  <div class="govuk-grid-row">
+    <div class="govuk-grid-column-two-thirds-from-desktop">
+      <p class="govuk-caption-m govuk-!-margin-bottom-1 govuk-!-margin-top-0">Functional standard assessment</p>
+      <h1 class="govuk-heading-l govuk-!-margin-bottom-4">@standardTitle</h1>
+    </div>
+    <div class="govuk-grid-column-one-third-from-desktop work-item-masthead__actions">
+      <div class="work-item-masthead__actions-inner">
+        @await Html.PartialAsync("_ConductAssessmentExportActions", exportWordHref)
+      </div>
+    </div>
+  </div>
+  <div class="govuk-grid-row">
+    <div class="govuk-grid-column-full">
+      <div class="work-item-masthead__meta-wrap">
+        <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed work-item-masthead__meta govuk-!-margin-bottom-0">
+          <caption class="govuk-table__caption govuk-visually-hidden">Assessment summary</caption>
+          <thead class="govuk-table__head">
+            <tr class="govuk-table__row">
+              <th scope="col" class="govuk-table__header">Assessment name</th>
+              <th scope="col" class="govuk-table__header">Status</th>
+              <th scope="col" class="govuk-table__header">Progress</th>
+              <th scope="col" class="govuk-table__header">Fully met</th>
+              <th scope="col" class="govuk-table__header">Partially met</th>
+              <th scope="col" class="govuk-table__header">Not met</th>
+              <th scope="col" class="govuk-table__header">Unanswered</th>
+            </tr>
+          </thead>
+          <tbody class="govuk-table__body">
+            <tr class="govuk-table__row">
+              <td class="govuk-table__cell">
+                <span class="govuk-!-font-weight-bold">@Model.AssessmentName</span>
+                <div class="govuk-body-s govuk-!-margin-top-1 govuk-!-margin-bottom-0 dfe-c-text-muted">
+                  Assessed @Model.AssessmentDate.ToString("d MMMM yyyy") · @Model.AssessedBy
+                </div>
+              </td>
+              <td class="govuk-table__cell">
+                @if (isSubmitted)
+                {
+                  <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--green">Submitted</span>
+                  <div class="govuk-body-s govuk-!-margin-top-1 govuk-!-margin-bottom-0 dfe-c-text-muted">@Model.SubmittedAt!.Value.ToString("d MMM yyyy HH:mm")</div>
+                }
+                else
+                {
+                  <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--blue">In progress</span>
+                  @if (!isReadOnly)
+                  {
+                    <span id="fsa-save-status" class="fsa-save-status govuk-body-s" aria-live="polite"></span>
+                  }
+                }
+              </td>
+              <td class="govuk-table__cell">
+                <p class="govuk-body govuk-!-margin-bottom-1" id="fsa-conduct-progress-summary">
+                  <span class="govuk-!-font-weight-bold dfe-f-u-tabular-numbers">@completedCriteriaCount</span> of
+                  <span class="dfe-f-u-tabular-numbers">@totalCriteriaCount</span> criteria (@progressPct%)
+                </p>
+                <div class="fsa-masthead-progress__track fsa-progress-bar__track"
+                     role="progressbar"
+                     aria-valuemin="0"
+                     aria-valuemax="@totalCriteriaCount"
+                     aria-valuenow="@completedCriteriaCount"
+                     aria-valuetext="@completedCriteriaCount of @totalCriteriaCount criteria assessed (@progressPct percent)">
+                  <div class="fsa-masthead-progress__fill fsa-progress-bar__fill" style="width:@(displayPct)%"></div>
+                </div>
+              </td>
+              <td class="govuk-table__cell">
+                <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--green fsa-stat fsa-stat--green dfe-f-u-tabular-numbers">@fullyMetCount</span>
+              </td>
+              <td class="govuk-table__cell">
+                <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--orange fsa-stat fsa-stat--amber dfe-f-u-tabular-numbers">@partiallyMetCount</span>
+              </td>
+              <td class="govuk-table__cell">
+                <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--red fsa-stat fsa-stat--red dfe-f-u-tabular-numbers">@notMetCount</span>
+              </td>
+              <td class="govuk-table__cell">
+                <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--grey fsa-stat fsa-stat--grey dfe-f-u-tabular-numbers" id="fsa-masthead-unanswered">@unansweredCount</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>

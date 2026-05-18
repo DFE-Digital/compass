@@ -101,4 +101,8 @@ public static class RaidRegisterTableFormatting
     }
 }
 
-public readonly record struct RaidRegisterRelationParts(string Kind, int? ProjectId, string? Target);
+public readonly record struct RaidRegisterRelationParts(
+    string Kind,
+    int? ProjectId,
+    string? Target,
+    string? WorkDetailSection = null);

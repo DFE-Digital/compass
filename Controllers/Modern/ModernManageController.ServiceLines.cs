@@ -36,7 +36,6 @@ public partial class ModernManageController
             {
                 id = p.Id.ToString(),
                 title = p.Title,
-                subtitle = p.CMDBID != null ? $"CMDB: {p.CMDBID}" : null,
             })
             .ToListAsync(ct);
 
@@ -65,7 +64,8 @@ public partial class ModernManageController
             .Select(p => new
             {
                 id = p.Id,
-                title = (p.ProjectCode ?? "") + " — " + (p.Title ?? ""),
+                title = p.Title ?? "",
+                subtitle = "WI-" + p.Id.ToString("D8", CultureInfo.InvariantCulture),
             })
             .ToListAsync(ct);
 
@@ -214,8 +214,10 @@ public partial class ModernManageController
             .AsNoTracking()
             .Include(s => s.ServiceLineDivisions).ThenInclude(d => d.Division)
             .Include(s => s.ServiceLineBusinessAreas).ThenInclude(b => b.BusinessAreaLookup)
-            .Include(s => s.ServiceLineProducts).ThenInclude(p => p.CMDBProduct)
-            .Include(s => s.ServiceLineProjects).ThenInclude(p => p.Project)
+            .Include(s => s.ServiceLineProducts).ThenInclude(p => p.CMDBProduct).ThenInclude(c => c.Phase)
+            .Include(s => s.ServiceLineProducts).ThenInclude(p => p.CMDBProduct).ThenInclude(c => c.BusinessAreas).ThenInclude(ba => ba.FipsBusinessArea).ThenInclude(f => f.BusinessAreaLookup)
+            .Include(s => s.ServiceLineProjects).ThenInclude(p => p.Project).ThenInclude(w => w.PhaseLookup)
+            .Include(s => s.ServiceLineProjects).ThenInclude(p => p.Project).ThenInclude(w => w.BusinessAreaLookup)
             .FirstOrDefaultAsync(s => s.Slug == slug, ct);
 
         if (sl == null)
@@ -566,7 +568,8 @@ public partial class ModernManageController
                 .Select(p => new ServiceLinePickedItem
                 {
                     Id = p.Id.ToString(CultureInfo.InvariantCulture),
-                    Label = (p.ProjectCode ?? "") + " — " + (p.Title ?? "") + (p.IsDeleted ? " (archived)" : ""),
+                    Label = (p.Title ?? "") + (p.IsDeleted ? " (archived)" : ""),
+                    Subtitle = "WI-" + p.Id.ToString("D8", CultureInfo.InvariantCulture),
                 })
                 .ToList();
         }

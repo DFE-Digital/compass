@@ -1,5 +1,22 @@
 namespace Compass.ViewModels.Modern;
 
+/// <summary>Left nav for <c>/modern/admin/notification-settings*</c> (defaults + category anchors + email log).</summary>
+public sealed class NotificationAdminSideNavViewModel
+{
+    /// <summary>When true, the email log page is active (hide category anchors; highlight log).</summary>
+    public bool IsEmailLogPage { get; init; }
+
+    /// <summary>Distinct category sections on the settings form (anchor id + display title).</summary>
+    public IReadOnlyList<NotificationAdminSideNavCategoryLink> SettingsCategories { get; init; } =
+        Array.Empty<NotificationAdminSideNavCategoryLink>();
+}
+
+public sealed class NotificationAdminSideNavCategoryLink
+{
+    public string AnchorId { get; init; } = "";
+    public string CategoryTitle { get; init; } = "";
+}
+
 public sealed class CompassNotificationSettingsPageViewModel
 {
     public List<CompassNotificationSettingRowViewModel> Rows { get; set; } = new();

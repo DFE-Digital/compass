@@ -1,3 +1,5 @@
+using Compass.Services;
+
 namespace Compass.ViewModels.Modern;
 
 /// <summary>Admin hub (matches Compass2 <c>AdminHubViewModel</c>): left navigation + configuration panel.</summary>
@@ -324,6 +326,8 @@ public class PerfReportingHubViewModel
     public List<PerfCommissionRow> Commissions { get; set; } = new();
     public List<PerfDueDateOverrideRow> DueDateOverrides { get; set; } = new();
     public List<PerfProductExclusionRow> ProductExclusions { get; set; } = new();
+    /// <summary>Active Service Register products for the exclusion picker.</summary>
+    public List<PerfProductExclusionProductOption> ServiceRegisterProductOptions { get; set; } = new();
 }
 
 public class PerfMetricRow
@@ -340,7 +344,18 @@ public class PerfMetricRow
     public string ValidFrom { get; set; } = string.Empty;
     public string? ApplicablePhases { get; set; }
     public string? ApplicableTypes { get; set; }
+    public string ValidationRules { get; set; } = "{\"required\": true, \"allowNull\": false}";
+    public int? ConditionalOnMetricId { get; set; }
     public bool IsDisabled { get; set; }
+    public List<string> CataloguePhaseOptions { get; set; } = new();
+    public List<string> CatalogueTypeOptions { get; set; } = new();
+    public List<PerfMetricConditionalOption> ConditionalMetricOptions { get; set; } = new();
+}
+
+public class PerfMetricConditionalOption
+{
+    public int Id { get; set; }
+    public string Title { get; set; } = string.Empty;
 }
 
 public class PerfCommissionMetricPickRow

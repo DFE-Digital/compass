@@ -203,6 +203,10 @@ public class ModernMonthlyReportService
                 {
                     Id = p.Id,
                     Title = p.Title,
+                    Summary = string.IsNullOrWhiteSpace(p.Aim) ? null : p.Aim.Trim(),
+                    PathToGreen = string.IsNullOrWhiteSpace(p.PathToGreen) ? null : p.PathToGreen.Trim(),
+                    RagJustification = string.IsNullOrWhiteSpace(p.RagJustification) ? null : p.RagJustification.Trim(),
+                    LatestMonthlyUpdateNarrative = ProjectMonthlyUpdateNarrative.LatestSubmittedText(p),
                     Rag = RagBucket(p),
                     Priority = PriorityBucket(p),
                     SubmittedUpdate = p.MonthlyUpdates.Any(u => u.Year == reportYear && u.Month == reportMonth && u.SubmittedAt.HasValue),
@@ -266,7 +270,7 @@ public class ModernMonthlyReportService
             .ToList();
 
         var ragOrder = new[] { "Red", "Amber-Red", "Amber-Green", "Green", "Not Set" };
-        var priOrder = new[] { "Critical", "High", "Medium", "Low", "Not Set" };
+        var priOrder = new[] { "Not Set", "Low", "Medium", "High", "Critical" };
         var matrix = new List<RagPriorityMatrixCell>();
         foreach (var r in ragOrder)
         {
@@ -391,6 +395,32 @@ public class ModernMonthlyReportService
                 accessibilityIssueCriteria = accessibilityAreaRows[0].IssueCriteria;
         }
 
+        var raidSummary = await BuildRaidSummaryAsync(businessAreaId, directorateId, cancellationToken);
+
+        var filterBaName = businessAreaId is int fba
+            ? businessAreas.FirstOrDefault(b => b.Id == fba)?.Name
+            : null;
+
+        var intelligence = await MonthlyReportIntelligenceBuilder.BuildAsync(
+            _db,
+            _aissSummary,
+            businessAreaId,
+            directorateId,
+            monthStart.ToString("MMMM yyyy"),
+            prevMonthName,
+            filterBaName,
+            allProjects,
+            prevMonthProjects,
+            monthlyUpdateStats,
+            ragChanges,
+            priorityChanges,
+            raidSummary,
+            accessibilityAreaRows,
+            accessibilitySummary,
+            monthStart,
+            monthEnd,
+            cancellationToken);
+
         string? businessAreaNarrative = null;
         if (businessAreaId.HasValue)
         {
@@ -467,7 +497,73 @@ public class ModernMonthlyReportService
             AccessibilitySummary = accessibilitySummary,
             AccessibilitySummaryError = accessibilityError,
             AccessibilityAreaRows = accessibilityAreaRows,
-            AccessibilityIssueCriteria = accessibilityIssueCriteria
+            AccessibilityIssueCriteria = accessibilityIssueCriteria,
+            RaidSummary = raidSummary,
+            Intelligence = intelligence
+        };
+    }
+
+    private async Task<MonthlyReportRaidSummary> BuildRaidSummaryAsync(
+        int? businessAreaId,
+        int? directorateId,
+        CancellationToken cancellationToken)
+    {
+        var riskQuery = _db.Risks.AsNoTracking().Where(r => !r.IsDeleted);
+        var issueQuery = _db.Issues.AsNoTracking().Where(i => !i.IsDeleted);
+
+        if (businessAreaId is { } baid)
+        {
+            riskQuery = riskQuery.Where(r =>
+                r.RiskBusinessAreas.Any(b => b.BusinessAreaLookupId == baid)
+                || (r.Project != null && r.Project.BusinessAreaId == baid));
+            issueQuery = issueQuery.Where(i =>
+                i.IssueBusinessAreas.Any(b => b.BusinessAreaLookupId == baid)
+                || (i.Project != null && i.Project.BusinessAreaId == baid));
+        }
+
+        if (directorateId is { } did)
+        {
+            riskQuery = riskQuery.Where(r => r.RiskDivisions.Any(d => d.DivisionId == did));
+            issueQuery = issueQuery.Where(i => i.IssueDivisions.Any(d => d.DivisionId == did));
+        }
+
+        var riskOpen = riskQuery.Where(r => r.ClosedDate == null);
+        var issueOpen = issueQuery.Where(i => i.ClosedDate == null);
+        var today = DateTime.UtcNow.Date;
+
+        var criticalSeverityIds = await _db.IssueSeverities.AsNoTracking()
+            .Where(s => s.IsActive && s.Label == "Critical")
+            .Select(s => s.Id)
+            .ToListAsync(cancellationToken);
+
+        var nearMissQuery = _db.NearMisses.AsNoTracking().Where(n => !n.IsDeleted);
+        if (businessAreaId is { } nmBaId)
+            nearMissQuery = nearMissQuery.Where(n => n.BusinessAreaLookupId == nmBaId);
+        if (directorateId is { } nmDirId)
+            nearMissQuery = nearMissQuery.Where(n => n.DirectorateLookupId == nmDirId);
+
+        var closedNearMissStatusIds = await _db.NearMissStatuses.AsNoTracking()
+            .Where(s => s.IsActive && s.Code == "CLOSED")
+            .Select(s => s.Id)
+            .ToListAsync(cancellationToken);
+        if (closedNearMissStatusIds.Count > 0)
+        {
+            nearMissQuery = nearMissQuery.Where(n =>
+                !n.NearMissStatusId.HasValue || !closedNearMissStatusIds.Contains(n.NearMissStatusId.Value));
+        }
+
+        return new MonthlyReportRaidSummary
+        {
+            OpenRisks = await riskOpen.CountAsync(cancellationToken),
+            OpenIssues = await issueOpen.CountAsync(cancellationToken),
+            OpenNearMisses = await nearMissQuery.CountAsync(cancellationToken),
+            HighRisks = await riskOpen.CountAsync(r => r.RiskScore >= 15, cancellationToken),
+            RisksReviewOverdue = await riskOpen.CountAsync(
+                r => r.NextReviewDate.HasValue && r.NextReviewDate.Value < today,
+                cancellationToken),
+            OpenCriticalIssues = criticalSeverityIds.Count == 0
+                ? 0
+                : await issueOpen.CountAsync(i => i.SeverityId.HasValue && criticalSeverityIds.Contains(i.SeverityId.Value), cancellationToken)
         };
     }
 
@@ -1176,6 +1272,306 @@ public class ModernMonthlyReportService
         if (oldest < monthStart.AddMonths(-2))
             return "Some have been open a long time; a light refresh of dates or ownership in the plan may be useful.";
         return "A quick look at whether dates or owners still feel right may be enough.";
+    }
+
+    public async Task<ModernMonthlySubmissionProgressViewModel> BuildSubmissionProgressAsync(
+        int? year,
+        int? month,
+        int? businessAreaId,
+        int? directorateId,
+        CancellationToken cancellationToken = default)
+    {
+        var currentDate = DateTime.UtcNow;
+        var calendarYearUtc = currentDate.Year;
+        var currentMonth = currentDate.Month;
+
+        const int minReportYear = 2026;
+        var maxSelectableYear = calendarYearUtc >= minReportYear ? calendarYearUtc : minReportYear;
+
+        var currentPeriodDueDate = _monthlyUpdateService.GetMonthlyUpdateDueDate(calendarYearUtc, currentMonth);
+        var daysUntilCurrentPeriodDueDate = (currentPeriodDueDate - currentDate).Days;
+
+        var defaultReportYear = daysUntilCurrentPeriodDueDate <= 10 ? calendarYearUtc : (currentMonth == 1 ? calendarYearUtc - 1 : calendarYearUtc);
+        var defaultReportMonth = daysUntilCurrentPeriodDueDate <= 10 ? currentMonth : (currentMonth == 1 ? 12 : currentMonth - 1);
+        defaultReportYear = Math.Max(minReportYear, defaultReportYear);
+
+        var reportYear = year ?? defaultReportYear;
+        var reportMonth = month ?? defaultReportMonth;
+        if (reportMonth < 1 || reportMonth > 12)
+            reportMonth = defaultReportMonth;
+        reportYear = Math.Clamp(reportYear, minReportYear, maxSelectableYear);
+
+        var monthStart = new DateTime(reportYear, reportMonth, 1);
+        var monthEnd = monthStart.AddMonths(1).AddDays(-1);
+
+        var explicitPeriod = _monthlyUpdateService.TryGetActiveExplicitReportingPeriod(reportYear, reportMonth);
+        var dueDate = _monthlyUpdateService.GetMonthlyUpdateDueDate(reportYear, reportMonth).Date;
+        var submissionWindowStart = _monthlyUpdateService.GetSubmissionWindowOpens(reportYear, reportMonth);
+        var submissionWindowEnd = _monthlyUpdateService.GetSubmissionWindowCloses(reportYear, reportMonth);
+        if (submissionWindowEnd < submissionWindowStart)
+            submissionWindowEnd = submissionWindowStart;
+
+        var submissionWindowDescription = explicitPeriod != null
+            ? _monthlyUpdateService.GetMonthlyUpdateDueRuleDescription(reportYear, reportMonth)
+            : $"Submission due {dueDate:d MMMM yyyy}";
+
+        var query = _db.Projects
+            .AsNoTracking()
+            .Include(p => p.BusinessAreaLookup)
+            .Include(p => p.MonthlyUpdates)
+            .Include(p => p.Directorates)
+                .ThenInclude(d => d.Division)
+            .Where(p => !p.IsDeleted && p.Status != "Cancelled" && p.Status != "Completed");
+
+        if (businessAreaId.HasValue)
+            query = query.Where(p => p.BusinessAreaId == businessAreaId.Value);
+        if (directorateId.HasValue)
+            query = query.Where(p => p.Directorates.Any(d => d.DivisionId == directorateId.Value));
+
+        var allProjects = await query.ToListAsync(cancellationToken);
+
+        var businessAreas = await _db.BusinessAreaLookups
+            .AsNoTracking()
+            .Where(ba => ba.IsActive)
+            .OrderBy(ba => ba.SortOrder)
+            .ThenBy(ba => ba.Name)
+            .ToListAsync(cancellationToken);
+
+        var directorates = await _db.Divisions
+            .AsNoTracking()
+            .Where(d => d.IsActive)
+            .OrderBy(d => d.SortOrder)
+            .ThenBy(d => d.Name)
+            .ToListAsync(cancellationToken);
+
+        var monthlyUpdateStats = CalculateMonthlyUpdateStats(allProjects, reportYear, reportMonth, _monthlyUpdateService);
+        var expectedProgressToday = ComputeExpectedProgressPercent(submissionWindowStart, submissionWindowEnd, DateTime.UtcNow.Date);
+
+        var submittedDates = allProjects
+            .Select(p => p.MonthlyUpdates?.FirstOrDefault(u => u.Year == reportYear && u.Month == reportMonth))
+            .Where(u => u?.SubmittedAt != null)
+            .Select(u => u!.SubmittedAt!.Value.Date)
+            .OrderBy(d => d)
+            .ToList();
+
+        var dailyProgress = BuildDailySubmissionProgress(
+            allProjects.Count,
+            submissionWindowStart,
+            submissionWindowEnd,
+            submittedDates);
+
+        var businessAreaLeague = BuildSubmissionLeagueByBusinessArea(
+            allProjects, reportYear, reportMonth, expectedProgressToday, _monthlyUpdateService);
+        var directorateLeague = BuildSubmissionLeagueByDirectorate(
+            allProjects, directorates, reportYear, reportMonth, expectedProgressToday, _monthlyUpdateService);
+
+        var nextMonthDate = monthStart.AddMonths(1);
+        var nextMonthAllowed =
+            (nextMonthDate.Year < defaultReportYear ||
+             (nextMonthDate.Year == defaultReportYear && nextMonthDate.Month <= defaultReportMonth)) &&
+            nextMonthDate.Year <= calendarYearUtc;
+        var prevMonthDate = monthStart.AddMonths(-1);
+        var earliestReportPeriod = new DateTime(minReportYear, 1, 1);
+        var hasPreviousMonthNav = prevMonthDate >= earliestReportPeriod;
+
+        return new ModernMonthlySubmissionProgressViewModel
+        {
+            ReportYear = reportYear,
+            ReportMonth = reportMonth,
+            MonthName = monthStart.ToString("MMMM yyyy"),
+            MonthStart = monthStart,
+            MonthEnd = monthEnd,
+            DefaultReportYear = defaultReportYear,
+            DefaultReportMonth = defaultReportMonth,
+            MinReportYear = minReportYear,
+            MaxReportYear = maxSelectableYear,
+            FilterBusinessAreaId = businessAreaId,
+            FilterDirectorateId = directorateId,
+            BusinessAreas = businessAreas,
+            Directorates = directorates,
+            MonthlyUpdateStats = monthlyUpdateStats,
+            SubmissionWindowStart = submissionWindowStart,
+            SubmissionWindowEnd = submissionWindowEnd,
+            UsesExplicitReportingPeriod = explicitPeriod != null,
+            SubmissionWindowDescription = submissionWindowDescription,
+            ExpectedProgressPercentToday = expectedProgressToday,
+            DailyProgress = dailyProgress,
+            BusinessAreaLeague = businessAreaLeague,
+            DirectorateLeague = directorateLeague,
+            HasPreviousMonthNav = hasPreviousMonthNav,
+            HasNextMonthNav = nextMonthAllowed,
+            PreviousNavYear = hasPreviousMonthNav ? prevMonthDate.Year : null,
+            PreviousNavMonth = hasPreviousMonthNav ? prevMonthDate.Month : null,
+            NextNavYear = nextMonthAllowed ? nextMonthDate.Year : null,
+            NextNavMonth = nextMonthAllowed ? nextMonthDate.Month : null
+        };
+    }
+
+    private static decimal ComputeExpectedProgressPercent(DateTime windowStart, DateTime windowEnd, DateTime asOfDate)
+    {
+        if (windowEnd < windowStart)
+            return 100m;
+
+        var totalDays = (windowEnd - windowStart).Days + 1;
+        if (totalDays <= 0)
+            return 100m;
+
+        if (asOfDate < windowStart)
+            return 0m;
+        if (asOfDate >= windowEnd)
+            return 100m;
+
+        var elapsedDays = (asOfDate - windowStart).Days + 1;
+        return Math.Round(100m * elapsedDays / totalDays, 1, MidpointRounding.AwayFromZero);
+    }
+
+    private static List<SubmissionProgressDayPoint> BuildDailySubmissionProgress(
+        int totalInScope,
+        DateTime windowStart,
+        DateTime windowEnd,
+        IReadOnlyList<DateTime> submissionDates)
+    {
+        var points = new List<SubmissionProgressDayPoint>();
+        if (windowEnd < windowStart)
+            return points;
+
+        var totalDays = (windowEnd - windowStart).Days + 1;
+        var submittedIndex = 0;
+        var cumulative = 0;
+
+        for (var day = windowStart; day <= windowEnd; day = day.AddDays(1))
+        {
+            while (submittedIndex < submissionDates.Count && submissionDates[submittedIndex] <= day)
+            {
+                cumulative++;
+                submittedIndex++;
+            }
+
+            var dayNumber = (day - windowStart).Days + 1;
+            var expected = totalInScope == 0 || totalDays == 0
+                ? 0m
+                : Math.Round((decimal)totalInScope * dayNumber / totalDays, 1, MidpointRounding.AwayFromZero);
+            var expectedPercent = totalDays == 0
+                ? 0m
+                : Math.Round(100m * dayNumber / totalDays, 1, MidpointRounding.AwayFromZero);
+            var actualPercent = totalInScope == 0
+                ? 0m
+                : Math.Round(100m * cumulative / totalInScope, 1, MidpointRounding.AwayFromZero);
+
+            points.Add(new SubmissionProgressDayPoint
+            {
+                Label = day.ToString("d MMM"),
+                Date = day,
+                ActualCumulative = cumulative,
+                ExpectedCumulative = expected,
+                ActualCompletionPercent = actualPercent,
+                ExpectedCompletionPercent = expectedPercent,
+                TotalInScope = totalInScope
+            });
+        }
+
+        return points;
+    }
+
+    private static List<MonthlySubmissionLeagueRow> BuildSubmissionLeagueByBusinessArea(
+        List<Project> projects,
+        int reportYear,
+        int reportMonth,
+        decimal expectedProgressPercent,
+        IMonthlyUpdateService monthlyUpdateService)
+    {
+        return projects
+            .GroupBy(p => p.BusinessAreaId)
+            .Select(g => BuildSubmissionLeagueRow(
+                g.First().BusinessAreaLookup?.Name ?? "Not set",
+                g.Key,
+                g.ToList(),
+                reportYear,
+                reportMonth,
+                expectedProgressPercent,
+                monthlyUpdateService))
+            .OrderByDescending(r => r.ActualProgressPercent)
+            .ThenBy(r => r.Name == "Not set" ? "zzzzzz" : r.Name)
+            .ToList();
+    }
+
+    private static List<MonthlySubmissionLeagueRow> BuildSubmissionLeagueByDirectorate(
+        List<Project> projects,
+        List<Division> directorateLookups,
+        int reportYear,
+        int reportMonth,
+        decimal expectedProgressPercent,
+        IMonthlyUpdateService monthlyUpdateService)
+    {
+        var dirNameById = directorateLookups.ToDictionary(d => d.Id, d => d.Name);
+
+        return projects
+            .GroupBy(GetPrimaryDirectorateId)
+            .Select(g =>
+            {
+                var name = g.Key.HasValue && dirNameById.TryGetValue(g.Key.Value, out var n)
+                    ? n
+                    : "Not set";
+                return BuildSubmissionLeagueRow(name, g.Key, g.ToList(), reportYear, reportMonth, expectedProgressPercent, monthlyUpdateService);
+            })
+            .OrderByDescending(r => r.ActualProgressPercent)
+            .ThenBy(r => r.Name == "Not set" ? "zzzzzz" : r.Name)
+            .ToList();
+    }
+
+    private static int? GetPrimaryDirectorateId(Project project)
+    {
+        var primary = project.Directorates?
+            .OrderBy(d => d.Division?.SortOrder ?? int.MaxValue)
+            .ThenBy(d => d.Division?.Name ?? "")
+            .FirstOrDefault();
+        return primary?.DivisionId;
+    }
+
+    private static MonthlySubmissionLeagueRow BuildSubmissionLeagueRow(
+        string name,
+        int? entityId,
+        List<Project> projects,
+        int reportYear,
+        int reportMonth,
+        decimal expectedProgressPercent,
+        IMonthlyUpdateService monthlyUpdateService)
+    {
+        var dueDate = monthlyUpdateService.GetMonthlyUpdateDueDate(reportYear, reportMonth);
+        var nowUtc = DateTime.UtcNow;
+        var submitted = 0;
+        var inProgress = 0;
+        var late = 0;
+        var notStarted = 0;
+
+        foreach (var project in projects)
+        {
+            var update = project.MonthlyUpdates?.FirstOrDefault(u => u.Year == reportYear && u.Month == reportMonth);
+            if (update != null && update.SubmittedAt.HasValue)
+                submitted++;
+            else if (nowUtc > dueDate)
+                late++;
+            else if (update != null && !update.SubmittedAt.HasValue)
+                inProgress++;
+            else
+                notStarted++;
+        }
+
+        var total = projects.Count;
+        var actual = total == 0 ? 0 : Math.Round(100m * submitted / total, 1, MidpointRounding.AwayFromZero);
+
+        return new MonthlySubmissionLeagueRow
+        {
+            Name = name,
+            EntityId = entityId,
+            TotalToReport = total,
+            Submitted = submitted,
+            InProgress = inProgress,
+            Late = late,
+            NotStarted = notStarted,
+            ActualProgressPercent = actual,
+            ExpectedProgressPercent = expectedProgressPercent
+        };
     }
 
 }

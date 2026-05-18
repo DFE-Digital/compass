@@ -1,5 +1,6 @@
 @using System.Collections.Generic
 @using Compass.Models.DemandPipeline
+@using Compass.ViewModels.Modern
 @{
     ViewData["Title"] = "Manage triage meetings";
     var triageTab = ViewBag.TriageTab as string ?? "upcoming";
@@ -26,20 +27,20 @@
  <li class="govuk-breadcrumbs__list-item" aria-current="page">Manage triage</li>
 }
 
-<div class="dfe-c-flex--between dfe-c-mb-3" style="flex-wrap:wrap;gap:1rem;">
- <div class="dfe-c-page-title" style="margin:0;">
- <div class="dfe-c-page-title__caption">Operations</div>
- <h1 class="dfe-c-page-title__heading">Manage triage meetings</h1>
- <p class="dfe-c-page-title__lede">Create and schedule triage meetings. Demands can be assigned from the demand request Triage tab.</p>
-    </div>
- <div class="dfe-c-flex" style="gap:0.5rem;flex-wrap:wrap;">
- <a href="@Url.Action("AddTriageMeeting", "ModernOperations")" class="govuk-button">Add meeting</a>
-    </div>
-</div>
+@{
+  var manageTriageLede = await Html.PartialAsync("_GovukBodyParagraph", "Create and schedule triage meetings. Demands can be assigned from the demand request Triage tab.");
+  var manageTriageActions = await Html.PartialAsync("_ManageTriageHeaderActions");
+}
+@await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+  Caption = "Operations",
+  Title = "Manage triage meetings",
+  Lede = manageTriageLede,
+  Actions = manageTriageActions
+})
 
 @if (TempData["Message"] != null)
 {
- <div class="govuk-notification-banner govuk-notification-banner--success dfe-c-mb-3" role="region">
+ <div class="govuk-notification-banner govuk-notification-banner--success govuk-!-margin-bottom-3" role="region">
  <div class="govuk-notification-banner__header">
  <h2 class="govuk-notification-banner__title">Success</h2>
         </div>
@@ -50,16 +51,22 @@
 }
 @if (TempData["Error"] != null)
 {
- <div class="govuk-error-summary dfe-c-mb-3" role="alert">
+ <div class="govuk-error-summary govuk-!-margin-bottom-3" role="alert">
  <h2 class="govuk-error-summary__title">There is a problem</h2>
  <div class="govuk-error-summary__body">@TempData["Error"]</div>
     </div>
 }
 
-<div class="tabs dfe-c-mb-3" role="tablist" aria-label="Triage meetings">
- <a href="@TabUrl("upcoming")" class="tab @(triageTab =="upcoming" ? "on" : "")" role="tab" aria-selected="@(triageTab == "upcoming")" aria-controls="d-triage-upcoming" id="tab-triage-upcoming">Upcoming</a>
- <a href="@TabUrl("previous")" class="tab @(triageTab =="previous" ? "on" : "")" role="tab" aria-selected="@(triageTab == "previous")" aria-controls="d-triage-previous" id="tab-triage-previous">Previous</a>
-</div>
+<nav class="dfe-f-sub-navigation govuk-!-margin-bottom-3" aria-label="Triage meetings">
+ <ul class="dfe-f-sub-navigation__list">
+ <li class="dfe-f-sub-navigation__item@(triageTab == "upcoming" ? " dfe-f-sub-navigation__item--active" : "")">
+ <a class="dfe-f-sub-navigation__link govuk-link govuk-link--no-visited-state" href="@TabUrl("upcoming")" id="tab-triage-upcoming"@if (triageTab == "upcoming") { <text> aria-current="page"</text> }>Upcoming</a>
+ </li>
+ <li class="dfe-f-sub-navigation__item@(triageTab == "previous" ? " dfe-f-sub-navigation__item--active" : "")">
+ <a class="dfe-f-sub-navigation__link govuk-link govuk-link--no-visited-state" href="@TabUrl("previous")" id="tab-triage-previous"@if (triageTab == "previous") { <text> aria-current="page"</text> }>Previous</a>
+ </li>
+ </ul>
+</nav>
 
 <div id="d-triage-upcoming" class="tab-pane @(triageTab =="upcoming" ? "on" : "")" role="tabpanel" aria-labelledby="tab-triage-upcoming">
     @if (upcoming.Count == 0)
@@ -68,31 +75,38 @@
     }
     else
     {
- <div class="dfe-c-table-wrap">
-            <table >
-                <thead>
-                    <tr>
+ <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+            <table class="govuk-table">
+                <thead class="govuk-table__head">
+                    <tr class="govuk-table__row">
  <th data-sort-bound="1" class="sortable">Name</th>
  <th data-sort-bound="1" class="sortable">Date</th>
-                        <th>Time</th>
-                        <th>Chair</th>
+                        <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Time</button>
+        </th>
+                        <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Chair</button>
+        </th>
  <th data-sort-bound="1" class="sortable">Demands</th>
-                        <th>Status</th>
+                        <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Status</button>
+        </th>
  <th><span class="govuk-visually-hidden">Actions</span></th>
                     </tr>
                 </thead>
-                <tbody>
+                <tbody class="govuk-table__body">
                 @foreach (var m in upcoming)
                 {
                     var dc = DemandCount(m.Id);
-                    <tr>
-                        <td><a href="@Url.Action("EditTriageMeeting", "ModernOperations", new { id = m.Id, returnTab = "upcoming" })">@m.Name</a></td>
-                        <td>@(m.MeetingDate?.ToString("d MMM yyyy") ?? "—")</td>
-                        <td>@FormatTimeRange(m.StartTime, m.EndTime)</td>
-                        <td>@(ExtractChairName(m.Chair) ?? "—")</td>
-                        <td>@dc</td>
- <td><span class="@StatusTagClass(m.Status)">@m.Status.ToUpperInvariant()</span></td>
-                        <td style="text-align:right;white-space:nowrap;">
+                    <tr class="govuk-table__row">
+                        <td class="govuk-table__cell"><a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("EditTriageMeeting", "ModernOperations", new { id = m.Id, returnTab = "upcoming" })">@m.Name</a></td>
+                        <td class="govuk-table__cell">@(m.MeetingDate?.ToString("d MMM yyyy") ?? "—")</td>
+                        <td class="govuk-table__cell">@FormatTimeRange(m.StartTime, m.EndTime)</td>
+                        <td class="govuk-table__cell">@(ExtractChairName(m.Chair) ?? "—")</td>
+                        <td class="govuk-table__cell">@dc</td>
+ <td class="govuk-table__cell"><span class="@StatusTagClass(m.Status)">@m.Status.ToUpperInvariant()</span></td>
+                        <td class="govuk-table__cell" style="text-align:right;white-space:nowrap;">
                             @if (dc == 0)
                             {
                                 <form method="post" action="@Url.Action("DeleteTriageMeeting", "ModernOperations")" style="display:inline;">
@@ -118,31 +132,38 @@
     }
     else
     {
- <div class="dfe-c-table-wrap">
-            <table >
-                <thead>
-                    <tr>
+ <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+            <table class="govuk-table">
+                <thead class="govuk-table__head">
+                    <tr class="govuk-table__row">
  <th data-sort-bound="1" class="sortable">Name</th>
  <th data-sort-bound="1" class="sortable">Date</th>
-                        <th>Time</th>
-                        <th>Chair</th>
+                        <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Time</button>
+        </th>
+                        <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Chair</button>
+        </th>
  <th data-sort-bound="1" class="sortable">Demands</th>
-                        <th>Status</th>
+                        <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Status</button>
+        </th>
  <th><span class="govuk-visually-hidden">Actions</span></th>
                     </tr>
                 </thead>
-                <tbody>
+                <tbody class="govuk-table__body">
                 @foreach (var m in previous)
                 {
                     var dc = DemandCount(m.Id);
-                    <tr>
-                        <td><a href="@Url.Action("EditTriageMeeting", "ModernOperations", new { id = m.Id, returnTab = "previous" })">@m.Name</a></td>
-                        <td>@(m.MeetingDate?.ToString("d MMM yyyy") ?? "—")</td>
-                        <td>@FormatTimeRange(m.StartTime, m.EndTime)</td>
-                        <td>@(ExtractChairName(m.Chair) ?? "—")</td>
-                        <td>@dc</td>
- <td><span class="@StatusTagClass(m.Status)">@m.Status.ToUpperInvariant()</span></td>
-                        <td style="text-align:right;white-space:nowrap;">
+                    <tr class="govuk-table__row">
+                        <td class="govuk-table__cell"><a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("EditTriageMeeting", "ModernOperations", new { id = m.Id, returnTab = "previous" })">@m.Name</a></td>
+                        <td class="govuk-table__cell">@(m.MeetingDate?.ToString("d MMM yyyy") ?? "—")</td>
+                        <td class="govuk-table__cell">@FormatTimeRange(m.StartTime, m.EndTime)</td>
+                        <td class="govuk-table__cell">@(ExtractChairName(m.Chair) ?? "—")</td>
+                        <td class="govuk-table__cell">@dc</td>
+ <td class="govuk-table__cell"><span class="@StatusTagClass(m.Status)">@m.Status.ToUpperInvariant()</span></td>
+                        <td class="govuk-table__cell" style="text-align:right;white-space:nowrap;">
                             @if (dc == 0)
                             {
                                 <form method="post" action="@Url.Action("DeleteTriageMeeting", "ModernOperations")" style="display:inline;">

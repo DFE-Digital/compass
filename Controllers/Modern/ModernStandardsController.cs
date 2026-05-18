@@ -1,11 +1,16 @@
 using Compass.Data;
 using Compass.Filters;
+using Compass.Helpers;
 using Compass.Models;
+using Compass.Security;
 using Compass.Services;
+using Compass.Services.DdtStandards;
+using Compass.Services.FunctionalStandards;
 using Compass.ViewModels.Modern;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Globalization;
 using System.Security.Claims;
 using System.Text;
 
@@ -15,15 +20,20 @@ namespace Compass.Controllers.Modern;
 [Authorize]
 [ServiceFilter(typeof(StandardsFeatureGateFilter))]
 [Route("modern/standards")]
-public class ModernStandardsController : Controller
+public partial class ModernStandardsController : Controller
 {
     private readonly CompassDbContext _context;
     private readonly IPermissionService _permissions;
+    private readonly IDdtStandardsWorkflowService _ddtWorkflow;
 
-    public ModernStandardsController(CompassDbContext context, IPermissionService permissions)
+    public ModernStandardsController(
+        CompassDbContext context,
+        IPermissionService permissions,
+        IDdtStandardsWorkflowService ddtWorkflow)
     {
         _context = context;
         _permissions = permissions;
+        _ddtWorkflow = ddtWorkflow;
     }
 
     private void SetChrome(string subNavItem)
@@ -38,6 +48,19 @@ public class ModernStandardsController : Controller
         ?? User.Identity?.Name
         ?? "";
 
+    private int? GetCurrentUserId()
+    {
+        var objectIdClaim = User.FindFirstValue(CompassClaimTypes.ObjectIdentifier);
+        if (Guid.TryParse(objectIdClaim, out var objectId))
+        {
+            var user = _context.Users.AsNoTracking()
+                .FirstOrDefault(u => u.AzureObjectId == objectId.ToString());
+            return user?.Id;
+        }
+
+        return null;
+    }
+
     [HttpGet("")]
     public IActionResult Index() => RedirectToAction(nameof(Dashboard));
 
@@ -48,9 +71,11 @@ public class ModernStandardsController : Controller
     {
         SetChrome("standards-dashboard");
 
-        var publishedDdtCount = await _context.DdtStandards.AsNoTracking()
+        var allPublishedDdt = await _context.DdtStandards.AsNoTracking()
             .Where(s => !s.IsDeleted && s.IsPublished && s.Stage == "Published")
-            .CountAsync();
+            .Select(s => new DdtStandard { Id = s.Id, ParentStandardId = s.ParentStandardId, PublishedAt = s.PublishedAt, UpdatedAt = s.UpdatedAt, IsPublished = s.IsPublished, Stage = s.Stage })
+            .ToListAsync();
+        var publishedDdtCount = DdtStandardsListingHelper.LatestPublishedOnly(allPublishedDdt).Count();
 
         var functionalStandardsCount = await _context.FunctionalStandards.AsNoTracking()
             .CountAsync();
@@ -64,30 +89,29 @@ public class ModernStandardsController : Controller
             .Where(a => a.SubmittedAt != null && a.SubmittedAt >= ytdStart)
             .CountAsync();
 
-        var recentDdtStandards = await _context.DdtStandards.AsNoTracking()
-            .Include(s => s.Categories).ThenInclude(c => c.Category)
-            .Include(s => s.Owners).ThenInclude(o => o.User)
-            .Where(s => !s.IsDeleted)
-            .OrderByDescending(s => s.UpdatedAt)
-            .Take(4)
+        var cultureGb = CultureInfo.GetCultureInfo("en-GB");
+        var recentPublishedAll = await _context.DdtStandards.AsNoTracking()
+            .Where(s => !s.IsDeleted && s.IsPublished && s.Stage == "Published")
             .ToListAsync();
+        var recentDdtStandards = DdtStandardsListingHelper.LatestPublishedOnly(recentPublishedAll)
+            .OrderByDescending(s => s.FirstPublished ?? s.PublishedAt ?? s.UpdatedAt)
+            .Take(6)
+            .ToList();
 
         var ddtRows = recentDdtStandards.Select(s => new StandardsDashboardDdtRow
         {
             StandardId = s.Id,
-            UniqueId = s.Slug,
             Title = s.Title,
             VersionDisplay = $"v{s.Version}",
-            StatusTagClass = DdtStageTagClass(s.Stage),
-            StatusLabel = s.Stage,
-            UseDraftAction = s.Stage == "Draft"
+            PublishedDisplay = (s.FirstPublished ?? s.PublishedAt)?.ToString("d MMMM yyyy", cultureGb) ?? "—"
         }).ToList();
 
         var recentAssessments = await _context.FunctionalStandardAssessments.AsNoTracking()
             .Include(a => a.FunctionalStandard)
             .Include(a => a.CriteriaResponses)
+            .Where(a => a.SubmittedAt == null)
             .OrderByDescending(a => a.AssessmentDate)
-            .Take(4)
+            .Take(8)
             .ToListAsync();
 
         var assessmentRows = recentAssessments.Select(a =>
@@ -113,7 +137,7 @@ public class ModernStandardsController : Controller
                 AssessmentTitle = a.AssessmentName,
                 Reference = $"FSA-{a.Id:D4}",
                 StandardRef = a.FunctionalStandard?.Title ?? $"FS-{a.FunctionalStandardId}",
-                StatusTagClass = submitted ? "dfe-c-tag--green" : "dfe-c-tag--blue",
+                StatusTagClass = submitted ? "dfe-f-badge--green" : "dfe-f-badge--blue",
                 StatusLabel = submitted ? "Complete" : "In progress",
                 AttainmentTagClass = attainmentTagClass,
                 AttainmentLabel = attainmentLabel
@@ -147,7 +171,7 @@ public class ModernStandardsController : Controller
 
     [HttpGet("ddt")]
     public async Task<IActionResult> DdtStandards(
-        string tab = "published",
+        string? tab = null,
         string? search = null,
         string? category = null,
         int? owner = null,
@@ -155,27 +179,46 @@ public class ModernStandardsController : Controller
     {
         SetChrome("standards-ddt");
 
-        var tabLower = (tab ?? "published").Trim().ToLowerInvariant();
-
         var query = _context.DdtStandards.AsNoTracking()
             .Include(s => s.Categories).ThenInclude(c => c.Category)
             .Include(s => s.Owners).ThenInclude(o => o.User)
+            .Include(s => s.Contacts).ThenInclude(c => c.User)
             .Where(s => !s.IsDeleted);
 
         var allNonDeleted = await query.ToListAsync();
 
-        var publishedCount = allNonDeleted.Count(s => s.IsPublished && s.Stage == "Published");
-        var draftCount = allNonDeleted.Count(s => s.Stage == "Draft");
-        var reviewCount = allNonDeleted.Count(s => s.Stage == "Under Review");
+        int? currentUserId = GetCurrentUserId();
+        var yourStandardsCount = 0;
+        if (currentUserId is int userId && userId > 0)
+        {
+            yourStandardsCount = DdtStandardsListingHelper.YourPublishedOnly(allNonDeleted, userId).Count();
+        }
+
+        var showYourStandardsTab = yourStandardsCount > 0;
+        var tabLower = string.IsNullOrWhiteSpace(tab)
+            ? (showYourStandardsTab ? "yours" : "published")
+            : tab.Trim().ToLowerInvariant();
+
+        var publishedCount = DdtStandardsListingHelper.LatestPublishedOnly(allNonDeleted).Count();
+        var draftCount = DdtStandardsListingHelper.ActiveDraftsOnly(allNonDeleted).Count();
+        var reviewCount = allNonDeleted.Count(s => s.Stage == "For Approval");
+        var awaitingPublishCount = allNonDeleted.Count(s => s.Stage == "Awaiting Publication");
         var withdrawnCount = allNonDeleted.Count(s => !s.IsPublished && s.Stage == "Archived");
 
         IEnumerable<DdtStandard> filtered = tabLower switch
         {
-            "draft" => allNonDeleted.Where(s => s.Stage == "Draft"),
-            "review" => allNonDeleted.Where(s => s.Stage == "Under Review"),
+            "yours" when currentUserId is int uid && uid > 0 =>
+                DdtStandardsListingHelper.YourPublishedOnly(allNonDeleted, uid),
+            "draft" => DdtStandardsListingHelper.ActiveDraftsOnly(allNonDeleted),
+            "review" => allNonDeleted.Where(s => s.Stage == "For Approval"),
+            "awaiting" => allNonDeleted.Where(s => s.Stage == "Awaiting Publication"),
             "withdrawn" => allNonDeleted.Where(s => !s.IsPublished && s.Stage == "Archived"),
-            _ => allNonDeleted.Where(s => s.IsPublished && s.Stage == "Published")
+            "published" => DdtStandardsListingHelper.LatestPublishedOnly(allNonDeleted),
+            _ => DdtStandardsListingHelper.LatestPublishedOnly(allNonDeleted)
         };
+
+        if (tabLower == "yours" && !showYourStandardsTab)
+            tabLower = "published";
 
         if (!string.IsNullOrWhiteSpace(search))
         {
@@ -198,7 +241,7 @@ public class ModernStandardsController : Controller
         }
 
         var items = filtered
-            .OrderByDescending(s => s.UpdatedAt)
+            .OrderBy(s => s.Title, StringComparer.OrdinalIgnoreCase)
             .Select(s => new DdtStandardsRegisterRow
             {
                 Id = s.Id,
@@ -234,9 +277,12 @@ public class ModernStandardsController : Controller
         {
             Tab = tabLower,
             TotalCount = allNonDeleted.Count,
+            YourStandardsCount = yourStandardsCount,
+            ShowYourStandardsTab = showYourStandardsTab,
             PublishedCount = publishedCount,
             DraftCount = draftCount,
             ReviewCount = reviewCount,
+            AwaitingPublishCount = awaitingPublishCount,
             WithdrawnCount = withdrawnCount,
             Items = items,
             CategoryOptions = categoryOptions,
@@ -268,22 +314,267 @@ public class ModernStandardsController : Controller
 
         if (standard == null) return NotFound();
 
+        if (standard.ParentStandardId.HasValue && standard.Stage == "Draft")
+            return RedirectToAction(nameof(DdtCreate), new { id = standard.ParentStandardId.Value });
+
+        var allForLineage = await _context.DdtStandards.AsNoTracking()
+            .Where(s => !s.IsDeleted)
+            .Select(s => new DdtStandard { Id = s.Id, ParentStandardId = s.ParentStandardId, IsPublished = s.IsPublished, Stage = s.Stage, PublishedAt = s.PublishedAt, UpdatedAt = s.UpdatedAt })
+            .ToListAsync();
+        var latestPublishedId = DdtStandardsListingHelper.GetLatestPublishedIdInLineage(allForLineage, id);
+        if (latestPublishedId.HasValue && latestPublishedId.Value != id && standard.IsPublished && standard.Stage == "Published")
+            return RedirectToAction(nameof(DdtDetail), new { id = latestPublishedId.Value });
+
         var categoryIds = standard.Categories.Select(c => c.CategoryId).ToList();
         var relatedStandards = categoryIds.Any()
-            ? await _context.DdtStandards.AsNoTracking()
-                .Include(s => s.Categories).ThenInclude(c => c.Category)
-                .Where(s => !s.IsDeleted && s.IsPublished && s.Stage == "Published" && s.Id != id
-                    && s.Categories.Any(c => categoryIds.Contains(c.CategoryId)))
-                .OrderByDescending(s => s.PublishedAt).Take(5).ToListAsync()
+            ? DdtStandardsListingHelper.LatestPublishedOnly(
+                await _context.DdtStandards.AsNoTracking()
+                    .Include(s => s.Categories).ThenInclude(c => c.Category)
+                    .Where(s => !s.IsDeleted && s.IsPublished && s.Stage == "Published" && s.Id != id
+                        && s.Categories.Any(c => categoryIds.Contains(c.CategoryId)))
+                    .ToListAsync())
+                .OrderByDescending(s => s.PublishedAt)
+                .Take(5)
+                .ToList()
             : new List<DdtStandard>();
 
         ViewBag.RelatedStandards = relatedStandards;
+        ViewBag.Workflow = await _ddtWorkflow.BuildWorkflowContextAsync(id, User);
+        ViewBag.Toolbar = await _ddtWorkflow.BuildDetailToolbarAsync(id, User);
         return View("~/Views/Modern/Standards/DdtDetail.cshtml", standard);
     }
 
+    [HttpGet("ddt/{id:int}/history")]
+    public async Task<IActionResult> DdtHistory(int id)
+    {
+        SetChrome("standards-ddt");
+
+        var vm = await _ddtWorkflow.BuildHistoryViewModelAsync(id);
+        if (vm == null) return NotFound();
+
+        return View("~/Views/Modern/Standards/DdtHistory.cshtml", vm);
+    }
+
+    [HttpGet("ddt/{id:int}/edit-confirm")]
+    public async Task<IActionResult> DdtStartEditConfirm(int id, CancellationToken cancellationToken = default)
+    {
+        SetChrome("standards-ddt");
+
+        var standard = await _context.DdtStandards.AsNoTracking()
+            .FirstOrDefaultAsync(s => s.Id == id && !s.IsDeleted, cancellationToken);
+        if (standard == null)
+            return NotFound();
+
+        var toolbar = await _ddtWorkflow.BuildDetailToolbarAsync(id, User, cancellationToken);
+        if (!toolbar.CanOpenEdit)
+        {
+            TempData["ErrorMessage"] = "You do not have permission to edit this standard.";
+            return RedirectToAction(nameof(DdtDetail), new { id });
+        }
+
+        if (toolbar.DraftEditId.HasValue)
+            return RedirectToAction(nameof(DdtCreate), new { id = toolbar.DraftEditId });
+
+        if (!toolbar.NeedsDraftFromPublished)
+        {
+            if (standard.Stage == "Draft")
+                return RedirectToAction(nameof(DdtCreate), new { id });
+            TempData["ErrorMessage"] = "This standard cannot be edited in its current stage.";
+            return RedirectToAction(nameof(DdtDetail), new { id });
+        }
+
+        return View("~/Views/Modern/Standards/DdtStartEditConfirm.cshtml", new DdtStartEditConfirmViewModel
+        {
+            StandardId = id,
+            Title = standard.Title,
+            Version = standard.Version
+        });
+    }
+
+    [HttpPost("ddt/{id:int}/start-edit")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> DdtStartEdit(int id)
+    {
+        var result = await _ddtWorkflow.EnsureDraftForEditAsync(id, User);
+        if (!result.Success)
+        {
+            TempData["ErrorMessage"] = result.ErrorMessage;
+            return RedirectToAction(nameof(DdtDetail), new { id });
+        }
+
+        return RedirectToAction(nameof(DdtCreate), new { id = result.StandardId });
+    }
+
     [HttpGet("ddt/create")]
-    public IActionResult DdtCreate() =>
-        RedirectToAction("Create", "DdtStandardsManagement");
+    [HttpGet("ddt/{id:int}/edit")]
+    public async Task<IActionResult> DdtCreate(int? id)
+    {
+        SetChrome("standards-ddt");
+        var vm = await _ddtWorkflow.BuildEditViewModelAsync(id, User);
+        if (id.HasValue && vm.Id == null)
+            return NotFound();
+
+        if (id.HasValue)
+        {
+            var editTarget = await _context.DdtStandards.AsNoTracking()
+                .Where(s => s.Id == id.Value && !s.IsDeleted)
+                .Select(s => new { s.ParentStandardId, s.Stage })
+                .FirstOrDefaultAsync();
+            if (editTarget is { Stage: "Draft", ParentStandardId: int parentId })
+                return RedirectToAction(nameof(DdtCreate), new { id = parentId });
+        }
+
+        if (id.HasValue && !vm.CanEdit)
+        {
+            var published = await _context.DdtStandards.AsNoTracking()
+                .FirstOrDefaultAsync(s => s.Id == id.Value && !s.IsDeleted);
+            if (published is { IsPublished: true, Stage: "Published" })
+            {
+                var toolbar = await _ddtWorkflow.BuildDetailToolbarAsync(id.Value, User);
+                if (toolbar.DraftEditId.HasValue)
+                    return RedirectToAction(nameof(DdtCreate), new { id = toolbar.DraftEditId });
+                if (toolbar.NeedsDraftFromPublished)
+                    return RedirectToAction(nameof(DdtStartEditConfirm), new { id = id.Value });
+
+                TempData["ErrorMessage"] = "You do not have permission to edit this standard.";
+                return RedirectToAction(nameof(DdtDetail), new { id });
+            }
+
+            TempData["ErrorMessage"] = "This standard cannot be edited in its current stage.";
+            return RedirectToAction(nameof(DdtDetail), new { id });
+        }
+        return View("~/Views/Modern/Standards/DdtCreate.cshtml", vm);
+    }
+
+    [HttpPost("ddt/create")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> DdtCreatePost(
+        int? id,
+        string title,
+        string? summary,
+        string? purpose,
+        string? criteria,
+        string? howToMeet,
+        string? governance,
+        string? legalBasis,
+        bool legalStandard = false,
+        int? validityPeriod = null,
+        string? relatedGuidance = null,
+        List<int>? categoryIds = null,
+        List<int>? phaseIds = null,
+        string? ownerObjectIds = null,
+        string? contactObjectIds = null,
+        string? submitAction = null)
+    {
+        SetChrome("standards-ddt");
+        var input = new DdtStandardDraftInput
+        {
+            Id = id,
+            Title = title,
+            Summary = summary,
+            Purpose = purpose,
+            Criteria = criteria,
+            HowToMeet = howToMeet,
+            Governance = governance,
+            LegalBasis = legalBasis,
+            LegalStandard = legalStandard,
+            ValidityPeriod = validityPeriod,
+            RelatedGuidance = relatedGuidance,
+            CategoryIds = categoryIds,
+            PhaseIds = phaseIds,
+            OwnerObjectIds = ownerObjectIds,
+            ContactObjectIds = contactObjectIds
+        };
+
+        var result = await _ddtWorkflow.SaveDraftAsync(input, User);
+        if (!result.Success)
+        {
+            TempData["ErrorMessage"] = result.ErrorMessage;
+            var vm = await _ddtWorkflow.BuildEditViewModelAsync(id, User);
+            vm.Title = title;
+            vm.Summary = summary;
+            vm.Purpose = purpose;
+            vm.Criteria = criteria;
+            vm.HowToMeet = howToMeet;
+            vm.Governance = governance;
+            vm.LegalBasis = legalBasis;
+            vm.LegalStandard = legalStandard;
+            vm.ValidityPeriod = validityPeriod;
+            vm.RelatedGuidance = relatedGuidance;
+            vm.SelectedCategoryIds = categoryIds ?? new List<int>();
+            vm.SelectedPhaseIds = phaseIds ?? new List<int>();
+            vm.OwnerObjectIds = ownerObjectIds;
+            vm.ContactObjectIds = contactObjectIds;
+            return View("~/Views/Modern/Standards/DdtCreate.cshtml", vm);
+        }
+
+        if (string.Equals(submitAction, "submit", StringComparison.OrdinalIgnoreCase) && result.StandardId.HasValue)
+        {
+            var submit = await _ddtWorkflow.SubmitForReviewAsync(result.StandardId.Value, User);
+            SetFlash(submit);
+            return RedirectToAction(nameof(DdtDetail), new { id = result.StandardId.Value });
+        }
+
+        TempData["SuccessMessage"] = result.SuccessMessage;
+        return RedirectToAction(nameof(DdtCreate), new { id = result.StandardId });
+    }
+
+    [HttpPost("ddt/{id:int}/submit-for-review")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> DdtSubmitForReview(int id)
+    {
+        var result = await _ddtWorkflow.SubmitForReviewAsync(id, User);
+        SetFlash(result);
+        return RedirectToAction(result.Success ? nameof(DdtDetail) : nameof(DdtCreate), new { id });
+    }
+
+    [HttpPost("ddt/{id:int}/approve")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> DdtApprove(int id, string? comment)
+    {
+        var result = await _ddtWorkflow.ApproveAsync(id, comment, User);
+        SetFlash(result);
+        return RedirectToAction(nameof(DdtDetail), new { id });
+    }
+
+    [HttpPost("ddt/{id:int}/reject")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> DdtReject(int id, string reason)
+    {
+        var result = await _ddtWorkflow.RejectAsync(id, reason, User);
+        SetFlash(result);
+        return RedirectToAction(nameof(DdtDetail), new { id });
+    }
+
+    [HttpPost("ddt/{id:int}/publish")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> DdtPublish(int id)
+    {
+        var result = await _ddtWorkflow.PublishAsync(id, User);
+        SetFlash(result);
+        return RedirectToAction(result.Success ? nameof(DdtDetail) : nameof(DdtDetail), new { id });
+    }
+
+    [HttpPost("ddt/{id:int}/delete")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> DdtDeleteDraft(int id)
+    {
+        var result = await _ddtWorkflow.DeleteDraftAsync(id, User);
+        SetFlash(result);
+        return result.Success
+            ? (result.StandardId.HasValue
+                ? RedirectToAction(nameof(DdtDetail), new { id = result.StandardId.Value })
+                : RedirectToAction(nameof(DdtStandards), new { tab = "draft" }))
+            : RedirectToAction(nameof(DdtCreate), new { id });
+    }
+
+    private void SetFlash(WorkflowOperationResult result)
+    {
+        if (result.Success)
+            TempData["SuccessMessage"] = result.SuccessMessage;
+        else
+            TempData["ErrorMessage"] = result.ErrorMessage;
+    }
 
     private IActionResult ExportDdtCsv(List<DdtStandardsRegisterRow> rows, string tab)
     {
@@ -570,9 +861,7 @@ public class ModernStandardsController : Controller
 
         if (assessment == null) return NotFound();
 
-        var totalCriteria = assessment.FunctionalStandard?.Themes?
-            .Sum(t => t.PracticeAreas?.Sum(pa => pa.Criteria?.Count ?? 0) ?? 0) ?? 0;
-        var completed = assessment.CriteriaResponses.Count(r => r.Attainment.HasValue);
+        var (totalCriteria, completed, _, _, _) = FunctionalAssessmentProgress.CountAgainstStandardTree(assessment);
 
         if (completed < totalCriteria)
         {
@@ -673,6 +962,24 @@ public class ModernStandardsController : Controller
         return RedirectToAction(nameof(ConductAssessment), new { assessmentId = assessment.Id });
     }
 
+    [HttpGet("functional/assessment/{assessmentId:int}/export/word")]
+    public async Task<IActionResult> ExportAssessmentWord(int assessmentId)
+    {
+        var assessment = await _context.FunctionalStandardAssessments
+            .AsNoTracking()
+            .Include(a => a.FunctionalStandard)
+                .ThenInclude(fs => fs!.Themes)
+                    .ThenInclude(t => t.PracticeAreas)
+                        .ThenInclude(pa => pa.Criteria)
+            .Include(a => a.CriteriaResponses)
+            .FirstOrDefaultAsync(a => a.Id == assessmentId);
+
+        if (assessment == null) return NotFound();
+
+        var (bytes, contentType, fileName) = FunctionalAssessmentWordExporter.Export(assessment);
+        return File(bytes, contentType, fileName);
+    }
+
     [HttpGet("functional/assessment/{assessmentId:int}/export")]
     public async Task<IActionResult> ExportAssessmentCsv(int assessmentId)
     {
@@ -729,23 +1036,58 @@ public class ModernStandardsController : Controller
     #region Management
 
     [HttpGet("management")]
-    public async Task<IActionResult> Management()
+    public async Task<IActionResult> Management(string? section = null, string? productStatus = null)
     {
         SetChrome("standards-management");
 
-        var userEmail = GetUserEmail();
-        var canManage = await _permissions.IsInGroupAsync(userEmail, "Standards Manager");
+        var canManage = await StandardsPermissionHelper.CanAccessModernStandardsManagementAsync(_permissions, User);
         ViewBag.CanAccessStandardsManagement = canManage;
 
+        var sectionKey = NormalizeManagementSection(section);
+        var productFilter = string.IsNullOrWhiteSpace(productStatus) ? null : productStatus.Trim();
+
         if (!canManage)
-            return View("~/Views/Modern/Standards/Management.cshtml", new StandardsManagementViewModel());
+            return View("~/Views/Modern/Standards/Management.cshtml", new StandardsManagementViewModel { ActiveSection = sectionKey });
+
+        var userEmail = GetUserEmail();
+        var canManageLookups =
+            !string.IsNullOrEmpty(userEmail) &&
+            (await _permissions.IsSuperAdminAsync(userEmail) ||
+             await _permissions.IsInGroupAsync(userEmail, "Central Operations Admin"));
+        ViewBag.CanManageStandardLookups = canManageLookups;
+
+        var currentUserId = GetCurrentUserId();
+
+        var yourStandardsCount = 0;
+        if (currentUserId is int userId && userId > 0)
+        {
+            var yourStandards = await _context.DdtStandards.AsNoTracking()
+                .Include(s => s.Owners)
+                .Include(s => s.Contacts)
+                .Where(s => !s.IsDeleted &&
+                    (s.Owners.Any(o => o.UserId == userId) || s.Contacts.Any(c => c.UserId == userId)))
+                .ToListAsync();
+            yourStandardsCount = DdtStandardsListingHelper.YourPublishedOnly(yourStandards, userId).Count();
+        }
+
+        var allForDraftCount = await _context.DdtStandards.AsNoTracking()
+            .Where(s => !s.IsDeleted)
+            .Select(s => new DdtStandard { Id = s.Id, ParentStandardId = s.ParentStandardId, Stage = s.Stage, UpdatedAt = s.UpdatedAt })
+            .ToListAsync();
+        var draftCount = DdtStandardsListingHelper.ActiveDraftsOnly(allForDraftCount).Count();
 
         var pendingReview = await _context.DdtStandards.AsNoTracking()
             .Include(s => s.Categories).ThenInclude(c => c.Category)
             .Include(s => s.Owners).ThenInclude(o => o.User)
-            .Where(s => !s.IsDeleted && s.Stage == "Under Review")
+            .Where(s => !s.IsDeleted && (s.Stage == "For Approval" || s.Stage == "Under Review"))
             .OrderByDescending(s => s.UpdatedAt)
             .ToListAsync();
+
+        var reviewQueueCount = await _context.DdtStandards.AsNoTracking()
+            .CountAsync(s => !s.IsDeleted && s.Stage == "For Approval");
+
+        var awaitingPublishCount = await _context.DdtStandards.AsNoTracking()
+            .CountAsync(s => !s.IsDeleted && s.Stage == "Awaiting Publication");
 
         var pendingRows = pendingReview.Select(s => new DdtStandardsRegisterRow
         {
@@ -783,17 +1125,25 @@ public class ModernStandardsController : Controller
             AssessmentCount = assessmentCounts.GetValueOrDefault(fs.Id, 0)
         }).ToList();
 
-        var categories = await _context.StandardCategories.AsNoTracking()
-            .Where(c => c.IsActive)
-            .OrderBy(c => c.SortOrder).ThenBy(c => c.Name)
-            .Select(c => new AdminLookupRow { Id = c.Id, Name = c.Name, Description = c.Description })
-            .ToListAsync();
+        var categoryRows = await LoadManagementCategoriesAsync();
+        var productRows = await LoadManagementProductsAsync(productFilter);
+        var productsCount = await _context.StandardProducts.AsNoTracking().CountAsync();
 
         var vm = new StandardsManagementViewModel
         {
+            ActiveSection = sectionKey,
+            YourStandardsCount = yourStandardsCount,
+            DraftStandardsCount = draftCount,
+            StandardsToReviewCount = reviewQueueCount,
+            StandardsAwaitingPublishCount = awaitingPublishCount,
+            FunctionalStandardsCount = fsAdminRows.Count,
+            StandardCategoriesCount = categoryRows.Count,
+            StandardProductsCount = productsCount,
+            ProductFilterStatus = productFilter,
             PendingReviewStandards = pendingRows,
             FunctionalStandards = fsAdminRows,
-            StandardCategories = categories
+            Categories = categoryRows,
+            Products = productRows
         };
 
         return View("~/Views/Modern/Standards/Management.cshtml", vm);
@@ -808,6 +1158,7 @@ public class ModernStandardsController : Controller
         "Published" => "dfe-c-tag--green",
         "Draft" => "dfe-c-tag--grey",
         "Under Review" => "dfe-c-tag--blue",
+        "For Approval" => "dfe-c-tag--amber",
         "Approved" => "dfe-c-tag--turquoise",
         "Archived" => "dfe-c-tag--orange",
         "Rejected" => "dfe-c-tag--red",

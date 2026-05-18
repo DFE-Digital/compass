@@ -1,19 +1,12 @@
 namespace Compass.ViewModels.Modern;
 
-/// <summary>Profile page — signed-in identity and Compass user record when present.</summary>
+/// <summary>Account profile — basic identity on Profile; directory groups on Permissions.</summary>
 public class ModernProfileViewModel
 {
-    public string? SignInName { get; init; }
     public string? Email { get; init; }
 
-    public string? DatabaseName { get; init; }
-    public string? FirstName { get; init; }
-    public string? LastName { get; init; }
-    public string? JobTitle { get; init; }
-    public string? UserPrincipalName { get; init; }
-    public string? AzureObjectId { get; init; }
-    public string? ApplicationRole { get; init; }
+    /// <summary>Best display name from the user directory record when available.</summary>
+    public string? DisplayName { get; init; }
 
     public IReadOnlyList<string> DirectoryGroups { get; init; } = Array.Empty<string>();
-    public bool HasCompassUserRecord { get; init; }
 }

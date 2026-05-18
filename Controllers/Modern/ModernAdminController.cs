@@ -10,6 +10,7 @@ using Compass.ViewModels.Modern;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 
 namespace Compass.Controllers.Modern;
 
@@ -46,7 +47,8 @@ public partial class ModernAdminController : Controller
         "issue-statuses", "issue-priorities", "issue-severities",
         "decision-statuses", "decision-priorities", "decision-outcomes", "decision-implementation-statuses",
         "raid-evidence-types", "governance-boards", "demand-request-statuses", "triage-outcome-stages",
-        "assumption-statuses", "assumption-criticalities", "dependency-criticalities", "dependency-link-types"
+        "assumption-statuses", "assumption-criticalities", "dependency-criticalities", "dependency-link-types",
+        "near-miss-types", "near-miss-seriousness", "near-miss-statuses"
     };
 
     public ModernAdminController(
@@ -256,6 +258,9 @@ public partial class ModernAdminController : Controller
             case "assumption-criticalities":
             case "dependency-criticalities":
             case "dependency-link-types":
+            case "near-miss-types":
+            case "near-miss-seriousness":
+            case "near-miss-statuses":
                 var raidDef = FindRaidDef(normalized);
                 if (raidDef != null)
                 {
@@ -1320,6 +1325,23 @@ public partial class ModernAdminController : Controller
     private static DateTime NormalizeUtcDate(DateTime d) =>
         DateTime.SpecifyKind(d.Kind == DateTimeKind.Utc ? d.Date : d.Date, DateTimeKind.Utc);
 
+    /// <summary>Parses GOV.UK date input fields (day / month / year) as a UTC calendar date.</summary>
+    private static bool TryParseUtcDateParts(int? day, int? month, int? year, out DateTime utcDate)
+    {
+        utcDate = default;
+        if (day is null || month is null || year is null)
+            return false;
+        try
+        {
+            utcDate = DateTime.SpecifyKind(new DateTime(year.Value, month.Value, day.Value), DateTimeKind.Utc).Date;
+            return true;
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            return false;
+        }
+    }
+
     private async Task<WorkReportingCycle> EnsureMonthlyWorkReportingCycleAsync()
     {
         var cycle = await _context.WorkReportingCycles
@@ -1445,10 +1467,18 @@ public partial class ModernAdminController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> WorkReportingPeriodCreate(
         string periodLabel,
-        DateTime? periodStart,
-        DateTime? periodEnd,
-        DateTime? submissionOpens,
-        DateTime? submissionCloses,
+        int? periodStartDay,
+        int? periodStartMonth,
+        int? periodStartYear,
+        int? periodEndDay,
+        int? periodEndMonth,
+        int? periodEndYear,
+        int? submissionOpensDay,
+        int? submissionOpensMonth,
+        int? submissionOpensYear,
+        int? submissionClosesDay,
+        int? submissionClosesMonth,
+        int? submissionClosesYear,
         bool isActive)
     {
         periodLabel = (periodLabel ?? "").Trim();
@@ -1458,16 +1488,20 @@ public partial class ModernAdminController : Controller
             return RedirectToAction(nameof(WorkReportingCreate));
         }
 
-        if (!periodStart.HasValue || !periodEnd.HasValue || !submissionOpens.HasValue || !submissionCloses.HasValue)
+        if (!TryParseUtcDateParts(periodStartDay, periodStartMonth, periodStartYear, out var ps) ||
+            !TryParseUtcDateParts(periodEndDay, periodEndMonth, periodEndYear, out var pe) ||
+            !TryParseUtcDateParts(submissionOpensDay, submissionOpensMonth, submissionOpensYear, out var so) ||
+            !TryParseUtcDateParts(submissionClosesDay, submissionClosesMonth, submissionClosesYear, out var sc))
         {
-            TempData["AdminError"] = "Period start, period end, submission opens, and submission closes are all required.";
+            TempData["AdminError"] =
+                "Enter a complete valid date for period start, period end, submission opens, and submission closes (day, month and year).";
             return RedirectToAction(nameof(WorkReportingCreate));
         }
 
-        var ps = NormalizeUtcDate(periodStart.Value);
-        var pe = NormalizeUtcDate(periodEnd.Value);
-        var so = NormalizeUtcDate(submissionOpens.Value);
-        var sc = NormalizeUtcDate(submissionCloses.Value);
+        ps = NormalizeUtcDate(ps);
+        pe = NormalizeUtcDate(pe);
+        so = NormalizeUtcDate(so);
+        sc = NormalizeUtcDate(sc);
 
         if (pe.Date < ps.Date)
         {
@@ -1518,7 +1552,7 @@ public partial class ModernAdminController : Controller
         _context.WorkReportingCyclePeriods.Add(entity);
         await _context.SaveChangesAsync();
 
-        TempData["AdminMessage"] = $"Reporting period \"{periodLabel}\" created.";
+        TempData["AdminMessage"] = $"Monthly reporting period \"{periodLabel}\" created.";
         return RedirectToAction(nameof(WorkReporting));
     }
 
@@ -1527,10 +1561,18 @@ public partial class ModernAdminController : Controller
     public async Task<IActionResult> WorkReportingPeriodEditPost(
         int id,
         string periodLabel,
-        DateTime periodStart,
-        DateTime periodEnd,
-        DateTime submissionOpens,
-        DateTime submissionCloses,
+        int? periodStartDay,
+        int? periodStartMonth,
+        int? periodStartYear,
+        int? periodEndDay,
+        int? periodEndMonth,
+        int? periodEndYear,
+        int? submissionOpensDay,
+        int? submissionOpensMonth,
+        int? submissionOpensYear,
+        int? submissionClosesDay,
+        int? submissionClosesMonth,
+        int? submissionClosesYear,
         bool isActive)
     {
         var entity = await _context.WorkReportingCyclePeriods
@@ -1545,6 +1587,16 @@ public partial class ModernAdminController : Controller
         if (string.IsNullOrWhiteSpace(periodLabel))
         {
             TempData["AdminError"] = "Name is required.";
+            return RedirectToAction(nameof(WorkReportingPeriodEdit), new { id });
+        }
+
+        if (!TryParseUtcDateParts(periodStartDay, periodStartMonth, periodStartYear, out var periodStart) ||
+            !TryParseUtcDateParts(periodEndDay, periodEndMonth, periodEndYear, out var periodEnd) ||
+            !TryParseUtcDateParts(submissionOpensDay, submissionOpensMonth, submissionOpensYear, out var submissionOpens) ||
+            !TryParseUtcDateParts(submissionClosesDay, submissionClosesMonth, submissionClosesYear, out var submissionCloses))
+        {
+            TempData["AdminError"] =
+                "Enter a complete valid date for period start, period end, submission opens, and submission closes (day, month and year).";
             return RedirectToAction(nameof(WorkReportingPeriodEdit), new { id });
         }
 
@@ -1590,7 +1642,7 @@ public partial class ModernAdminController : Controller
 
         await _context.SaveChangesAsync();
 
-        TempData["AdminMessage"] = $"Reporting period \"{periodLabel}\" updated.";
+        TempData["AdminMessage"] = $"Monthly reporting period \"{periodLabel}\" updated.";
         return RedirectToAction(nameof(WorkReporting));
     }
 
@@ -1685,6 +1737,15 @@ public partial class ModernAdminController : Controller
                         ExclusionUntilMonth = p.ExclusionUntilMonth,
                         IsActive = p.IsActive
                     }).ToListAsync();
+                var ensureDocIds = vm.ProductExclusions.Select(p => p.ProductDocumentId).ToList();
+                if (editId.HasValue)
+                {
+                    var editing = vm.ProductExclusions.FirstOrDefault(p => p.Id == editId.Value);
+                    if (editing != null && !ensureDocIds.Contains(editing.ProductDocumentId, StringComparer.OrdinalIgnoreCase))
+                        ensureDocIds.Add(editing.ProductDocumentId);
+                }
+                vm.ServiceRegisterProductOptions = await PerfProductExclusionOptionsBuilder.BuildActiveServiceRegisterOptionsAsync(
+                    _context, _productsApi, ensureDocIds);
                 break;
         }
 
@@ -1833,15 +1894,69 @@ public partial class ModernAdminController : Controller
 
     // ── Performance Metrics CRUD ──
 
+    private async Task PopulatePerfMetricFormOptionsAsync(PerfMetricRow vm, int? excludeMetricId = null)
+    {
+        vm.CataloguePhaseOptions = await _context.PhaseLookups.AsNoTracking()
+            .Where(p => p.IsActive && p.Name != null && p.Name != "")
+            .OrderBy(p => p.SortOrder)
+            .ThenBy(p => p.Name)
+            .Select(p => p.Name)
+            .Distinct()
+            .ToListAsync();
+
+        vm.CatalogueTypeOptions = await _context.FipsTypes.AsNoTracking()
+            .Where(t => t.Active && t.Name != null && t.Name != "")
+            .OrderBy(t => t.DisplayOrder)
+            .ThenBy(t => t.Name)
+            .Select(t => t.Name)
+            .Distinct()
+            .ToListAsync();
+
+        var metricsQuery = _context.PerformanceMetrics.AsNoTracking().Where(m => !m.IsDisabled);
+        if (excludeMetricId.HasValue)
+            metricsQuery = metricsQuery.Where(m => m.Id != excludeMetricId.Value);
+
+        vm.ConditionalMetricOptions = await metricsQuery
+            .OrderBy(m => m.Title)
+            .Select(m => new PerfMetricConditionalOption { Id = m.Id, Title = m.Title })
+            .ToListAsync();
+    }
+
+    private static readonly JsonSerializerOptions ValidationRulesJsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true
+    };
+
+    private static string? TryParseValidationRulesJson(string? validationRulesJson)
+    {
+        if (string.IsNullOrWhiteSpace(validationRulesJson))
+            return "{}";
+
+        try
+        {
+            JsonSerializer.Deserialize<ValidationRules>(validationRulesJson, ValidationRulesJsonOptions);
+            return validationRulesJson;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static string JoinSelectedLookups(List<string>? selected) =>
+        selected != null && selected.Count > 0 ? string.Join(",", selected) : string.Empty;
+
     [HttpGet("performance-reporting/metric/create")]
-    public IActionResult PerfMetricCreateForm()
+    public async Task<IActionResult> PerfMetricCreateForm()
     {
         SetAdminChrome("admin-perf-reporting");
         var vm = new PerfMetricRow
         {
             ValidFromYear = DateTime.UtcNow.Year,
-            ValidFromMonth = DateTime.UtcNow.Month
+            ValidFromMonth = DateTime.UtcNow.Month,
+            ValidationRules = "{\"required\": true, \"allowNull\": false}"
         };
+        await PopulatePerfMetricFormOptionsAsync(vm);
         if (TempData["PerfError"] is string err)
             ViewBag.PerfError = err;
         return View("~/Views/Modern/Admin/PerfMetricCreate.cshtml", vm);
@@ -1866,8 +1981,11 @@ public partial class ModernAdminController : Controller
             ValidFrom = $"{e.ValidFromYear}-{e.ValidFromMonth:D2}",
             ApplicablePhases = e.ApplicablePhases,
             ApplicableTypes = e.ApplicableTypes,
+            ValidationRules = string.IsNullOrWhiteSpace(e.ValidationRules) ? "{}" : e.ValidationRules,
+            ConditionalOnMetricId = e.ConditionalOnMetricId,
             IsDisabled = e.IsDisabled
         };
+        await PopulatePerfMetricFormOptionsAsync(vm, id);
         if (TempData["PerfMessage"] is string msg)
             ViewBag.AdminMessage = msg;
         if (TempData["PerfError"] is string err)
@@ -1877,13 +1995,31 @@ public partial class ModernAdminController : Controller
 
     [HttpPost("performance-reporting/metric/create")]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> PerfMetricCreate(string identifier, string title, string? description, int valueType, int validFromYear, int validFromMonth, string? applicablePhases, string? applicableTypes)
+    public async Task<IActionResult> PerfMetricCreate(
+        string identifier,
+        string title,
+        string? description,
+        int valueType,
+        int validFromYear,
+        int validFromMonth,
+        string? validationRulesJson,
+        List<string>? selectedPhases,
+        List<string>? selectedTypes,
+        int? conditionalOnMetricId)
     {
-        identifier = (identifier ?? "").Trim(); title = (title ?? "").Trim();
+        identifier = (identifier ?? "").Trim();
+        title = (title ?? "").Trim();
         if (string.IsNullOrWhiteSpace(identifier) || string.IsNullOrWhiteSpace(title))
         {
             TempData["PerfError"] = "Identifier and title are required.";
-            return RedirectToAction(nameof(PerformanceReporting), new { panel = "metrics" });
+            return RedirectToAction(nameof(PerfMetricCreateForm));
+        }
+
+        var parsedRules = TryParseValidationRulesJson(validationRulesJson);
+        if (parsedRules == null)
+        {
+            TempData["PerfError"] = "Validation rules must be valid JSON.";
+            return RedirectToAction(nameof(PerfMetricCreateForm));
         }
 
         _context.PerformanceMetrics.Add(new PerformanceMetric
@@ -1894,8 +2030,10 @@ public partial class ModernAdminController : Controller
             ValueType = (Models.ValueType)valueType,
             ValidFromYear = validFromYear,
             ValidFromMonth = validFromMonth,
-            ApplicablePhases = applicablePhases?.Trim() ?? "",
-            ApplicableTypes = applicableTypes?.Trim() ?? ""
+            ValidationRules = parsedRules,
+            ApplicablePhases = JoinSelectedLookups(selectedPhases),
+            ApplicableTypes = JoinSelectedLookups(selectedTypes),
+            ConditionalOnMetricId = conditionalOnMetricId > 0 ? conditionalOnMetricId : null
         });
         await _context.SaveChangesAsync();
         TempData["PerfMessage"] = $"Metric \"{identifier}\" created.";
@@ -1904,20 +2042,46 @@ public partial class ModernAdminController : Controller
 
     [HttpPost("performance-reporting/metric/{id:int}/edit")]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> PerfMetricEdit(int id, string identifier, string title, string? description, int valueType, int validFromYear, int validFromMonth, string? applicablePhases, string? applicableTypes)
+    public async Task<IActionResult> PerfMetricEdit(
+        int id,
+        string identifier,
+        string title,
+        string? description,
+        int valueType,
+        int validFromYear,
+        int validFromMonth,
+        string? validationRulesJson,
+        List<string>? selectedPhases,
+        List<string>? selectedTypes,
+        int? conditionalOnMetricId)
     {
         var e = await _context.PerformanceMetrics.FindAsync(id);
         if (e == null) return NotFound();
-        identifier = (identifier ?? "").Trim(); title = (title ?? "").Trim();
+        identifier = (identifier ?? "").Trim();
+        title = (title ?? "").Trim();
         if (string.IsNullOrWhiteSpace(identifier) || string.IsNullOrWhiteSpace(title))
         {
             TempData["PerfError"] = "Identifier and title are required.";
             return RedirectToAction(nameof(PerfMetricEditForm), new { id });
         }
 
-        e.Identifier = identifier; e.Title = title; e.Description = description?.Trim() ?? "";
-        e.ValueType = (Models.ValueType)valueType; e.ValidFromYear = validFromYear; e.ValidFromMonth = validFromMonth;
-        e.ApplicablePhases = applicablePhases?.Trim() ?? ""; e.ApplicableTypes = applicableTypes?.Trim() ?? "";
+        var parsedRules = TryParseValidationRulesJson(validationRulesJson);
+        if (parsedRules == null)
+        {
+            TempData["PerfError"] = "Validation rules must be valid JSON.";
+            return RedirectToAction(nameof(PerfMetricEditForm), new { id });
+        }
+
+        e.Identifier = identifier;
+        e.Title = title;
+        e.Description = description?.Trim() ?? "";
+        e.ValueType = (Models.ValueType)valueType;
+        e.ValidFromYear = validFromYear;
+        e.ValidFromMonth = validFromMonth;
+        e.ValidationRules = parsedRules;
+        e.ApplicablePhases = JoinSelectedLookups(selectedPhases);
+        e.ApplicableTypes = JoinSelectedLookups(selectedTypes);
+        e.ConditionalOnMetricId = conditionalOnMetricId > 0 ? conditionalOnMetricId : null;
         e.UpdatedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync();
         TempData["PerfMessage"] = $"Metric \"{identifier}\" updated.";
@@ -2064,11 +2228,18 @@ public partial class ModernAdminController : Controller
 
     [HttpPost("performance-reporting/product-exclusion/create")]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> PerfProductExclusionCreate(string productDocumentId, string? productName, string exclusionReason, int exclusionFromYear, int exclusionFromMonth, int? exclusionUntilYear, int? exclusionUntilMonth)
+    public async Task<IActionResult> PerfProductExclusionCreate(string productDocumentId, string exclusionReason, int exclusionFromYear, int exclusionFromMonth, int? exclusionUntilYear, int? exclusionUntilMonth)
     {
         productDocumentId = (productDocumentId ?? "").Trim();
         if (string.IsNullOrWhiteSpace(productDocumentId))
-        { TempData["PerfMessage"] = "Product document ID is required."; return RedirectToAction(nameof(PerformanceReporting), new { panel = "product-exclusions" }); }
+        { TempData["PerfError"] = "Select a product from the Service Register."; return RedirectToAction(nameof(PerformanceReporting), new { panel = "product-exclusions" }); }
+
+        var product = await PerfProductExclusionOptionsBuilder.ResolveByDocumentIdAsync(_context, _productsApi, productDocumentId);
+        if (product == null)
+        {
+            TempData["PerfError"] = "Selected product is not a valid active Service Register entry.";
+            return RedirectToAction(nameof(PerformanceReporting), new { panel = "product-exclusions" });
+        }
 
         if (exclusionUntilYear.HasValue != exclusionUntilMonth.HasValue)
         {
@@ -2076,10 +2247,19 @@ public partial class ModernAdminController : Controller
             return RedirectToAction(nameof(PerformanceReporting), new { panel = "product-exclusions" });
         }
 
+        var duplicate = await _context.PerformanceReportingProductExclusions
+            .AnyAsync(e => e.IsActive && e.ProductDocumentId == product.ProductDocumentId);
+        if (duplicate)
+        {
+            TempData["PerfError"] = $"An active exclusion already exists for {product.DisplayName}.";
+            return RedirectToAction(nameof(PerformanceReporting), new { panel = "product-exclusions" });
+        }
+
         _context.PerformanceReportingProductExclusions.Add(new PerformanceReportingProductExclusion
         {
-            ProductDocumentId = productDocumentId,
-            ProductName = productName?.Trim(),
+            ProductDocumentId = product.ProductDocumentId,
+            FipsId = product.FipsId,
+            ProductName = product.DisplayName,
             ExclusionReason = (exclusionReason ?? "").Trim(),
             ExclusionFromYear = exclusionFromYear,
             ExclusionFromMonth = exclusionFromMonth,
@@ -2089,18 +2269,25 @@ public partial class ModernAdminController : Controller
             UpdatedBy = GetUserEmail()
         });
         await _context.SaveChangesAsync();
-        TempData["PerfMessage"] = $"Product exclusion for \"{productName ?? productDocumentId}\" created.";
+        TempData["PerfMessage"] = $"Product exclusion for \"{product.DisplayName}\" created.";
         return RedirectToAction(nameof(PerformanceReporting), new { panel = "product-exclusions" });
     }
 
     [HttpPost("performance-reporting/product-exclusion/{id:int}/edit")]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> PerfProductExclusionEdit(int id, string productDocumentId, string? productName, string exclusionReason, int exclusionFromYear, int exclusionFromMonth, int? exclusionUntilYear, int? exclusionUntilMonth)
+    public async Task<IActionResult> PerfProductExclusionEdit(int id, string productDocumentId, string exclusionReason, int exclusionFromYear, int exclusionFromMonth, int? exclusionUntilYear, int? exclusionUntilMonth)
     {
         productDocumentId = (productDocumentId ?? "").Trim();
         if (string.IsNullOrWhiteSpace(productDocumentId))
         {
-            TempData["PerfError"] = "Product document ID is required.";
+            TempData["PerfError"] = "Select a product from the Service Register.";
+            return RedirectToAction(nameof(PerformanceReporting), new { panel = "product-exclusions", editId = id });
+        }
+
+        var product = await PerfProductExclusionOptionsBuilder.ResolveByDocumentIdAsync(_context, _productsApi, productDocumentId);
+        if (product == null)
+        {
+            TempData["PerfError"] = "Selected product is not a valid active Service Register entry.";
             return RedirectToAction(nameof(PerformanceReporting), new { panel = "product-exclusions", editId = id });
         }
 
@@ -2120,8 +2307,17 @@ public partial class ModernAdminController : Controller
         var e = await _context.PerformanceReportingProductExclusions.FindAsync(id);
         if (e == null) return NotFound();
 
-        e.ProductDocumentId = productDocumentId;
-        e.ProductName = string.IsNullOrWhiteSpace(productName) ? null : productName.Trim();
+        var duplicate = await _context.PerformanceReportingProductExclusions
+            .AnyAsync(x => x.IsActive && x.Id != id && x.ProductDocumentId == product.ProductDocumentId);
+        if (duplicate)
+        {
+            TempData["PerfError"] = $"An active exclusion already exists for {product.DisplayName}.";
+            return RedirectToAction(nameof(PerformanceReporting), new { panel = "product-exclusions", editId = id });
+        }
+
+        e.ProductDocumentId = product.ProductDocumentId;
+        e.FipsId = product.FipsId;
+        e.ProductName = product.DisplayName;
         e.ExclusionReason = exclusionReason;
         e.ExclusionFromYear = exclusionFromYear;
         e.ExclusionFromMonth = exclusionFromMonth;
@@ -2818,7 +3014,10 @@ public partial class ModernAdminController : Controller
         Rd<AssumptionStatus>("assumption-statuses", "Assumption statuses", "Lifecycle states for delivery assumptions."),
         Rd<AssumptionCriticality>("assumption-criticalities", "Assumption criticalities", "How critical the assumption is if it fails."),
         Rd<DependencyCriticality>("dependency-criticalities", "Dependency criticalities", "Criticality of dependency relationships."),
-        Rd<DependencyLinkType>("dependency-link-types", "Dependency link types", "Standard dependency classifications.")
+        Rd<DependencyLinkType>("dependency-link-types", "Dependency link types", "Standard dependency classifications."),
+        Rd<NearMissType>("near-miss-types", "Near miss types", "Near miss or unexpected issue classification."),
+        Rd<NearMissSeriousness>("near-miss-seriousness", "Near miss seriousness", "Seriousness scale (1–4) for near misses."),
+        Rd<NearMissStatus>("near-miss-statuses", "Near miss statuses", "Open or closed workflow states for near misses.")
     };
 
     private static RaidLookupDef Rd<T>(string key, string label, string? desc) where T : RaidLookupBase, new() =>

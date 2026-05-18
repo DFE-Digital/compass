@@ -1,0 +1,63 @@
+@model FipsProductDetailViewModel
+@using Compass.Models.Fips
+@{
+  var p = Model.Product;
+
+  string StatusBadgeClass(CMDBProductStatus status) => status switch
+  {
+    CMDBProductStatus.Active => "dfe-f-badge--green",
+    CMDBProductStatus.New => "dfe-f-badge--blue",
+    CMDBProductStatus.Inactive => "dfe-f-badge--grey",
+    CMDBProductStatus.Rejected => "dfe-f-badge--red",
+    _ => "dfe-f-badge--grey"
+  };
+}
+<div class="work-item-masthead fips-product-masthead govuk-!-margin-bottom-6">
+  <div class="govuk-grid-row">
+    <div class="govuk-grid-column-two-thirds-from-desktop">
+      <a href="@Url.Action("Fips", "ModernManage", new { tab = "active" })" class="govuk-link govuk-back-link govuk-!-margin-bottom-2 govuk-link--no-visited-state">Back to products</a>
+      <h1 class="govuk-heading-l govuk-!-margin-bottom-4">@p.Title</h1>
+    </div>
+    <div class="govuk-grid-column-one-third-from-desktop work-item-masthead__actions">
+      <div class="work-item-masthead__actions-inner">
+        @await Html.PartialAsync("~/Views/Modern/Manage/_FipsProductHeaderActions.cshtml", Model)
+      </div>
+    </div>
+  </div>
+  <div class="govuk-grid-row">
+    <div class="govuk-grid-column-full">
+      <div class="work-item-masthead__meta-wrap">
+        <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed work-item-masthead__meta govuk-!-margin-bottom-0">
+          <caption class="govuk-table__caption govuk-visually-hidden">Product summary</caption>
+          <thead class="govuk-table__head">
+            <tr class="govuk-table__row">
+              <th scope="col" class="govuk-table__header">Status</th>
+              <th scope="col" class="govuk-table__header">Business area</th>
+              <th scope="col" class="govuk-table__header">Phase</th>
+              <th scope="col" class="govuk-table__header">View product</th>
+            </tr>
+          </thead>
+          <tbody class="govuk-table__body">
+            <tr class="govuk-table__row">
+              <td class="govuk-table__cell">
+                <span class="dfe-f-badge dfe-f-badge--small @StatusBadgeClass(p.Status)">@p.Status</span>
+              </td>
+              <td class="govuk-table__cell">@(string.IsNullOrWhiteSpace(Model.BusinessAreasDisplay) ? "—" : Model.BusinessAreasDisplay)</td>
+              <td class="govuk-table__cell">@(p.Phase?.Name ?? "—")</td>
+              <td class="govuk-table__cell">
+                @if (!string.IsNullOrWhiteSpace(p.ProductURL))
+                {
+                  <a href="@p.ProductURL" class="govuk-link govuk-link--no-visited-state" target="_blank" rel="noopener noreferrer">Visit service</a>
+                }
+                else
+                {
+                  <span class="govuk-hint govuk-!-margin-bottom-0">—</span>
+                }
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>

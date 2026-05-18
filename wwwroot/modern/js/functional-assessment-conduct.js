@@ -79,12 +79,25 @@
         .catch(function () { /* silent */ });
     }
 
+    function criterionOutcomeValue(criterionEl) {
+      var sel = criterionEl.querySelector('.fsa-attainment-select');
+      if (sel) return sel.value;
+      var ro = criterionEl.querySelector('.fsa-criterion__readonly-outcome');
+      if (!ro) return '';
+      if (ro.querySelector('.dfe-c-tag--green')) return '2';
+      if (ro.querySelector('.dfe-c-tag--amber')) return '1';
+      if (ro.querySelector('.dfe-c-tag--red')) return '0';
+      return '';
+    }
+
     function updateCounts() {
       document.querySelectorAll('.fsa-practice-area').forEach(function (pa) {
-        var selects = pa.querySelectorAll('.fsa-attainment-select');
-        var total = selects.length;
+        var criteria = pa.querySelectorAll('.fsa-criterion');
+        var total = criteria.length;
         var done = 0;
-        selects.forEach(function (s) { if (s.value !== '') done++; });
+        criteria.forEach(function (c) {
+          if (criterionOutcomeValue(c) !== '') done++;
+        });
         var badge = pa.querySelector('.fsa-pa-progress');
         if (badge) badge.textContent = done + ' / ' + total + ' assessed';
       });
@@ -94,38 +107,60 @@
         var tid = c.dataset.theme;
         if (!themes[tid]) themes[tid] = { total: 0, done: 0 };
         themes[tid].total++;
-        var sel = c.querySelector('.fsa-attainment-select');
-        if (sel && sel.value !== '') themes[tid].done++;
+        if (criterionOutcomeValue(c) !== '') themes[tid].done++;
       });
       Object.keys(themes).forEach(function (tid) {
         var el = document.querySelector('.fsa-theme-progress[data-theme="' + tid + '"]');
-        if (el) el.textContent = themes[tid].done + ' / ' + themes[tid].total;
+        if (el) el.textContent = themes[tid].done + ' / ' + themes[tid].total + ' criteria';
       });
 
-      var allSelects = document.querySelectorAll('.fsa-attainment-select');
-      var globalTotal = allSelects.length;
+      var allCriteria = document.querySelectorAll('.fsa-criterion');
+      var globalTotal = allCriteria.length;
       var globalDone = 0;
       var fmCount = 0;
       var pmCount = 0;
       var nmCount = 0;
-      allSelects.forEach(function (s) {
-        if (s.value !== '') globalDone++;
-        if (s.value === '2') fmCount++;
-        if (s.value === '1') pmCount++;
-        if (s.value === '0') nmCount++;
+      allCriteria.forEach(function (c) {
+        var v = criterionOutcomeValue(c);
+        if (v !== '') globalDone++;
+        if (v === '2') fmCount++;
+        if (v === '1') pmCount++;
+        if (v === '0') nmCount++;
       });
       var pct = globalTotal > 0 ? Math.round(100 * globalDone / globalTotal) : 0;
+      var displayPct = globalTotal > 0 && globalDone > 0 && pct < 2 ? 2 : pct;
       var bar = document.querySelector('.fsa-progress-bar__fill');
-      if (bar) bar.style.width = pct + '%';
+      if (bar) bar.style.width = displayPct + '%';
+
+      var track = document.querySelector('.fsa-progress-bar__track');
+      if (track) {
+        track.setAttribute('aria-valuemax', String(globalTotal));
+        track.setAttribute('aria-valuenow', String(globalDone));
+        track.setAttribute(
+          'aria-valuetext',
+          globalDone + ' of ' + globalTotal + ' criteria assessed (' + pct + ' percent)'
+        );
+      }
+
+      var summary = document.getElementById('fsa-conduct-progress-summary');
+      if (summary) {
+        summary.innerHTML =
+          '<span class="govuk-!-font-weight-bold dfe-f-u-tabular-numbers">' + globalDone + '</span> of ' +
+          '<span class="dfe-f-u-tabular-numbers">' + globalTotal + '</span> criteria (' + pct + '%)';
+      }
 
       var stats = document.querySelectorAll('.fsa-stat');
       stats.forEach(function (st) {
-        if (st.classList.contains('fsa-stat--green')) st.textContent = fmCount + ' fully met';
-        if (st.classList.contains('fsa-stat--amber')) st.textContent = pmCount + ' partially met';
-        if (st.classList.contains('fsa-stat--red')) st.textContent = nmCount + ' not met';
-        if (st.classList.contains('fsa-stat--grey')) st.textContent = (globalTotal - globalDone) + ' unanswered';
+        if (st.classList.contains('fsa-stat--green')) st.textContent = String(fmCount);
+        if (st.classList.contains('fsa-stat--amber')) st.textContent = String(pmCount);
+        if (st.classList.contains('fsa-stat--red')) st.textContent = String(nmCount);
+        if (st.classList.contains('fsa-stat--grey')) st.textContent = String(globalTotal - globalDone);
       });
+      var unanswered = document.getElementById('fsa-masthead-unanswered');
+      if (unanswered) unanswered.textContent = String(globalTotal - globalDone);
     }
+
+    updateCounts();
   }
 
   if (document.readyState === 'loading') {

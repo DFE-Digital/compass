@@ -6,7 +6,10 @@ namespace Compass.Services.Raid;
 
 public interface IOperationsRiskEditService
 {
-    Task LoadEditorViewBagAsync(Controller controller, int? ownerUserId, int? sroUserId, CancellationToken cancellationToken);
+    Task LoadEditorViewBagAsync(
+        Controller controller,
+        ModernRaidRiskEditorForm form,
+        CancellationToken cancellationToken);
 
     Task<ModernRaidRiskEditorForm?> BuildFormAsync(int riskId, CancellationToken cancellationToken);
 

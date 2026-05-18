@@ -1,0 +1,284 @@
+@using System.Text.Json
+@using Compass.Helpers
+@using Compass.ViewModels
+@using Compass.ViewModels.Modern
+@model ModernRaidReviewProgressViewModel
+@{
+  ViewData["Title"] = "RAID review report";
+  var m = Model ?? new ModernRaidReviewProgressViewModel();
+  var s = m.Summary;
+  var jsonOpts = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+  var chartJson = JsonSerializer.Serialize(m.DailyProgress, jsonOpts);
+  var overallPct = s.ActualProgressPercent;
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernReporting")">Reporting</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">RAID review report</li>
+}
+
+<div class="mr-dash">
+  @{
+    var ledeText = "Track monthly RAID review completion for open risks and issues. Compare actual progress with the linear target for the review month.";
+    var lede = await Html.PartialAsync("_GovukBodyParagraph", ledeText);
+  }
+  @await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+    Caption = "Reporting",
+    Title = "RAID review report",
+    Lede = lede
+  })
+
+  @if (TempData["ErrorMessage"] != null)
+  {
+    <div class="dfe-c-error-summary" role="alert" style="margin-bottom:1.5rem;">
+      <p class="dfe-c-body" style="margin:0;">@TempData["ErrorMessage"]</p>
+    </div>
+  }
+
+  <div class="mr-toolbar mr-toolbar--compact govuk-!-margin-bottom-3">
+    <div class="mr-toolbar__row">
+      <div class="mr-toolbar__nav mr-toolbar__nav--compact">
+        @if (m.HasPreviousMonthNav && m.PreviousNavYear.HasValue && m.PreviousNavMonth.HasValue)
+        {
+          <a class="govuk-link mr-toolbar__nav-link govuk-link--no-visited-state" href="@Url.Action("RaidReviewProgress", "ModernReporting", new { year = m.PreviousNavYear, month = m.PreviousNavMonth, businessAreaId = m.FilterBusinessAreaId, directorateId = m.FilterDirectorateId })">← @(new DateTime(m.PreviousNavYear.Value, m.PreviousNavMonth.Value, 1).ToString("MMM yy"))</a>
+        }
+        <span class="mr-toolbar__period">@m.MonthName</span>
+        @if (m.HasNextMonthNav && m.NextNavYear.HasValue && m.NextNavMonth.HasValue)
+        {
+          <a class="govuk-link mr-toolbar__nav-link govuk-link--no-visited-state" href="@Url.Action("RaidReviewProgress", "ModernReporting", new { year = m.NextNavYear, month = m.NextNavMonth, businessAreaId = m.FilterBusinessAreaId, directorateId = m.FilterDirectorateId })">@(new DateTime(m.NextNavYear.Value, m.NextNavMonth.Value, 1).ToString("MMM yy")) →</a>
+        }
+      </div>
+      <form method="get" action="@Url.Action("RaidReviewProgress", "ModernReporting")" class="mr-toolbar__filters mr-toolbar__filters--compact" data-page-loading>
+        <select name="year" class="govuk-select" aria-label="Year">
+          @{
+            var maxY = m.MaxReportYear >= m.MinReportYear ? m.MaxReportYear : DateTime.UtcNow.Year;
+            var minY = m.MinReportYear;
+            if (maxY < minY) { maxY = minY; }
+          }
+          @for (var y = maxY; y >= minY; y--)
+          {
+            if (m.ReportYear == y) { <option value="@y" selected>@y</option> }
+            else { <option value="@y">@y</option> }
+          }
+        </select>
+        <select name="month" class="govuk-select" aria-label="Month">
+          @for (var mo = 1; mo <= 12; mo++)
+          {
+            if (m.ReportMonth == mo) { <option value="@mo" selected>@(new DateTime(2000, mo, 1).ToString("MMM"))</option> }
+            else { <option value="@mo">@(new DateTime(2000, mo, 1).ToString("MMM"))</option> }
+          }
+        </select>
+        <select name="businessAreaId" class="govuk-select" aria-label="Business area">
+          <option value="">All areas</option>
+          @foreach (var ba in m.BusinessAreas)
+          {
+            if (m.FilterBusinessAreaId == ba.Id) { <option value="@ba.Id" selected>@ba.Name</option> }
+            else { <option value="@ba.Id">@ba.Name</option> }
+          }
+        </select>
+        <select name="directorateId" class="govuk-select" aria-label="Directorate">
+          <option value="">All directorates</option>
+          @foreach (var d in m.Directorates)
+          {
+            if (m.FilterDirectorateId == d.Id) { <option value="@d.Id" selected>@d.Name</option> }
+            else { <option value="@d.Id">@d.Name</option> }
+          }
+        </select>
+        <button type="submit" class="govuk-button govuk-!-margin-bottom-0">Apply</button>
+      </form>
+    </div>
+  </div>
+
+  <p class="govuk-body-s govuk-hint govuk-!-margin-bottom-3">
+    Review due by <strong>@m.ReviewDueLabel</strong>
+    · Window @m.ReviewWindowStart.ToString("d MMM") – @m.ReviewWindowEnd.ToString("d MMM yyyy")
+  </p>
+
+  <section class="mr-section govuk-!-margin-bottom-4" aria-labelledby="rrp-h-summary">
+    <h2 id="rrp-h-summary" class="govuk-heading-m">Summary</h2>
+    <div class="dfe-f-card-grid">
+      <div class="dfe-f-stat-card dfe-f-stat-card--tint-grey">
+        <p class="govuk-body-s dfe-f-stat-card__label">Open risks</p>
+        <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@s.OpenRisks</p>
+      </div>
+      <div class="dfe-f-stat-card dfe-f-stat-card--tint-grey">
+        <p class="govuk-body-s dfe-f-stat-card__label">Open issues</p>
+        <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@s.OpenIssues</p>
+      </div>
+      <div class="dfe-f-stat-card dfe-f-stat-card--tint-grey">
+        <p class="govuk-body-s dfe-f-stat-card__label">Total open</p>
+        <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@s.TotalOpen</p>
+      </div>
+      <div class="dfe-f-stat-card dfe-f-stat-card--tint-green">
+        <p class="govuk-body-s dfe-f-stat-card__label">Risks reviewed</p>
+        <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@s.ReviewedRisks</p>
+      </div>
+      <div class="dfe-f-stat-card dfe-f-stat-card--tint-green">
+        <p class="govuk-body-s dfe-f-stat-card__label">Issues reviewed</p>
+        <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@s.ReviewedIssues</p>
+      </div>
+      <div class="dfe-f-stat-card dfe-f-stat-card--tint-green">
+        <p class="govuk-body-s dfe-f-stat-card__label">Total reviewed</p>
+        <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@s.TotalReviewed</p>
+      </div>
+      <div class="dfe-f-stat-card dfe-f-stat-card--tint-red">
+        <p class="govuk-body-s dfe-f-stat-card__label">Not reviewed</p>
+        <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@s.TotalNotReviewed</p>
+      </div>
+      <div class="dfe-f-stat-card dfe-f-stat-card--tint-grey">
+        <p class="govuk-body-s dfe-f-stat-card__label">Target today</p>
+        <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@m.ExpectedProgressPercentToday%</p>
+      </div>
+      <div class="dfe-f-stat-card dfe-f-stat-card--tint-grey">
+        <p class="govuk-body-s dfe-f-stat-card__label">Actual completion</p>
+        <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@overallPct%</p>
+      </div>
+    </div>
+    <div class="mr-progress-bar govuk-!-margin-top-3" role="group" aria-label="Overall RAID review completion">
+      <div class="mr-progress-bar__label govuk-body-s govuk-!-margin-bottom-1">
+        Actual: <strong>@overallPct%</strong> (@s.TotalReviewed of @s.TotalOpen open risks and issues reviewed)
+        · Target today: <strong>@m.ExpectedProgressPercentToday%</strong>
+        @if (s.TotalNotReviewed == 0 && s.TotalOpen > 0)
+        {
+          <span class="govuk-tag govuk-tag--green govuk-!-margin-left-2">All reviewed</span>
+        }
+      </div>
+      <div class="mr-progress-bar__track" aria-hidden="true">
+        <div class="mr-progress-bar__fill @ReportingProgressBarHelper.FillToneModifier(overallPct)" style="width:@(overallPct.ToString(System.Globalization.CultureInfo.InvariantCulture))%;"></div>
+      </div>
+    </div>
+    @if (s.TotalOpen > 0)
+    {
+      <p class="govuk-body-s govuk-hint govuk-!-margin-top-3 govuk-!-margin-bottom-0">
+        @s.NotReviewedRisks open risk@(s.NotReviewedRisks == 1 ? "" : "s") and @s.NotReviewedIssues open issue@(s.NotReviewedIssues == 1 ? "" : "s") still need a monthly review for @m.MonthName.
+      </p>
+    }
+  </section>
+
+  <section class="mr-section govuk-!-margin-bottom-4" aria-labelledby="rrp-h-chart">
+    <h2 id="rrp-h-chart" class="govuk-heading-m">Review progress over the month</h2>
+    <p class="govuk-body-s govuk-hint">Cumulative completion (%) compared with a linear target from the start of the month to the review due date.</p>
+    @if (m.DailyProgress.Count == 0)
+    {
+      <p class="govuk-body dfe-c-text-muted">No review window data for this period.</p>
+    }
+    else
+    {
+      <div class="msp-chart-wrap" style="position:relative;height:320px;max-width:100%;">
+        <canvas id="rrp-review-chart" aria-label="Cumulative RAID review progress chart"></canvas>
+      </div>
+    }
+  </section>
+
+  <section class="mr-section govuk-!-margin-bottom-4" aria-labelledby="rrp-h-directorate">
+    <h2 id="rrp-h-directorate" class="govuk-heading-m">By directorate</h2>
+    <p class="govuk-body-s govuk-hint">League table ordered by actual completion. Target for today: <strong>@m.ExpectedProgressPercentToday%</strong>. Each open risk or issue is counted once (primary directorate).</p>
+    @await Html.PartialAsync("_RaidReviewLeagueTable", m.DirectorateLeague)
+  </section>
+
+  <section class="mr-section govuk-!-margin-bottom-4" aria-labelledby="rrp-h-ba">
+    <h2 id="rrp-h-ba" class="govuk-heading-m">By business area</h2>
+    <p class="govuk-body-s govuk-hint">League table ordered by actual completion. Target for today: <strong>@m.ExpectedProgressPercentToday%</strong>.</p>
+    @await Html.PartialAsync("_RaidReviewLeagueTable", m.BusinessAreaLeague)
+  </section>
+
+  <p class="govuk-body-s">
+    <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("Raid", "ModernReporting", new { tab = "risks" })">Open RAID intelligence</a>
+    ·
+    <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("ReviewStart", "ModernRaid")">Start monthly RAID review</a>
+  </p>
+</div>
+
+<style>
+  .msp-chart-wrap { margin-bottom: 0.5rem; }
+  .msp-league__progress { min-width: 8rem; }
+  .msp-gap--ahead { color: #00703c; font-weight: 600; }
+  .msp-gap--behind { color: #d4351c; font-weight: 600; }
+  .mr-progress-bar__track {
+    height: 0.75rem;
+    background: #f3f2f1;
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .mr-progress-bar__fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.2s ease;
+  }
+</style>
+
+@if (m.DailyProgress.Count > 0)
+{
+  @section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" nonce="@Context.Items["Nonce"]"></script>
+    <script nonce="@Context.Items["Nonce"]">
+      (function () {
+        var points = @Html.Raw(chartJson);
+        var el = document.getElementById('rrp-review-chart');
+        if (!el || typeof Chart === 'undefined' || !points.length) return;
+
+        new Chart(el.getContext('2d'), {
+          type: 'line',
+          data: {
+            labels: points.map(function (p) { return p.label; }),
+            datasets: [
+              {
+                label: 'Actual (cumulative)',
+                data: points.map(function (p) { return p.actualCompletionPercent; }),
+                borderColor: '#00703c',
+                backgroundColor: 'rgba(0, 112, 60, 0.08)',
+                tension: 0,
+                fill: true,
+                pointRadius: 2,
+                pointHoverRadius: 5
+              },
+              {
+                label: 'Target (linear)',
+                data: points.map(function (p) { return p.expectedCompletionPercent; }),
+                borderColor: '#505a5f',
+                borderDash: [6, 4],
+                backgroundColor: 'transparent',
+                tension: 0,
+                fill: false,
+                pointRadius: 0,
+                pointHoverRadius: 4
+              }
+            ]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+              legend: { position: 'bottom' },
+              tooltip: {
+                callbacks: {
+                  label: function (ctx) {
+                    var pt = points[ctx.dataIndex];
+                    if (!pt) return ' ' + ctx.dataset.label + ': ' + ctx.parsed.y + '%';
+                    var count = ctx.datasetIndex === 0 ? pt.actualCumulative : Math.round(pt.expectedCumulative);
+                    return ' ' + ctx.dataset.label + ': ' + ctx.parsed.y + '% (' + count + ' of ' + pt.totalInScope + ')';
+                  }
+                }
+              }
+            },
+            scales: {
+              y: {
+                beginAtZero: true,
+                max: 100,
+                ticks: {
+                  callback: function (v) { return v + '%'; }
+                },
+                title: { display: true, text: 'Cumulative completion' }
+              },
+              x: {
+                ticks: { maxRotation: 45, minRotation: 0, autoSkip: true, maxTicksLimit: 16 }
+              }
+            }
+          }
+        });
+      })();
+    </script>
+  }
+}

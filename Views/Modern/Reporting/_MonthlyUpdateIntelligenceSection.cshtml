@@ -1,0 +1,144 @@
+@model Compass.ViewModels.ModernMonthlyReportDashboardViewModel
+@{
+  var m = Model;
+  var intel = m.Intelligence;
+  var signalCount = intel.SignalCount;
+  string WorkHref(int id) => Url.Content($"~/modern/work/detail/{id}") ?? $"/modern/work/detail/{id}";
+  string RiskHref(int id) => Url.Content($"~/modern/raid/risks/{id}") ?? $"/modern/raid/risks/{id}";
+  string IssueHref(int id) => Url.Content($"~/modern/raid/issues/{id}") ?? $"/modern/raid/issues/{id}";
+  string GroupToneClass(string tone) => tone switch
+  {
+    "positive" => "mr-intel-group--positive",
+    "warning" => "mr-intel-group--warning",
+    _ => ""
+  };
+}
+
+<div class="mr-report-section-panel dfe-f-toggle govuk-!-margin-bottom-3" data-module="dfe-f-toggle" data-mr-section-id="intelligence" data-mr-section-title="Intelligence">
+  <div class="dfe-f-toggle__title-wrapper">
+    <h2 class="dfe-f-toggle__heading">
+      <button type="button" class="dfe-f-toggle__button" aria-expanded="true" aria-controls="mr-toggle-intelligence-content" id="mr-toggle-intelligence-button">
+        <span class="dfe-f-toggle__icon" aria-hidden="true"></span>
+        <span class="dfe-f-toggle__title" id="mr-h-intelligence">Intelligence</span>
+        <span class="mr-toggle-panel__meta"><span class="govuk-tag @(signalCount > 0 ? "govuk-tag--blue" : "govuk-tag--grey")">@signalCount signal@(signalCount == 1 ? "" : "s")</span></span>
+      </button>
+    </h2>
+  </div>
+  <div id="mr-toggle-intelligence-content" class="dfe-f-toggle__content">
+    <div class="dfe-f-toggle__body govuk-body">
+      <p class="govuk-body-s govuk-hint govuk-!-margin-top-0 govuk-!-margin-bottom-3">
+        Rule-based highlights for <strong>@intel.ScopeLabel</strong> in <strong>@intel.MonthDisplay</strong> — monthly returns, RAG and priority movement, RAID, and accessibility. Not AI-generated.
+      </p>
+
+      @foreach (var para in intel.SummaryParagraphs)
+      {
+        <p class="govuk-body govuk-!-margin-bottom-3">@para</p>
+      }
+
+      @if (!intel.HasContent)
+      {
+        <p class="govuk-body dfe-c-text-muted govuk-!-margin-bottom-0">No notable signals for the current filters.</p>
+      }
+      else
+      {
+        @foreach (var sec in intel.Sections)
+        {
+          <section class="mr-intel-section govuk-!-margin-bottom-4" aria-labelledby="mr-intel-@sec.Id">
+            <h3 class="govuk-heading-s govuk-!-margin-bottom-1" id="mr-intel-@sec.Id">@sec.Title</h3>
+            @if (!string.IsNullOrWhiteSpace(sec.Intro))
+            {
+              <p class="govuk-body-s govuk-!-margin-bottom-2">@sec.Intro</p>
+            }
+
+            @if (!sec.HasListContent)
+            {
+              <p class="govuk-body-s dfe-c-text-muted govuk-!-margin-bottom-0">Nothing notable in this category.</p>
+            }
+            else
+            {
+              @foreach (var grp in sec.Groups)
+              {
+                <div class="mr-intel-group @GroupToneClass(grp.Tone) govuk-!-margin-bottom-3">
+                  <h4 class="govuk-body govuk-!-font-weight-bold govuk-!-margin-bottom-1">@grp.Title</h4>
+                  @if (!string.IsNullOrWhiteSpace(grp.Hint))
+                  {
+                    <p class="govuk-body-s dfe-c-text-muted govuk-!-margin-bottom-2">@grp.Hint</p>
+                  }
+                  @if (grp.Items.Count > 0)
+                  {
+                    <ul class="govuk-list mr-intel-list govuk-!-margin-bottom-0">
+                      @foreach (var item in grp.Items)
+                      {
+                        <li class="mr-intel-item">
+                          @if (item.ProjectId is int pid)
+                          {
+                            <a class="govuk-link govuk-link--no-visited-state" href="@WorkHref(pid)">@item.Text</a>
+                          }
+                          else if (item.RiskId is int rid)
+                          {
+                            <a class="govuk-link govuk-link--no-visited-state" href="@RiskHref(rid)">@item.Text</a>
+                          }
+                          else if (item.IssueId is int iid)
+                          {
+                            <a class="govuk-link govuk-link--no-visited-state" href="@IssueHref(iid)">@item.Text</a>
+                          }
+                          else
+                          {
+                            <span>@item.Text</span>
+                          }
+                          @if (!string.IsNullOrWhiteSpace(item.Subtext))
+                          {
+                            <div class="mr-intel-item__detail govuk-body-s dfe-c-text-muted">@item.Subtext</div>
+                          }
+                        </li>
+                      }
+                    </ul>
+                    @if (grp.OverflowCount > 0)
+                    {
+                      <p class="govuk-body-s dfe-c-text-muted govuk-!-margin-top-2 govuk-!-margin-bottom-0">… and @grp.OverflowCount more not listed.</p>
+                    }
+                  }
+                </div>
+              }
+
+              @if (sec.Items.Count > 0)
+              {
+                <ul class="govuk-list mr-intel-list govuk-!-margin-bottom-0@(sec.Groups.Count > 0 ? " govuk-!-margin-top-2" : "")">
+                  @foreach (var item in sec.Items)
+                  {
+                    <li class="mr-intel-item">
+                      @if (item.ProjectId is int pid)
+                      {
+                        <a class="govuk-link govuk-link--no-visited-state" href="@WorkHref(pid)">@item.Text</a>
+                      }
+                      else if (item.RiskId is int rid)
+                      {
+                        <a class="govuk-link govuk-link--no-visited-state" href="@RiskHref(rid)">@item.Text</a>
+                      }
+                      else if (item.IssueId is int iid)
+                      {
+                        <a class="govuk-link govuk-link--no-visited-state" href="@IssueHref(iid)">@item.Text</a>
+                      }
+                      else
+                      {
+                        <span>@item.Text</span>
+                      }
+                      @if (!string.IsNullOrWhiteSpace(item.Subtext))
+                      {
+                        <div class="mr-intel-item__detail govuk-body-s dfe-c-text-muted">@item.Subtext</div>
+                      }
+                    </li>
+                  }
+                </ul>
+                @if (sec.OverflowCount > 0)
+                {
+                  <p class="govuk-body-s dfe-c-text-muted govuk-!-margin-top-2 govuk-!-margin-bottom-0">… and @sec.OverflowCount more not listed.</p>
+                }
+              }
+            }
+          </section>
+        }
+      }
+    </div>
+  </div>
+</div>

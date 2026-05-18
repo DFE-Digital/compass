@@ -1,6 +1,9 @@
 @model Compass.ViewModels.Modern.CompassNotificationEmailLogPageViewModel
+@using Compass.ViewModels.Modern
+@using Microsoft.AspNetCore.Html
 @{
   ViewData["Title"] = "Notification email log";
+  var notificationSideNav = new NotificationAdminSideNavViewModel { IsEmailLogPage = true };
 }
 
 @section Breadcrumbs {
@@ -11,18 +14,23 @@
 }
 
 <div class="admin-hub">
- <div class="dfe-c-flex--between dfe-c-mb-3" style="flex-wrap:wrap;gap:1rem;align-items:flex-start;">
- <div class="dfe-c-page-title" style="margin:0;flex:1 1 20rem;">
- <div class="dfe-c-page-title__caption">Administration</div>
- <h1 class="dfe-c-page-title__heading">Notification email log</h1>
- <p class="dfe-c-page-title__lede">
-      Audit of Compass notification emails. Rows are written when sending code calls <code class="govuk-body-s">ICompassNotificationEmailLogService</code>.
-    </p>
-    </div>
- <div class="dfe-c-flex" style="gap:0.5rem;flex-wrap:wrap;">
- <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("NotificationSettings", "ModernAdminNotificationSettings")">Notification settings</a>
-    </div>
-  </div>
+ @{
+   var notifLogLede = new HtmlString("<p class=\"govuk-body govuk-!-margin-bottom-0\">Audit of Compass notification emails. Rows are written when sending code calls <code class=\"govuk-body-s\">ICompassNotificationEmailLogService</code>.</p>");
+   var notifLogActions = new HtmlString($"<a class=\"govuk-link govuk-link--no-visited-state\" href=\"{Url.Action("NotificationSettings", "ModernAdminNotificationSettings") ?? "#"}\">Notification settings</a>");
+ }
+ @await Html.PartialAsync("~/Views/Modern/Shared/_ModernPageHeader.cshtml", new ModernPageHeaderViewModel {
+   Caption = "Administration",
+   Title = "Notification email log",
+   Lede = notifLogLede,
+   Actions = notifLogActions
+ })
+
+ <div class="govuk-grid-row notification-settings-layout">
+ <div class="govuk-grid-column-one-quarter-from-desktop notification-settings-layout__nav">
+ @await Html.PartialAsync("~/Views/Modern/Admin/_NotificationAdminSideNav.cshtml", notificationSideNav)
+ </div>
+ <div class="govuk-grid-column-three-quarters-from-desktop">
+ <div id="notification-email-log-main">
 
  @if (Model.TotalCount == 0)
   {
@@ -30,23 +38,28 @@
   }
   else
   {
- <p class="govuk-body-s dfe-c-text-muted govuk-!-margin-bottom-3">@Model.TotalCount total · Page @Model.Page of @Model.TotalPages</p>
- <div class="dfe-c-table-wrap">
- <table>
-        <thead>
-          <tr>
- <th data-sort-bound="1" class="sortable">Sent (UTC)</th>
- <th data-sort-bound="1" class="sortable">Notification</th>
- <th data-sort-bound="1" class="sortable">Recipient</th>
- <th>Subject</th>
- <th data-sort-bound="1" class="sortable">OK</th>
- <th>Context</th>
+ <p class="govuk-body-s dfe-c-text-muted govuk-!-margin-bottom-3">@Model.TotalCount total</p>
+ <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+ <table class="govuk-table govuk-table--small dfe-f-table--condensed">
+        <thead class="govuk-table__head">
+          <tr class="govuk-table__row">
+ <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Sent (UTC)</button></th>
+ <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Notification</button></th>
+ <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Recipient</button></th>
+ <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Subject</button>
+        </th>
+ <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">OK</button></th>
+ <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Context</button>
+        </th>
           </tr>
         </thead>
-        <tbody>
+        <tbody class="govuk-table__body">
           @foreach (var r in Model.Rows)
           {
-            <tr>
+            <tr class="govuk-table__row">
               <td class="govuk-body-s">@r.SentAtUtc.ToString("yyyy-MM-dd HH:mm")</td>
               <td class="govuk-body-s">
                 <span title="@r.EventKey">@r.EventDisplayName</span>
@@ -55,14 +68,14 @@
                 @(string.IsNullOrEmpty(r.RecipientName) ? r.RecipientEmail : $"{r.RecipientName} ({r.RecipientEmail})")
               </td>
               <td class="govuk-body-s">@r.Subject</td>
-              <td>
+              <td class="govuk-table__cell">
  @if (r.SendSucceeded)
                 {
- <span class="dfe-c-tag dfe-c-tag--green">Yes</span>
+ <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--green">Yes</span>
                 }
                 else
                 {
- <span class="dfe-c-tag dfe-c-tag--red">No</span>
+ <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--red">No</span>
                 }
               </td>
               <td class="govuk-body-s dfe-c-mono">@(string.IsNullOrEmpty(r.ContextReference) ? "—" : r.ContextReference)</td>
@@ -74,16 +87,19 @@
 
  @if (Model.TotalPages > 1)
     {
- <nav class="dfe-c-flex govuk-!-margin-top-3" style="gap:0.75rem;align-items:center;flex-wrap:wrap;" aria-label="Pagination">
- @if (Model.Page > 1)
-        {
- <a class="govuk-link" href="@Url.Action("NotificationEmailLog", "ModernAdminNotificationSettings", new { page = Model.Page - 1 })">Previous</a>
-        }
- @if (Model.Page < Model.TotalPages)
-        {
- <a class="govuk-link" href="@Url.Action("NotificationEmailLog", "ModernAdminNotificationSettings", new { page = Model.Page + 1 })">Next</a>
-        }
-      </nav>
+ Func<int, string> notifLogPageUrl = p =>
+   Url.Action("NotificationEmailLog", "ModernAdminNotificationSettings", new { page = p }) ?? "#";
+ <div class="govuk-!-margin-top-3">
+ @await Html.PartialAsync("~/Views/Modern/Shared/_GovUkPagination.cshtml", new GovUkPaginationViewModel {
+   CurrentPage = Model.Page,
+   TotalPages = Model.TotalPages,
+   PageUrl = notifLogPageUrl,
+   NavigationAriaLabel = "Notification email log pages"
+ })
+ </div>
     }
   }
+ </div>
+ </div>
+ </div>
 </div>

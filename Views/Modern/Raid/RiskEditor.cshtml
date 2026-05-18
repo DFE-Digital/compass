@@ -2,6 +2,7 @@
 @using Compass.Models
 @using Compass.Models.Modern.Work
 @using Compass.ViewModels.Modern
+@using Microsoft.AspNetCore.Html
 @{
   ViewData["Title"] = ViewBag.EditorTitle as string ?? "Risk";
   var lh = ViewBag.RiskLikelihoodOptions as List<RiskIssueNamedIntOption> ?? new List<RiskIssueNamedIntOption>();
@@ -22,8 +23,12 @@
   var opsMode = ViewBag.OperationsRiskEdit as bool? == true;
   var opsFormUrl = ViewBag.OperationsFormPostUrl as string;
   var opsListUrl = ViewBag.OperationsListUrl as string;
+  var opsSummary = ViewBag.OperationsRiskSummary as OperationsRiskEditorSummaryVm;
+  var workCtx = ViewBag.RaidRiskEditorWorkItemContext as RaidRiskEditorWorkItemContext;
   string? formPostAction;
-  if (opsMode && isEdit && !string.IsNullOrEmpty(opsFormUrl))
+  if (workCtx != null && !isEdit)
+    formPostAction = workCtx.FormPostAction;
+  else if (opsMode && isEdit && !string.IsNullOrEmpty(opsFormUrl))
     formPostAction = opsFormUrl;
   else if (isEdit)
     formPostAction = Url.Action("RiskEditPost", "ModernRaid", new { id = Model!.Id!.Value });
@@ -35,6 +40,15 @@
 }
 
 @section Breadcrumbs {
+  @if (workCtx != null)
+  {
+    <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+    <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernWork")">Work</a></li>
+    <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@workCtx.WorkDetailUrl">@workCtx.WorkTitle</a></li>
+    <li class="govuk-breadcrumbs__list-item" aria-current="page">@ViewData["Title"]</li>
+  }
+  else
+  {
   <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
   @if (opsMode)
   {
@@ -47,21 +61,68 @@
     <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Risks", "ModernRaid")">Risks</a></li>
   }
   <li class="govuk-breadcrumbs__list-item" aria-current="page">@ViewData["Title"]</li>
+  }
 }
 
-<div id="sc-raid-risk-editor" class="modern-work-page">
-<p class="dfe-c-body dfe-c-mb-3">
-  <a href="@(opsMode && !string.IsNullOrEmpty(opsListUrl) ? opsListUrl : (isEdit ? Url.Action("RiskDetail", "ModernRaid", new { id = Model.Id }) : Url.Action("Risks", "ModernRaid")))" class="dfe-c-link">← @(opsMode ? "Back to Active risks" : (isEdit ? "Back to risk" : "Back to risks"))</a>
+@{
+  var workItemChrome = ViewBag.WorkItem as WorkItem;
+}
+@if (workItemChrome != null)
+{
+  @await Html.PartialAsync("~/Views/Modern/Shared/_WorkItemChrome.cshtml", workItemChrome)
+}
+
+<div id="sc-raid-risk-editor" class="modern-work-page@(opsMode ? " modern-operations-raid-escalations" : "")">
+<p class="dfe-c-body govuk-!-margin-bottom-3">
+  <a href="@(workCtx != null ? workCtx.CancelUrl : (opsMode && !string.IsNullOrEmpty(opsListUrl) ? opsListUrl : (isEdit ? Url.Action("RiskDetail", "ModernRaid", new { id = Model.Id }) : Url.Action("Risks", "ModernRaid"))))" class="dfe-c-link">← @(workCtx != null ? "Back to risks" : (opsMode ? "Back to Active risks" : (isEdit ? "Back to risk" : "Back to risks")))</a>
 </p>
 
-<div class="dfe-c-page-title">
-  <div class="dfe-c-page-title__caption">@(opsMode ? "Operations · RAID" : "RAID")</div>
-  <h1 class="dfe-c-page-title__heading">@ViewBag.EditorTitle</h1>
-  <p class="dfe-c-page-title__lede">@(opsMode ? "Update any field including risk tier. A reason is required and is recorded in the risk notes." : "Record or update a risk for the RAID register. Associate it with a work item, FIPS product, or organisation-wide scope.")</p>
-</div>
+@{
+  var editorTitleStr = ViewBag.EditorTitle as string ?? "";
+  var riskEditorLede = opsMode
+    ? "Update any field including risk tier. A reason is required and is recorded in the risk notes."
+    : workCtx != null
+    ? "Use the same RAID register fields as when adding a risk from the RAID area. This risk is recorded against the current work item."
+    : "Record or update a risk for the RAID register. Associate it with a work item, a service register product, or organisation-wide scope.";
+  var headerCaption = opsMode ? "Operations · RAID" : (workCtx != null ? "Work item" : "RAID");
+}
+@await Html.PartialAsync("~/Views/Modern/Shared/_ModernPageHeader.cshtml", new ModernPageHeaderViewModel {
+  Caption = headerCaption,
+  Title = editorTitleStr,
+  Lede = new HtmlString($"<p class=\"govuk-body govuk-!-margin-bottom-0\">{riskEditorLede}</p>")
+})
 
-<div class="dfe-c-form-layout">
-  <div class="dfe-c-form-layout__main">
+@if (opsMode && isEdit && opsSummary != null)
+{
+  <section class="govuk-!-margin-bottom-4" aria-labelledby="raid-ops-edit-summary-h">
+    <h2 class="govuk-heading-m govuk-!-margin-bottom-2" id="raid-ops-edit-summary-h">Risk record</h2>
+    <dl class="govuk-summary-list govuk-summary-list--no-border">
+      <div class="govuk-summary-list__row">
+        <dt class="govuk-summary-list__key">Reference</dt>
+        <dd class="govuk-summary-list__value dfe-c-mono">@opsSummary.Reference</dd>
+      </div>
+      <div class="govuk-summary-list__row">
+        <dt class="govuk-summary-list__key">Title</dt>
+        <dd class="govuk-summary-list__value">@opsSummary.Title</dd>
+      </div>
+      <div class="govuk-summary-list__row">
+        <dt class="govuk-summary-list__key">Tier</dt>
+        <dd class="govuk-summary-list__value">@(string.IsNullOrWhiteSpace(opsSummary.TierName) ? "—" : opsSummary.TierName)</dd>
+      </div>
+      <div class="govuk-summary-list__row">
+        <dt class="govuk-summary-list__key">Status</dt>
+        <dd class="govuk-summary-list__value">@(string.IsNullOrWhiteSpace(opsSummary.StatusLabel) ? "—" : opsSummary.StatusLabel)</dd>
+      </div>
+      <div class="govuk-summary-list__row">
+        <dt class="govuk-summary-list__key">Inherent (score @opsSummary.RiskScore)</dt>
+        <dd class="govuk-summary-list__value">@opsSummary.InherentLabel</dd>
+      </div>
+    </dl>
+  </section>
+}
+
+<div class="govuk-grid-row">
+  <div class="govuk-grid-column-three-quarters">
     <div class="dfe-c-card dfe-c-card--plain">
       <form method="post" novalidate action="@formPostAction">
         @Html.AntiForgeryToken()
@@ -84,6 +145,19 @@
         </div>
         }
 
+        @if (workCtx != null)
+        {
+        <div class="govuk-form-group govuk-!-margin-bottom-6" id="AssociationKind" data-raid-field="association">
+          <div class="govuk-inset-text govuk-!-margin-top-0">
+            <p class="govuk-body govuk-!-margin-bottom-2"><strong>Associated with work item</strong></p>
+            <p class="govuk-body govuk-!-margin-bottom-0">@workCtx.WorkTitle</p>
+          </div>
+          <input type="hidden" name="AssociationKind" value="work" />
+          <input type="hidden" name="ProjectId" value="@workCtx.ProjectId" />
+        </div>
+        }
+        else
+        {
         <div class="govuk-form-group govuk-!-margin-bottom-6" id="AssociationKind" data-raid-field="association">
           <fieldset class="govuk-fieldset" aria-describedby="raid-risk-association-hint">
             <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Associated with</legend>
@@ -109,12 +183,13 @@
 
             <div class="govuk-radios__item">
               <input class="govuk-radios__input" id="raid-risk-assoc-product" name="AssociationKind" type="radio" value="product" data-aria-controls="conditional-raid-risk-assoc-product" @(assoc == "product" ? "checked" : null) />
-              <label class="govuk-label govuk-radios__label" for="raid-risk-assoc-product">Product (FIPS)</label>
+              <label class="govuk-label govuk-radios__label" for="raid-risk-assoc-product">Service register product</label>
             </div>
             <div class="govuk-radios__conditional@(assoc != "product" ? " govuk-radios__conditional--hidden" : null)" id="conditional-raid-risk-assoc-product">
               <div class="govuk-form-group govuk-!-margin-bottom-0">
-                <label class="govuk-label" for="PrimaryProductId">FIPS product</label>
-                <select class="govuk-select govuk-!-width-full" id="PrimaryProductId" name="PrimaryProductId">
+                <label class="govuk-label" for="PrimaryProductId">Product</label>
+                <div id="PrimaryProductId-hint" class="govuk-hint">From the Operations service register (active services).</div>
+                <select class="govuk-select govuk-!-width-full" id="PrimaryProductId" name="PrimaryProductId" aria-describedby="PrimaryProductId-hint">
                   <option value="">— Select —</option>
                   @foreach (var o in fp)
                   {
@@ -131,18 +206,17 @@
             </div>
             <div class="govuk-radios__conditional@(assoc != "organisation" ? " govuk-radios__conditional--hidden" : null)" id="conditional-raid-risk-assoc-org">
               <div class="govuk-form-group govuk-!-margin-bottom-0">
-                <div class="govuk-inset-text govuk-!-margin-bottom-0">
-                  This is a risk which is not associated with any specific product or work item. This could relate to people or funding for example.
-                </div>
+                <p class="govuk-body-s govuk-!-margin-bottom-0">This is a risk which is not associated with any specific product or work item. This could relate to people or funding for example.</p>
               </div>
             </div>
             </div>
           </fieldset>
         </div>
+        }
 
         @if (isEdit)
         {
-          <input type="hidden" name="Title" value="@Model.Title" />
+          <input type="hidden" asp-for="Title" />
           <div class="govuk-form-group" data-raid-field="title">
             <span class="govuk-label">Title</span>
             <p class="govuk-body govuk-!-margin-bottom-1 govuk-!-font-weight-bold" id="raid-risk-title-readonly">@Model.Title</p>
@@ -396,10 +470,10 @@
           </div>
         </fieldset>
 
-        <div data-raid-field="owner">
+        <div class="user-picker-wrapper user-picker-wrapper--full-width" data-raid-field="owner">
           @await Html.PartialAsync("~/Views/Shared/_UserPicker.cshtml", ViewBag.OwnerUserPicker as UserPickerViewModel)
         </div>
-        <div data-raid-field="sro">
+        <div class="user-picker-wrapper user-picker-wrapper--full-width" data-raid-field="sro">
           @await Html.PartialAsync("~/Views/Shared/_UserPicker.cshtml", ViewBag.SroUserPicker as UserPickerViewModel)
         </div>
 
@@ -464,13 +538,13 @@
           }
           else
           {
-            <a class="govuk-button govuk-button--secondary" href="@Url.Action("Risks", "ModernRaid")">Cancel</a>
+            <a class="govuk-button govuk-button--secondary" href="@(workCtx != null ? workCtx.CancelUrl : Url.Action("Risks", "ModernRaid"))">Cancel</a>
           }
         </div>
       </form>
     </div>
   </div>
-  <div class="dfe-c-form-layout__aside">
+  <div class="govuk-grid-column-one-quarter">
     @{
       var matrixJson = ViewBag.RiskMatrixScoresJson as string;
     }

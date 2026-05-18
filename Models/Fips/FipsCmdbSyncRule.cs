@@ -31,6 +31,15 @@ public static class FipsCmdbSyncRuleMatchKinds
     public static readonly IReadOnlyList<string> All = [Contains, Regex];
 }
 
+/// <summary>What happens when a CMDB sync rule matches.</summary>
+public static class FipsCmdbSyncRuleActions
+{
+    public const string SetStatus = "SetStatus";
+    public const string SetEnterpriseService = "SetEnterpriseService";
+
+    public static readonly IReadOnlyList<string> All = [SetStatus, SetEnterpriseService];
+}
+
 [Table("FipsCmdbSyncRules")]
 public class FipsCmdbSyncRule
 {
@@ -53,6 +62,14 @@ public class FipsCmdbSyncRule
 
     /// <summary>Status applied when the rule matches (typically <see cref="CMDBProductStatus.Rejected"/> or <see cref="CMDBProductStatus.Inactive"/>).</summary>
     public CMDBProductStatus TargetStatus { get; set; } = CMDBProductStatus.Rejected;
+
+    /// <summary>
+    /// <see cref="FipsCmdbSyncRuleActions.SetStatus"/> — first matching rule sets <see cref="TargetStatus"/>.
+    /// <see cref="FipsCmdbSyncRuleActions.SetEnterpriseService"/> — sets <see cref="CMDBProduct.IsEnterpriseService"/> to true (in addition to status rules).
+    /// </summary>
+    [Required]
+    [MaxLength(30)]
+    public string Action { get; set; } = FipsCmdbSyncRuleActions.SetStatus;
 
     public int SortOrder { get; set; }
 

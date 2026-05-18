@@ -8,6 +8,7 @@ using Compass.Models.Modern.Work;
 using Compass.Services;
 using Compass.Services.Fips;
 using Compass.Services.Raid;
+using Compass.ViewModels;
 using Compass.ViewModels.Modern;
 using CsvHelper;
 using CsvHelper.Configuration;
@@ -20,6 +21,7 @@ namespace Compass.Controllers.Modern;
 /// <summary>RAID cross-service area at <c>/modern/raid</c> (Risks, Issues, Dependencies, Assumptions, etc.).</summary>
 [Authorize]
 [Route("modern/raid")]
+[ServiceFilter(typeof(Compass.Filters.RaidFeatureGateFilter))]
 public partial class ModernRaidController : Controller
 {
     private readonly CompassDbContext _db;
@@ -27,19 +29,28 @@ public partial class ModernRaidController : Controller
     private readonly IBusinessAreaLeadershipService _businessAreaLeadership;
     private readonly IDirectorateLeadershipService _directorateLeadership;
     private readonly IPermissionService _permissions;
+    private readonly IRaidRiskEditorFormService _raidRiskEditorForm;
+    private readonly IRaidIssueEditorFormService _raidIssueEditorForm;
+    private readonly IReturnStatusService _returnStatus;
 
     public ModernRaidController(
         CompassDbContext db,
         IBusinessAreaAdminService businessAreaAdmins,
         IBusinessAreaLeadershipService businessAreaLeadership,
         IDirectorateLeadershipService directorateLeadership,
-        IPermissionService permissions)
+        IPermissionService permissions,
+        IRaidRiskEditorFormService raidRiskEditorForm,
+        IRaidIssueEditorFormService raidIssueEditorForm,
+        IReturnStatusService returnStatus)
     {
         _db = db;
         _businessAreaAdmins = businessAreaAdmins;
         _businessAreaLeadership = businessAreaLeadership;
         _directorateLeadership = directorateLeadership;
         _permissions = permissions;
+        _raidRiskEditorForm = raidRiskEditorForm;
+        _raidIssueEditorForm = raidIssueEditorForm;
+        _returnStatus = returnStatus;
     }
 
     private void SetRaidChrome(string subItem)
@@ -60,7 +71,7 @@ public partial class ModernRaidController : Controller
     }
 
     private Task<List<RiskIssueNamedIntOption>> RaidFipsProductSelectOptionsAsync(CancellationToken cancellationToken) =>
-        FipsProductRaidQuery.BuildActiveCmdbProductServiceSelectOptionsForRaidAsync(_db, cancellationToken);
+        FipsProductRaidQuery.BuildActiveServiceRegisterSelectOptionsForRaidAsync(_db, cancellationToken);
 
     /// <summary>All non-deleted work items for RAID register editors (no artificial cap).</summary>
     private async Task<List<RiskIssueNamedIntOption>> RaidEditorProjectOptionsFullAsync(CancellationToken cancellationToken)
@@ -95,7 +106,8 @@ public partial class ModernRaidController : Controller
             DefaultUserId = ownerUserId,
             DefaultName = OwnerRow() is { } o ? DisplayName(o) : null,
             DefaultEmail = OwnerRow()?.Email,
-            InputIdSuffix = "owner"
+            InputIdSuffix = "owner",
+            UseGovUkStyling = true
         };
 
         ViewBag.SroUserPicker = new UserPickerViewModel
@@ -105,7 +117,8 @@ public partial class ModernRaidController : Controller
             DefaultUserId = sroUserId,
             DefaultName = SroRow() is { } s ? DisplayName(s) : null,
             DefaultEmail = SroRow()?.Email,
-            InputIdSuffix = "sro"
+            InputIdSuffix = "sro",
+            UseGovUkStyling = true
         };
     }
 
@@ -147,283 +160,9 @@ public partial class ModernRaidController : Controller
             adminBusinessAreaIds = adminIds.Union(leadershipIds).Distinct().ToList();
         }
 
-        // Personal dashboard: only records the signed-in user created, owns (including email-only on risks), or is assigned to via a linked action.
-        var riskScope = RaidDashboardRiskDirectToUser(userId, emailLower);
-        var issueScope = RaidDashboardIssueDirectToUser(userId);
-
-        var filRisksQ = _db.Risks.AsNoTracking().Where(r => !r.IsDeleted).Where(riskScope);
-        var filIssuesQ = _db.Issues.AsNoTracking().Where(i => !i.IsDeleted).Where(issueScope);
-
-        var openRiskCount = await filRisksQ.Where(r => r.ClosedDate == null).CountAsync(cancellationToken);
-        var openIssueCount = await filIssuesQ.Where(i => i.ClosedDate == null).CountAsync(cancellationToken);
-
-        var issueSeverityLabelList = await (
-                from i in filIssuesQ
-                where i.ClosedDate == null
-                join sv in _db.IssueSeverities.AsNoTracking() on i.SeverityId equals sv.Id into sj
-                from sv in sj.DefaultIfEmpty()
-                select sv != null ? sv.Label : (i.Severity ?? "Unassigned"))
-            .ToListAsync(cancellationToken);
-        var openIssueSeverityBreakdown = issueSeverityLabelList
-            .GroupBy(l => l)
-            .Select(g => new ModernRaidLabelCountVm(g.Key, g.Count()))
-            .OrderByDescending(x => x.Count)
-            .ToList();
-
-        var issuePriorityLabelList = await (
-                from i in filIssuesQ
-                where i.ClosedDate == null
-                join pv in _db.IssuePriorities.AsNoTracking() on i.PriorityId equals pv.Id into pj
-                from pv in pj.DefaultIfEmpty()
-                select pv != null ? pv.Label : (string.IsNullOrWhiteSpace(i.Priority) ? "Unassigned" : i.Priority!))
-            .ToListAsync(cancellationToken);
-        var openIssuePriorityBreakdown = issuePriorityLabelList
-            .GroupBy(l => l)
-            .Select(g => new ModernRaidLabelCountVm(g.Key, g.Count()))
-            .OrderByDescending(x => x.Count)
-            .ToList();
-
-        var openRiskScores = await filRisksQ
-            .Where(r => r.ClosedDate == null)
-            .Select(r => r.RiskScore)
-            .ToListAsync(cancellationToken);
-        var it1 = 0;
-        var it2 = 0;
-        var it3 = 0;
-        foreach (var lab in issueSeverityLabelList)
-            BucketIssueSeverityTier(lab, ref it1, ref it2, ref it3);
-
-        var openRiskBandCrisisCritical = openRiskScores.Count(s => s >= 16);
-        var openRiskBandModerate = openRiskScores.Count(s => s is >= 6 and <= 15);
-        var openRiskBandMarginal = openRiskScores.Count(s => s <= 5);
-
-        var matrixCells = new List<ModernRaidMatrixCellVm>();
-        var cellMap = new Dictionary<(int Impact, int Likelihood), List<int>>();
-        var openCells = await filRisksQ
-            .Where(r => r.ClosedDate == null)
-            .Select(r => new { r.Id, r.ImpactRating, r.LikelihoodRating })
-            .ToListAsync(cancellationToken);
-        foreach (var x in openCells)
-        {
-            var ir = Math.Clamp(x.ImpactRating, 1, 5);
-            var lr = Math.Clamp(x.LikelihoodRating, 1, 5);
-            var key = (ir, lr);
-            if (!cellMap.TryGetValue(key, out var list))
-            {
-                list = new List<int>();
-                cellMap[key] = list;
-            }
-
-            list.Add(x.Id);
-        }
-
-        var allCellRiskIds = cellMap.Values.SelectMany(ids => ids).Distinct().ToList();
-        var riskMetaById = new Dictionary<int, ModernRaidMatrixCellRiskVm>();
-        if (allCellRiskIds.Count > 0)
-        {
-            var fullRisks = await filRisksQ
-                .Where(r => allCellRiskIds.Contains(r.Id))
-                .AsSplitQuery()
-                .Include(r => r.RiskTier)
-                .Include(r => r.RiskStatus)
-                .Include(r => r.Likelihood)
-                .Include(r => r.ImpactLevel)
-                .Include(r => r.OwnerUser)
-                .Include(r => r.Project).ThenInclude(p => p!.BusinessAreaLookup)
-                .Include(r => r.PrimaryProduct)
-                .Include(r => r.RiskBusinessAreas).ThenInclude(x => x.BusinessAreaLookup)
-                .ToListAsync(cancellationToken);
-            foreach (var r in fullRisks)
-            {
-                var rel = RaidRegisterTableFormatting.BuildRiskRelation(r);
-                string? workItemUrl = rel.Kind == RaidRegisterRelationKinds.Work && r.ProjectId is int wpid && wpid > 0
-                    ? Url.Action("Detail", "ModernWork", new { id = wpid, tab = "risks" })
-                    : null;
-                riskMetaById[r.Id] = new ModernRaidMatrixCellRiskVm(
-                    r.Id,
-                    $"R-{r.Id:D4}",
-                    r.Title ?? "—",
-                    RaidRegisterTableFormatting.FormatRiskBusinessAreaLabels(r),
-                    r.RiskTier?.Name,
-                    rel.Kind,
-                    rel.ProjectId,
-                    rel.Target,
-                    workItemUrl,
-                    r.RiskStatus?.Label ?? r.Status,
-                    r.OwnerUser != null ? (r.OwnerUser.Name ?? r.OwnerUser.Email) : r.OwnerEmail,
-                    r.Likelihood?.Label ?? r.LikelihoodRating.ToString(),
-                    r.ImpactLevel?.Label ?? r.ImpactRating.ToString(),
-                    r.RiskScore);
-            }
-        }
-
-        for (var impact = 5; impact >= 1; impact--)
-        {
-            for (var lik = 1; lik <= 5; lik++)
-            {
-                cellMap.TryGetValue((impact, lik), out var ids);
-                var cnt = ids?.Count ?? 0;
-                var cellScore = impact * lik;
-                IReadOnlyList<ModernRaidMatrixCellRiskVm> cellRisks = Array.Empty<ModernRaidMatrixCellRiskVm>();
-                if (cnt > 0 && ids != null)
-                {
-                    cellRisks = ids
-                        .Select(id => riskMetaById.TryGetValue(id, out var m)
-                            ? m
-                            : new ModernRaidMatrixCellRiskVm(
-                                id,
-                                $"R-{id:D4}",
-                                "—",
-                                null,
-                                null,
-                                RaidRegisterRelationKinds.Unknown,
-                                null,
-                                null,
-                                null,
-                                null,
-                                "—",
-                                "—",
-                                "—",
-                                0))
-                        .OrderBy(r => r.Reference, StringComparer.Ordinal)
-                        .ToList();
-                }
-
-                matrixCells.Add(new ModernRaidMatrixCellVm(
-                    impact,
-                    lik,
-                    cnt,
-                    cellScore,
-                    RaidMatrixCellTone(cellScore),
-                    cellRisks));
-            }
-        }
-
-        var utcNow = DateTime.UtcNow;
-        const int registerStaleAfterDays = 30;
-        const int ratingUnchangedAfterDays = 90;
-
-        int DaysSinceUtc(DateTime t) => (int)Math.Floor((utcNow - t).TotalDays);
-
-        var openRiskHealth = await filRisksQ
-            .Where(r => r.ClosedDate == null)
-            .Select(r => new { r.Id, r.Title, r.CreatedAt, r.UpdatedAt })
-            .ToListAsync(cancellationToken);
-        var openIssueHealth = await filIssuesQ
-            .Where(i => i.ClosedDate == null)
-            .Select(i => new { i.Id, i.Title, i.CreatedAt, i.UpdatedAt })
-            .ToListAsync(cancellationToken);
-
-        var lastRiskRatingUtc = await RaidDashboardAuditHealth.GetLastRiskRatingChangeUtcByRiskIdAsync(
-            _db, openRiskHealth.Select(x => x.Id).ToList(), cancellationToken);
-        var lastIssueRatingUtc = await RaidDashboardAuditHealth.GetLastIssueRatingChangeUtcByIssueIdAsync(
-            _db, openIssueHealth.Select(x => x.Id).ToList(), cancellationToken);
-
-        var risksInherentUnchanged3Months = new List<ModernRaidAttentionRowVm>(openRiskHealth.Count);
-        foreach (var x in openRiskHealth)
-        {
-            var lastR = lastRiskRatingUtc.GetValueOrDefault(x.Id, x.CreatedAt);
-            var dRt = DaysSinceUtc(lastR);
-            if (dRt > ratingUnchangedAfterDays)
-            {
-                var dUp = DaysSinceUtc(x.UpdatedAt);
-                risksInherentUnchanged3Months.Add(
-                    new ModernRaidAttentionRowVm("Risk", x.Id, $"R-{x.Id:D4}", x.Title, dUp, dRt, dUp > registerStaleAfterDays, true));
-            }
-        }
-
-        risksInherentUnchanged3Months = risksInherentUnchanged3Months
-            .OrderByDescending(a => a.DaysSinceLastRatingChange)
-            .ToList();
-
-        var staleOpenRiskCount = openRiskHealth.Count(x => DaysSinceUtc(x.UpdatedAt) > registerStaleAfterDays);
-        var staleOpenIssueCount = openIssueHealth.Count(x => DaysSinceUtc(x.UpdatedAt) > registerStaleAfterDays);
-
-        var stagnantOpenIssueCount = 0;
-        foreach (var x in openIssueHealth)
-        {
-            var last = lastIssueRatingUtc.GetValueOrDefault(x.Id, x.CreatedAt);
-            if (DaysSinceUtc(last) > ratingUnchangedAfterDays)
-                stagnantOpenIssueCount++;
-        }
-
-        var scopeSummary = userId is not null
-            ? "Open risks, open issues, the matrix, and the tables below count only records you created, own (including by email on risks), or are assigned to through a linked action."
-            : "Open risks, open issues, the matrix, and the tables below count only risks you own by email until your sign-in is linked in Compass users.";
-
-        var meanScore = openRiskScores.Count == 0
-            ? (double?)null
-            : Math.Round(openRiskScores.Average(s => (double)s), 1);
-        var elevated = openRiskScores.Count(s => s >= 15);
-
-        var escRiskLabels = await (
-                from r in filRisksQ
-                where r.ClosedDate == null
-                join s in _db.RiskStatuses.AsNoTracking() on r.RiskStatusId equals s.Id into gj
-                from s in gj.DefaultIfEmpty()
-                select s != null ? s.Label : (r.Status ?? ""))
-            .ToListAsync(cancellationToken);
-        var escIssueLabels = await (
-                from i in filIssuesQ
-                where i.ClosedDate == null
-                join s in _db.IssueStatuses.AsNoTracking() on i.StatusId equals s.Id into gj
-                from s in gj.DefaultIfEmpty()
-                select s != null ? s.Label : (i.Status ?? ""))
-            .ToListAsync(cancellationToken);
-        var escalatedCount = escRiskLabels.Count(RaidLooksEscalated) + escIssueLabels.Count(RaidLooksEscalated);
-
-        var riskCount = await filRisksQ.CountAsync(cancellationToken);
-        var issueCount = await filIssuesQ.CountAsync(cancellationToken);
-
-        var vm = new ModernRaidDashboardViewModel
-        {
-            ViewerDisplayName = displayName,
-            ScopeSummary = scopeSummary,
-            LinkedWorkItemCount = projectIds.Count,
-            LinkedProductCount = productServiceIds.Count,
-            RiskCount = riskCount,
-            IssueCount = issueCount,
-            DependencyCount = 0,
-            AssumptionCount = 0,
-            OpenRiskCount = openRiskCount,
-            OpenIssueCount = openIssueCount,
-            ClosedRiskCount = 0,
-            ClosedIssueCount = 0,
-            ElevatedOpenRiskCount = elevated,
-            MeanOpenRiskScore = meanScore,
-            OpenRiskStatusBreakdown = Array.Empty<ModernRaidLabelCountVm>(),
-            OpenIssueStatusBreakdown = Array.Empty<ModernRaidLabelCountVm>(),
-            OpenRiskTierBreakdown = Array.Empty<ModernRaidLabelCountVm>(),
-            OpenRiskScoreBands = Array.Empty<ModernRaidLabelCountVm>(),
-            OrganisationTotals = new ModernRaidOrganisationTotalsVm(0, 0, 0, 0, 0, 0),
-            DataAsAtUtc = DateTime.UtcNow,
-            OpenCrisisCriticalRiskCount = openRiskBandCrisisCritical,
-            OpenModerateRiskCount = openRiskBandModerate,
-            OpenMarginalNegligibleRiskCount = openRiskBandMarginal,
-            EscalatedOpenRecordCount = escalatedCount,
-            OpenIssueTier1ApproxCount = it1,
-            OpenIssueTier2ApproxCount = it2,
-            OpenIssueTier3ApproxCount = it3,
-            OpenIssueSeverityBreakdown = openIssueSeverityBreakdown,
-            OpenIssuePriorityBreakdown = openIssuePriorityBreakdown,
-            MatrixCells = matrixCells,
-            TopRisks = Array.Empty<ModernRaidTopRiskVm>(),
-            DashboardRiskRows = Array.Empty<ModernRaidDashboardRiskRegisterVm>(),
-            DashboardIssueRows = Array.Empty<ModernRaidDashboardIssueRegisterVm>(),
-            ImpactTypeSummaries = Array.Empty<ModernRaidImpactTypeSummaryVm>(),
-            RecentMovementRows = Array.Empty<ModernRaidMovementRowVm>(),
-            PortfolioOptions = Array.Empty<ModernRaidDashboardProjectOption>(),
-            SelectedPortfolioProjectId = null,
-            ActiveReportTab = "summary",
-            OrganisationWideDashboard = false,
-            StaleOpenRiskCount = staleOpenRiskCount,
-            StaleOpenIssueCount = staleOpenIssueCount,
-            StagnantOpenRiskCount = risksInherentUnchanged3Months.Count,
-            StagnantOpenIssueCount = stagnantOpenIssueCount,
-            AttentionRows = Array.Empty<ModernRaidAttentionRowVm>(),
-            RisksInherentRatingUnchangedThreePlusMonths = risksInherentUnchanged3Months,
-            ViewerIsBusinessAreaAdmin = adminBusinessAreaIds.Count > 0
-        };
+        var vm = await BuildRaidDashboardViewModelAsync(
+            userId, emailLower, displayName, projectIds, productServiceIds, adminBusinessAreaIds,
+            cancellationToken: cancellationToken);
 
         return View("~/Views/Modern/Raid/Dashboard.cshtml", vm);
     }
@@ -1122,6 +861,18 @@ public partial class ModernRaidController : Controller
     }
 
     private static string NormalizeRaidEntityType(string entityType) => entityType.Trim().ToLowerInvariant();
+
+    /// <summary>Detail page URL for a dependency endpoint entity, when one exists.</summary>
+    private static string? RaidDependencyEntityDetailUrl(string entityType, int id)
+    {
+        return NormalizeRaidEntityType(entityType) switch
+        {
+            "project" => $"/modern/work/detail/{id}",
+            "risk" => $"/modern/raid/risks/{id}",
+            "issue" => $"/modern/raid/issues/{id}",
+            _ => null
+        };
+    }
 
     private static string Snippet(string? text, int maxChars)
     {

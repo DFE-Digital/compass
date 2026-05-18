@@ -1,5 +1,6 @@
 using System;
 using Compass.Models;
+using Compass.Services.Raid;
 using Compass.ViewModels.Modern;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -274,13 +275,30 @@ public partial class ModernRaidController
         string RiskUrl(int id) => Url.Action("RiskDetail", "ModernRaid", new { id }) ?? "#";
         string IssueUrl(int id) => Url.Action("IssueDetail", "ModernRaid", new { id }) ?? "#";
 
+        var allTiers = await _db.RiskTiers.AsNoTracking()
+            .Where(t => t.IsActive)
+            .OrderBy(t => t.SortOrder)
+            .ToListAsync(cancellationToken);
+        var levelToTierName = new Dictionary<int, string>();
+        foreach (var t in allTiers.Where(x => !x.IsProposedTier))
+        {
+            var lv = RiskTierGovernance.ResolveLevel(t, allTiers);
+            if (!levelToTierName.ContainsKey(lv))
+                levelToTierName[lv] = t.Name ?? "—";
+        }
+
+        string TierNameForIssue(Issue i)
+        {
+            var gl = MapIssueToGovernanceLevel(i);
+            return levelToTierName.TryGetValue(gl, out var n) ? n : "—";
+        }
+
         if (slice.StartsWith("risk-", StringComparison.Ordinal))
         {
             var list = await RaidTierReportingRiskQuery(search, projectId, null, effectiveBa)
                 .Include(r => r.Project).ThenInclude(p => p!.BusinessAreaLookup)
                 .Include(r => r.PrimaryProduct)
-                .Include(r => r.OwnerUser)
-                .Include(r => r.RiskStatus)
+                .Include(r => r.RiskTier)
                 .Include(r => r.Likelihood)
                 .Include(r => r.ImpactLevel)
                 .Include(r => r.RiskBusinessAreas).ThenInclude(rba => rba.BusinessAreaLookup)
@@ -305,26 +323,19 @@ public partial class ModernRaidController
             var title = $"{dirLabel} — risks — {slice.Replace("risk-", "", StringComparison.Ordinal)}";
             items = filtered
                 .Take(500)
-                .Select(r =>
+                .Select(r => new RaidTierReportingDrillItemVm
                 {
-                    var rel = RaidRegisterTableFormatting.BuildRiskRelation(r);
-                    return new RaidTierReportingDrillItemVm
-                    {
-                        Kind = "risk",
-                        Id = r.Id,
-                        Title = r.Title,
-                        Url = RiskUrl(r.Id),
-                        Reference = $"R-{r.Id:D4}",
-                        BusinessAreaLabel = RaidRegisterTableFormatting.FormatRiskBusinessAreaLabels(r),
-                        RelationKind = rel.Kind,
-                        RelationProjectId = rel.ProjectId,
-                        RelationTarget = rel.Target,
-                        Status = r.RiskStatus?.Label ?? r.Status,
-                        Owner = r.OwnerUser != null ? (r.OwnerUser.Name ?? r.OwnerUser.Email) : r.OwnerEmail,
-                        LikelihoodLabel = r.Likelihood?.Label ?? r.LikelihoodRating.ToString(),
-                        ImpactLabel = r.ImpactLevel?.Label ?? r.ImpactRating.ToString(),
-                        RiskScore = r.RiskScore
-                    };
+                    Kind = "risk",
+                    Id = r.Id,
+                    Title = r.Title,
+                    Url = RiskUrl(r.Id),
+                    Reference = $"R-{r.Id:D4}",
+                    TierName = r.RiskTier?.Name ?? "—",
+                    BusinessAreaLabel = RaidRegisterTableFormatting.FormatRiskBusinessAreaLabels(r),
+                    LikelihoodLabel = r.Likelihood?.Label ?? r.LikelihoodRating.ToString(),
+                    ImpactLabel = r.ImpactLevel?.Label ?? r.ImpactRating.ToString(),
+                    RiskScore = r.RiskScore,
+                    OpenedDate = FormatRaidDrillOpenedDate(r.IdentifiedDate ?? r.CreatedAt)
                 })
                 .ToList();
 
@@ -335,10 +346,8 @@ public partial class ModernRaidController
         {
             var issues = await IssueQueryableAlignedToRiskRegisterFilters(projectId, null, effectiveBa, search)
                 .Include(i => i.SeverityLookup)
-                .Include(i => i.StatusLookup)
                 .Include(i => i.Project).ThenInclude(p => p!.BusinessAreaLookup)
                 .Include(i => i.PrimaryProduct)
-                .Include(i => i.OwnerUser)
                 .Include(i => i.IssueBusinessAreas).ThenInclude(iba => iba.BusinessAreaLookup)
                 .Include(i => i.IssueDivisions)
                 .OrderByDescending(i => i.UpdatedAt)
@@ -362,24 +371,17 @@ public partial class ModernRaidController
             var title = $"{dirLabel} — issues — {slice.Replace("issue-", "", StringComparison.Ordinal)}";
             items = filtered
                 .Take(500)
-                .Select(i =>
+                .Select(i => new RaidTierReportingDrillItemVm
                 {
-                    var rel = RaidRegisterTableFormatting.BuildIssueRelation(i);
-                    return new RaidTierReportingDrillItemVm
-                    {
-                        Kind = "issue",
-                        Id = i.Id,
-                        Title = i.Title,
-                        Url = IssueUrl(i.Id),
-                        Reference = $"I-{i.Id:D4}",
-                        BusinessAreaLabel = RaidRegisterTableFormatting.FormatIssueBusinessAreaLabels(i),
-                        RelationKind = rel.Kind,
-                        RelationProjectId = rel.ProjectId,
-                        RelationTarget = rel.Target,
-                        Status = i.StatusLookup?.Label ?? i.Status,
-                        Owner = i.OwnerUser != null ? (i.OwnerUser.Name ?? i.OwnerUser.Email) : null,
-                        IssueSeverityLabel = i.SeverityLookup?.Label ?? i.Severity
-                    };
+                    Kind = "issue",
+                    Id = i.Id,
+                    Title = i.Title,
+                    Url = IssueUrl(i.Id),
+                    Reference = $"I-{i.Id:D4}",
+                    TierName = TierNameForIssue(i),
+                    BusinessAreaLabel = RaidRegisterTableFormatting.FormatIssueBusinessAreaLabels(i),
+                    IssueSeverityLabel = i.SeverityLookup?.Label ?? i.Severity,
+                    OpenedDate = FormatRaidDrillOpenedDate(i.DetectedDate)
                 })
                 .ToList();
 

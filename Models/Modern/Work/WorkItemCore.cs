@@ -64,6 +64,18 @@ public class WorkItem
     public ICollection<Milestone> Milestones { get; set; } = new List<Milestone>();
     public ICollection<MonthlyUpdate> MonthlyUpdates { get; set; } = new List<MonthlyUpdate>();
     public ICollection<WorkItemRiskOrIssue> RiskOrIssues { get; set; } = new List<WorkItemRiskOrIssue>();
+
+    /// <summary>RAID assumptions scoped to this work item (see project link on assumption records).</summary>
+    public ICollection<WorkItemAssumptionRef> Assumptions { get; set; } = new List<WorkItemAssumptionRef>();
+}
+
+/// <summary>Lightweight assumption row for work item detail.</summary>
+public class WorkItemAssumptionRef
+{
+    public int Id { get; set; }
+    public string Description { get; set; } = "";
+    public string? Criticality { get; set; }
+    public string? Status { get; set; }
 }
 
 public class WorkItemPriorityOutcome
@@ -100,6 +112,8 @@ public class WorkItemContact
     public int? ContactRoleTypeId { get; set; }
     /// <summary>When <see cref="ContactRoleTypeId"/> is custom (5), the label stored in <see cref="ProjectContact.Role"/>.</summary>
     public string? RoleName { get; set; }
+    /// <summary>Display name stored on <see cref="Compass.Models.ProjectContact.Name"/> (editable on the work item).</summary>
+    public string DisplayName { get; set; } = "";
     public User? AppUser { get; set; }
 }
 
@@ -181,6 +195,9 @@ public class MonthlyUpdate
     public DateTime ReportMonth { get; set; }
     public string? Narrative { get; set; }
     public int? RagStatusId { get; set; }
+    /// <summary>Resolved display label for submitted returns (includes legacy/history fallbacks).</summary>
+    public string? RagDisplayName { get; set; }
+    public string? RagCssClass { get; set; }
     public string? RagJustification { get; set; }
     public string? PathToGreen { get; set; }
     public string? SubmittedBy { get; set; }

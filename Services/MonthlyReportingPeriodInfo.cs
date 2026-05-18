@@ -5,4 +5,5 @@ public sealed record MonthlyReportingPeriodInfo(
     DateTime PeriodStart,
     DateTime PeriodEnd,
     DateTime SubmissionOpens,
-    DateTime SubmissionCloses);
+    DateTime SubmissionCloses,
+    string PeriodLabel);

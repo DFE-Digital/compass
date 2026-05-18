@@ -14,15 +14,23 @@ public sealed class OperationsRiskEditService(CompassDbContext db) : IOperations
 {
     private readonly record struct AssociationBind(string StoredKind, int? ProjectId, int? PrimaryProductId);
 
-    public async Task LoadEditorViewBagAsync(Controller controller, int? ownerUserId, int? sroUserId, CancellationToken cancellationToken)
+    public async Task LoadEditorViewBagAsync(
+        Controller controller,
+        ModernRaidRiskEditorForm form,
+        CancellationToken cancellationToken)
     {
-        controller.ViewBag.RiskTierOptions = await db.RiskTiers.AsNoTracking()
+        var ownerUserId = form.OwnerUserId;
+        var sroUserId = form.SroUserId;
+
+        var tierOptions = await db.RiskTiers.AsNoTracking()
             .Where(x => x.IsActive)
             .OrderBy(x => x.SortOrder)
             .ThenBy(x => x.IsProposedTier)
             .ThenBy(x => x.Name)
             .Select(x => new RiskIssueNamedIntOption { Id = x.Id, Name = x.IsProposedTier ? $"{x.Name} (proposed)" : x.Name })
             .ToListAsync(cancellationToken);
+        await EnsureTierOptionAsync(tierOptions, form.RiskTierId, cancellationToken);
+        controller.ViewBag.RiskTierOptions = tierOptions;
 
         controller.ViewBag.RiskLikelihoodOptions = await db.RiskLikelihoods.AsNoTracking()
             .Where(x => x.IsActive).OrderBy(x => x.SortOrder)
@@ -45,9 +53,36 @@ public sealed class OperationsRiskEditService(CompassDbContext db) : IOperations
         controller.ViewBag.RiskTreatmentOptions = await db.RiskTreatments.AsNoTracking()
             .Where(x => x.IsActive).OrderBy(x => x.SortOrder)
             .Select(x => new RiskIssueNamedIntOption { Id = x.Id, Name = x.Label, Description = x.Description }).ToListAsync(cancellationToken);
-        controller.ViewBag.ProjectOptions = await RaidEditorProjectOptionsFullAsync(cancellationToken);
-        controller.ViewBag.FipsProductOptions = await RaidFipsProductSelectOptionsAsync(cancellationToken);
+        var projectOptions = await RaidEditorProjectOptionsFullAsync(cancellationToken);
+        await EnsureProjectOptionAsync(projectOptions, form.ProjectId, cancellationToken);
+        controller.ViewBag.ProjectOptions = projectOptions;
+
+        var productOptions = await RaidFipsProductSelectOptionsAsync(cancellationToken);
+        await EnsureProductOptionAsync(productOptions, form.PrimaryProductId, cancellationToken);
+        controller.ViewBag.FipsProductOptions = productOptions;
+
         await PopulateUserPickersAsync(controller, ownerUserId, sroUserId, cancellationToken);
+
+        if (form.Id is int riskId && riskId > 0)
+        {
+            var riskRow = await db.Risks.AsNoTracking()
+                .Include(r => r.RiskTier)
+                .Include(r => r.RiskStatus)
+                .FirstOrDefaultAsync(r => r.Id == riskId && !r.IsDeleted, cancellationToken);
+            if (riskRow != null)
+            {
+                var score = riskRow.RiskScore;
+                controller.ViewBag.OperationsRiskSummary = new OperationsRiskEditorSummaryVm
+                {
+                    Reference = $"R-{riskRow.Id:D4}",
+                    Title = riskRow.Title ?? "",
+                    TierName = riskRow.RiskTier?.Name,
+                    StatusLabel = riskRow.RiskStatus?.Label ?? riskRow.Status,
+                    RiskScore = score,
+                    InherentLabel = InherentLabelFromScore(score)
+                };
+            }
+        }
 
         var likScores = await db.RiskLikelihoods.AsNoTracking()
             .Where(x => x.IsActive).ToDictionaryAsync(x => x.Id, x => x.MatrixScore, cancellationToken);
@@ -372,7 +407,7 @@ public sealed class OperationsRiskEditService(CompassDbContext db) : IOperations
         if (string.IsNullOrEmpty(k))
         {
             modelState.AddModelError("AssociationKind",
-                "Select whether this is associated with a work item, FIPS product, or organisation.");
+                "Select whether this is associated with a work item, a service register product, or organisation.");
             return null;
         }
 
@@ -382,15 +417,15 @@ public sealed class OperationsRiskEditService(CompassDbContext db) : IOperations
                 var primaryProductId = primaryProductIdForm is > 0 ? primaryProductIdForm : null;
                 if (!primaryProductId.HasValue)
                 {
-                    modelState.AddModelError(productFieldKey, "Select a FIPS product.");
+                    modelState.AddModelError(productFieldKey, "Select a service register product.");
                     return null;
                 }
 
                 var productOk = await db.Services.AsNoTracking()
-                    .AnyAsync(s => s.ServiceId == primaryProductId.Value, cancellationToken);
+                    .AnyAsync(s => s.ServiceId == primaryProductId.Value && s.IsActive, cancellationToken);
                 if (!productOk)
                 {
-                    modelState.AddModelError(productFieldKey, "Select a valid FIPS product.");
+                    modelState.AddModelError(productFieldKey, "Select a valid service register product.");
                     return null;
                 }
 
@@ -419,7 +454,7 @@ public sealed class OperationsRiskEditService(CompassDbContext db) : IOperations
 
             default:
                 modelState.AddModelError("AssociationKind",
-                    "Select whether this is associated with a work item, FIPS product, or organisation.");
+                    "Select whether this is associated with a work item, a service register product, or organisation.");
                 return null;
         }
     }
@@ -467,7 +502,7 @@ public sealed class OperationsRiskEditService(CompassDbContext db) : IOperations
     }
 
     private Task<List<RiskIssueNamedIntOption>> RaidFipsProductSelectOptionsAsync(CancellationToken cancellationToken) =>
-        FipsProductRaidQuery.BuildActiveCmdbProductServiceSelectOptionsForRaidAsync(db, cancellationToken);
+        FipsProductRaidQuery.BuildActiveServiceRegisterSelectOptionsForRaidAsync(db, cancellationToken);
 
     private Task<List<RiskIssueNamedIntOption>> RaidEditorProjectOptionsFullAsync(CancellationToken cancellationToken) =>
         db.Projects.AsNoTracking()
@@ -497,7 +532,8 @@ public sealed class OperationsRiskEditService(CompassDbContext db) : IOperations
             DefaultUserId = ownerUserId,
             DefaultName = OwnerRow() is { } o ? DisplayName(o) : null,
             DefaultEmail = OwnerRow()?.Email,
-            InputIdSuffix = "owner"
+            InputIdSuffix = "owner",
+            UseGovUkStyling = true
         };
         c.ViewBag.SroUserPicker = new UserPickerViewModel
         {
@@ -506,7 +542,65 @@ public sealed class OperationsRiskEditService(CompassDbContext db) : IOperations
             DefaultUserId = sroUserId,
             DefaultName = SroRow() is { } s ? DisplayName(s) : null,
             DefaultEmail = SroRow()?.Email,
-            InputIdSuffix = "sro"
+            InputIdSuffix = "sro",
+            UseGovUkStyling = true
         };
+    }
+
+    private static string InherentLabelFromScore(int score) =>
+        score >= 20
+            ? "Crisis / likely"
+            : score >= 16
+                ? "Critical / possible"
+                : score >= 11
+                    ? "High / possible"
+                    : score >= 6
+                        ? "Moderate / possible"
+                        : "Low / unlikely";
+
+    private async Task EnsureTierOptionAsync(
+        List<RiskIssueNamedIntOption> options,
+        int? tierId,
+        CancellationToken cancellationToken)
+    {
+        if (tierId is not > 0 || options.Any(o => o.Id == tierId))
+            return;
+        var tier = await db.RiskTiers.AsNoTracking().FirstOrDefaultAsync(x => x.Id == tierId.Value, cancellationToken);
+        if (tier == null)
+            return;
+        var name = tier.IsProposedTier ? $"{tier.Name} (proposed)" : tier.Name;
+        options.Insert(0, new RiskIssueNamedIntOption { Id = tier.Id, Name = name });
+    }
+
+    private async Task EnsureProjectOptionAsync(
+        List<RiskIssueNamedIntOption> options,
+        int? projectId,
+        CancellationToken cancellationToken)
+    {
+        if (projectId is not > 0 || options.Any(o => o.Id == projectId))
+            return;
+        var project = await db.Projects.AsNoTracking()
+            .FirstOrDefaultAsync(p => p.Id == projectId.Value && !p.IsDeleted, cancellationToken);
+        if (project == null)
+            return;
+        options.Insert(0, new RiskIssueNamedIntOption { Id = project.Id, Name = project.Title ?? $"Work item {project.Id}" });
+    }
+
+    private async Task EnsureProductOptionAsync(
+        List<RiskIssueNamedIntOption> options,
+        int? serviceId,
+        CancellationToken cancellationToken)
+    {
+        if (serviceId is not > 0 || options.Any(o => o.Id == serviceId))
+            return;
+        var service = await db.Services.AsNoTracking()
+            .FirstOrDefaultAsync(s => s.ServiceId == serviceId.Value, cancellationToken);
+        if (service == null)
+            return;
+        options.Insert(0, new RiskIssueNamedIntOption
+        {
+            Id = service.ServiceId,
+            Name = service.DisplayName ?? service.FipsId
+        });
     }
 }

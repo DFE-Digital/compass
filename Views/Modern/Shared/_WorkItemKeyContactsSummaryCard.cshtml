@@ -1,0 +1,186 @@
+@model Compass.Models.Modern.Work.WorkItem
+@using System.Linq
+@using Compass.Models
+@using Compass.Models.Modern.Work
+@{
+  var cardTitleRaw = ViewBag.KeyContactsSummaryTitle as string;
+  var cardTitle = string.IsNullOrWhiteSpace(cardTitleRaw) ? "Key contacts" : cardTitleRaw.Trim();
+  var topMarginClass = ViewBag.KeyContactsSummaryCardTopMargin as string;
+  if (string.IsNullOrWhiteSpace(topMarginClass))
+  {
+    topMarginClass = "govuk-!-margin-top-6";
+  }
+
+  var keyPeoplePanelItems = ViewBag.KeyPeoplePanelItems as List<(string Key, string Label)> ?? new List<(string Key, string Label)>();
+  var primaryContactUser = ViewBag.PrimaryContactUser as User;
+  var budgetOwnerUser = ViewBag.BudgetOwnerUser as User;
+  var budgetOwnerName = ViewBag.BudgetOwnerName as string ?? "—";
+  var canEdit = ViewBag.CanEditWorkItem as bool? ?? false;
+  var addContactUrl = Url.Action("AddContact", "ModernWork", new { id = Model.Id, returnTo = "detail" });
+
+  string KeyPersonDisplayName(User? u)
+  {
+    if (u == null) return "—";
+    var firstLast = (u.FirstName ?? "").Trim() + " " + (u.LastName ?? "").Trim();
+    return !string.IsNullOrWhiteSpace(firstLast) ? firstLast.Trim() : (u.Name ?? "—");
+  }
+
+  int? ContactRoleTypeIdFromKey(string key) =>
+      key.StartsWith("ContactRoleType:", StringComparison.Ordinal) && int.TryParse(key.Substring(16), out var id) ? id : null;
+
+  List<WorkItemContact> ContactsForKeyPeopleItem(string itemKey, string itemLabel)
+  {
+    if (Model.Contacts == null || !Model.Contacts.Any()) return new List<WorkItemContact>();
+    if (itemKey.StartsWith("CustomRole:", StringComparison.Ordinal))
+      return Model.Contacts.Where(c => c.ContactRoleTypeId == 5 && string.Equals(c.RoleName, itemLabel, StringComparison.Ordinal)).ToList();
+    var roleId = ContactRoleTypeIdFromKey(itemKey);
+    if (!roleId.HasValue) return new List<WorkItemContact>();
+    return Model.Contacts.Where(c => c.ContactRoleTypeId == roleId.Value).ToList();
+  }
+
+  string ContactListDisplayName(WorkItemContact c)
+  {
+    if (!string.IsNullOrWhiteSpace(c.DisplayName))
+      return c.DisplayName.Trim();
+    return KeyPersonDisplayName(c.AppUser);
+  }
+
+  string ContactEditUrl(string itemKey, string itemLabel)
+  {
+    if (itemKey == "PrimaryContact")
+      return Url.Action("EditContact", "ModernWork", new { id = Model.Id, kind = "primary", returnTo = "detail" }) ?? "#";
+    if (itemKey == "BudgetOwner")
+      return Url.Action("EditContact", "ModernWork", new { id = Model.Id, kind = "budget", returnTo = "detail" }) ?? "#";
+
+    var contactsInRole = ContactsForKeyPeopleItem(itemKey, itemLabel);
+    if (contactsInRole.Count == 1)
+      return Url.Action("EditContact", "ModernWork", new { id = Model.Id, contactId = contactsInRole[0].Id, returnTo = "detail" }) ?? "#";
+
+    if (itemKey.StartsWith("CustomRole:", StringComparison.Ordinal))
+      return Url.Action("AddContact", "ModernWork", new { id = Model.Id, contactRoleTypeId = 5, customRoleName = itemLabel, returnTo = "detail" }) ?? "#";
+
+    var roleId = ContactRoleTypeIdFromKey(itemKey);
+    if (roleId.HasValue)
+      return Url.Action("AddContact", "ModernWork", new { id = Model.Id, contactRoleTypeId = roleId.Value, returnTo = "detail" }) ?? "#";
+
+    return addContactUrl ?? "#";
+  }
+
+  var primaryEntry = keyPeoplePanelItems.FirstOrDefault(i => i.Key == "PrimaryContact");
+  var budgetEntry = keyPeoplePanelItems.FirstOrDefault(i => i.Key == "BudgetOwner");
+  var primaryLabel = string.IsNullOrWhiteSpace(primaryEntry.Label) ? "Primary contact" : primaryEntry.Label;
+  var budgetLabel = string.IsNullOrWhiteSpace(budgetEntry.Label) ? "Budget owner" : budgetEntry.Label;
+
+}
+
+<div class="govuk-summary-card @topMarginClass wd-key-people-summary-card">
+  <div class="govuk-summary-card__title-wrapper">
+    <h2 class="govuk-summary-card__title">@cardTitle</h2>
+    @if (canEdit && !string.IsNullOrEmpty(addContactUrl))
+    {
+      <ul class="govuk-summary-card__actions">
+        <li class="govuk-summary-card__action">
+          <a href="@addContactUrl" class="govuk-link govuk-link--no-visited-state">Add contact</a>
+        </li>
+      </ul>
+    }
+  </div>
+  <div class="govuk-summary-card__content">
+    <dl class="govuk-summary-list govuk-summary-list--no-border govuk-!-margin-bottom-0">
+      <div class="govuk-summary-list__row@(canEdit ? "" : " govuk-summary-list__row--no-actions")">
+        <dt class="govuk-summary-list__key">@primaryLabel</dt>
+        <dd class="govuk-summary-list__value">
+          @if (primaryContactUser != null)
+          {
+            var pcDisplayName = KeyPersonDisplayName(primaryContactUser);
+            if (!string.IsNullOrWhiteSpace(primaryContactUser.Email))
+            {
+              <a href="mailto:@primaryContactUser.Email" class="govuk-link">@pcDisplayName</a>
+            }
+            else
+            {
+              @pcDisplayName
+            }
+          }
+          else
+          {
+            <span class="govuk-hint govuk-!-margin-bottom-0">—</span>
+          }
+        </dd>
+        @if (canEdit)
+        {
+          <dd class="govuk-summary-list__actions">
+            <a class="govuk-link govuk-link--no-visited-state" href="@ContactEditUrl("PrimaryContact", primaryLabel)">Change<span class="govuk-visually-hidden"> @primaryLabel</span></a>
+          </dd>
+        }
+      </div>
+      <div class="govuk-summary-list__row@(canEdit ? "" : " govuk-summary-list__row--no-actions")">
+        <dt class="govuk-summary-list__key">@budgetLabel</dt>
+        <dd class="govuk-summary-list__value">
+          @if (budgetOwnerUser != null)
+          {
+            var boDisplayName = KeyPersonDisplayName(budgetOwnerUser);
+            if (!string.IsNullOrWhiteSpace(budgetOwnerUser.Email))
+            {
+              <a href="mailto:@budgetOwnerUser.Email" class="govuk-link">@boDisplayName</a>
+            }
+            else
+            {
+              @boDisplayName
+            }
+          }
+          else
+          {
+            @budgetOwnerName
+          }
+        </dd>
+        @if (canEdit)
+        {
+          <dd class="govuk-summary-list__actions">
+            <a class="govuk-link govuk-link--no-visited-state" href="@ContactEditUrl("BudgetOwner", budgetLabel)">Change<span class="govuk-visually-hidden"> @budgetLabel</span></a>
+          </dd>
+        }
+      </div>
+      @foreach (var item in keyPeoplePanelItems.Where(i => i.Key != "PrimaryContact" && i.Key != "BudgetOwner"))
+      {
+        var contactsInRole = ContactsForKeyPeopleItem(item.Key, item.Label);
+        <div class="govuk-summary-list__row@(canEdit ? "" : " govuk-summary-list__row--no-actions")">
+          <dt class="govuk-summary-list__key">@item.Label</dt>
+          <dd class="govuk-summary-list__value@(contactsInRole.Count > 1 ? " govuk-summary-list__value--multiple" : "")">
+            @if (contactsInRole.Any())
+            {
+              var first = true;
+              foreach (var c in contactsInRole)
+              {
+                if (!first)
+                {
+                  <br />
+                }
+                var listName = ContactListDisplayName(c);
+                if (!string.IsNullOrWhiteSpace(c.AppUser?.Email))
+                {
+                  <a href="mailto:@c.AppUser.Email" class="govuk-link">@listName</a>
+                }
+                else
+                {
+                  @listName
+                }
+                first = false;
+              }
+            }
+            else
+            {
+              <span class="govuk-hint govuk-!-margin-bottom-0">—</span>
+            }
+          </dd>
+          @if (canEdit)
+          {
+            <dd class="govuk-summary-list__actions">
+              <a class="govuk-link govuk-link--no-visited-state" href="@ContactEditUrl(item.Key, item.Label)">Change<span class="govuk-visually-hidden"> @item.Label</span></a>
+            </dd>
+          }
+        </div>
+      }
+    </dl>
+  </div>
+</div>

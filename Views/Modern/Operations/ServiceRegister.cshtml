@@ -1,10 +1,21 @@
 @model FipsProductsViewModel
+@using Compass.Models.Fips
+@using Compass.ViewModels.Modern
 @{
     ViewData["Title"] = "Service register — Products";
     var tab = Model.ActiveTab;
     var bulkNew = string.Equals(tab, "new", StringComparison.OrdinalIgnoreCase);
-    var showBulkManagement = bulkNew || string.Equals(tab, "all", StringComparison.OrdinalIgnoreCase);
-    var showAllTabExtraColumns = string.Equals(tab, "all", StringComparison.OrdinalIgnoreCase);
+    var isEnterpriseTab = string.Equals(tab, "enterprise", StringComparison.OrdinalIgnoreCase);
+    var bulkPanelOpen = bulkNew || isEnterpriseTab;
+    var isSearchResults = Model.IsSearchResults || string.Equals(tab, "search", StringComparison.OrdinalIgnoreCase);
+    var showBulkManagement = bulkNew
+        || string.Equals(tab, "all", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(tab, "active", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(tab, "enterprise", StringComparison.OrdinalIgnoreCase);
+    var showAllTabExtraColumns = string.Equals(tab, "all", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(tab, "enterprise", StringComparison.OrdinalIgnoreCase)
+        || isSearchResults;
+    var showStatusColumn = string.Equals(tab, "all", StringComparison.OrdinalIgnoreCase) || isSearchResults;
 }
 
 @section Breadcrumbs {
@@ -16,13 +27,23 @@
 @functions {
     string TabCount(int count) => count > 0 ? $" ({count})" : "";
 
-    string QualityPercent(int score, int max) =>
-        max > 0 ? $"{Math.Round((double)score / max * 100):0}%" : "0%";
+    string StatusLabel(CMDBProductStatus status) => status switch
+    {
+        CMDBProductStatus.Active => "Active",
+        CMDBProductStatus.New => "New",
+        CMDBProductStatus.Inactive => "Retired",
+        CMDBProductStatus.Rejected => "Rejected",
+        _ => status.ToString()
+    };
 
-    string QualityClass(int score, int max) =>
-        score >= (int)(max * 0.7) ? "fips-quality--high" :
-        score >= (int)(max * 0.4) ? "fips-quality--medium" :
-        "fips-quality--low";
+    string StatusTagClass(CMDBProductStatus status) => status switch
+    {
+        CMDBProductStatus.Active => "dfe-c-tag--green",
+        CMDBProductStatus.New => "dfe-c-tag--blue",
+        CMDBProductStatus.Inactive => "dfe-c-tag--grey",
+        CMDBProductStatus.Rejected => "dfe-c-tag--red",
+        _ => "dfe-c-tag--grey"
+    };
 }
 
 @if (TempData["Success"] != null)
@@ -44,64 +65,59 @@
     </div>
 }
 
-<div class="dfe-c-flex--between dfe-c-mb-3" style="flex-wrap:wrap;gap:1rem;align-items:flex-end;">
- <div class="dfe-c-page-title" style="margin:0;">
- <div class="dfe-c-page-title__caption">Operations</div>
- <h1 class="dfe-c-page-title__heading">Service register</h1>
- <p class="govuk-body-s govuk-!-margin-top-1 govuk-!-margin-bottom-0" style="color:#505a5f;">FIPS products — list, filters, and CMDB sync (updates matching records only).</p>
-    </div>
- <div class="dfe-c-flex" style="gap:0.75rem;flex-wrap:wrap;align-items:center;">
- <a href="@Url.Action("ServiceRegisterCmdbRules", "ModernOperations")" class="govuk-link govuk-link--no-visited-state govuk-!-font-weight-bold">CMDB sync rules</a>
-        @if (Model.CanSyncFromCmdb)
-        {
- <form id="fips-cmdb-bulk-sync-antiforgery" method="post" class="govuk-!-margin-bottom-0" aria-hidden="true">
-                @Html.AntiForgeryToken()
-            </form>
- <button type="button" class="govuk-button" id="fips-cmdb-bulk-sync-start" aria-haspopup="dialog" aria-controls="fips-cmdb-bulk-sync-confirm-modal">Sync from CMDB</button>
-        }
-    </div>
-</div>
+@{
+  var srLede = await Html.PartialAsync("_ServiceRegisterHeaderLede");
+}
+@await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+  Caption = "Operations",
+  Title = "Service register",
+  Lede = srLede
+})
 
-<div class="tabs dfe-c-mb-3" role="tablist" aria-label="Product sections">
- <a href="@Url.Action("ServiceRegister", "ModernOperations", new { tab = "my" })" class="tab @(tab =="my" ? "on" : "")" role="tab" aria-selected="@(tab == "my")" aria-controls="d-my" id="tab-my">My products@(TabCount(Model.MyProductsCount))</a>
- <a href="@Url.Action("ServiceRegister", "ModernOperations", new { tab = "all" })" class="tab @(tab =="all" ? "on" : "")" role="tab" aria-selected="@(tab == "all")" aria-controls="d-all" id="tab-all">All products@(TabCount(Model.AllProductsCount))</a>
- <a href="@Url.Action("ServiceRegister", "ModernOperations", new { tab = "new" })" class="tab @(tab =="new" ? "on" : "")" role="tab" aria-selected="@(tab == "new")" aria-controls="d-new" id="tab-new">New products@(TabCount(Model.NewProductsCount))</a>
- <a href="@Url.Action("ServiceRegister", "ModernOperations", new { tab = "inactive" })" class="tab @(tab =="inactive" ? "on" : "")" role="tab" aria-selected="@(tab == "inactive")" aria-controls="d-inactive" id="tab-inactive">Inactive products@(TabCount(Model.InactiveProductsCount))</a>
- <a href="@Url.Action("ServiceRegister", "ModernOperations", new { tab = "retired" })" class="tab @(tab =="retired" ? "on" : "")" role="tab" aria-selected="@(tab == "retired")" aria-controls="d-retired" id="tab-retired">Retired@(TabCount(Model.RetiredCount))</a>
-</div>
+@await Html.PartialAsync("_ServiceRegisterSubNav", Model)
 
 @if (tab == "inactive")
 {
-  <p class="govuk-body-s govuk-!-margin-bottom-3" style="color:#505a5f;">These products are <strong>excluded from the FIPS service register</strong> (for example by CMDB sync rules). They are not shown in the active catalogue.</p>
+  <p class="govuk-body-s govuk-!-margin-bottom-3" style="color:#505a5f;"><strong>Inactive</strong> — status inactive (retired) or rejected (excluded). Retired rows also appear under <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("ServiceRegister", "ModernOperations", new { tab = "retired" })">Retired</a>. Use the checkboxes for bulk actions where available.</p>
 }
 else if (tab == "retired")
 {
-  <p class="govuk-body-s govuk-!-margin-bottom-3" style="color:#505a5f;">These products are <strong>retired</strong> in Compass. CMDB sync does not update these records.</p>
+  <p class="govuk-body-s govuk-!-margin-bottom-3" style="color:#505a5f;"><strong>Retired</strong> — status inactive (retired; CMDB sync does not update these). These rows are included in <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("ServiceRegister", "ModernOperations", new { tab = "inactive" })">Inactive</a> too.</p>
 }
 else if (bulkNew)
 {
   <p class="govuk-body-s govuk-!-margin-bottom-3" style="color:#505a5f;">New products are not yet live in the register. Use the checkboxes to select products, then set status and/or details in bulk.</p>
 }
+else if (isSearchResults)
+{
+  <p class="govuk-body-s govuk-!-margin-bottom-3" style="color:#505a5f;">
+    <strong>Search results</strong> — matching products in every status (@Model.Products.Count.ToString("N0") shown).
+    @if (!string.IsNullOrWhiteSpace(Model.Search))
+    {
+      <span>Query: <strong>@Model.Search</strong>.</span>
+    }
+  </p>
+}
 else if (string.Equals(tab, "all", StringComparison.OrdinalIgnoreCase))
 {
-  <p class="govuk-body-s govuk-!-margin-bottom-3" style="color:#505a5f;">Use the checkboxes to select products, then set status and/or details in bulk. Filters apply to the list only.</p>
+  <p class="govuk-body-s govuk-!-margin-bottom-3" style="color:#505a5f;"><strong>All</strong> — every product regardless of status. Use the checkboxes for bulk actions where available.</p>
+}
+else if (isEnterpriseTab)
+{
+  <p class="govuk-body-s govuk-!-margin-bottom-3" style="color:#505a5f;"><strong>Enterprise</strong> — active products flagged as enterprise services. Select products and use bulk management to mark or clear the enterprise flag.</p>
 }
 
+<div style="margin-top:15px;">
 @await Html.PartialAsync("_SearchAndFilter", (SearchAndFilterViewModel)ViewBag.SearchAndFilter)
+</div>
 
 <div id="d-@tab" class="tab-pane on" role="tabpanel">
     @if (Model.Products.Count == 0)
     {
         <div class="govuk-inset-text">
-            <p class="govuk-body govuk-!-margin-bottom-1">No products in this list.</p>
-            @if (Model.TotalProductsInDatabase > 0)
-            {
-                <p class="govuk-body-s govuk-!-margin-bottom-0">The database has <strong>@Model.TotalProductsInDatabase.ToString("N0")</strong> row(s) in CMDBProducts — try clearing filters and search, or ask an administrator to confirm the latest migration has been applied if you still see nothing.</p>
-            }
-            else
-            {
-                <p class="govuk-body-s govuk-!-margin-bottom-0">There are no rows in CMDBProducts yet, or the app cannot read that table.</p>
-            }
+            <p class="govuk-body govuk-!-margin-bottom-0">
+                @(isSearchResults ? "No products match your search." : "No products in this list.")
+            </p>
         </div>
     }
     else if (showBulkManagement)
@@ -116,13 +132,33 @@ else if (string.Equals(tab, "all", StringComparison.OrdinalIgnoreCase))
             <input type="hidden" name="RTypeId" value="@(Model.TypeId?.ToString() ?? "")" />
             <input type="hidden" name="RPhaseId" value="@(Model.PhaseId?.ToString() ?? "")" />
 
-            <details class="govuk-details govuk-!-margin-bottom-3" data-module="govuk-details" id="sr-bulk-management-panel"@if (bulkNew) { <text> open</text> }>
-                <summary class="govuk-details__summary">
-                    <span class="govuk-details__summary-text">Bulk management</span>
-                </summary>
-                <div class="govuk-details__text">
+            <div class="dfe-f-toggle govuk-!-margin-bottom-3" data-module="dfe-f-toggle" id="sr-bulk-management-toggle">
+                <div class="dfe-f-toggle__title-wrapper">
+                    <h2 class="dfe-f-toggle__heading govuk-!-margin-bottom-0">
+                        <button type="button"
+                                class="dfe-f-toggle__button"
+                                id="sr-bulk-management-toggle-btn"
+                                aria-expanded="@(bulkPanelOpen ? "true" : "false")"
+                                aria-controls="sr-bulk-management-panel">
+                            <span class="dfe-f-toggle__icon" aria-hidden="true"></span>
+                            <span class="dfe-f-toggle__title">Bulk management</span>
+                        </button>
+                    </h2>
+                </div>
+                <div id="sr-bulk-management-panel" class="dfe-f-toggle__content"@if (!bulkPanelOpen) { <text> hidden</text> }>
+                    <div class="dfe-f-toggle__body">
                     <div class="dfe-c-card dfe-c-card--plain govuk-!-margin-top-0 govuk-!-margin-bottom-0">
-                <p class="govuk-body-s dfe-c-text-muted govuk-!-margin-bottom-3">Tick the actions to apply, choose values, then <strong>Apply to selected</strong>. Unticked rows keep their current values for that field.</p>
+                <p class="govuk-body-s dfe-c-text-muted govuk-!-margin-bottom-3">Tick the actions to apply, choose values, then <strong>Apply to selected</strong>. Unticked rows keep their current values for that field. For enterprise, choose <strong>Yes</strong> or <strong>No</strong> (not “No change”).</p>
+
+                <div class="govuk-form-group govuk-!-margin-bottom-3">
+                    <label class="govuk-label" for="sr-bulk-enterprise">Enterprise service</label>
+                    <select class="govuk-select" name="BulkEnterpriseAction" id="sr-bulk-enterprise" aria-describedby="sr-bulk-enterprise-hint">
+                        <option value="">— No change —</option>
+                        <option value="true">Yes — mark as enterprise service</option>
+                        <option value="false">No — clear enterprise flag</option>
+                    </select>
+                    <p class="govuk-hint govuk-!-margin-bottom-0" id="sr-bulk-enterprise-hint">Products with the flag cleared leave this tab but stay on Active. Products marked Yes appear here when active.</p>
+                </div>
 
                 <div class="govuk-form-group govuk-!-margin-bottom-3">
                     <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes">
@@ -232,15 +268,17 @@ else if (string.Equals(tab, "all", StringComparison.OrdinalIgnoreCase))
                     <button type="submit" class="govuk-button" data-module="govuk-button">Apply to selected</button>
                 </div>
                     </div>
+                    </div>
                 </div>
-            </details>
+            </div>
 
-            <div class="dfe-c-table-wrap">
-                <table>
+            <div class="dfe-f-table-wrapper modern-service-register-table" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+                <table class="govuk-table">
                     <caption class="govuk-visually-hidden">Products (select for bulk management)</caption>
-                    <thead>
-                        <tr>
-                            <th scope="col" style="width:3.5rem;white-space:nowrap">
+                    <thead class="govuk-table__head">
+                        <tr class="govuk-table__row">
+                            <th scope="col" class="govuk-table__header modern-service-register-table__select-head">
                                 <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes">
                                     <div class="govuk-checkboxes__item">
                                         <input class="govuk-checkboxes__input" type="checkbox" id="sr-bulk-select-all" title="Select all" />
@@ -248,26 +286,45 @@ else if (string.Equals(tab, "all", StringComparison.OrdinalIgnoreCase))
                                     </div>
                                 </div>
                             </th>
-                            <th scope="col">Name</th>
-                            <th scope="col">Phase</th>
-                            <th scope="col">Business area</th>
+                            <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Name</button>
+        </th>
+                            @if (showStatusColumn)
+                            {
+                                <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Status</button>
+        </th>
+                            }
+                            <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Phase</button>
+        </th>
+                            <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Business area</button>
+        </th>
                             @if (showAllTabExtraColumns)
                             {
-                                <th scope="col">Types</th>
-                                <th scope="col">Channels</th>
-                                <th scope="col" class="govuk-!-text-align-right" style="white-space:nowrap">User groups</th>
-                                <th scope="col" class="govuk-!-text-align-right" style="white-space:nowrap">Contacts</th>
+                                <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Types</button>
+        </th>
+                                <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Channels</button>
+        </th>
+                                <th scope="col" class="govuk-table__header govuk-!-text-align-centre modern-service-register-table__count-head">User groups</th>
+                                <th scope="col" class="govuk-table__header govuk-!-text-align-centre modern-service-register-table__count-head">Contacts</th>
                             }
-                            <th scope="col">Service owner</th>
-                            <th scope="col">Reporting contact</th>
-                            <th scope="col">Quality</th>
+                            <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Service owner</button>
+        </th>
+                            <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Reporting contact</button>
+        </th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody class="govuk-table__body">
                         @foreach (var p in Model.Products)
                         {
-                            <tr>
-                                <td>
+                            <tr class="govuk-table__row">
+                                <td class="govuk-table__cell">
                                     <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes">
                                         <div class="govuk-checkboxes__item">
                                             <input class="govuk-checkboxes__input sr-bulk-row-cb" type="checkbox" name="ProductIds" value="@p.Id" id="sr-bulk-p-@p.Id" />
@@ -275,24 +332,27 @@ else if (string.Equals(tab, "all", StringComparison.OrdinalIgnoreCase))
                                         </div>
                                     </div>
                                 </td>
-                                <td>
+                                <td class="govuk-table__cell">
                                     <a href="@Url.Action("ServiceRegisterProduct", "ModernOperations", new { id = p.Id })" class="govuk-link govuk-link--no-visited-state govuk-!-font-weight-bold">@p.Title</a>
                                     <span class="govuk-body-s dfe-c-text-muted" style="display:block;">ID: @p.UniqueID</span>
                                 </td>
-                                <td>@(p.PhaseName ?? "—")</td>
-                                <td>@(string.IsNullOrWhiteSpace(p.BusinessAreaDisplay) ? "—" : p.BusinessAreaDisplay)</td>
+                                @if (showStatusColumn)
+                                {
+                                    <td class="govuk-table__cell">
+                                        <span class="dfe-c-tag @StatusTagClass(p.Status)">@StatusLabel(p.Status)</span>
+                                    </td>
+                                }
+                                <td class="govuk-table__cell">@(p.PhaseName ?? "—")</td>
+                                <td class="govuk-table__cell">@(string.IsNullOrWhiteSpace(p.BusinessAreaDisplay) ? "—" : p.BusinessAreaDisplay)</td>
                                 @if (showAllTabExtraColumns)
                                 {
-                                    <td class="govuk-body-s" style="max-width:12rem;word-wrap:break-word">@(string.IsNullOrWhiteSpace(p.TypesDisplay) ? "—" : p.TypesDisplay)</td>
-                                    <td class="govuk-body-s" style="max-width:12rem;word-wrap:break-word">@(string.IsNullOrWhiteSpace(p.ChannelsDisplay) ? "—" : p.ChannelsDisplay)</td>
-                                    <td class="govuk-body-s govuk-!-text-align-right" style="white-space:nowrap">@p.UserGroupCount</td>
-                                    <td class="govuk-body-s govuk-!-text-align-right" style="white-space:nowrap">@p.ContactCount</td>
+                                    <td class="govuk-table__cell govuk-body-s">@(string.IsNullOrWhiteSpace(p.TypesDisplay) ? "—" : p.TypesDisplay)</td>
+                                    <td class="govuk-table__cell govuk-body-s">@(string.IsNullOrWhiteSpace(p.ChannelsDisplay) ? "—" : p.ChannelsDisplay)</td>
+                                    <td class="govuk-table__cell govuk-body-s govuk-!-text-align-centre modern-service-register-table__count-cell">@p.UserGroupCount.ToString("N0")</td>
+                                    <td class="govuk-table__cell govuk-body-s govuk-!-text-align-centre modern-service-register-table__count-cell">@p.ContactCount.ToString("N0")</td>
                                 }
-                                <td>@(p.ServiceOwner ?? "—")</td>
-                                <td>@(p.ReportingContact ?? "—")</td>
-                                <td>
-                                    <span class="fips-quality @QualityClass(p.QualityScore, p.QualityScoreMax)">@QualityPercent(p.QualityScore, p.QualityScoreMax)</span>
-                                </td>
+                                <td class="govuk-table__cell">@(p.ServiceOwner ?? "—")</td>
+                                <td class="govuk-table__cell">@(p.ReportingContact ?? "—")</td>
                             </tr>
                         }
                     </tbody>
@@ -302,34 +362,53 @@ else if (string.Equals(tab, "all", StringComparison.OrdinalIgnoreCase))
     }
     else
     {
-        <div class="dfe-c-table-wrap">
-            <table>
+        <div class="dfe-f-table-wrapper modern-service-register-table" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+            <table class="govuk-table">
                 <caption class="govuk-visually-hidden">Products</caption>
-                <thead>
-                    <tr>
-                        <th scope="col">Name</th>
-                        <th scope="col">Phase</th>
-                        <th scope="col">Business area</th>
-                        <th scope="col">Service owner</th>
-                        <th scope="col">Reporting contact</th>
-                        <th scope="col">Quality</th>
+                <thead class="govuk-table__head">
+                    <tr class="govuk-table__row">
+                        <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Name</button>
+        </th>
+                        @if (showStatusColumn)
+                        {
+                            <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Status</button>
+        </th>
+                        }
+                        <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Phase</button>
+        </th>
+                        <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Business area</button>
+        </th>
+                        <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Service owner</button>
+        </th>
+                        <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Reporting contact</button>
+        </th>
                     </tr>
                 </thead>
-                <tbody>
+                <tbody class="govuk-table__body">
                     @foreach (var p in Model.Products)
                     {
-                        <tr>
-                            <td>
+                        <tr class="govuk-table__row">
+                            <td class="govuk-table__cell">
                                 <a href="@Url.Action("ServiceRegisterProduct", "ModernOperations", new { id = p.Id })" class="govuk-link govuk-link--no-visited-state govuk-!-font-weight-bold">@p.Title</a>
                                 <span class="govuk-body-s dfe-c-text-muted" style="display:block;">ID: @p.UniqueID</span>
                             </td>
-                            <td>@(p.PhaseName ?? "—")</td>
-                            <td>@(string.IsNullOrWhiteSpace(p.BusinessAreaDisplay) ? "—" : p.BusinessAreaDisplay)</td>
-                            <td>@(p.ServiceOwner ?? "—")</td>
-                            <td>@(p.ReportingContact ?? "—")</td>
-                            <td>
-                                <span class="fips-quality @QualityClass(p.QualityScore, p.QualityScoreMax)">@QualityPercent(p.QualityScore, p.QualityScoreMax)</span>
-                            </td>
+                            @if (showStatusColumn)
+                            {
+                                <td class="govuk-table__cell">
+                                    <span class="dfe-c-tag @StatusTagClass(p.Status)">@StatusLabel(p.Status)</span>
+                                </td>
+                            }
+                            <td class="govuk-table__cell">@(p.PhaseName ?? "—")</td>
+                            <td class="govuk-table__cell">@(string.IsNullOrWhiteSpace(p.BusinessAreaDisplay) ? "—" : p.BusinessAreaDisplay)</td>
+                            <td class="govuk-table__cell">@(p.ServiceOwner ?? "—")</td>
+                            <td class="govuk-table__cell">@(p.ReportingContact ?? "—")</td>
                         </tr>
                     }
                 </tbody>
@@ -338,228 +417,7 @@ else if (string.Equals(tab, "all", StringComparison.OrdinalIgnoreCase))
     }
 </div>
 
-@if (Model.CanSyncFromCmdb)
-{
- <div id="fips-cmdb-bulk-sync-confirm-modal" class="fips-modal fips-cmdb-sync-modal" hidden role="dialog" aria-modal="true" aria-labelledby="fips-cmdb-bulk-sync-confirm-title">
- <div class="fips-modal__content fips-cmdb-sync-modal__panel">
- <h2 class="govuk-heading-m govuk-!-margin-top-0" id="fips-cmdb-bulk-sync-confirm-title">Run CMDB sync?</h2>
- <p class="govuk-body">This will sync every matching FIPS product to CMDB. It will update existing products, add new product entries, and update contacts, titles, and descriptions from CMDB.</p>
- <p class="govuk-body"><strong>Product categories are not updated</strong> by this sync. Categories are managed separately in Compass.</p>
- <div class="govuk-button-group govuk-!-margin-bottom-0">
- <button type="button" class="govuk-button" id="fips-cmdb-bulk-sync-confirm-proceed">Run sync</button>
- <button type="button" class="govuk-button govuk-button--secondary" id="fips-cmdb-bulk-sync-confirm-cancel">Cancel</button>
-        </div>
-    </div>
-    </div>
-
- <div id="fips-cmdb-bulk-sync-modal" class="fips-modal fips-cmdb-sync-modal" hidden role="dialog" aria-modal="true" aria-labelledby="fips-cmdb-bulk-sync-title">
- <div class="fips-modal__content fips-cmdb-sync-modal__panel">
- <h2 class="govuk-heading-m govuk-!-margin-top-0" id="fips-cmdb-bulk-sync-title">Sync from CMDB</h2>
- <p class="govuk-body" id="fips-cmdb-bulk-sync-live" aria-live="polite" aria-atomic="true">Starting…</p>
- <div class="fips-cmdb-sync-modal__progress-wrap govuk-!-margin-bottom-4">
- <progress id="fips-cmdb-bulk-sync-progress" class="fips-cmdb-sync-modal__progress" max="100" value="0" aria-hidden="true"></progress>
- <p class="govuk-body-s govuk-!-margin-top-1 govuk-!-margin-bottom-0" id="fips-cmdb-bulk-sync-count" style="color:#505a5f;"></p>
-            </div>
- <div id="fips-cmdb-bulk-sync-summary" class="govuk-body-s govuk-!-margin-bottom-4" style="display:none;color:#0b0c0c;"></div>
- <div class="govuk-button-group govuk-!-margin-bottom-0">
- <button type="button" class="govuk-button" id="fips-cmdb-bulk-sync-close" style="display:none;">Close and refresh</button>
- <button type="button" class="govuk-button govuk-button--secondary" id="fips-cmdb-bulk-sync-dismiss" disabled>Cancel</button>
-            </div>
-        </div>
-    </div>
-}
-
 @section Scripts {
-    @if (Model.CanSyncFromCmdb)
-    {
-        <script nonce="@Context.Items["Nonce"]">
-            (function () {
-                var streamUrl = @Html.Raw(Json.Serialize(Url.Action("ServiceRegisterSyncStream", "ModernOperations")));
-                var startBtn = document.getElementById('fips-cmdb-bulk-sync-start');
-                var confirmModal = document.getElementById('fips-cmdb-bulk-sync-confirm-modal');
-                var confirmProceed = document.getElementById('fips-cmdb-bulk-sync-confirm-proceed');
-                var confirmCancel = document.getElementById('fips-cmdb-bulk-sync-confirm-cancel');
-                var modal = document.getElementById('fips-cmdb-bulk-sync-modal');
-                var live = document.getElementById('fips-cmdb-bulk-sync-live');
-                var progress = document.getElementById('fips-cmdb-bulk-sync-progress');
-                var countEl = document.getElementById('fips-cmdb-bulk-sync-count');
-                var summary = document.getElementById('fips-cmdb-bulk-sync-summary');
-                var closeBtn = document.getElementById('fips-cmdb-bulk-sync-close');
-                var dismissBtn = document.getElementById('fips-cmdb-bulk-sync-dismiss');
-                var tokenForm = document.getElementById('fips-cmdb-bulk-sync-antiforgery');
-                if (!startBtn || !confirmModal || !modal || !tokenForm) return;
-
-                var syncFinished = false;
-                var abortController = null;
-
-                function getToken() {
-                    var input = tokenForm.querySelector('input[name="__RequestVerificationToken"]');
-                    return input ? input.value : '';
-                }
-
-                function openModal() {
-                    syncFinished = false;
-                    abortController = new AbortController();
-                    modal.hidden = false;
-                    summary.style.display = 'none';
-                    summary.textContent = '';
-                    closeBtn.style.display = 'none';
-                    dismissBtn.disabled = false;
-                    dismissBtn.textContent = 'Cancel';
-                    progress.value = 0;
-                    countEl.textContent = '';
-                    live.textContent = 'Starting…';
-                    startBtn.disabled = true;
-                }
-
-                function endModal(success) {
-                    syncFinished = true;
-                    abortController = null;
-                    startBtn.disabled = false;
-                    dismissBtn.textContent = 'Close';
-                    if (success) {
-                        closeBtn.style.display = '';
-                    }
-                }
-
-                function applyProgress(data) {
-                    if (data.message) live.textContent = data.message;
-                    if (data.processed != null && data.total != null && data.total > 0) {
-                        var pct = Math.min(100, Math.round((data.processed / data.total) * 100));
-                        progress.value = pct;
-                        countEl.textContent = 'Processed ' + data.processed + ' of ' + data.total + ' CMDB rows.';
-                    } else if (data.phase === 'preparing' || data.phase === 'loading_cmdb') {
-                        progress.removeAttribute('value');
-                    }
-                }
-
-                function buildSummary(r) {
-                    var lines = [];
-                    lines.push('Updated ' + r.updated + ' product(s). Status set by sync rules: ' + r.statusSetByRules + '.');
-                    lines.push('Skipped — retired in Compass: ' + r.skippedRetired + '; no sys_id: ' + r.skippedNoSysId + '; no local match: ' + r.skippedNoLocalMatch + '.');
-                    if (r.errors > 0) {
-                        lines.push('Errors: ' + r.errors + '.');
-                        if (r.errorSamples && r.errorSamples.length) lines.push(r.errorSamples.join(' '));
-                    }
-                    return lines.join(' ');
-                }
-
-                dismissBtn.addEventListener('click', function () {
-                    if (!syncFinished && abortController) {
-                        abortController.abort();
-                    }
-                    modal.hidden = true;
-                });
-                closeBtn.addEventListener('click', function () {
-                    window.location.reload();
-                });
-
-                function openConfirmModal() {
-                    confirmModal.hidden = false;
-                    if (confirmProceed) {
-                        setTimeout(function () { confirmProceed.focus(); }, 0);
-                    }
-                }
-
-                function closeConfirmModal() {
-                    confirmModal.hidden = true;
-                    startBtn.focus();
-                }
-
-                function startBulkStreamSync() {
-                    openModal();
-                    var body = new URLSearchParams();
-                    body.set('__RequestVerificationToken', getToken());
-                    fetch(streamUrl, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/x-www-form-urlencoded',
-                            'Accept': 'text/event-stream'
-                        },
-                        body: body,
-                        signal: abortController.signal
-                    }).then(function (res) {
-                        if (!res.ok) {
-                            live.textContent = 'Sync could not start (' + res.status + ').';
-                            endModal(false);
-                            return null;
-                        }
-                        return res.body.getReader();
-                    }).then(function (reader) {
-                        if (!reader) return;
-                        var decoder = new TextDecoder();
-                        var buffer = '';
-                        function pump() {
-                            return reader.read().then(function (result) {
-                                if (result.done) {
-                                    return;
-                                }
-                                buffer += decoder.decode(result.value, { stream: true });
-                                var parts = buffer.split('\n\n');
-                                buffer = parts.pop() || '';
-                                for (var i = 0; i < parts.length; i++) {
-                                    var block = parts[i].trim();
-                                    if (block.indexOf('data: ') !== 0) continue;
-                                    var jsonStr = block.slice(6);
-                                    var data;
-                                    try { data = JSON.parse(jsonStr); } catch (e) { continue; }
-                                    if (data.phase === 'complete' && data.success && data.result) {
-                                        progress.value = 100;
-                                        countEl.textContent = '';
-                                        live.textContent = 'Sync finished.';
-                                        summary.style.display = '';
-                                        summary.textContent = buildSummary(data.result);
-                                        endModal(true);
-                                    } else if (data.phase === 'error') {
-                                        live.textContent = data.message || 'Sync failed.';
-                                        endModal(false);
-                                    } else {
-                                        applyProgress(data);
-                                    }
-                                }
-                                return pump();
-                            });
-                        }
-                        return pump();
-                    }).catch(function (err) {
-                        if (err && err.name === 'AbortError') {
-                            live.textContent = 'Sync cancelled.';
-                        } else {
-                            live.textContent = 'Network error during sync.';
-                        }
-                        endModal(false);
-                    });
-                }
-
-                startBtn.addEventListener('click', function () {
-                    openConfirmModal();
-                });
-
-                if (confirmCancel) {
-                    confirmCancel.addEventListener('click', function () {
-                        closeConfirmModal();
-                    });
-                }
-                if (confirmProceed) {
-                    confirmProceed.addEventListener('click', function () {
-                        closeConfirmModal();
-                        startBulkStreamSync();
-                    });
-                }
-                confirmModal.addEventListener('click', function (e) {
-                    if (e.target === confirmModal) {
-                        closeConfirmModal();
-                    }
-                });
-                document.addEventListener('keydown', function (e) {
-                    if (e.key === 'Escape' && !confirmModal.hidden) {
-                        e.preventDefault();
-                        closeConfirmModal();
-                    }
-                });
-            })();
-        </script>
-    }
     @if (showBulkManagement)
     {
         <script nonce="@Context.Items["Nonce"]">
