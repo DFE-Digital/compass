@@ -59,5 +59,16 @@
     <Exec Command="npm run watch-css" ContinueOnError="true" />
   </Target>
 
+  <!-- DfEDigital.Frontend.AspNetCore 3.0.3: static web assets list dfe/.gitkeep but NuGet pack omits dotfiles (NU5119), breaking publish on Linux CI. -->
+  <Target Name="EnsureDfEFrontendAspNetCoreGitKeep"
+          BeforeTargets="ResolveStaticWebAssetsInputs;ComputeStaticWebAssetsPublishManifest;GetCopyToPublishDirectoryItems">
+    <PropertyGroup>
+      <_DfEFrontendPackageRoot Condition="'$(NuGetPackageRoot)' != ''">$([MSBuild]::EnsureTrailingSlash($(NuGetPackageRoot)))dfedigital.frontend.aspnetcore/3.0.3/</_DfEFrontendPackageRoot>
+      <_DfEFrontendGitKeep>$(_DfEFrontendPackageRoot)staticwebassets/dfe/.gitkeep</_DfEFrontendGitKeep>
+    </PropertyGroup>
+    <MakeDir Directories="$(_DfEFrontendPackageRoot)staticwebassets/dfe" Condition="'$(_DfEFrontendPackageRoot)' != '' and !Exists('$(_DfEFrontendGitKeep)')" />
+    <WriteLinesToFile File="$(_DfEFrontendGitKeep)" Lines="" Overwrite="false" Condition="'$(_DfEFrontendPackageRoot)' != '' and !Exists('$(_DfEFrontendGitKeep)')" />
+  </Target>
+
 </Project>
 
