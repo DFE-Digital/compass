@@ -13,8 +13,11 @@ public class RagStatus
 {
     public int Id { get; set; }
     public string Name { get; set; } = string.Empty;
+    public string? Description { get; set; }
     public string? BackgroundColourKey { get; set; }
     public string? TextColourKey { get; set; }
+    /// <summary>Admin tag modifier from <see cref="RagStatusLookup.CssClass"/>.</summary>
+    public string? CssClass { get; set; }
 }
 
 /// <summary>Placeholder type for ViewBag casts in work chrome (optional linked demand).</summary>
@@ -78,7 +81,15 @@ public class SearchAndFilterViewModel
     public string? SecondaryActionUrl { get; set; }
     public string? SecondaryActionLabel { get; set; }
     public IList<KeyValuePair<string, string>> HiddenFields { get; set; } = new List<KeyValuePair<string, string>>();
+
+    /// <summary>Human-readable active filters; each chip links to the same list with that constraint removed.</summary>
+    public IReadOnlyList<SearchAndFilterActiveChip> ActiveChips { get; set; } = Array.Empty<SearchAndFilterActiveChip>();
 }
+
+/// <param name="Label">Short filter name (e.g. RAG, Search).</param>
+/// <param name="Value">Selected display text.</param>
+/// <param name="RemoveUrl">GET URL with this constraint cleared.</param>
+public sealed record SearchAndFilterActiveChip(string Label, string Value, string RemoveUrl);
 
 public class SearchAndFilterFieldViewModel
 {
@@ -104,12 +115,20 @@ public class UserPickerViewModel
     public string FieldName { get; set; } = "UserId";
     public string Label { get; set; } = "Select user";
     public string? Hint { get; set; }
+    /// <summary>When true, render GOV.UK form classes instead of legacy DfE form classes.</summary>
+    public bool UseGovUkStyling { get; set; }
     public int? DefaultUserId { get; set; }
     public string? DefaultName { get; set; }
     public string? DefaultEmail { get; set; }
     public string Placeholder { get; set; } = "e.g. Alex Smith or alex.smith@education.gov.uk";
     public string DefaultSummaryText { get; set; } = "No user selected.";
     public string? InputIdSuffix { get; set; }
+
+    /// <summary>When true, renders hidden name/email fields updated by user-picker.js for POST (e.g. chair display string).</summary>
+    public bool IncludeHiddenNameEmailFields { get; set; }
+
+    public string HiddenNameFieldName { get; set; } = "UserName";
+    public string HiddenEmailFieldName { get; set; } = "UserEmail";
 }
 
 #endregion
@@ -146,6 +165,80 @@ public class PipelineStage
     public string? Description { get; set; }
     public bool IsActive { get; set; } = true;
     public string? Grouping { get; set; }
+}
+
+#endregion
+
+#region Demand pipeline dashboard (Modern /modern/demand)
+
+public class DemandDashboardViewModel
+{
+    public int TotalRequests { get; set; }
+    public int SubmittedCount { get; set; }
+    public int InExploreCount { get; set; }
+    public int ScoringCount { get; set; }
+    public int TriagePendingCount { get; set; }
+    public int ClosedCount { get; set; }
+
+    public List<DemandDashboardRecentRow> RecentSubmissions { get; set; } = new();
+
+    public DateTime? NextTriageMeetingDate { get; set; }
+    public string? NextTriageMeetingName { get; set; }
+    public int? NextTriageMeetingDaysUntil { get; set; }
+    public int NextMeetingDemandsReadyCount { get; set; }
+    public List<DemandDashboardAgendaPreviewLine> NextMeetingAgendaPreview { get; set; } = new();
+    public List<DemandDashboardTriageItem> NextMeetingItems { get; set; } = new();
+
+    public int Band90MustDo { get; set; }
+    public int Band90CouldDo { get; set; }
+    public int Band90DoNotDo { get; set; }
+
+    public List<DemandDashboardOrphanBc> OrphanBusinessCases { get; set; } = new();
+
+    public PipelineTrackerViewModel? PipelineTracker { get; set; }
+}
+
+public class DemandDashboardTriageItem
+{
+    public Guid Id { get; set; }
+    public string Title { get; set; } = "";
+    public string Reference { get; set; } = "";
+    public string Department { get; set; } = "—";
+    public int? TotalScore { get; set; }
+    public string? SuggestedBand { get; set; }
+    public string BandClass { get; set; } = "";
+    public string BandLabel { get; set; } = "—";
+    public string StatusLabel { get; set; } = "";
+    public string StatusTagClass { get; set; } = "dfe-c-tag--grey";
+}
+
+public class DemandDashboardOrphanBc
+{
+    public Guid Id { get; set; }
+    public string Title { get; set; } = "";
+    public string Reference { get; set; } = "";
+    public string Stage { get; set; } = "";
+    public string? BusinessArea { get; set; }
+    public DateTime CreatedAt { get; set; }
+}
+
+public class DemandDashboardRecentRow
+{
+    public Guid Id { get; set; }
+    public string Title { get; set; } = "";
+    public string Reference { get; set; } = "";
+    public string Department { get; set; } = "—";
+    public string StatusTagClass { get; set; } = "dfe-c-tag--grey";
+    public string StatusLabel { get; set; } = "";
+    public int? TotalScore { get; set; }
+    public string? SuggestedBand { get; set; }
+}
+
+public class DemandDashboardAgendaPreviewLine
+{
+    public string Reference { get; set; } = "";
+    public string BandClass { get; set; } = "dfe-c-band--could";
+    public string BandLabel { get; set; } = "—";
 }
 
 #endregion

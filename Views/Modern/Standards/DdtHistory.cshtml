@@ -1,0 +1,85 @@
+@model Compass.ViewModels.Modern.DdtStandardHistoryViewModel
+@using System.Globalization
+@{
+    ViewData["Title"] = $"Version history — {Model.Title}";
+    var culture = CultureInfo.GetCultureInfo("en-GB");
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernStandards")">Standards</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("DdtStandards", "ModernStandards")">DDT standards register</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("DdtDetail", "ModernStandards", new { id = Model.StandardId })">@Model.Title</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">Version history</li>
+}
+
+@await Html.PartialAsync("_ModernPageHeader", new Compass.ViewModels.Modern.ModernPageHeaderViewModel {
+  BackLinkHref = Url.Action("DdtDetail", "ModernStandards", new { id = Model.StandardId }),
+  BackLinkText = "Back to standard",
+  Caption = $"DDT-{Model.StandardId}",
+  Title = "Version history",
+  Lede = await Html.PartialAsync("_GovukBodyParagraph", Model.Title)
+})
+
+<p class="govuk-body">Current version: <strong>@Model.CurrentVersion</strong></p>
+
+@if (!Model.Entries.Any())
+{
+  <p class="govuk-body dfe-c-text-muted">No version history is recorded for this standard yet.</p>
+}
+else
+{
+  <table class="govuk-table">
+    <thead class="govuk-table__head">
+      <tr class="govuk-table__row">
+        <th scope="col" class="govuk-table__header">Version</th>
+        <th scope="col" class="govuk-table__header">Date changed</th>
+        <th scope="col" class="govuk-table__header">What changed</th>
+        <th scope="col" class="govuk-table__header">Published by</th>
+        <th scope="col" class="govuk-table__header"><span class="govuk-visually-hidden">Actions</span></th>
+      </tr>
+    </thead>
+    <tbody class="govuk-table__body">
+      @foreach (var entry in Model.Entries)
+      {
+        <tr class="govuk-table__row">
+          <td class="govuk-table__cell">
+            <strong>@entry.VersionNumber</strong>
+            @if (!string.IsNullOrWhiteSpace(entry.PreviousVersion))
+            {
+              <span class="govuk-body-s dfe-c-text-muted govuk-!-display-block">from @entry.PreviousVersion</span>
+            }
+            @if (entry.IsCurrent)
+            {
+              <span class="dfe-c-tag dfe-c-tag--green govuk-!-margin-top-1">Current</span>
+            }
+          </td>
+          <td class="govuk-table__cell">
+            @(entry.ChangedAt?.ToString("d MMMM yyyy", culture) ?? "—")
+          </td>
+          <td class="govuk-table__cell">
+            @if (!string.IsNullOrWhiteSpace(entry.ChangeSummary))
+            {
+              <p class="govuk-body govuk-!-margin-bottom-1">@entry.ChangeSummary</p>
+            }
+            @if (!string.IsNullOrWhiteSpace(entry.ChangeDetails))
+            {
+              <p class="govuk-body-s govuk-!-margin-bottom-0 dfe-c-text-muted">@entry.ChangeDetails</p>
+            }
+            @if (string.IsNullOrWhiteSpace(entry.ChangeSummary) && string.IsNullOrWhiteSpace(entry.ChangeDetails))
+            {
+              <span class="dfe-c-text-muted">—</span>
+            }
+          </td>
+          <td class="govuk-table__cell">@(entry.PublishedByName ?? "—")</td>
+          <td class="govuk-table__cell">
+            @if (entry.ViewStandardId.HasValue)
+            {
+              <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("DdtDetail", "ModernStandards", new { id = entry.ViewStandardId })">View</a>
+            }
+          </td>
+        </tr>
+      }
+    </tbody>
+  </table>
+}

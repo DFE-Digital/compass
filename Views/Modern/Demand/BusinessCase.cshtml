@@ -1,0 +1,150 @@
+@model IEnumerable<Compass.Models.DemandPipeline.DemandPipelineBusinessCase>
+@using Compass.ViewModels.Modern
+@{
+  ViewData["Title"] = "Business cases";
+  int readyCount = ViewBag.ReadyCounts ?? 0;
+  int devCount = ViewBag.DevCount ?? 0;
+  int ideaCount = ViewBag.IdeaCount ?? 0;
+  int submittedGrand = ViewBag.SubmittedCount as int? ?? 0;
+  int mineCasesCount = ViewBag.MineCasesCount as int? ?? 0;
+  int allCasesCount = ViewBag.AllCasesCount as int? ?? ViewBag.PipelineTotal as int? ?? ViewBag.DraftCount as int? ?? 0;
+  var stageFilter = ViewBag.StageFilter as string;
+  var search = ViewBag.Search as string;
+  var deptFilter = ViewBag.DepartmentFilter as string;
+  var tab = (ViewBag.Tab as string) ?? "mine";
+  var isMineTab = tab == "mine";
+  var isAllTab = tab == "all";
+  var isSubmittedTab = tab == "submitted";
+  var departments = ViewBag.DepartmentOptions as List<string> ?? new List<string>();
+
+  string TabUrl(string t) =>
+    Url.Action("BusinessCase", "ModernDemand", new { tab = t }) ?? "#";
+}
+
+@section Breadcrumbs {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernDemand")">Demand</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">Business cases</li>
+}
+
+<div id="sc-business-case-index">
+@{
+  var bcIndexActions = await Html.PartialAsync("_DemandBusinessCaseIndexHeaderActions");
+  var bcIndexLede = await Html.PartialAsync("_GovukBodyParagraph", "Ideas and business cases being developed before submission to the demand register");
+}
+@await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+  Caption = "Demand pipeline",
+  Title = "Business cases",
+  Lede = bcIndexLede,
+  Actions = bcIndexActions
+})
+
+  @if (isMineTab || isAllTab)
+  {
+ <div class="dfe-f-card-grid govuk-!-margin-bottom-3">
+ <div class="dfe-f-stat-card dfe-f-stat-card--tint-green">
+ <p class="govuk-body-s dfe-f-stat-card__label">Submitted</p>
+ <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@submittedGrand</p>
+      </div>
+ <div class="dfe-f-stat-card dfe-f-stat-card--tint-teal">
+ <p class="govuk-body-s dfe-f-stat-card__label">Ready to submit</p>
+ <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@readyCount</p>
+      </div>
+ <div class="dfe-f-stat-card dfe-f-stat-card--tint-orange">
+ <p class="govuk-body-s dfe-f-stat-card__label">Developing</p>
+ <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@devCount</p>
+      </div>
+ <div class="dfe-f-stat-card dfe-f-stat-card--tint-grey">
+ <p class="govuk-body-s dfe-f-stat-card__label">Ideas / concept</p>
+ <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@ideaCount</p>
+      </div>
+    </div>
+  }
+  else
+  {
+ <div class="dfe-c-callout dfe-c-callout--info govuk-!-margin-bottom-3">
+ <div class="dfe-c-callout__heading">Submitted to demand</div>
+ <p class="dfe-c-callout__body">Business cases that have been submitted or linked to a demand request (@submittedGrand total).</p>
+    </div>
+  }
+
+ <nav class="dfe-f-sub-navigation govuk-!-margin-bottom-3" aria-label="Business case views">
+    <ul class="dfe-f-sub-navigation__list">
+    <li class="dfe-f-sub-navigation__item@(isMineTab ? " dfe-f-sub-navigation__item--active" : "")">
+    <a class="dfe-f-sub-navigation__link govuk-link" href="@TabUrl("mine")" id="tab-bc-mine"@if (isMineTab) { <text> aria-current="page"</text> }>My cases <span class="dfe-c-fw-regular">(@mineCasesCount)</span></a>
+    </li>
+    <li class="dfe-f-sub-navigation__item@(isAllTab ? " dfe-f-sub-navigation__item--active" : "")">
+    <a class="dfe-f-sub-navigation__link govuk-link" href="@TabUrl("all")" id="tab-bc-all"@if (isAllTab) { <text> aria-current="page"</text> }>All cases <span class="dfe-c-fw-regular">(@allCasesCount)</span></a>
+    </li>
+    <li class="dfe-f-sub-navigation__item@(isSubmittedTab ? " dfe-f-sub-navigation__item--active" : "")">
+    <a class="dfe-f-sub-navigation__link govuk-link" href="@TabUrl("submitted")" id="tab-bc-submitted"@if (isSubmittedTab) { <text> aria-current="page"</text> }>Submitted <span class="dfe-c-fw-regular">(@submittedGrand)</span></a>
+    </li>
+    </ul>
+  </nav>
+
+ <form method="get" action="@Url.Action("BusinessCase", "ModernDemand")" id="bc-filter-form" class="dfe-c-mb-3">
+    <input type="hidden" name="tab" value="@tab" />
+    <div id="search-and-filter">
+ <div class="filter-toolbar">
+ <div class="filter-toolbar__search-wrap">
+ <input type="search" name="search" id="bc-register-search" value="@search" placeholder="Search business cases…" class="filter-search" autocomplete="off" aria-label="Search business cases" />
+ <button type="submit" class="govuk-button govuk-button--secondary filter-toolbar__search-submit" id="bc-search-submit">Search</button>
+        </div>
+ <button type="button" class="filter-toggle-btn" id="bc-filter-btn" aria-expanded="false" aria-controls="bc-filter-panel">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M1 3h14v1.5l-5 5V14l-4-2V9.5L1 4.5V3z"></path></svg>
+ <span class="filter-toggle-label">Filter</span>
+        </button>
+      </div>
+ <div class="filter-panel" id="bc-filter-panel">
+ <div class="filter-panel__grid">
+          <div>
+            <label for="bc-filter-stage">Stage</label>
+ <select name="stage" id="bc-filter-stage" class="govuk-select">
+              @{ var bcStageOpts = new[] { ("", "All"), ("Ready", "Ready to submit"), ("Developing", "Developing"), ("Idea", "Idea / concept") }; }
+              @foreach (var (val, label) in bcStageOpts)
+              {
+                if ((string.IsNullOrEmpty(val) && string.IsNullOrEmpty(stageFilter)) || val == stageFilter) { <option value="@val" selected>@label</option> }
+                else { <option value="@val">@label</option> }
+              }
+            </select>
+          </div>
+          <div>
+            <label for="bc-filter-dept">Business area</label>
+ <select name="department" id="bc-filter-dept" class="govuk-select">
+              <option value="">All business areas</option>
+              @foreach (var d in departments)
+              {
+                if (deptFilter == d) { <option value="@d" selected>@d</option> }
+                else { <option value="@d">@d</option> }
+              }
+            </select>
+          </div>
+        </div>
+ <div class="filter-panel__actions">
+ <button type="submit" class="govuk-button">Apply filters</button>
+ <a href="@Url.Action("BusinessCase", "ModernDemand", new { tab })" class="govuk-link">Clear filters</a>
+        </div>
+      </div>
+    </div>
+  </form>
+
+ <div id="d-bc-mine" class="tab-pane @(isMineTab ?"on" : "")" role="tabpanel" aria-labelledby="tab-bc-mine">
+    @if (isMineTab)
+    {
+      @await Html.PartialAsync("~/Views/Modern/Demand/_CaseTable.cshtml", Model)
+    }
+  </div>
+
+ <div id="d-bc-all" class="tab-pane @(isAllTab ?"on" : "")" role="tabpanel" aria-labelledby="tab-bc-all">
+    @if (isAllTab)
+    {
+      @await Html.PartialAsync("~/Views/Modern/Demand/_CaseTable.cshtml", Model)
+    }
+  </div>
+
+ <div id="d-bc-submitted" class="tab-pane @(isSubmittedTab ?"on" : "")" role="tabpanel" aria-labelledby="tab-bc-submitted">
+    @if (isSubmittedTab)
+    {
+      @await Html.PartialAsync("~/Views/Modern/Demand/_CaseTable.cshtml", Model)
+    }
+  </div>
+</div>

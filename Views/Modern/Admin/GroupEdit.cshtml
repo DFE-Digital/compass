@@ -1,0 +1,95 @@
+@model Compass.ViewModels.Modern.AdminGroupFormViewModel
+@using Compass.ViewModels.Modern
+@using Microsoft.AspNetCore.Html
+@{
+    ViewData["Title"] = "Edit group — " + Model.Name;
+    var id = Model.Id ?? 0;
+}
+
+@section Breadcrumbs {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernAdmin")">Admin</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Groups", "ModernAdmin")">Groups</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">Edit</li>
+}
+
+<div class="admin-hub">
+ @{
+   var groupEditLede = new HtmlString($"<p class=\"govuk-body govuk-!-margin-bottom-0\"><a class=\"govuk-link govuk-link--no-visited-state\" href=\"{Url.Action("GroupDetail", "ModernAdmin", new { id }) ?? "#"}\">Manage members and permissions</a><span class=\"govuk-body govuk-!-margin-left-2 govuk-!-margin-right-2\">·</span><a class=\"govuk-link govuk-link--no-visited-state\" href=\"{Url.Action("Groups", "ModernAdmin") ?? "#"}\">Back to all groups</a></p>");
+ }
+ @await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+   Caption = "Group",
+   Title = "Edit group",
+   Lede = groupEditLede
+ })
+
+  @if (ViewBag.AdminError != null)
+  {
+ <div class="govuk-error-summary" role="alert" data-module="govuk-error-summary" style="margin-bottom:1.5rem;">
+ <h2 class="govuk-error-summary__title">There is a problem</h2>
+ <div class="govuk-error-summary__body">@ViewBag.AdminError</div>
+    </div>
+  }
+  @if (ViewBag.AdminMessage != null)
+  {
+ <div class="govuk-notification-banner govuk-notification-banner--success govuk-!-margin-bottom-3" role="region">
+ <div class="govuk-notification-banner__content"><p class="govuk-notification-banner__heading">@ViewBag.AdminMessage</p></div>
+    </div>
+  }
+
+ <div class="dfe-c-flex" style="gap:0.5rem;flex-wrap:wrap;margin-bottom:1rem;">
+ @if (Model.IsActive) { <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--green">Active</span> }
+ else { <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--grey">Inactive</span> }
+ @if (Model.IsSystemGroup) { <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--blue">System group</span> }
+  </div>
+
+ <div class="dfe-c-card dfe-c-mb-4" style="border:1px solid var(--grey-2);border-left:4px solid var(--blue);padding:1.25rem 1.5rem;background:var(--white);max-width:40rem;">
+ <h2 class="govuk-heading-m govuk-!-margin-top-0">@Model.Name</h2>
+    <form method="post" action="@Url.Action("GroupEdit", "ModernAdmin", new { id })" novalidate>
+      @Html.AntiForgeryToken()
+ <div class="govuk-form-group govuk-!-margin-bottom-3">
+ <label class="govuk-label" for="edit-grp-name">Group name</label>
+        @if (Model.IsSystemGroup)
+        {
+          <input type="hidden" name="name" value="@Model.Name" />
+ <input class="govuk-input govuk-!-width-two-thirds" type="text" id="edit-grp-name" value="@Model.Name" maxlength="200" disabled aria-disabled="true" />
+ <p class="govuk-hint govuk-!-margin-bottom-0">System group names cannot be changed.</p>
+        }
+        else
+        {
+ <input class="govuk-input govuk-!-width-two-thirds" type="text" name="name" id="edit-grp-name" value="@Model.Name" required maxlength="200" />
+        }
+      </div>
+ <div class="govuk-form-group govuk-!-margin-bottom-3">
+ <label class="govuk-label" for="edit-grp-desc">Description <span class="govuk-hint govuk-!-display-inline">(optional)</span></label>
+ <input class="govuk-input govuk-!-width-two-thirds" type="text" name="description" id="edit-grp-desc" value="@Model.Description" maxlength="500" />
+      </div>
+      @if (!Model.IsSystemGroup)
+      {
+ <div class="govuk-form-group govuk-!-margin-bottom-3">
+ <label class="govuk-label" for="edit-grp-active">Active</label>
+ <select class="govuk-select" name="isActive" id="edit-grp-active">
+            @if (Model.IsActive)
+            {
+              <option value="true" selected>Yes</option>
+              <option value="false">No</option>
+            }
+            else
+            {
+              <option value="true">Yes</option>
+              <option value="false" selected>No</option>
+            }
+          </select>
+        </div>
+      }
+      else
+      {
+        <input type="hidden" name="isActive" value="@(Model.IsActive ? "true" : "false")" />
+      }
+ <div class="govuk-button-group">
+ <button type="submit" class="govuk-button" data-module="govuk-button">Save changes</button>
+ <a href="@Url.Action("Groups", "ModernAdmin")" class="govuk-link govuk-link--no-visited-state govuk-!-margin-left-2">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>

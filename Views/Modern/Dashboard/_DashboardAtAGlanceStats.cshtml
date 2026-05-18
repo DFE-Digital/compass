@@ -1,0 +1,78 @@
+@model Compass.ViewModels.Dashboard.HomeDashboardViewModel
+@using Compass.ViewModels.Modern
+@{
+  var fipsServiceRegisterEnabled = ViewBag.FipsServiceRegisterEnabled as bool? == true;
+  var showRaidNavigation = ViewBag.ShowRaidNavigation as bool? == true;
+  var openRisksCount = Model.MyProjects
+    .SelectMany(p => p.Risks ?? [])
+    .Count(r => !r.IsDeleted && !string.Equals(r.Status, "closed", StringComparison.OrdinalIgnoreCase));
+  var highIssueCount = Model.HighPriorityIssues.Count;
+  var atRiskCount = Model.AtRiskProjects.Count;
+  var deliveryWorkHref = Url.Action("Index", "ModernWork") ?? "#";
+  var productsHref = fipsServiceRegisterEnabled
+    ? (Url.Action("Fips", "ModernManage", new { tab = "my" }) ?? "#")
+    : (Url.Action("PerformanceMetrics", "ProductReporting", new { view = "mine" }) ?? "#");
+  var risksHref = Url.Action("Risks", "ModernRaid") ?? "/modern/raid/risks";
+  var issuesHref = Url.Action("Issues", "ModernRaid") ?? "#";
+  var atRiskHref = Url.Action("AllWork", "ModernWork") ?? "#";
+}
+
+<h2 id="dashboard-stats-heading" class="govuk-heading-s govuk-!-margin-top-0 govuk-!-margin-bottom-2">At a glance</h2>
+<p class="govuk-body-s govuk-!-margin-bottom-4">Counts for work where you have a role. Open a card for the relevant register.</p>
+
+<div class="dfe-f-card-grid govuk-!-margin-bottom-0" role="region" aria-labelledby="dashboard-stats-heading">
+  @await Html.PartialAsync("~/Views/Modern/Raid/_RaidDashboardStatCard.cshtml", new RaidDashboardStatCardVm
+  {
+    Label = "Delivery work",
+    Value = Model.MyProjects.Count.ToString("N0"),
+    Trend = "View delivery work",
+    Href = deliveryWorkHref,
+    AriaLabel = $"Delivery work: {Model.MyProjects.Count:N0}",
+    TintClass = "dfe-f-stat-card--tint-teal"
+  })
+  @if (fipsServiceRegisterEnabled)
+  {
+    @await Html.PartialAsync("~/Views/Modern/Raid/_RaidDashboardStatCard.cshtml", new RaidDashboardStatCardVm
+    {
+      Label = "Operational products",
+      Value = Model.MyProducts.Count.ToString("N0"),
+      Trend = "View operational products",
+      Href = productsHref,
+      AriaLabel = $"Operational products: {Model.MyProducts.Count:N0}",
+      TintClass = "dfe-f-stat-card--tint-blue"
+    })
+  }
+  @await Html.PartialAsync("~/Views/Modern/Raid/_RaidDashboardStatCard.cshtml", new RaidDashboardStatCardVm
+  {
+    Label = "Open risks",
+    Value = openRisksCount.ToString("N0"),
+    Trend = "View risks",
+    Href = risksHref,
+    AriaLabel = $"Open risks: {openRisksCount:N0}",
+    TintClass = "dfe-f-stat-card--tint-orange"
+  })
+  @if (showRaidNavigation)
+  {
+    @await Html.PartialAsync("~/Views/Modern/Raid/_RaidDashboardStatCard.cshtml", new RaidDashboardStatCardVm
+    {
+      Label = "High / critical issues",
+      Value = highIssueCount.ToString("N0"),
+      Trend = "View issues",
+      Href = issuesHref,
+      AriaLabel = $"High or critical issues: {highIssueCount:N0}",
+      TintClass = "dfe-f-stat-card--tint-red"
+    })
+  }
+  else
+  {
+    @await Html.PartialAsync("~/Views/Modern/Raid/_RaidDashboardStatCard.cshtml", new RaidDashboardStatCardVm
+    {
+      Label = "At-risk delivery",
+      Value = atRiskCount.ToString("N0"),
+      Trend = "View at-risk work",
+      Href = atRiskHref,
+      AriaLabel = $"At-risk delivery: {atRiskCount:N0}",
+      TintClass = "dfe-f-stat-card--tint-grey"
+    })
+  }
+</div>

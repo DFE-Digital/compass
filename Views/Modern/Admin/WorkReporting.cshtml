@@ -1,0 +1,100 @@
+@model Compass.ViewModels.Modern.WorkReportingViewModel
+@using Compass.ViewModels.Modern
+@using Microsoft.AspNetCore.Html
+@{
+    ViewData["Title"] = "Work reporting";
+}
+
+@section Breadcrumbs {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernAdmin")">Admin</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">Work reporting</li>
+}
+
+<div class="admin-hub" id="sc-admin-workreporting">
+  @{
+    var workReportingActions = new HtmlString($"<div class=\"dfe-c-flex\" style=\"gap:0.5rem;flex-wrap:wrap;align-items:center;\"><a class=\"govuk-button\" href=\"{Url.Action("WorkReportingCreate", "ModernAdmin") ?? "#"}\" id=\"btn-create-monthly-reporting-period\">Create monthly reporting period</a></div>");
+    var workReportingLede = new HtmlString("<p class=\"govuk-body govuk-!-margin-bottom-0\">Define each month’s period bounds and submission window (same pattern as performance commissions). Work items use these dates to decide when monthly returns can be submitted.</p>");
+  }
+  @await Html.PartialAsync("~/Views/Modern/Shared/_ModernPageHeader.cshtml", new ModernPageHeaderViewModel {
+    Caption = "Administration",
+    Title = "Work reporting",
+    Lede = workReportingLede,
+    Actions = workReportingActions
+  })
+
+  @if (ViewBag.AdminError != null)
+  {
+ <div class="govuk-error-summary" role="alert" data-module="govuk-error-summary" style="margin-bottom:1rem;">
+ <h2 class="govuk-error-summary__title">There is a problem</h2>
+ <div class="govuk-error-summary__body">@ViewBag.AdminError</div>
+    </div>
+  }
+  @if (ViewBag.AdminMessage != null)
+  {
+ <div class="govuk-notification-banner govuk-notification-banner--success govuk-!-margin-bottom-3" role="region" aria-labelledby="wr-notif-title">
+ <div class="govuk-notification-banner__header">
+ <h2 class="govuk-notification-banner__title" id="wr-notif-title">Success</h2>
+      </div>
+ <div class="govuk-notification-banner__content">
+ <p class="govuk-notification-banner__heading">@ViewBag.AdminMessage</p>
+      </div>
+    </div>
+  }
+
+ <div class="dfe-c-mb-2">
+ <h2 class="govuk-heading-m" style="margin:0;">Monthly reporting periods</h2>
+ <p class="govuk-body govuk-hint govuk-!-margin-bottom-0 govuk-!-margin-top-1">Each row is one calendar month (keyed from period start). When a period is active and today falls between submission opens and closes, teams can submit returns for that month. Months without a row still use legacy deadline rules from <strong>MonthlyUpdateDeadlineConfigs</strong> if configured.</p>
+  </div>
+
+ <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+    <table class="govuk-table govuk-table--small dfe-f-table--condensed">
+      <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+ <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Name</button></th>
+ <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Period bounds</button></th>
+ <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Submission opens</button></th>
+ <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Submission closes</button></th>
+ <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Status</button></th>
+        </tr>
+      </thead>
+      <tbody class="govuk-table__body">
+        @if (Model.ReportingPeriods.Count == 0)
+        {
+          <tr class="govuk-table__row">
+ <td class="govuk-table__cell" colspan="5"><span class="dfe-c-text-muted">No monthly reporting periods yet. Use <strong>Create monthly reporting period</strong> — for example April 2026 with period 1 Apr–30 Apr, submission opens 26 Apr, closes 3 May.</span></td>
+          </tr>
+        }
+        else
+        {
+          foreach (var p in Model.ReportingPeriods)
+          {
+            <tr class="govuk-table__row">
+              <td class="govuk-table__cell">
+                <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("WorkReportingPeriodEdit", "ModernAdmin", new { id = p.Id })" aria-label="Edit reporting period @p.PeriodLabel"><strong>@p.PeriodLabel</strong></a>
+              </td>
+              <td class="govuk-table__cell">@p.PeriodStart.ToString("d MMM yyyy") – @p.PeriodEnd.ToString("d MMM yyyy")</td>
+              <td class="govuk-table__cell">@p.SubmissionOpens.ToString("d MMM yyyy")</td>
+              <td class="govuk-table__cell">@p.SubmissionCloses.ToString("d MMM yyyy")</td>
+              <td class="govuk-table__cell">
+                @if (!p.IsActive)
+                {
+ <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--grey">Inactive</span>
+                }
+                else if (p.IsSubmissionWindowLive)
+                {
+ <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--green">Submission open</span>
+                }
+                else
+                {
+ <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--blue">Active</span>
+                }
+              </td>
+            </tr>
+          }
+        }
+      </tbody>
+    </table>
+  </div>
+</div>

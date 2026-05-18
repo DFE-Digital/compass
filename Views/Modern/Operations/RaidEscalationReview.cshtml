@@ -1,0 +1,170 @@
+@model Compass.ViewModels.Modern.ModernRaidEscalationReviewViewModel
+@using Compass.ViewModels.Modern
+@{
+  ViewData["Title"] = "Action request — " + Model.Reference;
+  var tierRequestsListUrl = Url.Action("RaidEscalations", "ModernOperations", new { tab = Model.ListReturnTab }) ?? "#";
+}
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernOperations")">Operations</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@tierRequestsListUrl">RAID tier requests</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">@Model.Reference</li>
+}
+
+<div class="modern-work-page raid-ops-esc" style="max-width: 100%; box-sizing: border-box;">
+  <style>
+    .raid-ops-esc { --raid-esc-max: 40rem; }
+    .raid-ops-esc .raid-esc-cap { max-width: var(--raid-esc-max); }
+    .raid-ops-esc .raid-esc-tier-block {
+      border: 1px solid #b1b4b6;
+      background: #f3f2f1;
+      padding: 1.25rem 1.25rem 1.1rem;
+      max-width: var(--raid-esc-max);
+      margin: 0 0 1.5rem 0;
+    }
+    .raid-ops-esc .raid-esc-tier-block__row { margin: 0; font-size: 1.125rem; line-height: 1.4; }
+    .raid-ops-esc .raid-esc-tier-block__row + .raid-esc-tier-block__row { margin-top: 0.9rem; padding-top: 0.9rem; border-top: 1px solid #b1b4b6; }
+    .raid-ops-esc .raid-esc-tier-block__k { display: block; font-size: 0.875rem; font-weight: 400; color: #505a5f; margin-bottom: 0.2rem; }
+  </style>
+  @{
+    var raidEscRevLede = await Html.PartialAsync("_RaidEscalationReviewHeaderLede", Model);
+    var raidEscRevActions = await Html.PartialAsync("_RaidEscalationReviewHeaderActions", Model);
+  }
+  @await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+    Caption = "Operations · RAID",
+    Title = "Escalation request",
+    Lede = raidEscRevLede,
+    Actions = raidEscRevActions
+  })
+
+  @if (TempData["ErrorMessage"] is string errMsg && !string.IsNullOrWhiteSpace(errMsg))
+  {
+    <div class="govuk-error-summary" role="alert" data-module="govuk-error-summary" style="max-width:44rem;">
+      <h2 class="govuk-error-summary__title">There is a problem</h2>
+      <div class="govuk-error-summary__body"><p class="govuk-!-margin-bottom-0">@errMsg</p></div>
+    </div>
+  }
+  @if (TempData["SuccessMessage"] is string okMsg && !string.IsNullOrWhiteSpace(okMsg))
+  {
+    <div class="govuk-notification-banner govuk-notification-banner--success" role="region" style="max-width:44rem;">
+      <div class="govuk-notification-banner__header"><h2 class="govuk-notification-banner__title">Success</h2></div>
+      <div class="govuk-notification-banner__content"><p class="govuk-notification-banner__heading">@okMsg</p></div>
+    </div>
+  }
+
+  <section class="govuk-!-margin-bottom-4" aria-labelledby="raid-esc-risk-h">
+    <h2 class="govuk-heading-m govuk-!-margin-bottom-2" id="raid-esc-risk-h" style="max-width:var(--raid-esc-max);">Risk</h2>
+    <dl class="govuk-summary-list govuk-summary-list--no-border raid-esc-cap">
+      <div class="govuk-summary-list__row">
+        <dt class="govuk-summary-list__key">Reference</dt>
+        <dd class="govuk-summary-list__value dfe-c-mono">@Model.Reference</dd>
+      </div>
+      <div class="govuk-summary-list__row">
+        <dt class="govuk-summary-list__key">Title</dt>
+        <dd class="govuk-summary-list__value">@Model.Title</dd>
+      </div>
+      <div class="govuk-summary-list__row">
+        <dt class="govuk-summary-list__key">Inherent (score @Model.RiskScore)</dt>
+        <dd class="govuk-summary-list__value">@Model.InherentLabel</dd>
+      </div>
+      <div class="govuk-summary-list__row">
+        <dt class="govuk-summary-list__key">Status</dt>
+        <dd class="govuk-summary-list__value">@Model.StatusLabel</dd>
+      </div>
+    </dl>
+  </section>
+
+  <section class="govuk-!-margin-bottom-4" aria-labelledby="raid-esc-change-h">
+    <h2 class="govuk-heading-m govuk-!-margin-bottom-2" id="raid-esc-change-h" style="max-width:var(--raid-esc-max);">Tier change</h2>
+    <div class="raid-esc-tier-block" role="group" aria-label="Current and requested tier">
+      <p class="raid-esc-tier-block__row">
+        <span class="raid-esc-tier-block__k">Current risk tier</span>
+        <strong class="govuk-!-font-size-24">@Model.CurrentRiskTierLabel</strong>
+      </p>
+      <p class="raid-esc-tier-block__row">
+        <span class="raid-esc-tier-block__k">Requested &mdash; move to</span>
+        <strong class="govuk-!-font-size-24">@Model.RequestedToTierLabel</strong>
+      </p>
+    </div>
+    <p class="govuk-body-s raid-esc-cap dfe-c-text-muted" style="margin:0 0 1rem;">Requested by <strong>@Model.SubmittedByDisplay</strong> &middot; @Model.SubmittedAt.ToString("d MMM yyyy, HH:mm") (UTC)</p>
+    <div class="raid-esc-cap">
+      <h3 class="govuk-heading-s govuk-!-margin-bottom-1">Rationale from delivery</h3>
+      @if (string.IsNullOrWhiteSpace(Model.Rationale))
+      {
+        <p class="govuk-body dfe-c-text-muted govuk-!-margin-bottom-0">No rationale was provided with this request.</p>
+      }
+      else
+      {
+        <p class="govuk-body govuk-!-white-space-pre-wrap govuk-!-margin-bottom-0">@Model.Rationale</p>
+      }
+    </div>
+  </section>
+
+  <div class="dfe-c-card dfe-c-card--plain" style="max-width: 44rem;">
+    <h2 class="govuk-heading-m govuk-!-margin-top-0">Your decision</h2>
+    <p class="govuk-body raid-esc-cap" style="margin:0 0 1.25rem;">
+      <strong>Approve</strong> to apply the requested tier, or <strong>decline</strong> to leave the risk on an operational band. Enter your rationale in all cases. If you decline, also choose the operational band below.
+    </p>
+    <form asp-controller="ModernOperations" asp-action="RaidEscalationDecide" method="post" novalidate>
+      @Html.AntiForgeryToken()
+      <input type="hidden" name="requestId" value="@Model.RequestId" />
+      <input type="hidden" name="returnUrl" value="@Model.ListReturnUrl" />
+      <input type="hidden" name="returnTab" value="@Model.ListReturnTab" />
+
+      <div class="govuk-form-group">
+        <fieldset class="govuk-fieldset" aria-describedby="esc-decision-hint">
+          <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Choose an option</legend>
+          <div id="esc-decision-hint" class="govuk-hint">Select one.</div>
+          <div class="govuk-radios" data-module="govuk-radios">
+            <div class="govuk-radios__item">
+              <input class="govuk-radios__input" type="radio" name="decision" id="dec-approve" value="approve" checked>
+              <label class="govuk-label govuk-radios__label" for="dec-approve">Approve &mdash; move to <span class="govuk-!-font-weight-bold">@Model.RequestedToTierLabel</span></label>
+            </div>
+            <div class="govuk-radios__item">
+              <input class="govuk-radios__input" type="radio" name="decision" id="dec-reject" value="reject" @if (Model.RejectTierOptions.Count == 0) { <text>disabled</text> }>
+              <label class="govuk-label govuk-radios__label" for="dec-reject">Decline &mdash; set band to the operational tier you choose (default: <span class="govuk-!-font-weight-bold">@Model.DefaultRejectTierName</span>)</label>
+            </div>
+          </div>
+        </fieldset>
+      </div>
+
+      @if (Model.RejectTierOptions.Count == 0)
+      {
+        <div class="govuk-inset-text raid-esc-cap govuk-!-margin-bottom-4" style="max-width: 44rem;">
+          There are no active <strong>operational</strong> (non-proposed) tiers. Add and activate bands in <strong>Admin &rarr; RAID</strong> before you can decline and set where the risk should sit.
+        </div>
+      }
+      else
+      {
+        <div class="govuk-form-group">
+          <label class="govuk-label" for="reject-tier-esc">Operational band (if you decline)</label>
+          <div class="govuk-hint" id="reject-tier-esc-h">If you <strong>approve</strong>, this is ignored. If you <strong>decline</strong>, the risk is set to the tier you select (defaults to the pre-selected band matching the case).</div>
+          <select class="govuk-select" id="reject-tier-esc" name="rejectTierId" aria-describedby="reject-tier-esc-h">
+            @foreach (var opt in Model.RejectTierOptions)
+            {
+              if (Model.RejectTierDefaultId == opt.Id)
+              {
+                <option value="@opt.Id" selected>@opt.Name</option>
+              }
+              else
+              {
+                <option value="@opt.Id">@opt.Name</option>
+              }
+            }
+          </select>
+        </div>
+      }
+
+      <div class="govuk-form-group">
+        <label class="govuk-label" for="raid-decision-rationale">Rationale</label>
+        <div class="govuk-hint" id="raid-decision-rationale-h">Required. If you approve, record a comment. If you decline, give the reason. Up to 500 characters.</div>
+        <textarea class="govuk-textarea" id="raid-decision-rationale" name="rationale" rows="5" maxlength="500" aria-describedby="raid-decision-rationale-h" autocomplete="off"></textarea>
+      </div>
+
+      <div class="govuk-button-group">
+        <button type="submit" class="govuk-button" data-module="govuk-button">Submit decision</button>
+        <a class="govuk-link govuk-link--no-visited-state" href="@Model.ListReturnUrl">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>

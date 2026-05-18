@@ -1,81 +1,165 @@
 @model Compass.Models.Modern.Work.WorkItem
+@using Compass.ViewModels.Modern
+@using System.Linq
 @{
     var work = Model;
     var priorityOutcomes = (List<Compass.Models.Modern.Work.WorkLookupOption>)ViewBag.PriorityOutcomes ?? new List<Compass.Models.Modern.Work.WorkLookupOption>();
     var missionPillars = (List<Compass.Models.Modern.Work.WorkLookupOption>)ViewBag.MissionPillars ?? new List<Compass.Models.Modern.Work.WorkLookupOption>();
     var directorates = (List<Compass.Models.Directorate>)ViewBag.Directorates ?? new List<Compass.Models.Directorate>();
+    var riskAppetiteOptions = (List<LookupOption>)ViewBag.RiskAppetiteOptions ?? new List<LookupOption>();
     var selectedPo = work.PriorityOutcomes?.Select(po => po.PriorityOutcomeId).ToHashSet() ?? new HashSet<int>();
     var selectedMp = work.MissionPillars?.Select(mp => mp.MissionPillarId).ToHashSet() ?? new HashSet<int>();
     var selectedDir = work.Directorates?.Select(d => d.DirectorateId).ToHashSet() ?? new HashSet<int>();
+    var cancelUrl = Url.Action("Detail", "ModernWork", new { id = Model.Id }) + "#wd-strategic-alignment";
     ViewData["Title"] = "Edit strategic alignment";
 }
 @section Breadcrumbs {
-    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="/">Home</a></li>
-    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="@Url.Action("Index", "ModernWork")">Work</a></li>
-    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="@Url.Action("Detail", "ModernWork", new { id = Model.Id })">@work.Title</a></li>
-    <li class="dfe-c-breadcrumb__item" aria-current="page">Edit strategic alignment</li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="/">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernWork")">Work</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Detail", "ModernWork", new { id = Model.Id })">@work.Title</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">Edit strategic alignment</li>
 }
 
-<div id="sc-work-editstrategicalignment">
+<div id="sc-work-editstrategicalignment" class="modern-work-page">
   @await Html.PartialAsync("_WorkItemChrome", ViewBag.WorkItem as Compass.Models.Modern.Work.WorkItem ?? Model)
-  <h2 class="dfe-c-heading-m dfe-c-mt-0">Edit strategic alignment</h2>
-  <p class="dfe-c-body muted dfe-c-mb-3">Flagship project, priority outcomes, mission pillars and directorates.</p>
 
-  <div class="dfe-c-grid-row">
-    <div class="dfe-c-grid-col dfe-c-grid-col--two-thirds">
-<form asp-action="EditStrategicAlignment" asp-route-id="@Model.Id" method="post" class="dfe-c-mb-4">
-  @Html.AntiForgeryToken()
-
-  <input type="hidden" name="FlagshipProject" value="false" />
-  <div class="dfe-c-form__group">
-    <div class="dfe-c-checkboxes__item">
-      <input class="dfe-c-checkboxes__input" id="FlagshipProject" name="FlagshipProject" type="checkbox" value="true" @(Model.FlagshipProject ? "checked" : "") />
-      <label class="dfe-c-form__label dfe-c-checkboxes__label" for="FlagshipProject">Flagship project</label>
+<div class="govuk-grid-row modern-work-detail-layout govuk-!-margin-top-4">
+  <div class="govuk-grid-column-one-quarter-from-desktop modern-work-detail-layout__nav">
+    <div class="dfe-f-u-sticky govuk-!-margin-bottom-4 modern-work-detail-layout__nav-inner" style="--dfe-f-sticky-top: 1rem;">
+      @await Html.PartialAsync("_WorkItemSideNav", work)
     </div>
   </div>
+  <div class="govuk-grid-column-three-quarters-from-desktop modern-work-detail-main">
+@{
+  var editStrategicLede = await Html.PartialAsync("_GovukBodyParagraph", "Update strategic alignment, governance flags, and directorate links for this work item.");
+}
+@await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+  Caption = "Work",
+  Title = "Edit strategic alignment",
+  HeadingTag = "h2",
+  HeadingClass = "govuk-heading-l",
+  Lede = editStrategicLede
+})
 
-  <div class="dfe-c-form__group">
-    <label class="dfe-c-form__label">Priority outcomes</label>
-    <div class="dfe-c-form__check-group">
-      @foreach (var po in priorityOutcomes)
-      {
-        <div class="dfe-c-checkboxes__item">
-          <input class="dfe-c-checkboxes__input" id="po_@po.Id" name="PriorityOutcomeIds" type="checkbox" value="@po.Id" checked="@selectedPo.Contains(po.Id)" />
-          <label class="dfe-c-form__label dfe-c-checkboxes__label" for="po_@po.Id">@po.Name</label>
+ <div class="dfe-c-form-layout dfe-c-form-layout--full-main">
+ <div class="dfe-c-form-layout__main">
+ <div class="dfe-c-card dfe-c-card--plain">
+        <form asp-controller="ModernWork" asp-action="EditStrategicAlignment" asp-route-id="@Model.Id" method="post" class="dfe-c-mb-0" novalidate>
+          @Html.AntiForgeryToken()
+
+ <fieldset id="edit-priority-outcomes" class="govuk-fieldset govuk-!-margin-bottom-6">
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Priority outcomes</legend>
+ <div class="govuk-hint govuk-!-margin-bottom-3">Select all priority outcomes this work contributes to.</div>
+ <div class="govuk-checkboxes" data-module="govuk-checkboxes">
+              @foreach (var po in priorityOutcomes)
+              {
+ <div class="govuk-checkboxes__item">
+ <input class="govuk-checkboxes__input" id="po_@po.Id" name="PriorityOutcomeIds" type="checkbox" value="@po.Id" @(selectedPo.Contains(po.Id) ? "checked" : "") />
+ <label class="govuk-label govuk-checkboxes__label" for="po_@po.Id">@po.Name</label>
+                </div>
+              }
+            </div>
+            @if (!priorityOutcomes.Any())
+            {
+ <p class="govuk-body govuk-!-margin-bottom-0">No priority outcomes configured. Ask an administrator to add them.</p>
+            }
+          </fieldset>
+
+ <fieldset id="edit-mission-pillars" class="govuk-fieldset govuk-!-margin-bottom-6">
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Mission pillars</legend>
+ <div class="govuk-hint govuk-!-margin-bottom-3">Select the mission pillars this work aligns to.</div>
+ <div class="govuk-checkboxes" data-module="govuk-checkboxes">
+              @foreach (var mp in missionPillars)
+              {
+ <div class="govuk-checkboxes__item">
+ <input class="govuk-checkboxes__input" id="mp_@mp.Id" name="MissionPillarIds" type="checkbox" value="@mp.Id" @(selectedMp.Contains(mp.Id) ? "checked" : "") />
+ <label class="govuk-label govuk-checkboxes__label" for="mp_@mp.Id">@mp.Name</label>
+                </div>
+              }
+            </div>
+            @if (!missionPillars.Any())
+            {
+ <p class="govuk-body govuk-!-margin-bottom-0">No mission pillars configured. Ask an administrator to add them.</p>
+            }
+          </fieldset>
+
+ <fieldset class="govuk-fieldset govuk-!-margin-bottom-6">
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Directorates</legend>
+ <div class="govuk-hint govuk-!-margin-bottom-3">Select the directorates involved in delivering this work.</div>
+ <div class="govuk-checkboxes" data-module="govuk-checkboxes">
+              @foreach (var d in directorates)
+              {
+ <div class="govuk-checkboxes__item">
+ <input class="govuk-checkboxes__input" id="dir_@d.Id" name="DirectorateIds" type="checkbox" value="@d.Id" @(selectedDir.Contains(d.Id) ? "checked" : "") />
+ <label class="govuk-label govuk-checkboxes__label" for="dir_@d.Id">@d.Name</label>
+                </div>
+              }
+            </div>
+            @if (!directorates.Any())
+            {
+ <p class="govuk-body govuk-!-margin-bottom-0">No directorates configured.</p>
+            }
+          </fieldset>
+
+ <fieldset class="govuk-fieldset govuk-!-margin-bottom-6">
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Governance flags</legend>
+
+ <div id="edit-flagship" class="govuk-form-group">
+ <fieldset class="govuk-fieldset">
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Flagship project?</legend>
+ <div class="govuk-radios govuk-radios--inline" data-module="govuk-radios">
+ <div class="govuk-radios__item">
+ <input class="govuk-radios__input" type="radio" name="FlagshipProject" id="edit-fp-yes" value="true" @(Model.FlagshipProject ? "checked" : null) />
+ <label class="govuk-label govuk-radios__label" for="edit-fp-yes">Yes</label>
+                </div>
+ <div class="govuk-radios__item">
+ <input class="govuk-radios__input" type="radio" name="FlagshipProject" id="edit-fp-no" value="false" @(!Model.FlagshipProject ? "checked" : null) />
+ <label class="govuk-label govuk-radios__label" for="edit-fp-no">No</label>
+                </div>
+              </div>
+            </fieldset>
+          </div>
+
+ <div id="edit-spend-control" class="govuk-form-group govuk-!-margin-bottom-0">
+ <fieldset class="govuk-fieldset">
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Subject to spend control?</legend>
+ <div class="govuk-radios govuk-radios--inline" data-module="govuk-radios">
+ <div class="govuk-radios__item">
+ <input class="govuk-radios__input" type="radio" name="SubjectToSpendControl" id="edit-ssc-yes" value="true" @(Model.SubjectToSpendControl ? "checked" : null) />
+ <label class="govuk-label govuk-radios__label" for="edit-ssc-yes">Yes</label>
+                </div>
+ <div class="govuk-radios__item">
+ <input class="govuk-radios__input" type="radio" name="SubjectToSpendControl" id="edit-ssc-no" value="false" @(!Model.SubjectToSpendControl ? "checked" : null) />
+ <label class="govuk-label govuk-radios__label" for="edit-ssc-no">No</label>
+                </div>
+              </div>
+            </fieldset>
+          </div>
+          </fieldset>
+
+ <div id="edit-risk-appetite" class="govuk-form-group govuk-!-margin-top-6 govuk-!-margin-bottom-6">
+ <label class="govuk-label govuk-label--m" for="RiskAppetiteId">Risk appetite</label>
+ <div class="govuk-hint" id="risk-app-hint">The level of risk tolerance for this work.</div>
+ <select name="RiskAppetiteId" id="RiskAppetiteId" class="govuk-select govuk-!-width-one-half" aria-describedby="risk-app-hint">
+            <option value="">— Select —</option>
+            @foreach (var opt in riskAppetiteOptions)
+            {
+              if (Model.RiskAppetiteId == opt.Id)
+              { <option value="@opt.Id" selected>@opt.Name</option> }
+              else
+              { <option value="@opt.Id">@opt.Name</option> }
+            }
+          </select>
         </div>
-      }
-    </div>
-  </div>
 
-  <div class="dfe-c-form__group">
-    <label class="dfe-c-form__label">Mission pillars</label>
-    <div class="dfe-c-form__check-group">
-      @foreach (var mp in missionPillars)
-      {
-        <div class="dfe-c-checkboxes__item">
-          <input class="dfe-c-checkboxes__input" id="mp_@mp.Id" name="MissionPillarIds" type="checkbox" value="@mp.Id" checked="@selectedMp.Contains(mp.Id)" />
-          <label class="dfe-c-form__label dfe-c-checkboxes__label" for="mp_@mp.Id">@mp.Name</label>
-        </div>
-      }
+ <div class="govuk-button-group govuk-!-margin-top-6 govuk-!-margin-bottom-0">
+ <button type="submit" class="govuk-button" data-module="govuk-button">Save changes</button>
+ <a href="@cancelUrl" class="govuk-link govuk-link--no-visited-state govuk-!-margin-left-3">Cancel</a>
+          </div>
+        </form>
+      </div>
     </div>
   </div>
-
-  <div class="dfe-c-form__group">
-    <label class="dfe-c-form__label">Directorates</label>
-    <div class="dfe-c-form__check-group">
-      @foreach (var d in directorates)
-      {
-        <div class="dfe-c-checkboxes__item">
-          <input class="dfe-c-checkboxes__input" id="dir_@d.Id" name="DirectorateIds" type="checkbox" value="@d.Id" checked="@selectedDir.Contains(d.Id)" />
-          <label class="dfe-c-form__label dfe-c-checkboxes__label" for="dir_@d.Id">@d.Name</label>
-        </div>
-      }
-    </div>
   </div>
-
-  <button type="submit" class="dfe-c-button dfe-c-button--primary">Save strategic alignment</button>
-  <a href="@Url.Action("Detail", "ModernWork", new { id = Model.Id })" class="dfe-c-button dfe-c-button--secondary dfe-c-ms-2">Cancel</a>
-</form>
-    </div>
-  </div>
+</div>
 </div>

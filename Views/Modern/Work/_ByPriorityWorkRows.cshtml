@@ -1,29 +1,59 @@
 @model IEnumerable<Compass.Models.Modern.Work.WorkItem>
 @using Compass.Models.Modern.Work
 @{
-    var portfolioNames = ViewBag.PortfolioNames as Dictionary<int, string> ?? new Dictionary<int, string>();
-    var priorityOptions = (List<LookupOption>)ViewBag.PriorityOptions ?? new List<LookupOption>();
+    var phaseNames = ViewBag.PhaseNames as Dictionary<int, string> ?? new Dictionary<int, string>();
+    var priorityNames = ViewBag.PriorityNames as Dictionary<int, string> ?? new Dictionary<int, string>();
+    var businessAreaById = ViewBag.BusinessAreaNameByProjectId as Dictionary<int, string> ?? new Dictionary<int, string>();
+    var suppressBusinessAreaColumn = ViewBag.SuppressBusinessAreaColumn as bool? == true;
+    string DirSummary(WorkItem w) =>
+        w.Directorates?.Any() == true
+            ? string.Join(", ", w.Directorates.Select(d => d.Division?.Name).Where(n => !string.IsNullOrEmpty(n)).Distinct().OrderBy(n => n))
+            : "—";
+    string BusinessAreaCell(WorkItem w) =>
+        businessAreaById.TryGetValue(w.Id, out var n) && !string.IsNullOrWhiteSpace(n) ? n : "—";
 }
 @foreach (var w in Model)
 {
-    var priorityName = "—";
-    if (w.PriorityId.HasValue)
-    {
-        var po = priorityOptions.FirstOrDefault(o => o.Id == w.PriorityId.Value);
-        if (po != null) { priorityName = po.Name; }
-    }
     var latestRag = w.RagHistory?.OrderByDescending(r => r.UpdatedAt).FirstOrDefault();
+    var phaseName = w.DeliveryPhaseId.HasValue && phaseNames.TryGetValue(w.DeliveryPhaseId.Value, out var ph) ? ph : null;
+    var priorityName = w.PriorityId.HasValue && priorityNames.TryGetValue(w.PriorityId.Value, out var pr) ? pr : null;
+    var pcName = ViewBag.PrimaryContactById is Dictionary<int, string> pcMap && pcMap.TryGetValue(w.Id, out var pc) ? pc : "—";
     var ragName = latestRag?.RagStatus?.Name ?? "";
-    var rowSearchable = (w.Title ?? "") + " " + (w.PortfolioId.HasValue && portfolioNames.TryGetValue(w.PortfolioId.Value, out var pn) ? pn : "") + " " + priorityName + " " + ragName + " " + (w.Status ?? "") + " " + w.Id.ToString("D8");
-    <tr class="wreg-row bypriority-work-row" data-searchable="@rowSearchable">
-        <td>
-            <a href="@Url.Action("Detail", "ModernWork", new { id = w.Id })" class="dfe-c-link dfe-c-link--muted">@w.Title</a>
-            <p class="dfe-c-body-s demand-register__meta dfe-c-m-0 dfe-c-mt-1">@w.Id.ToString("D8")</p>
+    var searchable = string.Join(" ", new[]
+    {
+        w.Title ?? "",
+        suppressBusinessAreaColumn ? "" : BusinessAreaCell(w),
+        DirSummary(w),
+        priorityName ?? "",
+        ragName,
+        pcName,
+        w.Status ?? "",
+        $"WI-{w.Id:D8}"
+    }.Where(s => !string.IsNullOrWhiteSpace(s)));
+ <tr class="govuk-table__row bypriority-work-row" data-searchable="@searchable">
+ <td class="govuk-table__cell" data-label="Work item">
+ <a href="@Url.Action("Detail", "ModernWork", new { id = w.Id })" class="govuk-link govuk-link--no-visited-state">@w.Title</a>
+ <div class="govuk-body-s modern-work-table__meta" style="color:#505a5f;">
+ WI-@w.Id.ToString("D8")@if (!string.IsNullOrEmpty(phaseName)) { <span aria-hidden="true"> · </span><span>@phaseName</span> }
+            </div>
         </td>
-        <td>@(w.PortfolioId.HasValue && portfolioNames.TryGetValue(w.PortfolioId.Value, out var pname) ? pname : "—")</td>
-        <td>@priorityName</td>
-        <td>@await Html.PartialAsync("_WorkRagBadge", latestRag)</td>
-        <td><span class="tag">@w.Status</span></td>
-        <td>@w.UpdatedAt.ToString("d MMM yyyy")</td>
+ @if (!suppressBusinessAreaColumn)
+ {
+ <td class="govuk-table__cell" data-label="Business area">@BusinessAreaCell(w)</td>
+ }
+ <td class="govuk-table__cell" data-label="Directorate">@DirSummary(w)</td>
+ <td class="govuk-table__cell" data-label="Priority">
+            @if (!string.IsNullOrEmpty(priorityName))
+            {
+ <span class="@WorkBadgeCss.PriorityDfeFrontendBadgeClass(priorityName)">@priorityName.ToUpperInvariant()</span>
+            }
+            else
+            {
+ <span class="govuk-hint govuk-!-margin-bottom-0">—</span>
+            }
+        </td>
+ <td class="govuk-table__cell" data-label="RAG">@await Html.PartialAsync("_WorkRagBadge", latestRag)</td>
+ <td class="govuk-table__cell" data-label="Primary contact">@pcName</td>
+ <td class="govuk-table__cell" data-label="Status"><span class="@WorkBadgeCss.StatusDfeFrontendBadgeClass(w.Status)">@w.Status</span></td>
     </tr>
 }

@@ -1,5 +1,6 @@
 @model Compass.Models.Modern.Work.WorkItem?
 @using Compass.Models.Modern.Work
+@using Compass.ViewModels.Modern
 @{
   var work = Model ?? ViewBag.WorkItem as WorkItem;
   var portfolioName = ViewBag.PortfolioName as string ?? "—";
@@ -12,50 +13,35 @@
 }
 @if (work != null)
 {
-  <div class="work-item-header detail-header dfe-c-flex--between mb4">
-    <div>
-      <div class="dfe-c-page-title__caption" style="font-family:monospace;font-size:13px;color:#505a5f">@(work.Id.ToString("X8")) · @portfolioName · <span class="tag">@work.Status</span></div>
-      <h1 class="dfe-c-heading-l dfe-c-mb-0">@work.Title</h1>
-    </div>
-    <div class="dfe-c-flex--between" style="gap:0.5rem;">
-      @if (isWatching)
-      {
-        <form method="post" action="@Url.Action("Unwatch", "ModernWork", new { id = work.Id })" style="display:inline;" data-confirm-title="Stop watching" data-confirm-message="Remove this work item from your watch list?">
-          @Html.AntiForgeryToken()
-          <button type="submit" class="dfe-c-button dfe-c-button--secondary">Stop watching</button>
-        </form>
-      }
-      else
-      {
-        <form method="post" action="@Url.Action("Watch", "ModernWork", new { id = work.Id })" style="display:inline;">
-          @Html.AntiForgeryToken()
-          <button type="submit" class="dfe-c-button dfe-c-button--secondary">Watch this item</button>
-        </form>
-      }
-      @if (canEditWorkItem) { <a href="@Url.Action("Edit", "ModernWork", new { id = work.Id })" class="dfe-c-button dfe-c-button--primary">Edit work item</a> }
-    </div>
-  </div>
+  var headerCaption = $"{work.Id.ToString("X8")} · {portfolioName} · {work.Status}";
+  var headerActions = await Html.PartialAsync("_WorkItemHeaderActions", work);
+  @await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+    Caption = headerCaption,
+    Title = work.Title,
+    Actions = headerActions,
+    HeadingClass = "govuk-heading-l"
+  })
 
   @if (showBanners && monthlyReportDue)
   {
-    <div class="dfe-c-notification-banner" role="region" aria-label="Monthly report due">
-      <div class="dfe-c-notification-banner__header">
-        <h2 class="dfe-c-notification-banner__title">Monthly report due</h2>
+ <div class="dfe-c-notification-banner" role="region" aria-label="Monthly report due">
+ <div class="dfe-c-notification-banner__header">
+ <h2 class="dfe-c-notification-banner__title">Monthly report due</h2>
       </div>
-      <div class="dfe-c-notification-banner__content">
-        <p class="dfe-c-body dfe-c-mb-2">Complete your monthly update for this work item@(currentPeriodDueDate.HasValue ? " by " + currentPeriodDueDate.Value.ToString("d MMM yyyy") : "").</p>
-        <p class="dfe-c-body dfe-c-mb-0"><a href="@Url.Action("AddMonthlyUpdate", "ModernWork", new { id = work.Id })" class="dfe-c-link">Add monthly update</a></p>
+ <div class="dfe-c-notification-banner__content">
+ <p class="dfe-c-body dfe-c-mb-2">Complete your monthly update for this work item@(currentPeriodDueDate.HasValue ? " by " + currentPeriodDueDate.Value.ToString("d MMM yyyy") : "").</p>
+ <p class="dfe-c-body"><a href="@Url.Action("AddMonthlyUpdate", "ModernWork", new { id = work.Id })" class="dfe-c-link">Add monthly update</a></p>
       </div>
     </div>
   }
   @if (showBanners && ragNeedsJustification)
   {
-    <div class="dfe-c-notification-banner dfe-c-notification-banner--warning" role="region" aria-label="RAG justification">
-      <div class="dfe-c-notification-banner__header">
-        <h2 class="dfe-c-notification-banner__title">RAG status not green</h2>
+ <div class="dfe-c-notification-banner dfe-c-notification-banner--warning" role="region" aria-label="RAG justification">
+ <div class="dfe-c-notification-banner__header">
+ <h2 class="dfe-c-notification-banner__title">RAG status not green</h2>
       </div>
-      <div class="dfe-c-notification-banner__content">
-        <p class="dfe-c-body dfe-c-mb-0">Ensure justification and path to green are recorded in <a href="@Url.Action("UpdateRag", "ModernWork", new { id = work.Id })" class="dfe-c-link">RAG history</a>.</p>
+ <div class="dfe-c-notification-banner__content">
+ <p class="dfe-c-body">Ensure justification and path to green are recorded in <a href="@Url.Action("UpdateRag", "ModernWork", new { id = work.Id })" class="dfe-c-link">RAG history</a>.</p>
       </div>
     </div>
   }

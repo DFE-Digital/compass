@@ -1,0 +1,102 @@
+@model Compass.Models.Modern.Work.WorkRegisterSubNavViewModel
+@using Microsoft.AspNetCore.Routing
+@using Microsoft.AspNetCore.WebUtilities
+@{
+  var m = Model;
+  var activeTab = string.IsNullOrWhiteSpace(m.ActiveTab) ? "active" : m.ActiveTab;
+  var isBusinessAreas = string.Equals(m.ListAction, "BusinessAreas", StringComparison.Ordinal);
+  var isDirectorates = string.Equals(m.ListAction, "Directorates", StringComparison.Ordinal);
+
+  string? MonthlyQ() => string.IsNullOrWhiteSpace(m.FilterMonthlyUpdate) ? null : m.FilterMonthlyUpdate;
+  int[]? TagIdsQ() => m.FilterTagIds.Count > 0 ? m.FilterTagIds.ToArray() : null;
+
+  string AppendQuery(string path, object routeValues)
+  {
+    var rd = new RouteValueDictionary(routeValues);
+    var query = rd
+      .Where(kv => kv.Value != null && !string.IsNullOrEmpty(Convert.ToString(kv.Value, System.Globalization.CultureInfo.InvariantCulture)))
+      .ToDictionary(kv => kv.Key!, kv => Convert.ToString(kv.Value, System.Globalization.CultureInfo.InvariantCulture)!);
+    return query.Count == 0 ? path : QueryHelpers.AddQueryString(path, query);
+  }
+
+  object TabQuery(string tab, bool? mine)
+  {
+    if (isBusinessAreas)
+    {
+      return new
+      {
+        tab,
+        page = 1,
+        businessAreaKey = m.BusinessAreaFilterKey,
+        search = m.FilterSearch,
+        ragStatusId = m.FilterRagId,
+        priorityId = m.FilterPriorityId
+      };
+    }
+
+    if (isDirectorates)
+    {
+      return new
+      {
+        tab,
+        page = 1,
+        directorateKey = m.DirectorateFilterKey,
+        search = m.FilterSearch
+      };
+    }
+
+    return new
+    {
+      tab,
+      page = 1,
+      mine,
+      search = m.FilterSearch,
+      businessAreaId = m.FilterBusinessAreaId,
+      directorateId = m.FilterDirectorateId,
+      phaseId = m.FilterPhaseId,
+      ragId = m.FilterRagId,
+      priorityId = m.FilterPriorityId,
+      monthlyUpdate = MonthlyQ(),
+      primaryContactUserId = m.FilterPrimaryContactUserId,
+      tagId = m.FilterTagId,
+      tagIds = TagIdsQ(),
+      sort = m.RegisterSortField,
+      sd = m.RegisterSortDescending
+    };
+  }
+
+  object YourWorkQuery() => TabQuery("active", true);
+  object OrgActiveQuery() => TabQuery("active", null);
+
+  string TabHref(object routeValues)
+  {
+    if (isBusinessAreas)
+      return AppendQuery("/modern/work/business-areas", routeValues);
+    if (isDirectorates)
+      return AppendQuery("/modern/work/directorates", routeValues);
+    return Url.Action(m.ListAction, m.ListController, routeValues) ?? "#";
+  }
+}
+
+<nav class="dfe-f-sub-navigation govuk-!-margin-bottom-4" aria-label="Work register sections">
+  <ul class="dfe-f-sub-navigation__list">
+    @if (!m.HideYourWorkTab)
+    {
+      <li class="dfe-f-sub-navigation__item">
+        <a class="dfe-f-sub-navigation__link govuk-link govuk-link--no-visited-state" href="@TabHref(YourWorkQuery())"@if (m.IsMyWork && activeTab == "active") { <text> aria-current="page"</text> }>Your work <span class="dfe-c-fw-regular">(@m.RegisterActivePausedCountMine)</span></a>
+      </li>
+    }
+    <li class="dfe-f-sub-navigation__item">
+      <a class="dfe-f-sub-navigation__link govuk-link govuk-link--no-visited-state" href="@TabHref(OrgActiveQuery())"@if (!m.IsMyWork && activeTab == "active") { <text> aria-current="page"</text> }>Active &amp; paused <span class="dfe-c-fw-regular">(@m.RegisterActivePausedCountOrg)</span></a>
+    </li>
+    <li class="dfe-f-sub-navigation__item">
+      <a class="dfe-f-sub-navigation__link govuk-link govuk-link--no-visited-state" href="@TabHref(TabQuery("completed", null))"@if (activeTab == "completed") { <text> aria-current="page"</text> }>Completed <span class="dfe-c-fw-regular">(@m.CompletedCount)</span></a>
+    </li>
+    <li class="dfe-f-sub-navigation__item">
+      <a class="dfe-f-sub-navigation__link govuk-link govuk-link--no-visited-state" href="@TabHref(TabQuery("cancelled", null))"@if (activeTab == "cancelled") { <text> aria-current="page"</text> }>Cancelled <span class="dfe-c-fw-regular">(@m.CancelledCount)</span></a>
+    </li>
+    <li class="dfe-f-sub-navigation__item">
+      <a class="dfe-f-sub-navigation__link govuk-link govuk-link--no-visited-state" href="@TabHref(TabQuery("all", null))"@if (activeTab == "all") { <text> aria-current="page"</text> }>All items <span class="dfe-c-fw-regular">(@m.AllItemsCount)</span></a>
+    </li>
+  </ul>
+</nav>

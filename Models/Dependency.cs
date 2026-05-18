@@ -24,7 +24,29 @@ public class Dependency
     public int TargetEntityId { get; set; }
 
     [MaxLength(200)]
-    public string? DependencyType { get; set; } // e.g., "Blocking", "Related", "Prerequisite", "Successor"
+    public string? DependencyType { get; set; } // Legacy free text; prefer DependencyLinkTypeId.
+
+    /// <summary>Structured link type from admin RAID lookups.</summary>
+    public int? DependencyLinkTypeId { get; set; }
+
+    [ForeignKey(nameof(DependencyLinkTypeId))]
+    public DependencyLinkType? LinkTypeLookup { get; set; }
+
+    public int? DependencyCriticalityId { get; set; }
+
+    [ForeignKey(nameof(DependencyCriticalityId))]
+    public DependencyCriticality? CriticalityLookup { get; set; }
+
+    /// <summary>Owning contact for coordination (may differ from entity owners).</summary>
+    public int? OwnerUserId { get; set; }
+
+    [ForeignKey(nameof(OwnerUserId))]
+    public User? OwnerUser { get; set; }
+
+    [MaxLength(200)]
+    public string? Organisation { get; set; }
+
+    public DateTime? DueDate { get; set; }
 
     public string? Description { get; set; }
 

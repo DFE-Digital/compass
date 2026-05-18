@@ -1,173 +1,417 @@
 @model Compass.Models.Modern.Work.WorkItem
+@using System
+@using System.Linq
+@using Compass.Models.Modern.Work
+@using Compass.ViewModels.Modern
 @{
     ViewData["Title"] = "Edit work item";
     var portfolios = (List<Compass.Models.Portfolio>)ViewBag.Portfolios ?? new List<Compass.Models.Portfolio>();
-    var workStatusOptions = (List<Compass.Models.Modern.Work.LookupOption>)ViewBag.WorkStatusOptions ?? new List<Compass.Models.Modern.Work.LookupOption>();
-    var workPriorityOptions = (List<Compass.Models.Modern.Work.LookupOption>)ViewBag.WorkPriorityOptions ?? new List<Compass.Models.Modern.Work.LookupOption>();
-    var deliveryPhaseOptions = (List<Compass.Models.Modern.Work.LookupOption>)ViewBag.DeliveryPhaseOptions ?? new List<Compass.Models.Modern.Work.LookupOption>();
-    var activityTypeOptions = (List<Compass.Models.Modern.Work.LookupOption>)ViewBag.ActivityTypeOptions ?? new List<Compass.Models.Modern.Work.LookupOption>();
-    var riskAppetiteOptions = (List<Compass.Models.Modern.Work.LookupOption>)ViewBag.RiskAppetiteOptions ?? new List<Compass.Models.Modern.Work.LookupOption>();
+    var directorates = (List<Compass.Models.Directorate>)ViewBag.Directorates ?? new List<Compass.Models.Directorate>();
+    var selectedDirectorateIds = (int[])ViewBag.SelectedDirectorateIds ?? Array.Empty<int>();
+    var workStatusOptions = (List<LookupOption>)ViewBag.WorkStatusOptions ?? new List<LookupOption>();
+    var workPriorityOptions = (List<LookupOption>)ViewBag.WorkPriorityOptions ?? new List<LookupOption>();
+    var deliveryPhaseOptions = (List<LookupOption>)ViewBag.DeliveryPhaseOptions ?? new List<LookupOption>();
+    var activityTypeOptions = (List<LookupOption>)ViewBag.ActivityTypeOptions ?? new List<LookupOption>();
+    var riskAppetiteOptions = (List<LookupOption>)ViewBag.RiskAppetiteOptions ?? new List<LookupOption>();
+
+    var sD0 = Model.StartDate;
+    int? sDay = sD0?.Day, sMonth = sD0?.Month, sYear = sD0?.Year;
+    var tD0 = Model.TargetEndDate;
+    int? tDay = tD0?.Day, tMonth = tD0?.Month, tYear = tD0?.Year;
+
+    bool HasError(string field) => ViewData.ModelState[field]?.Errors?.Any() == true;
+    string? ErrorMsg(string field) => ViewData.ModelState[field]?.Errors?.FirstOrDefault()?.ErrorMessage;
+
+    var primaryContactUser = ViewBag.PrimaryContactUser as Compass.Models.User;
+    var primaryContactPickerName = primaryContactUser != null
+        ? (string.IsNullOrWhiteSpace(primaryContactUser.Name) ? primaryContactUser.Email : primaryContactUser.Name)
+        : null;
+    if (string.IsNullOrWhiteSpace(primaryContactPickerName))
+    {
+        var pcNameFromBag = ViewBag.PrimaryContactName as string;
+        if (!string.IsNullOrWhiteSpace(pcNameFromBag) && pcNameFromBag != "—")
+            primaryContactPickerName = pcNameFromBag;
+    }
+    var primaryContactPickerEmail = primaryContactUser?.Email;
 }
+
 @section Breadcrumbs {
-    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="/">Home</a></li>
-    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="@Url.Action("Index", "ModernWork")">Work</a></li>
-    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="@Url.Action("Detail", "ModernWork", new { id = Model.Id })">@Model.Title</a></li>
-    <li class="dfe-c-breadcrumb__item" aria-current="page">Edit</li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernWork")">Work</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Detail", "ModernWork", new { id = Model.Id })">@Model.Title</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">Edit</li>
 }
 
 <div id="sc-work-edit">
   @await Html.PartialAsync("_WorkItemChrome", ViewBag.WorkItem as Compass.Models.Modern.Work.WorkItem ?? Model)
-  <h2 class="dfe-c-heading-m dfe-c-mt-0">Edit work item</h2>
-  <p class="dfe-c-body muted dfe-c-mb-3">Update title, problem statement, aim, status, priority and other details.</p>
 
-  <div class="dfe-c-grid-row">
-    <div class="dfe-c-grid-col dfe-c-grid-col--two-thirds">
-<form asp-action="Edit" asp-route-id="@Model.Id" method="post" class="dfe-c-mb-4">
+@{
+  var editHeaderLede = await Html.PartialAsync("_GovukBodyParagraph", "Update the key information for this work item.");
+}
+@await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+  Caption = "Work",
+  Title = "Edit work item",
+  HeadingTag = "h1",
+  HeadingClass = "govuk-heading-l",
+  Lede = editHeaderLede
+})
+
+<div class="govuk-grid-row sc-work-edit__layout">
+ <div class="govuk-grid-column-three-quarters">
+ <div class="dfe-c-card dfe-c-card--plain">
+<form asp-action="Edit" asp-route-id="@Model.Id" method="post" novalidate>
   @Html.AntiForgeryToken()
 
-  <div class="dfe-c-form__group @(ViewData.ModelState["Title"]?.Errors?.Any() == true ? "dfe-c-form__group--error" : "")">
-    <label class="dfe-c-form__label" asp-for="Title">Title *</label>
-    @if (ViewData.ModelState["Title"]?.Errors?.Any() == true)
-    {
-      <span class="dfe-c-form__error">@ViewData.ModelState["Title"]?.Errors?.FirstOrDefault()?.ErrorMessage</span>
-    }
-    <input class="dfe-c-width-full" asp-for="Title" type="text" />
-  </div>
-
-  <div class="dfe-c-form__group">
-    <label class="dfe-c-form__label" asp-for="ProblemStatement">Problem statement</label>
-    <textarea class="dfe-c-width-full" asp-for="ProblemStatement" rows="4"></textarea>
-  </div>
-
-  <div class="dfe-c-form__group">
-    <label class="dfe-c-form__label" asp-for="Aim">Aim</label>
-    <textarea class="dfe-c-width-full" asp-for="Aim" rows="3"></textarea>
-  </div>
-
-  <div class="dfe-c-form__group">
-    <label class="dfe-c-form__label" asp-for="Status">Status</label>
-    <select class="dfe-c-width-full" asp-for="Status">
-      @foreach (var opt in workStatusOptions)
-      {
-        <option value="@opt.Value" selected="@(Model.Status == opt.Value)">@opt.Name</option>
-      }
-    </select>
-  </div>
-
-  <div class="dfe-c-form__group">
-    <label class="dfe-c-form__label" asp-for="PortfolioId">Portfolio</label>
-    <select class="dfe-c-width-full" asp-for="PortfolioId">
-      <option value="">— Select —</option>
-      @foreach (var p in portfolios)
-      {
-        <option value="@p.Id" selected="@(Model.PortfolioId == p.Id)">@p.Name</option>
-      }
-    </select>
-  </div>
-
-  <div class="dfe-c-form__group">
-    <label class="dfe-c-form__label" asp-for="PriorityId">Priority</label>
-    <select class="dfe-c-width-full" asp-for="PriorityId">
-      <option value="">— Select —</option>
-      @foreach (var opt in workPriorityOptions)
-      {
-        <option value="@opt.Id" selected="@(Model.PriorityId == opt.Id)">@opt.Name</option>
-      }
-    </select>
-  </div>
-
-  <div class="dfe-c-form__group @(ViewData.ModelState["PriorityChangeReason"]?.Errors?.Any() == true ? "dfe-c-form__group--error" : "")">
-    <label class="dfe-c-form__label" for="PriorityChangeReason">Reason for priority change</label>
-    <span class="dfe-c-form__hint">Required when you change the priority above.</span>
-    @if (ViewData.ModelState["PriorityChangeReason"]?.Errors?.Any() == true)
-    {
-      <span class="dfe-c-form__error">@ViewData.ModelState["PriorityChangeReason"]?.Errors?.FirstOrDefault()?.ErrorMessage</span>
-    }
-    <textarea class="dfe-c-width-full" id="PriorityChangeReason" name="PriorityChangeReason" rows="3" maxlength="2000">@Model.PriorityChangeReason</textarea>
-  </div>
-
-  <div class="dfe-c-form__group">
-    <label class="dfe-c-form__label" asp-for="DeliveryPhaseId">Phase</label>
-    <span class="dfe-c-form__hint">From Admin → Lookups → Delivery phase.</span>
-    <select class="dfe-c-width-full" asp-for="DeliveryPhaseId">
-      <option value="">— Select phase —</option>
-      @foreach (var opt in deliveryPhaseOptions)
-      {
-        <option value="@opt.Id" selected="@(Model.DeliveryPhaseId == opt.Id)">@opt.Name</option>
-      }
-    </select>
-  </div>
-
-  <div class="dfe-c-form__group">
-    @await Html.PartialAsync("_UserPicker", new Compass.Models.UserPickerViewModel
-    {
-      FieldName = "PrimaryContactUserId",
-      Label = "Primary contact",
-      Placeholder = "Search by name or email",
-      DefaultUserId = Model.PrimaryContactUserId,
-      DefaultName = null,
-      DefaultSummaryText = "No primary contact selected."
-    })
-  </div>
-
-  <div class="dfe-c-form__group">
-    @await Html.PartialAsync("_UserPicker", new Compass.Models.UserPickerViewModel
-    {
-      FieldName = "BudgetOwnerUserId",
-      Label = "Budget owner",
-      Placeholder = "Search by name or email",
-      DefaultUserId = Model.BudgetOwnerUserId,
-      DefaultName = null,
-      DefaultSummaryText = "No budget owner selected."
-    })
-  </div>
-
-  <div class="dfe-c-form__group">
-    <label class="dfe-c-form__label" asp-for="ActivityTypeId">Activity type</label>
-    <select class="dfe-c-width-full" asp-for="ActivityTypeId">
-      <option value="">— Select —</option>
-      @foreach (var opt in activityTypeOptions)
-      {
-        <option value="@opt.Id" selected="@(Model.ActivityTypeId == opt.Id)">@opt.Name</option>
-      }
-    </select>
-  </div>
-
-  <div class="dfe-c-form__group">
-    <label class="dfe-c-form__label" asp-for="RiskAppetiteId">Risk appetite</label>
-    <select class="dfe-c-width-full" asp-for="RiskAppetiteId">
-      <option value="">— Select —</option>
-      @foreach (var opt in riskAppetiteOptions)
-      {
-        <option value="@opt.Id" selected="@(Model.RiskAppetiteId == opt.Id)">@opt.Name</option>
-      }
-    </select>
-  </div>
-
-  <div class="dfe-c-form__group">
-    <label class="dfe-c-form__label" asp-for="StartDate">Start date</label>
-    <input class="dfe-c-width-full" asp-for="StartDate" type="date" />
-  </div>
-
-  <div class="dfe-c-form__group">
-    <label class="dfe-c-form__label" asp-for="TargetEndDate">Target end date</label>
-    <input class="dfe-c-width-full" asp-for="TargetEndDate" type="date" />
-  </div>
-
-  <div class="dfe-c-form__group dfe-c-mb-3">
-    <div class="dfe-c-checkboxes__item">
-      <input class="dfe-c-checkboxes__input" asp-for="SubjectToSpendControl" type="checkbox" />
-      <label class="dfe-c-form__label dfe-c-checkboxes__label" asp-for="SubjectToSpendControl">Subject to spend control</label>
+  @if (!ViewData.ModelState.IsValid)
+  {
+ <div class="govuk-error-summary" data-module="govuk-error-summary" role="alert" aria-labelledby="error-summary-title">
+ <h2 class="govuk-error-summary__title" id="error-summary-title">There is a problem</h2>
+ <div class="govuk-error-summary__body">
+ <ul class="govuk-list govuk-error-summary__list">
+          @{
+            var summaryOrder = new[]
+            {
+              nameof(Model.Title), nameof(Model.ProblemStatement), nameof(Model.Aim), nameof(Model.PortfolioId),
+              nameof(Model.Status), nameof(Model.PriorityId), nameof(Model.PriorityChangeReason), nameof(Model.DeliveryPhaseId),
+              nameof(Model.ActivityTypeId), nameof(Model.StartDate), nameof(Model.TargetEndDate), nameof(Model.RiskAppetiteId),
+              nameof(Model.PrimaryContactUserId), nameof(Model.BudgetOwnerUserId)
+            };
+          }
+          @foreach (var key in summaryOrder)
+          {
+            if (ViewData.ModelState.TryGetValue(key, out var entry) && entry?.Errors?.Count > 0)
+            {
+              <li><a href="#@key">@entry.Errors[0].ErrorMessage</a></li>
+            }
+          }
+          @foreach (var kv in ViewData.ModelState)
+          {
+            if (summaryOrder.Contains(kv.Key, StringComparer.Ordinal)) continue;
+            if (kv.Value?.Errors?.Count > 0)
+            {
+              <li><a href="#@kv.Key">@kv.Value.Errors[0].ErrorMessage</a></li>
+            }
+          }
+        </ul>
+      </div>
     </div>
-    <div class="dfe-c-checkboxes__item">
-      <input class="dfe-c-checkboxes__input" asp-for="FlagshipProject" type="checkbox" />
-      <label class="dfe-c-form__label dfe-c-checkboxes__label" asp-for="FlagshipProject">Flagship project</label>
-    </div>
-  </div>
+  }
 
-  <button type="submit" class="dfe-c-button dfe-c-button--primary">Save changes</button>
-  <a href="@Url.Action("Detail", "ModernWork", new { id = Model.Id })" class="dfe-c-button dfe-c-button--secondary dfe-c-ms-2">Cancel</a>
+ <fieldset class="govuk-fieldset govuk-!-margin-bottom-6">
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Work item details</legend>
+
+ <div id="edit-title" class="govuk-form-group @(HasError(nameof(Model.Title)) ? "govuk-form-group--error" : "")">
+ <label class="govuk-label" for="Title">Title</label>
+ <div class="govuk-hint" id="Title-hint">The name of this work item as it appears across the system.</div>
+          @if (HasError(nameof(Model.Title)))
+          {
+ <p id="Title-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @ErrorMsg(nameof(Model.Title))</p>
+          }
+ <input asp-for="Title" type="text" class="govuk-input @(HasError(nameof(Model.Title)) ? "govuk-input--error" : "")" autocomplete="off" aria-describedby="Title-hint @(HasError(nameof(Model.Title)) ? "Title-error" : "")" />
+        </div>
+
+ <div id="edit-problem" class="govuk-form-group">
+ <label class="govuk-label" for="ProblemStatement">Problem statement</label>
+ <div class="govuk-hint" id="problemstatement-hint">What problem does this work address? Be clear and concise.</div>
+ <textarea asp-for="ProblemStatement" rows="4" class="govuk-textarea" aria-describedby="problemstatement-hint"></textarea>
+        </div>
+
+ <div id="edit-aim" class="govuk-form-group">
+ <label class="govuk-label" for="Aim">Aim</label>
+ <div class="govuk-hint" id="aim-hint">The intended outcome or goal of this work.</div>
+ <textarea asp-for="Aim" rows="3" class="govuk-textarea" aria-describedby="aim-hint"></textarea>
+        </div>
+      </fieldset>
+
+ <fieldset class="govuk-fieldset govuk-!-margin-bottom-6">
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Business area and directorates</legend>
+
+ <div id="edit-business-area" class="govuk-form-group">
+ <label class="govuk-label" for="PortfolioId">Business area</label>
+ <div class="govuk-hint" id="portfolio-hint">The business area this work item belongs to.</div>
+ <select asp-for="PortfolioId" class="govuk-select govuk-!-width-full" aria-describedby="portfolio-hint">
+            <option value="">— Select —</option>
+            @foreach (var p in portfolios)
+            {
+              if (Model.PortfolioId == p.Id)
+              { <option value="@p.Id" selected>@p.Name</option> }
+              else
+              { <option value="@p.Id">@p.Name</option> }
+            }
+          </select>
+        </div>
+
+ <div id="edit-directorates" class="govuk-form-group">
+ <fieldset class="govuk-fieldset">
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Directorates</legend>
+ <div class="govuk-hint" id="directorates-hint">Select all directorates this work item is associated with.</div>
+            @if (directorates.Count == 0)
+            {
+ <p class="govuk-body-s govuk-!-margin-bottom-0">No active directorates are configured.</p>
+            }
+            else
+            {
+ <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes" aria-describedby="directorates-hint">
+                @foreach (var d in directorates)
+                {
+                  var isChecked = selectedDirectorateIds.Contains(d.Id);
+ <div class="govuk-checkboxes__item">
+ <input class="govuk-checkboxes__input" type="checkbox" name="DirectorateIds" value="@d.Id" id="edit-dir-@d.Id" checked="@isChecked" />
+ <label class="govuk-label govuk-checkboxes__label" for="edit-dir-@d.Id">@d.Name</label>
+                </div>
+                }
+              </div>
+            }
+          </fieldset>
+        </div>
+      </fieldset>
+
+ <fieldset class="govuk-fieldset govuk-!-margin-bottom-6">
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Delivery and status</legend>
+
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="Status">Status</label>
+ <div class="govuk-hint" id="status-hint">The current lifecycle status of this work item.</div>
+ <select asp-for="Status" class="govuk-select govuk-!-width-full" aria-describedby="status-hint">
+            @foreach (var opt in workStatusOptions)
+            {
+              if (Model.Status == opt.Value)
+              { <option value="@opt.Value" selected>@opt.Name</option> }
+              else
+              { <option value="@opt.Value">@opt.Name</option> }
+            }
+          </select>
+        </div>
+
+ <div id="edit-priority" class="govuk-form-group">
+ <label class="govuk-label" for="PriorityId">Priority</label>
+ <div class="govuk-hint" id="priority-hint">The agreed priority band for this work.</div>
+ <select asp-for="PriorityId" class="govuk-select govuk-!-width-full" aria-describedby="priority-hint">
+            <option value="">— Select —</option>
+            @foreach (var opt in workPriorityOptions)
+            {
+              if (Model.PriorityId == opt.Id)
+              { <option value="@opt.Id" selected>@opt.Name</option> }
+              else
+              { <option value="@opt.Id">@opt.Name</option> }
+            }
+          </select>
+        </div>
+
+ <div class="govuk-form-group @(HasError(nameof(Model.PriorityChangeReason)) ? "govuk-form-group--error" : "")">
+ <label class="govuk-label" for="PriorityChangeReason">Reason for priority change</label>
+ <div class="govuk-hint" id="pcr-hint">Required when you change the priority above.</div>
+            @if (HasError(nameof(Model.PriorityChangeReason)))
+            {
+ <p id="PriorityChangeReason-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @ErrorMsg(nameof(Model.PriorityChangeReason))</p>
+            }
+ <textarea class="govuk-textarea @(HasError(nameof(Model.PriorityChangeReason)) ? "govuk-textarea--error" : "")" id="PriorityChangeReason" name="PriorityChangeReason" rows="3" maxlength="2000" aria-describedby="pcr-hint @(HasError(nameof(Model.PriorityChangeReason)) ? "PriorityChangeReason-error" : "")">@Model.PriorityChangeReason</textarea>
+        </div>
+
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="DeliveryPhaseId">Phase</label>
+ <div class="govuk-hint" id="phase-hint">The current delivery phase of this work.</div>
+ <select asp-for="DeliveryPhaseId" class="govuk-select govuk-!-width-full" aria-describedby="phase-hint">
+            <option value="">— Select phase —</option>
+            @foreach (var opt in deliveryPhaseOptions)
+            {
+              if (Model.DeliveryPhaseId == opt.Id)
+              { <option value="@opt.Id" selected>@opt.Name</option> }
+              else
+              { <option value="@opt.Id">@opt.Name</option> }
+            }
+          </select>
+        </div>
+
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="ActivityTypeId">Activity type</label>
+ <div class="govuk-hint" id="activity-hint">Categorisation of the type of activity.</div>
+ <select asp-for="ActivityTypeId" class="govuk-select govuk-!-width-full" aria-describedby="activity-hint">
+            <option value="">— Select —</option>
+            @foreach (var opt in activityTypeOptions)
+            {
+              if (Model.ActivityTypeId == opt.Id)
+              { <option value="@opt.Id" selected>@opt.Name</option> }
+              else
+              { <option value="@opt.Id">@opt.Name</option> }
+            }
+          </select>
+        </div>
+
+ <div id="edit-start-date" class="govuk-form-group @(HasError(nameof(Model.StartDate)) ? "govuk-form-group--error" : "")">
+ <fieldset class="govuk-fieldset" role="group" aria-describedby="@(HasError(nameof(Model.StartDate)) ? "StartDate-hint StartDate-error" : "StartDate-hint")">
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Start date</legend>
+ <div id="StartDate-hint" class="govuk-hint">For example 15 3 @(DateTime.UtcNow.Year)</div>
+          @if (HasError(nameof(Model.StartDate)))
+          {
+ <p id="StartDate-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @ErrorMsg(nameof(Model.StartDate))</p>
+          }
+ <div class="govuk-date-input" id="StartDate">
+ <div class="govuk-date-input__item">
+ <div class="govuk-form-group">
+ <label class="govuk-label govuk-date-input__label" for="StartDay">Day</label>
+ <input class="govuk-input govuk-date-input__input govuk-input--width-2 @(HasError(nameof(Model.StartDate)) ? "govuk-input--error" : "")" id="StartDay" name="startDay" type="text" inputmode="numeric" maxlength="2" autocomplete="off" pattern="[0-9]*" value="@sDay" />
+              </div>
+            </div>
+ <div class="govuk-date-input__item">
+ <div class="govuk-form-group">
+ <label class="govuk-label govuk-date-input__label" for="StartMonth">Month</label>
+ <input class="govuk-input govuk-date-input__input govuk-input--width-2 @(HasError(nameof(Model.StartDate)) ? "govuk-input--error" : "")" id="StartMonth" name="startMonth" type="text" inputmode="numeric" maxlength="2" autocomplete="off" pattern="[0-9]*" value="@sMonth" />
+              </div>
+            </div>
+ <div class="govuk-date-input__item">
+ <div class="govuk-form-group">
+ <label class="govuk-label govuk-date-input__label" for="StartYear">Year</label>
+ <input class="govuk-input govuk-date-input__input govuk-input--width-4 @(HasError(nameof(Model.StartDate)) ? "govuk-input--error" : "")" id="StartYear" name="startYear" type="text" inputmode="numeric" maxlength="4" autocomplete="off" pattern="[0-9]*" value="@sYear" />
+              </div>
+            </div>
+          </div>
+        </fieldset>
+        </div>
+
+ <div id="edit-target-end" class="govuk-form-group @(HasError(nameof(Model.TargetEndDate)) ? "govuk-form-group--error" : "")">
+ <fieldset class="govuk-fieldset" role="group">
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Target end date</legend>
+ <div id="TargetEndDate-hint" class="govuk-hint">The planned completion date for this work.</div>
+          @if (HasError(nameof(Model.TargetEndDate)))
+          {
+ <p id="TargetEndDate-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @ErrorMsg(nameof(Model.TargetEndDate))</p>
+          }
+ <div class="govuk-date-input" id="TargetEndDate">
+ <div class="govuk-date-input__item">
+ <div class="govuk-form-group">
+ <label class="govuk-label govuk-date-input__label" for="TargetEndDay">Day</label>
+ <input class="govuk-input govuk-date-input__input govuk-input--width-2 @(HasError(nameof(Model.TargetEndDate)) ? "govuk-input--error" : "")" id="TargetEndDay" name="targetEndDay" type="text" inputmode="numeric" maxlength="2" autocomplete="off" pattern="[0-9]*" value="@tDay" />
+              </div>
+            </div>
+ <div class="govuk-date-input__item">
+ <div class="govuk-form-group">
+ <label class="govuk-label govuk-date-input__label" for="TargetEndMonth">Month</label>
+ <input class="govuk-input govuk-date-input__input govuk-input--width-2 @(HasError(nameof(Model.TargetEndDate)) ? "govuk-input--error" : "")" id="TargetEndMonth" name="targetEndMonth" type="text" inputmode="numeric" maxlength="2" autocomplete="off" pattern="[0-9]*" value="@tMonth" />
+              </div>
+            </div>
+ <div class="govuk-date-input__item">
+ <div class="govuk-form-group">
+ <label class="govuk-label govuk-date-input__label" for="TargetEndYear">Year</label>
+ <input class="govuk-input govuk-date-input__input govuk-input--width-4 @(HasError(nameof(Model.TargetEndDate)) ? "govuk-input--error" : "")" id="TargetEndYear" name="targetEndYear" type="text" inputmode="numeric" maxlength="4" autocomplete="off" pattern="[0-9]*" value="@tYear" />
+              </div>
+            </div>
+          </div>
+        </fieldset>
+        </div>
+
+ <div id="edit-risk-appetite" class="govuk-form-group">
+ <label class="govuk-label" for="RiskAppetiteId">Risk appetite</label>
+ <div class="govuk-hint" id="risk-app-hint">The level of risk tolerance for this work.</div>
+ <select asp-for="RiskAppetiteId" class="govuk-select govuk-!-width-full" aria-describedby="risk-app-hint">
+            <option value="">— Select —</option>
+            @foreach (var opt in riskAppetiteOptions)
+            {
+              if (Model.RiskAppetiteId == opt.Id)
+              { <option value="@opt.Id" selected>@opt.Name</option> }
+              else
+              { <option value="@opt.Id">@opt.Name</option> }
+            }
+          </select>
+        </div>
+      </fieldset>
+
+ <fieldset class="govuk-fieldset govuk-!-margin-bottom-6">
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">People</legend>
+
+ <div class="govuk-form-group">
+            @await Html.PartialAsync("~/Views/Modern/Shared/_UserPicker.cshtml", new Compass.Models.UserPickerViewModel
+            {
+              FieldName = "PrimaryContactUserId",
+              Label = "Primary contact",
+              Hint = "The person responsible for day-to-day management.",
+              Placeholder = "Search by name or email",
+              DefaultUserId = Model.PrimaryContactUserId,
+              DefaultName = primaryContactPickerName,
+              DefaultEmail = primaryContactPickerEmail,
+              DefaultSummaryText = "No primary contact selected.",
+              UseGovUkStyling = true
+            })
+          </div>
+
+ <div class="govuk-form-group">
+            @await Html.PartialAsync("~/Views/Modern/Shared/_UserPicker.cshtml", new Compass.Models.UserPickerViewModel
+            {
+              FieldName = "BudgetOwnerUserId",
+              Label = "Budget owner",
+              Hint = "The person accountable for the budget of this work.",
+              Placeholder = "Search by name or email",
+              DefaultUserId = Model.BudgetOwnerUserId,
+              DefaultName = null,
+              DefaultSummaryText = "No budget owner selected.",
+              UseGovUkStyling = true
+            })
+          </div>
+      </fieldset>
+
+ <fieldset class="govuk-fieldset govuk-!-margin-bottom-6">
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Flags</legend>
+
+ <div id="edit-spend-control" class="govuk-form-group">
+ <fieldset class="govuk-fieldset">
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Subject to spend control?</legend>
+ <div class="govuk-radios govuk-radios--inline" data-module="govuk-radios">
+ <div class="govuk-radios__item">
+ <input class="govuk-radios__input" type="radio" name="SubjectToSpendControl" id="edit-ssc-yes" value="true" @(Model.SubjectToSpendControl ? "checked" : null) />
+ <label class="govuk-label govuk-radios__label" for="edit-ssc-yes">Yes</label>
+                  </div>
+ <div class="govuk-radios__item">
+ <input class="govuk-radios__input" type="radio" name="SubjectToSpendControl" id="edit-ssc-no" value="false" @(!Model.SubjectToSpendControl ? "checked" : null) />
+ <label class="govuk-label govuk-radios__label" for="edit-ssc-no">No</label>
+                  </div>
+                </div>
+              </fieldset>
+            </div>
+
+ <div id="edit-flagship" class="govuk-form-group">
+ <fieldset class="govuk-fieldset">
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Flagship project?</legend>
+ <div class="govuk-radios govuk-radios--inline" data-module="govuk-radios">
+ <div class="govuk-radios__item">
+ <input class="govuk-radios__input" type="radio" name="FlagshipProject" id="edit-fp-yes" value="true" @(Model.FlagshipProject ? "checked" : null) />
+ <label class="govuk-label govuk-radios__label" for="edit-fp-yes">Yes</label>
+                  </div>
+ <div class="govuk-radios__item">
+ <input class="govuk-radios__input" type="radio" name="FlagshipProject" id="edit-fp-no" value="false" @(!Model.FlagshipProject ? "checked" : null) />
+ <label class="govuk-label govuk-radios__label" for="edit-fp-no">No</label>
+                  </div>
+                </div>
+              </fieldset>
+            </div>
+      </fieldset>
+
+ <div class="govuk-button-group">
+ <button type="submit" class="govuk-button" data-module="govuk-button">Save changes</button>
+ <a href="@Url.Action("Detail", "ModernWork", new { id = Model.Id })" class="govuk-button govuk-button--secondary">Cancel</a>
+      </div>
 </form>
+    </div>
+  </div>
+
+ <div class="govuk-grid-column-one-quarter sc-work-edit__aside">
+ <div class="dfe-c-sidebar">
+ <div class="dfe-c-scard">
+ <h3 class="dfe-c-scard__heading">Key information</h3>
+ <p class="dfe-c-scard__body">Title, problem statement, and aim define the core identity of this work item and how it appears in reports and dashboards.</p>
+        </div>
+ <div class="dfe-c-scard">
+ <h3 class="dfe-c-scard__heading">Status &amp; classification</h3>
+ <p class="dfe-c-scard__body">Status, business area, directorates, priority, and phase determine how this work is tracked, filtered, and reported across the system.</p>
+        </div>
+ <div class="dfe-c-scard">
+ <h3 class="dfe-c-scard__heading">People</h3>
+ <p class="dfe-c-scard__body">Primary contact is the day-to-day lead. Budget owner is accountable for spend. Both can also be managed from the People tab.</p>
+        </div>
+ <div class="dfe-c-scard">
+ <h3 class="dfe-c-scard__heading">Dates &amp; flags</h3>
+ <p class="dfe-c-scard__body">Start and end dates drive timeline views. Spend control and flagship flags affect governance reporting.</p>
+        </div>
+      </div>
     </div>
   </div>
 </div>

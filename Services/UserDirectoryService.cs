@@ -118,11 +118,12 @@ public class UserDirectoryService : IUserDirectoryService
         var email = !string.IsNullOrWhiteSpace(graphUser.Mail)
             ? graphUser.Mail
             : graphUser.UserPrincipalName ?? string.Empty;
+        var friendlyName = GraphUserNameFormatter.FormatFriendlyName(graphUser, email);
 
         return new UserEntity
         {
             AzureObjectId = graphUser.Id,
-            Name = graphUser.DisplayName ?? email,
+            Name = friendlyName,
             FirstName = graphUser.GivenName,
             LastName = graphUser.Surname,
             Email = email,

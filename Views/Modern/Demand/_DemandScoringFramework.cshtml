@@ -1,0 +1,601 @@
+@model Compass.ViewModels.Modern.DemandScoringFrameworkPageViewModel
+@using System.Text.Json
+@using Compass.Models.DemandPipeline
+@using Compass.Services.DemandPipeline
+@{
+  var demand = Model.Demand;
+  var po = Model.PriorityOutcomeName;
+  var mp = Model.MissionPillarName;
+  var port = Model.PortfolioName;
+  var canEdit = demand.Status == "Scoring" || demand.Status == "Active";
+  var hasOutcome = demand.TotalScore.HasValue && !string.IsNullOrEmpty(demand.SuggestedBand);
+  var s1 = demand.ScoreStrategic ?? 0;
+  var s2 = demand.ScoreUrgency ?? 0;
+  var s3 = demand.ScoreFunding ?? 0;
+  var s4 = demand.ScoreRice ?? 0;
+  var rawDisplay = s1 + s2 + s3 + s4;
+  var rawMaxVm = Model.RawMax > 0 ? Model.RawMax : 1;
+  var scaledDisplay = DemandScoringHelper.ScaleRawTo100(rawDisplay, rawMaxVm);
+  var bandPreview = DemandScoringHelper.BandFromScaled100(scaledDisplay);
+  var bandLabel = !string.IsNullOrEmpty(demand.SuggestedBand) ? DemandScoringHelper.BandLabel(demand.SuggestedBand) : DemandScoringHelper.BandLabel(bandPreview);
+  string DetailUrl(string t) => Url.Action("RequestDetail", "ModernDemand", new { id = demand.Id, tab = t }) ?? "#";
+
+  var orderedSections = Model.Framework.Sections.OrderBy(s => s.SortOrder).ToList();
+  var reviewStep = orderedSections.Count + 1;
+
+  string ContextBlock(DemandScoringFrameworkQuestion q)
+  {
+    var key = (q.ContextKey ?? "").Trim();
+    return key switch
+    {
+      "Description" => demand.Description ?? "—",
+      "ExploreAimClarification" => string.IsNullOrWhiteSpace(demand.ExploreAimClarification) ? "" : demand.ExploreAimClarification!,
+      "PriorityOutcomeName" => po ?? "—",
+      "MissionPillarName" => mp ?? "—",
+      "PortfolioName" => port ?? "—",
+      "DeliveryTypeSummary" => $"{(demand.IsNewDigitalService == true ? "Delivery / change" : demand.IsNewDigitalService == false ? "Non-delivery / other" : "—")} · Public-facing: {(demand.IsPublicFacing == true ? "Yes" : demand.IsPublicFacing == false ? "No" : "—")}",
+      "SubmissionFunding" => demand.FundingProvided == true ? "Yes" : demand.FundingProvided == false ? "No" : "—",
+      "SubmissionHeadcount" => demand.HeadcountProvided == true ? "Yes" : demand.HeadcountProvided == false ? "No" : "—",
+      _ => "—"
+    };
+  }
+
+  var bandsJson = JsonSerializer.Serialize(Model.Framework.Bands.OrderBy(b => b.SortOrder).Select(b => new { min = b.MinScaledInclusive, max = b.MaxScaledInclusive, label = b.Label }));
+  var questionCodesJson = JsonSerializer.Serialize(orderedSections.SelectMany(s => s.Questions).Select(q => q.Code).ToList());
+  var activeBandCode = demand.SuggestedBand ?? bandPreview;
+}
+
+<div class="demand-scoring-framework" id="demand-scoring-framework">
+  @if (canEdit)
+  {
+ <div class="demand-scoring-flow dfe-c-mb-4" role="region" aria-label="Scoring progress">
+ <p class="demand-scoring-flow__meta govuk-body-s govuk-!-margin-bottom-2" id="demand-scoring-flow-meta">
+ <span class="govuk-visually-hidden">Progress: </span>
+        <span id="demand-scoring-flow-step-label">Step 1 of @reviewStep</span>
+      </p>
+ <div class="demand-scoring-flow__track" role="tablist" aria-label="Scoring steps" aria-describedby="demand-scoring-flow-meta">
+        @{ var flowIdx = 0; }
+        @foreach (var sec in orderedSections)
+        {
+          flowIdx++;
+          var shortTitle = sec.Title.Split('—').FirstOrDefault()?.Trim() ?? sec.Title;
+ <div class="demand-scoring-flow__segment">
+            <button type="button"
+ class="demand-scoring-flow__step @(flowIdx == 1 ?"demand-scoring-flow__step--current" : "demand-scoring-flow__step--later")"
+                    data-go-step="@flowIdx"
+                    role="tab"
+                    aria-selected="@(flowIdx == 1 ? "true" : "false")"
+                    id="demand-scoring-flow-tab-@flowIdx"
+                    aria-label="Step @flowIdx of @reviewStep: @shortTitle">
+ <span class="demand-scoring-flow__label">@shortTitle</span>
+            </button>
+          </div>
+        }
+ <div class="demand-scoring-flow__segment">
+          <button type="button"
+ class="demand-scoring-flow__step demand-scoring-flow__step--review @(orderedSections.Count == 0 ?"demand-scoring-flow__step--current" : "demand-scoring-flow__step--later")"
+                  data-go-step="@reviewStep"
+                  role="tab"
+                  aria-selected="@(orderedSections.Count == 0 ? "true" : "false")"
+                  id="demand-scoring-flow-tab-review"
+                  aria-label="Step @reviewStep of @reviewStep: Review and submit">
+ <span class="demand-scoring-flow__label">Review</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+
+ <div class="demand-scoring-framework__maincol">
+
+    @if (hasOutcome && !canEdit)
+    {
+ <div class="dfe-c-callout dfe-c-callout--info govuk-!-margin-bottom-3">
+ <p class="dfe-c-mb-0">Scoring completed. Section scores and band are shown below. To change scores, move the demand back to <strong>Scoring</strong> using the workflow actions.</p>
+      </div>
+    }
+
+    @if (canEdit)
+    {
+      <form method="post" id="demand-scoring-form" novalidate>
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="scoringAnswersJson" id="scoringAnswersJson" value="@demand.ScoringAnswersJson" />
+        <input type="hidden" name="scoreStrategic" id="hidScoreStrategic" value="@s1" />
+        <input type="hidden" name="scoreUrgency" id="hidScoreUrgency" value="@s2" />
+        <input type="hidden" name="scoreFunding" id="hidScoreFunding" value="@s3" />
+        <input type="hidden" name="scoreRice" id="hidScoreRice" value="@s4" />
+
+ <p class="govuk-body">Use the steps below to complete one section at a time. Raw points map to a 0–100 score and an automatic band using the <a href="@Url.Action("DemandScoringFramework", "ModernAdmin")">configured scoring framework</a>. Live score updates in the sidebar.</p>
+
+        <div id="demand-scoring-wizard" data-total-steps="@reviewStep">
+          @{ var step = 0; }
+          @foreach (var sec in orderedSections)
+          {
+            step++;
+            var isLastSection = step == orderedSections.Count;
+ <div class="dfe-c-card dfe-c-card--plain govuk-!-margin-bottom-3 demand-scoring-section demand-scoring-step-panel @(step == 1 ?"demand-scoring-step-panel--active" : "")" id="scoring-step-@step" role="region"
+                 data-demand-scoring-section
+                 data-step="@step"
+                 data-max="@sec.MaxPoints"
+                 data-legacy="@(sec.LegacyColumn ?? "")">
+ <div class="demand-scoring-section__error govuk-!-margin-bottom-3" id="scoring-step-@step-error" hidden>
+ <p class="govuk-error-message govuk-!-margin-bottom-0" role="alert"></p>
+              </div>
+ <header class="demand-scoring-section__head govuk-!-margin-bottom-3">
+ <h2 class="govuk-heading-m demand-scoring-section__heading">@sec.Title</h2>
+ <p class="govuk-body-s govuk-!-margin-bottom-0 govuk-!-margin-top-1 demand-scoring-section__maxpoints">Maximum <strong>@sec.MaxPoints</strong> points for this section</p>
+              </header>
+              @if (!string.IsNullOrWhiteSpace(sec.Description))
+              {
+ <p class="govuk-body govuk-!-margin-bottom-4">@sec.Description</p>
+              }
+
+              @foreach (var q in sec.Questions.OrderBy(x => x.SortOrder))
+              {
+                var qt = (q.QuestionType ?? "Radio").Trim().ToLowerInvariant();
+                Model.Answers.TryGetValue(q.Code, out var saved);
+
+                @if (qt == "context")
+                {
+                  var ctx = ContextBlock(q);
+                  if (string.IsNullOrWhiteSpace(ctx) && q.ContextKey == "ExploreAimClarification") { continue; }
+ <div class="dfe-c-mb-4">
+ <h3 class="govuk-heading-s">@q.Prompt @if (!q.IsScored) { <span class="govuk-hint govuk-!-display-inline">(context only — not scored)</span> }</h3>
+                    @if (!string.IsNullOrWhiteSpace(q.Hint))
+                    {
+ <p class="govuk-hint govuk-!-margin-bottom-2">@q.Hint</p>
+                    }
+ <div class="dfe-c-callout dfe-c-callout--info">
+ <p class="govuk-body govuk-!-margin-bottom-0" style="white-space:pre-wrap;">@ctx</p>
+                    </div>
+                  </div>
+                  continue;
+                }
+
+                @if (qt == "radio")
+                {
+ <fieldset class="govuk-fieldset govuk-!-margin-bottom-4">
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">@q.Prompt</legend>
+                    @if (!string.IsNullOrWhiteSpace(q.Hint))
+                    {
+ <div class="govuk-hint">@q.Hint</div>
+                    }
+ <div class="govuk-radios" data-scoring-group="@q.Code">
+                      @{ var oi = 0; }
+                      @foreach (var opt in q.Options.OrderBy(o => o.SortOrder))
+                      {
+                        oi++;
+                        var rid = $"q_{q.Code}_{oi}";
+                        var isChecked = int.TryParse(saved, out var sid) && sid == opt.Id;
+ <div class="govuk-radios__item">
+ <input class="govuk-radios__input" id="@rid" name="@q.Code" type="radio" value="@opt.Id" data-points="@opt.Points" @(isChecked ? "checked" : null) />
+ <label class="govuk-label govuk-radios__label" for="@rid">@opt.Label</label>
+                        </div>
+                      }
+                    </div>
+                  </fieldset>
+                  continue;
+                }
+
+                @if (qt == "number")
+                {
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="num_@q.Code">@q.Prompt</label>
+                    @if (!string.IsNullOrWhiteSpace(q.Hint))
+                    {
+ <div class="govuk-hint">@q.Hint</div>
+                    }
+                    @* min/max on type=number trigger native validity on hidden wizard steps (not focusable). Bounds enforced in JS via data-* and custom validation. *@
+ <input class="govuk-input govuk-input--width-5" type="number" id="num_@q.Code" name="@q.Code" value="@saved" data-scoring-number="true" data-num-min="@(q.NumberMin ?? 0)" data-num-max="@(q.NumberMax ?? 999)" />
+                  </div>
+                  continue;
+                }
+
+                @if (qt == "text")
+                {
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="txt_@q.Code">@q.Prompt</label>
+                    @if (!string.IsNullOrWhiteSpace(q.Hint))
+                    {
+ <div class="govuk-hint">@q.Hint</div>
+                    }
+ <textarea class="govuk-textarea" id="txt_@q.Code" name="@q.Code" rows="3" data-scoring-text="@(q.IsScored ? "scored" : "")">@saved</textarea>
+                  </div>
+                }
+              }
+
+ <div class="demand-scoring-step-nav govuk-!-margin-top-4">
+                @if (step > 1)
+                {
+ <button type="button" class="govuk-button govuk-button--secondary demand-scoring-btn-prev">Back</button>
+                }
+ <button type="button" class="govuk-button demand-scoring-btn-next">@(isLastSection ? "Continue to review" : "Continue")</button>
+              </div>
+            </div>
+          }
+
+ <div class="dfe-c-card dfe-c-card--plain govuk-!-margin-bottom-3 demand-scoring-step-panel @(orderedSections.Count == 0 ?"demand-scoring-step-panel--active" : "")" id="scoring-step-review" role="region" data-step="@reviewStep">
+ <div class="demand-scoring-review__error govuk-error-summary govuk-!-margin-bottom-4" id="scoring-review-error" hidden role="alert" aria-labelledby="scoring-review-error-title">
+ <h2 class="govuk-error-summary__title" id="scoring-review-error-title">There is a problem</h2>
+ <div class="govuk-error-summary__body"><ul class="govuk-list govuk-error-summary__list" id="scoring-review-error-list"></ul></div>
+            </div>
+ <h2 class="dfe-c-heading-m">Score review</h2>
+ <h3 class="govuk-heading-s">Section totals</h3>
+ <dl class="govuk-summary-list">
+ <div class="govuk-summary-list__row"><dt class="govuk-summary-list__key">S1 Strategic</dt><dd class="govuk-summary-list__value"><span id="sumStrategic">@s1</span> / @Model.MaxForLegacy("Strategic")</dd></div>
+ <div class="govuk-summary-list__row"><dt class="govuk-summary-list__key">S2 Urgency</dt><dd class="govuk-summary-list__value"><span id="sumUrgency">@s2</span> / @Model.MaxForLegacy("Urgency")</dd></div>
+ <div class="govuk-summary-list__row"><dt class="govuk-summary-list__key">S3 Funding</dt><dd class="govuk-summary-list__value"><span id="sumFunding">@s3</span> / @Model.MaxForLegacy("Funding")</dd></div>
+ <div class="govuk-summary-list__row"><dt class="govuk-summary-list__key">S4 RICE</dt><dd class="govuk-summary-list__value"><span id="sumRice">@s4</span> / @Model.MaxForLegacy("Rice")</dd></div>
+            </dl>
+ <div class="govuk-form-group govuk-!-margin-top-4">
+ <label class="govuk-label govuk-label--s" for="scoringAssessmentNotes">Overall assessment <span class="govuk-hint govuk-!-display-inline">(required to finalise)</span></label>
+ <div class="govuk-hint" id="scoringAssessmentNotes-hint">Summarise strengths, risks, and recommendation for the triage panel.</div>
+ <textarea class="govuk-textarea" id="scoringAssessmentNotes" name="scoringAssessmentNotes" rows="6" aria-describedby="scoringAssessmentNotes-hint">@demand.ScoringAssessmentNotes</textarea>
+            </div>
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="scoringConcernsNotes">Any concerns or caveats?</label>
+ <textarea class="govuk-textarea" id="scoringConcernsNotes" name="scoringConcernsNotes" rows="4">@demand.ScoringConcernsNotes</textarea>
+            </div>
+ <div class="govuk-checkboxes govuk-!-margin-bottom-4">
+ <div class="govuk-checkboxes__item">
+ <input class="govuk-checkboxes__input" id="confirmScoringComplete" name="confirmScoringComplete" type="checkbox" value="true" />
+ <label class="govuk-label govuk-checkboxes__label" for="confirmScoringComplete">I confirm this scorecard is complete and represents my best assessment of this demand.</label>
+              </div>
+            </div>
+ <div class="govuk-button-group">
+              @if (orderedSections.Count > 0)
+              {
+ <button type="button" class="govuk-button govuk-button--secondary demand-scoring-btn-prev">Back</button>
+              }
+ <button type="submit" class="govuk-button" formaction="@Url.Action("RequestScoringDraft", "ModernDemand", new { id = demand.Id })" formnovalidate>Save draft</button>
+ <button type="submit" class="govuk-button" formaction="@Url.Action("RequestScoringComplete", "ModernDemand", new { id = demand.Id })" formnovalidate>Finalise and submit score</button>
+ <a class="govuk-button govuk-button--secondary" href="@DetailUrl("explore")">← Explore</a>
+            </div>
+          </div>
+        </div>
+      </form>
+    }
+    else
+    {
+ <div class="dfe-c-card dfe-c-card--plain govuk-!-margin-bottom-3">
+ <h2 class="dfe-c-heading-m">Prioritisation scorecard</h2>
+ <dl class="govuk-summary-list">
+ <div class="govuk-summary-list__row"><dt class="govuk-summary-list__key">S1 Strategic</dt><dd class="govuk-summary-list__value">@s1 / @Model.MaxForLegacy("Strategic")</dd></div>
+ <div class="govuk-summary-list__row"><dt class="govuk-summary-list__key">S2 Urgency</dt><dd class="govuk-summary-list__value">@s2 / @Model.MaxForLegacy("Urgency")</dd></div>
+ <div class="govuk-summary-list__row"><dt class="govuk-summary-list__key">S3 Funding</dt><dd class="govuk-summary-list__value">@s3 / @Model.MaxForLegacy("Funding")</dd></div>
+ <div class="govuk-summary-list__row"><dt class="govuk-summary-list__key">S4 RICE</dt><dd class="govuk-summary-list__value">@s4 / @Model.MaxForLegacy("Rice")</dd></div>
+ <div class="govuk-summary-list__row"><dt class="govuk-summary-list__key">Total (scaled)</dt><dd class="govuk-summary-list__value">@(demand.TotalScore?.ToString() ?? scaledDisplay.ToString()) / 100</dd></div>
+ <div class="govuk-summary-list__row"><dt class="govuk-summary-list__key">Band</dt><dd class="govuk-summary-list__value">@bandLabel</dd></div>
+        </dl>
+        @if (hasOutcome && !string.IsNullOrWhiteSpace(demand.ScoringAssessmentNotes))
+        {
+ <h3 class="govuk-heading-s govuk-!-margin-top-4">Scorer notes</h3>
+ <p class="govuk-body" style="white-space:pre-wrap;">@demand.ScoringAssessmentNotes</p>
+          @if (!string.IsNullOrWhiteSpace(demand.ScoringConcernsNotes))
+          {
+ <h3 class="govuk-heading-s">Concerns</h3>
+ <p class="govuk-body" style="white-space:pre-wrap;">@demand.ScoringConcernsNotes</p>
+          }
+        }
+      </div>
+    }
+  </div>
+</div>
+
+@if (canEdit)
+{
+  <script nonce="@Context.Items["Nonce"]">
+    (function () {
+      var rawMax = @Model.RawMax;
+      var bands = @Html.Raw(bandsJson);
+      var form = document.getElementById('demand-scoring-form');
+      var jsonField = document.getElementById('scoringAnswersJson');
+      var totalSteps = @reviewStep;
+
+      function clamp(n, lo, hi) { return Math.min(hi, Math.max(lo, n)); }
+
+      function validateDemandSection(panel) {
+        if (!panel || !panel.hasAttribute('data-demand-scoring-section')) return null;
+        var radios = panel.querySelectorAll('.govuk-radios[data-scoring-group]');
+        for (var i = 0; i < radios.length; i++) {
+          var name = radios[i].getAttribute('data-scoring-group');
+          if (!name) continue;
+          var checked = panel.querySelector('input[name="' + name.replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"]:checked');
+          if (!checked) {
+            var fs = radios[i].closest('fieldset');
+            var leg = fs ? fs.querySelector('.govuk-fieldset__legend') : null;
+            return 'Select an option for: ' + (leg ? leg.textContent.replace(/\s+/g, ' ').trim() : name);
+          }
+        }
+        var nums = panel.querySelectorAll('input[data-scoring-number]');
+        for (var j = 0; j < nums.length; j++) {
+          var inp = nums[j];
+          var v = (inp.value || '').trim();
+          if (v === '') {
+            var lbl = inp.id ? panel.querySelector('label[for="' + inp.id + '"]') : null;
+            return 'Enter a number for: ' + (lbl ? lbl.textContent.replace(/\s+/g, ' ').trim() : 'this question');
+          }
+          var n = parseInt(v, 10);
+          if (isNaN(n)) return 'Enter a valid number for this question.';
+          var mn = parseInt(inp.getAttribute('data-num-min'), 10);
+          var mx = parseInt(inp.getAttribute('data-num-max'), 10);
+          if (!isNaN(mn) && n < mn) return 'Number is below the minimum allowed.';
+          if (!isNaN(mx) && n > mx) return 'Number is above the maximum allowed.';
+        }
+        var texts = panel.querySelectorAll('textarea[data-scoring-text="scored"]');
+        for (var t = 0; t < texts.length; t++) {
+          var ta = texts[t];
+          if (!(ta.value || '').trim()) {
+            var l = ta.id ? panel.querySelector('label[for="' + ta.id + '"]') : null;
+            return 'Enter an answer for: ' + (l ? l.textContent.replace(/\s+/g, ' ').trim() : 'this question');
+          }
+        }
+        return null;
+      }
+
+      var skipCompleteValidation = false;
+
+      function collectAnswers() {
+        var o = {};
+        var codes = @Html.Raw(questionCodesJson);
+        codes.forEach(function (code) {
+          var r = document.querySelector('input[name="' + code + '"]:checked');
+          if (r) { o[code] = String(r.value); return; }
+          var num = document.querySelector('input[name="' + code + '"][type="number"]');
+          if (num && num.value !== '') { o[code] = String(num.value); return; }
+          var ta = document.querySelector('textarea[name="' + code + '"]');
+          if (ta) o[code] = ta.value || '';
+        });
+        return o;
+      }
+
+      function sectionScore(el) {
+        var max = parseInt(el.getAttribute('data-max'), 10) || 0;
+        var leg = (el.getAttribute('data-legacy') || '').trim();
+        var sum = 0;
+        el.querySelectorAll('.govuk-radios[data-scoring-group]').forEach(function (box) {
+          var name = box.getAttribute('data-scoring-group');
+          var inp = box.querySelector('input[name="' + name + '"]:checked');
+          if (!inp) return;
+          sum += parseInt(inp.getAttribute('data-points') || '0', 10) || 0;
+        });
+        el.querySelectorAll('input[data-scoring-number]').forEach(function (inp) {
+          var v = parseInt(inp.value, 10);
+          if (isNaN(v)) return;
+          var mn = parseInt(inp.getAttribute('data-num-min'), 10); if (!isNaN(mn)) v = Math.max(mn, v);
+          var mx = parseInt(inp.getAttribute('data-num-max'), 10); if (!isNaN(mx)) v = Math.min(mx, v);
+          sum += v;
+        });
+        sum = clamp(sum, 0, max);
+        return { sum: sum, legacy: leg };
+      }
+
+      function update() {
+        var answers = collectAnswers();
+        if (jsonField) jsonField.value = JSON.stringify(answers);
+
+        var raw = 0;
+        var leg = { Strategic: 0, Urgency: 0, Funding: 0, Rice: 0 };
+        document.querySelectorAll('[data-demand-scoring-section]').forEach(function (sec) {
+          var r = sectionScore(sec);
+          raw += r.sum;
+          var k = r.legacy.toLowerCase();
+          if (k === 'strategic') leg.Strategic += r.sum;
+          else if (k === 'urgency') leg.Urgency += r.sum;
+          else if (k === 'funding') leg.Funding += r.sum;
+          else if (k === 'rice') leg.Rice += r.sum;
+        });
+
+        var hidS = document.getElementById('hidScoreStrategic');
+        var hidU = document.getElementById('hidScoreUrgency');
+        var hidF = document.getElementById('hidScoreFunding');
+        var hidR = document.getElementById('hidScoreRice');
+        if (hidS) hidS.value = leg.Strategic;
+        if (hidU) hidU.value = leg.Urgency;
+        if (hidF) hidF.value = leg.Funding;
+        if (hidR) hidR.value = leg.Rice;
+
+        var elS = document.getElementById('sumStrategic');
+        var elU = document.getElementById('sumUrgency');
+        var elF = document.getElementById('sumFunding');
+        var elR = document.getElementById('sumRice');
+        if (elS) elS.textContent = leg.Strategic;
+        if (elU) elU.textContent = leg.Urgency;
+        if (elF) elF.textContent = leg.Funding;
+        if (elR) elR.textContent = leg.Rice;
+
+        var rm = rawMax > 0 ? rawMax : 1;
+        var sc = Math.round(raw * 100 / rm);
+        var live = document.getElementById('demand-scoring-live-scaled');
+        var rawEl = document.getElementById('demand-scoring-live-raw');
+        var bandEl = document.getElementById('demand-scoring-live-band');
+        if (rawEl) rawEl.textContent = raw;
+        if (live) live.textContent = sc;
+        if (bandEl && bands && bands.length) {
+          var label = '—';
+          for (var i = 0; i < bands.length; i++) {
+            if (sc >= bands[i].min && sc <= bands[i].max) { label = bands[i].label; break; }
+          }
+          bandEl.textContent = label;
+        }
+      }
+
+      function showStep(n) {
+        n = clamp(n, 1, totalSteps);
+        var meta = document.getElementById('demand-scoring-flow-step-label');
+        if (meta) meta.textContent = 'Step ' + n + ' of ' + totalSteps;
+
+        document.querySelectorAll('.demand-scoring-section__error').forEach(function (box) {
+          box.hidden = true;
+          var ep = box.querySelector('p');
+          if (ep) ep.textContent = '';
+        });
+        var revErr = document.getElementById('scoring-review-error');
+        if (revErr && n < totalSteps) revErr.hidden = true;
+
+        document.querySelectorAll('.demand-scoring-step-panel').forEach(function (el) {
+          var s = parseInt(el.getAttribute('data-step'), 10);
+          el.classList.toggle('demand-scoring-step-panel--active', s === n);
+        });
+
+        document.querySelectorAll('.demand-scoring-flow__step').forEach(function (btn) {
+          var gs = parseInt(btn.getAttribute('data-go-step'), 10);
+          if (isNaN(gs)) return;
+          var on = gs === n;
+          btn.classList.toggle('demand-scoring-flow__step--current', on);
+          btn.classList.toggle('demand-scoring-flow__step--done', gs < n);
+          btn.classList.toggle('demand-scoring-flow__step--later', gs > n);
+          btn.setAttribute('aria-selected', on ? 'true' : 'false');
+          if (on) btn.setAttribute('aria-current', 'step');
+          else btn.removeAttribute('aria-current');
+        });
+
+      }
+
+      showStep(1);
+
+      function currentStepFromPanel(el) {
+        if (!el) return 1;
+        var p = el.closest('.demand-scoring-step-panel');
+        if (!p) return 1;
+        return parseInt(p.getAttribute('data-step'), 10) || 1;
+      }
+
+      if (form) {
+        form.addEventListener('change', update);
+        form.addEventListener('input', update);
+
+        var autoSaveUrl = '@Url.Action("RequestScoringAutoSave", "ModernDemand", new { id = demand.Id })';
+        var autoSaveTimer = null;
+        var autoSaveIndicator = null;
+        var savingInProgress = false;
+
+        function getAutoSaveIndicator() {
+          if (autoSaveIndicator) return autoSaveIndicator;
+          autoSaveIndicator = document.createElement('span');
+          autoSaveIndicator.className = 'demand-scoring-autosave-status govuk-body-s';
+          autoSaveIndicator.setAttribute('aria-live', 'polite');
+          autoSaveIndicator.style.cssText = 'color:var(--mid-grey);margin-left:1rem;';
+          var meta = document.getElementById('demand-scoring-flow-meta');
+          if (meta) meta.appendChild(autoSaveIndicator);
+          return autoSaveIndicator;
+        }
+
+        function autoSave() {
+          if (savingInProgress) return;
+          savingInProgress = true;
+          update();
+          var ind = getAutoSaveIndicator();
+          ind.textContent = 'Saving…';
+          ind.style.color = 'var(--mid-grey)';
+          var fd = new FormData(form);
+          fetch(autoSaveUrl, { method: 'POST', body: fd, headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(function (r) {
+              if (r.ok) {
+                ind.textContent = 'Saved';
+                ind.style.color = 'var(--green)';
+              } else {
+                ind.textContent = 'Save failed';
+                ind.style.color = 'var(--rag-r)';
+              }
+            })
+            .catch(function () {
+              ind.textContent = 'Save failed';
+              ind.style.color = 'var(--rag-r)';
+            })
+            .finally(function () { savingInProgress = false; });
+        }
+
+        function scheduleAutoSave() {
+          if (autoSaveTimer) clearTimeout(autoSaveTimer);
+          autoSaveTimer = setTimeout(autoSave, 1500);
+        }
+
+        form.addEventListener('change', scheduleAutoSave);
+        form.addEventListener('input', scheduleAutoSave);
+
+        form.addEventListener('submit', function (e) {
+          if (autoSaveTimer) clearTimeout(autoSaveTimer);
+          var submitter = e.submitter;
+          var fa = submitter && submitter.getAttribute('formaction');
+          if (!fa || fa.indexOf('scoring/complete') === -1) return;
+          if (skipCompleteValidation) {
+            skipCompleteValidation = false;
+            return;
+          }
+          e.preventDefault();
+          update();
+          var msgs = [];
+          document.querySelectorAll('[data-demand-scoring-section]').forEach(function (p) {
+            var err = validateDemandSection(p);
+            if (err) msgs.push(err);
+          });
+          var notes = document.getElementById('scoringAssessmentNotes');
+          var confirmCb = document.getElementById('confirmScoringComplete');
+          if (!notes || (notes.value || '').trim().length < 10)
+            msgs.push('Enter an overall assessment of at least 10 characters.');
+          if (!confirmCb || !confirmCb.checked)
+            msgs.push('Tick the box to confirm this scorecard is complete.');
+          var reviewErr = document.getElementById('scoring-review-error');
+          var reviewList = document.getElementById('scoring-review-error-list');
+          if (msgs.length) {
+            if (reviewList) {
+              reviewList.innerHTML = '';
+              msgs.forEach(function (m) {
+                var li = document.createElement('li');
+                li.textContent = m;
+                reviewList.appendChild(li);
+              });
+            }
+            if (reviewErr) reviewErr.hidden = false;
+            showStep(totalSteps);
+            if (reviewErr) reviewErr.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            return;
+          }
+          if (reviewErr) reviewErr.hidden = true;
+          skipCompleteValidation = true;
+          if (typeof form.requestSubmit === 'function') {
+            form.requestSubmit(submitter);
+          } else {
+            submitter.click();
+          }
+        });
+        update();
+      }
+
+      document.querySelectorAll('.demand-scoring-btn-next').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var panel = btn.closest('.demand-scoring-step-panel');
+          if (panel && panel.hasAttribute('data-demand-scoring-section')) {
+            var err = validateDemandSection(panel);
+            var errBox = panel.querySelector('.demand-scoring-section__error');
+            if (err) {
+              if (errBox) {
+                var ep = errBox.querySelector('p');
+                if (ep) ep.textContent = err;
+                errBox.hidden = false;
+                errBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+              }
+              return;
+            }
+            if (errBox) errBox.hidden = true;
+          }
+          var step = currentStepFromPanel(btn);
+          showStep(step + 1);
+        });
+      });
+      document.querySelectorAll('.demand-scoring-btn-prev').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var step = currentStepFromPanel(btn);
+          showStep(step - 1);
+        });
+      });
+      document.querySelectorAll('.demand-scoring-flow__step').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var gs = parseInt(btn.getAttribute('data-go-step'), 10);
+          if (!isNaN(gs)) showStep(gs);
+        });
+      });
+    })();
+  </script>
+}

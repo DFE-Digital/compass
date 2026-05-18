@@ -1,0 +1,250 @@
+@model Compass.ViewModels.Modern.ServiceLineDetailViewModel
+@using Compass.Models.Fips
+@using Compass.ViewModels.Modern
+@{
+    ViewData["Title"] = Model.ServiceLine.Name + " — Service line";
+    var sl = Model.ServiceLine;
+    var editHref = Url.Action("ServiceLineEdit", "ModernManage", new { slug = sl.Slug }) ?? "#";
+
+    string ProductStatusLabel(CMDBProductStatus s) => s switch
+    {
+        CMDBProductStatus.New => "New",
+        CMDBProductStatus.Active => "Active",
+        CMDBProductStatus.Inactive => "Inactive",
+        CMDBProductStatus.Rejected => "Rejected",
+        _ => s.ToString()
+    };
+
+    string ProductBusinessAreasDisplay(CMDBProduct p)
+    {
+        if (p.BusinessAreas.Count == 0)
+            return "—";
+        var names = p.BusinessAreas
+            .Select(ba => ba.FipsBusinessArea.BusinessAreaLookup?.Name ?? ba.FipsBusinessArea.Name)
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct()
+            .OrderBy(x => x);
+        return string.Join(", ", names);
+    }
+}
+
+@section Breadcrumbs {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("FipsDashboard", "ModernManage")">Service register</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("ServiceLines", "ModernManage")">Service lines</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">@sl.Name</li>
+}
+
+@if (TempData["Success"] != null)
+{
+ <div class="govuk-notification-banner govuk-notification-banner--success" role="region" aria-labelledby="sl-detail-success-title">
+ <div class="govuk-notification-banner__header">
+ <h2 class="govuk-notification-banner__title" id="sl-detail-success-title">Success</h2>
+        </div>
+ <div class="govuk-notification-banner__content">
+ <p class="govuk-notification-banner__heading">@TempData["Success"]</p>
+        </div>
+    </div>
+}
+
+<p class="govuk-body govuk-!-margin-bottom-4">
+  <a href="@Url.Action("ServiceLines", "ModernManage")" class="govuk-link govuk-back-link govuk-!-margin-bottom-0 govuk-link--no-visited-state">Back to service lines</a>
+</p>
+
+@await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+  Caption = "Service Register",
+  Title = sl.Name
+})
+
+@if (!string.IsNullOrWhiteSpace(sl.Description))
+{
+ <p class="govuk-body-l govuk-!-margin-bottom-6">@sl.Description</p>
+}
+
+<div class="govuk-grid-row">
+  <div class="govuk-grid-column-three-quarters">
+
+    <section class="govuk-!-margin-bottom-6" aria-labelledby="sl-sec-dir">
+      <div class="govuk-summary-card">
+        <div class="govuk-summary-card__title-wrapper">
+          <h2 class="govuk-summary-card__title" id="sl-sec-dir">Directorates</h2>
+          @if (Model.CanEdit)
+          {
+            <ul class="govuk-summary-card__actions">
+              <li class="govuk-summary-card__action">
+                <a href="@(editHref)#sl-directorates" class="govuk-link govuk-link--no-visited-state">Manage<span class="govuk-visually-hidden"> directorates</span></a>
+              </li>
+            </ul>
+          }
+        </div>
+        <div class="govuk-summary-card__content">
+          @if (Model.Divisions.Count == 0)
+          {
+            <p class="govuk-body govuk-!-margin-bottom-0">None selected.</p>
+          }
+          else
+          {
+            <ul class="govuk-list govuk-list--bullet govuk-!-margin-bottom-0">
+              @foreach (var d in Model.Divisions)
+              {
+                <li>@d.Name</li>
+              }
+            </ul>
+          }
+        </div>
+      </div>
+    </section>
+
+    <section class="govuk-!-margin-bottom-6" aria-labelledby="sl-sec-ba">
+      <div class="govuk-summary-card">
+        <div class="govuk-summary-card__title-wrapper">
+          <h2 class="govuk-summary-card__title" id="sl-sec-ba">Business areas</h2>
+          @if (Model.CanEdit)
+          {
+            <ul class="govuk-summary-card__actions">
+              <li class="govuk-summary-card__action">
+                <a href="@(editHref)#sl-business-areas" class="govuk-link govuk-link--no-visited-state">Manage<span class="govuk-visually-hidden"> business areas</span></a>
+              </li>
+            </ul>
+          }
+        </div>
+        <div class="govuk-summary-card__content">
+          @if (Model.BusinessAreas.Count == 0)
+          {
+            <p class="govuk-body govuk-!-margin-bottom-0">None selected.</p>
+          }
+          else
+          {
+            <ul class="govuk-list govuk-list--bullet govuk-!-margin-bottom-0">
+              @foreach (var b in Model.BusinessAreas)
+              {
+                <li>@b.Name</li>
+              }
+            </ul>
+          }
+        </div>
+      </div>
+    </section>
+
+    <section class="govuk-!-margin-bottom-6" aria-labelledby="sl-sec-prd">
+      <div class="govuk-summary-card">
+        <div class="govuk-summary-card__title-wrapper">
+          <h2 class="govuk-summary-card__title" id="sl-sec-prd">Service register products</h2>
+          @if (Model.CanEdit)
+          {
+            <ul class="govuk-summary-card__actions">
+              <li class="govuk-summary-card__action">
+                <a href="@(editHref)#sl-fips-heading" class="govuk-link govuk-link--no-visited-state">Add product</a>
+              </li>
+            </ul>
+          }
+        </div>
+        <div class="govuk-summary-card__content">
+          @if (Model.Products.Count == 0)
+          {
+            <p class="govuk-body govuk-!-margin-bottom-0">None linked.</p>
+          }
+          else
+          {
+            <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+              <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+              <table class="govuk-table govuk-!-margin-bottom-0">
+                <caption class="govuk-visually-hidden">Products linked to this service line</caption>
+                <thead class="govuk-table__head">
+                  <tr class="govuk-table__row">
+                    <th scope="col" class="govuk-table__header" aria-sort="none">
+                      <button type="button" class="dfe-f-table-sort-button">Product</button>
+                    </th>
+                    <th scope="col" class="govuk-table__header" aria-sort="none">
+                      <button type="button" class="dfe-f-table-sort-button">Phase</button>
+                    </th>
+                    <th scope="col" class="govuk-table__header" aria-sort="none">
+                      <button type="button" class="dfe-f-table-sort-button">Business area</button>
+                    </th>
+                    <th scope="col" class="govuk-table__header" aria-sort="none">
+                      <button type="button" class="dfe-f-table-sort-button">Status</button>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody class="govuk-table__body">
+                  @foreach (var p in Model.Products)
+                  {
+                    <tr class="govuk-table__row">
+                      <td class="govuk-table__cell">
+                        <a class="govuk-link govuk-link--no-visited-state govuk-!-font-weight-bold" href="@Url.Action("FipsProduct", "ModernManage", new { id = p.Id })">@p.Title</a>
+                      </td>
+                      <td class="govuk-table__cell">@(p.Phase?.Name ?? "—")</td>
+                      <td class="govuk-table__cell">@ProductBusinessAreasDisplay(p)</td>
+                      <td class="govuk-table__cell">@ProductStatusLabel(p.Status)</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+        </div>
+      </div>
+    </section>
+
+    <section class="govuk-!-margin-bottom-6" aria-labelledby="sl-sec-wrk">
+      <div class="govuk-summary-card">
+        <div class="govuk-summary-card__title-wrapper">
+          <h2 class="govuk-summary-card__title" id="sl-sec-wrk">Work items</h2>
+          @if (Model.CanEdit)
+          {
+            <ul class="govuk-summary-card__actions">
+              <li class="govuk-summary-card__action">
+                <a href="@(editHref)#sl-wrk-heading" class="govuk-link govuk-link--no-visited-state">Add work item</a>
+              </li>
+            </ul>
+          }
+        </div>
+        <div class="govuk-summary-card__content">
+          @if (Model.Projects.Count == 0)
+          {
+            <p class="govuk-body govuk-!-margin-bottom-0">None linked.</p>
+          }
+          else
+          {
+            <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+              <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+              <table class="govuk-table govuk-!-margin-bottom-0">
+                <caption class="govuk-visually-hidden">Work items linked to this service line</caption>
+                <thead class="govuk-table__head">
+                  <tr class="govuk-table__row">
+                    <th scope="col" class="govuk-table__header" aria-sort="none">
+                      <button type="button" class="dfe-f-table-sort-button">Title</button>
+                    </th>
+                    <th scope="col" class="govuk-table__header" aria-sort="none">
+                      <button type="button" class="dfe-f-table-sort-button">Phase</button>
+                    </th>
+                    <th scope="col" class="govuk-table__header" aria-sort="none">
+                      <button type="button" class="dfe-f-table-sort-button">Business area</button>
+                    </th>
+                    <th scope="col" class="govuk-table__header" aria-sort="none">
+                      <button type="button" class="dfe-f-table-sort-button">Status</button>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody class="govuk-table__body">
+                  @foreach (var p in Model.Projects)
+                  {
+                    <tr class="govuk-table__row">
+                      <td class="govuk-table__cell">
+                        <a class="govuk-link govuk-link--no-visited-state govuk-!-font-weight-bold" href="@Url.Action("Detail", "ModernWork", new { id = p.Id })">@p.Title</a>
+                      </td>
+                      <td class="govuk-table__cell">@(p.PhaseLookup?.Name ?? "—")</td>
+                      <td class="govuk-table__cell">@(p.BusinessAreaLookup?.Name ?? "—")</td>
+                      <td class="govuk-table__cell">@(string.IsNullOrWhiteSpace(p.Status) ? "—" : p.Status)</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+        </div>
+      </div>
+    </section>
+
+  </div>
+</div>

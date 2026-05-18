@@ -1,0 +1,954 @@
+@using System.Text.Json
+@using System.Text.Json.Serialization
+@using Compass.ViewModels.Modern
+@model ModernServiceAssessmentsReportViewModel
+@{
+  ViewData["Title"] = "Service assessments";
+  var m = Model ?? new ModernServiceAssessmentsReportViewModel();
+  var hasList = m.AssessmentRows.Count > 0;
+  var hasStandardActions = m.StandardActionRows.Count > 0;
+  var useStdPropensity = m.ServiceStandardOutcomeBreakdownAvailable && hasStandardActions;
+  var hasSummaryTabular = m.ByOutcome.Count + m.ByType.Count + m.ByPhase.Count + m.ByYear.Count > 0;
+  var showKpis = !m.SummaryLoadFailed && m.TotalAssessments > 0;
+  var sa = m.StandardsAnalysis;
+  var aa = m.AssessorAnalysis;
+  var hasStdAnalysis = sa.StandardPoints.Any(p => p.ActionCount > 0);
+  var hasAssessorAnalysis = !aa.LoadFailed && aa.TotalAssessors > 0;
+  var totalStdActions = sa.StandardPoints.Sum(p => p.ActionCount);
+  var showReportNav = showKpis || hasStdAnalysis || !aa.LoadFailed;
+
+  var jsonOpts = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull };
+  var chartOutcomeJson = JsonSerializer.Serialize(
+    new { labels = m.ByOutcome.Select(x => x.Key).ToList(), data = m.ByOutcome.Select(x => x.Value).ToList() },
+    jsonOpts);
+  var chartTypeJson = JsonSerializer.Serialize(
+    new { labels = m.ByType.Select(x => x.Key).ToList(), data = m.ByType.Select(x => x.Value).ToList() },
+    jsonOpts);
+  var chartPhaseJson = JsonSerializer.Serialize(
+    new { labels = m.ByPhase.Select(x => x.Key).ToList(), data = m.ByPhase.Select(x => x.Value).ToList() },
+    jsonOpts);
+  var chartYearJson = JsonSerializer.Serialize(
+    new { labels = m.ByYear.Select(x => x.Key).ToList(), data = m.ByYear.Select(x => x.Value).ToList() },
+    jsonOpts);
+  string chartStdJson;
+  if (!hasStandardActions)
+  {
+    chartStdJson = "{}";
+  }
+  else if (useStdPropensity)
+  {
+    var rows = m.StandardActionRows;
+    static double Pct(int part, int total) => total <= 0 ? 0.0 : 100.0 * part / total;
+    chartStdJson = JsonSerializer.Serialize(
+      new
+      {
+        usePropensity = true,
+        standards = rows.Select(x => x.Standard).ToList(),
+        redPct = rows.Select(x => Pct(x.ActionsFromRedOutcome, x.ActionCount)).ToList(),
+        amberPct = rows.Select(x => Pct(x.ActionsFromAmberOutcome, x.ActionCount)).ToList(),
+        greenPct = rows.Select(x => Pct(x.ActionsFromGreenOutcome, x.ActionCount)).ToList(),
+        otherPct = rows.Select(x => Pct(x.ActionsFromOtherOutcome, x.ActionCount)).ToList()
+      },
+      jsonOpts);
+  }
+  else
+  {
+    chartStdJson = JsonSerializer.Serialize(
+      new
+      {
+        usePropensity = false,
+        standards = m.StandardActionRows.Select(x => x.Standard).ToList(),
+        actionCounts = m.StandardActionRows.Select(x => x.ActionCount).ToList(),
+        assessmentCounts = m.StandardActionRows.Select(x => x.AssessmentCount).ToList()
+      },
+      jsonOpts);
+  }
+
+  var trendMonths = sa.TrendComparisonMonths > 0 ? sa.TrendComparisonMonths : 6;
+  var chartStdYearTotalJson = JsonSerializer.Serialize(
+    new { labels = sa.TrendPeriodLabels.ToList(), data = sa.TrendPeriodTotals.ToList() },
+    jsonOpts);
+  var chartStdPeriodJson = JsonSerializer.Serialize(
+    new
+    {
+      labels = sa.StandardPoints.Select(p => p.Standard).ToList(),
+      recent = sa.StandardPoints.Select(p => p.ActionsRecentPeriod).ToList(),
+      prior = sa.StandardPoints.Select(p => p.ActionsPriorPeriod).ToList(),
+      trends = sa.StandardPoints.Select(p => p.TrendLabel).ToList(),
+      recentLabel = $"Last {trendMonths} months",
+      priorLabel = $"Prior {trendMonths} months"
+    },
+    jsonOpts);
+
+  var chartAssessorPeriodJson = JsonSerializer.Serialize(
+    new { labels = aa.PeriodLabels.ToList(), data = aa.PeriodTotals.ToList() },
+    jsonOpts);
+  var chartAssessorOutcomeJson = JsonSerializer.Serialize(
+    new { labels = aa.ByOutcome.Select(x => x.Key).ToList(), data = aa.ByOutcome.Select(x => x.Value).ToList() },
+    jsonOpts);
+  var chartAssessorRoleJson = JsonSerializer.Serialize(
+    new { labels = aa.ByPrimaryRole.Select(x => x.Key).ToList(), data = aa.ByPrimaryRole.Select(x => x.Value).ToList() },
+    jsonOpts);
+  var chartAssessorStatusJson = JsonSerializer.Serialize(
+    new { labels = aa.ByStatus.Select(x => x.Key).ToList(), data = aa.ByStatus.Select(x => x.Value).ToList() },
+    jsonOpts);
+
+  string SasOutcomeBadgeModifier(string? o) => o switch
+  {
+    { } s when s.Equals("Green", StringComparison.OrdinalIgnoreCase) => "dfe-f-badge--green",
+    { } s when s.Equals("Amber", StringComparison.OrdinalIgnoreCase) => "dfe-f-badge--orange",
+    { } s when s.Equals("Red", StringComparison.OrdinalIgnoreCase) => "dfe-f-badge--red",
+    _ => "dfe-f-badge--grey"
+  };
+
+  string SasTrendBadgeModifier(string trend) => trend switch
+  {
+    "Increasing" => "dfe-f-badge--red",
+    "Decreasing" => "dfe-f-badge--green",
+    _ => "dfe-f-badge--grey"
+  };
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernReporting")">Reporting</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">Service assessments</li>
+}
+
+<div class="mr-dash sas-rpt" id="sas-top">
+  <header class="sas-rpt__hero">
+    @await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+      Caption = "Reporting",
+      Title = "Service assessments",
+      Lede = null
+    })
+  </header>
+
+  @if (TempData["ErrorMessage"] != null)
+  {
+    <div class="govuk-error-summary" data-module="govuk-error-summary" role="alert" style="margin-bottom: 1.5rem;">
+      <h2 class="govuk-error-summary__title">There is a problem</h2>
+      <div class="govuk-error-summary__body">@TempData["ErrorMessage"]</div>
+    </div>
+  }
+
+  @if (m.SummaryLoadFailed)
+  {
+    <p class="govuk-body">Summary data is not available. If this continues, check SAS configuration in appsettings and network access to the service assessment API.</p>
+  }
+  else
+  {
+    @if (showKpis)
+    {
+      <section class="sas-rpt__stat-strip" aria-label="High level figures">
+        <h2 class="govuk-heading-m govuk-!-margin-top-4 govuk-!-margin-bottom-3">High level figures</h2>
+        <div class="dfe-f-card-grid govuk-!-margin-bottom-3">
+          <div class="dfe-f-stat-card dfe-f-stat-card--tint-teal">
+            <p class="govuk-body-s dfe-f-stat-card__label">Published in summary</p>
+            <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l" id="sas-kpi-total">@m.TotalAssessments.ToString("N0")</p>
+            <p class="govuk-body-s govuk-!-margin-top-2 govuk-!-margin-bottom-0">
+              <a class="govuk-link govuk-link--no-visited-state" href="#sas-summary-h" data-sas-tab-link="overview">Overview charts</a>
+            </p>
+          </div>
+          @if (m.ByOutcome.Count > 0)
+          {
+            var topOutcome = m.ByOutcome.OrderByDescending(x => x.Value).First();
+            <div class="dfe-f-stat-card dfe-f-stat-card--tint-blue">
+              <p class="govuk-body-s dfe-f-stat-card__label">Largest outcome (Service assessment)</p>
+              <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@topOutcome.Value.ToString("N0")</p>
+              <p class="govuk-body-s govuk-!-margin-top-2 govuk-!-margin-bottom-0">
+                <span class="dfe-f-badge dfe-f-badge--small @SasOutcomeBadgeModifier(topOutcome.Key)">@topOutcome.Key</span>
+                <a class="govuk-link govuk-link--no-visited-state" href="#sas-outcome" data-sas-tab-link="overview">View outcome chart</a>
+              </p>
+            </div>
+          }
+          @if (hasStdAnalysis)
+          {
+            <div class="dfe-f-stat-card dfe-f-stat-card--tint-orange">
+              <p class="govuk-body-s dfe-f-stat-card__label">GSS actions (published SA)</p>
+              <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@totalStdActions.ToString("N0")</p>
+              <p class="govuk-body-s govuk-!-margin-top-2 govuk-!-margin-bottom-0">
+                <a class="govuk-link govuk-link--no-visited-state" href="#sas-standards-analysis" data-sas-tab-link="standards">Standards analysis</a>
+              </p>
+            </div>
+          }
+          @if (hasAssessorAnalysis)
+          {
+            <div class="dfe-f-stat-card dfe-f-stat-card--tint-blue">
+              <p class="govuk-body-s dfe-f-stat-card__label">Assessors</p>
+              <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@aa.TotalAssessors.ToString("N0")</p>
+              <p class="govuk-body-s govuk-!-margin-top-2 govuk-!-margin-bottom-0">
+                <a class="govuk-link govuk-link--no-visited-state" href="#sas-assessor-analysis" data-sas-tab-link="assessors">Assessor analysis</a>
+              </p>
+            </div>
+          }
+          @if (hasList)
+          {
+            <div class="dfe-f-stat-card dfe-f-stat-card--tint-green">
+              <p class="govuk-body-s dfe-f-stat-card__label">In published list</p>
+              <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@m.AssessmentRows.Count.ToString("N0")</p>
+              <p class="govuk-body-s govuk-!-margin-top-2 govuk-!-margin-bottom-0">
+                <a class="govuk-link govuk-link--no-visited-state" href="#sas-list-heading" data-sas-tab-link="overview">Full register</a>
+              </p>
+            </div>
+          }
+        </div>
+      </section>
+    }
+
+    @if (showReportNav)
+    {
+      <nav class="sas-rpt__subnav" aria-label="Report views">
+        <ul class="sas-rpt__subnav-list">
+          <li><button type="button" class="sas-rpt__subnav-btn is-active" id="sas-tab-btn-overview" data-sas-tab="overview" aria-controls="sas-tab-panel-overview" aria-selected="true">Overview</button></li>
+          <li><button type="button" class="sas-rpt__subnav-btn" id="sas-tab-btn-standards" data-sas-tab="standards" aria-controls="sas-tab-panel-standards" aria-selected="false">Standards analysis</button></li>
+          <li><button type="button" class="sas-rpt__subnav-btn" id="sas-tab-btn-assessors" data-sas-tab="assessors" aria-controls="sas-tab-panel-assessors" aria-selected="false">Assessor analysis</button></li>
+        </ul>
+      </nav>
+    }
+
+    <div id="sas-tab-panel-overview" class="sas-rpt__tab-panel" role="tabpanel" aria-labelledby="sas-tab-btn-overview">
+
+    @if (hasSummaryTabular)
+    {
+      <section class="sas-rpt__block" aria-label="Report summary: charts and tables">
+        <h2 class="sas-rpt__h2" id="sas-summary-h">At a glance</h2>
+        <p class="govuk-hint govuk-!-margin-bottom-4 sas-rpt__h2-hint">Four views of the same published cohort. Use Chart or Table on each panel; Expand for full width.</p>
+
+        <div class="sas-rpt__summary-grid" id="sas-summary-grid">
+          <article class="sas-panel" data-sas-panel="outcome" aria-labelledby="sas-outcome">
+            <header class="sas-panel__head">
+              <div class="sas-panel__title-wrap">
+                <h3 class="sas-rpt__h3" id="sas-outcome">By outcome</h3>
+                <p class="sas-rpt__cell-hint govuk-!-margin-bottom-0">Service assessment type only</p>
+              </div>
+              <div class="sas-panel__tools">
+                <div class="sas-panel__view" role="group" aria-label="By outcome view">
+                  <button type="button" class="sas-panel__view-btn is-active" data-sas-view="chart" aria-pressed="true">Chart</button>
+                  <button type="button" class="sas-panel__view-btn" data-sas-view="table" aria-pressed="false">Table</button>
+                </div>
+                <button type="button" class="govuk-button govuk-button--secondary govuk-button--small sas-panel__expand" aria-expanded="false">Expand</button>
+              </div>
+            </header>
+            <div class="sas-panel__body">
+            @if (m.ByOutcome.Count == 0)
+            {
+              <p class="govuk-body dfe-c-text-muted sas-rpt__empty">No outcome data for Service assessments.</p>
+            }
+            else
+            {
+              <div class="sas-panel__pane sas-panel__pane--chart">
+                <div class="sas-panel__chart-wrap sas-panel__chart-wrap--doughnut">
+                  <canvas id="sas-chart-outcome" role="img" aria-label="Outcomes for service assessments only"></canvas>
+                </div>
+              </div>
+              <div class="sas-panel__pane sas-panel__pane--table" hidden>
+              <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+                <table class="govuk-table mr-ba-table" aria-describedby="sas-outcome">
+                  <thead class="govuk-table__head">
+                  <tr class="govuk-table__row">
+                    <th scope="col" class="govuk-table__header mr-ba-table__area-col" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Outcome</button>
+        </th>
+                    <th scope="col" class="govuk-table__header mr-ba-table__num-hdr" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Count</button>
+        </th>
+                  </tr>
+                  </thead>
+                  <tbody class="govuk-table__body">
+                  @foreach (var row in m.ByOutcome)
+                  {
+                    <tr class="govuk-table__row">
+                      <th scope="row" class="mr-ba-table__area-col">
+                        <span class="dfe-f-badge dfe-f-badge--small @SasOutcomeBadgeModifier(row.Key)">@row.Key</span>
+                      </th>
+                      <td class="mr-ba-table__num"><span class="mr-ba-num">@row.Value.ToString("N0")</span></td>
+                    </tr>
+                  }
+                  </tbody>
+                </table>
+              </div>
+              </div>
+            }
+            </div>
+          </article>
+
+          <article class="sas-panel" data-sas-panel="type" aria-labelledby="sas-type">
+            <header class="sas-panel__head">
+              <div class="sas-panel__title-wrap">
+                <h3 class="sas-rpt__h3" id="sas-type">By type</h3>
+                <p class="sas-rpt__cell-hint govuk-!-margin-bottom-0">All published assessment types</p>
+              </div>
+              <div class="sas-panel__tools">
+                <div class="sas-panel__view" role="group" aria-label="By type view">
+                  <button type="button" class="sas-panel__view-btn is-active" data-sas-view="chart" aria-pressed="true">Chart</button>
+                  <button type="button" class="sas-panel__view-btn" data-sas-view="table" aria-pressed="false">Table</button>
+                </div>
+                <button type="button" class="govuk-button govuk-button--secondary govuk-button--small sas-panel__expand" aria-expanded="false">Expand</button>
+              </div>
+            </header>
+            <div class="sas-panel__body">
+            @if (m.ByType.Count == 0)
+            {
+              <p class="govuk-body dfe-c-text-muted sas-rpt__empty">No type data.</p>
+            }
+            else
+            {
+              <div class="sas-panel__pane sas-panel__pane--chart">
+                <div class="sas-panel__chart-wrap sas-panel__chart-wrap--doughnut">
+                  <canvas id="sas-chart-type" role="img" aria-label="Distribution by assessment type"></canvas>
+                </div>
+              </div>
+              <div class="sas-panel__pane sas-panel__pane--table" hidden>
+              <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+                <table class="govuk-table mr-ba-table" aria-describedby="sas-type">
+                  <thead class="govuk-table__head">
+                  <tr class="govuk-table__row">
+                    <th scope="col" class="govuk-table__header mr-ba-table__area-col" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Type</button>
+        </th>
+                    <th scope="col" class="govuk-table__header mr-ba-table__num-hdr" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Count</button>
+        </th>
+                  </tr>
+                  </thead>
+                  <tbody class="govuk-table__body">
+                  @foreach (var row in m.ByType)
+                  {
+                    <tr class="govuk-table__row">
+                      <th scope="row" class="mr-ba-table__area-col">@row.Key</th>
+                      <td class="mr-ba-table__num"><span class="mr-ba-num">@row.Value.ToString("N0")</span></td>
+                    </tr>
+                  }
+                  </tbody>
+                </table>
+              </div>
+              </div>
+            }
+            </div>
+          </article>
+
+          <article class="sas-panel" data-sas-panel="phase" aria-labelledby="sas-phase">
+            <header class="sas-panel__head">
+              <div class="sas-panel__title-wrap">
+                <h3 class="sas-rpt__h3" id="sas-phase">By phase</h3>
+                <p class="sas-rpt__cell-hint govuk-!-margin-bottom-0">Discovery → Live, then any other</p>
+              </div>
+              <div class="sas-panel__tools">
+                <div class="sas-panel__view" role="group" aria-label="By phase view">
+                  <button type="button" class="sas-panel__view-btn is-active" data-sas-view="chart" aria-pressed="true">Chart</button>
+                  <button type="button" class="sas-panel__view-btn" data-sas-view="table" aria-pressed="false">Table</button>
+                </div>
+                <button type="button" class="govuk-button govuk-button--secondary govuk-button--small sas-panel__expand" aria-expanded="false">Expand</button>
+              </div>
+            </header>
+            <div class="sas-panel__body">
+            @if (m.ByPhase.Count == 0)
+            {
+              <p class="govuk-body dfe-c-text-muted sas-rpt__empty">No phase data.</p>
+            }
+            else
+            {
+              <div class="sas-panel__pane sas-panel__pane--chart">
+                <div class="sas-panel__chart-wrap">
+                  <canvas id="sas-chart-phase" role="img" aria-label="Counts by delivery phase"></canvas>
+                </div>
+              </div>
+              <div class="sas-panel__pane sas-panel__pane--table" hidden>
+              <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+                <table class="govuk-table mr-ba-table" aria-describedby="sas-phase">
+                  <thead class="govuk-table__head">
+                  <tr class="govuk-table__row">
+                    <th scope="col" class="govuk-table__header mr-ba-table__area-col" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Phase</button>
+        </th>
+                    <th scope="col" class="govuk-table__header mr-ba-table__num-hdr" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Count</button>
+        </th>
+                  </tr>
+                  </thead>
+                  <tbody class="govuk-table__body">
+                  @foreach (var row in m.ByPhase)
+                  {
+                    <tr class="govuk-table__row">
+                      <th scope="row" class="mr-ba-table__area-col">@row.Key</th>
+                      <td class="mr-ba-table__num"><span class="mr-ba-num">@row.Value.ToString("N0")</span></td>
+                    </tr>
+                  }
+                  </tbody>
+                </table>
+              </div>
+              </div>
+            }
+            </div>
+          </article>
+
+          <article class="sas-panel" data-sas-panel="year" aria-labelledby="sas-year">
+            <header class="sas-panel__head">
+              <div class="sas-panel__title-wrap">
+                <h3 class="sas-rpt__h3" id="sas-year">By year</h3>
+                <p class="sas-rpt__cell-hint govuk-!-margin-bottom-0">Calendar year (ascending)</p>
+              </div>
+              <div class="sas-panel__tools">
+                <div class="sas-panel__view" role="group" aria-label="By year view">
+                  <button type="button" class="sas-panel__view-btn is-active" data-sas-view="chart" aria-pressed="true">Chart</button>
+                  <button type="button" class="sas-panel__view-btn" data-sas-view="table" aria-pressed="false">Table</button>
+                </div>
+                <button type="button" class="govuk-button govuk-button--secondary govuk-button--small sas-panel__expand" aria-expanded="false">Expand</button>
+              </div>
+            </header>
+            <div class="sas-panel__body">
+            @if (m.ByYear.Count == 0)
+            {
+              <p class="govuk-body dfe-c-text-muted sas-rpt__empty">No year data.</p>
+            }
+            else
+            {
+              <div class="sas-panel__pane sas-panel__pane--chart">
+                <div class="sas-panel__chart-wrap">
+                  <canvas id="sas-chart-year" role="img" aria-label="Counts by year"></canvas>
+                </div>
+              </div>
+              <div class="sas-panel__pane sas-panel__pane--table" hidden>
+              <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+                <table class="govuk-table mr-ba-table" aria-describedby="sas-year">
+                  <thead class="govuk-table__head">
+                  <tr class="govuk-table__row">
+                    <th scope="col" class="govuk-table__header mr-ba-table__area-col" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Year</button>
+        </th>
+                    <th scope="col" class="govuk-table__header mr-ba-table__num-hdr" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Count</button>
+        </th>
+                  </tr>
+                  </thead>
+                  <tbody class="govuk-table__body">
+                  @foreach (var row in m.ByYear)
+                  {
+                    <tr class="govuk-table__row">
+                      <th scope="row" class="mr-ba-table__area-col">@row.Key</th>
+                      <td class="mr-ba-table__num"><span class="mr-ba-num">@row.Value.ToString("N0")</span></td>
+                    </tr>
+                  }
+                  </tbody>
+                </table>
+              </div>
+              </div>
+            }
+            </div>
+          </article>
+        </div>
+      </section>
+    }
+
+  @if (!m.ActionsByStandardLoadFailed)
+  {
+    <section class="sas-rpt__block sas-rpt__block--wide" id="sas-std-section" aria-labelledby="sas-std-heading">
+      <h2 class="sas-rpt__h2" id="sas-std-heading" style="margin-top:0;">Actions by Service Standard</h2>
+      @if (useStdPropensity)
+      {
+        <p class="govuk-hint govuk-!-margin-bottom-2">Per <abbr title="Government Service Standard">GSS</abbr> point (1–14) for <strong>published</strong> <strong>Service assessment</strong> only. Each action is assigned the assessment’s <strong>overall</strong> Red / Amber / Green outcome; the chart shows how action volume <strong>within that point</strong> splits by outcome — a large Red+Amber share flags pressure on that point. <strong>Rows and the chart are always in GSS number order.</strong></p>
+        <p class="govuk-body-s govuk-!-margin-bottom-4 dfe-c-text-muted sas-rpt__std-hint-narrow">Rows with the highest Red+Amber share are highlighted. Use the table for raw counts; the chart is 100% per row so you compare the <em>mix</em> between points, not total bar length.</p>
+      }
+      else
+      {
+        <p class="govuk-hint govuk-!-margin-bottom-4">Per <abbr title="Government Service Standard">GSS</abbr> point from the aggregate <abbr title="Service assessment service">SAS</abbr> view, in <strong>standard number order (1–14)</strong>. A detailed RAG mix could not be loaded — the chart and table use total action and assessment counts only. If this persists, check SAS API configuration and connectivity.</p>
+      }
+      @if (hasStandardActions)
+      {
+        <div class="sas-rpt__standards-panels">
+          <div class="sas-rpt__standards-chart">
+            <div class="sas-rpt__chart sas-rpt__chart--standards">
+              <div class="mr-chart-wrap sas-rpt__standards-canvas-wrap">
+                <canvas id="sas-chart-standards" role="img" aria-label="Actions by GSS point in standard order, @(useStdPropensity ? "share of actions by Red Amber Green and other outcomes" : "actions and assessment counts by point")"></canvas>
+              </div>
+            </div>
+          </div>
+          <div class="sas-rpt__standards-table dfe-f-table-wrapper" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+            @if (useStdPropensity)
+            {
+              <table class="govuk-table mr-ba-table" aria-describedby="sas-std-heading">
+                <caption class="govuk-visually-hidden">GSS points in number order; columns show outcome mix and totals.</caption>
+                <thead class="govuk-table__head">
+                <tr class="govuk-table__row">
+                  <th scope="col" class="govuk-table__header mr-ba-table__area-col" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">GSS point</button>
+        </th>
+                  <th scope="col" class="mr-ba-table__num-hdr" title="Percentage of this row's actions on assessments with Red or Amber overall outcome">Red+Amber</th>
+                  <th scope="col" class="govuk-table__header mr-ba-table__num-hdr" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Red</button>
+        </th>
+                  <th scope="col" class="govuk-table__header mr-ba-table__num-hdr" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Amber</button>
+        </th>
+                  <th scope="col" class="govuk-table__header mr-ba-table__num-hdr" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Green</button>
+        </th>
+                  <th scope="col" class="govuk-table__header mr-ba-table__num-hdr" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Other</button>
+        </th>
+                  <th scope="col" class="govuk-table__header mr-ba-table__num-hdr" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Actions (total)</button>
+        </th>
+                  <th scope="col" class="govuk-table__header mr-ba-table__num-hdr" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Assessments</button>
+        </th>
+                </tr>
+                </thead>
+                <tbody class="govuk-table__body">
+                @foreach (var row in m.StandardActionRows)
+                {
+                  var isHot = row.MostProblematicRank <= 3 && row.PctOnAmberOrRed is { } p && p > 0.001;
+                  <tr class="@(isHot ? "sas-std--hot" : "")">
+                    <th scope="row" class="mr-ba-table__area-col">@row.Standard</th>
+                    <td class="mr-ba-table__num"><span class="mr-ba-num">@(row.PctOnAmberOrRed is { } x ? $"{x:0.0}%" : "—")</span></td>
+                    <td class="mr-ba-table__num"><span class="mr-ba-num">@row.ActionsFromRedOutcome.ToString("N0")</span></td>
+                    <td class="mr-ba-table__num"><span class="mr-ba-num">@row.ActionsFromAmberOutcome.ToString("N0")</span></td>
+                    <td class="mr-ba-table__num"><span class="mr-ba-num">@row.ActionsFromGreenOutcome.ToString("N0")</span></td>
+                    <td class="mr-ba-table__num"><span class="mr-ba-num">@row.ActionsFromOtherOutcome.ToString("N0")</span></td>
+                    <td class="mr-ba-table__num"><span class="mr-ba-num">@row.ActionCount.ToString("N0")</span></td>
+                    <td class="mr-ba-table__num"><span class="mr-ba-num">@row.AssessmentCount.ToString("N0")</span></td>
+                  </tr>
+                }
+                </tbody>
+              </table>
+            }
+            else
+            {
+              <table class="govuk-table mr-ba-table" aria-describedby="sas-std-heading">
+                <thead class="govuk-table__head">
+                <tr class="govuk-table__row">
+                  <th scope="col" class="govuk-table__header mr-ba-table__area-col" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">GSS point</button>
+        </th>
+                  <th scope="col" class="govuk-table__header mr-ba-table__num-hdr" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Actions</button>
+        </th>
+                  <th scope="col" class="govuk-table__header mr-ba-table__num-hdr" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Assessments</button>
+        </th>
+                </tr>
+                </thead>
+                <tbody class="govuk-table__body">
+                @foreach (var row in m.StandardActionRows)
+                {
+                  <tr class="govuk-table__row">
+                    <th scope="row" class="mr-ba-table__area-col">@row.Standard</th>
+                    <td class="mr-ba-table__num"><span class="mr-ba-num">@row.ActionCount.ToString("N0")</span></td>
+                    <td class="mr-ba-table__num"><span class="mr-ba-num">@row.AssessmentCount.ToString("N0")</span></td>
+                  </tr>
+                }
+                </tbody>
+              </table>
+            }
+          </div>
+        </div>
+      }
+      else
+      {
+        <p class="govuk-body dfe-c-text-muted">No actions-by-standard data returned.</p>
+      }
+    </section>
+  }
+  else
+  {
+    <section class="sas-rpt__block" aria-labelledby="sas-std-heading-fail">
+      <h2 class="sas-rpt__h2" id="sas-std-heading-fail" style="margin-top:0;">Actions by Service Standard</h2>
+      <p class="govuk-body" style="margin:0;">This section could not be loaded.</p>
+    </section>
+  }
+
+  @if (!m.SummaryLoadFailed)
+  {
+    <section class="sas-rpt__block sas-rpt__block--list" id="published-assessments" aria-labelledby="sas-list-heading">
+      <h2 class="sas-rpt__h2" id="sas-list-heading" style="margin-top:0;">Published assessment list</h2>
+      @if (m.AssessmentsGroupedByType.Count > 0)
+      {
+        <p class="govuk-hint" style="margin:0.25rem 0 0;">@m.AssessmentRows.Count published assessment@(m.AssessmentRows.Count == 1 ? "" : "s") grouped by type. Report links open in a new tab.</p>
+      }
+      @if (m.AssessmentsGroupedByType.Count == 0 && !hasList)
+      {
+        <p class="govuk-body dfe-c-text-muted" style="margin:0;">No individual assessments in the response.</p>
+      }
+      @{
+        var grpIndex = 0;
+      }
+      @foreach (var grp in m.AssessmentsGroupedByType)
+      {
+        var typeAnchor = $"sas-type-grp-{grpIndex++}";
+        <div class="sas-rpt__type-panel">
+          <h3 class="sas-rpt__h3" id="@typeAnchor">@grp.TypeLabel <span class="sas-rpt__type-badge">@grp.Items.Count</span></h3>
+          <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+            <table class="govuk-table mr-ba-table" aria-labelledby="@typeAnchor">
+              <thead class="govuk-table__head">
+              <tr class="govuk-table__row">
+                <th scope="col" class="govuk-table__header mr-ba-table__area-col" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Outcome</button>
+        </th>
+                <th scope="col" class="govuk-table__header mr-ba-table__area-col" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Name</button>
+        </th>
+                <th scope="col" class="govuk-table__header mr-ba-table__area-col" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Phase</button>
+        </th>
+                <th scope="col" class="govuk-table__header mr-ba-table__area-col" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Portfolio</button>
+        </th>
+                <th scope="col" class="govuk-table__header mr-ba-table__num-hdr" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Assessment date</button>
+        </th>
+                <th scope="col" class="govuk-table__header mr-ba-table__area-col" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Report</button>
+        </th>
+              </tr>
+              </thead>
+              <tbody class="govuk-table__body">
+              @foreach (var a in grp.Items)
+              {
+                var reportUrl = $"{m.SasReportBaseUrl.TrimEnd('/')}/{a.AssessmentId}";
+                <tr class="govuk-table__row">
+                  <td class="govuk-table__cell">
+                    @if (!string.IsNullOrEmpty(a.Outcome))
+                    {
+                      <span class="dfe-f-badge dfe-f-badge--small @SasOutcomeBadgeModifier(a.Outcome)">@a.Outcome</span>
+                    }
+                    else
+                    {
+                      <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--grey">—</span>
+                    }
+                  </td>
+                  <td class="mr-ba-table__area-col">@(!string.IsNullOrEmpty(a.Name) ? a.Name : "—")</td>
+                  <td class="mr-ba-table__area-col">@(a.Phase ?? "—")</td>
+                  <td class="mr-ba-table__area-col">@(a.Portfolio ?? "—")</td>
+                  <td class="mr-ba-table__num"><span class="mr-ba-num">@(a.AssessmentDate is { } ad ? ad.ToString("d MMM yyyy", System.Globalization.CultureInfo.GetCultureInfo("en-GB")) : "—")</span></td>
+                  <td class="mr-ba-table__num"><a class="govuk-link govuk-link--no-visited-state" href="@reportUrl" rel="noopener noreferrer" target="_blank" aria-label="Open full report: @(a.Name?.Replace("\"", "") ?? "assessment")">View</a></td>
+                </tr>
+              }
+              </tbody>
+            </table>
+          </div>
+        </div>
+      }
+    </section>
+  }
+
+    </div>
+
+    <div id="sas-tab-panel-standards" class="sas-rpt__tab-panel" role="tabpanel" aria-labelledby="sas-tab-btn-standards" hidden>
+      @await Html.PartialAsync("_SasStandardsAnalysis", m)
+    </div>
+
+    <div id="sas-tab-panel-assessors" class="sas-rpt__tab-panel" role="tabpanel" aria-labelledby="sas-tab-btn-assessors" hidden>
+      @await Html.PartialAsync("_SasAssessorAnalysis", m)
+    </div>
+  }
+
+</div>
+
+@section Scripts {
+  <script src="~/modern/js/sas-report.js" asp-append-version="true" nonce="@Context.Items["Nonce"]"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" nonce="@Context.Items["Nonce"]"></script>
+  <script nonce="@Context.Items["Nonce"]">
+  (function () {
+    if (typeof Chart === 'undefined') return;
+    var font = { family: "'Inter', system-ui, -apple-system, sans-serif" };
+    var byOutcome = @Html.Raw(chartOutcomeJson);
+    var byType = @Html.Raw(chartTypeJson);
+    var byPhase = @Html.Raw(chartPhaseJson);
+    var byYear = @Html.Raw(chartYearJson);
+    var byStd = @Html.Raw(chartStdJson);
+    var byStdYear = @Html.Raw(chartStdYearTotalJson);
+    var byStdPeriod = @Html.Raw(chartStdPeriodJson);
+    var byAssessorPeriod = @Html.Raw(chartAssessorPeriodJson);
+    var byAssessorOutcome = @Html.Raw(chartAssessorOutcomeJson);
+    var byAssessorRole = @Html.Raw(chartAssessorRoleJson);
+    var byAssessorStatus = @Html.Raw(chartAssessorStatusJson);
+    var colBar = '#505a5f';
+    var colBarAlt = '#85994b';
+    var typeColors = [
+      '#505a5f', '#00703c', '#f47738', '#4c2c92', '#d4351c', '#0b0c0c',
+      '#28a197', '#85994b', '#6f2f5f', '#a285d9'
+    ];
+    var axisOpts = { grid: { color: 'rgba(11, 12, 12, 0.08)' }, border: { display: false } };
+
+    function colOutcome(label) {
+      var t = (label || '').toLowerCase();
+      if (t === 'green') return '#00703c';
+      if (t === 'amber') return '#f47738';
+      if (t === 'red') return '#d4351c';
+      if (t.indexOf('not') >= 0) return '#6f777b';
+      return '#505a5f';
+    }
+
+    var cOut = document.getElementById('sas-chart-outcome');
+    if (cOut && byOutcome && byOutcome.data && byOutcome.data.length) {
+      new Chart(cOut.getContext('2d'), {
+        type: 'doughnut',
+        data: {
+          labels: byOutcome.labels,
+          datasets: [{ data: byOutcome.data, backgroundColor: (byOutcome.labels || []).map(colOutcome), borderWidth: 0 }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          font: font,
+          cutout: '55%',
+          plugins: {
+            legend: {
+              position: 'bottom',
+              align: 'center',
+              labels: { boxWidth: 11, font: { size: 11, family: font.family }, padding: 8, usePointStyle: true, pointStyle: 'rectRounded' }
+            }
+          }
+        }
+      });
+    }
+
+    var cTy = document.getElementById('sas-chart-type');
+    if (cTy && byType && byType.data && byType.data.length) {
+      new Chart(cTy.getContext('2d'), {
+        type: 'pie',
+        data: {
+          labels: byType.labels,
+          datasets: [{
+            data: byType.data,
+            backgroundColor: (byType.labels || []).map(function (_l, i) { return typeColors[i % typeColors.length]; }),
+            borderWidth: 0
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          font: font,
+          plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11, family: font.family }, padding: 8 } } }
+        }
+      });
+    }
+
+    var cPh = document.getElementById('sas-chart-phase');
+    if (cPh && byPhase && byPhase.data && byPhase.data.length) {
+      new Chart(cPh.getContext('2d'), {
+        type: 'bar',
+        data: {
+          labels: byPhase.labels,
+          datasets: [{ label: 'Count', data: byPhase.data, backgroundColor: colBar, borderRadius: 4, maxBarThickness: 36 }]
+        },
+        options: {
+          indexAxis: 'y',
+          responsive: true,
+          maintainAspectRatio: false,
+          font: font,
+          plugins: { legend: { display: false } },
+          scales: { x: { beginAtZero: true, ticks: { precision: 0, font: { size: 11, family: font.family } }, ...axisOpts }, y: { ticks: { font: { size: 11, family: font.family } }, ...axisOpts } }
+        }
+      });
+    }
+
+    var cYr = document.getElementById('sas-chart-year');
+    if (cYr && byYear && byYear.data && byYear.data.length) {
+      new Chart(cYr.getContext('2d'), {
+        type: 'bar',
+        data: {
+          labels: byYear.labels,
+          datasets: [{ label: 'Count', data: byYear.data, backgroundColor: colBar, borderRadius: 4, maxBarThickness: 36 }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          font: font,
+          plugins: { legend: { display: false } },
+          scales: { y: { beginAtZero: true, ticks: { precision: 0, font: { size: 11, family: font.family } }, ...axisOpts }, x: { ticks: { font: { size: 11, family: font.family } }, ...axisOpts } }
+        }
+      });
+    }
+
+    var cSt = document.getElementById('sas-chart-standards');
+    if (cSt && byStd && byStd.standards && byStd.standards.length) {
+      var colRed = '#b10e1e';
+      var colAmber = '#f47738';
+      var colGreen = '#00703c';
+      var colOth = '#6f777b';
+      if (byStd.usePropensity) {
+        new Chart(cSt.getContext('2d'), {
+          type: 'bar',
+          data: {
+            labels: (byStd.standards || []).map(function (s) { return 'Point ' + s; }),
+            datasets: [
+              { label: 'Red (share of row)', data: byStd.redPct, backgroundColor: colRed, borderRadius: 2, stack: 'rag', maxBarThickness: 28 },
+              { label: 'Amber (share of row)', data: byStd.amberPct, backgroundColor: colAmber, borderRadius: 2, stack: 'rag', maxBarThickness: 28 },
+              { label: 'Green (share of row)', data: byStd.greenPct, backgroundColor: colGreen, borderRadius: 2, stack: 'rag', maxBarThickness: 28 },
+              { label: 'Other (share of row)', data: byStd.otherPct, backgroundColor: colOth, borderRadius: 2, stack: 'rag', maxBarThickness: 28 }
+            ]
+          },
+          options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            font: font,
+            interaction: { mode: 'index', axis: 'y' },
+            plugins: {
+              title: { display: true, text: 'GSS points in order (1 at top) — each bar is 100% of that point’s actions', font: { size: 12, family: font.family, weight: '400' } },
+              tooltip: {
+                callbacks: {
+                  label: function (c) {
+                    var n = c.dataset.label || '';
+                    if (c.parsed && typeof c.parsed.x === 'number') { return n + ': ' + c.parsed.x.toFixed(1) + '%'; }
+                    return n;
+                  }
+                }
+              },
+              legend: { position: 'bottom', labels: { font: { size: 12, family: font.family }, boxWidth: 12, padding: 8 } }
+            },
+            scales: {
+              x: { stacked: true, max: 100, min: 0, ticks: { callback: function (v) { return v + '%'; }, font: { size: 11, family: font.family } }, ...axisOpts },
+              y: { stacked: true, reverse: true, ticks: { font: { size: 11, family: font.family } }, ...axisOpts }
+            }
+          }
+        });
+      } else {
+        new Chart(cSt.getContext('2d'), {
+          type: 'bar',
+          data: {
+            labels: (byStd.standards || []).map(function (s) { return 'Point ' + s; }),
+            datasets: [
+              { label: 'Actions', data: byStd.actionCounts, backgroundColor: colBar, borderRadius: 4, maxBarThickness: 32 },
+              { label: 'Assessments', data: byStd.assessmentCounts, backgroundColor: colBarAlt, borderRadius: 4, maxBarThickness: 32 }
+            ]
+          },
+          options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            font: font,
+            interaction: { mode: 'index', axis: 'y' },
+            plugins: {
+              legend: { position: 'bottom', labels: { font: { size: 12, family: font.family }, boxWidth: 12, padding: 10 } }
+            },
+            scales: { x: { beginAtZero: true, ticks: { precision: 0, font: { size: 11, family: font.family } }, ...axisOpts }, y: { stacked: false, reverse: true, ticks: { font: { size: 11, family: font.family } }, ...axisOpts } }
+          }
+        });
+      }
+    }
+
+    var cStdYr = document.getElementById('sas-chart-std-year-total');
+    if (cStdYr && byStdYear && byStdYear.data && byStdYear.data.length) {
+      new Chart(cStdYr.getContext('2d'), {
+        type: 'line',
+        data: {
+          labels: byStdYear.labels,
+          datasets: [{ label: 'Actions', data: byStdYear.data, borderColor: colBar, backgroundColor: 'rgba(80, 90, 95, 0.15)', fill: true, tension: 0.2, pointRadius: 4 }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          font: font,
+          plugins: { legend: { display: false } },
+          scales: { y: { beginAtZero: true, ticks: { precision: 0, font: { size: 11, family: font.family } }, ...axisOpts }, x: { ticks: { font: { size: 11, family: font.family } }, ...axisOpts } }
+        }
+      });
+    }
+
+    var cStdPer = document.getElementById('sas-chart-std-period');
+    if (cStdPer && byStdPeriod && byStdPeriod.labels && byStdPeriod.labels.length) {
+      new Chart(cStdPer.getContext('2d'), {
+        type: 'bar',
+        data: {
+          labels: (byStdPeriod.labels || []).map(function (s) { return 'Point ' + s; }),
+          datasets: [
+            { label: byStdPeriod.recentLabel || 'Last 6 months', data: byStdPeriod.recent, backgroundColor: colBar, borderRadius: 3, maxBarThickness: 22 },
+            { label: byStdPeriod.priorLabel || 'Prior 6 months', data: byStdPeriod.prior, backgroundColor: colBarAlt, borderRadius: 3, maxBarThickness: 22 }
+          ]
+        },
+        options: {
+          indexAxis: 'y',
+          responsive: true,
+          maintainAspectRatio: false,
+          font: font,
+          plugins: { legend: { position: 'bottom', labels: { font: { size: 11, family: font.family }, boxWidth: 12 } } },
+          scales: { x: { beginAtZero: true, ticks: { precision: 0, font: { size: 11, family: font.family } }, ...axisOpts }, y: { reverse: true, ticks: { font: { size: 11, family: font.family } }, ...axisOpts } }
+        }
+      });
+    }
+
+    var cAssPer = document.getElementById('sas-chart-assessor-period');
+    if (cAssPer && byAssessorPeriod && byAssessorPeriod.data && byAssessorPeriod.data.length) {
+      new Chart(cAssPer.getContext('2d'), {
+        type: 'line',
+        data: {
+          labels: byAssessorPeriod.labels,
+          datasets: [{ label: 'Panel assignments', data: byAssessorPeriod.data, borderColor: colBar, backgroundColor: 'rgba(80, 90, 95, 0.15)', fill: true, tension: 0.2, pointRadius: 4 }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          font: font,
+          plugins: { legend: { display: false } },
+          scales: { y: { beginAtZero: true, ticks: { precision: 0, font: { size: 11, family: font.family } }, ...axisOpts }, x: { ticks: { font: { size: 11, family: font.family } }, ...axisOpts } }
+        }
+      });
+    }
+
+    var cAssOut = document.getElementById('sas-chart-assessor-outcome');
+    if (cAssOut && byAssessorOutcome && byAssessorOutcome.data && byAssessorOutcome.data.length) {
+      new Chart(cAssOut.getContext('2d'), {
+        type: 'doughnut',
+        data: {
+          labels: byAssessorOutcome.labels,
+          datasets: [{ data: byAssessorOutcome.data, backgroundColor: (byAssessorOutcome.labels || []).map(colOutcome), borderWidth: 0 }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          font: font,
+          cutout: '55%',
+          plugins: { legend: { position: 'bottom', labels: { boxWidth: 11, font: { size: 11, family: font.family }, padding: 8 } } }
+        }
+      });
+    }
+
+    var cAssRole = document.getElementById('sas-chart-assessor-role');
+    if (cAssRole && byAssessorRole && byAssessorRole.data && byAssessorRole.data.length) {
+      new Chart(cAssRole.getContext('2d'), {
+        type: 'bar',
+        data: {
+          labels: byAssessorRole.labels,
+          datasets: [{ label: 'Assessors', data: byAssessorRole.data, backgroundColor: colBarAlt, borderRadius: 4, maxBarThickness: 28 }]
+        },
+        options: {
+          indexAxis: 'y',
+          responsive: true,
+          maintainAspectRatio: false,
+          font: font,
+          plugins: { legend: { display: false } },
+          scales: { x: { beginAtZero: true, ticks: { precision: 0, font: { size: 11, family: font.family } }, ...axisOpts }, y: { ticks: { font: { size: 10, family: font.family } }, ...axisOpts } }
+        }
+      });
+    }
+
+    var cAssSt = document.getElementById('sas-chart-assessor-status');
+    if (cAssSt && byAssessorStatus && byAssessorStatus.data && byAssessorStatus.data.length) {
+      new Chart(cAssSt.getContext('2d'), {
+        type: 'bar',
+        data: {
+          labels: byAssessorStatus.labels,
+          datasets: [{ label: 'Assignments', data: byAssessorStatus.data, backgroundColor: colBar, borderRadius: 4, maxBarThickness: 36 }]
+        },
+        options: {
+          indexAxis: 'y',
+          responsive: true,
+          maintainAspectRatio: false,
+          font: font,
+          plugins: { legend: { display: false } },
+          scales: { x: { beginAtZero: true, ticks: { precision: 0, font: { size: 11, family: font.family } }, ...axisOpts }, y: { ticks: { font: { size: 11, family: font.family } }, ...axisOpts } }
+        }
+      });
+    }
+  })();
+  </script>
+}

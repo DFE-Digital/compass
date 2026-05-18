@@ -1,86 +1,138 @@
 @model Compass.Models.Milestone
+@using Compass.Models.Modern.Work
+@using System.Linq
 @{
-    var work = ViewBag.WorkItem as Compass.Models.Modern.Work.WorkItem;
+    var work = ViewBag.WorkItem as WorkItem;
     ViewData["Title"] = "Edit milestone";
+    bool HasErr(string field) => ViewData.ModelState[field]?.Errors?.Any() == true;
+    string? ErrMsg(string field) => ViewData.ModelState[field]?.Errors?.FirstOrDefault()?.ErrorMessage;
 }
 @section Breadcrumbs {
-    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="/">Home</a></li>
-    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="@Url.Action("Index", "ModernWork")">Work</a></li>
-    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="@Url.Action("Detail", "ModernWork", new { id = Model.ProjectId })">@(work?.Title ?? "Work")</a></li>
-    <li class="dfe-c-breadcrumb__item" aria-current="page">Edit milestone</li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="/">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernWork")">Work</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Detail", "ModernWork", new { id = Model.ProjectId })">@(work?.Title ?? "Work")</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">Edit milestone</li>
 }
 
-<div id="sc-work-editmilestone">
+<div id="sc-work-edit-milestone">
   @await Html.PartialAsync("_WorkItemChrome", work)
 
-  <div class="dfe-c-page-title">
-    <div class="dfe-c-page-title__caption">WI-@(ViewBag.WorkIdShort ?? (Model.ProjectId.HasValue ? Model.ProjectId.Value.ToString("X8") : "")) · @(work?.Title)</div>
-    <h1>Edit milestone</h1>
+<div class="govuk-grid-row modern-work-detail-layout govuk-!-margin-top-4">
+  <div class="govuk-grid-column-one-quarter-from-desktop modern-work-detail-layout__nav">
+    <div class="dfe-f-u-sticky govuk-!-margin-bottom-4 modern-work-detail-layout__nav-inner" style="--dfe-f-sticky-top: 1rem;">
+      @await Html.PartialAsync("_WorkItemSideNav", work)
+    </div>
   </div>
+  <div class="govuk-grid-column-three-quarters-from-desktop modern-work-detail-main">
+ <div class="dfe-c-form-layout dfe-c-form-layout--full-main">
+ <div class="dfe-c-form-layout__main">
+ <div class="dfe-c-card dfe-c-card--plain">
+ <form asp-controller="ModernWork" asp-action="UpdateMilestone" asp-route-id="@Model.ProjectId" asp-route-milestoneId="@Model.Id" method="post" novalidate>
+          @Html.AntiForgeryToken()
 
-  <div class="dfe-c-grid-row">
-    <div class="dfe-c-grid-col dfe-c-grid-col--two-thirds">
-  <form asp-controller="Project" asp-action="UpdateMilestone" asp-route-projectId="@Model.ProjectId" asp-route-milestoneId="@Model.Id" method="post" class="dfe-c-mb-4">
-    @Html.AntiForgeryToken()
-
-    <div class="dfe-c-form__group @(ViewData.ModelState["name"]?.Errors?.Any() == true ? "dfe-c-form__group--error" : "")">
-      <label class="dfe-c-form__label" for="name">Title *</label>
-      @if (ViewData.ModelState["name"]?.Errors?.Any() == true)
-      {
-        <span class="dfe-c-form__error">@ViewData.ModelState["name"]?.Errors?.FirstOrDefault()?.ErrorMessage</span>
-      }
-      <input class="dfe-c-width-full" id="name" name="name" type="text" value="@Model.Name" maxlength="200" />
-    </div>
-
-    <div class="dfe-c-form__group">
-      <label class="dfe-c-form__label" for="Description">Description</label>
-      <textarea class="dfe-c-width-full" id="Description" name="Description" rows="3">@Model.Description</textarea>
-    </div>
-
-    <div class="dfe-c-form__group">
-      <label class="dfe-c-form__label" for="dueDate">Due date *</label>
-      <input class="dfe-c-width-full" id="dueDate" name="dueDate" type="date" value="@Model.DueDate.ToString("yyyy-MM-dd")" required />
-    </div>
-
-    <div class="dfe-c-form__group">
-      <label class="dfe-c-form__label" for="status">Status</label>
-      <!select class="dfe-c-width-full" id="status" name="status">
-        @{
-          var statusOpts = new (string Value, string Label)[]
+          @if (!ViewData.ModelState.IsValid)
           {
-            ("not_started", "Not started"),
-            ("in_progress", "In progress"),
-            ("on_track", "On track"),
-            ("at_risk", "At risk"),
-            ("delayed", "Delayed"),
-            ("complete", "Complete"),
-            ("cancelled", "Cancelled")
-          };
-        }
-        @foreach (var o in statusOpts)
-        {
-          if (string.Equals(Model.Status, o.Value, StringComparison.OrdinalIgnoreCase))
-          {
-            <option value="@o.Value" selected>@o.Label</option>
+ <div class="govuk-error-summary" data-module="govuk-error-summary" role="alert" aria-labelledby="edit-milestone-error-summary-title">
+ <h2 class="govuk-error-summary__title" id="edit-milestone-error-summary-title">There is a problem</h2>
+ <div class="govuk-error-summary__body">
+ <ul class="govuk-list govuk-error-summary__list">
+                  @foreach (var kv in ViewData.ModelState)
+                  {
+                    if (kv.Value?.Errors == null || kv.Value.Errors.Count == 0) continue;
+                    foreach (var err in kv.Value.Errors)
+                    {
+                      var anchor = string.IsNullOrEmpty(kv.Key) ? "name" : kv.Key;
+                      <li><a href="#@anchor">@err.ErrorMessage</a></li>
+                    }
+                  }
+                </ul>
+              </div>
+            </div>
           }
-          else
-          {
-            <option value="@o.Value">@o.Label</option>
-          }
-        }
-      </select>
-    </div>
 
-    <button type="submit" class="dfe-c-button dfe-c-button--primary">Save changes</button>
-    <a href="@Url.Action("Detail", "ModernWork", new { id = Model.ProjectId })#wd-milestones" class="dfe-c-button dfe-c-button--secondary dfe-c-ms-2">Cancel</a>
-  </form>
+ <h2 class="govuk-heading-l govuk-!-margin-top-0 govuk-!-margin-bottom-4" id="edit-milestone-details-heading">Milestone details</h2>
+ <fieldset class="govuk-fieldset" aria-labelledby="edit-milestone-details-heading">
+ <legend class="govuk-visually-hidden">Milestone details</legend>
 
-  <div class="dfe-c-mt-3 govuk-!-padding-top-6 dfe-c-body" style="border-top:1px solid #b1b4b6;">
-    <form method="post" action="@Url.Action("DeleteMilestone", "Project", new { projectId = Model.ProjectId, milestoneId = Model.Id })" class="dfe-c-mt-3" data-confirm-title="Delete milestone" data-confirm-message="Delete this milestone? Any risks or issues linked to it will be unlinked. This cannot be undone.">
-      @Html.AntiForgeryToken()
-      <button type="submit" class="dfe-c-button dfe-c-button--warning">Delete milestone</button>
-    </form>
-  </div>
+ <div class="govuk-form-group @(HasErr("name") ? "govuk-form-group--error" : "")">
+ <label class="govuk-label govuk-label--m" for="name">Title</label>
+ <span class="govuk-hint" id="name-hint">Required — up to 200 characters.</span>
+              @if (HasErr("name"))
+              {
+ <p id="name-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span>@ErrMsg("name")</p>
+              }
+ <input class="govuk-input @(HasErr("name") ? "govuk-input--error" : "")" id="name" name="name" type="text" value="@Model.Name" maxlength="200" required aria-describedby="name-hint @(HasErr("name") ? "name-error" : "")" />
+            </div>
+
+ <div class="govuk-form-group @(HasErr("Description") ? "govuk-form-group--error" : "")">
+ <label class="govuk-label govuk-label--m" for="Description">Description</label>
+              @if (HasErr("Description"))
+              {
+ <p id="Description-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span>@ErrMsg("Description")</p>
+              }
+ <textarea class="govuk-textarea @(HasErr("Description") ? "govuk-textarea--error" : "")" id="Description" name="Description" rows="3" aria-describedby="@(HasErr("Description") ? "Description-error" : null)">@Model.Description</textarea>
+            </div>
+
+ <div class="govuk-form-group @(HasErr("dueDate") ? "govuk-form-group--error" : "")">
+ <label class="govuk-label govuk-label--m" for="dueDate">Due date</label>
+              @if (HasErr("dueDate"))
+              {
+ <p id="dueDate-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span>@ErrMsg("dueDate")</p>
+              }
+ <input class="govuk-input @(HasErr("dueDate") ? "govuk-input--error" : "")" id="dueDate" name="dueDate" type="date" value="@Model.DueDate.ToString("yyyy-MM-dd")" required aria-describedby="@(HasErr("dueDate") ? "dueDate-error" : null)" />
+            </div>
+
+ <div class="govuk-form-group @(HasErr("status") ? "govuk-form-group--error" : "")">
+ <label class="govuk-label govuk-label--m" for="status">Status</label>
+              @if (HasErr("status"))
+              {
+ <p id="status-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span>@ErrMsg("status")</p>
+              }
+ <select class="govuk-select @(HasErr("status") ? "govuk-select--error" : "")" id="status" name="status" aria-describedby="@(HasErr("status") ? "status-error" : null)">
+                  @{
+                    var statusOpts = new (string Value, string Label)[]
+                    {
+                      ("not_started", "Not started"),
+                      ("in_progress", "In progress"),
+                      ("on_track", "On track"),
+                      ("at_risk", "At risk"),
+                      ("delayed", "Delayed"),
+                      ("complete", "Complete"),
+                      ("cancelled", "Cancelled")
+                    };
+                  }
+                  @foreach (var o in statusOpts)
+                  {
+                    if (string.Equals(Model.Status, o.Value, StringComparison.OrdinalIgnoreCase))
+                    {
+                      <option value="@o.Value" selected>@o.Label</option>
+                    }
+                    else
+                    {
+                      <option value="@o.Value">@o.Label</option>
+                    }
+                  }
+                </select>
+            </div>
+          </fieldset>
+
+ <div class="govuk-button-group">
+ <button type="submit" class="govuk-button" data-module="govuk-button">Save changes</button>
+ <a href="@Url.Action("Detail", "ModernWork", new { id = Model.ProjectId, tab = "milestones" })#wd-milestones" class="govuk-link govuk-link--no-visited-state govuk-!-margin-left-3">Cancel</a>
+          </div>
+        </form>
+
+ <hr class="govuk-section-break govuk-section-break--l govuk-section-break--visible govuk-!-margin-top-6 govuk-!-margin-bottom-6" />
+
+ <h2 class="govuk-heading-m govuk-!-margin-top-0 govuk-!-margin-bottom-2">Delete this milestone</h2>
+ <p class="govuk-body govuk-!-margin-bottom-4">If you delete this milestone, any risks or issues linked to it will be unlinked. This cannot be undone.</p>
+          <form asp-controller="ModernWork" asp-action="DeleteMilestone" asp-route-id="@Model.ProjectId" asp-route-milestoneId="@Model.Id" method="post" data-confirm-title="Delete milestone" data-confirm-message="Delete this milestone? Any risks or issues linked to it will be unlinked. This cannot be undone.">
+            @Html.AntiForgeryToken()
+ <button type="submit" class="govuk-button govuk-button--warning" data-module="govuk-button">Delete milestone</button>
+          </form>
+      </div>
     </div>
   </div>
+  </div>
+</div>
 </div>

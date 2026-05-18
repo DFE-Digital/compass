@@ -1,0 +1,55 @@
+@model Compass.Models.Division
+@using Compass.ViewModels.Modern
+@using Microsoft.AspNetCore.Html
+@{
+  ViewData["Title"] = "Directorate — " + Model.Name;
+  var workItemCount = ViewBag.DivisionWorkItemCount as int? ?? 0;
+  var riskCount = ViewBag.DivisionRiskCount as int? ?? 0;
+  var openRiskCount = ViewBag.DivisionOpenRiskCount as int? ?? 0;
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernRaid")">RAID</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Directorate", "ModernRaid")">Directorate</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">@Model.Name</li>
+}
+
+<div class="dfe-c-page modern-work-page">
+  @{
+    var divisionDetailActions = new HtmlString(
+      $"<div class=\"dfe-c-flex\" style=\"gap:0.5rem;\"><a href=\"{Url.Action("Directorate", "ModernRaid", new { divisionId = Model.Id }) ?? "#"}\" class=\"govuk-button\">Risks for this directorate</a><a href=\"{Url.Action("Directorate", "ModernRaid") ?? "#"}\" class=\"govuk-button govuk-button--secondary\">All directorates</a></div>");
+    var divisionLede = new HtmlString("<p class=\"govuk-body govuk-!-margin-bottom-0\">Directorate-level risk profile: work items linked to this directorate and risks tagged to it on the RAID record.</p>");
+  }
+  @await Html.PartialAsync("~/Views/Modern/Shared/_ModernPageHeader.cshtml", new ModernPageHeaderViewModel {
+    Caption = $"RAID · Directorate #{Model.Id}",
+    Title = Model.Name,
+    Lede = divisionLede,
+    Actions = divisionDetailActions
+  })
+
+  <div class="dfe-c-grid" style="grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:1rem;">
+    <div class="dfe-c-card"><p class="govuk-body-s govuk-!-margin-bottom-1 govuk-!-margin-top-0" style="color:#505a5f;">Linked work items</p><strong>@workItemCount</strong></div>
+    <div class="dfe-c-card"><p class="govuk-body-s govuk-!-margin-bottom-1 govuk-!-margin-top-0" style="color:#505a5f;">Total risks</p><strong>@riskCount</strong></div>
+    <div class="dfe-c-card"><p class="govuk-body-s govuk-!-margin-bottom-1 govuk-!-margin-top-0" style="color:#505a5f;">Open risks</p><strong>@openRiskCount</strong></div>
+  </div>
+
+  <dl class="govuk-summary-list govuk-!-margin-bottom-9">
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Description</dt>
+      <dd class="govuk-summary-list__value govuk-body">@(string.IsNullOrEmpty(Model.Description) ? "—" : Model.Description)</dd>
+    </div>
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Sort order</dt>
+      <dd class="govuk-summary-list__value">@Model.SortOrder</dd>
+    </div>
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Active</dt>
+      <dd class="govuk-summary-list__value">@(Model.IsActive ? "Yes" : "No")</dd>
+    </div>
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Updated</dt>
+      <dd class="govuk-summary-list__value">@Model.UpdatedAt.ToString("d MMM yyyy HH:mm") UTC</dd>
+    </div>
+  </dl>
+</div>

@@ -1,0 +1,88 @@
+@model Compass.ViewModels.Modern.StandardsManagementProductFormViewModel
+@{
+  ViewData["Title"] = Model.IsEdit ? "Edit standard product" : "Add standard product";
+  var managementHref = Url.Action("Management", "ModernStandards", new { section = "products" }) ?? "#";
+}
+
+@section Breadcrumbs {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernStandards")">Standards</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@managementHref">Management</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">@(Model.IsEdit ? "Edit product" : "Add product")</li>
+}
+
+@{
+  var formLede = await Html.PartialAsync("_GovukBodyParagraph", "Products used on DDT standards for approval or tolerance. These are separate from FIPS service register products.");
+}
+@await Html.PartialAsync("_ModernPageHeader", new Compass.ViewModels.Modern.ModernPageHeaderViewModel {
+  Caption = "Standards management",
+  Title = Model.IsEdit ? "Edit standard product" : "Add standard product",
+  Lede = formLede
+})
+
+@if (TempData["ErrorMessage"] is string formError && !string.IsNullOrWhiteSpace(formError))
+{
+  <div class="govuk-notification-banner govuk-notification-banner--error" role="alert" aria-labelledby="product-form-error-title" data-module="govuk-notification-banner">
+    <div class="govuk-notification-banner__header">
+      <h2 class="govuk-notification-banner__title" id="product-form-error-title">There is a problem</h2>
+    </div>
+    <div class="govuk-notification-banner__content">
+      <p class="govuk-notification-banner__heading">@formError</p>
+    </div>
+  </div>
+}
+
+<form method="post"
+      action="@(Model.IsEdit
+        ? Url.Action("ManagementProductUpdate", "ModernStandards", new { id = Model.Id })
+        : Url.Action("ManagementProductCreate", "ModernStandards"))"
+      class="govuk-!-margin-top-4">
+  @Html.AntiForgeryToken()
+
+  <div class="govuk-form-group">
+    <label class="govuk-label govuk-label--m" for="product-name">Product name</label>
+    <input class="govuk-input" id="product-name" name="name" type="text" value="@Model.Name" required maxlength="200" />
+  </div>
+
+  <div class="govuk-form-group">
+    <label class="govuk-label" for="product-description">Description</label>
+    <textarea class="govuk-textarea" id="product-description" name="description" rows="4" maxlength="2000">@Model.Description</textarea>
+  </div>
+
+  <div>
+    <label class="govuk-label" for="product-provider">Provider</label>
+    <input class="govuk-input" id="product-provider" name="provider" type="text" value="@Model.Provider" maxlength="200" />
+  </div>
+
+  <div class="govuk-form-group">
+    <label class="govuk-label" for="product-version">Version</label>
+    <input class="govuk-input" id="product-version" name="version" type="text" value="@Model.Version" maxlength="100" />
+  </div>
+
+  <h2 class="govuk-heading-s">Optional DfE product link</h2>
+  <p class="govuk-body-s govuk-!-margin-bottom-3">Link to a FIPS service register product when this standard product corresponds to an existing DfE product.</p>
+
+  <div class="govuk-form-group">
+    <label class="govuk-label" for="product-dfe-id">FIPS product ID</label>
+    <input class="govuk-input govuk-input--width-10" id="product-dfe-id" name="dfeFipsProductId" type="text" value="@Model.DfeFipsProductId" maxlength="50" />
+  </div>
+
+  <div class="govuk-form-group">
+    <label class="govuk-label" for="product-dfe-name">DfE product name (display)</label>
+    <input class="govuk-input" id="product-dfe-name" name="dfeProductName" type="text" value="@Model.DfeProductName" maxlength="200" />
+  </div>
+
+  @if (Model.IsEdit)
+  {
+    <p class="govuk-body-s">Approval status: <strong class="govuk-tag">@Model.ApprovalStatus</strong></p>
+  }
+  else
+  {
+    <p class="govuk-body-s">New products are submitted as <strong class="govuk-tag govuk-tag--blue">Pending</strong> until approved.</p>
+  }
+
+  <div class="govuk-button-group govuk-!-margin-top-6">
+    <button type="submit" class="govuk-button">@(Model.IsEdit ? "Save changes" : "Add product")</button>
+    <a class="govuk-link govuk-link--no-visited-state" href="@managementHref">Cancel</a>
+  </div>
+</form>

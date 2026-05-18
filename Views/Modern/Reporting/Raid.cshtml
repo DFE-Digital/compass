@@ -1,0 +1,106 @@
+@using Compass.ViewModels
+@using Compass.ViewModels.Modern
+@model ModernRaidReportViewModel
+@{
+  ViewData["Title"] = "RAID report";
+  var m = Model ?? new ModernRaidReportViewModel();
+  var panel = m.ActivePanel;
+  var activeTab = m.ActiveTab;
+
+  string TabUrl(string tab)
+  {
+    var route = new Dictionary<string, object?> { ["tab"] = tab };
+    if (m.FilterBusinessAreaId is > 0) route["businessAreaId"] = m.FilterBusinessAreaId.Value;
+    if (m.FilterDirectorateId is > 0) route["directorateId"] = m.FilterDirectorateId.Value;
+    return Url.Action("Raid", "ModernReporting", route) ?? "#";
+  }
+
+  var clearUrl = Url.Action("Raid", "ModernReporting", new { tab = activeTab }) ?? "#";
+  var tableTitle = activeTab switch
+  {
+    "issues" => "Open issues",
+    "near-misses" => "Open near misses",
+    "dependencies" => "Active dependencies",
+    "assumptions" => "Open assumptions",
+    _ => "Open risks"
+  };
+
+  var reportNav = new RaidRegisterScopeNavViewModel
+  {
+    AriaLabel = "RAID report registers",
+    ActiveTab = activeTab,
+    Links =
+    [
+      new RaidRegisterScopeNavLink { TabKey = "risks", Label = "Risks", Href = TabUrl("risks"), Count = m.Risks.Count },
+      new RaidRegisterScopeNavLink { TabKey = "issues", Label = "Issues", Href = TabUrl("issues"), Count = m.Issues.Count },
+      new RaidRegisterScopeNavLink { TabKey = "near-misses", Label = "Near misses", Href = TabUrl("near-misses"), Count = m.NearMisses.Count },
+      new RaidRegisterScopeNavLink { TabKey = "dependencies", Label = "Dependencies", Href = TabUrl("dependencies"), Count = m.Dependencies.Count },
+      new RaidRegisterScopeNavLink { TabKey = "assumptions", Label = "Assumptions", Href = TabUrl("assumptions"), Count = m.Assumptions.Count }
+    ]
+  };
+}
+
+@section Breadcrumbs {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernReporting")">Reporting</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">RAID report</li>
+}
+
+<div class="mr-dash raid-report">
+@{
+    var lede = await Html.PartialAsync("_ReportingMutedBodyLede",
+      "Open and active RAID registers for your selected business area and directorate. Use the tabs to switch register type.");
+}
+@await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+  Caption = "Reporting",
+    Title = "RAID report",
+    Lede = lede
+})
+
+  @if (TempData["ErrorMessage"] is string err)
+  {
+    <section class="dfe-c-error-summary" role="alert" style="margin-bottom:1rem;">
+ <p class="dfe-c-body" style="margin:0;">@err</p>
+    </section>
+  }
+
+  <form method="get" action="@Url.Action("Raid", "ModernReporting")" class="mr-toolbar__filters mr-toolbar__filters--compact govuk-!-margin-bottom-3">
+    <input type="hidden" name="tab" value="@activeTab" />
+    <div class="govuk-form-group govuk-!-margin-bottom-0">
+      <label class="govuk-label govuk-label--s" for="raid-report-ba">Business area</label>
+      <select class="govuk-select" id="raid-report-ba" name="businessAreaId">
+        <option value="">All business areas</option>
+ @foreach (var o in m.BusinessAreaFilterOptions)
+ {
+   if (m.FilterBusinessAreaId == o.Id) { <option value="@o.Id" selected>@o.Name</option> }
+   else { <option value="@o.Id">@o.Name</option> }
+ }
+        </select>
+    </div>
+    <div class="govuk-form-group govuk-!-margin-bottom-0">
+      <label class="govuk-label govuk-label--s" for="raid-report-dir">Directorate</label>
+      <select class="govuk-select" id="raid-report-dir" name="directorateId">
+ <option value="">All directorates</option>
+ @foreach (var o in m.DirectorateFilterOptions)
+ {
+   if (m.FilterDirectorateId == o.Id) { <option value="@o.Id" selected>@o.Name</option> }
+   else { <option value="@o.Id">@o.Name</option> }
+ }
+        </select>
+    </div>
+    <button type="submit" class="govuk-button govuk-!-margin-bottom-0">Apply filters</button>
+    <a class="govuk-link govuk-link--no-visited-state govuk-body-s" href="@clearUrl">Clear filters</a>
+  </form>
+
+  <p class="govuk-body-s govuk-hint govuk-!-margin-bottom-2">
+    Scope: <strong>@m.FilterScopeSummary</strong>
+  </p>
+
+  @await Html.PartialAsync("~/Views/Modern/Raid/_RaidRegisterScopeNav.cshtml", reportNav)
+
+  @await Html.PartialAsync("_RaidReportTabPanel", new RaidReportTabPanelViewModel(panel, tableTitle))
+ </div>
+
+@section Styles {
+  <link rel="stylesheet" href="~/modern/css/raid-report.css" asp-append-version="true" />
+}

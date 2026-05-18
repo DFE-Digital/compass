@@ -44,8 +44,15 @@ public class DemandTriageController : Controller
 
     // ── Feature flag guard ───────────────────────────────────────────────────
 
+    private bool IsDemandGloballyActive()
+    {
+        var row = _db.Features.AsNoTracking().FirstOrDefault(f => f.Code == FeatureCodes.Demand);
+        return row == null || row.IsActive;
+    }
+
     private bool IsEnabled() =>
-        _configuration.GetValue<bool>("FeatureFlags:EnableDemandManagement", false);
+        _configuration.GetValue<bool>("FeatureFlags:EnableDemandManagement", false) &&
+        IsDemandGloballyActive();
 
     private IActionResult FeatureDisabled() =>
         NotFound("Demand triage is not currently enabled.");

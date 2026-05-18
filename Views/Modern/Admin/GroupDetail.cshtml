@@ -1,0 +1,209 @@
+@model Compass.ViewModels.Modern.AdminGroupDetailViewModel
+@using Compass.ViewModels.Modern
+@{
+    ViewData["Title"] = Model.Name + " — Group";
+    var addMemberPicker = new UserPickerViewModel
+    {
+        FieldName = "userId",
+        Label = "Find user in directory",
+        Hint = "Search by name or email, select the person, then add them to this group.",
+        InputIdSuffix = "group-add-member",
+        DefaultSummaryText = "No user selected yet."
+    };
+}
+
+@section Breadcrumbs {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernAdmin")">Admin</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Groups", "ModernAdmin")">Groups</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">@Model.Name</li>
+}
+
+<div class="admin-hub">
+ @{
+   var groupDetailLede = await Html.PartialAsync("_AdminGroupDetailHeaderLede", Model);
+ }
+ @await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+   Caption = "Group",
+   Title = Model.Name,
+   Lede = groupDetailLede
+ })
+
+ <div class="dfe-c-flex" style="gap:0.5rem;flex-wrap:wrap;margin-bottom:1rem;">
+ @if (Model.IsActive) { <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--green">Active</span> }
+ else { <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--grey">Inactive</span> }
+ @if (Model.IsSystemGroup) { <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--blue">System group</span> }
+  </div>
+
+  @if (ViewBag.AdminError != null)
+  {
+ <div class="govuk-error-summary" role="alert" data-module="govuk-error-summary" style="margin-bottom:1.5rem;">
+ <h2 class="govuk-error-summary__title">There is a problem</h2>
+ <div class="govuk-error-summary__body">@ViewBag.AdminError</div>
+    </div>
+  }
+  @if (ViewBag.AdminMessage != null)
+  {
+ <div class="govuk-notification-banner govuk-notification-banner--success govuk-!-margin-bottom-3" role="region" aria-labelledby="group-notif-title">
+ <div class="govuk-notification-banner__header">
+ <h2 class="govuk-notification-banner__title" id="group-notif-title">Success</h2>
+      </div>
+ <div class="govuk-notification-banner__content">
+ <p class="govuk-notification-banner__heading">@ViewBag.AdminMessage</p>
+      </div>
+    </div>
+  }
+
+ <div class="dfe-c-flex dfe-c-flex--between dfe-c-mb-2" style="align-items:flex-end;flex-wrap:wrap;gap:0.75rem;">
+ <h2 class="govuk-heading-m" style="margin:0;">Members <span class="govuk-body-s govuk-!-font-weight-regular govuk-!-margin-left-1">(@Model.Members.Count)</span></h2>
+ <button type="button" class="govuk-button" id="btn-open-add-member" aria-haspopup="dialog" aria-controls="dlg-add-member" data-dialog-open="dlg-add-member">Add member</button>
+  </div>
+
+ <div class="dfe-f-table-wrapper" style="margin-bottom:1.5rem;" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+    <table class="govuk-table">
+      <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+ <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Name</button></th>
+ <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Email</button></th>
+ <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">App role</button></th>
+ <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Added</button></th>
+ <th scope="col" class="govuk-table__header govuk-table__header--numeric"><span class="govuk-visually-hidden">Actions</span></th>
+        </tr>
+      </thead>
+      <tbody class="govuk-table__body">
+        @if (Model.Members.Count == 0)
+        {
+ <tr class="govuk-table__row"><td colspan="5" class="dfe-c-text-muted">No members yet. Use <strong>Add member</strong> to add someone from the directory.</td></tr>
+        }
+        else
+        {
+          foreach (var m in Model.Members)
+          {
+            <tr class="govuk-table__row">
+              <td class="govuk-table__cell"><strong>@m.Name</strong></td>
+              <td class="govuk-table__cell">@m.Email</td>
+              <td class="govuk-table__cell">@m.Role</td>
+              <td class="govuk-table__cell">@m.AssignedAt.ToString("d MMM yyyy")</td>
+              <td class="govuk-table__cell" style="text-align:right;white-space:nowrap;">
+                <form method="post"
+                      action="@Url.Action("GroupRemoveMember", "ModernAdmin", new { id = Model.Id })"
+                      data-confirm-title="Remove member"
+                      data-confirm-message="Remove this person from the group? They will lose access granted by this group."
+                      style="display:inline;">
+                  @Html.AntiForgeryToken()
+                  <input type="hidden" name="userId" value="@m.UserId" />
+ <button type="submit" class="govuk-link" style="background:none;border:none;padding:0;cursor:pointer;font:inherit;color:var(--red);text-decoration:underline;">Remove</button>
+                </form>
+              </td>
+            </tr>
+          }
+        }
+      </tbody>
+    </table>
+  </div>
+
+ <dialog id="dlg-add-member" class="admin-dialog" aria-labelledby="dlg-add-member-title">
+ <div class="admin-dialog__inner">
+ <h3 class="govuk-heading-m" id="dlg-add-member-title">Add member</h3>
+ <p class="govuk-body">Search the directory, select a person, then confirm to add them to this group.</p>
+      <form method="post" action="@Url.Action("GroupAddMember", "ModernAdmin", new { id = Model.Id })">
+        @Html.AntiForgeryToken()
+        @await Html.PartialAsync("~/Views/Modern/Shared/_UserPicker.cshtml", addMemberPicker)
+ <div class="govuk-button-group govuk-!-margin-top-4">
+ <button type="submit" class="govuk-button" data-module="govuk-button">Add to group</button>
+ <button type="button" class="govuk-button govuk-button--secondary" id="btn-close-add-member" data-dialog-close="dlg-add-member">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </dialog>
+
+ <div class="dfe-c-flex dfe-c-flex--between dfe-c-mb-2" style="align-items:flex-end;flex-wrap:wrap;gap:0.75rem;">
+ <h2 class="govuk-heading-m" style="margin:0;">Feature permissions <span class="govuk-body-s govuk-!-font-weight-regular govuk-!-margin-left-1">(@Model.Features.Count)</span></h2>
+    @if (Model.AvailableFeatures.Count > 0)
+    {
+ <button type="button" class="govuk-button" id="btn-open-add-permission" aria-haspopup="dialog" aria-controls="dlg-add-permission" data-dialog-open="dlg-add-permission">Add feature permission</button>
+    }
+  </div>
+
+ <div class="dfe-f-table-wrapper" style="margin-bottom:1.5rem;" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+    <table class="govuk-table">
+      <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+ <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Feature</button></th>
+ <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Code</button></th>
+ <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Permission</button></th>
+ <th scope="col" class="govuk-table__header govuk-table__header--numeric"><span class="govuk-visually-hidden">Actions</span></th>
+        </tr>
+      </thead>
+      <tbody class="govuk-table__body">
+        @if (Model.Features.Count == 0)
+        {
+ <tr class="govuk-table__row"><td colspan="4" class="dfe-c-text-muted">No feature permissions assigned.</td></tr>
+        }
+        else
+        {
+          foreach (var f in Model.Features)
+          {
+            <tr class="govuk-table__row">
+              <td class="govuk-table__cell"><strong>@f.FeatureName</strong></td>
+              <td class="govuk-table__cell"><code>@f.FeatureCode</code></td>
+ <td class="govuk-table__cell"><span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--blue">@f.Permission.ToUpper()</span></td>
+              <td class="govuk-table__cell" style="text-align:right;white-space:nowrap;">
+                <form method="post"
+                      action="@Url.Action("GroupRemovePermission", "ModernAdmin", new { id = Model.Id })"
+                      style="display:inline;"
+                      data-confirm-title="Remove permission"
+                      data-confirm-message="Remove this feature permission from the group?">
+                  @Html.AntiForgeryToken()
+                  <input type="hidden" name="permissionId" value="@f.PermissionId" />
+ <button type="submit" class="govuk-link" style="background:none;border:none;padding:0;cursor:pointer;font:inherit;">Remove</button>
+                </form>
+              </td>
+            </tr>
+          }
+        }
+      </tbody>
+    </table>
+  </div>
+
+  @if (Model.AvailableFeatures.Count > 0)
+  {
+ <dialog id="dlg-add-permission" class="admin-dialog" aria-labelledby="dlg-add-permission-title">
+ <div class="admin-dialog__inner">
+ <h3 class="govuk-heading-m" id="dlg-add-permission-title">Add feature permission</h3>
+        <form method="post" action="@Url.Action("GroupAddPermission", "ModernAdmin", new { id = Model.Id })">
+          @Html.AntiForgeryToken()
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="add-perm-feature">Feature</label>
+ <select class="govuk-select govuk-!-width-full" name="featureId" id="add-perm-feature" required>
+              <option value="">Select a feature…</option>
+              @foreach (var f in Model.AvailableFeatures)
+              {
+                <option value="@f.Id">@f.Name (@f.Code)</option>
+              }
+            </select>
+          </div>
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="add-perm-type">Permission</label>
+ <select class="govuk-select govuk-!-width-full" name="permission" id="add-perm-type" required>
+              <option value="1">View</option>
+              <option value="2">Create</option>
+              <option value="3">Update</option>
+              <option value="4">Delete</option>
+            </select>
+          </div>
+ <div class="govuk-button-group">
+ <button type="submit" class="govuk-button" data-module="govuk-button">Add permission</button>
+ <button type="button" class="govuk-button govuk-button--secondary" id="btn-close-add-permission" data-dialog-close="dlg-add-permission">Cancel</button>
+          </div>
+        </form>
+      </div>
+    </dialog>
+  }
+
+ <p class="govuk-body">
+ <a href="@Url.Action("Groups", "ModernAdmin")" class="govuk-link govuk-link--no-visited-state">← Back to all groups</a>
+  </p>
+</div>

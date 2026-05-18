@@ -1,0 +1,35 @@
+@model Compass.ViewModels.Modern.DemandScoringFrameworkPageViewModel
+@using Compass.Services.DemandPipeline
+@{
+  var demand = Model.Demand;
+  var canEdit = demand.Status == "Scoring";
+  var hasOutcome = demand.TotalScore.HasValue && !string.IsNullOrEmpty(demand.SuggestedBand);
+  var s1 = demand.ScoreStrategic ?? 0;
+  var s2 = demand.ScoreUrgency ?? 0;
+  var s3 = demand.ScoreFunding ?? 0;
+  var s4 = demand.ScoreRice ?? 0;
+  var rawDisplay = s1 + s2 + s3 + s4;
+  var rawMaxVm = Model.RawMax > 0 ? Model.RawMax : 1;
+  var scaledDisplay = DemandScoringHelper.ScaleRawTo100(rawDisplay, rawMaxVm);
+  var bandPreview = DemandScoringHelper.BandFromScaled100(scaledDisplay);
+  var bandLabel = !string.IsNullOrEmpty(demand.SuggestedBand) ? DemandScoringHelper.BandLabel(demand.SuggestedBand) : DemandScoringHelper.BandLabel(bandPreview);
+}
+
+<div class="dfe-c-scard demand-scoring-sticky demand-scoring-live-score">
+ <div class="dfe-c-scard__title">Live score</div>
+ <p class="govuk-body govuk-!-margin-bottom-1"><span class="govuk-!-font-size-48 govuk-!-font-weight-bold" id="demand-scoring-live-scaled">@(canEdit ? scaledDisplay : (hasOutcome ? demand.TotalScore : scaledDisplay))</span> <span class="govuk-body-s govuk-!-margin-bottom-0">/ 100</span></p>
+ <p class="govuk-body-s govuk-!-margin-bottom-3">Raw <span id="demand-scoring-live-raw">@rawDisplay</span> / @Model.RawMax</p>
+ <p class="govuk-body govuk-!-font-weight-bold govuk-!-margin-bottom-1" id="demand-scoring-live-band">@bandLabel</p>
+ <hr class="govuk-section-break govuk-section-break--m govuk-section-break--visible" />
+ <div class="dfe-c-scard__title govuk-!-margin-bottom-2">Scoring bands</div>
+ <ul class="govuk-list govuk-body-s demand-scoring-band-list">
+    @foreach (var b in Model.Framework.Bands.OrderBy(x => x.SortOrder))
+    {
+      <li><strong>@b.Label</strong> @b.MinScaledInclusive–@b.MaxScaledInclusive</li>
+    }
+  </ul>
+  @if (demand.ScoredAt.HasValue)
+  {
+ <p class="govuk-body-s govuk-!-margin-top-3 govuk-!-margin-bottom-0">Scored @demand.ScoredAt.Value.ToString("d MMM yyyy") @(string.IsNullOrEmpty(demand.ScoredBy) ? "" : $"· {demand.ScoredBy}")</p>
+  }
+</div>

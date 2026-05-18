@@ -1,5 +1,7 @@
 @model Compass.Models.Modern.Work.WorkItem
+@using System.Text.Json
 @using Compass.Models.Modern.Work
+@using Compass.ViewModels.Modern
 @{
     ViewData["Title"] = "Create work item";
     var portfolios = (List<Compass.Models.Portfolio>)ViewBag.Portfolios ?? new List<Compass.Models.Portfolio>();
@@ -12,46 +14,62 @@
     var ragStatuses = (List<Compass.Models.RagStatus>)ViewBag.RagStatuses ?? new List<Compass.Models.RagStatus>();
     var priorityOutcomes = (List<WorkLookupOption>)ViewBag.PriorityOutcomes ?? new List<WorkLookupOption>();
     var missionPillars = (List<WorkLookupOption>)ViewBag.MissionPillars ?? new List<WorkLookupOption>();
+    var workTagOptions = (List<LookupOption>)ViewBag.WorkTagOptions ?? new List<LookupOption>();
     var governmentDepartments = (List<Compass.Models.GovernmentDepartment>)ViewBag.GovernmentDepartments ?? new List<Compass.Models.GovernmentDepartment>();
     var selectedDirectorateIds = (int[])ViewBag.SelectedDirectorateIds ?? Array.Empty<int>();
     var selectedPriorityOutcomeIds = (int[])ViewBag.SelectedPriorityOutcomeIds ?? Array.Empty<int>();
     var selectedMissionPillarIds = (int[])ViewBag.SelectedMissionPillarIds ?? Array.Empty<int>();
+    var selectedWorkTagIds = (int[])ViewBag.SelectedWorkTagIds ?? Array.Empty<int>();
+    var selectedGovDeptIds = (int[])ViewBag.SelectedGovernmentDepartmentIds ?? Array.Empty<int>();
+    var multiDeptYesBag = ViewBag.MultiDeptYes as bool?;
+    var initialPathToGreenPosted = ViewBag.InitialPathToGreen as string;
     var fromDemand = ViewBag.FromDemand as DemandRequest;
     var fromBc = ViewBag.FromBusinessCase as BusinessCase;
+    var sD0 = Model.StartDate;
+    int? sDay = sD0?.Day, sMonth = sD0?.Month, sYear = sD0?.Year;
+    var tD0 = Model.TargetEndDate;
+    int? tDay = tD0?.Day, tMonth = tD0?.Month, tYear = tD0?.Year;
+
+    bool HasError(string field) => ViewData.ModelState[field]?.Errors?.Any() == true;
+    string? ErrorMsg(string field) => ViewData.ModelState[field]?.Errors?.FirstOrDefault()?.ErrorMessage;
 }
 
 @section Breadcrumbs {
-    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="@Url.Action("Index", "ModernWork")">Work</a></li>
-    <li class="dfe-c-breadcrumb__item" aria-current="page">Create work item</li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernWork")">Work</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">Create work item</li>
 }
 
 <div id="sc-work-create">
-<p class="dfe-c-body dfe-c-mb-3">
-  <a href="@(fromDemand != null ? Url.Action("Detail", "Demand", new { id = fromDemand.Id }) : fromBc != null ? Url.Action("Detail", "Horizon", new { id = fromBc.Id }) : Url.Action("Index", "ModernWork"))" class="dfe-c-link">← @(fromDemand != null ? "Back to demand request" : fromBc != null ? "Back to business case" : "Back to work register")</a>
+<p class="dfe-c-body govuk-!-margin-bottom-3">
+ <a href="@(fromDemand != null ? Url.Action("Detail", "Demand", new { id = fromDemand.Id }) : fromBc != null ? Url.Action("Detail", "Horizon", new { id = fromBc.Id }) : Url.Action("Index", "ModernWork"))" class="govuk-link govuk-link--no-visited-state">← @(fromDemand != null ? "Back to demand request" : fromBc != null ? "Back to business case" : "Back to work register")</a>
 </p>
 
 @if (fromDemand != null)
 {
-  <div class="dfe-c-notification-banner dfe-c-notification-banner--info" role="alert">
-    <div class="dfe-c-notification-banner__header">
-      <h2 class="dfe-c-notification-banner__title" id="demand-banner-title">Linked to demand</h2>
+ <div class="govuk-notification-banner" role="region" aria-labelledby="demand-banner-title" data-module="govuk-notification-banner">
+ <div class="govuk-notification-banner__header">
+ <h2 class="govuk-notification-banner__title" id="demand-banner-title">Linked to demand</h2>
     </div>
-    <div class="dfe-c-notification-banner__content">
-      <p class="dfe-c-body">This work item will be linked to demand request <strong>@fromDemand.Reference — @fromDemand.Title</strong>. Complete the form and create when ready.</p>
+ <div class="govuk-notification-banner__content">
+ <p class="govuk-notification-banner__heading">This work item will be linked to demand request <strong>@fromDemand.Reference — @fromDemand.Title</strong>.</p>
+ <p class="govuk-body govuk-!-margin-bottom-0">Complete the form and create when ready.</p>
     </div>
   </div>
 }
 
-<div class="dfe-c-page-title">
-  <div class="dfe-c-page-title__caption">Work</div>
-  <h1 class="dfe-c-page-title__heading">Create work item</h1>
-  <p class="dfe-c-page-title__lede">Create a new DDT work item to track in the portfolio. Typically linked to an approved demand or business case.</p>
-</div>
+@{
+  var createHeaderLede = await Html.PartialAsync("_GovukBodyParagraph", "Create a new DDT work item to track in the business area. Typically linked to an approved demand or business case.");
+}
+@await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+  Caption = "Work",
+  Title = "Create work item",
+  Lede = createHeaderLede
+})
 
-<div class="dfe-c-form-layout">
-  <div class="dfe-c-form-layout__main">
-    <div class="dfe-c-card dfe-c-card--plain">
-<form asp-controller="ModernWork" asp-action="Create" method="post">
+<div class="govuk-grid-row sc-work-create__layout">
+ <div class="govuk-grid-column-three-quarters">
+ <div class="dfe-c-card dfe-c-card--plain">
+<form asp-controller="ModernWork" asp-action="Create" method="post" novalidate>
   @Html.AntiForgeryToken()
   <input type="hidden" asp-for="DemandRequestId" />
   <input type="hidden" asp-for="BusinessCaseId" />
@@ -60,239 +78,626 @@
     <input type="hidden" name="businessCaseId" value="@fromBc.Id" />
   }
 
-      <div class="form-layout" style="margin-bottom:0">
-        <fieldset>
-          <legend>Work item details</legend>
-          <div class="dfe-c-form__group @(ViewData.ModelState["Title"]?.Errors?.Any() == true ? "dfe-c-form__group--error" : "")">
-            <label asp-for="Title">Title <span style="color:var(--red)">*</span></label>
-            <input asp-for="Title" type="text" placeholder="Short, clear title for this work item" />
-            @if (ViewData.ModelState["Title"]?.Errors?.Any() == true)
-            { <span class="dfe-c-form__error">@ViewData.ModelState["Title"]?.Errors?.FirstOrDefault()?.ErrorMessage</span> }
-          </div>
-          <div class="dfe-c-form__group @(ViewData.ModelState["ProblemStatement"]?.Errors?.Any() == true ? "dfe-c-form__group--error" : "")">
-            <label asp-for="ProblemStatement">Problem statement <span style="color:var(--red)">*</span></label>
-            <div class="form-hint">What is the problem this work is solving? Be specific — this is the 'why'.</div>
-            <textarea asp-for="ProblemStatement" rows="4" placeholder="Describe the problem in plain English..."></textarea>
-          </div>
-          <div class="dfe-c-form__group @(ViewData.ModelState["Aim"]?.Errors?.Any() == true ? "dfe-c-form__group--error" : "")">
-            <label asp-for="Aim">Aim <span style="color:var(--red)">*</span></label>
-            <div class="form-hint">What will success look like? What is this work item trying to achieve?</div>
-            <textarea asp-for="Aim" rows="3" placeholder="Describe the aim and expected outcome..."></textarea>
-          </div>
-        </fieldset>
+  @if (!ViewData.ModelState.IsValid)
+  {
+ <div class="govuk-error-summary" data-module="govuk-error-summary" role="alert" aria-labelledby="error-summary-title">
+ <h2 class="govuk-error-summary__title" id="error-summary-title">There is a problem</h2>
+ <div class="govuk-error-summary__body">
+ <ul class="govuk-list govuk-error-summary__list">
+          @{
+            var summaryOrder = new[]
+            {
+              nameof(Model.Title), nameof(Model.ProblemStatement), nameof(Model.Aim), nameof(Model.PortfolioId),
+              nameof(Model.Status), nameof(Model.PriorityId), nameof(Model.DeliveryPhaseId), nameof(Model.ActivityTypeId),
+              nameof(Model.StartDate), nameof(Model.TargetEndDate), nameof(Model.RiskAppetiteId),
+              nameof(Model.RagStatusId), "InitialRagJustification", "InitialPathToGreen", nameof(Model.SubjectToSpendControl), nameof(Model.FlagshipProject), "governmentDepartmentIds", "MultiDept"
+            };
+          }
+          @foreach (var key in summaryOrder)
+          {
+            if (ViewData.ModelState.TryGetValue(key, out var entry) && entry?.Errors?.Count > 0)
+            {
+              <li><a class="govuk-link govuk-link--no-visited-state" href="#@key">@entry.Errors[0].ErrorMessage</a></li>
+            }
+          }
+          @foreach (var kv in ViewData.ModelState)
+          {
+            if (summaryOrder.Contains(kv.Key, StringComparer.Ordinal)) continue;
+            if (kv.Value?.Errors?.Count > 0)
+            {
+              <li><a class="govuk-link govuk-link--no-visited-state" href="#@kv.Key">@kv.Value.Errors[0].ErrorMessage</a></li>
+            }
+          }
+        </ul>
+      </div>
+    </div>
+  }
 
-        <fieldset>
-          <legend>Portfolio and directorates</legend>
-          <div class="dfe-c-form__group @(ViewData.ModelState["PortfolioId"]?.Errors?.Any() == true ? "dfe-c-form__group--error" : "")">
-            <label asp-for="PortfolioId">Portfolio <span style="color:var(--red)">*</span></label>
-            <select asp-for="PortfolioId">
-              <option value="">— Select portfolio —</option>
-              @foreach (var p in portfolios)
-              { <option value="@p.Id">@p.Name</option> }
-            </select>
-          </div>
-          <div class="dfe-c-form__group">
-            <label for="DirectorateIds">Directorate(s)</label>
-            <div class="form-hint">Select all that apply.</div>
-            <div class="dfe-c-form__check-group" style="margin-top:8px;">
+ <fieldset class="govuk-fieldset govuk-!-margin-bottom-6">
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Work item details</legend>
+
+ <div class="govuk-form-group @(HasError(nameof(Model.Title)) ?"govuk-form-group--error" : "")">
+ <label class="govuk-label" for="Title">Title <span style="color:#d4351c">*</span></label>
+          @if (HasError(nameof(Model.Title)))
+          {
+ <p id="Title-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @ErrorMsg(nameof(Model.Title))</p>
+          }
+ <input asp-for="Title" type="text" class="govuk-input @(HasError(nameof(Model.Title)) ?"govuk-input--error" : "")" placeholder="Short, clear title for this work item" autocomplete="off" aria-describedby="@(HasError(nameof(Model.Title)) ? "Title-error" : null)" />
+        </div>
+
+ <div class="govuk-form-group @(HasError(nameof(Model.ProblemStatement)) ?"govuk-form-group--error" : "")">
+ <label class="govuk-label" for="ProblemStatement">Problem statement <span style="color:#d4351c">*</span></label>
+ <div class="govuk-hint" id="problemstatement-hint">What is the problem this work is solving? Be specific — this is the &lsquo;why&rsquo;.</div>
+          @if (HasError(nameof(Model.ProblemStatement)))
+          {
+ <p id="ProblemStatement-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @ErrorMsg(nameof(Model.ProblemStatement))</p>
+          }
+ <textarea asp-for="ProblemStatement" rows="6" class="govuk-textarea @(HasError(nameof(Model.ProblemStatement)) ?"govuk-textarea--error" : "")" placeholder="Describe the problem in plain English..." aria-describedby="problemstatement-hint @(HasError(nameof(Model.ProblemStatement)) ? "ProblemStatement-error" : "")"></textarea>
+        </div>
+
+ <div class="govuk-form-group @(HasError(nameof(Model.Aim)) ?"govuk-form-group--error" : "")">
+ <label class="govuk-label" for="Aim">Aim <span style="color:#d4351c">*</span></label>
+ <div class="govuk-hint" id="aim-hint">What will success look like? What is this work item trying to achieve?</div>
+          @if (HasError(nameof(Model.Aim)))
+          {
+ <p id="Aim-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @ErrorMsg(nameof(Model.Aim))</p>
+          }
+ <textarea asp-for="Aim" rows="6" class="govuk-textarea @(HasError(nameof(Model.Aim)) ?"govuk-textarea--error" : "")" placeholder="Describe the aim and expected outcome..." aria-describedby="aim-hint @(HasError(nameof(Model.Aim)) ? "Aim-error" : "")"></textarea>
+        </div>
+      </fieldset>
+
+ <fieldset class="govuk-fieldset govuk-!-margin-bottom-6">
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Business area and directorates</legend>
+
+ <div class="govuk-form-group @(HasError(nameof(Model.PortfolioId)) ?"govuk-form-group--error" : "")">
+ <label class="govuk-label" for="PortfolioId">Business area <span style="color:#d4351c">*</span></label>
+          @if (HasError(nameof(Model.PortfolioId)))
+          {
+ <p id="PortfolioId-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @ErrorMsg(nameof(Model.PortfolioId))</p>
+          }
+ <select asp-for="PortfolioId" class="govuk-select govuk-!-width-full @(HasError(nameof(Model.PortfolioId)) ?"govuk-select--error" : "")" aria-describedby="@(HasError(nameof(Model.PortfolioId)) ? "PortfolioId-error" : null)">
+            <option value="">— Select business area —</option>
+            @foreach (var p in portfolios)
+            { <option value="@p.Id">@p.Name</option> }
+          </select>
+        </div>
+
+ <div class="govuk-form-group">
+ <fieldset class="govuk-fieldset">
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Directorate(s)</legend>
+ <div class="govuk-hint" id="directorates-hint">Select all that apply.</div>
+ <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes" aria-describedby="directorates-hint">
               @foreach (var d in directorates)
               {
                 var isChecked = selectedDirectorateIds.Contains(d.Id);
-                <label class="dfe-c-form__check-item" for="dir-@d.Id">
-                  <input type="checkbox" name="DirectorateIds" value="@d.Id" id="dir-@d.Id" checked="@isChecked" />
-                  <div>@d.Name</div>
-                </label>
+ <div class="govuk-checkboxes__item">
+ <input class="govuk-checkboxes__input" type="checkbox" name="DirectorateIds" value="@d.Id" id="dir-@d.Id" checked="@isChecked" />
+ <label class="govuk-label govuk-checkboxes__label" for="dir-@d.Id">@d.Name</label>
+                </div>
               }
             </div>
+          </fieldset>
+        </div>
+      </fieldset>
+
+ <fieldset class="govuk-fieldset govuk-!-margin-bottom-6">
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Delivery and status</legend>
+
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="Status">Status <span style="color:#d4351c">*</span></label>
+ <select asp-for="Status" class="govuk-select govuk-!-width-full">
+            @foreach (var opt in workStatusOptions)
+            {
+              if (Model?.Status == opt.Value)
+              { <option value="@opt.Value" selected>@opt.Name</option> }
+              else
+              { <option value="@opt.Value">@opt.Name</option> }
+            }
+          </select>
+        </div>
+
+ <div class="govuk-form-group @(HasError(nameof(Model.PriorityId)) ?"govuk-form-group--error" : "")">
+ <label class="govuk-label" for="PriorityId">Priority <span style="color:#d4351c">*</span></label>
+          @if (HasError(nameof(Model.PriorityId)))
+          {
+ <p id="PriorityId-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @ErrorMsg(nameof(Model.PriorityId))</p>
+          }
+ <select asp-for="PriorityId" class="govuk-select govuk-!-width-full @(HasError(nameof(Model.PriorityId)) ?"govuk-select--error" : "")" aria-describedby="@(HasError(nameof(Model.PriorityId)) ? "PriorityId-error" : null)">
+            <option value="">— Select —</option>
+            @foreach (var opt in workPriorityOptions)
+            {
+              if (Model?.PriorityId == opt.Id)
+              { <option value="@opt.Id" selected>@opt.Name</option> }
+              else
+              { <option value="@opt.Id">@opt.Name</option> }
+            }
+          </select>
+        </div>
+
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="DeliveryPhaseId">Phase</label>
+ <div class="govuk-hint" id="phase-hint">Delivery phase (e.g. Discovery, Alpha, Beta, Live).</div>
+ <select asp-for="DeliveryPhaseId" class="govuk-select govuk-!-width-full" aria-describedby="phase-hint">
+            <option value="">— Select phase —</option>
+            @foreach (var opt in deliveryPhaseOptions)
+            {
+              if (Model?.DeliveryPhaseId == opt.Id)
+              { <option value="@opt.Id" selected>@opt.Name</option> }
+              else
+              { <option value="@opt.Id">@opt.Name</option> }
+            }
+          </select>
+        </div>
+
+ <div class="govuk-form-group @(HasError(nameof(Model.ActivityTypeId)) ?"govuk-form-group--error" : "")">
+ <label class="govuk-label" for="ActivityTypeId">Activity type <span style="color:#d4351c">*</span></label>
+          @if (HasError(nameof(Model.ActivityTypeId)))
+          {
+ <p id="ActivityTypeId-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @ErrorMsg(nameof(Model.ActivityTypeId))</p>
+          }
+ <select asp-for="ActivityTypeId" class="govuk-select govuk-!-width-full @(HasError(nameof(Model.ActivityTypeId)) ?"govuk-select--error" : "")" aria-describedby="@(HasError(nameof(Model.ActivityTypeId)) ? "ActivityTypeId-error" : null)">
+            <option value="">— Select —</option>
+            @foreach (var opt in activityTypeOptions)
+            {
+              if (Model?.ActivityTypeId == opt.Id)
+              { <option value="@opt.Id" selected>@opt.Name</option> }
+              else
+              { <option value="@opt.Id">@opt.Name</option> }
+            }
+          </select>
+        </div>
+
+ <div class="govuk-form-group @(HasError(nameof(Model.StartDate)) ?"govuk-form-group--error" : "")">
+ <fieldset class="govuk-fieldset" role="group" aria-describedby="@(HasError(nameof(Model.StartDate)) ? "StartDate-hint StartDate-error" : "StartDate-hint")">
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Start date <span class="govuk-visually-hidden">(required)</span><span style="color:#d4351c">*</span></legend>
+ <div id="StartDate-hint" class="govuk-hint">For example 15 3 @(DateTime.UtcNow.Year)</div>
+          @if (HasError(nameof(Model.StartDate)))
+          {
+ <p id="StartDate-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @ErrorMsg(nameof(Model.StartDate))</p>
+          }
+ <div class="govuk-date-input" id="StartDate">
+ <div class="govuk-date-input__item">
+ <div class="govuk-form-group">
+ <label class="govuk-label govuk-date-input__label" for="StartDay">Day</label>
+ <input class="govuk-input govuk-date-input__input govuk-input--width-2 @(HasError(nameof(Model.StartDate)) ?"govuk-input--error" : "")" id="StartDay" name="startDay" type="text" inputmode="numeric" maxlength="2" autocomplete="off" pattern="[0-9]*" value="@sDay" />
+              </div>
+            </div>
+ <div class="govuk-date-input__item">
+ <div class="govuk-form-group">
+ <label class="govuk-label govuk-date-input__label" for="StartMonth">Month</label>
+ <input class="govuk-input govuk-date-input__input govuk-input--width-2 @(HasError(nameof(Model.StartDate)) ?"govuk-input--error" : "")" id="StartMonth" name="startMonth" type="text" inputmode="numeric" maxlength="2" autocomplete="off" pattern="[0-9]*" value="@sMonth" />
+              </div>
+            </div>
+ <div class="govuk-date-input__item">
+ <div class="govuk-form-group">
+ <label class="govuk-label govuk-date-input__label" for="StartYear">Year</label>
+ <input class="govuk-input govuk-date-input__input govuk-input--width-4 @(HasError(nameof(Model.StartDate)) ?"govuk-input--error" : "")" id="StartYear" name="startYear" type="text" inputmode="numeric" maxlength="4" autocomplete="off" pattern="[0-9]*" value="@sYear" />
+              </div>
+            </div>
           </div>
         </fieldset>
+        </div>
 
-        <fieldset>
-          <legend>Delivery and status</legend>
-          <div class="dfe-c-form__group">
-            <label asp-for="Status">Status <span style="color:var(--red)">*</span></label>
-            <select asp-for="Status">
-              @foreach (var opt in workStatusOptions)
-              { <option value="@opt.Value" selected="@(Model?.Status == opt.Value)">@opt.Name</option> }
-            </select>
-          </div>
-          <div class="dfe-c-form__group">
-            <label asp-for="PriorityId">Priority <span style="color:var(--red)">*</span></label>
-            <select asp-for="PriorityId">
-              <option value="">— Select —</option>
-              @foreach (var opt in workPriorityOptions)
-              { <option value="@opt.Id" selected="@(Model?.PriorityId == opt.Id)">@opt.Name</option> }
-            </select>
-          </div>
-          <div class="dfe-c-form__group">
-            <label asp-for="DeliveryPhaseId">Phase</label>
-            <div class="form-hint">Delivery phase (e.g. Discovery, Alpha, Beta, Live).</div>
-            <select asp-for="DeliveryPhaseId">
-              <option value="">— Select phase —</option>
-              @foreach (var opt in deliveryPhaseOptions)
-              { <option value="@opt.Id" selected="@(Model?.DeliveryPhaseId == opt.Id)">@opt.Name</option> }
-            </select>
-          </div>
-          <div class="dfe-c-form__group">
-            <label asp-for="ActivityTypeId">Activity type <span style="color:var(--red)">*</span></label>
-            <select asp-for="ActivityTypeId">
-              <option value="">— Select —</option>
-              @foreach (var opt in activityTypeOptions)
-              { <option value="@opt.Id" selected="@(Model?.ActivityTypeId == opt.Id)">@opt.Name</option> }
-            </select>
-          </div>
-          <div class="fr2">
-            <div class="dfe-c-form__group">
-              <label asp-for="StartDate">Start date <span style="color:var(--red)">*</span></label>
-              <input asp-for="StartDate" type="date" />
+ <div class="govuk-form-group @(HasError(nameof(Model.TargetEndDate)) ?"govuk-form-group--error" : "")">
+ <fieldset class="govuk-fieldset" role="group">
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Target end date</legend>
+          @if (HasError(nameof(Model.TargetEndDate)))
+          {
+ <p id="TargetEndDate-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @ErrorMsg(nameof(Model.TargetEndDate))</p>
+          }
+ <div class="govuk-date-input" id="TargetEndDate">
+ <div class="govuk-date-input__item">
+ <div class="govuk-form-group">
+ <label class="govuk-label govuk-date-input__label" for="TargetEndDay">Day</label>
+ <input class="govuk-input govuk-date-input__input govuk-input--width-2 @(HasError(nameof(Model.TargetEndDate)) ?"govuk-input--error" : "")" id="TargetEndDay" name="targetEndDay" type="text" inputmode="numeric" maxlength="2" autocomplete="off" pattern="[0-9]*" value="@tDay" />
+              </div>
             </div>
-            <div class="dfe-c-form__group">
-              <label asp-for="TargetEndDate">Target end date</label>
-              <input asp-for="TargetEndDate" type="date" />
+ <div class="govuk-date-input__item">
+ <div class="govuk-form-group">
+ <label class="govuk-label govuk-date-input__label" for="TargetEndMonth">Month</label>
+ <input class="govuk-input govuk-date-input__input govuk-input--width-2 @(HasError(nameof(Model.TargetEndDate)) ?"govuk-input--error" : "")" id="TargetEndMonth" name="targetEndMonth" type="text" inputmode="numeric" maxlength="2" autocomplete="off" pattern="[0-9]*" value="@tMonth" />
+              </div>
+            </div>
+ <div class="govuk-date-input__item">
+ <div class="govuk-form-group">
+ <label class="govuk-label govuk-date-input__label" for="TargetEndYear">Year</label>
+ <input class="govuk-input govuk-date-input__input govuk-input--width-4 @(HasError(nameof(Model.TargetEndDate)) ?"govuk-input--error" : "")" id="TargetEndYear" name="targetEndYear" type="text" inputmode="numeric" maxlength="4" autocomplete="off" pattern="[0-9]*" value="@tYear" />
+              </div>
             </div>
           </div>
-          <div class="dfe-c-form__group">
-            <label asp-for="RiskAppetiteId">Risk appetite</label>
-            <select asp-for="RiskAppetiteId">
-              <option value="">— Select —</option>
+        </fieldset>
+        </div>
+
+ <div class="govuk-form-group @(HasError(nameof(Model.RiskAppetiteId)) ? "govuk-form-group--error" : "")">
+ <fieldset class="govuk-fieldset" id="RiskAppetiteId" aria-describedby="@(HasError(nameof(Model.RiskAppetiteId)) ? "RiskAppetiteId-error risk-app-hint" : "risk-app-hint")">
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Risk appetite</legend>
+ <div class="govuk-hint" id="risk-app-hint">The level of risk tolerance for this work.</div>
+          @if (HasError(nameof(Model.RiskAppetiteId)))
+          {
+ <p id="RiskAppetiteId-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @ErrorMsg(nameof(Model.RiskAppetiteId))</p>
+          }
+ <div class="govuk-radios govuk-radios--inline @(HasError(nameof(Model.RiskAppetiteId)) ? "govuk-radios--error" : "")" data-module="govuk-radios">
+ <div class="govuk-radios__item">
+ <input class="govuk-radios__input" type="radio" name="RiskAppetiteId" id="work-create-risk-appetite-none" value="" @(!Model.RiskAppetiteId.HasValue ? "checked" : null) />
+ <label class="govuk-label govuk-radios__label" for="work-create-risk-appetite-none">Not set</label>
+              </div>
               @foreach (var opt in riskAppetiteOptions)
-              { <option value="@opt.Id" selected="@(Model?.RiskAppetiteId == opt.Id)">@opt.Name</option> }
-            </select>
-          </div>
-        </fieldset>
+              {
+ <div class="govuk-radios__item">
+ <input class="govuk-radios__input" type="radio" name="RiskAppetiteId" id="work-create-risk-appetite-@opt.Id" value="@opt.Id" @(Model.RiskAppetiteId == opt.Id ? "checked" : null) />
+ <label class="govuk-label govuk-radios__label" for="work-create-risk-appetite-@opt.Id">@opt.Name</label>
+                </div>
+              }
+            </div>
+          </fieldset>
+        </div>
+      </fieldset>
 
-        <fieldset>
-          <legend>Strategic alignment</legend>
-          <div class="dfe-c-form__group">
-            <span class="legend-sm" style="font-size:15px;font-weight:700;">Priority outcome</span>
-            <div class="form-hint">Select all that apply.</div>
-            <div class="dfe-c-form__check-group" style="margin-top:8px;">
+ <fieldset class="govuk-fieldset govuk-!-margin-bottom-6">
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Strategic alignment</legend>
+
+ <div class="govuk-form-group">
+ <fieldset class="govuk-fieldset">
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Priority outcome</legend>
+ <div class="govuk-hint" id="po-hint">Select all that apply.</div>
+ <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes" aria-describedby="po-hint">
               @foreach (var po in priorityOutcomes)
               {
                 var isChecked = selectedPriorityOutcomeIds.Contains(po.Id);
-                <label class="dfe-c-form__check-item" for="po-@po.Id">
-                  <input type="checkbox" name="PriorityOutcomeIds" value="@po.Id" id="po-@po.Id" checked="@isChecked" />
-                  <div>@po.Name</div>
-                </label>
+ <div class="govuk-checkboxes__item">
+ <input class="govuk-checkboxes__input" type="checkbox" name="PriorityOutcomeIds" value="@po.Id" id="po-@po.Id" checked="@isChecked" />
+ <label class="govuk-label govuk-checkboxes__label" for="po-@po.Id">@po.Name</label>
+                </div>
               }
             </div>
-          </div>
-          <div class="dfe-c-form__group">
-            <span class="legend-sm" style="font-size:15px;font-weight:700;">Mission pillar</span>
-            <div class="form-hint">Select all that apply.</div>
-            <div class="dfe-c-form__check-group" style="margin-top:8px;">
+          </fieldset>
+        </div>
+
+ <div class="govuk-form-group">
+ <fieldset class="govuk-fieldset">
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Mission pillar</legend>
+ <div class="govuk-hint" id="mp-hint">Select all that apply.</div>
+ <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes" aria-describedby="mp-hint">
               @foreach (var mp in missionPillars)
               {
                 var isChecked = selectedMissionPillarIds.Contains(mp.Id);
-                <label class="dfe-c-form__check-item" for="mp-@mp.Id">
-                  <input type="checkbox" name="MissionPillarIds" value="@mp.Id" id="mp-@mp.Id" checked="@isChecked" />
-                  <div>@mp.Name</div>
-                </label>
+ <div class="govuk-checkboxes__item">
+ <input class="govuk-checkboxes__input" type="checkbox" name="MissionPillarIds" value="@mp.Id" id="mp-@mp.Id" checked="@isChecked" />
+ <label class="govuk-label govuk-checkboxes__label" for="mp-@mp.Id">@mp.Name</label>
+                </div>
               }
             </div>
-          </div>
-        </fieldset>
+          </fieldset>
+        </div>
+      </fieldset>
 
-        <fieldset>
-          <legend>RAG and flags</legend>
-          <div class="fr2">
-            <div class="dfe-c-form__group">
-              <label asp-for="RagStatusId">Initial RAG status</label>
-              <select asp-for="RagStatusId">
-                <option value="">— Not set —</option>
-                @foreach (var r in ragStatuses)
-                { <option value="@r.Id" selected="@(Model?.RagStatusId == r.Id)">@r.Name</option> }
-              </select>
-            </div>
-            <div class="dfe-c-form__group">
-              <label for="InitialRagJustification">Initial RAG justification</label>
-              <div class="form-hint">Explain the current status. If Red or Amber, a path to green is required.</div>
-              <textarea id="InitialRagJustification" name="InitialRagJustification" rows="2" placeholder="Brief justification...">@(ViewBag.InitialRagJustification as string)</textarea>
-            </div>
-          </div>
-          <div class="fr2">
-            <div class="dfe-c-form__group">
-              <span class="legend-sm" style="font-size:15px;font-weight:700;">Subject to spend control?</span>
-              <div class="dfe-c-form__radio-group dfe-c-form__radio-group--inline" style="margin-top:8px;">
-                <label class="dfe-c-form__radio-item"><input type="radio" asp-for="SubjectToSpendControl" value="true" /><div>Yes</div></label>
-                <label class="dfe-c-form__radio-item"><input type="radio" asp-for="SubjectToSpendControl" value="false" checked="@(!Model?.SubjectToSpendControl)" /><div>No</div></label>
-              </div>
-            </div>
-            <div class="dfe-c-form__group">
-              <span class="legend-sm" style="font-size:15px;font-weight:700;">Flagship project?</span>
-              <div class="dfe-c-form__radio-group dfe-c-form__radio-group--inline" style="margin-top:8px;">
-                <label class="dfe-c-form__radio-item"><input type="radio" asp-for="FlagshipProject" value="true" /><div>Yes</div></label>
-                <label class="dfe-c-form__radio-item"><input type="radio" asp-for="FlagshipProject" value="false" checked="@(!Model?.FlagshipProject)" /><div>No</div></label>
-              </div>
-            </div>
-            <div class="dfe-c-form__group">
-              <span class="legend-sm" style="font-size:15px;font-weight:700;">Multi-department cooperation?</span>
-              <div class="dfe-c-form__radio-group dfe-c-form__radio-group--inline" style="margin-top:8px;">
-                <label class="dfe-c-form__radio-item"><input type="radio" name="MultiDept" id="multidept-yes" value="yes" /><div>Yes</div></label>
-                <label class="dfe-c-form__radio-item"><input type="radio" name="MultiDept" id="multidept-no" value="no" checked /><div>No</div></label>
-              </div>
-              <div id="dept-names" style="display:none;margin-top:8px;">
-                <label style="font-size:13px;font-weight:700;">Which departments?</label>
-                <div class="form-hint">Select all that apply.</div>
-                <div class="dfe-c-form__check-group" style="margin-top:8px;">
-                @foreach (var g in governmentDepartments)
-                {
-                  <label class="dfe-c-form__check-item" for="govdept-@g.Id">
-                    <input type="checkbox" name="GovernmentDepartmentIds" value="@g.Id" id="govdept-@g.Id" />
-                    <div>@g.Title</div>
-                  </label>
-                }
+ <fieldset class="govuk-fieldset govuk-!-margin-bottom-6">
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Tags</legend>
+ <div class="govuk-form-group">
+ <fieldset class="govuk-fieldset">
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Custom tags</legend>
+ <div class="govuk-hint" id="wt-hint">Select all that apply.</div>
+ <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes" aria-describedby="wt-hint">
+              @foreach (var wt in workTagOptions)
+              {
+                var wtChecked = selectedWorkTagIds.Contains(wt.Id);
+                var wtHintId = $"wt-{wt.Id}-hint";
+ <div class="govuk-checkboxes__item">
+ <input class="govuk-checkboxes__input" type="checkbox" name="workTagIds" value="@wt.Id" id="wt-@wt.Id" checked="@wtChecked" @if (!string.IsNullOrWhiteSpace(wt.Value)) { <text>aria-describedby="@wtHintId"</text> } />
+ <label class="govuk-label govuk-checkboxes__label" for="wt-@wt.Id">@wt.Name</label>
+                  @if (!string.IsNullOrWhiteSpace(wt.Value))
+                  {
+ <div id="@wtHintId" class="govuk-hint govuk-checkboxes__hint">@wt.Value</div>
+                  }
                 </div>
-              </div>
+              }
             </div>
+          </fieldset>
+        </div>
+      </fieldset>
+
+ <fieldset class="govuk-fieldset govuk-!-margin-bottom-6">
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">RAG and flags</legend>
+
+ <div class="govuk-form-group @(HasError(nameof(Model.RagStatusId)) ? "govuk-form-group--error" : "")">
+ <fieldset class="govuk-fieldset" id="RagStatusId" aria-describedby="@(HasError(nameof(Model.RagStatusId)) ? "RagStatusId-error rag-status-hint" : "rag-status-hint")">
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Initial RAG status</legend>
+ <div class="govuk-hint" id="rag-status-hint">Optional. Select the initial delivery confidence for this work item.</div>
+          @if (HasError(nameof(Model.RagStatusId)))
+          {
+ <p id="RagStatusId-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @ErrorMsg(nameof(Model.RagStatusId))</p>
+          }
+ <div class="govuk-radios govuk-radios--inline @(HasError(nameof(Model.RagStatusId)) ? "govuk-radios--error" : "")" data-module="govuk-radios" id="work-create-rag-radios">
+ <div class="govuk-radios__item">
+ <input class="govuk-radios__input" type="radio" name="RagStatusId" id="work-create-rag-none" value="" @(!Model.RagStatusId.HasValue ? "checked" : null) />
+ <label class="govuk-label govuk-radios__label" for="work-create-rag-none">Not set</label>
+              </div>
+              @foreach (var r in ragStatuses)
+              {
+ <div class="govuk-radios__item">
+ <input class="govuk-radios__input" type="radio" name="RagStatusId" id="work-create-rag-@r.Id" value="@r.Id" data-rag-label="@r.Name" @(Model.RagStatusId == r.Id ? "checked" : null) />
+ <label class="govuk-label govuk-radios__label" for="work-create-rag-@r.Id">@r.Name</label>
+                </div>
+              }
+            </div>
+          </fieldset>
+        </div>
+
+ <div class="govuk-form-group @(HasError("InitialRagJustification") ? "govuk-form-group--error" : "")">
+ <label class="govuk-label" for="InitialRagJustification">Initial RAG justification</label>
+ <div class="govuk-hint" id="rag-just-hint">Explain the current delivery confidence and why this RAG applies.</div>
+          @if (HasError("InitialRagJustification"))
+          {
+ <p id="InitialRagJustification-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @ErrorMsg("InitialRagJustification")</p>
+          }
+ <textarea id="InitialRagJustification" name="InitialRagJustification" rows="6" class="govuk-textarea @(HasError("InitialRagJustification") ? "govuk-textarea--error" : "")" placeholder="Brief justification..." aria-describedby="rag-just-hint @(HasError("InitialRagJustification") ? "InitialRagJustification-error" : "")">@(ViewBag.InitialRagJustification as string)</textarea>
+            </div>
+
+ <div id="work-create-path-to-green-group" class="govuk-form-group @(HasError("InitialPathToGreen") ? "govuk-form-group--error" : "")">
+ <label class="govuk-label" for="InitialPathToGreen">Path to green</label>
+ <div class="govuk-hint" id="path-green-hint">Required when RAG is not Green. Describe how delivery confidence will return to green.</div>
+          @if (HasError("InitialPathToGreen"))
+          {
+ <p id="InitialPathToGreen-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @ErrorMsg("InitialPathToGreen")</p>
+          }
+ <textarea id="InitialPathToGreen" name="InitialPathToGreen" rows="4" class="govuk-textarea @(HasError("InitialPathToGreen") ? "govuk-textarea--error" : "")" placeholder="Actions, dates and owners where appropriate…" aria-describedby="path-green-hint @(HasError("InitialPathToGreen") ? "InitialPathToGreen-error" : "")">@(initialPathToGreenPosted)</textarea>
+            </div>
+
+ <div class="govuk-form-group">
+ <fieldset class="govuk-fieldset">
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Subject to spend control?</legend>
+ <div class="govuk-radios govuk-radios--inline" data-module="govuk-radios">
+ <div class="govuk-radios__item">
+ <input class="govuk-radios__input" type="radio" name="SubjectToSpendControl" id="ssc-yes" value="true" @(Model.SubjectToSpendControl ? "checked" : null) />
+ <label class="govuk-label govuk-radios__label" for="ssc-yes">Yes</label>
+                  </div>
+ <div class="govuk-radios__item">
+ <input class="govuk-radios__input" type="radio" name="SubjectToSpendControl" id="ssc-no" value="false" @(!Model.SubjectToSpendControl ? "checked" : null) />
+ <label class="govuk-label govuk-radios__label" for="ssc-no">No</label>
+                  </div>
+                </div>
+              </fieldset>
+            </div>
+
+ <div class="govuk-form-group">
+ <fieldset class="govuk-fieldset">
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Flagship project?</legend>
+ <div class="govuk-radios govuk-radios--inline" data-module="govuk-radios">
+ <div class="govuk-radios__item">
+ <input class="govuk-radios__input" type="radio" name="FlagshipProject" id="fp-yes" value="true" @(Model.FlagshipProject ? "checked" : null) />
+ <label class="govuk-label govuk-radios__label" for="fp-yes">Yes</label>
+                  </div>
+ <div class="govuk-radios__item">
+ <input class="govuk-radios__input" type="radio" name="FlagshipProject" id="fp-no" value="false" @(!Model.FlagshipProject ? "checked" : null) />
+ <label class="govuk-label govuk-radios__label" for="fp-no">No</label>
+                  </div>
+                </div>
+              </fieldset>
+            </div>
+
+ <div id="governmentDepartmentIds" class="govuk-form-group @(HasError("governmentDepartmentIds") ? "govuk-form-group--error" : "")">
+ <fieldset class="govuk-fieldset">
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Multi-department cooperation?</legend>
+ <div class="govuk-radios govuk-radios--inline" data-module="govuk-radios">
+ <div class="govuk-radios__item">
+ <input class="govuk-radios__input" type="radio" name="MultiDept" id="multidept-yes" value="yes" @(multiDeptYesBag == true ? "checked" : null) />
+ <label class="govuk-label govuk-radios__label" for="multidept-yes">Yes</label>
+                  </div>
+ <div class="govuk-radios__item">
+ <input class="govuk-radios__input" type="radio" name="MultiDept" id="multidept-no" value="no" @(multiDeptYesBag != true ? "checked" : null) />
+ <label class="govuk-label govuk-radios__label" for="multidept-no">No</label>
+                  </div>
+                </div>
+              </fieldset>
+ @if (HasError("governmentDepartmentIds"))
+ {
+ <p id="governmentDepartmentIds-error" class="govuk-error-message govuk-!-margin-top-2"><span class="govuk-visually-hidden">Error:</span> @ErrorMsg("governmentDepartmentIds")</p>
+ }
+            </div>
+
+ <div id="dept-names" class="govuk-form-group govuk-!-margin-bottom-6 sc-work-create__govdept-panel">
+ <label class="govuk-label" for="govdept-autocomplete">Add another government department</label>
+ <div class="govuk-hint" id="govdept-hint">Type to filter the list, choose a department, then select &ldquo;Add department&rdquo;. You can add more than one.</div>
+ <div class="sc-work-create__govdept-picker">
+ <input class="govuk-input @(HasError("governmentDepartmentIds") ? "govuk-input--error" : "")" id="govdept-autocomplete" type="text" autocomplete="off" list="govdept-datalist" placeholder="Start typing a department name…" aria-describedby="govdept-hint @(HasError("governmentDepartmentIds") ? "governmentDepartmentIds-error" : "")" />
+ <datalist id="govdept-datalist">
+              @foreach (var g in governmentDepartments)
+              {
+                <option value="@g.Title"></option>
+              }
+            </datalist>
+ <button type="button" class="govuk-button govuk-!-margin-bottom-0 sc-work-create__govdept-add" id="govdept-add-btn" data-module="govuk-button">Add department</button>
           </div>
-        </fieldset>
+
+ <div id="govdept-table-wrap" class="dfe-f-table-wrapper govuk-!-margin-top-4" data-module="dfe-f-table" @(selectedGovDeptIds.Length == 0 ? "hidden" : "")>
+ <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed">
+ <caption class="govuk-table__caption govuk-table__caption--m">Departments you cooperate with</caption>
+ <thead class="govuk-table__head">
+ <tr class="govuk-table__row">
+ <th scope="col" class="govuk-table__header">Department</th>
+ <th scope="col" class="govuk-table__header govuk-table__header--numeric">Remove</th>
+              </tr>
+            </thead>
+ <tbody id="govdept-tbody" class="govuk-table__body"></tbody>
+          </table>
+        </div>
+ <div id="govdept-hidden-fields"></div>
+ <script type="application/json" id="govdept-json">@Html.Raw(JsonSerializer.Serialize(governmentDepartments.Select(g => new { id = g.Id, title = g.Title })))</script>
       </div>
 
-      <div class="dfe-c-button-group">
-        <button type="submit" class="dfe-c-button dfe-c-button--primary">Create work item</button>
-        <a href="@(fromDemand != null ? Url.Action("Detail", "Demand", new { id = fromDemand.Id }) : fromBc != null ? Url.Action("Detail", "Horizon", new { id = fromBc.Id }) : Url.Action("Index", "ModernWork"))" class="dfe-c-button dfe-c-button--secondary">Cancel</a>
+      </fieldset>
+
+ <div class="govuk-button-group">
+ <button type="submit" class="govuk-button" data-module="govuk-button">Create work item</button>
+ <a href="@(fromDemand != null ? Url.Action("Detail", "Demand", new { id = fromDemand.Id }) : fromBc != null ? Url.Action("Detail", "Horizon", new { id = fromBc.Id }) : Url.Action("Index", "ModernWork"))" class="govuk-button govuk-button--secondary">Cancel</a>
       </div>
 </form>
     </div>
   </div>
 
-  <div class="dfe-c-form-layout__aside">
-    <div class="dfe-c-sidebar">
-      <div class="dfe-c-scard">
-        <div class="dfe-c-scard__title">Work item phases</div>
-        <div style="font-size:0.8125rem;display:flex;flex-direction:column;gap:0.5rem;">
-          <div><span class="dfe-c-phase dfe-c-phase--explore">EXPLORE</span><span style="color:var(--grey-4);margin-left:0.5rem;">Concept stage. Not yet committed.</span></div>
-          <div><span class="dfe-c-phase dfe-c-phase--discovery">DISCOVERY</span><span style="color:var(--grey-4);margin-left:0.5rem;">Understanding the problem space.</span></div>
-          <div><span class="dfe-c-phase dfe-c-phase--alpha">ALPHA</span><span style="color:var(--grey-4);margin-left:0.5rem;">Testing hypotheses with users.</span></div>
-          <div><span class="dfe-c-phase dfe-c-phase--private-beta">PRIVATE BETA</span><span style="color:var(--grey-4);margin-left:0.5rem;">Limited release for testing.</span></div>
-          <div><span class="dfe-c-phase dfe-c-phase--public-beta">PUBLIC BETA</span><span style="color:var(--grey-4);margin-left:0.5rem;">Wider release before live.</span></div>
-          <div><span class="dfe-c-phase dfe-c-phase--live">LIVE</span><span style="color:var(--grey-4);margin-left:0.5rem;">Full production release.</span></div>
-        </div>
-      </div>
-      <div class="dfe-c-scard">
-        <div class="dfe-c-scard__title">Monthly reporting</div>
-        <div style="font-size:0.8125rem;color:var(--grey-4);">Work items at Alpha or above are expected to submit a monthly RAG update. Updates are typically due in the last week of each month — check your portfolio guidance.</div>
-      </div>
-      <div class="dfe-c-scard">
-        <div class="dfe-c-scard__title">Priority guidance</div>
-        <div style="font-size:0.8125rem;color:var(--grey-4);">High priority items appear prominently in portfolio reviews. Use High for statutory, ministerial, or critical delivery risk. Medium for significant commitments. Low for improvements and exploratory work.</div>
-      </div>
+ <div class="govuk-grid-column-one-quarter">
+ <div class="dfe-c-sidebar sc-work-create__aside">
     </div>
   </div>
 </div>
 </div>
 
 @section Scripts {
-<script>
+@{
+    var cspNonce = Context.Items["Nonce"]?.ToString() ?? "";
+}
+<script nonce="@cspNonce">
 (function() {
+  var ragRadios = document.querySelectorAll('input[name="RagStatusId"]');
+  var pathGroup = document.getElementById('work-create-path-to-green-group');
+  var pathTa = document.getElementById('InitialPathToGreen');
+
+  function selectedRagRadio() {
+    return document.querySelector('input[name="RagStatusId"]:checked');
+  }
+
+  function ragIsGreen() {
+    var radio = selectedRagRadio();
+    if (!radio || !radio.value) return true;
+    var label = radio.getAttribute('data-rag-label') || '';
+    return String(label).trim().toLowerCase() === 'green';
+  }
+
+  function syncPathVisibility() {
+    if (!pathGroup || !pathTa) return;
+    var radio = selectedRagRadio();
+    var hide = !radio || !radio.value || ragIsGreen();
+    pathGroup.hidden = hide;
+    if (hide) pathTa.value = '';
+  }
+
+  ragRadios.forEach(function (radio) {
+    radio.addEventListener('change', syncPathVisibility);
+  });
+  syncPathVisibility();
+
+  var jsonEl = document.getElementById('govdept-json');
+  var depts = [];
+  if (jsonEl) {
+    try { depts = JSON.parse(jsonEl.textContent || '[]'); } catch (e) {}
+  }
+
+  var selected = new Map();
+  var tbody = document.getElementById('govdept-tbody');
+  var hiddenWrap = document.getElementById('govdept-hidden-fields');
+  var tableWrap = document.getElementById('govdept-table-wrap');
+  var ac = document.getElementById('govdept-autocomplete');
+  var addBtn = document.getElementById('govdept-add-btn');
   var multideptYes = document.getElementById('multidept-yes');
   var multideptNo = document.getElementById('multidept-no');
-  var deptNames = document.getElementById('dept-names');
-  if (multideptYes && multideptNo && deptNames) {
-    function toggle() { deptNames.style.display = multideptYes.checked ? 'block' : 'none'; }
-    multideptYes.addEventListener('change', toggle);
-    multideptNo.addEventListener('change', toggle);
+  var deptPanel = document.getElementById('dept-names');
+
+  function syncHidden() {
+    if (!hiddenWrap) return;
+    hiddenWrap.innerHTML = '';
+    selected.forEach(function (title, id) {
+      var inp = document.createElement('input');
+      inp.type = 'hidden';
+      inp.name = 'governmentDepartmentIds';
+      inp.value = String(id);
+      hiddenWrap.appendChild(inp);
+    });
+  }
+
+  function updateTableVisibility() {
+    if (!tableWrap) return;
+    tableWrap.hidden = selected.size === 0;
+  }
+
+  function renderRow(id, title) {
+    if (!tbody) return;
+    var tr = document.createElement('tr');
+    tr.className = 'govuk-table__row';
+    tr.setAttribute('data-dept-id', String(id));
+    var td1 = document.createElement('td');
+    td1.className = 'govuk-table__cell';
+    td1.textContent = title;
+    var td2 = document.createElement('td');
+    td2.className = 'govuk-table__cell govuk-table__cell--numeric';
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'govuk-link';
+    btn.setAttribute('aria-label', 'Remove ' + title);
+    btn.textContent = 'Remove';
+    btn.addEventListener('click', function () {
+      selected.delete(id);
+      tr.remove();
+      syncHidden();
+      updateTableVisibility();
+    });
+    td2.appendChild(btn);
+    tr.appendChild(td1);
+    tr.appendChild(td2);
+    tbody.appendChild(tr);
+  }
+
+  function findDeptByTitle(t) {
+    var needle = String(t || '').trim().toLowerCase();
+    if (!needle) return null;
+    for (var i = 0; i < depts.length; i++) {
+      if (String(depts[i].title).trim().toLowerCase() === needle) return depts[i];
+    }
+    return null;
+  }
+
+  function addDept() {
+    if (!ac) return;
+    var d = findDeptByTitle(ac.value);
+    if (!d) return;
+    if (selected.has(d.id)) return;
+    selected.set(d.id, d.title);
+    renderRow(d.id, d.title);
+    ac.value = '';
+    syncHidden();
+    updateTableVisibility();
+  }
+
+  if (addBtn) addBtn.addEventListener('click', addDept);
+  if (ac) {
+    ac.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        addDept();
+      }
+    });
+  }
+
+  function toggleMultiDept() {
+    var show = multideptYes && multideptYes.checked;
+    if (deptPanel) deptPanel.hidden = !show;
+    if (!show) {
+      selected.clear();
+      if (tbody) tbody.innerHTML = '';
+      syncHidden();
+      updateTableVisibility();
+      if (ac) ac.value = '';
+    }
+  }
+
+  if (multideptYes && multideptNo && deptPanel) {
+    multideptYes.addEventListener('change', toggleMultiDept);
+    multideptNo.addEventListener('change', toggleMultiDept);
+    toggleMultiDept();
+  }
+
+  var initialIds = @Html.Raw(JsonSerializer.Serialize(selectedGovDeptIds));
+  if (Array.isArray(initialIds) && initialIds.length && depts.length && tbody) {
+    initialIds.forEach(function (rawId) {
+      var id = typeof rawId === 'number' ? rawId : parseInt(rawId, 10);
+      if (!id || selected.has(id)) return;
+      var row = depts.find(function (d) { return d.id === id; });
+      if (row) {
+        selected.set(id, row.title);
+        renderRow(id, row.title);
+      }
+    });
+    syncHidden();
+    updateTableVisibility();
   }
 })();
 </script>

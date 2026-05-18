@@ -1,0 +1,107 @@
+@model Compass.ViewModels.Modern.AdminOrganisationStructureViewModel
+@using Compass.ViewModels.Modern
+@using Microsoft.AspNetCore.Html
+@{
+  ViewData["Title"] = "Organisation structure";
+}
+
+@section Breadcrumbs {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernAdmin")">Admin</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">Organisation structure</li>
+}
+
+<div class="admin-hub">
+ @{
+   var orgStructLede = new HtmlString($"<p class=\"govuk-body govuk-!-margin-bottom-0\">Map business areas to directorates. A business area can appear under more than one directorate. Use with <a class=\"govuk-link govuk-link--no-visited-state\" href=\"{Url.Action("Index", "ModernAdmin", new { panel = "directorates" }) ?? "#"}\">Directorates</a> and <a class=\"govuk-link govuk-link--no-visited-state\" href=\"{Url.Action("Index", "ModernAdmin", new { panel = "directorate-leadership" }) ?? "#"}\">Directorate leadership</a>.</p>");
+ }
+ @await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+   Caption = "Administration",
+   Title = "Organisation structure",
+   Lede = orgStructLede
+ })
+
+  @if (ViewBag.AdminError != null)
+  {
+ <div class="govuk-error-summary" role="alert" data-module="govuk-error-summary" style="margin-bottom:1.5rem;">
+ <h2 class="govuk-error-summary__title">There is a problem</h2>
+ <div class="govuk-error-summary__body">@ViewBag.AdminError</div>
+    </div>
+  }
+  @if (ViewBag.AdminMessage != null)
+  {
+ <div class="govuk-notification-banner govuk-notification-banner--success" role="region" style="margin-bottom:1.5rem;">
+ <div class="govuk-notification-banner__header">
+ <h2 class="govuk-notification-banner__title" id="org-struct-success">Success</h2>
+      </div>
+ <div class="govuk-notification-banner__content">
+ <p class="govuk-notification-banner__heading" id="org-struct-success-msg">@ViewBag.AdminMessage</p>
+      </div>
+    </div>
+  }
+
+ <div class="dfe-c-card dfe-c-mb-4" style="border:1px solid var(--grey-2);padding:1.25rem 1.5rem;background:var(--white);max-width:50rem;">
+ <h2 class="govuk-heading-m">Link a business area to a directorate</h2>
+ <p class="govuk-body dfe-c-text-muted">This sets which business areas are considered in scope for directorate leadership when a work item has that business area but not an explicit directorate.</p>
+    <form method="post" action="@Url.Action("OrganisationStructureAdd", "ModernAdmin")" class="govuk-!-margin-top-2">
+      @Html.AntiForgeryToken()
+      <div class="govuk-form-group">
+ <label class="govuk-label govuk-label--s" for="org-struct-dir">Directorate</label>
+ <select name="divisionId" id="org-struct-dir" class="govuk-select" required>
+          <option value="">Choose…</option>
+          @foreach (var d in Model.Directorates)
+          {
+            <option value="@d.DivisionId">@d.Name</option>
+          }
+        </select>
+      </div>
+      <div class="govuk-form-group">
+ <label class="govuk-label govuk-label--s" for="org-struct-ba">Business area</label>
+ <select name="businessAreaLookupId" id="org-struct-ba" class="govuk-select" required>
+          <option value="">Choose…</option>
+          @foreach (var o in Model.AllBusinessAreaOptions)
+          {
+            <option value="@o.Id">@o.Name</option>
+          }
+        </select>
+      </div>
+ <button type="submit" class="govuk-button" data-module="govuk-button">Add link</button>
+    </form>
+  </div>
+
+  <h2 class="govuk-heading-m">By directorate</h2>
+  <p class="govuk-body dfe-c-text-muted" style="max-width:40rem;">Each list shows business areas currently linked. Removing a link does not remove the business area from Compass.</p>
+
+  <div class="govuk-!-margin-top-4">
+    @if (Model.Directorates.Count == 0)
+    {
+ <p class="govuk-body">No active directorates. Add directorates under <a class="govuk-link" href="@Url.Action("Index", "ModernAdmin", new { panel = "directorates" })">Directorates</a> first.</p>
+    }
+    @foreach (var d in Model.Directorates)
+    {
+ <div class="dfe-c-card" style="border:1px solid var(--grey-2);padding:1rem 1.25rem;margin-bottom:1rem;max-width:50rem;">
+ <h3 class="govuk-heading-s" style="margin-top:0;">@d.Name</h3>
+        @if (d.Links.Count == 0)
+        {
+ <p class="govuk-body dfe-c-text-muted govuk-!-margin-bottom-0">No business areas linked yet.</p>
+        }
+        else
+        {
+ <ul class="govuk-list" style="margin:0;padding-left:1.25rem;">
+            @foreach (var link in d.Links)
+            {
+              <li class="govuk-!-margin-bottom-1">
+ <span>@link.BusinessAreaName</span>
+                <form method="post" action="@Url.Action("OrganisationStructureRemove", "ModernAdmin")" style="display:inline; margin-left:0.5rem;">
+                  @Html.AntiForgeryToken()
+ <input type="hidden" name="linkId" value="@link.LinkId" />
+ <button type="submit" class="govuk-link govuk-link--no-visited-state" style="background:none;border:none;padding:0;cursor:pointer;font:inherit;">Remove</button>
+                </form>
+              </li>
+            }
+          </ul>
+        }
+      </div>
+    }
+  </div>
+</div>

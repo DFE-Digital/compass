@@ -1,0 +1,236 @@
+@model Compass.ViewModels.Modern.StandardsManagementViewModel
+@using Compass.ViewModels.Modern
+@{
+  ViewData["Title"] = "Standards management";
+  var sec = string.IsNullOrWhiteSpace(Model?.ActiveSection) ? "ddt" : Model!.ActiveSection.Trim().ToLowerInvariant();
+  if (sec is not ("ddt" or "functional" or "categories" or "products")) { sec = "ddt"; }
+
+  var draftsHref = Url.Action("DdtStandards", "ModernStandards", new { tab = "draft" }) ?? "#";
+  var reviewQueueHref = Url.Action("DdtStandards", "ModernStandards", new { tab = "review" }) ?? "#";
+  var awaitingPublishHref = Url.Action("DdtStandards", "ModernStandards", new { tab = "awaiting" }) ?? "#";
+  var yourStandardsHref = Url.Action("DdtStandards", "ModernStandards", new { tab = "yours" }) ?? "#";
+}
+
+@section Breadcrumbs {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernStandards")">Standards</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">Management</li>
+}
+
+@{
+  var mgmtLede = await Html.PartialAsync("_GovukBodyParagraph", "Review, publish, and manage DDT standards and functional standards content");
+}
+@await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+  Caption = "Standards",
+  Title = "Standards management",
+  Lede = mgmtLede
+})
+
+@if (TempData["SuccessMessage"] is string mgmtSuccess && !string.IsNullOrWhiteSpace(mgmtSuccess))
+{
+  <div class="govuk-notification-banner govuk-notification-banner--success" role="alert" aria-labelledby="mgmt-success-title" data-module="govuk-notification-banner">
+    <div class="govuk-notification-banner__header">
+      <h2 class="govuk-notification-banner__title" id="mgmt-success-title">Success</h2>
+    </div>
+    <div class="govuk-notification-banner__content">
+      <p class="govuk-notification-banner__heading">@mgmtSuccess</p>
+    </div>
+  </div>
+}
+@if (TempData["ErrorMessage"] is string mgmtError && !string.IsNullOrWhiteSpace(mgmtError))
+{
+  <div class="govuk-notification-banner govuk-notification-banner--error" role="alert" aria-labelledby="mgmt-error-title" data-module="govuk-notification-banner">
+      <div class="govuk-notification-banner__header">
+        <h2 class="govuk-notification-banner__title" id="mgmt-error-title">There is a problem</h2>
+      </div>
+      <div class="govuk-notification-banner__content">
+        <p class="govuk-notification-banner__heading">@mgmtError</p>
+      </div>
+  </div>
+}
+
+@if (ViewBag.CanAccessStandardsManagement != true)
+{
+ <div class="dfe-c-callout dfe-c-callout--info govuk-!-margin-bottom-3">
+ <div class="dfe-c-callout__heading">Access restricted</div>
+ <p class="dfe-c-callout__body">Standards management is available to members of the <strong>Standards Manager</strong> group. Contact an administrator if you need access.</p>
+  </div>
+}
+else
+{
+ <div class="dfe-f-card-grid govuk-!-margin-bottom-4" role="region" aria-label="Standards management summary">
+    @await Html.PartialAsync("~/Views/Modern/Raid/_RaidDashboardStatCard.cshtml", new RaidDashboardStatCardVm
+    {
+      Label = "Your standards",
+      Value = Model.YourStandardsCount.ToString("N0"),
+      Trend = "View your standards",
+      Href = yourStandardsHref,
+      AriaLabel = $"Your standards: {Model.YourStandardsCount:N0}",
+      TintClass = "dfe-f-stat-card--tint-teal"
+    })
+    @await Html.PartialAsync("~/Views/Modern/Raid/_RaidDashboardStatCard.cshtml", new RaidDashboardStatCardVm
+    {
+      Label = "Draft standards",
+      Value = Model.DraftStandardsCount.ToString("N0"),
+      Trend = "View drafts",
+      Href = draftsHref,
+      AriaLabel = $"Draft standards: {Model.DraftStandardsCount:N0}",
+      TintClass = "dfe-f-stat-card--tint-grey"
+    })
+    @await Html.PartialAsync("~/Views/Modern/Raid/_RaidDashboardStatCard.cshtml", new RaidDashboardStatCardVm
+    {
+      Label = "Standards to review",
+      Value = Model.StandardsToReviewCount.ToString("N0"),
+      Trend = "View review queue",
+      Href = reviewQueueHref,
+      AriaLabel = $"Standards to review: {Model.StandardsToReviewCount:N0}",
+      TintClass = "dfe-f-stat-card--tint-blue"
+    })
+    @await Html.PartialAsync("~/Views/Modern/Raid/_RaidDashboardStatCard.cshtml", new RaidDashboardStatCardVm
+    {
+      Label = "Standards awaiting publish",
+      Value = Model.StandardsAwaitingPublishCount.ToString("N0"),
+      Trend = "View awaiting publish",
+      Href = awaitingPublishHref,
+      AriaLabel = $"Standards awaiting publish: {Model.StandardsAwaitingPublishCount:N0}",
+      TintClass = "dfe-f-stat-card--tint-orange"
+    })
+  </div>
+
+  <nav class="dfe-f-sub-navigation govuk-!-margin-bottom-4" aria-label="Standards management areas">
+    <ul class="dfe-f-sub-navigation__list">
+      <li class="dfe-f-sub-navigation__item@(sec == "ddt" ? " dfe-f-sub-navigation__item--active" : "")">
+        <a href="@Url.Action("Management", "ModernStandards", new { section = "ddt" })" class="dfe-f-sub-navigation__link govuk-link govuk-link--no-visited-state"@if (sec == "ddt") { <text> aria-current="page"</text> }>DDT standards <span class="dfe-c-fw-regular">(@Model.PendingReviewStandards.Count to review)</span></a>
+      </li>
+      <li class="dfe-f-sub-navigation__item@(sec == "functional" ? " dfe-f-sub-navigation__item--active" : "")">
+        <a href="@Url.Action("Management", "ModernStandards", new { section = "functional" })" class="dfe-f-sub-navigation__link govuk-link govuk-link--no-visited-state"@if (sec == "functional") { <text> aria-current="page"</text> }>Functional standards <span class="dfe-c-fw-regular">(@Model.FunctionalStandardsCount)</span></a>
+      </li>
+      <li class="dfe-f-sub-navigation__item@(sec == "categories" ? " dfe-f-sub-navigation__item--active" : "")">
+        <a href="@Url.Action("Management", "ModernStandards", new { section = "categories" })" class="dfe-f-sub-navigation__link govuk-link govuk-link--no-visited-state"@if (sec == "categories") { <text> aria-current="page"</text> }>Categories <span class="dfe-c-fw-regular">(@Model.StandardCategoriesCount)</span></a>
+      </li>
+      <li class="dfe-f-sub-navigation__item@(sec == "products" ? " dfe-f-sub-navigation__item--active" : "")">
+        <a href="@Url.Action("Management", "ModernStandards", new { section = "products" })" class="dfe-f-sub-navigation__link govuk-link govuk-link--no-visited-state"@if (sec == "products") { <text> aria-current="page"</text> }>Products <span class="dfe-c-fw-regular">(@Model.StandardProductsCount)</span></a>
+      </li>
+    </ul>
+  </nav>
+
+  @if (sec == "ddt")
+  {
+ <div class="dfe-c-mb-4" id="ddt-pending-review">
+ <div class="dfe-c-section-header">
+ <h2 class="dfe-c-heading-m">Pending review</h2>
+    </div>
+    <p class="govuk-body-s govuk-!-margin-bottom-3"><strong>For approval</strong> — use the approval queue to progress workflow. <strong>Under review</strong> — use the register review tab or open a standard below.</p>
+    @if (Model.PendingReviewStandards.Count == 0)
+    {
+ <p class="dfe-c-body muted">No standards are pending review.</p>
+    }
+    else
+    {
+ <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+        <table class="govuk-table">
+          <thead class="govuk-table__head">
+            <tr class="govuk-table__row">
+              <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Standard</button>
+        </th>
+              <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Stage</button>
+        </th>
+              <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Category</button>
+        </th>
+              <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Version</button>
+        </th>
+              <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Owner</button>
+        </th>
+              <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button"></button>
+        </th>
+            </tr>
+          </thead>
+          <tbody class="govuk-table__body">
+          @foreach (var s in Model.PendingReviewStandards)
+          {
+            <tr class="govuk-table__row">
+              <td class="govuk-table__cell"><a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("DdtDetail", "ModernStandards", new { id = s.Id })"><strong>@s.Title</strong></a></td>
+              <td class="govuk-table__cell">@s.Stage</td>
+              <td class="govuk-table__cell">@(string.IsNullOrEmpty(s.CategoryDisplay) ? "—" : s.CategoryDisplay)</td>
+              <td class="govuk-table__cell">v@(s.Version)</td>
+              <td class="govuk-table__cell">@(string.IsNullOrEmpty(s.OwnerDisplay) ? "—" : s.OwnerDisplay)</td>
+ <td class="govuk-table__cell"><a href="@Url.Action("DdtDetail", "ModernStandards", new { id = s.Id })" class="dfe-c-button dfe-c-button--secondary dfe-c-button--sm">Review</a></td>
+            </tr>
+          }
+          </tbody>
+        </table>
+      </div>
+    }
+  </div>
+
+  }
+
+  @if (sec == "functional")
+  {
+ <div class="dfe-c-mb-4" id="functional-standards-mgmt">
+ <div class="dfe-c-section-header">
+ <h2 class="dfe-c-heading-m">Functional standards</h2>
+    </div>
+    @if (Model.FunctionalStandards.Count == 0)
+    {
+ <p class="dfe-c-body muted">No functional standards configured.</p>
+    }
+    else
+    {
+ <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+        <table class="govuk-table">
+          <thead class="govuk-table__head">
+            <tr class="govuk-table__row">
+              <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Standard</button>
+        </th>
+              <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Themes</button>
+        </th>
+              <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Criteria</button>
+        </th>
+              <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Assessments</button>
+        </th>
+              <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button"></button>
+        </th>
+            </tr>
+          </thead>
+          <tbody class="govuk-table__body">
+          @foreach (var fs in Model.FunctionalStandards)
+          {
+            <tr class="govuk-table__row">
+              <td class="govuk-table__cell"><strong>@fs.Title</strong></td>
+              <td class="govuk-table__cell">@fs.ThemeCount</td>
+              <td class="govuk-table__cell">@fs.CriteriaCount</td>
+              <td class="govuk-table__cell">@fs.AssessmentCount</td>
+ <td class="govuk-table__cell"><a href="@Url.Action("FunctionalStandardDashboard", "ModernStandards", new { id = fs.Id })" class="govuk-link govuk-link--no-visited-state">Manage</a></td>
+            </tr>
+          }
+          </tbody>
+        </table>
+      </div>
+    }
+  </div>
+  }
+
+  @if (sec == "categories")
+  {
+    @await Html.PartialAsync("_ManagementCategoriesSection", Model)
+  }
+
+  @if (sec == "products")
+  {
+    @await Html.PartialAsync("_ManagementProductsSection", Model)
+  }
+}

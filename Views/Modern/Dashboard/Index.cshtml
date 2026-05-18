@@ -1,7 +1,12 @@
 @model HomeDashboardViewModel
 @using System.Linq
+@using Compass.Models
+@using Compass.Models.Modern.Work
+@using Compass.Services
+@using Compass.ViewModels.Dashboard
+@using System.Globalization
 @{
-  ViewData["Title"] = "Your dashboard";
+  ViewData["Title"] = $"{Greeting()}, {Model.FirstName}";
 
   string Trunc(string? s, int n)
   {
@@ -15,364 +20,370 @@
     return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
   }
 
-  string RagCssSuffix(string? ragName) => (ragName ?? "") switch
-  {
-    "Green" => "g",
-    "Amber-Green" => "ag",
-    "Amber" => "a",
-    "Amber-Red" => "ar",
-    "Red" => "r",
-    _ => ""
-  };
+  var fipsServiceRegisterEnabled = ViewBag.FipsServiceRegisterEnabled as bool? == true;
+  var dashboardServiceRegisterByCmdbKey = ViewBag.DashboardServiceRegisterProductIdByCmdbKey as IReadOnlyDictionary<string, Guid>;
 
-  string PhaseCssSuffix(string? phaseName)
+  string PerformanceReportingUrl(ProductDto pr)
   {
-    if (string.IsNullOrWhiteSpace(phaseName)) return "";
-    return phaseName.Replace(" ", "-", StringComparison.Ordinal).ToLowerInvariant();
+    var needle = (pr.DocumentId ?? pr.FipsId)?.Trim();
+    if (string.IsNullOrEmpty(needle))
+      return Url.Action("PerformanceMetrics", "ProductReporting", new { view = "mine" }) ?? "#";
+    return Url.Action("PerformanceMetrics", "ProductReporting", new { view = "mine", search = needle }) ?? "#";
   }
 
-  var overdueCount = Model.OverdueMilestones.Count;
-  var highIssueCount = Model.HighPriorityIssues.Count;
-  var atRiskCount = Model.AtRiskProjects.Count;
-  var updatesDueCount = Model.ProjectsNeedingMonthlyUpdates.Count;
-  var returnsDueCount = Model.ProductsNeedingReturns.Count;
-  var commissionCount = Model.ProductsNeedingCommissionReporting.Count;
-  var actionCount = Model.AssignedActions.Count;
-  var attentionCount = overdueCount + highIssueCount + atRiskCount + updatesDueCount + returnsDueCount + commissionCount + actionCount;
+  string? ServiceRegisterProductUrl(ProductDto pr)
+  {
+    if (Guid.TryParse(pr.DocumentId, out var registerId))
+      return Url.Action("FipsProduct", "ModernManage", new { id = registerId });
+    if (dashboardServiceRegisterByCmdbKey == null) return null;
+    foreach (var k in new[] { pr.CmdbSysId, pr.FipsId })
+    {
+      if (string.IsNullOrWhiteSpace(k)) continue;
+      if (dashboardServiceRegisterByCmdbKey.TryGetValue(k.Trim(), out var id))
+        return Url.Action("FipsProduct", "ModernManage", new { id });
+    }
+    return null;
+  }
 
-  var updatesDueByProjectId = Model.ProjectsNeedingMonthlyUpdates.ToDictionary(t => t.Project.Id, t => t.Status);
+  string ProductRegisterOrPerformanceHref(ProductDto pr)
+  {
+    if (fipsServiceRegisterEnabled)
+    {
+      var reg = ServiceRegisterProductUrl(pr);
+      if (!string.IsNullOrEmpty(reg)) return reg;
+    }
+    return PerformanceReportingUrl(pr);
+  }
 
-  var ragGroups = Model.MyProjects
-    .GroupBy(p => p.RagStatusLookup?.Name ?? "Not set")
-    .ToDictionary(g => g.Key, g => g.Count());
-  int RagCount(string k) => ragGroups.TryGetValue(k, out var v) ? v : 0;
-  var ragBarG = RagCount("Green") + RagCount("Amber-Green");
-  var ragBarA = RagCount("Amber");
-  var ragBarR = RagCount("Red") + RagCount("Amber-Red");
-  var ragBarO = RagCount("Not set");
+  string ProductPhaseDisplay(ProductDto pr) =>
+    string.IsNullOrWhiteSpace(pr.Phase) ? "—" : pr.Phase;
 
-  var monthlySubmitted = Model.MyProjects.Count - updatesDueCount;
-  if (monthlySubmitted < 0) monthlySubmitted = 0;
-  var monthlyTotal = monthlySubmitted + updatesDueCount;
-  var pctSubmitted = monthlyTotal > 0 ? (int)Math.Round(100.0 * monthlySubmitted / monthlyTotal) : 0;
-  string MonthlyPctColour() =>
-    pctSubmitted >= 90 ? "var(--rag-g)" : pctSubmitted >= 60 ? "var(--rag-a)" : "var(--rag-r)";
-  string ProgressFillColour() => MonthlyPctColour();
+  string ProductBusinessAreaDisplay(ProductDto pr) =>
+    !string.IsNullOrWhiteSpace(pr.BusinessArea)
+      ? pr.BusinessArea
+      : ProductDtoViewHelpers.BusinessArea(pr) ?? "—";
+
+  string ProductTypeDisplay(ProductDto pr)
+  {
+    if (!string.IsNullOrWhiteSpace(pr.ProductType))
+      return pr.ProductType;
+    var types = ProductDtoViewHelpers.TypeNames(pr);
+    return types.Count > 0 ? string.Join(", ", types) : "—";
+  }
+
+  var monthlyByProject = Model.MonthlyUpdateStatusByProjectId;
+  var reportingPeriodLabel = !string.IsNullOrWhiteSpace(Model.ApplicableMonthlyUpdatePeriodLabel)
+    ? Model.ApplicableMonthlyUpdatePeriodLabel
+    : new DateTime(Model.ApplicableMonthlyUpdateYear, Model.ApplicableMonthlyUpdateMonth, 1)
+      .ToString("MMMM yyyy", CultureInfo.GetCultureInfo("en-GB"));
+
+  string MonthlyStatusLabel(int projectId)
+  {
+    if (!monthlyByProject.TryGetValue(projectId, out var st))
+      return "—";
+    return st switch
+    {
+      UpdateSubmissionStatus.Submitted => "Submitted",
+      UpdateSubmissionStatus.Late => "Late",
+      UpdateSubmissionStatus.Due => "Due",
+      UpdateSubmissionStatus.Upcoming => "Upcoming",
+      _ => st.ToString()
+    };
+  }
+
+  string TaskStatusBadgeClass(string tag) => tag switch
+  {
+    _ when tag.Equals("Complete", StringComparison.OrdinalIgnoreCase) => "dfe-f-badge dfe-f-badge--small dfe-f-badge--green",
+    _ when tag.Equals("Late", StringComparison.OrdinalIgnoreCase) => "dfe-f-badge dfe-f-badge--small dfe-f-badge--red",
+    _ when tag.Contains("remaining", StringComparison.OrdinalIgnoreCase) => "dfe-f-badge dfe-f-badge--small dfe-f-badge--orange",
+    _ => "dfe-f-badge dfe-f-badge--small dfe-f-badge--orange"
+  };
+
+  var workDashboardHref = Url.Action("Dashboard", "ModernWork") ?? "/modern/work/dashboard";
+  var today = DateTime.Today;
+
+  var rows = new List<(string Title, string Hint, DateTime? SortDate, string Href, string StatusTag)>();
+
+  foreach (var m in Model.OverdueMilestones)
+  {
+    var proj = Model.MyProjects.FirstOrDefault(p => p.Id == m.ProjectId);
+    var milestoneHint = proj != null ? $"Milestone · {proj.Title}" : "Milestone";
+    milestoneHint = $"Due {m.DueDate.ToString("d MMM yyyy", CultureInfo.GetCultureInfo("en-GB"))} · {milestoneHint}";
+    rows.Add((
+      m.Name,
+      milestoneHint,
+      m.DueDate,
+      $"{Url.Action("Detail", "ModernWork", new { id = m.ProjectId, tab = "milestones" })}#wd-milestones",
+      "Late"));
+  }
+
+  foreach (var m in Model.MilestonesDueThisWeek)
+  {
+    var proj = Model.MyProjects.FirstOrDefault(p => p.Id == m.ProjectId);
+    rows.Add((
+      m.Name,
+      proj != null ? $"Milestone · {proj.Title}" : "Milestone",
+      m.DueDate,
+      $"{Url.Action("Detail", "ModernWork", new { id = m.ProjectId, tab = "milestones" })}#wd-milestones",
+      "Due"));
+  }
+
+  if (ViewBag.ShowRaidNavigation == true)
+  {
+    foreach (var i in Model.HighPriorityIssues.Take(8))
+    {
+      var proj = Model.MyProjects.FirstOrDefault(p => p.Id == i.ProjectId);
+      var issueLate = i.TargetResolutionDate.HasValue && i.TargetResolutionDate.Value.Date < today;
+      rows.Add((
+        i.Title,
+        proj != null ? $"Issue · {proj.Title}" : "Issue",
+        i.TargetResolutionDate ?? DateTime.MaxValue.AddDays(-365),
+        Url.Action("Details", "Issue", new { id = i.Id }) ?? "#",
+        issueLate ? "Late" : "Due"));
+    }
+  }
+
+  foreach (var (product, retStatus, due) in Model.ProductsNeedingReturns.Take(8))
+  {
+    rows.Add((
+      product.Title,
+      "Performance return",
+      due,
+      Url.Action("PerformanceMetrics", "ProductReporting", new { documentId = product.DocumentId ?? product.FipsId }) ?? "#",
+      retStatus == ReturnStatus.Late ? "Late" : "Due"));
+  }
+
+  foreach (var (product, commission, subStatus, due) in Model.ProductsNeedingCommissionReporting.Take(8))
+  {
+    var commissionLate = due.Date < today;
+    rows.Add((
+      product.Title,
+      $"{commission.Name} · {subStatus}",
+      due,
+      Url.Action("Commission", "ModernPerformance", new { commissionId = commission.Id }) ?? "#",
+      commissionLate ? "Late" : "Due"));
+  }
+
+  foreach (var a in Model.AssignedActions.Take(15))
+  {
+    var actionLate = a.DueDate.HasValue && a.DueDate.Value.Date < today;
+    rows.Add((
+      a.Title,
+      a.Project?.Title ?? "Action",
+      a.DueDate ?? DateTime.MaxValue.AddDays(-365),
+      Url.Action("Details", "Action", new { id = a.Id }) ?? "#",
+      actionLate ? "Late" : "Due"));
+  }
+
+  var orderedTasks = rows
+    .OrderBy(r => r.SortDate ?? DateTime.MaxValue)
+    .ThenBy(r => r.Title, StringComparer.OrdinalIgnoreCase)
+    .Take(40)
+    .ToList();
+
+  var showMonthlyReportingTask = Model.MonthlyReportingWindowOpen;
+  var monthlyReportingComplete = Model.MonthlyReportingRemainingCount == 0;
+  var hasAnyTasks = showMonthlyReportingTask || orderedTasks.Any();
+
+  var dateCaption = DateTime.Today.ToString("dddd d MMMM yyyy", CultureInfo.GetCultureInfo("en-GB"));
+  var pageTitle = $"{Greeting()}, {Model.FirstName}";
 }
 
-<div class="dfe-c-flex--between dfe-c-mb-3" style="flex-wrap:wrap;gap:1rem;">
-  <div>
-    <div style="font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.7px;color:var(--grey-4);">DDT Central Operations</div>
-    <h1 style="margin-bottom:0.25rem;">@Greeting(), @Model.FirstName</h1>
-    <p class="dfe-c-text-muted">
-      @DateTime.Today.ToString("dddd d MMMM yyyy")
-      @if (attentionCount > 0)
-      {
-        <span> — <strong style="color:var(--black);">@attentionCount</strong> items need your attention</span>
-      }
-    </p>
-  </div>
-  <div class="dfe-c-export-group">
-    <a class="govuk-button govuk-button--outline-blue" href="@Url.Action("Index", "Reports")">Reports</a>
+@section Masthead {
+<div class="dfe-f-masthead dfe-f-masthead--page modern-dashboard__masthead">
+  <div class="dfe-f-app-container dfe-f-app-container--wide govuk-width-container dfe-f-masthead__inner">
+    <p class="govuk-caption-m govuk-!-margin-bottom-2 govuk-!-margin-top-0">@dateCaption</p>
+    <h1 class="govuk-heading-xl govuk-!-margin-top-0 govuk-!-margin-bottom-0">@pageTitle</h1>
+    <div class="modern-dashboard__masthead-stats" aria-labelledby="dashboard-stats-heading">
+      @await Html.PartialAsync("~/Views/Modern/Dashboard/_DashboardAtAGlanceStats.cshtml", Model)
+    </div>
   </div>
 </div>
+}
 
-<div class="dfe-c-grid dfe-c-grid--4 dfe-c-mb-4">
-  <a class="dfe-c-metric @(updatesDueCount > 0 ? "dfe-c-metric--red" : "dfe-c-metric--grey")" href="@Url.Action("Index", "ModernWork")" title="View your projects">
-    <div class="dfe-c-metric__number" style="@(updatesDueCount > 0 ? "color:var(--rag-r);" : "")">@updatesDueCount</div>
-    <div class="dfe-c-metric__label">Project monthly updates due</div>
-    <div class="dfe-c-metric__note" style="color:var(--grey-4);">Projects →</div>
-  </a>
-  <a class="dfe-c-metric @(returnsDueCount > 0 ? "dfe-c-metric--amber" : "dfe-c-metric--grey")" href="@Url.Action("Index", "Products")" title="Product performance">
-    <div class="dfe-c-metric__number" style="@(returnsDueCount > 0 ? "color:var(--rag-a);" : "")">@returnsDueCount</div>
-    <div class="dfe-c-metric__label">Product returns due</div>
-    <div class="dfe-c-metric__note" style="color:var(--grey-4);">Products →</div>
-  </a>
-  <a class="dfe-c-metric @(Model.UnmonitoredRisks.Count > 0 ? "dfe-c-metric--red" : "dfe-c-metric--grey")" href="@Url.Action("Index", "Risk")" title="Risk register">
-    <div class="dfe-c-metric__number" style="@(Model.UnmonitoredRisks.Count > 0 ? "color:var(--rag-r);" : "")">@Model.UnmonitoredRisks.Count</div>
-    <div class="dfe-c-metric__label">Risks needing review</div>
-    <div class="dfe-c-metric__note" style="color:var(--grey-4);">Risks →</div>
-  </a>
-  <a class="dfe-c-metric @(highIssueCount > 0 ? "dfe-c-metric--red" : "dfe-c-metric--grey")" href="@Url.Action("Index", "Issue")" title="Issues">
-    <div class="dfe-c-metric__number" style="@(highIssueCount > 0 ? "color:var(--rag-r);" : "")">@highIssueCount</div>
-    <div class="dfe-c-metric__label">High / critical issues</div>
-    <div class="dfe-c-metric__note" style="color:var(--grey-4);">Issues →</div>
-  </a>
-</div>
+@if (TempData["ErrorMessage"] != null)
+{
+  <div class="govuk-error-summary govuk-!-margin-bottom-6" role="alert">
+    <h2 class="govuk-error-summary__title">There is a problem</h2>
+    <p class="govuk-body govuk-!-margin-bottom-0">@TempData["ErrorMessage"]</p>
+  </div>
+}
 
-<div class="dfe-c-grid dfe-c-grid--content">
-  <div>
-    <div class="dfe-c-section-header">
-      <h2>Your work</h2>
-      <a class="dfe-c-button--link" style="font-size:0.875rem;" href="@Url.Action("Index", "ModernWork")">All projects →</a>
-    </div>
-    @if (Model.MyProjects.Any())
-    {
-      <div class="dfe-c-table-wrap dfe-c-mb-3">
-        <table>
-          <thead>
-            <tr>
-              <th scope="col">Project</th>
-              <th scope="col">Priority / area</th>
-              <th scope="col">Phase</th>
-              <th scope="col">RAG</th>
-              <th scope="col">Monthly update</th>
-            </tr>
-          </thead>
-          <tbody>
-            @foreach (var p in Model.MyProjects.OrderBy(x => x.Title).Take(25))
-            {
-              var ragName = p.RagStatusLookup?.Name;
-              var ragSuf = RagCssSuffix(ragName);
-              var phaseName = p.Phase ?? "—";
-              var phaseSuf = PhaseCssSuffix(p.Phase);
-              updatesDueByProjectId.TryGetValue(p.Id, out var updStatus);
-              string monthlyClass = "dfe-c-tag dfe-c-tag--grey";
-              string monthlyText = "Up to date";
-              if (updStatus == UpdateSubmissionStatus.Due)
-              {
-                monthlyClass = "dfe-c-tag dfe-c-tag--amber";
-                monthlyText = "Due";
-              }
-              else if (updStatus == UpdateSubmissionStatus.Late)
-              {
-                monthlyClass = "dfe-c-tag dfe-c-tag--red-strong";
-                monthlyText = "Late";
-              }
-              <tr>
-                <td>
-                  <a class="dfe-c-link" href="@Url.Action("Detail", "ModernWork", new { id = p.Id })">@Trunc(p.Title, 56)</a><span class="dfe-c-table-ref">@p.ProjectCode</span>
-                </td>
-                <td>@(p.DeliveryPriority?.Name ?? p.BusinessAreaLookup?.Name ?? "—")</td>
-                <td>
-                  @if (!string.IsNullOrEmpty(phaseSuf))
-                  {
-                    <span class="dfe-c-phase dfe-c-phase--@phaseSuf">@phaseName.ToUpperInvariant()</span>
-                  }
-                  else
-                  {
-                    <span class="dfe-c-phase">@(string.IsNullOrEmpty(phaseName) || phaseName == "—" ? "—" : phaseName.ToUpperInvariant())</span>
-                  }
-                </td>
-                <td>
-                  @if (!string.IsNullOrEmpty(ragSuf))
-                  {
-                    <span class="dfe-c-rag dfe-c-rag--@ragSuf">@ragName!.ToUpperInvariant()</span>
-                  }
-                  else
-                  {
-                    <span class="dfe-c-rag dfe-c-rag--tbc">@(string.IsNullOrEmpty(ragName) ? "TBC" : ragName.ToUpperInvariant())</span>
-                  }
-                </td>
-                <td><span class="@monthlyClass">@monthlyText</span></td>
-              </tr>
-            }
-          </tbody>
-        </table>
-      </div>
-    }
-    else
-    {
-      <p class="dfe-c-text-muted dfe-c-mb-3">No active projects are assigned to you yet. When you join a delivery team, projects appear here.</p>
-    }
+<div id="modern-dashboard" class="modern-dashboard modern-dashboard--with-masthead">
 
-    <div class="dfe-c-section-header" id="priority-tasks">
-      <h2>Priority tasks</h2>
-    </div>
-    <div style="border:1px solid var(--grey-2);">
-      @if (Model.PriorityTasks.Any())
+<section class="modern-dashboard__section" aria-labelledby="dashboard-tasks-heading">
+  <h2 id="dashboard-tasks-heading" class="govuk-heading-m govuk-!-margin-top-0 modern-dashboard__section-heading">Your tasks</h2>
+  <p class="govuk-body modern-dashboard__section-desc">Prioritised actions across delivery, performance and RAID. Each row links to where you complete the task in Compass.</p>
+
+  @if (!hasAnyTasks)
+  {
+    <p class="govuk-body govuk-!-margin-bottom-0">No outstanding tasks from this list. Open <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("AllWork", "ModernWork")">all work</a> for the full register.</p>
+  }
+  else
+  {
+    <ul class="govuk-task-list">
+      @if (showMonthlyReportingTask)
       {
-        @foreach (var t in Model.PriorityTasks.Take(12))
-        {
-          <div class="dfe-c-notification">
-            <span class="dfe-c-notification__dot"></span>
-            <div>
-              @if (!string.IsNullOrEmpty(t.LinkUrl))
+        var monthlyStatusId = "dashboard-task-monthly-reporting-status";
+        var monthlyHintId = "dashboard-task-monthly-reporting-hint";
+        <li class="govuk-task-list__item govuk-task-list__item--with-link">
+          <div class="govuk-task-list__name-and-hint">
+            <a class="govuk-link govuk-task-list__link govuk-!-font-weight-bold govuk-link--no-visited-state" href="@workDashboardHref" aria-describedby="@monthlyHintId @monthlyStatusId">
+              Submit monthly delivery updates (@reportingPeriodLabel)
+            </a>
+            <div id="@monthlyHintId" class="govuk-task-list__hint">
+              @if (monthlyReportingComplete)
               {
-                <div style="font-size:0.875rem;font-weight:600;"><a class="dfe-c-link" href="@t.LinkUrl">@t.Title</a></div>
+                <text>All assigned work items have a submitted update for this period.</text>
               }
               else
               {
-                <div style="font-size:0.875rem;font-weight:600;">@t.Title</div>
+                <text>@Model.MonthlyReportingRemainingCount work item@(Model.MonthlyReportingRemainingCount == 1 ? "" : "s") still need an update.</text>
               }
-              <div class="dfe-c-text-muted">@t.Category · @t.Description</div>
             </div>
           </div>
-        }
+          <div class="govuk-task-list__status" id="@monthlyStatusId">
+            @if (monthlyReportingComplete)
+            {
+              <span class="@TaskStatusBadgeClass("Complete")">Complete</span>
+            }
+            else
+            {
+              <span class="@TaskStatusBadgeClass($"{Model.MonthlyReportingRemainingCount} remaining")">@Model.MonthlyReportingRemainingCount remaining</span>
+            }
+          </div>
+        </li>
       }
-      else
+      @for (var ti = 0; ti < orderedTasks.Count; ti++)
       {
-        <div class="dfe-c-notification"><span class="dfe-c-notification__dot dfe-c-notification__dot--read"></span><div><div class="dfe-c-text-muted">No priority tasks right now.</div></div></div>
+        var t = orderedTasks[ti];
+        var statusId = $"dashboard-task-status-{ti + 1}";
+        var hintId = $"dashboard-task-hint-{ti + 1}";
+        <li class="govuk-task-list__item govuk-task-list__item--with-link">
+          <div class="govuk-task-list__name-and-hint">
+            <a class="govuk-link govuk-task-list__link govuk-!-font-weight-bold govuk-link--no-visited-state" href="@t.Href" aria-describedby="@hintId @statusId">@Trunc(t.Title, 120)</a>
+            <div id="@hintId" class="govuk-task-list__hint">@Trunc(t.Hint, 120)</div>
+          </div>
+          <div class="govuk-task-list__status" id="@statusId">
+            <span class="@TaskStatusBadgeClass(t.StatusTag)">@t.StatusTag</span>
+          </div>
+        </li>
       }
-    </div>
-  </div>
+    </ul>
+  }
+</section>
 
-  <aside class="dfe-c-sidebar" aria-label="Summary and quick actions">
-    <div class="dfe-c-scard">
-      <div class="dfe-c-scard__title">Portfolio snapshot</div>
-      <div style="margin-bottom:0.875rem;">
-        <div style="display:flex;justify-content:space-between;font-size:0.8125rem;margin-bottom:0.25rem;"><span>@Model.MyProjects.Count active projects</span></div>
-        <div style="display:flex;gap:2px;height:0.75rem;border-radius:1px;overflow:hidden;margin-bottom:0.375rem;">
-          <div style="flex:@Math.Max(ragBarG, 0.0001);background:var(--rag-g);min-width:2px;"></div>
-          <div style="flex:@Math.Max(ragBarA, 0.0001);background:var(--rag-a);min-width:2px;"></div>
-          <div style="flex:@Math.Max(ragBarR + ragBarO, 0.0001);background:var(--rag-r);min-width:2px;"></div>
-        </div>
-        <div style="display:flex;gap:0.875rem;font-size:0.75rem;color:var(--grey-4);flex-wrap:wrap;">
-          <span style="color:var(--rag-g);">■ @ragBarG Green</span>
-          <span style="color:var(--rag-a);">■ @ragBarA Amber</span>
-          <span style="color:var(--rag-r);">■ @(ragBarR + ragBarO) Red / not set</span>
-        </div>
-      </div>
-      <hr class="dfe-c-divider">
-      <div class="dfe-c-kv"><dt>Products</dt><dd><strong>@Model.MyProducts.Count</strong></dd></div>
-      <div class="dfe-c-kv"><dt>Actions assigned</dt><dd><strong>@actionCount</strong></dd></div>
-      <div class="dfe-c-kv"><dt>Milestones this week</dt><dd><strong>@Model.MilestonesDueThisWeek.Count</strong></dd></div>
-      <div class="dfe-c-kv"><dt>DDT standards</dt><dd><strong>@Model.MyDdtStandards.Count</strong></dd></div>
+@if (Model.MyProjects.Any())
+{
+  <section class="modern-dashboard__section" aria-labelledby="dashboard-delivery-heading">
+    <h2 id="dashboard-delivery-heading" class="govuk-heading-m govuk-!-margin-top-0 modern-dashboard__section-heading">Your delivery work</h2>
+    <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+      <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+      <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed modern-dashboard__table">
+        <caption class="govuk-table__caption govuk-table__caption--m govuk-visually-hidden">Your delivery work items</caption>
+        <thead class="govuk-table__head">
+          <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+              <button type="button" class="dfe-f-table-sort-button">Work item</button>
+            </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+              <button type="button" class="dfe-f-table-sort-button">Delivery status</button>
+            </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+              <button type="button" class="dfe-f-table-sort-button">RAG</button>
+            </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+              <button type="button" class="dfe-f-table-sort-button">Priority</button>
+            </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+              <button type="button" class="dfe-f-table-sort-button">Monthly (@reportingPeriodLabel)</button>
+            </th>
+          </tr>
+        </thead>
+        <tbody class="govuk-table__body">
+          @foreach (var p in Model.MyProjects.Take(12))
+          {
+            var ragName = p.RagStatusName ?? p.RagStatus ?? "—";
+            var ragCss = p.RagStatusLookup?.CssClass;
+            var priorityName = p.DeliveryPriority?.Name;
+            var statusText = string.IsNullOrEmpty(p.Status) ? "—" : p.Status;
+            <tr class="govuk-table__row">
+              <td class="govuk-table__cell">
+                <a class="govuk-link govuk-link--no-visited-state govuk-!-font-weight-bold" href="@Url.Action("Detail", "ModernWork", new { id = p.Id })">@Trunc(p.Title, 80)</a>
+                <div class="govuk-body-s dfe-c-text-muted modern-work-table__meta">WI-@p.Id.ToString("D8")</div>
+              </td>
+              <td class="govuk-table__cell"><span class="@WorkBadgeCss.StatusDfeFrontendBadgeClass(statusText == "—" ? null : statusText) dfe-f-badge--small">@statusText</span></td>
+              <td class="govuk-table__cell"><span class="@WorkBadgeCss.RagDfeFrontendBadgeClass(ragCss, ragName == "—" ? null : ragName) dfe-f-badge--small">@(string.IsNullOrEmpty(ragName) || ragName == "—" ? "—" : ragName.ToUpperInvariant())</span></td>
+              <td class="govuk-table__cell"><span class="@WorkBadgeCss.PriorityDfeFrontendBadgeClass(priorityName) dfe-f-badge--small">@((priorityName ?? "—").ToUpperInvariant())</span></td>
+              <td class="govuk-table__cell">@MonthlyStatusLabel(p.Id)</td>
+            </tr>
+          }
+        </tbody>
+      </table>
     </div>
+    @if (Model.MyProjects.Count > 12)
+    {
+      <p class="govuk-body govuk-!-margin-top-3 govuk-!-margin-bottom-0">
+        <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("AllWork", "ModernWork")">View more</a>
+      </p>
+    }
+  </section>
+}
 
-    <div class="dfe-c-scard">
-      <div class="dfe-c-scard__title">Monthly project updates</div>
-      @if (monthlyTotal > 0)
-      {
-        <div style="text-align:center;padding:0.75rem 0;">
-          <div style="font-size:2.625rem;font-weight:700;line-height:1;color:@MonthlyPctColour();">@pctSubmitted%</div>
-          <div class="dfe-c-text-muted" style="margin-top:0.25rem;">@monthlySubmitted of @monthlyTotal up to date</div>
-        </div>
-        <div class="dfe-c-progress dfe-c-mb-2"><div class="dfe-c-progress__fill" style="width:@pctSubmitted%;background:@ProgressFillColour();"></div></div>
-        <div class="dfe-c-kv"><dt>Due or late</dt><dd style="color:var(--rag-r);font-weight:700;">@updatesDueCount</dd></div>
-      }
-      else
-      {
-        <p class="dfe-c-text-muted" style="font-size:0.875rem;margin:0;">No reporting scope for your projects this period.</p>
-      }
+@if (fipsServiceRegisterEnabled && Model.MyProducts.Any())
+{
+  <section class="modern-dashboard__section" aria-labelledby="dashboard-products-heading">
+    <h2 id="dashboard-products-heading" class="govuk-heading-m govuk-!-margin-top-0 modern-dashboard__section-heading">Products you support</h2>
+    <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+      <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+      <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed modern-dashboard__table">
+        <caption class="govuk-table__caption govuk-table__caption--m govuk-visually-hidden">Products you support</caption>
+        <thead class="govuk-table__head">
+          <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+              <button type="button" class="dfe-f-table-sort-button">Product</button>
+            </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+              <button type="button" class="dfe-f-table-sort-button">Phase</button>
+            </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+              <button type="button" class="dfe-f-table-sort-button">Business area</button>
+            </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+              <button type="button" class="dfe-f-table-sort-button">Type</button>
+            </th>
+          </tr>
+        </thead>
+        <tbody class="govuk-table__body">
+          @foreach (var pr in Model.MyProducts.Take(10))
+          {
+            var productHref = ProductRegisterOrPerformanceHref(pr);
+            var phase = string.IsNullOrWhiteSpace(pr.Phase) ? "—" : pr.Phase;
+            var businessArea = string.IsNullOrWhiteSpace(pr.BusinessArea)
+              ? ProductDtoViewHelpers.BusinessArea(pr) ?? "—"
+              : pr.BusinessArea;
+            var types = string.IsNullOrWhiteSpace(pr.ProductType)
+              ? (ProductDtoViewHelpers.TypeNames(pr).Count > 0 ? string.Join(", ", ProductDtoViewHelpers.TypeNames(pr)) : "—")
+              : pr.ProductType;
+            <tr class="govuk-table__row">
+              <td class="govuk-table__cell">
+                <a class="govuk-link govuk-link--no-visited-state govuk-!-font-weight-bold" href="@productHref">@Trunc(pr.Title, 80)</a>
+              </td>
+              <td class="govuk-table__cell">@phase</td>
+              <td class="govuk-table__cell">@Trunc(businessArea, 60)</td>
+              <td class="govuk-table__cell">@Trunc(types, 60)</td>
+            </tr>
+          }
+        </tbody>
+      </table>
     </div>
+    @if (Model.MyProducts.Count > 10)
+    {
+      <p class="govuk-body govuk-!-margin-top-3 govuk-!-margin-bottom-0">
+        <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("Fips", "ModernManage", new { tab = "my" })">View all your products</a>
+      </p>
+    }
+  </section>
+}
 
-    <div class="dfe-c-scard">
-      <div class="dfe-c-scard__title">Quick actions</div>
-      <div style="display:flex;flex-direction:column;gap:0.5rem;">
-        <a class="dfe-c-button dfe-c-button--primary dfe-c-button--sm" href="@Url.Action("Index", "ModernWork")">View projects</a>
-        <a class="dfe-c-button dfe-c-button--secondary dfe-c-button--sm" href="@Url.Action("Index", "Products")">Product performance</a>
-        <a class="dfe-c-button dfe-c-button--secondary dfe-c-button--sm" href="@Url.Action("Create", "Risk")">Log a risk</a>
-        <a class="dfe-c-button dfe-c-button--secondary dfe-c-button--sm" href="@Url.Action("Dashboard", "DdtStandards")">Standards</a>
-      </div>
-    </div>
-  </aside>
 </div>
-
-@if (Model.MilestonesDueThisWeek.Any() || Model.OverdueMilestones.Any())
-{
-  <section class="dfe-c-mb-3 dfe-c-mt-3" aria-labelledby="home-milestones-heading">
-    <div class="dfe-c-section-header"><h2 id="home-milestones-heading">Milestones</h2><a class="dfe-c-button--link" style="font-size:0.875rem;" href="@Url.Action("Index", "ModernWork")">Projects →</a></div>
-    <div class="dfe-c-table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th scope="col">Timing</th>
-            <th scope="col">Milestone</th>
-            <th scope="col">Project</th>
-            <th scope="col">Due</th>
-            <th scope="col"><span class="compass2-visually-hidden">Open</span></th>
-          </tr>
-        </thead>
-        <tbody>
-          @foreach (var m in Model.OverdueMilestones.Take(8))
-          {
-            var proj = Model.MyProjects.FirstOrDefault(p => p.Id == m.ProjectId);
-            <tr>
-              <td><span class="dfe-c-tag dfe-c-tag--red-strong">OVERDUE</span></td>
-              <td><a class="dfe-c-link" href="@Url.Action("Detail", "ModernWork", new { id = m.ProjectId, tab = "milestones" })">@Trunc(m.Name, 56)</a></td>
-              <td class="dfe-c-text-muted">@Trunc(proj?.Title ?? "—", 48)</td>
-              <td style="white-space:nowrap;">@m.DueDate.ToString("d MMM yyyy")</td>
-              <td style="white-space:nowrap;"><a class="dfe-c-link" href="@Url.Action("Detail", "ModernWork", new { id = m.ProjectId, tab = "milestones" })">View</a></td>
-            </tr>
-          }
-          @foreach (var m in Model.MilestonesDueThisWeek.Take(8))
-          {
-            var proj = Model.MyProjects.FirstOrDefault(p => p.Id == m.ProjectId);
-            <tr>
-              <td><span class="dfe-c-tag dfe-c-tag--grey">THIS WEEK</span></td>
-              <td><a class="dfe-c-link" href="@Url.Action("Detail", "ModernWork", new { id = m.ProjectId, tab = "milestones" })">@Trunc(m.Name, 56)</a></td>
-              <td class="dfe-c-text-muted">@Trunc(proj?.Title ?? "—", 48)</td>
-              <td style="white-space:nowrap;">@m.DueDate.ToString("d MMM yyyy")</td>
-              <td style="white-space:nowrap;"><a class="dfe-c-link" href="@Url.Action("Detail", "ModernWork", new { id = m.ProjectId, tab = "milestones" })">View</a></td>
-            </tr>
-          }
-        </tbody>
-      </table>
-    </div>
-  </section>
-}
-
-@if (Model.HighPriorityIssues.Any() || Model.UnmonitoredRisks.Any())
-{
-  <section class="dfe-c-mb-3" aria-labelledby="home-raid-heading">
-    <div class="dfe-c-section-header">
-      <h2 id="home-raid-heading">Risks and issues</h2>
-      <a class="dfe-c-button--link" style="font-size:0.875rem;" href="@Url.Action("Index", "Raid")">RAID hub →</a>
-    </div>
-    <div class="dfe-c-table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th scope="col">Type</th>
-            <th scope="col">Title</th>
-            <th scope="col">Project</th>
-            <th scope="col"><span class="compass2-visually-hidden">Open</span></th>
-          </tr>
-        </thead>
-        <tbody>
-          @foreach (var r in Model.UnmonitoredRisks.Take(6))
-          {
-            var proj = Model.MyProjects.FirstOrDefault(p => p.Id == r.ProjectId);
-            <tr>
-              <td><span class="dfe-c-tag dfe-c-tag--grey">RISK</span></td>
-              <td><a class="dfe-c-link" href="@Url.Action("Details", "Risk", new { id = r.Id })">@Trunc(r.Title, 48)</a></td>
-              <td class="dfe-c-text-muted">@Trunc(proj?.Title ?? "—", 40)</td>
-              <td style="white-space:nowrap;"><a class="dfe-c-link" href="@Url.Action("Details", "Risk", new { id = r.Id })">View</a></td>
-            </tr>
-          }
-          @foreach (var i in Model.HighPriorityIssues.Take(6))
-          {
-            var proj = Model.MyProjects.FirstOrDefault(p => p.Id == i.ProjectId);
-            <tr>
-              <td><span class="dfe-c-tag dfe-c-tag--grey">ISSUE</span></td>
-              <td><a class="dfe-c-link" href="@Url.Action("Details", "Issue", new { id = i.Id })">@Trunc(i.Title, 48)</a></td>
-              <td class="dfe-c-text-muted">@Trunc(proj?.Title ?? "—", 40)</td>
-              <td style="white-space:nowrap;"><a class="dfe-c-link" href="@Url.Action("Details", "Issue", new { id = i.Id })">View</a></td>
-            </tr>
-          }
-        </tbody>
-      </table>
-    </div>
-  </section>
-}
-
-@if (Model.AssignedActions.Any())
-{
-  <section class="dfe-c-mb-3" aria-labelledby="home-actions-heading">
-    <div class="dfe-c-section-header">
-      <h2 id="home-actions-heading">Actions assigned to you</h2>
-    </div>
-    <div class="dfe-c-table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th scope="col">Action</th>
-            <th scope="col">Due</th>
-            <th scope="col">Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          @foreach (var a in Model.AssignedActions)
-          {
-            <tr>
-              <td><a class="dfe-c-link" href="@Url.Action("Details", "Action", new { id = a.Id })">@Trunc(a.Title, 48)</a></td>
-              <td>@(a.DueDate.HasValue ? a.DueDate.Value.ToString("d MMM yyyy") : "—")</td>
-              <td><span class="dfe-c-tag dfe-c-tag--grey">@(a.Status ?? "—").ToUpperInvariant()</span></td>
-            </tr>
-          }
-        </tbody>
-      </table>
-    </div>
-  </section>
-}

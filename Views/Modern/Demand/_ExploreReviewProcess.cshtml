@@ -1,0 +1,601 @@
+@model Compass.Models.DemandPipeline.DemandPipelineRequest
+@using Compass.Models.DemandPipeline
+@{
+  var canSave = ViewBag.ExploreCanSaveFields as bool? ?? false;
+  var canWorkflow = ViewBag.ExploreCanWorkflow as bool? ?? false;
+  var backToRequestUrl = Url.Action("RequestDetail", "ModernDemand", new { id = Model.Id, tab = "request" }) ?? "#";
+  var relatedLinks = ViewBag.ExploreRelatedLinksList as IReadOnlyList<ExploreRelatedLinkDto> ?? Array.Empty<ExploreRelatedLinkDto>();
+  var barrierRowsReadonly = ViewBag.SelectedExploreUniversalBarrierRows as IList<UniversalBarrierLookup> ?? new List<UniversalBarrierLookup>();
+  var barrierOptions = ViewBag.ExploreUniversalBarrierOptions as IList<UniversalBarrierLookup> ?? new List<UniversalBarrierLookup>();
+  var selectedBarrierIds = ViewBag.SelectedExploreUniversalBarrierIds as IList<int> ?? new List<int>();
+  var selectedBarrierSet = new HashSet<int>(selectedBarrierIds);
+  var workSearchUrl = Url.Action("ExploreSearchWork", "ModernDemand") ?? "";
+  var serviceSearchUrl = Url.Action("ExploreSearchServices", "ModernDemand") ?? "";
+}
+
+@if (!canSave)
+{
+  @if (string.Equals(Model.Status, "Draft", StringComparison.OrdinalIgnoreCase))
+  {
+ <div class="dfe-c-card dfe-c-card--plain">
+ <h2 class="govuk-heading-m">Explore</h2>
+ <p class="govuk-body">Submit the demand first. After submission, Explore captures evidence for scoring.</p>
+ <p class="govuk-body govuk-!-margin-bottom-0"><a class="govuk-link govuk-link--no-visited-state" href="@backToRequestUrl">View request details</a></p>
+    </div>
+  }
+  else
+  {
+ <div class="dfe-c-card dfe-c-card--plain">
+ <h2 class="govuk-heading-m">Explore</h2>
+ <p class="govuk-body govuk-!-margin-bottom-3">Explore evidence for this demand (read-only in the current state).</p>
+ <dl class="govuk-summary-list">
+        @if (relatedLinks.Count > 0)
+        {
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">Related work and live services</dt>
+ <dd class="govuk-summary-list__value">
+ <div class="dfe-f-table-wrapper" style="margin-bottom:0;" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+                <table class="govuk-table">
+                  <thead class="govuk-table__head"><tr class="govuk-table__row"><th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Name</button>
+        </th><th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Type</button>
+        </th></tr></thead>
+                  <tbody class="govuk-table__body">
+                    @foreach (var link in relatedLinks)
+                    {
+                      var isWork = string.Equals(link.Kind, "Work", StringComparison.OrdinalIgnoreCase);
+                      <tr class="govuk-table__row">
+                        <td class="govuk-table__cell">
+                          @if (isWork && link.ProjectId.HasValue)
+                          {
+ <a class="govuk-link govuk-link--no-visited-state" href="@(Url.Action("Detail", "ModernWork", new { id = link.ProjectId.Value }) ?? "#")">@link.Label</a>
+                          }
+                          else if (!isWork && link.CmdbProductId.HasValue)
+                          {
+ <a class="govuk-link govuk-link--no-visited-state" href="@(Url.Action("FipsProduct", "ModernManage", new { id = link.CmdbProductId.Value }) ?? "#")">@link.Label</a>
+                          }
+                          else
+                          {
+                            @link.Label
+                          }
+                        </td>
+                        <td class="govuk-table__cell">
+                          @if (isWork)
+ { <span class="dfe-c-tag dfe-c-tag--blue">Compass work</span> }
+                          else
+ { <span class="dfe-c-tag dfe-c-tag--teal">FIPS product</span> }
+                        </td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            </dd>
+          </div>
+        }
+        @if (!string.IsNullOrWhiteSpace(Model.ExploreLinksToExistingWork))
+        {
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">@(relatedLinks.Count> 0 ? "Other comments" : "Links to existing work or related programmes")</dt>
+ <dd class="govuk-summary-list__value" style="white-space:pre-line;">@Model.ExploreLinksToExistingWork</dd>
+          </div>
+        }
+        @if (!string.IsNullOrWhiteSpace(Model.ExploreResearchAndInsights))
+        {
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">Research and insights</dt>
+ <dd class="govuk-summary-list__value" style="white-space:pre-line;">@Model.ExploreResearchAndInsights</dd>
+          </div>
+        }
+        @if (!string.IsNullOrWhiteSpace(Model.ExploreAimClarification))
+        {
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">Aim and outcomes</dt>
+ <dd class="govuk-summary-list__value" style="white-space:pre-line;">@Model.ExploreAimClarification</dd>
+          </div>
+        }
+        @if (!string.IsNullOrWhiteSpace(Model.ExplorePolicies))
+        {
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">Policies and standards</dt>
+ <dd class="govuk-summary-list__value" style="white-space:pre-line;">@Model.ExplorePolicies</dd>
+          </div>
+        }
+        @if (!string.IsNullOrWhiteSpace(Model.ExploreUserGroups))
+        {
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">User groups</dt>
+ <dd class="govuk-summary-list__value" style="white-space:pre-line;">@Model.ExploreUserGroups</dd>
+          </div>
+        }
+        @if (barrierRowsReadonly.Count > 0)
+        {
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">Universal barriers impacted</dt>
+ <dd class="govuk-summary-list__value">
+ <ul class="govuk-list govuk-list--bullet govuk-!-margin-bottom-0">
+                @foreach (var b in barrierRowsReadonly)
+                {
+                  <li>
+                    <strong>@b.Name</strong>
+                    @if (!string.IsNullOrWhiteSpace(b.Description))
+                    {<span> — @b.Description</span>}
+                  </li>
+                }
+              </ul>
+            </dd>
+          </div>
+        }
+        @if (!string.IsNullOrWhiteSpace(Model.ExploreFeasibility))
+        {
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">Feasibility</dt>
+ <dd class="govuk-summary-list__value">@Model.ExploreFeasibility</dd>
+          </div>
+        }
+        @if (!string.IsNullOrWhiteSpace(Model.ExploreRecommendation))
+        {
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">Recommendation</dt>
+ <dd class="govuk-summary-list__value">@Model.ExploreRecommendation</dd>
+          </div>
+        }
+        @if (Model.ExploreCompletedAt.HasValue)
+        {
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">Last recorded</dt>
+ <dd class="govuk-summary-list__value">@Model.ExploreCompletedAt.Value.ToString("d MMM yyyy HH:mm") @(string.IsNullOrEmpty(Model.ExploreCompletedBy) ? "" : $"· {Model.ExploreCompletedBy}")</dd>
+          </div>
+        }
+        @if (!string.IsNullOrWhiteSpace(Model.ExploreNotes))
+        {
+ <div class="govuk-summary-list__row">
+ <dt class="govuk-summary-list__key">Review notes</dt>
+ <dd class="govuk-summary-list__value" style="white-space:pre-line;">@Model.ExploreNotes</dd>
+          </div>
+        }
+      </dl>
+    </div>
+  }
+}
+else
+{
+  <div id="demand-explore">
+    <form method="post" asp-action="ExploreReview" asp-controller="ModernDemand" asp-route-id="@Model.Id" id="explore-review-form">
+      @Html.AntiForgeryToken()
+      <input type="hidden" name="command" id="explore-review-command" value="" />
+      <input type="hidden" name="exploreRelatedLinksJson" id="explore-related-links-json" value="" />
+      <script type="application/json" id="explore-related-links-bootstrap">@Html.Raw(Model.ExploreRelatedLinksJson ?? "[]")</script>
+
+ <div class="dfe-c-card dfe-c-card--plain govuk-!-margin-bottom-3">
+ <h2 class="govuk-heading-m">Explore — additional information</h2>
+ <p class="govuk-body">Capture links to existing work, research, clarification of the aim, policies, user groups, and universal barriers. This builds the evidence pack for scoring.</p>
+
+ <div class="govuk-form-group">
+ <label class="govuk-label govuk-label--m" for="explore-link-search" id="explore-link-search-label">Related work and FIPS products</label>
+ <div id="explore-link-search-hint" class="govuk-hint">Search for a <strong>Compass work item</strong> (delivery work in this system) or a <strong>FIPS product</strong> (service catalogue entry). Results are grouped by source. Duplicates are ignored.</div>
+ <div class="govuk-form-group govuk-!-margin-bottom-2">
+ <label class="govuk-label govuk-visually-hidden" for="explore-link-search">Search work or services</label>
+ <input class="govuk-input" type="search" id="explore-link-search" autocomplete="off" placeholder="e.g. project code, title, or product name…" aria-describedby="explore-link-search-hint" />
+          </div>
+ <div id="explore-link-suggestions" class="demand-explore-suggestions" style="display:none;" aria-live="polite" role="region" aria-label="Search suggestions"></div>
+        </div>
+
+ <div class="govuk-form-group">
+ <h3 class="govuk-heading-s">Selected links</h3>
+ <div class="dfe-f-table-wrapper" id="explore-related-links-table" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+            <table class="govuk-table">
+              <thead class="govuk-table__head"><tr class="govuk-table__row"><th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Name</button>
+        </th><th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Type</button>
+        </th><th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Action</button>
+        </th></tr></thead>
+              <tbody id="explore-related-links-tbody"></tbody>
+            </table>
+          </div>
+ <p class="govuk-body-s govuk-!-margin-bottom-0" id="explore-related-links-empty">No links added yet.</p>
+        </div>
+
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="exploreLinksToExistingWork">Other comments</label>
+ <div class="govuk-hint">Additional URLs, context, or notes not covered by the table.</div>
+ <textarea name="exploreLinksToExistingWork" id="exploreLinksToExistingWork" rows="6" class="govuk-textarea">@Model.ExploreLinksToExistingWork</textarea>
+        </div>
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="exploreResearchAndInsights">Research and insights</label>
+ <textarea name="exploreResearchAndInsights" id="exploreResearchAndInsights" rows="6" class="govuk-textarea">@Model.ExploreResearchAndInsights</textarea>
+        </div>
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="exploreAimClarification">Clarification of aim or outcomes</label>
+ <textarea name="exploreAimClarification" id="exploreAimClarification" rows="6" class="govuk-textarea">@Model.ExploreAimClarification</textarea>
+        </div>
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="explorePolicies">Policies, standards, or statutory context</label>
+ <textarea name="explorePolicies" id="explorePolicies" rows="6" class="govuk-textarea">@Model.ExplorePolicies</textarea>
+        </div>
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="exploreUserGroups">User groups</label>
+ <div class="govuk-hint">Who is affected, cohorts, assisted digital or accessibility considerations.</div>
+ <textarea name="exploreUserGroups" id="exploreUserGroups" rows="6" class="govuk-textarea">@Model.ExploreUserGroups</textarea>
+        </div>
+
+ <div class="govuk-form-group govuk-!-margin-bottom-0">
+ <fieldset class="govuk-fieldset" aria-describedby="explore-barriers-hint">
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Universal barriers impacted</legend>
+ <div id="explore-barriers-hint" class="govuk-hint govuk-!-margin-bottom-3">Select any that apply. Definitions follow the <a href="https://www.gov.uk/service-manual/design/making-your-service-more-inclusive#universal-barriers-to-using-a-service" class="govuk-link govuk-link--no-visited-state" target="_blank" rel="noopener noreferrer">GOV.UK guidance on universal barriers (opens in a new tab)</a>.</div>
+ <div class="govuk-checkboxes" data-module="govuk-checkboxes">
+              @foreach (var b in barrierOptions)
+              {
+                var barrierHintId = $"barrier-{b.Id}-hint";
+ <div class="govuk-checkboxes__item">
+ <input class="govuk-checkboxes__input" id="barrier-@b.Id" name="exploreUniversalBarrierIds" type="checkbox" value="@b.Id" @(selectedBarrierSet.Contains(b.Id) ? "checked" : null) @if (!string.IsNullOrWhiteSpace(b.Description)) { <text>aria-describedby="@barrierHintId"</text> } />
+ <label class="govuk-label govuk-checkboxes__label" for="barrier-@b.Id">@b.Name</label>
+                  @if (!string.IsNullOrWhiteSpace(b.Description))
+                  {
+ <div id="@barrierHintId" class="govuk-hint govuk-checkboxes__hint">@b.Description</div>
+                  }
+                </div>
+              }
+            </div>
+          </fieldset>
+        </div>
+      </div>
+
+ <div class="dfe-c-card dfe-c-card--plain">
+ <h2 class="govuk-heading-m">Review assessment</h2>
+
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="exploreFeasibility">Feasibility assessment</label>
+ <select name="exploreFeasibility" id="exploreFeasibility" class="govuk-select">
+            @{ var feasOpts = new[] { ("", "— Select —"), ("Feasible", "Feasible"), ("Feasible with conditions", "Feasible with conditions"), ("Not feasible", "Not feasible"), ("Needs further investigation", "Needs further investigation") }; }
+            @foreach (var (val, label) in feasOpts)
+            {
+              if ((string.IsNullOrEmpty(val) && string.IsNullOrEmpty(Model.ExploreFeasibility)) || val == Model.ExploreFeasibility) { <option value="@val" selected>@label</option> }
+              else { <option value="@val">@label</option> }
+            }
+          </select>
+        </div>
+
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="exploreRecommendation">Recommendation</label>
+ <select name="exploreRecommendation" id="exploreRecommendation" class="govuk-select">
+            @{ var recOpts = new[] { ("", "— Select —"), ("Progress to scoring", "Progress to scoring"), ("Return to submitter", "Return to submitter"), ("Reject", "Reject") }; }
+            @foreach (var (val, label) in recOpts)
+            {
+              if ((string.IsNullOrEmpty(val) && string.IsNullOrEmpty(Model.ExploreRecommendation)) || val == Model.ExploreRecommendation) { <option value="@val" selected>@label</option> }
+              else { <option value="@val">@label</option> }
+            }
+          </select>
+        </div>
+
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="exploreNotes">Review notes</label>
+ <div class="govuk-hint">Record findings from the exploratory review — alignment, feasibility, risks, and any conditions.</div>
+ <textarea name="exploreNotes" id="exploreNotes" rows="6" class="govuk-textarea">@Model.ExploreNotes</textarea>
+        </div>
+
+ <div class="dfe-c-button-group" style="align-items:center;">
+          @if (canWorkflow)
+          {
+ <button type="submit" class="govuk-button" data-command="progress">Progress to scoring</button>
+ <button type="submit" class="govuk-button govuk-button--warning" data-command="return">Return to submitter</button>
+          }
+ <a href="@backToRequestUrl" class="govuk-button govuk-button--secondary">Back to request</a>
+ <span id="explore-autosave-status" class="dfe-c-text-muted" style="font-size:0.875rem;margin-left:auto;"></span>
+        </div>
+      </div>
+    </form>
+    <script nonce="@Context.Items["Nonce"]">
+      (function() {
+        var form = document.getElementById('explore-review-form');
+        var hidden = document.getElementById('explore-review-command');
+        if (form && hidden) {
+          form.querySelectorAll('button[data-command]').forEach(function(btn) {
+            btn.addEventListener('click', function() { hidden.value = btn.getAttribute('data-command') || ''; });
+          });
+        }
+
+        var jsonField = document.getElementById('explore-related-links-json');
+        if (form && jsonField) {
+          form.addEventListener('submit', function() {
+            try { jsonField.value = JSON.stringify(links); } catch (e) { jsonField.value = '[]'; }
+          });
+        }
+        var bootEl = document.getElementById('explore-related-links-bootstrap');
+        var tbody = document.getElementById('explore-related-links-tbody');
+        var emptyMsg = document.getElementById('explore-related-links-empty');
+        var searchInput = document.getElementById('explore-link-search');
+        var sug = document.getElementById('explore-link-suggestions');
+        var workUrl = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(workSearchUrl));
+        var serviceUrl = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(serviceSearchUrl));
+        var autosaveUrl = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Action("ExploreAutosave", "ModernDemand", new { id = Model.Id })));
+        var csrfToken = document.querySelector('input[name="__RequestVerificationToken"]')?.value || '';
+        var statusEl = document.getElementById('explore-autosave-status');
+        var links = [];
+        try { links = JSON.parse((bootEl && bootEl.textContent) ? bootEl.textContent.trim() : '[]'); } catch (e) { links = []; }
+        jsonField.value = JSON.stringify(links);
+
+        var autosaveTimer = null;
+        var saving = false;
+        var lastChangedEl = null;
+
+        function showFieldSaved(el) {
+          if (!el) return;
+          var group = el.closest('.govuk-form-group') || el.closest('.govuk-checkboxes');
+          if (!group) return;
+          var existing = group.querySelector('.explore-field-saved');
+          if (existing) existing.remove();
+          var note = document.createElement('span');
+          note.className = 'explore-field-saved';
+          note.textContent = '✓ Saved';
+          note.style.cssText = 'display:inline-block;font-size:0.8125rem;color:#00703c;margin-top:4px;opacity:1;transition:opacity 0.4s ease;';
+          if (el.tagName === 'INPUT' && el.type === 'checkbox') {
+            group.parentNode.insertBefore(note, group.nextSibling);
+          } else {
+            el.parentNode.insertBefore(note, el.nextSibling);
+          }
+          setTimeout(function() { note.style.opacity = '0'; }, 2500);
+          setTimeout(function() { if (note.parentNode) note.parentNode.removeChild(note); }, 3000);
+        }
+
+        function setStatus(text, isError) {
+          if (!statusEl) return;
+          statusEl.textContent = text;
+          statusEl.style.color = isError ? 'var(--rag-r)' : '';
+        }
+
+        function gatherPayload() {
+          var barrierIds = [];
+          form.querySelectorAll('input[name="exploreUniversalBarrierIds"]:checked').forEach(function(cb) {
+            barrierIds.push(parseInt(cb.value, 10));
+          });
+          return {
+            exploreLinksToExistingWork: form.querySelector('[name="exploreLinksToExistingWork"]')?.value || null,
+            exploreResearchAndInsights: form.querySelector('[name="exploreResearchAndInsights"]')?.value || null,
+            exploreAimClarification: form.querySelector('[name="exploreAimClarification"]')?.value || null,
+            explorePolicies: form.querySelector('[name="explorePolicies"]')?.value || null,
+            exploreUserGroups: form.querySelector('[name="exploreUserGroups"]')?.value || null,
+            exploreFeasibility: form.querySelector('[name="exploreFeasibility"]')?.value || null,
+            exploreRecommendation: form.querySelector('[name="exploreRecommendation"]')?.value || null,
+            exploreNotes: form.querySelector('[name="exploreNotes"]')?.value || null,
+            exploreRelatedLinksJson: JSON.stringify(links),
+            exploreUniversalBarrierIds: barrierIds
+          };
+        }
+
+        function doAutosave(triggerEl) {
+          if (saving) return;
+          saving = true;
+          var saveTarget = triggerEl || lastChangedEl;
+          setStatus('Saving…', false);
+          fetch(autosaveUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'RequestVerificationToken': csrfToken },
+            body: JSON.stringify(gatherPayload())
+          })
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            saving = false;
+            if (data.ok) {
+              setStatus('Saved at ' + data.savedAt, false);
+              showFieldSaved(saveTarget);
+              lastChangedEl = null;
+            } else {
+              setStatus('Save failed: ' + (data.error || 'unknown'), true);
+            }
+          })
+          .catch(function() {
+            saving = false;
+            setStatus('Save failed — check connection', true);
+          });
+        }
+
+        function scheduleAutosave(e) {
+          lastChangedEl = e?.target || null;
+          clearTimeout(autosaveTimer);
+          setStatus('Unsaved changes', false);
+          autosaveTimer = setTimeout(function() { doAutosave(); }, 1200);
+        }
+
+        function immediateAutosave(e) {
+          lastChangedEl = e?.target || null;
+          clearTimeout(autosaveTimer);
+          doAutosave();
+        }
+
+        form.querySelectorAll('textarea, select').forEach(function(el) {
+          if (el.tagName === 'SELECT') {
+            el.addEventListener('change', function(e) { immediateAutosave(e); });
+          } else {
+            el.addEventListener('input', function(e) { scheduleAutosave(e); });
+            el.addEventListener('blur', function(e) {
+              lastChangedEl = e.target;
+              clearTimeout(autosaveTimer);
+              doAutosave();
+            });
+          }
+        });
+
+        form.querySelectorAll('input[name="exploreUniversalBarrierIds"]').forEach(function(cb) {
+          cb.addEventListener('change', function(e) { immediateAutosave(e); });
+        });
+
+        function syncHidden() {
+          jsonField.value = JSON.stringify(links);
+        }
+
+        function rowKey(l) {
+          var k = (l.kind || '').toLowerCase();
+          if (k === 'work' && l.projectId) return 'W-' + l.projectId;
+          if ((k === 'liveservice' || k === 'live service') && l.cmdbProductId) return 'P-' + l.cmdbProductId;
+          if ((k === 'liveservice' || k === 'live service') && l.serviceId) return 'S-' + l.serviceId;
+          return '';
+        }
+
+        function referenceLine(l) {
+          var k = (l.kind || '').toLowerCase();
+          if (k === 'work') {
+            var p = ['Compass'];
+            if (l.projectCode) p.push(l.projectCode);
+            if (l.projectId) p.push('project #' + l.projectId);
+            return p.join(' · ');
+          }
+          if (k === 'liveservice') {
+            var f = ['FIPS product'];
+            if (l.fipsId) f.push(l.fipsId);
+            return f.join(' · ');
+          }
+          return '—';
+        }
+
+        function renderTable() {
+          tbody.innerHTML = '';
+          links.forEach(function(l, idx) {
+            var tr = document.createElement('tr');
+            var k = (l.kind || '').toLowerCase();
+            var isWork = k === 'work';
+            var nameCell = document.createElement('td');
+            var a = document.createElement('span');
+            a.textContent = l.label || '';
+            nameCell.appendChild(a);
+            var typeCell = document.createElement('td');
+            typeCell.innerHTML = isWork
+ ? '<span class="dfe-c-tag dfe-c-tag--blue">Compass work</span>'
+ : '<span class="dfe-c-tag dfe-c-tag--teal">FIPS product</span>';
+            var act = document.createElement('td');
+            act.style.textAlign = 'right';
+            var btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'govuk-button govuk-button--warning govuk-!-margin-bottom-0';
+            btn.style.fontSize = '0.875rem';
+            btn.textContent = 'Remove';
+            btn.addEventListener('click', function() {
+              if (!confirm('Are you sure you want to remove "' + (l.label || 'this link') + '"?')) return;
+              links.splice(idx, 1);
+              syncHidden();
+              renderTable();
+              immediateAutosave();
+            });
+            act.appendChild(btn);
+            tr.appendChild(nameCell);
+            tr.appendChild(typeCell);
+            tr.appendChild(act);
+            tbody.appendChild(tr);
+          });
+          emptyMsg.style.display = links.length ? 'none' : 'block';
+        }
+
+        function addLink(item) {
+          var l;
+          if (item.kind === 'Work') {
+            l = { kind: 'Work', projectId: item.projectId, projectCode: item.projectCode || null, label: item.label };
+          } else {
+            l = { kind: 'LiveService', cmdbProductId: item.cmdbProductId || null, serviceId: item.serviceId || null, fipsId: item.fipsId, label: item.label };
+          }
+          var k = rowKey(l);
+          for (var i = 0; i < links.length; i++) {
+            if (rowKey(links[i]) === k) return;
+          }
+          links.push(l);
+          syncHidden();
+          renderTable();
+          searchInput.value = '';
+          sug.style.display = 'none';
+          sug.innerHTML = '';
+          immediateAutosave();
+        }
+
+        function appendSectionHeading(container, text) {
+          var h = document.createElement('h3');
+          h.className = 'govuk-heading-s demand-explore-suggestions__heading';
+          h.textContent = text;
+          container.appendChild(h);
+        }
+
+        function appendSuggestionRow(container, item, isWork) {
+          var btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'demand-explore-suggestion';
+          var titleText = isWork ? (item.title || item.label) : (item.displayName || item.label);
+          var metaParts = isWork ? ['Compass work'] : ['FIPS product'];
+          if (isWork && item.projectCode) metaParts.push(item.projectCode);
+          if (isWork && item.projectId) metaParts.push('project #' + item.projectId);
+          if (!isWork && item.fipsId) metaParts.push(item.fipsId);
+          var metaText = metaParts.join(' · ');
+          btn.setAttribute('aria-label', 'Add ' + (isWork ? 'Compass work' : 'FIPS product') + ': ' + titleText);
+          var tag = document.createElement('span');
+          tag.className = isWork ? 'dfe-c-tag dfe-c-tag--blue demand-explore-suggestion__tag' : 'dfe-c-tag dfe-c-tag--teal demand-explore-suggestion__tag';
+          tag.textContent = isWork ? 'Compass work' : 'FIPS product';
+          var body = document.createElement('span');
+          body.className = 'demand-explore-suggestion__body';
+          var t = document.createElement('span');
+          t.className = 'demand-explore-suggestion__title';
+          t.textContent = titleText;
+          var m = document.createElement('span');
+          m.className = 'demand-explore-suggestion__meta';
+          m.textContent = metaText;
+          body.appendChild(t);
+          body.appendChild(m);
+          btn.appendChild(tag);
+          btn.appendChild(body);
+          btn.addEventListener('click', function() {
+            if (isWork) {
+              addLink({ kind: 'Work', projectId: item.projectId, projectCode: item.projectCode, title: item.title, label: item.label });
+            } else {
+              addLink({ kind: 'LiveService', cmdbProductId: item.cmdbProductId, fipsId: item.fipsId, label: item.label, displayName: item.displayName });
+            }
+          });
+          container.appendChild(btn);
+        }
+
+        var timer;
+        searchInput.addEventListener('input', function() {
+          clearTimeout(timer);
+          var q = (searchInput.value || '').trim();
+          if (q.length < 2) {
+            sug.style.display = 'none';
+            sug.innerHTML = '';
+            return;
+          }
+          timer = setTimeout(function() {
+            Promise.all([
+              fetch(workUrl + '?q=' + encodeURIComponent(q)).then(function(r) { return r.json(); }),
+              fetch(serviceUrl + '?q=' + encodeURIComponent(q)).then(function(r) { return r.json(); })
+            ]).then(function(pair) {
+              var w = pair[0].results || [];
+              var s = pair[1].results || [];
+              sug.innerHTML = '';
+              if (!w.length && !s.length) {
+                var empty = document.createElement('p');
+                empty.className = 'govuk-body-s govuk-!-margin-bottom-0 demand-explore-suggestions__empty';
+                empty.textContent = 'No matches. Try another code, title, or product name.';
+                sug.appendChild(empty);
+                sug.style.display = 'block';
+                return;
+              }
+              if (w.length) {
+                appendSectionHeading(sug, 'Compass work items');
+                w.forEach(function(it) { appendSuggestionRow(sug, it, true); });
+              }
+              if (s.length) {
+                appendSectionHeading(sug, 'FIPS products');
+                s.forEach(function(it) { appendSuggestionRow(sug, it, false); });
+              }
+              sug.style.display = 'block';
+            }).catch(function() {
+ sug.innerHTML = '<p class="govuk-body-s govuk-!-margin-bottom-0 demand-explore-suggestions__empty">Search failed. Try again.</p>';
+              sug.style.display = 'block';
+            });
+          }, 300);
+        });
+
+        renderTable();
+      })();
+    </script>
+  </div>
+}

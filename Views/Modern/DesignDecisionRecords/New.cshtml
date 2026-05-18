@@ -1,0 +1,422 @@
+@model Compass.ViewModels.Modern.Ddr.DdrCreateViewModel
+@using Compass.Models.Ddr
+@using Compass.ViewModels.Modern
+@using Compass.ViewModels.Modern.Ddr
+@{
+  ViewData["Title"] = "Create a decision";
+
+  var preselectedProductIds = string.Join(",", Model.LinkedProductIds);
+  var preselectedWorkItemIds = string.Join(",", Model.LinkedWorkItemIds);
+  var ddrWizardShowCompletion = ViewBag.DdrWizardShowCompletion as bool? == true;
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Register", "ModernDesignDecisionRecords")">Decisions</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">New</li>
+}
+
+@{
+  var ddrNewLede = await Html.PartialAsync("~/Views/Modern/DesignDecisionRecords/_DdrNewHeaderLede.cshtml");
+}
+@await Html.PartialAsync("~/Views/Modern/Shared/_ModernPageHeader.cshtml", new ModernPageHeaderViewModel {
+  Caption = "Decisions",
+  Title = "Create a decision",
+  HeadingClass = "govuk-heading-l",
+  Lede = ddrNewLede
+})
+
+@if (TempData["DdrDraftSaved"] != null)
+{
+  <div class="govuk-width-container">
+    <div class="govuk-notification-banner govuk-notification-banner--success" role="region" aria-labelledby="ddr-draft-saved-title">
+      <div class="govuk-notification-banner__header">
+        <h2 class="govuk-notification-banner__title" id="ddr-draft-saved-title">Draft saved</h2>
+      </div>
+      <div class="govuk-notification-banner__content">
+        <p class="govuk-notification-banner__heading">You can continue editing your DDR.</p>
+      </div>
+    </div>
+  </div>
+}
+
+@if (!string.IsNullOrWhiteSpace(Model.EditingReference))
+{
+  <div class="govuk-width-container govuk-!-margin-bottom-4">
+    <form method="post"
+          action="@Url.Action("DeleteDraft", "ModernDesignDecisionRecords", new { reference = Model.EditingReference })"
+          id="ddr-delete-draft-form"
+          data-confirm-title="Delete this draft?"
+          data-confirm-message="This will remove @Model.EditingReference from the register. You cannot undo this action.">
+      @Html.AntiForgeryToken()
+      <button type="submit" class="govuk-button govuk-button--warning">Delete draft</button>
+    </form>
+  </div>
+}
+
+@if (!ViewData.ModelState.IsValid)
+{
+  <div class="govuk-grid-row">
+    <div class="govuk-grid-column-two-thirds">
+      <div class="govuk-error-summary" data-module="govuk-error-summary">
+        <div role="alert">
+          <h2 class="govuk-error-summary__title">There is a problem</h2>
+          <div class="govuk-error-summary__body">
+            <ul class="govuk-list govuk-error-summary__list">
+              @foreach (var entry in ViewData.ModelState
+                          .Where(kv => kv.Value!.Errors.Count > 0))
+              {
+                @foreach (var err in entry.Value!.Errors)
+                {
+                  <li><a class="govuk-link govuk-link--no-visited-state" href="#field-@entry.Key">@err.ErrorMessage</a></li>
+                }
+              }
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+}
+
+<form method="post" action="@Url.Action("New", "ModernDesignDecisionRecords")" novalidate id="ddr-create-form">
+  @Html.AntiForgeryToken()
+  @Html.HiddenFor(m => m.PreFilledProductId)
+  @Html.HiddenFor(m => m.PreFilledWorkItemId)
+  @Html.HiddenFor(m => m.Status)
+  @Html.HiddenFor(m => m.EditingReference)
+  <input type="hidden" name="LinkedProductIdsCsv" id="LinkedProductIdsCsv" value="@preselectedProductIds" />
+  <input type="hidden" name="LinkedWorkItemIdsCsv" id="LinkedWorkItemIdsCsv" value="@preselectedWorkItemIds" />
+
+  @await Html.PartialAsync("~/Views/Modern/DesignDecisionRecords/_DdrCreateWizardForm.cshtml", Model)
+</form>
+
+@section Scripts {
+<script nonce="@(Context.Items["Nonce"]?.ToString() ?? "")">
+  (function () {
+    var productPicker = document.getElementById('ddr-product-picker');
+    var productTbody = document.getElementById('ddr-product-tbody');
+    var productWrap = document.getElementById('ddr-product-table-wrap');
+    var productCsv = document.getElementById('LinkedProductIdsCsv');
+    var workItemPicker = document.getElementById('ddr-workitem-picker');
+    var workItemTbody = document.getElementById('ddr-workitem-tbody');
+    var workItemWrap = document.getElementById('ddr-workitem-table-wrap');
+    var workItemCsv = document.getElementById('LinkedWorkItemIdsCsv');
+
+    function syncCsv(tbody, csvEl) {
+      if (!tbody || !csvEl) return;
+      var ids = Array.from(tbody.querySelectorAll('tr[data-id]')).map(function (tr) { return tr.getAttribute('data-id'); });
+      csvEl.value = ids.join(',');
+    }
+
+    function setWrapVisible(wrap, tbody) {
+      if (!wrap || !tbody) return;
+      var has = tbody.querySelectorAll('tr[data-id]').length > 0;
+      if (has) wrap.classList.remove('govuk-!-display-none');
+      else wrap.classList.add('govuk-!-display-none');
+    }
+
+    function addRow(picker, tbody, csv, wrap, kind) {
+      var id = picker.value;
+      if (!id || !tbody) return;
+      if (tbody.querySelector('tr[data-id="' + id + '"]')) return;
+      var label = picker.options[picker.selectedIndex].text;
+      var tr = document.createElement('tr');
+      tr.className = 'govuk-table__row';
+      tr.setAttribute('data-id', id);
+      var tdType = document.createElement('td');
+      tdType.className = 'govuk-table__cell';
+      var tag = document.createElement('span');
+      tag.className = 'dfe-c-tag ' + (kind === 'product' ? 'dfe-c-tag--blue' : 'dfe-c-tag--teal');
+      tag.textContent = kind === 'product' ? 'Product' : 'Work item';
+      tdType.appendChild(tag);
+      var tdName = document.createElement('td');
+      tdName.className = 'govuk-table__cell';
+      tdName.textContent = label;
+      var tdAct = document.createElement('td');
+      tdAct.className = 'govuk-table__cell govuk-table__cell--numeric';
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'govuk-link';
+      btn.setAttribute('data-remove', kind);
+      btn.setAttribute('data-id', id);
+      btn.textContent = 'Remove';
+      tdAct.appendChild(btn);
+      tr.appendChild(tdType);
+      tr.appendChild(tdName);
+      tr.appendChild(tdAct);
+      tbody.appendChild(tr);
+      picker.selectedIndex = 0;
+      syncCsv(tbody, csv);
+      setWrapVisible(wrap, tbody);
+      if (typeof window.ddrMarkWizardDirty === 'function') window.ddrMarkWizardDirty();
+      if (typeof window.ddrRefreshWizardState === 'function') window.ddrRefreshWizardState();
+    }
+
+    function runConfirm(title, message, fn) {
+      if (typeof window.showConfirmModal === 'function') {
+        window.showConfirmModal(title, message, fn);
+      } else {
+        fn();
+      }
+    }
+
+    if (productPicker && productTbody) {
+      productPicker.addEventListener('change', function () {
+        addRow(productPicker, productTbody, productCsv, productWrap, 'product');
+      });
+    }
+    if (workItemPicker && workItemTbody) {
+      workItemPicker.addEventListener('change', function () {
+        addRow(workItemPicker, workItemTbody, workItemCsv, workItemWrap, 'workitem');
+      });
+    }
+
+    document.addEventListener('click', function (e) {
+      var btn = e.target && e.target.closest ? e.target.closest('button[data-remove]') : null;
+      if (!btn) return;
+      var kind = btn.getAttribute('data-remove');
+      if (kind !== 'product' && kind !== 'workitem') return;
+      e.preventDefault();
+      var tr = btn.closest('tr');
+      if (!tr || !tr.parentNode) return;
+      var tbody = tr.parentNode;
+      var id = btn.getAttribute('data-id');
+      var nameCell = tr.querySelector('td:nth-child(2)');
+      var itemName = nameCell ? nameCell.textContent.trim() : '';
+      var isProduct = kind === 'product';
+      var csvEl = isProduct ? productCsv : workItemCsv;
+      var wrap = isProduct ? productWrap : workItemWrap;
+      var title = isProduct ? 'Remove product link?' : 'Remove work item link?';
+      var message = itemName
+        ? 'Remove “' + itemName + '” from this DDR? You can add it again later.'
+        : 'Remove this link from the DDR? You can add it again later.';
+      runConfirm(title, message, function () {
+        tr.parentNode.removeChild(tr);
+        syncCsv(tbody, csvEl);
+        setWrapVisible(wrap, tbody);
+        if (typeof window.ddrMarkWizardDirty === 'function') window.ddrMarkWizardDirty();
+        if (typeof window.ddrRefreshWizardState === 'function') window.ddrRefreshWizardState();
+      });
+    });
+  })();
+
+  (function () {
+    function val(id) {
+      var el = document.getElementById(id);
+      return el ? el.value : '';
+    }
+    function len(id) {
+      return val(id).length;
+    }
+    function checked(id) {
+      var el = document.getElementById(id);
+      return !!(el && el.checked);
+    }
+    function countAltLines(text) {
+      return text.split(/\r?\n/).filter(function (s) { return s.trim().length > 0; }).length;
+    }
+    function todayLocalMidnight() {
+      var t = new Date();
+      t.setHours(0, 0, 0, 0);
+      return t;
+    }
+
+    function ddrSectionComplete(step) {
+      var pCsv = document.getElementById('LinkedProductIdsCsv');
+      var wCsv = document.getElementById('LinkedWorkItemIdsCsv');
+      var hasLinks = (pCsv && pCsv.value.trim()) || (wCsv && wCsv.value.trim());
+      switch (step) {
+        case 2: {
+          var st = len('field-ShortTitle');
+          if (st < 10 || st > 120) return false;
+          var ctx = len('field-ContextProblemStatement');
+          if (ctx < 50 || ctx > 4000) return false;
+          var dec = len('field-Decision');
+          if (dec < 50 || dec > 3000) return false;
+          var rat = len('field-Rationale');
+          if (rat < 50 || rat > 4000) return false;
+          var cons = len('field-ConsequencesTradeoffs');
+          if (cons < 30 || cons > 3000) return false;
+          if (!checked('field-RetrospectiveRecord')) return true;
+          var retCtx = len('field-RetrospectiveContext');
+          if (retCtx < 50 || retCtx > 2000) return false;
+          if (!val('field-CurrentValidity').trim()) return false;
+          var cv = val('field-CurrentValidity');
+          if ((cv === 'Partially valid' || cv === 'No longer valid' || cv === 'Unknown') && !val('field-CurrentValidityRationale').trim()) return false;
+          return true;
+        }
+        case 3:
+          if (!checked('field-DeviationFlag')) return true;
+          if (!val('field-DeviationType').trim()) return false;
+          var det = len('field-DeviationDetails');
+          if (det < 50 || det > 3000) return false;
+          return !!val('field-ApprovalRoute').trim();
+        case 4: {
+          var lines = val('field-AlternativesText').split(/\r?\n/).map(function (s) { return s.trim(); }).filter(function (s) { return s.length > 0; });
+          if (lines.length < 1 || lines.length > 10) return false;
+          return lines.every(function (l) { return l.length >= 20 && l.length <= 1500; });
+        }
+        case 5:
+          return !!(val('field-Category').trim() && hasLinks);
+        case 6: {
+          var trig = len('field-ReviewTrigger');
+          if (trig < 10 || trig > 500) return false;
+          var dStr = val('field-ReviewDate-day').trim();
+          var mStr = val('field-ReviewDate-month').trim();
+          var yStr = val('field-ReviewDate-year').trim();
+          var hasAny = dStr || mStr || yStr;
+          var hasAll = dStr && mStr && yStr;
+          if (hasAny && !hasAll) return false;
+          if (hasAll) {
+            var di = parseInt(dStr, 10);
+            var mi = parseInt(mStr, 10);
+            var yi = parseInt(yStr, 10);
+            if (isNaN(di) || isNaN(mi) || isNaN(yi)) return false;
+            var dt = new Date(yi, mi - 1, di);
+            if (dt.getFullYear() !== yi || dt.getMonth() !== mi - 1 || dt.getDate() !== di) return false;
+            dt.setHours(0, 0, 0, 0);
+            if (dt < todayLocalMidnight()) return false;
+          }
+          if (checked('field-DeviationFlag') && !hasAll) return false;
+          return true;
+        }
+        case 7:
+          return len('field-MessageToDesignOps') <= 1000;
+        default:
+          return true;
+      }
+    }
+
+    function ddrClientCanSubmit() {
+      for (var s = 2; s <= 7; s++) {
+        if (!ddrSectionComplete(s)) return false;
+      }
+      return true;
+    }
+
+    var ddrLiveProgress = @(ddrWizardShowCompletion ? "true" : "false");
+    var ddrProgressUnlocked = ddrLiveProgress;
+
+    window.ddrMarkWizardDirty = function () {
+      if (!ddrLiveProgress) ddrProgressUnlocked = true;
+    };
+
+    function ddrRefreshProgressUi() {
+      if (!ddrLiveProgress && !ddrProgressUnlocked) return;
+      for (var s = 2; s <= 7; s++) {
+        var statusEl = document.querySelector('.govuk-task-list__status[data-ddr-progress-tag="' + s + '"]');
+        if (!statusEl) continue;
+        var ok = ddrSectionComplete(s);
+        if (ok) {
+          statusEl.textContent = 'Completed';
+        } else {
+          statusEl.innerHTML = '<strong class="govuk-tag govuk-tag--blue">Incomplete</strong>';
+        }
+      }
+      var inset = document.getElementById('ddr-submit-hint');
+      if (inset) {
+        if (ddrClientCanSubmit()) inset.classList.add('govuk-!-display-none');
+        else inset.classList.remove('govuk-!-display-none');
+      }
+    }
+
+    function ddrRefreshSubmitButton() {
+      var btn = document.getElementById('ddr-btn-submit');
+      if (!btn) return;
+      var ok = ddrClientCanSubmit();
+      btn.disabled = !ok;
+      btn.setAttribute('aria-disabled', ok ? 'false' : 'true');
+    }
+
+    function ddrGoToStep(step) {
+      var field = document.getElementById('ddr-wizard-step-field');
+      if (field) field.value = String(step);
+      document.querySelectorAll('[data-ddr-step]').forEach(function (panel) {
+        var ps = parseInt(panel.getAttribute('data-ddr-step'), 10);
+        if (ps === step) panel.classList.remove('govuk-!-display-none');
+        else panel.classList.add('govuk-!-display-none');
+      });
+      var progressActions = document.getElementById('ddr-actions-progress');
+      var sectionActions = document.getElementById('ddr-actions-section');
+      if (progressActions && sectionActions) {
+        if (step === 1) {
+          progressActions.classList.remove('govuk-!-display-none');
+          sectionActions.classList.add('govuk-!-display-none');
+        } else {
+          progressActions.classList.add('govuk-!-display-none');
+          sectionActions.classList.remove('govuk-!-display-none');
+        }
+      }
+      document.querySelectorAll('#ddr-create-side-nav .dfe-f-side-navigation__item').forEach(function (li) {
+        var a = li.querySelector('a[data-ddr-go-step]');
+        var linkStep = a ? parseInt(a.getAttribute('data-ddr-go-step'), 10) : NaN;
+        if (linkStep === step) {
+          li.classList.add('dfe-f-side-navigation__item--current');
+          if (a) a.setAttribute('aria-current', 'page');
+        } else {
+          li.classList.remove('dfe-f-side-navigation__item--current');
+          if (a) a.removeAttribute('aria-current');
+        }
+      });
+      var h = document.querySelector('#ddr-step-panel-' + step + ' h2.govuk-heading-m');
+      if (h) {
+        h.setAttribute('tabindex', '-1');
+        h.focus({ preventScroll: false });
+      }
+    }
+
+    window.ddrRefreshWizardState = function () {
+      ddrRefreshSubmitButton();
+      ddrRefreshProgressUi();
+    };
+
+    var form = document.getElementById('ddr-create-form');
+    function ddrOnFormChange() {
+      if (!ddrLiveProgress) ddrProgressUnlocked = true;
+      ddrRefreshWizardState();
+    }
+    if (form) {
+      form.addEventListener('click', function (e) {
+        var el = e.target.closest('[data-ddr-go-step]');
+        if (!el) return;
+        if (el.tagName === 'A') e.preventDefault();
+        var step = parseInt(el.getAttribute('data-ddr-go-step'), 10);
+        if (!step || step < 1 || step > 7) return;
+        ddrGoToStep(step);
+        ddrRefreshWizardState();
+      });
+      form.addEventListener('input', ddrOnFormChange);
+      form.addEventListener('change', ddrOnFormChange);
+    }
+    ddrRefreshSubmitButton();
+    if (ddrLiveProgress) ddrRefreshProgressUi();
+  })();
+
+  // Character count: GOV.UK init runs before wizard panels are visible; bind after load so counts update (mirrors Add Monthly Update pattern).
+  window.addEventListener('load', function () {
+    var form = document.getElementById('ddr-create-form');
+    if (!form) return;
+    form.querySelectorAll('.govuk-character-count[data-maxlength]').forEach(function (wrapper) {
+      var max = parseInt(wrapper.getAttribute('data-maxlength'), 10) || 0;
+      var ta = wrapper.querySelector('textarea.govuk-js-character-count');
+      var msg = wrapper.querySelector('.govuk-character-count__message');
+      if (!ta || !msg || max <= 0) return;
+      function update() {
+        var n = (ta.value || '').length;
+        var remaining = max - n;
+        msg.classList.remove('govuk-visually-hidden');
+        if (remaining < 0) {
+          var over = Math.abs(remaining);
+          msg.textContent = 'You have ' + over + ' character' + (over !== 1 ? 's' : '') + ' too many';
+        } else {
+          msg.textContent = 'You have ' + remaining + ' character' + (remaining !== 1 ? 's' : '') + ' remaining';
+        }
+      }
+      ta.addEventListener('input', update);
+      ta.addEventListener('change', update);
+      update();
+    });
+  });
+</script>
+}

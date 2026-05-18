@@ -1,0 +1,98 @@
+@model ModernPerformanceBulkVerifyViewModel
+@using Compass.ViewModels.Modern
+@using Microsoft.AspNetCore.Html
+@{
+  ViewData["Title"] = "Verify bulk upload — " + Model.CommissionName;
+}
+
+@section Breadcrumbs {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernPerformance")">Performance</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Commission", "ModernPerformance", new { commissionId = Model.CommissionId, tab = Model.Tab })">@Model.CommissionName</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">Verify upload</li>
+}
+
+@await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+  Title = "Verify bulk upload",
+  Lede = new HtmlString($"<p class=\"govuk-body govuk-!-margin-bottom-0\">{Model.StagedRowCount} data row(s) in file.</p>")
+})
+
+@await Html.PartialAsync("_PerformanceCommissionScopeSubNav", new PerformanceCommissionScopeNavViewModel {
+  CommissionId = Model.CommissionId,
+  Tab = Model.Tab
+})
+
+@if (Model.CanApply)
+{
+ <div class="govuk-notification-banner govuk-notification-banner--success dfe-c-mb-4" role="region">
+ <div class="govuk-notification-banner__header"><h2 class="govuk-notification-banner__title">Ready to apply</h2></div>
+ <div class="govuk-notification-banner__content">
+ <p class="govuk-body">No blocking errors were found. Applying will write metric values using the same rules as single-product entry.</p>
+    </div>
+  </div>
+
+ <form asp-controller="ModernPerformance" asp-action="BulkApply" asp-route-commissionId="@Model.CommissionId" method="post" class="govuk-form-group">
+    @Html.AntiForgeryToken()
+    <input type="hidden" name="token" value="@Model.Token" />
+ <button type="submit" class="govuk-button">Apply import</button>
+ <a class="govuk-button govuk-button--secondary" href="@Url.Action("BulkUpload", "ModernPerformance", new { commissionId = Model.CommissionId, tab = Model.Tab })">Upload a different file</a>
+  </form>
+}
+else
+{
+ <div class="govuk-error-summary dfe-c-mb-4" role="alert">
+ <h2 class="govuk-error-summary__title">Fix errors and upload again</h2>
+ <p class="govuk-body">Correct the file and run verify again. Nothing was saved.</p>
+  </div>
+ <p class="govuk-body">
+ <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("BulkUpload", "ModernPerformance", new { commissionId = Model.CommissionId, tab = Model.Tab })">Back to bulk upload</a>
+  </p>
+}
+
+<h2 class="govuk-heading-m dfe-c-mt-4">Row results</h2>
+<div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+  <table class="govuk-table">
+    <thead class="govuk-table__head">
+      <tr class="govuk-table__row">
+        <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Row</button>
+        </th>
+        <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">DocumentId</button>
+        </th>
+        <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Product</button>
+        </th>
+        <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Errors</button>
+        </th>
+      </tr>
+    </thead>
+    <tbody class="govuk-table__body">
+    @foreach (var line in Model.Lines)
+    {
+      <tr class="govuk-table__row">
+        <td class="govuk-table__cell">@line.RowNumber</td>
+ <td class="govuk-body-s">@line.DocumentId</td>
+        <td class="govuk-table__cell">@(line.ProductTitle ?? "—")</td>
+        <td class="govuk-table__cell">
+          @if (line.Errors.Count == 0)
+          {
+ <span class="dfe-c-tag dfe-c-tag--green">OK</span>
+          }
+          else
+          {
+ <ul class="govuk-list govuk-error-summary__list govuk-body-s">
+              @foreach (var e in line.Errors)
+              {
+                <li>@e</li>
+              }
+            </ul>
+          }
+        </td>
+      </tr>
+    }
+    </tbody>
+  </table>
+</div>

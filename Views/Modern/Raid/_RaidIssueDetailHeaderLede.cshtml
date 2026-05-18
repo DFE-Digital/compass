@@ -1,0 +1,44 @@
+@model Compass.Models.Issue
+@using System.Globalization
+@using Compass.Models
+@{
+  string IssuePriorityTagClass()
+  {
+    var p = (Model.PriorityLookup?.Label ?? Model.Priority ?? "").ToLowerInvariant();
+    if (p.Contains("critical")) return "dfe-c-tag dfe-c-tag--red";
+    if (p.Contains("high")) return "dfe-c-tag dfe-c-tag--amber";
+    return "dfe-c-tag dfe-c-tag--grey";
+  }
+
+  string IssueSeverityTagClass()
+  {
+    var s = (Model.SeverityLookup?.Label ?? Model.Severity ?? "").ToLowerInvariant();
+    if (s.Contains("critical")) return "dfe-c-tag dfe-c-tag--red";
+    if (s.Contains("major")) return "dfe-c-tag dfe-c-tag--amber";
+    return "dfe-c-tag dfe-c-tag--green";
+  }
+
+  string StatusTagClass()
+  {
+    var s = (Model.StatusLookup?.Label ?? Model.Status ?? "").ToLowerInvariant();
+    if (s.Contains("escalat")) return "dfe-c-tag dfe-c-tag--red";
+    if (s.Contains("closed") || s.Contains("resolved")) return "dfe-c-tag dfe-c-tag--green";
+    return "dfe-c-tag dfe-c-tag--blue";
+  }
+
+  var detectedDateUk = Model.DetectedDate.ToString("d MMMM yyyy", CultureInfo.GetCultureInfo("en-GB"));
+  var raisedByDisplay = Model.CreatedByUser?.Name ?? Model.CreatedByUser?.Email ?? "—";
+  var updatedByDisplay = Model.UpdatedByUser?.Name ?? Model.UpdatedByUser?.Email ?? "—";
+  var openPhrase = ViewBag.OpenDurationPhrase as string ?? "—";
+}
+<div class="dfe-c-flex" style="gap:0.5rem;flex-wrap:wrap;align-items:center;">
+  <span class="@StatusTagClass()">@((Model.StatusLookup?.Label ?? Model.Status ?? "—").ToUpperInvariant())</span>
+  <span class="@IssuePriorityTagClass()">@((Model.PriorityLookup?.Label ?? Model.Priority ?? "—").ToUpperInvariant())</span>
+  <span class="@IssueSeverityTagClass()">@((Model.SeverityLookup?.Label ?? Model.Severity ?? "—").ToUpperInvariant())</span>
+  <span style="font-size:0.875rem;color:var(--grey-4);">
+    Raised @detectedDateUk by @raisedByDisplay
+    <span aria-hidden="true">&nbsp;·&nbsp;</span>@openPhrase
+    <span aria-hidden="true">&nbsp;·&nbsp;</span>
+    Updated @Model.UpdatedAt.ToString("d MMM yyyy", CultureInfo.InvariantCulture) by @updatedByDisplay
+  </span>
+</div>

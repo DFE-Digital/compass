@@ -21,6 +21,7 @@ public partial class CompassDbContext
     public DbSet<RiskImpactLevel> RiskImpactLevels { get; set; }
     public DbSet<RiskProximity> RiskProximities { get; set; }
     public DbSet<RiskCategory> RiskCategories { get; set; }
+    public DbSet<RiskTreatment> RiskTreatments { get; set; }
 
     public DbSet<IssueStatus> IssueStatuses { get; set; }
     public DbSet<IssuePriority> IssuePriorities { get; set; }
@@ -38,4 +39,14 @@ public partial class CompassDbContext
     public DbSet<DecisionTag> DecisionTags { get; set; }
 
     public DbSet<DemandRequestStatus> DemandRequestStatuses { get; set; }
+    public DbSet<DemandTriageOutcomeStage> DemandTriageOutcomeStages { get; set; }
+
+    public DbSet<AssumptionStatus> AssumptionStatuses { get; set; }
+    public DbSet<AssumptionCriticality> AssumptionCriticalities { get; set; }
+    public DbSet<DependencyCriticality> DependencyCriticalities { get; set; }
+    public DbSet<DependencyLinkType> DependencyLinkTypes { get; set; }
+
+    public DbSet<NearMissType> NearMissTypes { get; set; }
+    public DbSet<NearMissSeriousness> NearMissSeriousnesses { get; set; }
+    public DbSet<NearMissStatus> NearMissStatuses { get; set; }
 }

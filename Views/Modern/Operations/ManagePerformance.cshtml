@@ -1,0 +1,677 @@
+@model Compass.ViewModels.Modern.OperationsManagePerformanceViewModel
+@using System.Globalization
+@using Compass.Models
+@using Compass.ViewModels.Modern
+@{
+  ViewData["Title"] = "Manage performance";
+  var c = Model.Commission;
+  var ci = CultureInfo.GetCultureInfo("en-GB");
+  var returnRate = Model.ReturnRatePercent;
+  var baTop = Model.BusinessAreaRows.OrderByDescending(x => x.PotentialSubmissions).Take(16).ToList();
+  var windowTag = Model.SubmissionWindowPhase switch
+  {
+    "Open" => ("govuk-tag--green", "Open for submission"),
+    "Upcoming" => ("govuk-tag--blue", "Opens soon"),
+    _ => ("govuk-tag--grey", "Closed")
+  };
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernOperations")">Operations</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">Manage performance</li>
+}
+
+<div class="mr-dash ops-mp">
+  @{
+    var opsMpLede = await Html.PartialAsync("_ManagePerformanceHeaderLede");
+  }
+  @await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+    Caption = "Operations",
+    Title = "Manage performance",
+    Lede = opsMpLede
+  })
+
+  @if (TempData["Error"] != null)
+  {
+    <div class="dfe-c-error-summary" role="alert" style="margin-bottom: 1rem;">
+      <p class="dfe-c-body" style="margin: 0;">@TempData["Error"]</p>
+    </div>
+  }
+
+  @if (!Model.CommissionOptions.Any())
+  {
+    <p class="govuk-body dfe-c-text-muted">No commissions are defined yet. Add commission periods in Admin (performance settings) to see reporting here.</p>
+  }
+  else
+  {
+    <div class="ops-mp__context govuk-!-margin-bottom-4">
+      @if (Model.HasCommission && c != null)
+      {
+        <div class="ops-mp__context-header">
+          <div class="ops-mp__context-current">
+            <p class="govuk-caption-m govuk-!-margin-bottom-1">Current performance request</p>
+            <div class="ops-mp__context-title-row">
+              <h2 class="govuk-heading-m govuk-!-margin-top-0 govuk-!-margin-bottom-0">@c.Name</h2>
+              <div class="ops-mp__context-tags">
+                <strong class="govuk-tag @windowTag.Item1">@windowTag.Item2</strong>
+                @if (c.IsActive)
+                {
+                  <strong class="govuk-tag govuk-tag--green">Active commission</strong>
+                }
+                else
+                {
+                  <strong class="govuk-tag govuk-tag--grey">Inactive</strong>
+                }
+              </div>
+            </div>
+          </div>
+          <div class="ops-mp__context-select">
+            <h2 class="govuk-heading-s govuk-!-margin-top-0 govuk-!-margin-bottom-1">Change dataset</h2>
+            <form method="get" action="@Url.Action("ManagePerformance", "ModernOperations")" class="ops-mp__select-form" id="ops-mp-filters">
+              <div class="ops-mp__select-fields">
+                <div class="ops-mp__select-field">
+                  <label class="govuk-label govuk-!-margin-bottom-1" for="ops-mp-commission">Commission period</label>
+                  <select class="govuk-select" id="ops-mp-commission" name="commissionId" aria-describedby="ops-mp-commission-hint">
+                    @foreach (var opt in Model.CommissionOptions)
+                    {
+                      var suffix = opt.IsActive ? "" : " (inactive)";
+                      var label = $"{opt.Name} — due {opt.DueDate.ToString("d MMM yyyy", ci)}{suffix}";
+                      if (Model.SelectedCommissionId == opt.Id)
+                      {
+                        <option value="@opt.Id" selected>@label</option>
+                      }
+                      else
+                      {
+                        <option value="@opt.Id">@label</option>
+                      }
+                    }
+                  </select>
+                </div>
+                <div class="ops-mp__select-action">
+                  <button type="submit" class="govuk-button govuk-!-margin-bottom-0" id="ops-mp-apply">Apply</button>
+                </div>
+              </div>
+              <p id="ops-mp-commission-hint" class="govuk-hint govuk-!-margin-top-2 govuk-!-margin-bottom-0">Reloads the dashboard for the selected period.</p>
+            </form>
+          </div>
+        </div>
+        <dl class="ops-mp__context-meta">
+            @if (!string.IsNullOrWhiteSpace(c.Quarter))
+            {
+              <div>
+                <dt>Quarter</dt>
+                <dd>@c.Quarter</dd>
+              </div>
+            }
+            <div>
+              <dt>Reporting period</dt>
+              <dd>@CommissionDisplay.FormatPeriod(c.StartDate, c.EndDate)</dd>
+            </div>
+            <div>
+              <dt>Submission window</dt>
+              <dd>@c.OpenDate.ToString("d MMM yyyy", ci) — @c.DueDate.ToString("d MMM yyyy", ci)</dd>
+            </div>
+            @if (Model.DaysUntilDue.HasValue && Model.SubmissionWindowPhase == "Open")
+            {
+              <div>
+                <dt>Due</dt>
+                <dd>
+                  @if (Model.DaysUntilDue >= 0)
+                  {
+                    <span>@Model.DaysUntilDue day@(Model.DaysUntilDue == 1 ? "" : "s") remaining</span>
+                  }
+                  else
+                  {
+                    <span class="dfe-c-text-muted">@Math.Abs(Model.DaysUntilDue.Value) day@(Math.Abs(Model.DaysUntilDue.Value) == 1 ? "" : "s") past due</span>
+                  }
+                  <span class="dfe-c-text-muted"> (@c.DueDate.ToString("d MMM yyyy", ci))</span>
+                </dd>
+              </div>
+            }
+        </dl>
+      }
+      else
+      {
+        <div class="ops-mp__context-header ops-mp__context-header--empty">
+          <p class="govuk-body govuk-!-margin-bottom-0">Choose a commission period to load the dashboard.</p>
+          <div class="ops-mp__context-select ops-mp__context-select--solo">
+            <h2 class="govuk-heading-s govuk-!-margin-top-0 govuk-!-margin-bottom-1">Change dataset</h2>
+            <form method="get" action="@Url.Action("ManagePerformance", "ModernOperations")" class="ops-mp__select-form" id="ops-mp-filters">
+              <div class="ops-mp__select-fields">
+                <div class="ops-mp__select-field">
+                  <label class="govuk-label govuk-!-margin-bottom-1" for="ops-mp-commission">Commission period</label>
+                  <select class="govuk-select" id="ops-mp-commission" name="commissionId">
+                    @foreach (var opt in Model.CommissionOptions)
+                    {
+                      var suffix = opt.IsActive ? "" : " (inactive)";
+                      var label = $"{opt.Name} — due {opt.DueDate.ToString("d MMM yyyy", ci)}{suffix}";
+                      <option value="@opt.Id">@label</option>
+                    }
+                  </select>
+                </div>
+                <div class="ops-mp__select-action">
+                  <button type="submit" class="govuk-button govuk-!-margin-bottom-0" id="ops-mp-apply">Apply</button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      }
+    </div>
+
+    @if (Model.HasCommission && c != null)
+    {
+      @if (!Model.HasEligibleProducts)
+      {
+        <div class="dfe-c-callout dfe-c-callout--warning govuk-!-margin-bottom-4">
+          <div class="dfe-c-callout__heading">No in-scope products</div>
+          <p class="dfe-c-callout__body govuk-!-margin-bottom-0">No active published products match this commission’s phase and type rules (or the catalogue could not be loaded). Adjust commission scope or check product categories.</p>
+        </div>
+      }
+      else
+      {
+        <section class="ops-mp__kpi" aria-labelledby="ops-mp-kpi-heading">
+          <h2 class="govuk-visually-hidden" id="ops-mp-kpi-heading">Key measures</h2>
+          <div class="dfe-f-card-grid" role="region" aria-label="Submission summary">
+            <div class="dfe-f-stat-card dfe-f-stat-card--tint-blue">
+              <p class="govuk-body-s dfe-f-stat-card__label">In scope</p>
+              <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@Model.EligibleProductCount</p>
+              <p class="govuk-body-s govuk-!-margin-top-2 govuk-!-margin-bottom-0">Products</p>
+            </div>
+            <div class="dfe-f-stat-card dfe-f-stat-card--tint-teal">
+              <p class="govuk-body-s dfe-f-stat-card__label">Return rate</p>
+              <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@returnRate%</p>
+              <p class="govuk-body-s govuk-!-margin-top-2 govuk-!-margin-bottom-0">@Model.ActualReturnCount returned</p>
+            </div>
+            <div class="dfe-f-stat-card dfe-f-stat-card--tint-grey">
+              <p class="govuk-body-s dfe-f-stat-card__label">Metric completion</p>
+              <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@Model.MetricCompletionPercent%</p>
+              <p class="govuk-body-s govuk-!-margin-top-2 govuk-!-margin-bottom-0">@Model.CompletedMetricCells of @Model.ApplicableMetricCells cells</p>
+            </div>
+            <div class="dfe-f-stat-card dfe-f-stat-card--tint-green">
+              <p class="govuk-body-s dfe-f-stat-card__label">Submitted</p>
+              <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@Model.SubmittedCount</p>
+            </div>
+            <div class="dfe-f-stat-card dfe-f-stat-card--tint-red">
+              <p class="govuk-body-s dfe-f-stat-card__label">Late</p>
+              <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@Model.LateCount</p>
+            </div>
+            <div class="dfe-f-stat-card dfe-f-stat-card--tint-orange">
+              <p class="govuk-body-s dfe-f-stat-card__label">In progress</p>
+              <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@Model.InProgressCount</p>
+            </div>
+            <div class="dfe-f-stat-card dfe-f-stat-card--tint-grey">
+              <p class="govuk-body-s dfe-f-stat-card__label">Not started</p>
+              <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@Model.NotStartedCount</p>
+            </div>
+          </div>
+        </section>
+
+        @if (Model.OverviewLines.Any())
+        {
+          <div class="govuk-inset-text ops-mp__narrative govuk-!-margin-bottom-4">
+            <h3 class="govuk-heading-s govuk-!-margin-top-0">At a glance</h3>
+            @foreach (var line in Model.OverviewLines)
+            {
+              <p class="govuk-body govuk-!-margin-bottom-2">@line</p>
+            }
+          </div>
+        }
+
+        <div class="ops-mp__progress-pair govuk-!-margin-bottom-4">
+          <div class="mr-progress-bar" role="group" aria-label="Return rate">
+            <div class="mr-progress-bar__label govuk-body-s govuk-!-margin-bottom-1">Return rate: <strong>@returnRate%</strong> (@Model.ActualReturnCount of @Model.EligibleProductCount products)</div>
+            <div class="mr-progress-bar__track" aria-hidden="true">
+              <div class="mr-progress-bar__fill ops-mp__progress-fill--return" style="width:@(returnRate.ToString("0.#", CultureInfo.InvariantCulture))%;"></div>
+            </div>
+          </div>
+          <div class="mr-progress-bar" role="group" aria-label="Metric completion">
+            <div class="mr-progress-bar__label govuk-body-s govuk-!-margin-bottom-1">Metric completion: <strong>@Model.MetricCompletionPercent%</strong> (@Model.CompletedMetricCells of @Model.ApplicableMetricCells cells)</div>
+            <div class="mr-progress-bar__track" aria-hidden="true">
+              <div class="mr-progress-bar__fill ops-mp__progress-fill--metrics" style="width:@(Model.MetricCompletionPercent.ToString("0.#", CultureInfo.InvariantCulture))%;"></div>
+            </div>
+          </div>
+        </div>
+
+        <section class="ops-mp__charts govuk-!-margin-bottom-4" aria-labelledby="ops-mp-charts-heading">
+          <h2 class="govuk-heading-m" id="ops-mp-charts-heading">Charts</h2>
+          <div class="ops-mp__chart-grid">
+            <div class="ops-mp__chart-panel">
+              <h3 class="govuk-heading-s govuk-!-margin-top-0">Submission status</h3>
+              <div class="mr-chart-wrap ops-mp__chart">
+                <canvas id="chart-status-doughnut" aria-label="Status breakdown chart"></canvas>
+              </div>
+            </div>
+            <div class="ops-mp__chart-panel">
+              <h3 class="govuk-heading-s govuk-!-margin-top-0">Cumulative returns</h3>
+              <p class="govuk-body-s dfe-c-text-muted govuk-!-margin-bottom-2">Submitted and late returns over time.</p>
+              <div class="mr-chart-wrap ops-mp__chart">
+                <canvas id="chart-timeline" aria-label="Cumulative returns chart"></canvas>
+              </div>
+            </div>
+            <div class="ops-mp__chart-panel ops-mp__chart-panel--wide">
+              <h3 class="govuk-heading-s govuk-!-margin-top-0">Returns by business area</h3>
+              <p class="govuk-body-s dfe-c-text-muted govuk-!-margin-bottom-2">Potential vs returned (submitted + late) for top areas.</p>
+              <div class="mr-chart-wrap ops-mp__chart ops-mp__chart--bar">
+                <canvas id="chart-ba-bar" aria-label="Business area returns chart"></canvas>
+              </div>
+            </div>
+            @if (Model.MetricRows.Any())
+            {
+              <div class="ops-mp__chart-panel ops-mp__chart-panel--wide">
+                <h3 class="govuk-heading-s govuk-!-margin-top-0">Metric completion by field</h3>
+                <p class="govuk-body-s dfe-c-text-muted govuk-!-margin-bottom-2">Share of in-scope products with each metric completed.</p>
+                <div class="mr-chart-wrap ops-mp__chart ops-mp__chart--bar">
+                  <canvas id="chart-metric-bar" aria-label="Metric completion chart"></canvas>
+                </div>
+              </div>
+            }
+          </div>
+        </section>
+
+        <div class="dfe-f-toggle-group ops-mp__toggle-group govuk-!-margin-bottom-3" data-module="dfe-f-toggle-group">
+          <div class="dfe-f-toggle-group__controls govuk-body-s govuk-!-margin-bottom-2">
+            <button type="button" class="dfe-f-toggle-group__action" data-dfe-toggle-expand-all>Expand all</button>
+            <span class="dfe-f-toggle-group__separator" aria-hidden="true"> · </span>
+            <button type="button" class="dfe-f-toggle-group__action" data-dfe-toggle-collapse-all>Collapse all</button>
+          </div>
+          <div class="dfe-f-toggle-group__items">
+            <div class="dfe-f-toggle ops-mp__section-toggle" data-module="dfe-f-toggle">
+              <div class="dfe-f-toggle__title-wrapper">
+                <h2 class="dfe-f-toggle__heading govuk-!-margin-bottom-0">
+                  <button type="button" class="dfe-f-toggle__button" aria-expanded="true" aria-controls="ops-mp-panel-ba-bars" id="ops-mp-toggle-ba-bars">
+                    <span class="dfe-f-toggle__icon" aria-hidden="true"></span>
+                    <span class="dfe-f-toggle__title">Business area completion</span>
+                    <span class="mr-toggle-panel__meta"><span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--grey">@baTop.Count</span></span>
+                  </button>
+                </h2>
+              </div>
+              <div id="ops-mp-panel-ba-bars" class="dfe-f-toggle__content">
+                <div class="dfe-f-toggle__body">
+                  <p class="govuk-body-s dfe-c-text-muted govuk-!-margin-bottom-3">Return rate and metric completion by business area.</p>
+                  <div class="ops-mp__ba-bars" >
+                    @foreach (var row in baTop)
+                    {
+                      var pct = row.CompletionPercent < 0m ? 0m : (row.CompletionPercent > 100m ? 100m : row.CompletionPercent);
+                      var tierClass = pct >= 90m ? "ops-mp__ba-bar-fill--green" : (pct >= 60m ? "ops-mp__ba-bar-fill--amber" : (pct >= 20m ? "ops-mp__ba-bar-fill--red" : "ops-mp__ba-bar-fill--black"));
+                      <div class="ops-mp__ba-bar-row" >
+                        <div class="ops-mp__ba-bar-name govuk-body-s">
+                          <strong>@row.Name</strong>
+                          <span class="dfe-c-text-muted"> · @row.MetricCompletionPercent% metrics</span>
+                        </div>
+                        <div class="ops-mp__ba-bar-track" aria-hidden="true">
+                          <div class="ops-mp__ba-bar-fill @tierClass" style="width: @pct.ToString("0.#", CultureInfo.InvariantCulture)%"></div>
+                        </div>
+                        <div class="ops-mp__ba-bar-pct govuk-body-s"><strong>@row.CompletionPercent%</strong> returned</div>
+                      </div>
+                    }
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            @if (Model.MetricRows.Any())
+            {
+              <div class="dfe-f-toggle ops-mp__section-toggle" data-module="dfe-f-toggle">
+                <div class="dfe-f-toggle__title-wrapper">
+                  <h2 class="dfe-f-toggle__heading govuk-!-margin-bottom-0">
+                    <button type="button" class="dfe-f-toggle__button" aria-expanded="true" aria-controls="ops-mp-panel-metrics" id="ops-mp-toggle-metrics">
+                      <span class="dfe-f-toggle__icon" aria-hidden="true"></span>
+                      <span class="dfe-f-toggle__title">Metrics captured</span>
+                      <span class="mr-toggle-panel__meta"><span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--grey">@Model.MetricRows.Count</span></span>
+                    </button>
+                  </h2>
+                </div>
+                <div id="ops-mp-panel-metrics" class="dfe-f-toggle__content">
+                  <div class="dfe-f-toggle__body">
+                    <p class="govuk-body-s dfe-c-text-muted govuk-!-margin-bottom-2">Completion of each performance metric across in-scope products for this commission.</p>
+                    <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+                      <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+                      <table class="govuk-table govuk-!-margin-bottom-0" id="ops-mp-metrics">
+                        <thead class="govuk-table__head">
+                          <tr class="govuk-table__row">
+                            <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Metric</button></th>
+                            <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Applicable products</button></th>
+                            <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Completed</button></th>
+                            <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Completion</button></th>
+                          </tr>
+                        </thead>
+                        <tbody class="govuk-table__body">
+                          @foreach (var m in Model.MetricRows)
+                          {
+                            var mPct = m.CompletionPercent;
+                            var mTier = mPct >= 90m ? "ops-mp__ba-bar-fill--green" : (mPct >= 60m ? "ops-mp__ba-bar-fill--amber" : (mPct >= 20m ? "ops-mp__ba-bar-fill--red" : "ops-mp__ba-bar-fill--black"));
+                            <tr class="govuk-table__row">
+                              <th scope="row" class="govuk-table__cell">@m.Name</th>
+                              <td class="govuk-table__cell">@m.ApplicableProducts</td>
+                              <td class="govuk-table__cell">@m.CompletedCount</td>
+                              <td class="govuk-table__cell">
+                                <div class="ops-mp__inline-bar">
+                                  <div class="ops-mp__ba-bar-track ops-mp__inline-bar-track" aria-hidden="true">
+                                    <div class="ops-mp__ba-bar-fill @mTier" style="width: @mPct.ToString("0.#", CultureInfo.InvariantCulture)%"></div>
+                                  </div>
+                                  <span class="govuk-body-s"><strong>@mPct%</strong></span>
+                                </div>
+                              </td>
+                            </tr>
+                          }
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            }
+
+            <div class="dfe-f-toggle ops-mp__section-toggle" data-module="dfe-f-toggle">
+              <div class="dfe-f-toggle__title-wrapper">
+                <h2 class="dfe-f-toggle__heading govuk-!-margin-bottom-0">
+                  <button type="button" class="dfe-f-toggle__button" aria-expanded="false" aria-controls="ops-mp-panel-ba-table" id="ops-mp-toggle-ba-table">
+                    <span class="dfe-f-toggle__icon" aria-hidden="true"></span>
+                    <span class="dfe-f-toggle__title">Business areas — detail</span>
+                    <span class="mr-toggle-panel__meta"><span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--grey">@Model.BusinessAreaRows.Count</span></span>
+                  </button>
+                </h2>
+              </div>
+              <div id="ops-mp-panel-ba-table" class="dfe-f-toggle__content" hidden>
+                <div class="dfe-f-toggle__body">
+                  @await Html.PartialAsync("_ManagePerformanceOrgTable", Model.BusinessAreaRows, new ViewDataDictionary(ViewData) { { "OrgLabel", "Business area" } })
+                </div>
+              </div>
+            </div>
+
+            <div class="dfe-f-toggle ops-mp__section-toggle" data-module="dfe-f-toggle">
+              <div class="dfe-f-toggle__title-wrapper">
+                <h2 class="dfe-f-toggle__heading govuk-!-margin-bottom-0">
+                  <button type="button" class="dfe-f-toggle__button" aria-expanded="false" aria-controls="ops-mp-panel-dir-table" id="ops-mp-toggle-dir-table">
+                    <span class="dfe-f-toggle__icon" aria-hidden="true"></span>
+                    <span class="dfe-f-toggle__title">Directorates — detail</span>
+                    <span class="mr-toggle-panel__meta"><span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--grey">@Model.DirectorateRows.Count</span></span>
+                  </button>
+                </h2>
+              </div>
+              <div id="ops-mp-panel-dir-table" class="dfe-f-toggle__content" hidden>
+                <div class="dfe-f-toggle__body">
+                  <p class="govuk-body-s dfe-c-text-muted govuk-!-margin-bottom-2">Directorate from product category values.</p>
+                  @await Html.PartialAsync("_ManagePerformanceOrgTable", Model.DirectorateRows, new ViewDataDictionary(ViewData) { { "OrgLabel", "Directorate" } })
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      }
+    }
+  }
+</div>
+
+@section Styles {
+<style>
+  .ops-mp { margin-bottom: 3rem; }
+  .ops-mp__context {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+    padding: 1.25rem 1.5rem;
+    background: #fff;
+    border: 1px solid var(--rpt-border, #e5e7eb);
+    border-left: 4px solid var(--navy, #1d70b8);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  }
+  .ops-mp__context-header {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.25rem 2rem;
+    align-items: flex-start;
+    justify-content: space-between;
+  }
+  .ops-mp__context-header--empty {
+    align-items: flex-end;
+  }
+  .ops-mp__context-current {
+    flex: 1 1 16rem;
+    min-width: 0;
+  }
+  .ops-mp__context-title-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 0.75rem;
+  }
+  .ops-mp__context-tags {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem 0.5rem;
+  }
+  .ops-mp__context-select {
+    flex: 0 1 22rem;
+    min-width: 14rem;
+    max-width: 100%;
+  }
+  .ops-mp__context-select--solo { margin-left: auto; }
+  .ops-mp__select-fields {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem 1rem;
+    align-items: flex-end;
+  }
+  .ops-mp__select-field {
+    flex: 1 1 12rem;
+    min-width: 12rem;
+  }
+  .ops-mp__select-action { flex: 0 0 auto; }
+  .ops-mp__select-form .govuk-select { width: 100%; max-width: 100%; margin-bottom: 0; }
+  .ops-mp__context-meta {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+    gap: 0.75rem 1.25rem;
+    margin: 0;
+    padding-top: 1rem;
+    border-top: 1px solid #e5e7eb;
+  }
+  .ops-mp__context-meta dt {
+    font-size: 0.8125rem;
+    color: #505a5f;
+    margin: 0 0 0.15rem;
+    font-weight: 400;
+  }
+  .ops-mp__context-meta dd { margin: 0; font-weight: 600; }
+  .ops-mp__kpi .dfe-f-card-grid { margin-bottom: 0; }
+  .ops-mp__narrative p:last-child { margin-bottom: 0 !important; }
+  .ops-mp__progress-pair {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.25rem;
+  }
+  .mr-progress-bar__track {
+    height: 0.75rem;
+    background: #f3f2f1;
+    border-radius: 999px;
+    overflow: hidden;
+    border: 1px solid #b1b4b6;
+  }
+  .mr-progress-bar__fill {
+    height: 100%;
+    border-radius: 999px;
+    min-width: 2px;
+  }
+  .ops-mp__progress-fill--return { background: linear-gradient(90deg, #5694ca, #1d70b8); }
+  .ops-mp__progress-fill--metrics { background: linear-gradient(90deg, #80cbc4, #00703c); }
+  .ops-mp__chart-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.25rem;
+  }
+  .ops-mp__chart-panel {
+    padding: 1rem 1.25rem;
+    background: #fff;
+    border: 1px solid #b1b4b6;
+  }
+  .ops-mp__chart-panel--wide { grid-column: 1 / -1; }
+  .ops-mp__chart { min-height: 260px; max-height: 320px; }
+  .ops-mp__chart--bar { min-height: 280px; max-height: 400px; }
+  .ops-mp .mr-chart-wrap { position: relative; width: 100%; }
+  .ops-mp__toggle-group { scroll-margin-top: 1rem; }
+  .ops-mp .mr-toggle-panel__meta { margin-left: auto; flex-shrink: 0; display: flex; align-items: center; }
+  .ops-mp__ba-bars { display: flex; flex-direction: column; gap: 0.75rem; }
+  .ops-mp__ba-bar-row {
+    display: grid;
+    grid-template-columns: minmax(8rem, 1fr) 2fr 5rem;
+    gap: 0.75rem;
+    align-items: center;
+  }
+  .ops-mp__ba-bar-track {
+    height: 0.85rem;
+    background: #f3f2f1;
+    border: 1px solid #b1b4b6;
+    border-radius: 999px;
+    overflow: hidden;
+  }
+  .ops-mp__ba-bar-fill { height: 100%; border-radius: 999px; min-width: 2px; background: #b1b4b6; }
+  .ops-mp__ba-bar-fill--green { background: #00703c; }
+  .ops-mp__ba-bar-fill--amber { background: #f47738; }
+  .ops-mp__ba-bar-fill--red { background: #d4351c; }
+  .ops-mp__ba-bar-fill--black { background: #0b0c0c; }
+  .ops-mp__ba-bar-pct { text-align: right; font-variant-numeric: tabular-nums; }
+  .ops-mp__inline-bar { display: flex; align-items: center; gap: 0.5rem; min-width: 10rem; }
+  .ops-mp__inline-bar-track { flex: 1; min-width: 4rem; }
+  .ops-mp .mr-ba-table { border-collapse: collapse; font-size: 0.8125rem; width: 100%; min-width: 44rem; }
+  .ops-mp .mr-ba-table th, .ops-mp .mr-ba-table td { padding: 0.4rem 0.35rem; border: 1px solid var(--rpt-border, #e5e7eb); vertical-align: middle; }
+  .ops-mp .mr-ba-table thead th { background: #f3f2f1; font-weight: 700; text-align: center; }
+  .ops-mp .mr-ba-table__area-col { text-align: left !important; white-space: normal; min-width: 10rem; font-weight: 600; }
+  .ops-mp .mr-ba-table__num-hdr { font-variant-numeric: tabular-nums; }
+  .ops-mp .mr-ba-table__num { text-align: center; font-variant-numeric: tabular-nums; }
+  .ops-mp .mr-ba-num {
+    display: inline-flex; align-items: center; justify-content: center; min-width: 1.75rem;
+    padding: 0.2rem 0.45rem; border-radius: 6px; font-weight: 600; font-size: 0.8125rem;
+    font-variant-numeric: tabular-nums; background: #f3f2f1; color: #505a5f;
+  }
+  .ops-mp .mr-ba-num--strong { background: #e8eaed; color: #0b0c0c; font-weight: 700; }
+  .ops-mp .mr-ba-num--muted { opacity: 0.45; font-weight: 500; }
+  .ops-mp .mr-ba-num--pri-crit { background: #fde8e5; color: #942514; }
+  .ops-mp .mr-ba-num--pri-low { background: #e3f5eb; color: #005a30; }
+  .ops-mp .mr-ba-table__fixed { position: sticky; left: 0; background: #fff; z-index: 1; box-shadow: 2px 0 4px rgba(0,0,0,0.04); }
+  .ops-mp .mr-ba-table thead .mr-ba-table__fixed { background: #f3f2f1; z-index: 2; }
+  @@media (max-width: 48em) {
+    .ops-mp__context-header { flex-direction: column; }
+    .ops-mp__context-select,
+    .ops-mp__context-select--solo { flex: 1 1 auto; min-width: 0; width: 100%; margin-left: 0; }
+    .ops-mp__select-fields { flex-direction: column; align-items: stretch; }
+    .ops-mp__select-action .govuk-button { width: 100%; }
+    .ops-mp__progress-pair, .ops-mp__chart-grid { grid-template-columns: 1fr; }
+    .ops-mp__ba-bar-row { grid-template-columns: 1fr; gap: 0.35rem; }
+    .ops-mp__ba-bar-pct { text-align: left; }
+  }
+</style>
+}
+
+@section Scripts {
+  @if (Model.HasCommission && Model.HasEligibleProducts)
+  {
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" nonce="@Context.Items["Nonce"]"></script>
+    <script nonce="@Context.Items["Nonce"]">
+(function () {
+  var chartFont = { family: "'Inter', system-ui, -apple-system, sans-serif" };
+  var doughnutJson = @Html.Raw(Model.StatusDoughnutJson);
+  var tlJson = @Html.Raw(Model.SubmissionTimelineJson);
+  var baJson = @Html.Raw(Model.BusinessAreaBarJson);
+  var metricJson = @Html.Raw(Model.MetricCompletionBarJson);
+
+  if (typeof Chart === 'undefined') return;
+
+  function doughnut(el, data) {
+    if (!el || !data || !data.labels || !data.labels.length) return;
+    new Chart(el.getContext('2d'), {
+      type: 'doughnut',
+      data: {
+        labels: data.labels,
+        datasets: [{ data: data.values, backgroundColor: data.colors, borderWidth: 1, borderColor: '#fff' }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { position: 'bottom', labels: { font: chartFont, boxWidth: 12 } } }
+      }
+    });
+  }
+
+  function lineChart(el, data, label) {
+    if (!el || !data || !data.labels || !data.labels.length) {
+      if (el && el.parentElement) {
+        var m = document.createElement('p');
+        m.className = 'govuk-body-s dfe-c-text-muted';
+        m.textContent = 'No submitted returns yet.';
+        el.parentElement.appendChild(m);
+      }
+      return;
+    }
+    new Chart(el.getContext('2d'), {
+      type: 'line',
+      data: {
+        labels: data.labels,
+        datasets: [{
+          label: label,
+          data: data.cumulative,
+          borderColor: '#1d70b8',
+          backgroundColor: 'rgba(29, 112, 184, 0.12)',
+          fill: true,
+          tension: 0.2,
+          pointRadius: 3
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { font: chartFont, maxRotation: 45 } },
+          y: { ticks: { font: chartFont }, beginAtZero: true }
+        }
+      }
+    });
+  }
+
+  function groupedBar(el, labels, datasets, yLabel) {
+    if (!el || !labels || !labels.length) return;
+    new Chart(el.getContext('2d'), {
+      type: 'bar',
+      data: { labels: labels, datasets: datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { position: 'bottom', labels: { font: chartFont, boxWidth: 12 } } },
+        scales: {
+          x: { ticks: { font: chartFont, maxRotation: 50, minRotation: 25 } },
+          y: { ticks: { font: chartFont }, beginAtZero: true, title: yLabel ? { display: true, text: yLabel, font: chartFont } : undefined }
+        }
+      }
+    });
+  }
+
+  doughnut(document.getElementById('chart-status-doughnut'), doughnutJson);
+  lineChart(document.getElementById('chart-timeline'), tlJson, 'Cumulative returns');
+
+  if (baJson && baJson.labels && baJson.labels.length) {
+    groupedBar(document.getElementById('chart-ba-bar'), baJson.labels, [
+      { label: 'Potential', data: baJson.potential, backgroundColor: '#b1b4b6' },
+      { label: 'Returned', data: baJson.actual, backgroundColor: '#00703c' }
+    ], 'Products');
+  }
+
+  if (metricJson && metricJson.labels && metricJson.labels.length) {
+    groupedBar(document.getElementById('chart-metric-bar'), metricJson.labels, [
+      { label: 'Applicable', data: metricJson.applicable, backgroundColor: '#f3f2f1', borderColor: '#b1b4b6', borderWidth: 1 },
+      { label: 'Completed', data: metricJson.completed, backgroundColor: '#1d70b8' }
+    ], 'Products');
+  }
+
+  var sel = document.getElementById('ops-mp-commission');
+  var form = document.getElementById('ops-mp-filters');
+  if (sel && form) {
+    sel.addEventListener('change', function () { form.submit(); });
+  }
+})();
+    </script>
+  }
+}

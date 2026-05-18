@@ -350,7 +350,7 @@ public class NotificationRuleService : INotificationRuleService
                     triggerCode,
                     rule.Id,
                     contextData,
-                    cancellationToken);
+                    cancellationToken: cancellationToken);
 
                 if (result.Success)
                 {

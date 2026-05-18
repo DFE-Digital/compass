@@ -1,0 +1,507 @@
+@model Compass.Models.DemandPipeline.DemandPipelineRequest
+@using Compass.Models
+@using Compass.ViewModels.Modern
+@{
+  var demandEditFromRequest = ViewBag.DemandEditFromRequest as bool? == true;
+  ViewData["Title"] = demandEditFromRequest ? "Edit demand information" : "Submit a demand request";
+  var bc = ViewBag.LinkedBc as Compass.Models.DemandPipeline.DemandPipelineBusinessCase;
+  var portfolios = ViewBag.Portfolios as IEnumerable<Portfolio> ?? Enumerable.Empty<Portfolio>();
+  var departmentGroups = ViewBag.DepartmentGroups as IEnumerable<string> ?? Enumerable.Empty<string>();
+  var priorityOutcomes = ViewBag.PriorityOutcomes as IEnumerable<Objective> ?? Enumerable.Empty<Objective>();
+  var missionPillars = ViewBag.MissionPillars as IEnumerable<Mission> ?? Enumerable.Empty<Mission>();
+
+  var selectedPoIds = new HashSet<int>();
+  foreach (var s in (Model.PriorityOutcomeIds ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries))
+  {
+    if (int.TryParse(s.Trim(), out var id)) selectedPoIds.Add(id);
+  }
+  if (selectedPoIds.Count == 0 && Model.PriorityOutcomeId.HasValue) selectedPoIds.Add(Model.PriorityOutcomeId.Value);
+  var selectedMpIds = new HashSet<int>();
+  foreach (var s in (Model.MissionPillarIds ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries))
+  {
+    if (int.TryParse(s.Trim(), out var id)) selectedMpIds.Add(id);
+  }
+  if (selectedMpIds.Count == 0 && Model.MissionPillarId.HasValue) selectedMpIds.Add(Model.MissionPillarId.Value);
+
+  bool HasError(string field) => ViewData.ModelState[field]?.Errors?.Any() == true;
+  string? ErrorMsg(string field) => ViewData.ModelState[field]?.Errors?.FirstOrDefault()?.ErrorMessage;
+}
+
+@section Breadcrumbs {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernDemand")">Demand</a></li>
+  @if (demandEditFromRequest)
+  {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Register", "ModernDemand")">Demand register</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("RequestDetail", "ModernDemand", new { id = Model.Id, tab = "request" })">@(Model.Reference)</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">Edit demand information</li>
+  }
+  else
+  {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Register", "ModernDemand")">Demand register</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">Submit new request</li>
+  }
+}
+
+<div id="sc-demand-submit">
+@if (bc != null && !demandEditFromRequest)
+{
+ <div class="govuk-notification-banner govuk-notification-banner--success" role="alert" data-module="govuk-notification-banner">
+ <div class="govuk-notification-banner__header">
+ <h2 class="govuk-notification-banner__title" id="bc-banner-title">Pre-filled from business case</h2>
+    </div>
+ <div class="govuk-notification-banner__content">
+ <p class="govuk-body"><strong>@bc.Reference — @bc.Title</strong>. Review and complete all fields before submitting.</p>
+    </div>
+  </div>
+}
+
+@{
+  var submitTitle = demandEditFromRequest ? "Edit demand information" : Model.Id != Guid.Empty ? "Edit demand request" : "Submit a demand request";
+  var submitLedeText = demandEditFromRequest
+    ? "Update the details stored on this demand. Changes apply to the request record immediately after you save."
+    : "Describe the problem you want DDT to address. A demand lead will review, score, and triage your request.";
+  var submitHeaderLede = await Html.PartialAsync("_GovukBodyParagraph", submitLedeText);
+}
+@await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+  Caption = "Demand",
+  Title = submitTitle,
+  Lede = submitHeaderLede
+})
+
+<div class="dfe-c-form-layout">
+ <div class="dfe-c-form-layout__main">
+ <div class="dfe-c-card dfe-c-card--plain">
+    <form asp-controller="ModernDemand" asp-action="@(demandEditFromRequest ? "RequestEdit" : "Submit")" asp-route-id="@(demandEditFromRequest ? Model.Id : (Model.Id != Guid.Empty ? Model.Id : (Guid?)null))" method="post" id="demand-submit-form">
+      @Html.AntiForgeryToken()
+      @if (!demandEditFromRequest)
+      {
+        <input type="hidden" name="command" id="demand-submit-command" value="" />
+      }
+      @if (Model.Id != Guid.Empty) { <input type="hidden" asp-for="Id" /> }
+      @Html.HiddenFor(m => m.BusinessCaseId)
+      @if (demandEditFromRequest)
+      {
+        <input type="hidden" asp-for="Reference" />
+        <input type="hidden" asp-for="Status" />
+      }
+
+      @if (!ViewData.ModelState.IsValid)
+      {
+ <div class="govuk-error-summary" data-module="govuk-error-summary" role="alert">
+ <h2 class="govuk-error-summary__title">There is a problem</h2>
+ <div class="govuk-error-summary__body">
+ <ul class="govuk-list govuk-error-summary__list">
+              @foreach (var kv in ViewData.ModelState)
+              {
+                if (kv.Value?.Errors?.Count > 0)
+                {
+                  <li><a href="#@kv.Key">@(kv.Value.Errors[0].ErrorMessage)</a></li>
+                }
+              }
+            </ul>
+          </div>
+        </div>
+      }
+
+ <h2 class="govuk-heading-m">Your details</h2>
+
+ <div class="govuk-form-group @(HasError("SubmittedByUserId") ? "govuk-form-group--error" : "")" id="SubmittedByUserId">
+        @if (HasError("SubmittedByUserId"))
+        {
+ <p id="SubmittedByUserId-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @ErrorMsg("SubmittedByUserId")</p>
+        }
+        @await Html.PartialAsync("~/Views/Modern/Shared/_UserPicker.cshtml", new UserPickerViewModel
+        {
+          FieldName = "SubmittedByUserId",
+          Label = "Primary contact for this demand *",
+          Hint = "This is who we will contact with additional questions or updates about this demand. Search by name or email.",
+          DefaultUserId = Model.SubmittedByUserId,
+          DefaultName = Model.SubmittedBy,
+          DefaultSummaryText = "No primary contact selected."
+        })
+      </div>
+
+ <div class="govuk-form-group @(HasError("DepartmentGroup") ? "govuk-form-group--error" : "")">
+ <label class="govuk-label" for="DepartmentGroup">Business area <span style="color:#d4351c">*</span></label>
+        @if (HasError("DepartmentGroup"))
+        {
+ <p id="DepartmentGroup-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @ErrorMsg("DepartmentGroup")</p>
+        }
+ <select asp-for="DepartmentGroup" class="govuk-select @(HasError("DepartmentGroup") ? "govuk-select--error" : "")" aria-describedby="@(HasError("DepartmentGroup") ? "DepartmentGroup-error" : null)">
+          <option value="">— Select business area —</option>
+          @foreach (var opt in departmentGroups)
+          {
+            if (Model.DepartmentGroup == opt)
+            { <option value="@opt" selected>@opt</option> }
+            else
+            { <option value="@opt">@opt</option> }
+          }
+        </select>
+      </div>
+
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="PortfolioId">Business areas</label>
+ <div class="govuk-hint" id="portfolio-hint">Which DDT business area or portfolio supports this demand, if known.</div>
+ <select asp-for="PortfolioId" class="govuk-select" aria-describedby="portfolio-hint">
+          <option value="">— Select business areas, if known —</option>
+          @foreach (var p in portfolios)
+          {
+            if (Model.PortfolioId == p.Id)
+            { <option value="@p.Id" selected>@p.Name</option> }
+            else
+            { <option value="@p.Id">@p.Name</option> }
+          }
+        </select>
+      </div>
+
+ <div class="govuk-form-group @(HasError("SroUserId") ? "govuk-form-group--error" : "")" id="SroUserId">
+        @if (HasError("SroUserId"))
+        {
+ <p id="SroUserId-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @ErrorMsg("SroUserId")</p>
+        }
+        @await Html.PartialAsync("~/Views/Modern/Shared/_UserPicker.cshtml", new UserPickerViewModel
+        {
+          FieldName = "SroUserId",
+          Label = "Senior Responsible Officer (G6+) *",
+          Hint = "SRO accountable for this demand. Search by name or email.",
+          DefaultUserId = Model.SroUserId,
+          DefaultName = Model.Sro,
+          DefaultSummaryText = "No SRO selected."
+        })
+      </div>
+
+ <hr class="govuk-section-break govuk-section-break--l govuk-section-break--visible" />
+
+ <h2 class="govuk-heading-m">About your request</h2>
+
+ <div class="govuk-form-group @(HasError("Title") ? "govuk-form-group--error" : "")">
+ <label class="govuk-label" for="Title">Proposed request title <span style="color:#d4351c">*</span></label>
+        @if (HasError("Title"))
+        {
+ <p id="Title-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @ErrorMsg("Title")</p>
+        }
+ <input type="text" asp-for="Title" class="govuk-input @(HasError("Title") ? "govuk-input--error" : "")" placeholder="e.g. AI attendance analytics dashboard" aria-describedby="@(HasError("Title") ? "Title-error" : null)" />
+      </div>
+
+ <div class="govuk-form-group @(HasError("Description") ? "govuk-form-group--error" : "")">
+ <label class="govuk-label" for="Description">Request overview <span style="color:#d4351c">*</span></label>
+ <div class="govuk-hint" id="description-hint">Describe the problem you are trying to solve, not the solution.</div>
+        @if (HasError("Description"))
+        {
+ <p id="Description-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @ErrorMsg("Description")</p>
+        }
+ <textarea asp-for="Description" rows="5" class="govuk-textarea @(HasError("Description") ? "govuk-textarea--error" : "")" placeholder="What problem does this solve? What is the expected outcome?" aria-describedby="description-hint @(HasError("Description") ? "Description-error" : "")"></textarea>
+      </div>
+
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="PreviousResearch">Previous insight or research conducted</label>
+ <textarea asp-for="PreviousResearch" rows="4" class="govuk-textarea"></textarea>
+      </div>
+
+ <div class="govuk-form-group @(HasError("TargetDeliveryDate") ? "govuk-form-group--error" : "")">
+ <label class="govuk-label" for="TargetDeliveryDate">Target delivery date <span style="color:#d4351c">*</span></label>
+        @if (HasError("TargetDeliveryDate"))
+        {
+ <p id="TargetDeliveryDate-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @ErrorMsg("TargetDeliveryDate")</p>
+        }
+ <input type="date" asp-for="TargetDeliveryDate" class="govuk-input govuk-input--width-10 @(HasError("TargetDeliveryDate") ? "govuk-input--error" : "")" aria-describedby="@(HasError("TargetDeliveryDate") ? "TargetDeliveryDate-error" : null)" />
+      </div>
+
+ <hr class="govuk-section-break govuk-section-break--l govuk-section-break--visible" />
+
+ <h2 class="govuk-heading-m">Strategic alignment</h2>
+
+ <div class="govuk-form-group">
+ <fieldset class="govuk-fieldset">
+ <legend class="govuk-fieldset__legend">Priority outcome (optional)</legend>
+ <div class="govuk-hint">Select all that apply.</div>
+ <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes">
+            @foreach (var po in priorityOutcomes)
+            {
+              var chk = selectedPoIds.Contains(po.Id);
+ <div class="govuk-checkboxes__item">
+ <input class="govuk-checkboxes__input" id="po-@po.Id" name="priorityOutcomeIds" type="checkbox" value="@po.Id" @(chk ? "checked" : "") />
+ <label class="govuk-label govuk-checkboxes__label" for="po-@po.Id">@po.Title</label>
+              </div>
+            }
+          </div>
+        </fieldset>
+      </div>
+
+ <div class="govuk-form-group">
+ <fieldset class="govuk-fieldset">
+ <legend class="govuk-fieldset__legend">Mission pillar (optional)</legend>
+ <div class="govuk-hint">Select all that apply.</div>
+ <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes">
+            @foreach (var mp in missionPillars)
+            {
+              var chk = selectedMpIds.Contains(mp.Id);
+ <div class="govuk-checkboxes__item">
+ <input class="govuk-checkboxes__input" id="mp-@mp.Id" name="missionPillarIds" type="checkbox" value="@mp.Id" @(chk ? "checked" : "") />
+ <label class="govuk-label govuk-checkboxes__label" for="mp-@mp.Id">@mp.Title</label>
+              </div>
+            }
+          </div>
+        </fieldset>
+      </div>
+
+ <div class="govuk-form-group @(HasError("StatutoryDriver") ? "govuk-form-group--error" : "")" id="StatutoryDriver">
+ <fieldset class="govuk-fieldset" @(HasError("StatutoryDriver") ? "aria-describedby=StatutoryDriver-error" : "")>
+ <legend class="govuk-fieldset__legend">Legal or statutory requirement? <span style="color:#d4351c">*</span></legend>
+          @if (HasError("StatutoryDriver"))
+          {
+ <p id="StatutoryDriver-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @ErrorMsg("StatutoryDriver")</p>
+          }
+ <div class="govuk-radios govuk-radios--inline" data-module="govuk-radios">
+ <div class="govuk-radios__item">
+ <input class="govuk-radios__input" id="statutory-yes" name="StatutoryDriver" type="radio" value="true" @(Model.StatutoryDriver == true ? "checked" : "") />
+ <label class="govuk-label govuk-radios__label" for="statutory-yes">Yes</label>
+            </div>
+ <div class="govuk-radios__item">
+ <input class="govuk-radios__input" id="statutory-no" name="StatutoryDriver" type="radio" value="false" @(Model.StatutoryDriver == false ? "checked" : "") />
+ <label class="govuk-label govuk-radios__label" for="statutory-no">No</label>
+            </div>
+          </div>
+        </fieldset>
+      </div>
+
+ <div id="manifesto-group" class="govuk-form-group @(HasError("ManifestoCommitment") ? "govuk-form-group--error" : "") @(Model.StatutoryDriver == true ? "" : "govuk-!-display-none")">
+ <label class="govuk-label" for="ManifestoCommitment">Supporting manifesto commitment or statute law <span style="color:#d4351c">*</span></label>
+ <div class="govuk-hint" id="manifesto-hint">Required when legal or statutory requirement is Yes.</div>
+        @if (HasError("ManifestoCommitment"))
+        {
+ <p id="ManifestoCommitment-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @ErrorMsg("ManifestoCommitment")</p>
+        }
+ <textarea asp-for="ManifestoCommitment" rows="3" class="govuk-textarea @(HasError("ManifestoCommitment") ? "govuk-textarea--error" : "")" aria-describedby="manifesto-hint @(HasError("ManifestoCommitment") ? "ManifestoCommitment-error" : "")"></textarea>
+      </div>
+
+ <div class="govuk-form-group @(HasError("ExpectedBenefits") ? "govuk-form-group--error" : "")">
+ <label class="govuk-label" for="ExpectedBenefits">Expected measurable benefits <span style="color:#d4351c">*</span></label>
+        @if (HasError("ExpectedBenefits"))
+        {
+ <p id="ExpectedBenefits-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @ErrorMsg("ExpectedBenefits")</p>
+        }
+ <textarea asp-for="ExpectedBenefits" rows="3" class="govuk-textarea @(HasError("ExpectedBenefits") ? "govuk-textarea--error" : "")" aria-describedby="@(HasError("ExpectedBenefits") ? "ExpectedBenefits-error" : null)"></textarea>
+      </div>
+
+ <div class="govuk-form-group @(HasError("RiskIfNotDelivered") ? "govuk-form-group--error" : "")">
+ <label class="govuk-label" for="RiskIfNotDelivered">Risk or consequence if not delivered <span style="color:#d4351c">*</span></label>
+        @if (HasError("RiskIfNotDelivered"))
+        {
+ <p id="RiskIfNotDelivered-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @ErrorMsg("RiskIfNotDelivered")</p>
+        }
+ <textarea asp-for="RiskIfNotDelivered" rows="3" class="govuk-textarea @(HasError("RiskIfNotDelivered") ? "govuk-textarea--error" : "")" aria-describedby="@(HasError("RiskIfNotDelivered") ? "RiskIfNotDelivered-error" : null)"></textarea>
+      </div>
+
+ <hr class="govuk-section-break govuk-section-break--l govuk-section-break--visible" />
+
+ <h2 class="govuk-heading-m">Funding and headcount</h2>
+
+ <div class="govuk-form-group @(HasError("FundingProvided") ? "govuk-form-group--error" : "")" id="FundingProvided">
+ <fieldset class="govuk-fieldset" @(HasError("FundingProvided") ? "aria-describedby=FundingProvided-error" : "")>
+ <legend class="govuk-fieldset__legend">Funding provided for delivery? <span style="color:#d4351c">*</span></legend>
+          @if (HasError("FundingProvided"))
+          {
+ <p id="FundingProvided-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @ErrorMsg("FundingProvided")</p>
+          }
+ <div class="govuk-radios govuk-radios--inline" data-module="govuk-radios">
+ <div class="govuk-radios__item">
+ <input class="govuk-radios__input" id="funding-yes" name="FundingProvided" type="radio" value="true" @(Model.FundingProvided == true ? "checked" : "") />
+ <label class="govuk-label govuk-radios__label" for="funding-yes">Yes</label>
+            </div>
+ <div class="govuk-radios__item">
+ <input class="govuk-radios__input" id="funding-no" name="FundingProvided" type="radio" value="false" @(Model.FundingProvided == false ? "checked" : "") />
+ <label class="govuk-label govuk-radios__label" for="funding-no">No</label>
+            </div>
+          </div>
+        </fieldset>
+      </div>
+
+ <div id="funding-details-group" class="govuk-form-group @(HasError("FundingProvidedDetails") ? "govuk-form-group--error" : "") @(Model.FundingProvided == true ? "" : "govuk-!-display-none")">
+ <label class="govuk-label" for="FundingProvidedDetails">Funding details <span style="color:#d4351c">*</span></label>
+ <div class="govuk-hint" id="funding-details-hint">Describe the funding available for delivery.</div>
+        @if (HasError("FundingProvidedDetails"))
+        {
+ <p id="FundingProvidedDetails-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @ErrorMsg("FundingProvidedDetails")</p>
+        }
+ <textarea asp-for="FundingProvidedDetails" rows="3" class="govuk-textarea @(HasError("FundingProvidedDetails") ? "govuk-textarea--error" : "")" aria-describedby="funding-details-hint @(HasError("FundingProvidedDetails") ? "FundingProvidedDetails-error" : "")"></textarea>
+      </div>
+
+ <div class="govuk-form-group @(HasError("HeadcountProvided") ? "govuk-form-group--error" : "")" id="HeadcountProvided">
+ <fieldset class="govuk-fieldset" @(HasError("HeadcountProvided") ? "aria-describedby=HeadcountProvided-error" : "")>
+ <legend class="govuk-fieldset__legend">Does this come with headcount? <span style="color:#d4351c">*</span></legend>
+          @if (HasError("HeadcountProvided"))
+          {
+ <p id="HeadcountProvided-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @ErrorMsg("HeadcountProvided")</p>
+          }
+ <div class="govuk-radios govuk-radios--inline" data-module="govuk-radios">
+ <div class="govuk-radios__item">
+ <input class="govuk-radios__input" id="headcount-yes" name="HeadcountProvided" type="radio" value="true" @(Model.HeadcountProvided == true ? "checked" : "") />
+ <label class="govuk-label govuk-radios__label" for="headcount-yes">Yes</label>
+            </div>
+ <div class="govuk-radios__item">
+ <input class="govuk-radios__input" id="headcount-no" name="HeadcountProvided" type="radio" value="false" @(Model.HeadcountProvided == false ? "checked" : "") />
+ <label class="govuk-label govuk-radios__label" for="headcount-no">No</label>
+            </div>
+          </div>
+        </fieldset>
+      </div>
+
+ <div id="headcount-details-group" class="govuk-form-group @(HasError("HeadcountProvidedDetails") ? "govuk-form-group--error" : "") @(Model.HeadcountProvided == true ? "" : "govuk-!-display-none")">
+ <label class="govuk-label" for="HeadcountProvidedDetails">Headcount details <span style="color:#d4351c">*</span></label>
+ <div class="govuk-hint" id="headcount-details-hint">Describe the headcount or roles provided.</div>
+        @if (HasError("HeadcountProvidedDetails"))
+        {
+ <p id="HeadcountProvidedDetails-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @ErrorMsg("HeadcountProvidedDetails")</p>
+        }
+ <textarea asp-for="HeadcountProvidedDetails" rows="3" class="govuk-textarea @(HasError("HeadcountProvidedDetails") ? "govuk-textarea--error" : "")" aria-describedby="headcount-details-hint @(HasError("HeadcountProvidedDetails") ? "HeadcountProvidedDetails-error" : "")"></textarea>
+      </div>
+
+ <div class="govuk-form-group @(HasError("IsNewDigitalService") ? "govuk-form-group--error" : "")" id="IsNewDigitalService">
+ <fieldset class="govuk-fieldset" @(HasError("IsNewDigitalService") ? "aria-describedby=IsNewDigitalService-error" : "")>
+ <legend class="govuk-fieldset__legend">Changing an existing digital service or product? <span style="color:#d4351c">*</span></legend>
+          @if (HasError("IsNewDigitalService"))
+          {
+ <p id="IsNewDigitalService-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @ErrorMsg("IsNewDigitalService")</p>
+          }
+ <div class="govuk-radios govuk-radios--inline" data-module="govuk-radios">
+ <div class="govuk-radios__item">
+ <input class="govuk-radios__input" id="newservice-yes" name="IsNewDigitalService" type="radio" value="true" @(Model.IsNewDigitalService == true ? "checked" : "") />
+ <label class="govuk-label govuk-radios__label" for="newservice-yes">Yes</label>
+            </div>
+ <div class="govuk-radios__item">
+ <input class="govuk-radios__input" id="newservice-no" name="IsNewDigitalService" type="radio" value="false" @(Model.IsNewDigitalService == false ? "checked" : "") />
+ <label class="govuk-label govuk-radios__label" for="newservice-no">No</label>
+            </div>
+          </div>
+        </fieldset>
+      </div>
+
+ <div id="digital-change-details-group" class="govuk-form-group @(HasError("DigitalServiceChangeDetails") ? "govuk-form-group--error" : "") @(Model.IsNewDigitalService == true ? "" : "govuk-!-display-none")">
+ <label class="govuk-label" for="DigitalServiceChangeDetails">Details of products or services <span style="color:#d4351c">*</span></label>
+ <div class="govuk-hint" id="digital-change-hint">Describe the digital services or products you are changing.</div>
+        @if (HasError("DigitalServiceChangeDetails"))
+        {
+ <p id="DigitalServiceChangeDetails-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @ErrorMsg("DigitalServiceChangeDetails")</p>
+        }
+ <textarea asp-for="DigitalServiceChangeDetails" rows="3" class="govuk-textarea @(HasError("DigitalServiceChangeDetails") ? "govuk-textarea--error" : "")" aria-describedby="digital-change-hint @(HasError("DigitalServiceChangeDetails") ? "DigitalServiceChangeDetails-error" : "")"></textarea>
+      </div>
+
+ <div class="govuk-form-group @(HasError("IsPublicFacing") ? "govuk-form-group--error" : "")" id="IsPublicFacing">
+ <fieldset class="govuk-fieldset" @(HasError("IsPublicFacing") ? "aria-describedby=IsPublicFacing-error" : "")>
+ <legend class="govuk-fieldset__legend">Public-facing digital service? <span style="color:#d4351c">*</span></legend>
+          @if (HasError("IsPublicFacing"))
+          {
+ <p id="IsPublicFacing-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @ErrorMsg("IsPublicFacing")</p>
+          }
+ <div class="govuk-radios govuk-radios--inline" data-module="govuk-radios">
+ <div class="govuk-radios__item">
+ <input class="govuk-radios__input" id="publicfacing-yes" name="IsPublicFacing" type="radio" value="true" @(Model.IsPublicFacing == true ? "checked" : "") />
+ <label class="govuk-label govuk-radios__label" for="publicfacing-yes">Yes</label>
+            </div>
+ <div class="govuk-radios__item">
+ <input class="govuk-radios__input" id="publicfacing-no" name="IsPublicFacing" type="radio" value="false" @(Model.IsPublicFacing == false ? "checked" : "") />
+ <label class="govuk-label govuk-radios__label" for="publicfacing-no">No</label>
+            </div>
+          </div>
+        </fieldset>
+      </div>
+
+ <div class="govuk-button-group">
+        @if (demandEditFromRequest)
+        {
+ <button type="submit" class="govuk-button" data-module="govuk-button">Save changes</button>
+ <a href="@Url.Action("RequestDetail", "ModernDemand", new { id = Model.Id, tab = "request" })" class="govuk-button govuk-button--secondary">Cancel</a>
+        }
+        else
+        {
+ <button type="submit" class="govuk-button" data-command="submit">Submit request</button>
+ <button type="submit" class="govuk-button govuk-button--secondary" data-command="save">Save as draft</button>
+ <a href="@(Model.Id != Guid.Empty ? Url.Action("Register", "ModernDemand") : (bc != null ? Url.Action("BusinessCaseDetail", "ModernDemand", new { id = bc.Id }) : Url.Action("Register", "ModernDemand")))" class="govuk-button govuk-button--secondary">Cancel</a>
+        }
+      </div>
+    </form>
+    <script nonce="@Context.Items["Nonce"]">
+      (function() {
+        var form = document.getElementById('demand-submit-form');
+        var hidden = document.getElementById('demand-submit-command');
+        if (form && hidden) {
+          form.addEventListener('submit', function() {
+            var btn = document.querySelector('button[data-command]:focus');
+            if (btn && btn.getAttribute('data-command')) hidden.value = btn.getAttribute('data-command');
+          });
+          form.querySelectorAll('button[data-command]').forEach(function(btn) {
+            btn.addEventListener('click', function() { hidden.value = btn.getAttribute('data-command') || ''; });
+          });
+        }
+        function setHidden(el, show) {
+          if (!el) return;
+          if (show) el.classList.remove('govuk-!-display-none');
+          else el.classList.add('govuk-!-display-none');
+        }
+        var manifesto = document.getElementById('manifesto-group');
+        var fundingDetails = document.getElementById('funding-details-group');
+        var headcountDetails = document.getElementById('headcount-details-group');
+        var digitalDetails = document.getElementById('digital-change-details-group');
+        document.querySelectorAll('input[name="StatutoryDriver"]').forEach(function(r) {
+          r.addEventListener('change', function() {
+            setHidden(manifesto, document.getElementById('statutory-yes') && document.getElementById('statutory-yes').checked);
+          });
+        });
+        document.querySelectorAll('input[name="FundingProvided"]').forEach(function(r) {
+          r.addEventListener('change', function() {
+            setHidden(fundingDetails, document.getElementById('funding-yes') && document.getElementById('funding-yes').checked);
+          });
+        });
+        document.querySelectorAll('input[name="HeadcountProvided"]').forEach(function(r) {
+          r.addEventListener('change', function() {
+            setHidden(headcountDetails, document.getElementById('headcount-yes') && document.getElementById('headcount-yes').checked);
+          });
+        });
+        document.querySelectorAll('input[name="IsNewDigitalService"]').forEach(function(r) {
+          r.addEventListener('change', function() {
+            setHidden(digitalDetails, document.getElementById('newservice-yes') && document.getElementById('newservice-yes').checked);
+          });
+        });
+      })();
+    </script>
+    </div>
+  </div>
+
+ <div class="dfe-c-form-layout__aside">
+ <div class="dfe-c-sidebar">
+ <div class="dfe-c-scard">
+ <div class="dfe-c-scard__title">How demands are scored</div>
+        <p style="font-size:0.8125rem;color:var(--grey-4);margin-bottom:0.875rem;">A demand lead scores your submission across four sections totalling 100 points. The band determines what happens at triage.</p>
+        <div style="font-size:0.8125rem;display:flex;flex-direction:column;gap:0;">
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:0.5rem 0;border-bottom:1px solid var(--grey-2);">
+            <div><div style="font-weight:700;">Strategic alignment</div><div style="color:var(--grey-4);font-size:0.75rem;">Statutory, ministerial and strategy fit</div></div>
+            <span style="font-weight:700;color:var(--navy);">/ 15</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:0.5rem 0;border-bottom:1px solid var(--grey-2);">
+            <div><div style="font-weight:700;">Urgency</div><div style="color:var(--grey-4);font-size:0.75rem;">Deadlines and consequence of inaction</div></div>
+            <span style="font-weight:700;color:var(--navy);">/ 10</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:0.5rem 0;border-bottom:1px solid var(--grey-2);">
+            <div><div style="font-weight:700;">Funding and readiness</div><div style="color:var(--grey-4);font-size:0.75rem;">Budget, SRO, headcount</div></div>
+            <span style="font-weight:700;color:var(--navy);">/ 22</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:0.5rem 0;border-bottom:2px solid var(--grey-2);">
+            <div><div style="font-weight:700;">RICE</div><div style="color:var(--grey-4);font-size:0.75rem;">Reach, impact, confidence, effort</div></div>
+            <span style="font-weight:700;color:var(--navy);">/ 42</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:0.5rem 0;">
+            <span style="font-weight:700;">Total</span>
+            <span style="font-weight:700;color:var(--navy);">/ 100</span>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:2px;margin-top:0.5rem;font-size:0.8125rem;">
+          <div style="padding:4px 8px;background:var(--t-green-bg);color:var(--rag-g);font-weight:700;">57–100 — Must do (progressed)</div>
+          <div style="padding:4px 8px;background:var(--t-amber-bg);color:var(--t-amber-fg);font-weight:700;">21–56 — Could do (may be progressed)</div>
+          <div style="padding:4px 8px;background:var(--t-red-bg);color:var(--t-red-fg);font-weight:700;">1–20 — Do not do (not progressed)</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>

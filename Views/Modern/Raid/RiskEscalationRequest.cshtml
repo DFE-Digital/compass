@@ -1,0 +1,194 @@
+@model Compass.ViewModels.Modern.ModernRaidEscalationRequestViewModel
+@using Compass.ViewModels.Modern
+@using Microsoft.AspNetCore.Html
+@{
+  ViewData["Title"] = "Risk escalation request";
+  var canSubmit = string.IsNullOrEmpty(Model.TierChoicesBlockedReason) && Model.TierChoices.Count > 0;
+  var canSubmitNew = !Model.HasPendingTierChangeRequest && canSubmit;
+  var canDecide = ViewBag.CanAccessOperations as bool? == true;
+  var escalationReturnUrl = Url.Action("RiskEscalationRequest", "ModernRaid", new { id = Model.RecordId });
+  var opsEscalationsUrl = Url.Action("RaidEscalations", "ModernOperations");
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="/modern/raid/dashboard">RAID</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="/modern/raid/risks/@Model.RecordId">@Model.Reference</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">Escalation request</li>
+}
+
+<div id="sc-raid-risk-escalation" class="modern-work-page">
+  @if (TempData["Error"] != null || TempData["ErrorMessage"] != null)
+  {
+    <div class="govuk-error-summary govuk-!-margin-bottom-6" data-module="govuk-error-summary" role="alert">
+      <h2 class="govuk-error-summary__title">There is a problem</h2>
+      <div class="govuk-error-summary__body">@(TempData["Error"] ?? TempData["ErrorMessage"])</div>
+    </div>
+  }
+  @if (TempData["SuccessMessage"] is string sm && !string.IsNullOrWhiteSpace(sm))
+  {
+    <div class="govuk-notification-banner govuk-notification-banner--success govuk-!-margin-bottom-6" role="region">
+      <div class="govuk-notification-banner__header"><h2 class="govuk-notification-banner__title">Success</h2></div>
+      <div class="govuk-notification-banner__content"><p class="govuk-notification-banner__heading">@sm</p></div>
+    </div>
+  }
+
+  @await Html.PartialAsync("~/Views/Modern/Shared/_ModernPageHeader.cshtml", new ModernPageHeaderViewModel {
+    Caption = "Risks · " + Model.Reference,
+    Title = "Request escalation or de-escalation",
+    Lede = new HtmlString("<p class=\"govuk-body govuk-!-margin-bottom-0\">Propose the governance tier you need. Tier 1 and Tier 2 placements are confirmed through Operations RAID management.</p>")
+  })
+
+  <div class="dfe-f-card-grid govuk-!-margin-bottom-3" role="region" aria-label="Current risk at a glance">
+    <div class="dfe-f-stat-card dfe-f-stat-card--tint-blue">
+      <p class="govuk-body-s dfe-f-stat-card__label">Current rating</p>
+      <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@Model.CurrentRatingLabel</p>
+    </div>
+    <div class="dfe-f-stat-card dfe-f-stat-card--tint-teal">
+      <p class="govuk-body-s dfe-f-stat-card__label">Current tier</p>
+      <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@Model.CurrentTierLabel</p>
+    </div>
+    <div class="dfe-f-stat-card dfe-f-stat-card--tint-grey">
+      <p class="govuk-body-s dfe-f-stat-card__label">Status</p>
+      <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@Model.CurrentStatusLabel</p>
+    </div>
+  </div>
+
+  <div class="dfe-c-form-layout">
+    <div class="dfe-c-form-layout__main">
+      <div class="dfe-c-card dfe-c-card--plain">
+        @if (Model.HasPendingTierChangeRequest)
+        {
+          <h2 class="govuk-heading-m govuk-!-margin-top-0">Pending tier change request</h2>
+          <p class="govuk-body">
+            Submitted @(Model.PendingSubmittedAt?.ToString("d MMM yyyy") ?? "—") by @Model.PendingRequestedBy.
+          </p>
+          <dl class="govuk-summary-list govuk-!-margin-bottom-4">
+            <div class="govuk-summary-list__row">
+              <dt class="govuk-summary-list__key">From tier</dt>
+              <dd class="govuk-summary-list__value">@(Model.PendingFromTierLabel ?? "—")</dd>
+            </div>
+            <div class="govuk-summary-list__row">
+              <dt class="govuk-summary-list__key">Requested tier</dt>
+              <dd class="govuk-summary-list__value">@(Model.PendingToTierLabel ?? "—")</dd>
+            </div>
+            <div class="govuk-summary-list__row">
+              <dt class="govuk-summary-list__key">Rationale</dt>
+              <dd class="govuk-summary-list__value govuk-!-white-space-pre-wrap">@(string.IsNullOrWhiteSpace(Model.PendingRationale) ? "—" : Model.PendingRationale)</dd>
+            </div>
+          </dl>
+
+          @if (Model.CanCancelPendingRequest && Model.PendingRequestId is int cancelReqId)
+          {
+            <p class="govuk-body">You can cancel this request while it is still pending. The risk will return to the tier you had when you sent it (before it moved to the proposed tier).</p>
+            <form method="post" asp-action="RiskEscalationRequestCancel" asp-controller="ModernRaid" asp-route-id="@Model.RecordId" class="govuk-!-margin-bottom-4" data-page-loading>
+              @Html.AntiForgeryToken()
+              <input type="hidden" name="requestId" value="@cancelReqId" />
+              <div class="govuk-button-group">
+                <button type="submit" class="govuk-button govuk-button--secondary">Cancel this request</button>
+                <a class="govuk-link" href="/modern/raid/risks/@Model.RecordId">Back to risk</a>
+              </div>
+            </form>
+          }
+
+          @if (canDecide && Model.PendingRequestId.HasValue && !string.IsNullOrWhiteSpace(escalationReturnUrl))
+          {
+            var manageInOpsUrl = Url.Action("RaidEscalationAction", "ModernOperations", new
+            {
+              requestId = Model.PendingRequestId.Value,
+              returnTab = "escalations",
+              returnUrl = escalationReturnUrl
+            });
+            <p class="govuk-body govuk-!-margin-bottom-2">
+              Approve or reject in <strong>Operations</strong> so the decision is recorded with the correct operational tier and notes.
+            </p>
+            <p class="govuk-!-margin-bottom-0">
+              <a class="govuk-button" href="@manageInOpsUrl">Action request (Operations)</a>
+            </p>
+          }
+          else if (!canDecide && !Model.CanCancelPendingRequest)
+          {
+            <p class="govuk-body govuk-!-margin-bottom-0">This request is awaiting review by Central Operations.</p>
+            <p class="govuk-body govuk-!-margin-top-2 govuk-!-margin-bottom-0">
+              <a class="govuk-link" href="/modern/raid/risks/@Model.RecordId">Back to risk</a>
+            </p>
+          }
+          @if (canDecide && Model.PendingRequestId.HasValue && !string.IsNullOrWhiteSpace(opsEscalationsUrl))
+          {
+            <p class="govuk-body-s govuk-!-margin-top-4 govuk-!-margin-bottom-0">
+              <a class="govuk-link" href="@opsEscalationsUrl">Open the Operations escalations queue</a>
+            </p>
+          }
+        }
+
+        @if (!string.IsNullOrEmpty(Model.TierChoicesBlockedReason))
+        {
+          <div class="govuk-inset-text govuk-!-margin-bottom-4 @(Model.HasPendingTierChangeRequest ? "govuk-!-margin-top-6" : "")">
+            @Model.TierChoicesBlockedReason
+            <span class="govuk-!-display-block govuk-!-margin-top-2">
+              <a class="govuk-link" href="/modern/raid/risks/@Model.RecordId/edit">Edit risk</a>
+              <span aria-hidden="true"> · </span>
+              <a class="govuk-link" href="/modern/raid/risks/@Model.RecordId">Back to risk</a>
+            </span>
+          </div>
+        }
+
+        @if (canSubmitNew)
+        {
+          <form method="post" action="@Url.Action("RiskEscalationRequestPost", "ModernRaid", new { id = Model.RecordId })" novalidate>
+            @Html.AntiForgeryToken()
+
+            <fieldset class="govuk-fieldset govuk-!-margin-bottom-6">
+              <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Proposed tier</legend>
+              <div id="proposed-tier-hint" class="govuk-hint">
+                Tier 1 is the highest band; Tier 3 is the lowest. You can move one step at a time: escalate toward Tier 1, or de-escalate toward Tier 3. Each option is a <strong>proposed</strong> tier row (configure in Admin → RAID → Risk tiers).
+              </div>
+              <div class="govuk-radios" data-module="govuk-radios">
+                @foreach (var c in Model.TierChoices)
+                {
+                  <div class="govuk-radios__item">
+                    <input class="govuk-radios__input"
+                           id="@c.ChoiceId"
+                           name="requestedTargetTierId"
+                           type="radio"
+                           value="@c.TargetTierId" />
+                    <label class="govuk-label govuk-radios__label" for="@c.ChoiceId">@c.PrimaryLabel</label>
+                    @if (!string.IsNullOrEmpty(c.Hint))
+                    {
+                      <div id="@(c.ChoiceId)-hint" class="govuk-hint govuk-radios__hint">@c.Hint</div>
+                    }
+                  </div>
+                }
+              </div>
+            </fieldset>
+
+            <div class="govuk-form-group">
+              <label class="govuk-label govuk-label--m" for="raid-risk-esc-rationale">Rationale</label>
+              <div id="raid-risk-esc-rationale-hint" class="govuk-hint">Explain why this tier change is needed and any impact or deadlines.</div>
+              <textarea class="govuk-textarea"
+                        id="raid-risk-esc-rationale"
+                        name="rationale"
+                        rows="6"
+                        aria-describedby="raid-risk-esc-rationale-hint"></textarea>
+            </div>
+
+            <div class="govuk-button-group">
+              <button class="govuk-button" type="submit" data-module="govuk-button">Submit request</button>
+              <a class="govuk-button govuk-button--secondary" href="/modern/raid/risks/@Model.RecordId">Cancel</a>
+            </div>
+          </form>
+        }
+        else if (!Model.HasPendingTierChangeRequest && string.IsNullOrEmpty(Model.TierChoicesBlockedReason))
+        {
+          <p class="govuk-body govuk-!-margin-bottom-4">No tier moves are available for this risk.</p>
+          <p class="govuk-body govuk-!-margin-bottom-0">
+            <a class="govuk-link" href="/modern/raid/risks/@Model.RecordId">Back to risk</a>
+          </p>
+        }
+      </div>
+    </div>
+    <div class="dfe-c-form-layout__aside">
+      @await Html.PartialAsync("~/Views/Modern/Raid/_RaidGuidanceAside.cshtml", "risk-escalation")
+    </div>
+  </div>
+</div>

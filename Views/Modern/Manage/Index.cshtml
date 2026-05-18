@@ -1,0 +1,141 @@
+@model FipsProductsViewModel
+@using Compass.ViewModels.Modern
+@{
+    ViewData["Title"] = "FIPS — Products";
+    var tab = Model.ActiveTab;
+}
+
+@section Breadcrumbs {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("FipsDashboard", "ModernManage")">Service register</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">Products</li>
+}
+
+@functions {
+    string TabCount(int count) => count > 0 ? $" ({count})" : "";
+}
+
+@if (TempData["Success"] != null)
+{
+ <div class="govuk-notification-banner govuk-notification-banner--success" role="region" aria-labelledby="fips-sync-success-title">
+ <div class="govuk-notification-banner__header">
+ <h2 class="govuk-notification-banner__title" id="fips-sync-success-title">Success</h2>
+        </div>
+ <div class="govuk-notification-banner__content">
+ <p class="govuk-notification-banner__heading">@TempData["Success"]</p>
+        </div>
+    </div>
+}
+@if (TempData["Error"] != null)
+{
+ <div class="govuk-error-summary" role="alert" style="margin-bottom:1.5rem;">
+ <h2 class="govuk-error-summary__title">Something went wrong</h2>
+ <div class="govuk-error-summary__body">@TempData["Error"]</div>
+    </div>
+}
+
+@await Html.PartialAsync("~/Views/Modern/Shared/_ModernPageHeader.cshtml", new ModernPageHeaderViewModel {
+  Caption = "Service register",
+  Title = "Products"
+})
+
+@if (!string.IsNullOrWhiteSpace(Model.CategorisationItemName))
+{
+  <div class="govuk-inset-text govuk-!-margin-bottom-4">
+    <p class="govuk-body govuk-!-margin-bottom-2">Showing products with categorisation value <strong>@Model.CategorisationItemName</strong>.</p>
+    <p class="govuk-body govuk-!-margin-bottom-0"><a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("Fips", "ModernManage", new { tab })">Clear categorisation filter</a></p>
+  </div>
+}
+else if (!string.IsNullOrWhiteSpace(Model.CategorisationGroupName))
+{
+  <div class="govuk-inset-text govuk-!-margin-bottom-4">
+    <p class="govuk-body govuk-!-margin-bottom-2">Showing products in categorisation <strong>@Model.CategorisationGroupName</strong>.</p>
+    <p class="govuk-body govuk-!-margin-bottom-0"><a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("Fips", "ModernManage", new { tab })">Clear categorisation filter</a></p>
+  </div>
+}
+
+<nav class="dfe-f-sub-navigation govuk-!-margin-bottom-4" aria-label="Product catalogue views">
+  <ul class="dfe-f-sub-navigation__list">
+    <li class="dfe-f-sub-navigation__item">
+      <a class="dfe-f-sub-navigation__link govuk-link govuk-link--no-visited-state" href="@Url.Action("Fips", "ModernManage", new { tab = "my" })"@if (tab == "my") { <text> aria-current="page"</text> }>Your products<span class="dfe-c-fw-regular">@TabCount(Model.MyProductsCount)</span></a>
+    </li>
+    <li class="dfe-f-sub-navigation__item">
+      <a class="dfe-f-sub-navigation__link govuk-link govuk-link--no-visited-state" href="@Url.Action("Fips", "ModernManage", new { tab = "active" })"@if (tab == "active") { <text> aria-current="page"</text> }>Active<span class="dfe-c-fw-regular">@TabCount(Model.AllProductsCount)</span></a>
+    </li>
+    <li class="dfe-f-sub-navigation__item">
+      <a class="dfe-f-sub-navigation__link govuk-link govuk-link--no-visited-state" href="@Url.Action("Fips", "ModernManage", new { tab = "enterprise" })"@if (tab == "enterprise") { <text> aria-current="page"</text> }>Enterprise<span class="dfe-c-fw-regular">@TabCount(Model.EnterpriseProductsCount)</span></a>
+    </li>
+    <li class="dfe-f-sub-navigation__item">
+      <a class="dfe-f-sub-navigation__link govuk-link govuk-link--no-visited-state" href="@Url.Action("Fips", "ModernManage", new { tab = "new" })"@if (tab == "new") { <text> aria-current="page"</text> }>New products<span class="dfe-c-fw-regular">@TabCount(Model.NewProductsCount)</span></a>
+    </li>
+    <li class="dfe-f-sub-navigation__item">
+      <a class="dfe-f-sub-navigation__link govuk-link govuk-link--no-visited-state" href="@Url.Action("Fips", "ModernManage", new { tab = "inactive" })"@if (tab == "inactive") { <text> aria-current="page"</text> }>Inactive<span class="dfe-c-fw-regular">@TabCount(Model.InactiveProductsCount)</span></a>
+    </li>
+    <li class="dfe-f-sub-navigation__item">
+      <a class="dfe-f-sub-navigation__link govuk-link govuk-link--no-visited-state" href="@Url.Action("Fips", "ModernManage", new { tab = "retired" })"@if (tab == "retired") { <text> aria-current="page"</text> }>Retired<span class="dfe-c-fw-regular">@TabCount(Model.RetiredCount)</span></a>
+    </li>
+  </ul>
+</nav>
+
+<div class="govuk-!-margin-top-2">
+@await Html.PartialAsync("_SearchAndFilter", (SearchAndFilterViewModel)ViewBag.SearchAndFilter)
+</div>
+
+<div id="d-@tab" class="tab-pane on" role="region" aria-label="Products for selected catalogue view">
+    @if (Model.Products.Count == 0)
+    {
+        @if (string.Equals(tab, "my", StringComparison.OrdinalIgnoreCase))
+        {
+            <div class="govuk-inset-text">
+                <p class="govuk-body govuk-!-margin-bottom-0">You are not a named owner, or contact on any products</p>
+            </div>
+        }
+        else
+        {
+            <div class="govuk-inset-text">
+                <p class="govuk-body govuk-!-margin-bottom-0">No products in this list.</p>
+            </div>
+        }
+    }
+    else
+    {
+ <div class="dfe-f-table-wrapper fips-manage-products-table" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+            <table class="govuk-table govuk-table--small dfe-f-table--condensed">
+ <caption class="govuk-visually-hidden">Products</caption>
+                <thead class="govuk-table__head">
+                    <tr class="govuk-table__row">
+                        <th scope="col" class="govuk-table__header" aria-sort="none">
+                            <button type="button" class="dfe-f-table-sort-button">Product</button>
+                        </th>
+                        <th scope="col" class="govuk-table__header" aria-sort="none">
+                            <button type="button" class="dfe-f-table-sort-button">Phase</button>
+                        </th>
+                        <th scope="col" class="govuk-table__header" aria-sort="none">
+                            <button type="button" class="dfe-f-table-sort-button">Business area</button>
+                        </th>
+                        <th scope="col" class="govuk-table__header" aria-sort="none">
+                            <button type="button" class="dfe-f-table-sort-button">Service owner</button>
+                        </th>
+                    </tr>
+                </thead>
+                <tbody class="govuk-table__body">
+                @foreach (var p in Model.Products)
+                {
+                    <tr class="govuk-table__row">
+                        <td class="govuk-table__cell">
+ <a href="@Url.Action("FipsProduct", "ModernManage", new { id = p.Id })" class="govuk-link govuk-link--no-visited-state govuk-!-font-weight-bold">@p.Title</a>
+ <div class="dfe-c-body-s dfe-c-text-muted" style="margin-top:0.25rem;line-height:1.3;">
+                                ID: @p.UniqueID
+                            </div>
+                        </td>
+                        <td class="govuk-table__cell">@(p.PhaseName ?? "—")</td>
+                        <td class="govuk-table__cell">@(string.IsNullOrWhiteSpace(p.BusinessAreaDisplay) ? "—" : p.BusinessAreaDisplay)</td>
+                        <td class="govuk-table__cell">@(p.ServiceOwner ?? "—")</td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>

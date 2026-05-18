@@ -1,0 +1,588 @@
+@model Compass.ViewModels.Modern.Ddr.DdrCreateViewModel
+@using Compass.Models.Ddr
+@using Compass.ViewModels.Modern
+@using Compass.ViewModels.Modern.Ddr
+@using Compass.Helpers
+@{
+  var showCompletion = ViewBag.DdrWizardShowCompletion as bool? == true;
+  var completion = showCompletion
+    ? DdrCreateWizardHelper.GetSectionCompletion(Model)
+    : Enumerable.Range(2, 6).ToDictionary(s => s, _ => false);
+  var canSubmit = showCompletion && DdrCreateWizardHelper.AllSectionsComplete(Model);
+  var initialStep = ViewBag.WizardStep as int? ?? 1;
+  if (initialStep < 1) { initialStep = 1; }
+  if (initialStep > DdrCreateWizardHelper.StepCount) { initialStep = DdrCreateWizardHelper.StepCount; }
+  string PanelClass(int s) => s == initialStep ? string.Empty : "govuk-!-display-none";
+}
+
+<input type="hidden" name="wizardStep" id="ddr-wizard-step-field" value="@initialStep" />
+
+<div class="govuk-grid-row ddr-create-wizard-layout modern-work-detail-layout govuk-!-margin-top-4">
+  <div class="govuk-grid-column-one-quarter-from-desktop modern-work-detail-layout__nav">
+    <div class="dfe-f-u-sticky govuk-!-margin-bottom-6 modern-work-detail-layout__nav-inner" style="--dfe-f-sticky-top: 1rem">
+      <nav class="dfe-f-side-navigation ddr-create-wizard-side-nav" aria-label="Section navigation" data-module="dfe-f-side-navigation">
+        <button type="button" class="dfe-f-side-navigation__toggle" aria-controls="ddr-create-side-nav" aria-expanded="false">Section navigation</button>
+        <ul id="ddr-create-side-nav" class="dfe-f-side-navigation__list" hidden>
+          <li class="dfe-f-side-navigation__item@(initialStep == 1 ? " dfe-f-side-navigation__item--current" : "")">
+            <a class="dfe-f-side-navigation__link govuk-link govuk-link--no-visited-state govuk-link--no-underline" href="#" data-ddr-go-step="1"@if (initialStep == 1) { <text> aria-current="page"</text> }>Progress</a>
+          </li>
+          <li class="dfe-f-side-navigation__item@(initialStep == 2 ? " dfe-f-side-navigation__item--current" : "")">
+            <a class="dfe-f-side-navigation__link govuk-link govuk-link--no-visited-state govuk-link--no-underline" href="#" data-ddr-go-step="2"@if (initialStep == 2) { <text> aria-current="page"</text> }>The decision</a>
+          </li>
+          <li class="dfe-f-side-navigation__item@(initialStep == 3 ? " dfe-f-side-navigation__item--current" : "")">
+            <a class="dfe-f-side-navigation__link govuk-link govuk-link--no-visited-state govuk-link--no-underline" href="#" data-ddr-go-step="3"@if (initialStep == 3) { <text> aria-current="page"</text> }>Deviation</a>
+          </li>
+          <li class="dfe-f-side-navigation__item@(initialStep == 4 ? " dfe-f-side-navigation__item--current" : "")">
+            <a class="dfe-f-side-navigation__link govuk-link govuk-link--no-visited-state govuk-link--no-underline" href="#" data-ddr-go-step="4"@if (initialStep == 4) { <text> aria-current="page"</text> }>Alternatives</a>
+          </li>
+          <li class="dfe-f-side-navigation__item@(initialStep == 5 ? " dfe-f-side-navigation__item--current" : "")">
+            <a class="dfe-f-side-navigation__link govuk-link govuk-link--no-visited-state govuk-link--no-underline" href="#" data-ddr-go-step="5"@if (initialStep == 5) { <text> aria-current="page"</text> }>Scope and links</a>
+          </li>
+          <li class="dfe-f-side-navigation__item@(initialStep == 6 ? " dfe-f-side-navigation__item--current" : "")">
+            <a class="dfe-f-side-navigation__link govuk-link govuk-link--no-visited-state govuk-link--no-underline" href="#" data-ddr-go-step="6"@if (initialStep == 6) { <text> aria-current="page"</text> }>Review</a>
+          </li>
+          <li class="dfe-f-side-navigation__item@(initialStep == 7 ? " dfe-f-side-navigation__item--current" : "")">
+            <a class="dfe-f-side-navigation__link govuk-link govuk-link--no-visited-state govuk-link--no-underline" href="#" data-ddr-go-step="7"@if (initialStep == 7) { <text> aria-current="page"</text> }>DesignOps</a>
+          </li>
+        </ul>
+      </nav>
+    </div>
+  </div>
+  <div class="govuk-grid-column-three-quarters-from-desktop modern-work-detail-main">
+    <div class="@PanelClass(1)" data-ddr-step="1" id="ddr-step-panel-1">
+      <h2 class="govuk-heading-m">Progress</h2>
+      <p class="govuk-body">Complete each section. While editing a section, use Save to store your draft. On this Progress screen you can save as draft or submit the DDR when every section is complete.</p>
+      <ul class="govuk-task-list">
+        <li class="govuk-task-list__item govuk-task-list__item--with-link">
+          <div class="govuk-task-list__name-and-hint">
+            <a class="govuk-link govuk-task-list__link govuk-link--no-visited-state" href="#" data-ddr-go-step="2" aria-describedby="ddr-progress-2-status">The decision</a>
+          </div>
+          <div class="govuk-task-list__status" id="ddr-progress-2-status" data-ddr-progress-tag="2">
+            @if (completion[2])
+            {
+              @:Completed
+            }
+            else
+            {
+              <strong class="govuk-tag govuk-tag--blue">Incomplete</strong>
+            }
+          </div>
+        </li>
+        <li class="govuk-task-list__item govuk-task-list__item--with-link">
+          <div class="govuk-task-list__name-and-hint">
+            <a class="govuk-link govuk-task-list__link govuk-link--no-visited-state" href="#" data-ddr-go-step="3" aria-describedby="ddr-progress-3-status">Deviation</a>
+          </div>
+          <div class="govuk-task-list__status" id="ddr-progress-3-status" data-ddr-progress-tag="3">
+            @if (completion[3])
+            {
+              @:Completed
+            }
+            else
+            {
+              <strong class="govuk-tag govuk-tag--blue">Incomplete</strong>
+            }
+          </div>
+        </li>
+        <li class="govuk-task-list__item govuk-task-list__item--with-link">
+          <div class="govuk-task-list__name-and-hint">
+            <a class="govuk-link govuk-task-list__link govuk-link--no-visited-state" href="#" data-ddr-go-step="4" aria-describedby="ddr-progress-4-status">Alternatives and evidence</a>
+          </div>
+          <div class="govuk-task-list__status" id="ddr-progress-4-status" data-ddr-progress-tag="4">
+            @if (completion[4])
+            {
+              @:Completed
+            }
+            else
+            {
+              <strong class="govuk-tag govuk-tag--blue">Incomplete</strong>
+            }
+          </div>
+        </li>
+        <li class="govuk-task-list__item govuk-task-list__item--with-link">
+          <div class="govuk-task-list__name-and-hint">
+            <a class="govuk-link govuk-task-list__link govuk-link--no-visited-state" href="#" data-ddr-go-step="5" aria-describedby="ddr-progress-5-status">Scope and category</a>
+          </div>
+          <div class="govuk-task-list__status" id="ddr-progress-5-status" data-ddr-progress-tag="5">
+            @if (completion[5])
+            {
+              @:Completed
+            }
+            else
+            {
+              <strong class="govuk-tag govuk-tag--blue">Incomplete</strong>
+            }
+          </div>
+        </li>
+        <li class="govuk-task-list__item govuk-task-list__item--with-link">
+          <div class="govuk-task-list__name-and-hint">
+            <a class="govuk-link govuk-task-list__link govuk-link--no-visited-state" href="#" data-ddr-go-step="6" aria-describedby="ddr-progress-6-status">Review and lifecycle</a>
+          </div>
+          <div class="govuk-task-list__status" id="ddr-progress-6-status" data-ddr-progress-tag="6">
+            @if (completion[6])
+            {
+              @:Completed
+            }
+            else
+            {
+              <strong class="govuk-tag govuk-tag--blue">Incomplete</strong>
+            }
+          </div>
+        </li>
+        <li class="govuk-task-list__item govuk-task-list__item--with-link">
+          <div class="govuk-task-list__name-and-hint">
+            <a class="govuk-link govuk-task-list__link govuk-link--no-visited-state" href="#" data-ddr-go-step="7" aria-describedby="ddr-progress-7-status">DesignOps message (optional)</a>
+          </div>
+          <div class="govuk-task-list__status" id="ddr-progress-7-status" data-ddr-progress-tag="7">
+            @if (completion[7])
+            {
+              @:Completed
+            }
+            else
+            {
+              <strong class="govuk-tag govuk-tag--blue">Incomplete</strong>
+            }
+          </div>
+        </li>
+      </ul>
+      <div class="govuk-inset-text govuk-!-margin-top-4@(canSubmit ? " govuk-!-display-none" : "")" id="ddr-submit-hint" data-ddr-submit-hint>
+        <p class="govuk-body govuk-!-margin-bottom-0">The record cannot be submitted as some sections are not complete</p>
+      </div>
+    </div>
+    <div class="@PanelClass(2)" data-ddr-step="2" id="ddr-step-panel-2">
+      @* ── Decision + retrospective ───────────────────────────────────── *@
+      <h2 class="govuk-heading-m govuk-!-margin-top-0">The decision</h2>
+
+      <div class="govuk-form-group@(ViewData.ModelState["ShortTitle"]?.Errors.Count > 0 ? " govuk-form-group--error" : "")">
+        <label class="govuk-label govuk-label--s" for="field-ShortTitle">Short title</label>
+        <div class="govuk-hint">10 to 120 characters. State the decision in plain English.</div>
+        @if (ViewData.ModelState["ShortTitle"]?.Errors.Count > 0)
+        {
+          <p class="govuk-error-message">
+            <span class="govuk-visually-hidden">Error:</span> @ViewData.ModelState["ShortTitle"]!.Errors.First().ErrorMessage
+          </p>
+        }
+        <input class="govuk-input" id="field-ShortTitle" name="ShortTitle" type="text" maxlength="120" value="@Model.ShortTitle" />
+      </div>
+
+      @await Html.PartialAsync("~/Views/Modern/Shared/_GovUkCharacterCountTextarea.cshtml", new GovUkCharacterCountTextareaViewModel {
+        FieldId = "field-ContextProblemStatement",
+        Name = "ContextProblemStatement",
+        Label = "Context and problem statement",
+        Hint = "50 to 4,000 characters. What is happening? What problem is being solved?",
+        ModelStateKey = nameof(Model.ContextProblemStatement),
+        Value = Model.ContextProblemStatement,
+      })
+      @await Html.PartialAsync("~/Views/Modern/Shared/_GovUkCharacterCountTextarea.cshtml", new GovUkCharacterCountTextareaViewModel {
+        FieldId = "field-Decision",
+        Name = "Decision",
+        Label = "Decision",
+        Hint = "50 to 3,000 characters. What was decided?",
+        ModelStateKey = nameof(Model.Decision),
+        Value = Model.Decision,
+      })
+      @await Html.PartialAsync("~/Views/Modern/Shared/_GovUkCharacterCountTextarea.cshtml", new GovUkCharacterCountTextareaViewModel {
+        FieldId = "field-Rationale",
+        Name = "Rationale",
+        Label = "Rationale",
+        Hint = "50 to 4,000 characters. Why was this decision taken?",
+        ModelStateKey = nameof(Model.Rationale),
+        Value = Model.Rationale,
+      })
+      @await Html.PartialAsync("~/Views/Modern/Shared/_GovUkCharacterCountTextarea.cshtml", new GovUkCharacterCountTextareaViewModel {
+        FieldId = "field-ConsequencesTradeoffs",
+        Name = "ConsequencesTradeoffs",
+        Label = "Consequences and trade-offs",
+        Hint = "30 to 3,000 characters. What is gained? What is given up?",
+        ModelStateKey = nameof(Model.ConsequencesTradeoffs),
+        Value = Model.ConsequencesTradeoffs,
+      })
+
+      <h3 class="govuk-heading-s govuk-!-margin-top-8 govuk-!-margin-bottom-2">Retrospective record</h3>
+      <p class="govuk-body">Answer below if this DDR documents a historic decision that was already made.</p>
+
+      <div class="govuk-form-group">
+        <div class="govuk-checkboxes" data-module="govuk-checkboxes">
+          <div class="govuk-checkboxes__item">
+            <input class="govuk-checkboxes__input" id="field-RetrospectiveRecord" name="RetrospectiveRecord" type="checkbox" value="true"
+                   data-aria-controls="ddr-retrospective-detail" @(Model.RetrospectiveRecord ? "checked" : "") />
+            <label class="govuk-label govuk-checkboxes__label" for="field-RetrospectiveRecord">
+              This documents a historic decision (already made)
+            </label>
+          </div>
+          <div class="govuk-checkboxes__conditional @(Model.RetrospectiveRecord ? "" : "govuk-checkboxes__conditional--hidden")"
+               id="ddr-retrospective-detail">
+
+            <div class="govuk-form-group">
+              <label class="govuk-label" for="field-OriginalDecisionDate">Original decision date</label>
+              <div class="govuk-hint">Free text — e.g. "Spring 2023" if exact date is unknown.</div>
+              <input class="govuk-input govuk-input--width-20" id="field-OriginalDecisionDate" name="OriginalDecisionDate" type="text" maxlength="50" value="@Model.OriginalDecisionDate" />
+            </div>
+
+            @{
+              var retrospectiveCtxVm = new GovUkCharacterCountTextareaViewModel {
+                FieldId = "field-RetrospectiveContext",
+                Name = "RetrospectiveContext",
+                Label = "Why is this being recorded now?",
+                Hint = "50 to 2,000 characters.",
+                ModelStateKey = nameof(Model.RetrospectiveContext),
+                Value = Model.RetrospectiveContext,
+                LabelClass = "govuk-label",
+              };
+            }
+            @await Html.PartialAsync("~/Views/Modern/Shared/_GovUkCharacterCountTextarea.cshtml", retrospectiveCtxVm)
+
+            <div class="govuk-form-group@(ViewData.ModelState["CurrentValidity"]?.Errors.Count > 0 ? " govuk-form-group--error" : "")">
+              <label class="govuk-label" for="field-CurrentValidity">Current validity</label>
+              @if (ViewData.ModelState["CurrentValidity"]?.Errors.Count > 0)
+              {
+                <p class="govuk-error-message">
+                  <span class="govuk-visually-hidden">Error:</span> @ViewData.ModelState["CurrentValidity"]!.Errors.First().ErrorMessage
+                </p>
+              }
+              <select class="govuk-select" id="field-CurrentValidity" name="CurrentValidity">
+                <option value="">Select validity</option>
+                @foreach (var v in DdrCreateViewModel.CurrentValidityOptions)
+                {
+                  if (string.Equals(Model.CurrentValidity, v, StringComparison.OrdinalIgnoreCase))
+                  { <option value="@v" selected>@v</option> }
+                  else
+                  { <option value="@v">@v</option> }
+                }
+              </select>
+            </div>
+
+            @{
+              var validityRatVm = new GovUkCharacterCountTextareaViewModel {
+                FieldId = "field-CurrentValidityRationale",
+                Name = "CurrentValidityRationale",
+                Label = "Validity rationale (if not still valid)",
+                Hint = "Up to 4,000 characters when this field applies.",
+                ModelStateKey = nameof(Model.CurrentValidityRationale),
+                Value = Model.CurrentValidityRationale,
+                LabelClass = "govuk-label",
+              };
+            }
+            @await Html.PartialAsync("~/Views/Modern/Shared/_GovUkCharacterCountTextarea.cshtml", validityRatVm)
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="@PanelClass(3)" data-ddr-step="3" id="ddr-step-panel-3">
+      @* ── Section: Deviation ──────────────────────────────────────────── *@
+      <h2 class="govuk-heading-m govuk-!-margin-top-0">Deviation</h2>
+
+      <div class="govuk-form-group">
+        <div class="govuk-checkboxes" data-module="govuk-checkboxes">
+          <div class="govuk-checkboxes__item">
+            <input class="govuk-checkboxes__input" id="field-DeviationFlag" name="DeviationFlag" type="checkbox" value="true"
+                   data-aria-controls="ddr-deviation-detail" @(Model.DeviationFlag ? "checked" : "") />
+            <label class="govuk-label govuk-checkboxes__label" for="field-DeviationFlag">
+              This decision deviates from a standard, pattern, or established practice
+            </label>
+          </div>
+          <div class="govuk-checkboxes__conditional @(Model.DeviationFlag ? "" : "govuk-checkboxes__conditional--hidden")"
+               id="ddr-deviation-detail">
+
+            <div class="govuk-form-group@(ViewData.ModelState["DeviationType"]?.Errors.Count > 0 ? " govuk-form-group--error" : "")">
+              <label class="govuk-label" for="field-DeviationType">Type of deviation</label>
+              @if (ViewData.ModelState["DeviationType"]?.Errors.Count > 0)
+              {
+                <p class="govuk-error-message">
+                  <span class="govuk-visually-hidden">Error:</span> @ViewData.ModelState["DeviationType"]!.Errors.First().ErrorMessage
+                </p>
+              }
+              <select class="govuk-select" id="field-DeviationType" name="DeviationType">
+                <option value="">Select a type</option>
+                @foreach (var t in DdrCreateViewModel.DeviationTypeOptions)
+                {
+                  if (string.Equals(Model.DeviationType, t, StringComparison.OrdinalIgnoreCase))
+                  { <option value="@t" selected>@t</option> }
+                  else
+                  { <option value="@t">@t</option> }
+                }
+              </select>
+            </div>
+
+            @{
+              var deviationDetailsVm = new GovUkCharacterCountTextareaViewModel {
+                FieldId = "field-DeviationDetails",
+                Name = "DeviationDetails",
+                Label = "What is being deviated from and why",
+                Hint = "50 to 3,000 characters.",
+                ModelStateKey = nameof(Model.DeviationDetails),
+                Value = Model.DeviationDetails,
+                LabelClass = "govuk-label",
+              };
+            }
+            @await Html.PartialAsync("~/Views/Modern/Shared/_GovUkCharacterCountTextarea.cshtml", deviationDetailsVm)
+
+            <div class="govuk-form-group@(ViewData.ModelState["ApprovalRoute"]?.Errors.Count > 0 ? " govuk-form-group--error" : "")">
+              <label class="govuk-label" for="field-ApprovalRoute">Approval route</label>
+              @if (ViewData.ModelState["ApprovalRoute"]?.Errors.Count > 0)
+              {
+                <p class="govuk-error-message">
+                  <span class="govuk-visually-hidden">Error:</span> @ViewData.ModelState["ApprovalRoute"]!.Errors.First().ErrorMessage
+                </p>
+              }
+              <select class="govuk-select" id="field-ApprovalRoute" name="ApprovalRoute">
+                <option value="">Select an approval route</option>
+                @foreach (var r in DdrCreateViewModel.ApprovalRouteOptions)
+                {
+                  if (string.Equals(Model.ApprovalRoute, r, StringComparison.OrdinalIgnoreCase))
+                  { <option value="@r" selected>@r</option> }
+                  else
+                  { <option value="@r">@r</option> }
+                }
+              </select>
+            </div>
+
+            <div class="govuk-form-group">
+              <label class="govuk-label" for="field-ApprovedBy">Approved by (optional)</label>
+              <div class="govuk-hint">Person or board that approved the deviation.</div>
+              <input class="govuk-input" id="field-ApprovedBy" name="ApprovedBy" type="text" maxlength="200" value="@Model.ApprovedBy" />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="@PanelClass(4)" data-ddr-step="4" id="ddr-step-panel-4">
+      @* ── Section: Alternatives ──────────────────────────────────────── *@
+      <h2 class="govuk-heading-m govuk-!-margin-top-0">Alternatives and evidence</h2>
+
+      @await Html.PartialAsync("~/Views/Modern/Shared/_GovUkCharacterCountTextarea.cshtml", new GovUkCharacterCountTextareaViewModel {
+        FieldId = "field-AlternativesText",
+        Name = "AlternativesText",
+        Label = "Alternatives considered",
+        Hint = "One per line. At least one alternative is required (20 to 1,500 characters each). Up to 10 alternatives.",
+        ModelStateKey = nameof(Model.AlternativesText),
+        Value = Model.AlternativesText,
+      })
+      @await Html.PartialAsync("~/Views/Modern/Shared/_GovUkCharacterCountTextarea.cshtml", new GovUkCharacterCountTextareaViewModel {
+        FieldId = "field-EvidenceText",
+        Name = "EvidenceText",
+        Label = "Supporting evidence (optional)",
+        Hint = "One per line. Format: Title — URL, or just a URL, or just a title.",
+        ModelStateKey = nameof(Model.EvidenceText),
+        Value = Model.EvidenceText,
+      })
+      @await Html.PartialAsync("~/Views/Modern/Shared/_GovUkCharacterCountTextarea.cshtml", new GovUkCharacterCountTextareaViewModel {
+        FieldId = "field-StandardsText",
+        Name = "StandardsText",
+        Label = "Linked standards (optional)",
+        Hint = "One per line, e.g. WCAG 1.4.3, GOV.UK Service Standard 5.",
+        ModelStateKey = nameof(Model.StandardsText),
+        Value = Model.StandardsText,
+      })
+    </div>
+
+    <div class="@PanelClass(5)" data-ddr-step="5" id="ddr-step-panel-5">
+      @* ── Section: Scope ─────────────────────────────────────────────── *@
+      <h2 class="govuk-heading-m govuk-!-margin-top-0">Scope and category</h2>
+
+      <div class="govuk-form-group@(ViewData.ModelState["Category"]?.Errors.Count > 0 ? " govuk-form-group--error" : "")">
+        <label class="govuk-label govuk-label--s" for="field-Category">Category</label>
+        <div class="govuk-hint">Pick the discipline or area this decision relates to.</div>
+        @if (ViewData.ModelState["Category"]?.Errors.Count > 0)
+        {
+          <p class="govuk-error-message">
+            <span class="govuk-visually-hidden">Error:</span> @ViewData.ModelState["Category"]!.Errors.First().ErrorMessage
+          </p>
+        }
+        <select class="govuk-select" id="field-Category" name="Category">
+          <option value="">Select a category</option>
+          @foreach (var c in DdrCreateViewModel.CategoryOptions)
+          {
+            if (string.Equals(Model.Category, c, StringComparison.OrdinalIgnoreCase))
+            { <option value="@c" selected>@c</option> }
+            else
+            { <option value="@c">@c</option> }
+          }
+        </select>
+      </div>
+
+      <div class="govuk-form-group@(ViewData.ModelState["LinkedProductIds"]?.Errors.Count > 0 ? " govuk-form-group--error" : "")">
+        <fieldset class="govuk-fieldset">
+          <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Linked products and work items</legend>
+          <div class="govuk-hint">A DDR must be linked to at least one product or work item.</div>
+          @if (ViewData.ModelState["LinkedProductIds"]?.Errors.Count > 0)
+          {
+            <p class="govuk-error-message">
+              <span class="govuk-visually-hidden">Error:</span> @ViewData.ModelState["LinkedProductIds"]!.Errors.First().ErrorMessage
+            </p>
+          }
+
+          <label class="govuk-label" for="ddr-product-picker">Add a product</label>
+          <select class="govuk-select govuk-!-width-three-quarters" id="ddr-product-picker">
+            <option value="">— Select a product —</option>
+            @foreach (var p in Model.ProductOptions)
+            {
+              <option value="@p.Id">@p.Title</option>
+            }
+          </select>
+          <div id="ddr-product-table-wrap" class="dfe-f-table-wrapper govuk-!-margin-top-4@(Model.LinkedProductIds.Count > 0 ? "" : " govuk-!-display-none")" data-module="dfe-f-table">
+            <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+            <table class="govuk-table govuk-table--small govuk-!-margin-bottom-0">
+              <caption class="govuk-table__caption govuk-table__caption--m">Selected products</caption>
+              <thead class="govuk-table__head">
+                <tr class="govuk-table__row">
+                  <th scope="col" data-sort-bound="1" class="sortable">Type</th>
+                  <th scope="col" data-sort-bound="1" class="sortable">Name</th>
+                  <th scope="col" class="govuk-table__header govuk-table__header--numeric"><span class="govuk-visually-hidden">Action</span></th>
+                </tr>
+              </thead>
+              <tbody id="ddr-product-tbody" class="govuk-table__body">
+                @foreach (var pid in Model.LinkedProductIds)
+                {
+                  var title = Model.ProductOptions.FirstOrDefault(o => o.Id == pid)?.Title
+                              ?? (pid == Model.PreFilledProductId ? Model.PreFilledProductTitle : null)
+                              ?? pid.ToString();
+                  <tr class="govuk-table__row" data-id="@pid">
+                    <td class="govuk-table__cell"><span class="dfe-c-tag dfe-c-tag--blue">Product</span></td>
+                    <td class="govuk-table__cell">@title</td>
+                    <td class="govuk-table__cell govuk-table__cell--numeric">
+                      <button type="button" class="govuk-link" data-remove="product" data-id="@pid">Remove</button>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+
+          <label class="govuk-label govuk-!-margin-top-6" for="ddr-workitem-picker">Add a work item</label>
+          <select class="govuk-select govuk-!-width-three-quarters" id="ddr-workitem-picker">
+            <option value="">— Select a work item —</option>
+            @foreach (var w in Model.WorkItemOptions)
+            {
+              <option value="@w.Id">@w.Title</option>
+            }
+          </select>
+          <div id="ddr-workitem-table-wrap" class="dfe-f-table-wrapper govuk-!-margin-top-4@(Model.LinkedWorkItemIds.Count > 0 ? "" : " govuk-!-display-none")" data-module="dfe-f-table">
+            <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+            <table class="govuk-table govuk-table--small govuk-!-margin-bottom-0">
+              <caption class="govuk-table__caption govuk-table__caption--m">Selected work items</caption>
+              <thead class="govuk-table__head">
+                <tr class="govuk-table__row">
+                  <th scope="col" data-sort-bound="1" class="sortable">Type</th>
+                  <th scope="col" data-sort-bound="1" class="sortable">Name</th>
+                  <th scope="col" class="govuk-table__header govuk-table__header--numeric"><span class="govuk-visually-hidden">Action</span></th>
+                </tr>
+              </thead>
+              <tbody id="ddr-workitem-tbody" class="govuk-table__body">
+                @foreach (var wid in Model.LinkedWorkItemIds)
+                {
+                  var title = Model.WorkItemOptions.FirstOrDefault(o => o.Id == wid)?.Title
+                              ?? (wid == Model.PreFilledWorkItemId ? Model.PreFilledWorkItemTitle : null)
+                              ?? wid.ToString();
+                  <tr class="govuk-table__row" data-id="@wid">
+                    <td class="govuk-table__cell"><span class="dfe-c-tag dfe-c-tag--teal">Work item</span></td>
+                    <td class="govuk-table__cell">@title</td>
+                    <td class="govuk-table__cell govuk-table__cell--numeric">
+                      <button type="button" class="govuk-link" data-remove="workitem" data-id="@wid">Remove</button>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </fieldset>
+      </div>
+    </div>
+
+    <div class="@PanelClass(6)" data-ddr-step="6" id="ddr-step-panel-6">
+      @* ── Section: Review ────────────────────────────────────────────── *@
+      <h2 class="govuk-heading-m govuk-!-margin-top-0">Review and lifecycle</h2>
+
+      @await Html.PartialAsync("~/Views/Modern/Shared/_GovUkCharacterCountTextarea.cshtml", new GovUkCharacterCountTextareaViewModel {
+        FieldId = "field-ReviewTrigger",
+        Name = "ReviewTrigger",
+        Label = "When should this decision be reviewed?",
+        Hint = "10 to 500 characters. Describe the trigger or condition.",
+        ModelStateKey = nameof(Model.ReviewTrigger),
+        Value = Model.ReviewTrigger,
+      })
+
+      @{
+        var reviewDateErr = ViewData.ModelState["ReviewDate"]?.Errors.Count > 0;
+        var rdDay = Model.ReviewDateDay?.ToString() ?? "";
+        var rdMonth = Model.ReviewDateMonth?.ToString() ?? "";
+        var rdYear = Model.ReviewDateYear?.ToString() ?? "";
+        if (string.IsNullOrEmpty(rdDay) && Model.ReviewDate is { } rv)
+        {
+          rdDay = rv.Day.ToString();
+          rdMonth = rv.Month.ToString();
+          rdYear = rv.Year.ToString();
+        }
+      }
+      <div class="govuk-form-group@(reviewDateErr ? " govuk-form-group--error" : "")">
+        <fieldset class="govuk-fieldset" role="group" id="field-ReviewDate" aria-describedby="ReviewDate-hint@(reviewDateErr ? " ReviewDate-error" : "")">
+          <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Review date (optional)</legend>
+          <div id="ReviewDate-hint" class="govuk-hint">For example 15 3 @DateTime.UtcNow.Year — required for deviations. Today or in the future.</div>
+          @if (reviewDateErr)
+          {
+            <p id="ReviewDate-error" class="govuk-error-message">
+              <span class="govuk-visually-hidden">Error:</span> @ViewData.ModelState["ReviewDate"]!.Errors.First().ErrorMessage
+            </p>
+          }
+          <div class="govuk-date-input">
+            <div class="govuk-date-input__item">
+              <div class="govuk-form-group">
+                <label class="govuk-label govuk-date-input__label" for="field-ReviewDate-day">Day</label>
+                <input class="govuk-input govuk-date-input__input govuk-input--width-2 @(reviewDateErr ? "govuk-input--error" : "")"
+                       id="field-ReviewDate-day" name="reviewDateDay" type="text" inputmode="numeric" maxlength="2" autocomplete="off" pattern="[0-9]*" value="@rdDay" />
+              </div>
+            </div>
+            <div class="govuk-date-input__item">
+              <div class="govuk-form-group">
+                <label class="govuk-label govuk-date-input__label" for="field-ReviewDate-month">Month</label>
+                <input class="govuk-input govuk-date-input__input govuk-input--width-2 @(reviewDateErr ? "govuk-input--error" : "")"
+                       id="field-ReviewDate-month" name="reviewDateMonth" type="text" inputmode="numeric" maxlength="2" autocomplete="off" pattern="[0-9]*" value="@rdMonth" />
+              </div>
+            </div>
+            <div class="govuk-date-input__item">
+              <div class="govuk-form-group">
+                <label class="govuk-label govuk-date-input__label" for="field-ReviewDate-year">Year</label>
+                <input class="govuk-input govuk-date-input__input govuk-input--width-4 @(reviewDateErr ? "govuk-input--error" : "")"
+                       id="field-ReviewDate-year" name="reviewDateYear" type="text" inputmode="numeric" maxlength="4" autocomplete="off" pattern="[0-9]*" value="@rdYear" />
+              </div>
+            </div>
+          </div>
+        </fieldset>
+      </div>
+    </div>
+
+    <div class="@PanelClass(7)" data-ddr-step="7" id="ddr-step-panel-7">
+      @* ── Section: Message to DesignOps ──────────────────────────────── *@
+      <h2 class="govuk-heading-m govuk-!-margin-top-0">DesignOps (optional)</h2>
+
+      @await Html.PartialAsync("~/Views/Modern/Shared/_GovUkCharacterCountTextarea.cshtml", new GovUkCharacterCountTextareaViewModel {
+        FieldId = "field-MessageToDesignOps",
+        Name = "MessageToDesignOps",
+        Label = "Message to DesignOps",
+        Hint = "Optional. Up to 1,000 characters. Anything DesignOps should know when reviewing this decision.",
+        ModelStateKey = nameof(Model.MessageToDesignOps),
+        Value = Model.MessageToDesignOps,
+        VisuallyHiddenLabel = true,
+      })
+    </div>
+
+    @* Step 1 (task list): submit + save as draft. Sections 2–7: save only (same draft POST). *@
+    <div id="ddr-actions-progress" class="govuk-button-group govuk-!-margin-top-6@(initialStep == 1 ? "" : " govuk-!-display-none")">
+      @if (canSubmit)
+      {
+        <button type="submit" class="govuk-button" data-module="govuk-button" name="Action" value="submit" id="ddr-btn-submit">Submit decision</button>
+      }
+      else
+      {
+        <button type="submit" class="govuk-button" data-module="govuk-button" name="Action" value="submit" id="ddr-btn-submit" disabled aria-disabled="true">Submit decision</button>
+      }
+      <button type="submit" class="govuk-button govuk-button--secondary" data-module="govuk-button" name="Action" value="draft">Save as draft</button>
+      <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("Register", "ModernDesignDecisionRecords")">Cancel</a>
+    </div>
+    <div id="ddr-actions-section" class="govuk-button-group govuk-!-margin-top-6@(initialStep != 1 ? "" : " govuk-!-display-none")">
+      <button type="submit" class="govuk-button" data-module="govuk-button" name="Action" value="draft">Save</button>
+      <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("Register", "ModernDesignDecisionRecords")">Cancel</a>
+    </div>
+  </div>
+</div>

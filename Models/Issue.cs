@@ -112,6 +112,15 @@ public class Issue
     [ForeignKey(nameof(PrimaryProductId))]
     public FipsService? PrimaryProduct { get; set; }
 
+    /// <summary>WorkItem, Product, or Organisation — see <see cref="RaidAssociationKinds"/>.</summary>
+    [MaxLength(20)]
+    public string? RaidAssociationKind { get; set; }
+
+    public int? SroUserId { get; set; }
+
+    [ForeignKey(nameof(SroUserId))]
+    public User? SroUser { get; set; }
+
     public string? UserImpactSummary { get; set; }
 
     public string? ServiceImpactSummary { get; set; }
@@ -188,5 +197,22 @@ public class Issue
     public ICollection<IssueComment> Comments { get; set; } = new List<IssueComment>();
     public ICollection<IssueHistory> HistoryEntries { get; set; } = new List<IssueHistory>();
     public ICollection<IssueWcagCriterion> WcagCriteria { get; set; } = new List<IssueWcagCriterion>();
+
+    /// <summary>Modern RAID: multiple category labels.</summary>
+    public ICollection<IssueIssueCategory> IssueIssueCategories { get; set; } = new List<IssueIssueCategory>();
+
+    /// <summary>Modern RAID: divisions (multi-select).</summary>
+    public ICollection<IssueDivision> IssueDivisions { get; set; } = new List<IssueDivision>();
+
+    /// <summary>Modern RAID: business areas from admin lookup (multi-select).</summary>
+    public ICollection<IssueBusinessArea> IssueBusinessAreas { get; set; } = new List<IssueBusinessArea>();
+
+    /// <summary>Detailed root cause narrative for RAID issues.</summary>
+    public string? DetailedCause { get; set; }
+
+    /// <summary>Summary of significant assurance arrangements (narrative).</summary>
+    public string? AssuranceArrangements { get; set; }
+
+    public ICollection<IssueAssuranceEvent> AssuranceEvents { get; set; } = new List<IssueAssuranceEvent>();
 }
 

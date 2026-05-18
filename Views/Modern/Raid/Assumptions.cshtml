@@ -1,0 +1,263 @@
+@model Compass.ViewModels.Modern.ModernRaidAssumptionsPageViewModel
+@using System
+@using Compass.Models.Modern.Work
+@using Compass.ViewModels.Modern
+@using Microsoft.AspNetCore.Html
+@{
+  ViewData["Title"] = "RAID — Assumptions";
+  var formAction = "/modern/raid/assumptions";
+  var clearUrl = "/modern/raid/assumptions";
+  var activeTab = string.IsNullOrWhiteSpace(Model.ActiveTab) ? "open" : Model.ActiveTab;
+  var cspNonce = Context.Items["Nonce"]?.ToString() ?? "";
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="/modern/raid/dashboard">RAID</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">Assumptions</li>
+}
+
+<div class="modern-work-page raid-assumptions-page">
+  <style>
+    .raid-assumptions-page .raid-assumptions-data-shell {
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      overflow: hidden;
+      padding: 0;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+    }
+    .raid-assumptions-page .raid-assumptions-data-shell .dfe-f-table-wrapper { margin-bottom: 0; }
+    .raid-assumptions-page .raid-assumptions-data-table { margin-bottom: 0; }
+    .raid-assumptions-page .raid-assumptions-data-table thead .govuk-table__header {
+      background: #f3f2f1;
+      border-bottom: 2px solid #0b0c0c;
+      font-weight: 700;
+      vertical-align: bottom;
+    }
+    .raid-assumptions-page .raid-assumptions-data-table tbody tr:nth-child(even) { background: #fafafa; }
+    .raid-assumptions-page .raid-assumptions-data-table tbody td,
+    .raid-assumptions-page .raid-assumptions-data-table tbody th { vertical-align: middle; }
+  </style>
+  @{
+    var assumptionsActions = new HtmlString("<button type=\"button\" class=\"govuk-button\" id=\"raid-asm-managed-at-work-open\">Add assumption<span class=\"govuk-visually-hidden\"> (opens in a dialog)</span></button>");
+  }
+  @await Html.PartialAsync("~/Views/Modern/Shared/_ModernPageHeader.cshtml", new ModernPageHeaderViewModel {
+    Caption = "RAID",
+    Title = "Assumptions register",
+    Lede = new HtmlString($"<p class=\"govuk-body govuk-!-margin-bottom-0\">Aggregated view of assumptions linked to work items ({Model.TotalFiltered:N0} matched). Use <strong>Add assumption</strong> to see how to add new entries.</p>"),
+    Actions = assumptionsActions
+  })
+
+  <form method="get" action="@formAction" id="raid-asm-register-form" class="govuk-!-margin-bottom-0">
+    <input type="hidden" name="tab" value="@activeTab" />
+    <input type="hidden" name="page" value="1" />
+    <div id="search-and-filter">
+      <div class="filter-toolbar">
+        <div class="filter-toolbar__search-wrap">
+          <input type="search" name="search" id="raid-asm-search" value="@Model.Search" placeholder="Search assumption text…" class="filter-search" autocomplete="off" aria-label="Search assumptions" />
+          <button type="submit" class="govuk-button govuk-button--secondary filter-toolbar__search-submit">Search</button>
+        </div>
+        <button type="button" class="filter-toggle-btn" id="raid-asm-filter-btn" aria-expanded="false" aria-controls="raid-asm-filter-panel">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="flex-shrink:0;" aria-hidden="true"><path d="M1 3h14v1.5l-5 5V14l-4-2V9.5L1 4.5V3z"></path></svg>
+          <span class="filter-toggle-label">Filter</span>
+        </button>
+      </div>
+      <div class="filter-panel filter-panel--allwork" id="raid-asm-filter-panel">
+        <div class="filter-panel__grid">
+          <div>
+            <label for="raid-asm-project">Work item</label>
+            <select name="projectId" id="raid-asm-project" class="govuk-select">
+              <option value="">All</option>
+              @foreach (var o in Model.ProjectOptions)
+              {
+                if (Model.ProjectId == o.Id) { <option value="@o.Id" selected>@o.Name</option> }
+                else { <option value="@o.Id">@o.Name</option> }
+              }
+            </select>
+          </div>
+          <div>
+            <label for="raid-asm-cr">Criticality</label>
+            <select name="criticalityId" id="raid-asm-cr" class="govuk-select">
+              <option value="">All</option>
+              @foreach (var o in Model.CriticalityOptions)
+              {
+                if (Model.CriticalityId == o.Id) { <option value="@o.Id" selected>@o.Name</option> }
+                else { <option value="@o.Id">@o.Name</option> }
+              }
+            </select>
+          </div>
+          <div>
+            <label for="raid-asm-st">Status</label>
+            <select name="statusId" id="raid-asm-st" class="govuk-select">
+              <option value="">All</option>
+              @foreach (var o in Model.StatusOptions)
+              {
+                if (Model.StatusId == o.Id) { <option value="@o.Id" selected>@o.Name</option> }
+                else { <option value="@o.Id">@o.Name</option> }
+              }
+            </select>
+          </div>
+        </div>
+        <div class="filter-panel__actions" style="margin-top:0.75rem;display:flex;gap:0.5rem;flex-wrap:wrap;">
+          <button type="submit" class="govuk-button">Apply filters</button>
+          <a class="govuk-button govuk-button--secondary" href="@clearUrl">Clear</a>
+        </div>
+      </div>
+    </div>
+  </form>
+
+  @{
+    var asmScopeNav = new RaidRegisterScopeNavViewModel
+    {
+      AriaLabel = "Assumptions register views",
+      ActiveTab = activeTab,
+      Links = new[]
+      {
+        new RaidRegisterScopeNavLink
+        {
+          TabKey = "open",
+          Label = "Open assumptions",
+          Href = $"/modern/raid/assumptions?tab=open&page=1&search={Uri.EscapeDataString(Model.Search ?? "")}&projectId={Model.ProjectId}&criticalityId={Model.CriticalityId}&statusId={Model.StatusId}",
+          Count = Model.OpenCount
+        },
+        new RaidRegisterScopeNavLink
+        {
+          TabKey = "closed",
+          Label = "Closed assumptions",
+          Href = $"/modern/raid/assumptions?tab=closed&page=1&search={Uri.EscapeDataString(Model.Search ?? "")}&projectId={Model.ProjectId}&criticalityId={Model.CriticalityId}&statusId={Model.StatusId}",
+          Count = Model.ClosedCount
+        },
+        new RaidRegisterScopeNavLink
+        {
+          TabKey = "all",
+          Label = "All assumptions",
+          Href = $"/modern/raid/assumptions?tab=all&page=1&search={Uri.EscapeDataString(Model.Search ?? "")}&projectId={Model.ProjectId}&criticalityId={Model.CriticalityId}&statusId={Model.StatusId}",
+          Count = Model.AllCount
+        }
+      }
+    };
+  }
+  @await Html.PartialAsync("~/Views/Modern/Raid/_RaidRegisterScopeNav.cshtml", asmScopeNav)
+
+  @if (Model.Rows.Count == 0)
+  {
+    <p class="govuk-body">No assumptions match your filters.</p>
+  }
+  else
+  {
+    <div class="raid-assumptions-data-shell govuk-!-margin-top-0">
+    <div class="dfe-f-table-wrapper govuk-!-margin-bottom-0" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+      <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed raid-assumptions-data-table govuk-!-margin-bottom-0" id="raid-assumptions-table">
+        <caption class="govuk-visually-hidden">Assumptions matching current filters</caption>
+        <thead class="govuk-table__head">
+          <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+              <button type="button" class="dfe-f-table-sort-button">Assumption</button>
+            </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+              <button type="button" class="dfe-f-table-sort-button">Associated with</button>
+            </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+              <button type="button" class="dfe-f-table-sort-button">Criticality</button>
+            </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+              <button type="button" class="dfe-f-table-sort-button">Status</button>
+            </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+              <button type="button" class="dfe-f-table-sort-button">Review</button>
+            </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+              <button type="button" class="dfe-f-table-sort-button">Updated</button>
+            </th>
+          </tr>
+        </thead>
+        <tbody class="govuk-table__body">
+          @foreach (var a in Model.Rows)
+          {
+            var statusClosed = (a.Status ?? "").Contains("closed", StringComparison.OrdinalIgnoreCase);
+            <tr class="govuk-table__row">
+              <td class="govuk-table__cell">
+                <a class="govuk-link govuk-!-font-weight-bold govuk-link--no-visited-state" href="/modern/raid/assumptions/@a.Id">@a.DescriptionSnippet</a>
+                <div class="dfe-c-body-s dfe-c-text-muted govuk-!-margin-top-1" style="line-height:1.3;">A-@a.Id.ToString("D4")</div>
+              </td>
+              <td class="govuk-table__cell govuk-body-s">
+                @if (a.AssociationUi == "work" && a.ProjectId.HasValue && !string.IsNullOrEmpty(a.ProjectTitle))
+                {
+                  <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("Detail", "ModernWork", new { id = a.ProjectId })">@a.ProjectTitle</a>
+                }
+                else if (a.AssociationUi == "product")
+                {
+                  @(a.ProductLabel ?? "—")
+                }
+                else
+                {
+                  @:Organisation
+                }
+              </td>
+              <td class="govuk-table__cell govuk-body-s">
+                <span class="@WorkBadgeCss.RaidAssumptionCriticalityDfeFrontendBadgeClass(a.Criticality) dfe-f-badge--small">@((a.Criticality ?? "—").ToUpperInvariant())</span>
+              </td>
+              <td class="govuk-table__cell govuk-body-s">
+                <span class="@WorkBadgeCss.RaidOpenClosedDfeFrontendBadgeClass(statusClosed) dfe-f-badge--small">@((a.Status ?? "—").ToUpperInvariant())</span>
+              </td>
+              <td class="govuk-table__cell govuk-body-s">@(a.ReviewDate.HasValue ? a.ReviewDate.Value.ToString("d MMM yyyy") : "—")</td>
+              <td class="govuk-table__cell govuk-body-s">@a.Updated.ToString("d MMM yyyy")</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+    </div>
+  }
+  @if (Model.TotalPages > 1)
+  {
+    Func<int, string> assumptionsPageUrl = p =>
+      $"/modern/raid/assumptions?tab={activeTab}&search={Uri.EscapeDataString(Model.Search ?? "")}&projectId={Model.ProjectId}&criticalityId={Model.CriticalityId}&statusId={Model.StatusId}&page={p}";
+    <div class="govuk-!-margin-top-6">
+      @await Html.PartialAsync("~/Views/Modern/Shared/_GovUkPagination.cshtml", new GovUkPaginationViewModel {
+        CurrentPage = Model.Page,
+        TotalPages = Model.TotalPages,
+        PageUrl = assumptionsPageUrl,
+        NavigationAriaLabel = "Assumptions results"
+      })
+    </div>
+  }
+</div>
+
+<dialog id="raid-asm-managed-at-work-modal"
+        class="dfe-f-modal govuk-!-margin-0"
+        data-module="dfe-f-modal"
+        aria-labelledby="raid-asm-managed-at-work-title"
+        aria-modal="true"
+        role="dialog">
+  <div class="dfe-f-modal__panel">
+    <header class="dfe-f-modal__header">
+      <h2 id="raid-asm-managed-at-work-title" class="govuk-heading-m dfe-f-modal__title">Add an assumption</h2>
+      <button type="button" class="dfe-f-modal__close" data-dfe-modal-close aria-label="Close">
+        <span class="dfe-f-modal__close-x" aria-hidden="true">×</span>
+      </button>
+    </header>
+    <div class="dfe-f-modal__body">
+      <p class="govuk-body">Assumptions in this register are collated from assumption records attached to individual work items (and other scopes where used). You do not add assumptions from this page.</p>
+      <p class="govuk-body govuk-!-margin-bottom-0">Open the relevant work item and use the <strong>Assumptions</strong> tab to create a new assumption for that entry.</p>
+      <div class="govuk-button-group govuk-!-margin-top-4 govuk-!-margin-bottom-0">
+        <a class="govuk-button" href="@Url.Action("AllWork", "ModernWork")">Browse work items</a>
+        <button type="button" class="govuk-button govuk-button--secondary" data-dfe-modal-close>Close</button>
+      </div>
+    </div>
+  </div>
+</dialog>
+<script nonce="@cspNonce">
+(function () {
+  var openBtn = document.getElementById('raid-asm-managed-at-work-open');
+  var dlg = document.getElementById('raid-asm-managed-at-work-modal');
+  if (openBtn && dlg instanceof HTMLDialogElement && typeof dlg.showModal === 'function') {
+    openBtn.addEventListener('click', function (e) {
+      e.preventDefault();
+      if (!dlg.open) dlg.showModal();
+    });
+  }
+})();
+</script>

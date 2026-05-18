@@ -1,0 +1,248 @@
+@model Compass.ViewModels.Modern.ModernRaidIssuesPageViewModel
+@using System
+@using Compass.Models.Modern.Work
+@using Compass.ViewModels.Modern
+@using Microsoft.AspNetCore.Html
+@{
+  ViewData["Title"] = "RAID — Issues";
+  var formAction = "/modern/raid/issues";
+  var clearUrl = "/modern/raid/issues";
+  var activeTab = string.IsNullOrWhiteSpace(Model.ActiveTab) ? "my" : Model.ActiveTab;
+  var baQ = Model.RaidBusinessAreaQueryFragment;
+  var baSuffix = string.IsNullOrEmpty(baQ) ? "" : "&" + baQ;
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="/modern/raid/dashboard">RAID</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">Issues</li>
+}
+
+<div class="modern-work-page raid-issues-page">
+  <style>
+    .raid-issues-page .raid-issues-data-table .raid-issues-badge-cell { white-space: nowrap; }
+    .raid-issues-page .raid-issues-data-shell {
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      overflow: hidden;
+      padding: 0;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+    }
+    .raid-issues-page .raid-issues-data-shell .dfe-f-table-wrapper { margin-bottom: 0; }
+    .raid-issues-page .raid-issues-data-table { margin-bottom: 0; }
+    .raid-issues-page .raid-issues-data-table thead .govuk-table__header {
+      background: #f3f2f1;
+      border-bottom: 2px solid #0b0c0c;
+      font-weight: 700;
+      vertical-align: bottom;
+    }
+    .raid-issues-page .raid-issues-data-table tbody tr:nth-child(even) { background: #fafafa; }
+    .raid-issues-page .raid-issues-data-table tbody td,
+    .raid-issues-page .raid-issues-data-table tbody th { vertical-align: middle; }
+  </style>
+  @{
+    var issuesHeroActions = new HtmlString(@"<div class=""dfe-c-flex"" style=""gap:0.5rem;flex-wrap:wrap;""><a href=""/modern/raid/issues/create"" class=""govuk-button"">Add issue</a></div>");
+  }
+  @await Html.PartialAsync("~/Views/Modern/Shared/_ModernPageHeader.cshtml", new ModernPageHeaderViewModel {
+    Caption = "RAID",
+    Title = "Issues register",
+    Lede = new HtmlString($"<p class=\"govuk-body govuk-!-margin-bottom-0\">Browse and filter issues ({Model.TotalFiltered:N0} matched).</p>"),
+    Actions = issuesHeroActions
+  })
+
+  @if (TempData["Message"] is string issuePrefMsg && !string.IsNullOrWhiteSpace(issuePrefMsg))
+  {
+    <div class="govuk-notification-banner govuk-notification-banner--success govuk-!-margin-bottom-4" role="region" aria-labelledby="raid-issue-pref-banner-title">
+      <div class="govuk-notification-banner__header">
+        <h2 class="govuk-notification-banner__title" id="raid-issue-pref-banner-title">Success</h2>
+      </div>
+      <div class="govuk-notification-banner__content">
+        <p class="govuk-notification-banner__heading">@issuePrefMsg</p>
+      </div>
+    </div>
+  }
+  @if (TempData["ErrorMessage"] is string issuePrefErr && !string.IsNullOrWhiteSpace(issuePrefErr))
+  {
+    <div class="govuk-error-summary govuk-!-margin-bottom-4" tabindex="-1">
+      <h2 class="govuk-error-summary__title">There is a problem</h2>
+      <div class="govuk-error-summary__body">@issuePrefErr</div>
+    </div>
+  }
+
+  <form method="get" action="@formAction" id="raid-issues-register-form" class="govuk-!-margin-bottom-0">
+    <input type="hidden" name="tab" value="@activeTab" />
+    <input type="hidden" name="page" value="1" />
+    <div id="search-and-filter">
+      <div class="filter-toolbar">
+        <div class="filter-toolbar__search-wrap">
+          <input type="search" name="search" id="raid-issues-search" value="@Model.Search" placeholder="Search title or description…" class="filter-search" autocomplete="off" aria-label="Search issues" />
+          <button type="submit" class="govuk-button govuk-button--secondary filter-toolbar__search-submit">Search</button>
+        </div>
+        <button type="button" class="filter-toggle-btn" id="raid-issues-filter-btn" aria-expanded="false" aria-controls="raid-issues-filter-panel">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="flex-shrink:0;" aria-hidden="true"><path d="M1 3h14v1.5l-5 5V14l-4-2V9.5L1 4.5V3z"></path></svg>
+          <span class="filter-toggle-label">Filter</span>
+        </button>
+      </div>
+      <div class="filter-panel filter-panel--allwork" id="raid-issues-filter-panel">
+        <div class="filter-panel__grid">
+          @if (Model.BusinessAreaOptions.Count > 0)
+          {
+            <div>
+              <label for="raid-issues-ba">Business area</label>
+              <select name="businessAreaId" id="raid-issues-ba" class="govuk-select">
+                @if (Model.RaidBusinessAreaExplicitNone || Model.BusinessAreaId is not > 0)
+                { <option value="0" selected>All business areas</option> }
+                else
+                { <option value="0">All business areas</option> }
+                @foreach (var o in Model.BusinessAreaOptions)
+                {
+                  var optSelected = !Model.RaidBusinessAreaExplicitNone && Model.BusinessAreaId == o.Id;
+                  if (optSelected) { <option value="@o.Id" selected>@o.Name</option> }
+                  else { <option value="@o.Id">@o.Name</option> }
+                }
+              </select>
+            </div>
+          }
+          <div>
+            <label for="raid-issues-project">Work item</label>
+            <select name="projectId" id="raid-issues-project" class="govuk-select">
+              <option value="">All</option>
+              @foreach (var o in Model.ProjectOptions)
+              {
+                if (Model.ProjectId == o.Id) { <option value="@o.Id" selected>@o.Name</option> }
+                else { <option value="@o.Id">@o.Name</option> }
+              }
+            </select>
+          </div>
+          <div>
+            <label for="raid-issues-status">Status</label>
+            <select name="issueStatusId" id="raid-issues-status" class="govuk-select">
+              <option value="">All</option>
+              @foreach (var o in Model.IssueStatusOptions)
+              {
+                if (Model.IssueStatusId == o.Id) { <option value="@o.Id" selected>@o.Name</option> }
+                else { <option value="@o.Id">@o.Name</option> }
+              }
+            </select>
+          </div>
+          <div>
+            <label for="raid-issues-sev">Severity</label>
+            <select name="severityId" id="raid-issues-sev" class="govuk-select">
+              <option value="">All</option>
+              @foreach (var o in Model.SeverityOptions)
+              {
+                if (Model.SeverityId == o.Id) { <option value="@o.Id" selected>@o.Name</option> }
+                else { <option value="@o.Id">@o.Name</option> }
+              }
+            </select>
+          </div>
+        </div>
+        <div class="filter-panel__actions" style="margin-top:0.75rem;display:flex;gap:0.5rem;flex-wrap:wrap;">
+          <button type="submit" class="govuk-button">Apply filters</button>
+          <a class="govuk-button govuk-button--secondary" href="@clearUrl">Clear</a>
+        </div>
+      </div>
+    </div>
+  </form>
+
+  @{
+    var issuesScopeNav = new RaidRegisterScopeNavViewModel
+    {
+      AriaLabel = "Issues register views",
+      ActiveTab = activeTab,
+      Links = new[]
+      {
+        new RaidRegisterScopeNavLink
+        {
+          TabKey = "my",
+          Label = "Your issues",
+          Href = $"/modern/raid/issues?tab=my&page=1&search={Uri.EscapeDataString(Model.Search ?? "")}&projectId={Model.ProjectId}&issueStatusId={Model.IssueStatusId}&severityId={Model.SeverityId}{baSuffix}",
+          Count = Model.MyCount
+        },
+        new RaidRegisterScopeNavLink
+        {
+          TabKey = "open",
+          Label = "Open issues",
+          Href = $"/modern/raid/issues?tab=open&page=1&search={Uri.EscapeDataString(Model.Search ?? "")}&projectId={Model.ProjectId}&issueStatusId={Model.IssueStatusId}&severityId={Model.SeverityId}{baSuffix}",
+          Count = Model.OpenCount
+        },
+        new RaidRegisterScopeNavLink
+        {
+          TabKey = "closed",
+          Label = "Closed issues",
+          Href = $"/modern/raid/issues?tab=closed&page=1&search={Uri.EscapeDataString(Model.Search ?? "")}&projectId={Model.ProjectId}&issueStatusId={Model.IssueStatusId}&severityId={Model.SeverityId}{baSuffix}",
+          Count = Model.ClosedCount
+        },
+        new RaidRegisterScopeNavLink
+        {
+          TabKey = "all",
+          Label = "All issues",
+          Href = $"/modern/raid/issues?tab=all&page=1&search={Uri.EscapeDataString(Model.Search ?? "")}&projectId={Model.ProjectId}&issueStatusId={Model.IssueStatusId}&severityId={Model.SeverityId}{baSuffix}",
+          Count = Model.AllCount
+        }
+      }
+    };
+  }
+  @await Html.PartialAsync("~/Views/Modern/Raid/_RaidRegisterScopeNav.cshtml", issuesScopeNav)
+
+  @if (Model.Rows.Count == 0)
+  {
+    <p class="govuk-body">No issues match your filters.</p>
+  }
+  else
+  {
+    <div class="raid-issues-data-shell govuk-!-margin-top-0">
+    <div class="dfe-f-table-wrapper govuk-!-margin-bottom-0" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+      <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed raid-issues-data-table govuk-!-margin-bottom-0" id="raid-issues-table">
+        <caption class="govuk-visually-hidden">Issues matching current filters</caption>
+        <thead class="govuk-table__head">
+          <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+              <button type="button" class="dfe-f-table-sort-button">Issue</button>
+            </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+              <button type="button" class="dfe-f-table-sort-button">Priority</button>
+            </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+              <button type="button" class="dfe-f-table-sort-button">Severity</button>
+            </th>
+          </tr>
+        </thead>
+        <tbody class="govuk-table__body">
+          @foreach (var i in Model.Rows)
+          {
+            <tr class="govuk-table__row">
+              @{
+                var issueDetailUrl = Url.Action("IssueDetail", "ModernRaid", new { id = i.Id }) ?? "#";
+              }
+              @await Html.PartialAsync("~/Views/Modern/Raid/_RaidRegisterItemTitleCell.cshtml", new RaidRegisterItemTitleVm(issueDetailUrl, i.Title, $"I-{i.Id:D4}"))
+              <td class="govuk-table__cell govuk-body-s raid-issues-badge-cell">
+                <span class="@WorkBadgeCss.RaidPriorityLabelDfeFrontendBadgeClass(i.Priority) dfe-f-badge--small">@((i.Priority ?? "—").ToUpperInvariant())</span>
+              </td>
+              <td class="govuk-table__cell govuk-body-s raid-issues-badge-cell">
+                <span class="@WorkBadgeCss.RaidSeverityLabelDfeFrontendBadgeClass(i.Severity) dfe-f-badge--small">@((i.Severity ?? "—").ToUpperInvariant())</span>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+    </div>
+  }
+
+  @if (Model.TotalPages > 1)
+  {
+    Func<int, string> issuesPageUrl = p =>
+      $"/modern/raid/issues?tab={activeTab}&search={Uri.EscapeDataString(Model.Search ?? "")}&projectId={Model.ProjectId}&issueStatusId={Model.IssueStatusId}&severityId={Model.SeverityId}{baSuffix}&page={p}";
+    <div class="govuk-!-margin-top-6">
+      @await Html.PartialAsync("~/Views/Modern/Shared/_GovUkPagination.cshtml", new GovUkPaginationViewModel {
+        CurrentPage = Model.Page,
+        TotalPages = Model.TotalPages,
+        PageUrl = issuesPageUrl,
+        NavigationAriaLabel = "Issues results"
+      })
+    </div>
+  }
+</div>

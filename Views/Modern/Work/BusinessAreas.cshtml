@@ -1,0 +1,406 @@
+@using Compass.Models
+@using Compass.Models.Modern.Work
+@using Compass.ViewModels.Modern
+@using System.Globalization
+@using static Compass.ViewModels.Modern.WorkV2GroupingIntroKind
+@using Microsoft.AspNetCore.Routing
+@using Microsoft.AspNetCore.WebUtilities
+@{
+    ViewData["Title"] = "Business areas";
+    var businessAreasNav = (List<BusinessAreaLookup>)ViewBag.BusinessAreasNav ?? new List<BusinessAreaLookup>();
+    var workCountByBusinessAreaId = (Dictionary<int, int>)ViewBag.WorkCountByBusinessAreaId ?? new Dictionary<int, int>();
+    var search = ViewBag.Search as string;
+    var statusFilter = ViewBag.StatusFilter as string;
+    var ragStatusIdFilter = ViewBag.RagStatusId as int?;
+    var priorityIdFilter = ViewBag.PriorityId as int?;
+    var showCancelled = ViewBag.ShowCancelled as bool? ?? false;
+    var hasItemFilters = ViewBag.HasItemFilters as bool? ?? false;
+    var ragStatusOptions = ViewBag.RagStatusOptions as List<RagStatusLookupOption> ?? new List<RagStatusLookupOption>();
+    var priorityOptions = ViewBag.PriorityOptions as List<WorkLookupOption> ?? new List<WorkLookupOption>();
+    var cancelledToggleUrl = ViewBag.CancelledToggleUrl as string;
+    var countBeforeWorkFilter = ViewBag.CountBeforeWorkFilter as int?;
+    var unassignedCount = ViewBag.UnassignedCount as int? ?? 0;
+    var showUnassignedNav = ViewBag.ShowUnassignedNav as bool? ?? false;
+    var selectedBusinessAreaId = ViewBag.SelectedBusinessAreaId as int?;
+    var showUnassignedSelected = ViewBag.ShowUnassignedSelected as bool? ?? false;
+    var showAllBusinessAreas = ViewBag.ShowAllBusinessAreas as bool? ?? false;
+    var canSetDefaultBusinessAreaView = ViewBag.CanSetDefaultBusinessAreaView as bool? ?? false;
+    var isCurrentViewSavedDefault = ViewBag.IsCurrentViewSavedDefault as bool? ?? false;
+    var filterKey = (ViewBag.BusinessAreaFilterKey as string ?? "all").Trim();
+    var pagedWorkItems = ViewBag.PagedWorkItems as List<WorkItem> ?? new List<WorkItem>();
+    var registerPage = ViewBag.RegisterPage as int? ?? 1;
+    var registerPageCount = ViewBag.RegisterPageCount as int? ?? 1;
+    var registerTotalCount = ViewBag.RegisterTotalCount as int? ?? 0;
+    var registerDisplayRowStart = ViewBag.RegisterDisplayRowStart as int? ?? 0;
+    var registerDisplayRowEnd = ViewBag.RegisterDisplayRowEnd as int? ?? 0;
+    var registerIsPaginated = ViewBag.RegisterIsPaginated as bool? ?? false;
+    var activeTab = ViewBag.ActiveTab as string ?? "active";
+
+    var selectedBusinessArea = selectedBusinessAreaId.HasValue
+        ? businessAreasNav.FirstOrDefault(b => b.Id == selectedBusinessAreaId.Value)
+        : null;
+
+    object BaPageQuery(int p)
+    {
+        if (showAllBusinessAreas)
+            return new { tab = activeTab, search, businessAreaKey = "all", status = statusFilter, ragStatusId = ragStatusIdFilter, priorityId = priorityIdFilter, showCancelled = showCancelled ? true : (bool?)null, page = p };
+        if (showUnassignedSelected)
+            return new { tab = activeTab, search, businessAreaKey = "unassigned", status = statusFilter, ragStatusId = ragStatusIdFilter, priorityId = priorityIdFilter, showCancelled = showCancelled ? true : (bool?)null, page = p };
+        if (selectedBusinessAreaId.HasValue)
+            return new { tab = activeTab, search, businessAreaKey = selectedBusinessAreaId.Value.ToString(CultureInfo.InvariantCulture), status = statusFilter, ragStatusId = ragStatusIdFilter, priorityId = priorityIdFilter, showCancelled = showCancelled ? true : (bool?)null, page = p };
+        return new { tab = activeTab, search, status = statusFilter, ragStatusId = ragStatusIdFilter, priorityId = priorityIdFilter, showCancelled = showCancelled ? true : (bool?)null, page = p };
+    }
+
+    var returnUrl = Context.Request.Path + Context.Request.QueryString;
+    ViewBag.SuppressBusinessAreaColumn = !showAllBusinessAreas && !showUnassignedSelected && selectedBusinessAreaId.HasValue;
+
+    string BusinessAreasUrl(object? values = null)
+    {
+        const string path = "/modern/work/business-areas";
+        if (values == null) return path;
+        var rd = new RouteValueDictionary(values);
+        var query = rd
+            .Where(kv => kv.Value != null && !string.IsNullOrEmpty(Convert.ToString(kv.Value, CultureInfo.InvariantCulture)))
+            .ToDictionary(kv => kv.Key!, kv => Convert.ToString(kv.Value, CultureInfo.InvariantCulture)!);
+        return query.Count == 0 ? path : QueryHelpers.AddQueryString(path, query);
+    }
+}
+@section Breadcrumbs {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernWork")">Work</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">Business areas</li>
+}
+
+<div id="sc-work-business-areas" class="modern-work-page">
+@if (TempData["SuccessMessage"] is string successMessage && !string.IsNullOrWhiteSpace(successMessage))
+{
+ <div class="govuk-notification-banner govuk-notification-banner--success govuk-!-margin-bottom-3" role="region" aria-labelledby="ba-default-view-banner-title">
+ <div class="govuk-notification-banner__header">
+ <h2 class="govuk-notification-banner__title" id="ba-default-view-banner-title">Success</h2>
+      </div>
+ <div class="govuk-notification-banner__content">
+ <p class="govuk-notification-banner__heading govuk-!-margin-bottom-0">@successMessage</p>
+      </div>
+    </div>
+}
+@{
+  var businessAreasLede = await Html.PartialAsync("_GovukBodyParagraph", "Each work item is assigned to one business area. Use the filters to choose a business area or view every work item together.");
+}
+@await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+  Caption = "Work",
+  Title = "Business areas",
+  Lede = businessAreasLede
+})
+
+ <form method="get" action="@BusinessAreasUrl()" id="business-areas-search-form" class="dfe-c-mb-3">
+    <input type="hidden" name="tab" value="@activeTab" />
+    @if (showCancelled)
+    {
+      <input type="hidden" name="showCancelled" value="true" />
+    }
+    <div id="search-and-filter">
+ <div class="filter-toolbar">
+ <div class="filter-toolbar__search-wrap">
+ <input type="search" name="search" id="business-areas-register-search" value="@search" placeholder="Search business areas…" class="filter-search" autocomplete="off" aria-label="Search business areas" />
+ <button type="submit" class="govuk-button govuk-button--secondary filter-toolbar__search-submit">Search</button>
+        </div>
+ <button type="button" class="filter-toggle-btn" id="business-areas-filter-btn" aria-expanded="false" aria-controls="business-areas-filter-panel">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="flex-shrink:0;" aria-hidden="true"><path d="M1 3h14v1.5l-5 5V14l-4-2V9.5L1 4.5V3z"></path></svg>
+ <span class="filter-toggle-label">Filter</span>
+        </button>
+      </div>
+ <div class="filter-panel filter-panel--allwork" id="business-areas-filter-panel">
+ <div class="filter-panel__grid">
+        <div>
+          <label for="business-areas-filter-area">Business area</label>
+ <select name="businessAreaKey" id="business-areas-filter-area" class="govuk-select">
+            @if (string.Equals(filterKey, "all", StringComparison.OrdinalIgnoreCase))
+            {
+              <option value="all" selected>All work items</option>
+            }
+            else
+            {
+              <option value="all">All work items</option>
+            }
+            @foreach (var b in businessAreasNav)
+            {
+              var count = workCountByBusinessAreaId.TryGetValue(b.Id, out var c) ? c : 0;
+              var key = b.Id.ToString(CultureInfo.InvariantCulture);
+              var isSel = string.Equals(filterKey, key, StringComparison.Ordinal);
+              if (isSel)
+              {
+                <option value="@key" selected>@b.Name (@count)</option>
+              }
+              else
+              {
+                <option value="@key">@b.Name (@count)</option>
+              }
+            }
+            @if (showUnassignedNav)
+            {
+              if (string.Equals(filterKey, "unassigned", StringComparison.OrdinalIgnoreCase))
+              {
+                <option value="unassigned" selected>No business area assigned (@unassignedCount)</option>
+              }
+              else
+              {
+                <option value="unassigned">No business area assigned (@unassignedCount)</option>
+              }
+            }
+          </select>
+        </div>
+        <div>
+          <label for="business-areas-filter-status">Status</label>
+          <select name="status" id="business-areas-filter-status" class="govuk-select">
+            @if (string.IsNullOrEmpty(statusFilter))
+            {
+              <option value="" selected>All statuses</option>
+            }
+            else
+            {
+              <option value="">All statuses</option>
+            }
+            @foreach (var st in new[] { "Active", "Paused", "Completed", "Cancelled" })
+            {
+              if (string.Equals(statusFilter, st, StringComparison.OrdinalIgnoreCase))
+              {
+                <option value="@st" selected>@st</option>
+              }
+              else
+              {
+                <option value="@st">@st</option>
+              }
+            }
+          </select>
+        </div>
+        <div>
+          <label for="business-areas-filter-rag">RAG</label>
+          <select name="ragStatusId" id="business-areas-filter-rag" class="govuk-select">
+            @if (!ragStatusIdFilter.HasValue)
+            {
+              <option value="" selected>All RAG ratings</option>
+            }
+            else
+            {
+              <option value="">All RAG ratings</option>
+            }
+            @foreach (var r in ragStatusOptions)
+            {
+              if (ragStatusIdFilter == r.Id)
+              {
+                <option value="@r.Id.ToString(CultureInfo.InvariantCulture)" selected>@r.Name</option>
+              }
+              else
+              {
+                <option value="@r.Id.ToString(CultureInfo.InvariantCulture)">@r.Name</option>
+              }
+            }
+          </select>
+        </div>
+        <div>
+          <label for="business-areas-filter-priority">Priority</label>
+          <select name="priorityId" id="business-areas-filter-priority" class="govuk-select">
+            @if (!priorityIdFilter.HasValue)
+            {
+              <option value="" selected>All priorities</option>
+            }
+            else
+            {
+              <option value="">All priorities</option>
+            }
+            @foreach (var pr in priorityOptions)
+            {
+              if (priorityIdFilter == pr.Id)
+              {
+                <option value="@pr.Id.ToString(CultureInfo.InvariantCulture)" selected>@pr.Name</option>
+              }
+              else
+              {
+                <option value="@pr.Id.ToString(CultureInfo.InvariantCulture)">@pr.Name</option>
+              }
+            }
+          </select>
+        </div>
+      </div>
+ <div class="filter-panel__actions">
+ <button type="submit" class="govuk-button govuk-button--primary">Apply</button>
+ <a href="@BusinessAreasUrl()" class="govuk-button govuk-button--secondary">Clear filters</a>
+        </div>
+      </div>
+    </div>
+  </form>
+
+  @if (ViewBag.WorkRegisterSubNav is WorkRegisterSubNavViewModel workRegisterSubNav)
+  {
+    @await Html.PartialAsync("_WorkRegisterSubNav", workRegisterSubNav)
+  }
+
+  @{
+    var showStandaloneEmpty = countBeforeWorkFilter == 0 && !showUnassignedNav;
+  }
+  @if (showStandaloneEmpty)
+  {
+ <div class="dfe-c-body dfe-c-text-muted">
+      @if (!string.IsNullOrWhiteSpace(search))
+      {
+        <text>No business areas match your search.</text>
+      }
+      else
+      {
+        <text>No business areas defined. Add business areas in Admin.</text>
+      }
+    </div>
+  }
+  else
+  {
+ <div class="modern-work-ba-register govuk-!-margin-top-4">
+ <div class="work-grouping-main-header">
+ <div class="work-grouping-main-header__titles">
+ @if (showAllBusinessAreas)
+ {
+ <h2 class="govuk-heading-m govuk-!-margin-top-0">All work items</h2>
+ <p class="dfe-c-body-s dfe-c-text-muted govuk-!-margin-bottom-0">Every work item in one list.</p>
+ }
+ else if (showUnassignedSelected)
+ {
+ <h2 class="govuk-heading-m govuk-!-margin-top-0">No business area assigned</h2>
+ <p class="dfe-c-body-s dfe-c-text-muted govuk-!-margin-bottom-0">Work items without a business area set on the record.</p>
+ }
+ else if (selectedBusinessArea != null)
+ {
+ <h2 class="govuk-heading-m govuk-!-margin-top-0">@selectedBusinessArea.Name</h2>
+   @if (!string.IsNullOrEmpty(selectedBusinessArea.Description))
+   {
+ <p class="dfe-c-body-s dfe-c-text-muted govuk-!-margin-bottom-0">@selectedBusinessArea.Description</p>
+   }
+   else
+   {
+ <p class="dfe-c-body-s dfe-c-text-muted govuk-!-margin-bottom-0">Work items assigned to this business area.</p>
+   }
+ }
+ else
+ {
+ <h2 class="govuk-heading-m govuk-!-margin-top-0">Work items</h2>
+ }
+ </div>
+ <div class="work-grouping-main-header__actions">
+ @if (isCurrentViewSavedDefault)
+ {
+ <form method="post" asp-action="ClearDefaultBusinessAreaView" asp-controller="ModernWork" class="govuk-!-margin-bottom-0">
+ @Html.AntiForgeryToken()
+ <button type="submit" class="govuk-button">Reset view</button>
+ </form>
+ }
+ else if (canSetDefaultBusinessAreaView && selectedBusinessAreaId.HasValue)
+ {
+ <form method="post" action="@Url.Action("SetDefaultBusinessAreaView", "ModernWork")" class="govuk-!-margin-bottom-0">
+ @Html.AntiForgeryToken()
+ <input type="hidden" name="businessAreaId" value="@selectedBusinessAreaId.Value" />
+ <input type="hidden" name="returnUrl" value="@returnUrl" />
+ <button type="submit" class="govuk-button">Make default view</button>
+ </form>
+ }
+ @if (hasItemFilters && !string.IsNullOrEmpty(cancelledToggleUrl))
+ {
+ <a class="govuk-button govuk-button--secondary" href="@cancelledToggleUrl">@(showCancelled ? "Hide cancelled items" : "Show cancelled items")</a>
+ }
+ </div>
+ </div>
+
+ @if (!pagedWorkItems.Any())
+ {
+ <p class="dfe-c-body dfe-c-text-muted govuk-!-margin-bottom-0 govuk-!-margin-top-4">No work items to show for this selection.</p>
+ }
+ else
+ {
+ <div class="dfe-f-table-wrapper dfe-f-table-wrapper--stacked govuk-!-margin-top-3 modern-work-ba-table-wrap govuk-!-width-full" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+                <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed modern-work-table govuk-!-width-full"><caption class="govuk-table__caption govuk-visually-hidden">Work items</caption>
+                  <thead class="govuk-table__head">
+                    <tr class="govuk-table__row">
+                      <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Work item</button>
+        </th>
+                      @if (ViewBag.SuppressBusinessAreaColumn as bool? != true)
+                      {
+                      <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Business area</button>
+        </th>
+                      }
+                      <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Directorate</button>
+        </th>
+                      <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Priority</button>
+        </th>
+                      <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">RAG</button>
+        </th>
+                      <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Primary contact</button>
+        </th>
+                      <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Status</button>
+        </th>
+                    </tr>
+                  </thead>
+                  <tbody class="govuk-table__body">
+                    @await Html.PartialAsync("_ByPriorityWorkRows", pagedWorkItems)
+                  </tbody>
+                </table>
+              </div>
+
+ <div class="work-grouping-register-footer">
+    @if (registerIsPaginated)
+    {
+ <p class="dfe-c-text-muted work-grouping-register-footer__count" id="ba-showing-count">Showing @registerDisplayRowStart–@registerDisplayRowEnd of @registerTotalCount work items</p>
+    }
+    @if (registerIsPaginated && registerPageCount > 1)
+    {
+ @await Html.PartialAsync("~/Views/Modern/Shared/_GovUkPagination.cshtml", new GovUkPaginationViewModel {
+   CurrentPage = registerPage,
+   TotalPages = registerPageCount,
+   PageUrl = p => BusinessAreasUrl(BaPageQuery(p)),
+   NavigationAriaLabel = "Business areas work items"
+ })
+    }
+  </div>
+ }
+ </div>
+}
+
+  @await Html.PartialAsync("~/Views/Modern/Work/_WorkV2GroupingIntroModal.cshtml", new WorkV2GroupingIntroModalModel(BusinessAreas))
+</div>
+
+@section Scripts {
+<script src="~/modern/js/work-grouping-v2-intro.js" asp-append-version="true" nonce="@Context.Items["Nonce"]"></script>
+}
+
+@section Styles {
+<style>
+  .modern-work-ba-register {
+    max-width: 100%;
+  }
+  .modern-work-ba-table-wrap {
+    max-width: 100%;
+  }
+  .work-grouping-main-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+  .work-grouping-main-header__titles { flex: 1 1 12rem; min-width: 0; }
+  .work-grouping-main-header__actions { flex-shrink: 0; display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+  .work-grouping-register-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 0.875rem;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .work-grouping-register-footer__count { margin: 0; }
+</style>
+}

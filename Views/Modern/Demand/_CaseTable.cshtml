@@ -1,0 +1,139 @@
+@model IEnumerable<Compass.Models.DemandPipeline.DemandPipelineBusinessCase>
+@{
+    var list = Model?.ToList() ?? new List<Compass.Models.DemandPipeline.DemandPipelineBusinessCase>();
+    var count = list.Count;
+    var tableMode = ViewBag.TableMode as string ?? "";
+    var isSubmitted = string.Equals(tableMode, "submitted", StringComparison.OrdinalIgnoreCase);
+    var isMine = string.Equals(tableMode, "mine", StringComparison.OrdinalIgnoreCase);
+    var totalForFooter = isMine
+        ? (ViewBag.MineCasesCount as int? ?? count)
+        : (ViewBag.PipelineTotal as int? ?? count);
+}
+
+@functions {
+  (string Label, string Css) StageTag(string? stage)
+  {
+    return stage switch
+    {
+      "Ready" => ("READY TO SUBMIT", "dfe-c-tag--green"),
+      "Developing" => ("DEVELOPING", "dfe-c-tag--amber"),
+      "Idea" => ("IDEA / CONCEPT", "dfe-c-tag--blue"),
+      _ => ((stage ?? "—").ToUpperInvariant(), "dfe-c-tag--grey")
+    };
+  }
+
+  (string Label, string Css) FundingTag(string? fp)
+  {
+    if (string.IsNullOrWhiteSpace(fp)) return ("UNKNOWN", "dfe-c-tag--grey");
+    if (string.Equals(fp, "Confirmed", StringComparison.OrdinalIgnoreCase)) return ("CONFIRMED", "dfe-c-tag--green");
+    if (string.Equals(fp, "Not yet confirmed", StringComparison.OrdinalIgnoreCase)) return ("NOT CONFIRMED", "dfe-c-tag--red");
+    if (string.Equals(fp, "Not applicable", StringComparison.OrdinalIgnoreCase)) return ("N/A", "dfe-c-tag--grey");
+    return (fp.ToUpperInvariant(), "dfe-c-tag--amber");
+  }
+
+  string EstSubmit(Compass.Models.DemandPipeline.DemandPipelineBusinessCase bc)
+  {
+    if (!bc.TargetSubmissionDate.HasValue) return "TBC";
+    return bc.TargetSubmissionDate.Value.ToString("d MMM yyyy");
+  }
+}
+
+@if (count == 0)
+{
+ <p class="dfe-c-body muted">No business cases found.</p>
+}
+else if (isSubmitted)
+{
+ <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+    <table class="govuk-table">
+      <thead class="govuk-table__head"><tr class="govuk-table__row"><th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Business case</button>
+        </th><th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Business area</button>
+        </th><th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Lead</button>
+        </th><th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">SRO</button>
+        </th><th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Stage</button>
+        </th><th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Submitted</button>
+        </th><th></th></tr></thead>
+      <tbody class="govuk-table__body">
+        @foreach (var bc in list)
+        {
+          var st = StageTag(bc.Stage);
+          <tr class="govuk-table__row">
+            <td class="govuk-table__cell">
+              <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("BusinessCaseDetail", "ModernDemand", new { id = bc.Id })">@bc.Title</a>
+ <span class="dfe-c-table-ref">@bc.Reference</span>
+            </td>
+            <td class="govuk-table__cell">@(bc.DepartmentGroup ?? "—")</td>
+            <td class="govuk-table__cell">@(bc.Lead ?? "—")</td>
+            <td class="govuk-table__cell">@(bc.Sro ?? "—")</td>
+ <td class="govuk-table__cell"><span class="dfe-c-tag @st.Css">@st.Label</span></td>
+            <td class="govuk-table__cell">@(bc.SubmittedDate?.ToString("d MMM yyyy") ?? bc.UpdatedAt.ToString("d MMM yyyy"))</td>
+            <td class="govuk-table__cell">
+              @if (bc.LinkedDemandRequestId.HasValue)
+              {
+                <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("RequestDetail", "ModernDemand", new { id = bc.LinkedDemandRequestId.Value })">View demand</a>
+              }
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+ <p class="dfe-c-text-muted dfe-c-mt-1" id="bc-showing">Showing @count business case@(count == 1 ? "" : "s")</p>
+}
+else
+{
+ <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+    <table class="govuk-table">
+      <thead class="govuk-table__head"><tr class="govuk-table__row"><th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Business case</button>
+        </th><th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Business area</button>
+        </th><th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Lead</button>
+        </th><th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">SRO</button>
+        </th><th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Stage</button>
+        </th><th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Funding</button>
+        </th><th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Est. submit</button>
+        </th><th></th></tr></thead>
+      <tbody class="govuk-table__body">
+        @foreach (var bc in list)
+        {
+          var st = StageTag(bc.Stage);
+          var fu = FundingTag(bc.FundingPosition);
+          var demandSubmitted = bc.LinkedDemandRequestId.HasValue;
+          <tr class="govuk-table__row">
+            <td class="govuk-table__cell">
+              <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("BusinessCaseDetail", "ModernDemand", new { id = bc.Id })">@bc.Title</a>
+ <span class="dfe-c-table-ref">@bc.Reference</span>
+            </td>
+            <td class="govuk-table__cell">@(bc.DepartmentGroup ?? "—")</td>
+            <td class="govuk-table__cell">@(bc.Lead ?? "—")</td>
+            <td class="govuk-table__cell">@(bc.Sro ?? "—")</td>
+ <td class="govuk-table__cell"><span class="dfe-c-tag @st.Css">@st.Label</span></td>
+ <td class="govuk-table__cell"><span class="dfe-c-tag @fu.Css">@fu.Label</span></td>
+            <td class="govuk-table__cell">@EstSubmit(bc)</td>
+            <td class="govuk-table__cell">
+              @if (demandSubmitted)
+              {
+ <span class="dfe-c-tag dfe-c-tag--green">SUBMITTED</span>
+              }
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+ <p class="dfe-c-text-muted dfe-c-mt-1" id="bc-showing">Showing @count of @totalForFooter business case@(totalForFooter == 1 ? "" : "s")</p>
+}

@@ -1,0 +1,59 @@
+@using Compass.ViewModels.Modern
+@using Microsoft.AspNetCore.Html
+@using System.Net
+@{
+    var theme = ViewBag.Theme as Compass.Models.FunctionalStandardTheme;
+    var standard = ViewBag.Standard as Compass.Models.FunctionalStandard;
+    ViewData["Title"] = $"Add practice area — Theme {theme!.ThemeId}";
+    string ThemeUrl() => Url.Action("FsThemeDetail", "ModernAdmin", new { standardId = standard!.Id, themeId = theme!.ThemeId }) ?? "#";
+}
+
+@section Breadcrumbs {
+    <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+    <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernAdmin")">Admin</a></li>
+    <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernAdmin", new { panel = "std-functional" })">Functional standards</a></li>
+    <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("FunctionalStandardDetail", "ModernAdmin", new { id = standard!.Id })">@standard.Title</a></li>
+    <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@ThemeUrl()">Theme @theme.ThemeId</a></li>
+    <li class="govuk-breadcrumbs__list-item" aria-current="page">Add practice area</li>
+}
+
+<div class="admin-hub">
+    @await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+        Caption = $"{standard.Title} — Theme {theme.ThemeId}",
+        Title = "Add practice area",
+        Lede = new HtmlString($"<p class=\"govuk-body govuk-!-margin-bottom-0\"><a class=\"govuk-link govuk-link--no-visited-state\" href=\"{ThemeUrl()}\">Back to {WebUtility.HtmlEncode(theme.Title)}</a></p>")
+    })
+
+    @if (ViewBag.AdminError != null)
+    {
+        <div class="govuk-error-summary" role="alert" data-module="govuk-error-summary" style="margin-bottom:1.5rem;">
+            <h2 class="govuk-error-summary__title">There is a problem</h2>
+            <div class="govuk-error-summary__body">@ViewBag.AdminError</div>
+        </div>
+    }
+
+    <div class="dfe-c-card dfe-c-mb-4" style="border:1px solid var(--grey-2);border-left:4px solid var(--blue);padding:1.25rem 1.5rem;background:var(--white);max-width:40rem;">
+        <h2 class="govuk-heading-m govuk-!-margin-top-0">Practice area details</h2>
+        <p class="govuk-hint govuk-!-margin-bottom-3">The practice area ID is a decimal number like 1.1, 2.3, etc. It must be unique within this theme.</p>
+        <form method="post" action="@Url.Action("FsPracticeAreaCreate", "ModernAdmin", new { standardId = standard.Id, themeId = theme.ThemeId })" novalidate>
+            @Html.AntiForgeryToken()
+            <div class="govuk-form-group govuk-!-margin-bottom-3">
+                <label class="govuk-label" for="pa-id">Practice area ID</label>
+                <span class="govuk-hint">For example 1.1 or 2.3</span>
+                <input class="govuk-input govuk-input--width-4" type="number" step="0.01" name="practiceAreaId" id="pa-id" required min="0" />
+            </div>
+            <div class="govuk-form-group govuk-!-margin-bottom-3">
+                <label class="govuk-label" for="pa-title">Title</label>
+                <input class="govuk-input govuk-!-width-two-thirds" type="text" name="title" id="pa-title" required autocomplete="off" maxlength="255" />
+            </div>
+            <div class="govuk-form-group govuk-!-margin-bottom-3">
+                <label class="govuk-label" for="pa-desc">Description <span class="govuk-hint govuk-!-display-inline">(optional)</span></label>
+                <textarea class="govuk-textarea govuk-!-width-two-thirds" name="description" id="pa-desc" rows="4"></textarea>
+            </div>
+            <div class="govuk-button-group">
+                <button type="submit" class="govuk-button" data-module="govuk-button">Create practice area</button>
+                <a href="@ThemeUrl()" class="govuk-link govuk-link--no-visited-state govuk-!-margin-left-2">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>

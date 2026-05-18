@@ -1,0 +1,189 @@
+@model Compass.Models.FunctionalStandardAssessment
+@using Compass.Models
+@using Compass.ViewModels.Modern
+@{
+    ViewData["Title"] = "Assessment summary";
+
+    var totalCriteria = Model.CriteriaResponses.Count;
+    var fullyMet = Model.CriteriaResponses.Count(r => r.Attainment == AttainmentLevel.FullyMet);
+    var partiallyMet = Model.CriteriaResponses.Count(r => r.Attainment == AttainmentLevel.PartiallyMet);
+    var notMet = Model.CriteriaResponses.Count(r => r.Attainment == AttainmentLevel.NotOrSeldomMet);
+    var fullyMetPct = totalCriteria > 0 ? (double)fullyMet / totalCriteria * 100 : 0;
+
+    string OverallHeadline() { if (fullyMetPct >= 80) return "Strong"; if (fullyMetPct >= 50) return "Developing"; return "Needs attention"; }
+    string OverallTagClass() { if (fullyMetPct >= 80) return "dfe-c-tag--green"; if (fullyMetPct >= 50) return "dfe-c-tag--amber"; return "dfe-c-tag--red"; }
+
+    string RatingLabel(CriteriaRating r) => r switch { CriteriaRating.Good => "Good", CriteriaRating.Better => "Better", CriteriaRating.Best => "Best", _ => "" };
+    string RatingClass(CriteriaRating r) => r switch { CriteriaRating.Good => "rating-good", CriteriaRating.Better => "rating-better", CriteriaRating.Best => "rating-best", _ => "" };
+}
+
+@section Breadcrumbs {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernStandards")">Standards</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("FunctionalStandards", "ModernStandards")">Functional standards</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("FunctionalStandardDashboard", "ModernStandards", new { id = Model.FunctionalStandardId })">@(Model.FunctionalStandard?.Title ?? "Standard")</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">Summary</li>
+}
+
+<div id="sc-standards-summary">
+
+@{
+  var summaryLede = await Html.PartialAsync("_AssessmentSummaryHeaderLede", Model);
+  var summaryActions = await Html.PartialAsync("_AssessmentSummaryHeaderActions", Model);
+}
+@await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+  Caption = "Assessment summary",
+  Title = Model.AssessmentName,
+  Lede = summaryLede,
+  Actions = summaryActions
+})
+
+ <div class="fsa-summary-grid dfe-c-mb-4">
+ <div class="fsa-summary-card fsa-summary-card--headline">
+ <div class="fsa-summary-card__label">Overall attainment</div>
+ <div class="fsa-summary-card__value"><span class="dfe-c-tag @OverallTagClass()">@OverallHeadline().ToUpperInvariant()</span></div>
+ <div class="fsa-summary-card__sub">@fullyMet of @totalCriteria criteria fully met (@(Math.Round(fullyMetPct))%)</div>
+        </div>
+ <div class="fsa-summary-card">
+ <div class="fsa-summary-card__label">Total criteria</div>
+ <div class="fsa-summary-card__value">@totalCriteria</div>
+        </div>
+ <div class="fsa-summary-card fsa-summary-card--green">
+ <div class="fsa-summary-card__label">Fully met</div>
+ <div class="fsa-summary-card__value">@fullyMet</div>
+        </div>
+ <div class="fsa-summary-card fsa-summary-card--amber">
+ <div class="fsa-summary-card__label">Partially met</div>
+ <div class="fsa-summary-card__value">@partiallyMet</div>
+        </div>
+ <div class="fsa-summary-card fsa-summary-card--red">
+ <div class="fsa-summary-card__label">Not met</div>
+ <div class="fsa-summary-card__value">@notMet</div>
+        </div>
+    </div>
+
+    @if (Model.FunctionalStandard?.Themes != null)
+    {
+        foreach (var theme in Model.FunctionalStandard.Themes.OrderBy(t => t.ThemeId))
+        {
+            var themeResponses = Model.CriteriaResponses.Where(cr => cr.ThemeId == theme.ThemeId).ToList();
+            var themeFm = themeResponses.Count(r => r.Attainment == AttainmentLevel.FullyMet);
+            var themePm = themeResponses.Count(r => r.Attainment == AttainmentLevel.PartiallyMet);
+            var themeNm = themeResponses.Count(r => r.Attainment == AttainmentLevel.NotOrSeldomMet);
+
+ <div class="dfe-c-collapsible dfe-c-collapsible--open dfe-c-mb-2">
+ <button type="button" class="dfe-c-collapsible__trigger">
+ <span class="dfe-c-collapsible__icon">−</span>
+                    <span>Theme @theme.ThemeId: @theme.Title</span>
+ <div class="dfe-c-collapsible__status">
+ <span class="dfe-c-tag dfe-c-tag--green" style="font-size:0.75rem;">@themeFm</span>
+ <span class="dfe-c-tag dfe-c-tag--amber" style="font-size:0.75rem;">@themePm</span>
+ <span class="dfe-c-tag dfe-c-tag--red" style="font-size:0.75rem;">@themeNm</span>
+                    </div>
+                </button>
+ <div class="dfe-c-collapsible__body">
+                    @if (theme.PracticeAreas != null)
+                    {
+                        foreach (var pa in theme.PracticeAreas.OrderBy(p => p.PracticeAreaId))
+                        {
+                            var paCriteria = pa.Criteria?.OrderBy(c => c.CriteriaCode).ToList() ?? new List<Criterion>();
+                            var paResponses = Model.CriteriaResponses
+                                .Where(cr => cr.ThemeId == theme.ThemeId && cr.PracticeAreaId == pa.PracticeAreaId).ToList();
+
+ <div class="fsa-practice-area">
+ <h3 class="fsa-practice-area__title">@pa.PracticeAreaId @pa.Title</h3>
+                                @foreach (var rating in new[] { CriteriaRating.Good, CriteriaRating.Better, CriteriaRating.Best })
+                                {
+                                    var criteriaForRating = paCriteria.Where(c => c.Rating == rating).ToList();
+                                    if (!criteriaForRating.Any()) continue;
+
+ <div class="fsa-rating-group">
+ <div class="fsa-rating-group__label @RatingClass(rating)">@RatingLabel(rating)</div>
+                                        @foreach (var criterion in criteriaForRating)
+                                        {
+                                            var response = paResponses.FirstOrDefault(r => r.CriteriaCode == criterion.CriteriaCode);
+ <div class="fsa-criterion-summary">
+ <div class="fsa-criterion-summary__code">@criterion.CriteriaCode</div>
+ <div class="fsa-criterion-summary__text">@criterion.Criteria</div>
+ <div class="fsa-criterion-summary__result">
+                                                    @if (response?.Attainment != null)
+                                                    {
+                                                        @switch (response.Attainment.Value)
+                                                        {
+                                                            case AttainmentLevel.FullyMet:
+ <span class="dfe-c-tag dfe-c-tag--green">FULLY MET</span>
+                                                                break;
+                                                            case AttainmentLevel.PartiallyMet:
+ <span class="dfe-c-tag dfe-c-tag--amber">PARTIALLY MET</span>
+                                                                break;
+                                                            case AttainmentLevel.NotOrSeldomMet:
+ <span class="dfe-c-tag dfe-c-tag--red">NOT MET</span>
+                                                                break;
+                                                        }
+                                                    }
+                                                    @if (!string.IsNullOrWhiteSpace(response?.Notes))
+                                                    {
+ <p class="fsa-criterion-summary__notes">@response.Notes</p>
+                                                    }
+                                                </div>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        }
+                    }
+                </div>
+            </div>
+        }
+    }
+</div>
+
+<style>
+    .fsa-summary-grid {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 1rem;
+    }
+    .fsa-summary-card {
+        background: #f3f2f1;
+        padding: 1rem;
+        text-align: center;
+    }
+    .fsa-summary-card--headline { grid-column: 1; background: #1d70b8; color: #fff; }
+    .fsa-summary-card--headline .fsa-summary-card__label { color: rgba(255,255,255,0.8); }
+    .fsa-summary-card--green { border-top: 4px solid #00703c; }
+    .fsa-summary-card--amber { border-top: 4px solid #f47738; }
+    .fsa-summary-card--red { border-top: 4px solid #d4351c; }
+    .fsa-summary-card__label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: #505a5f; margin-bottom: 0.375rem; }
+    .fsa-summary-card__value { font-size: 1.75rem; font-weight: 700; }
+    .fsa-summary-card__sub { font-size: 0.8125rem; margin-top: 0.25rem; color: rgba(255,255,255,0.8); }
+
+    .fsa-practice-area { border: 1px solid #b1b4b6; margin-bottom: 1rem; padding: 1rem 1.25rem; }
+    .fsa-practice-area__title { font-size: 1.0625rem; font-weight: 700; margin: 0 0 0.75rem 0; }
+
+    .fsa-rating-group { margin-bottom: 0.75rem; }
+    .fsa-rating-group__label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; padding: 0.25rem 0.5rem; display: inline-block; margin-bottom: 0.5rem; }
+    .rating-good { background: #cce2d8; color: #00552e; }
+    .rating-better { background: #fcd6c3; color: #6e3619; }
+    .rating-best { background: #d4d5e7; color: #28286e; }
+
+    .fsa-criterion-summary {
+        display: grid;
+        grid-template-columns: 4rem 1fr 180px;
+        gap: 0.5rem 1rem;
+        padding: 0.5rem 0;
+        border-bottom: 1px solid #f3f2f1;
+        align-items: start;
+    }
+    .fsa-criterion-summary:last-child { border-bottom: none; }
+    .fsa-criterion-summary__code { font-weight: 700; font-size: 0.875rem; color: #505a5f; text-align: center; }
+    .fsa-criterion-summary__text { font-size: 0.9375rem; line-height: 1.5; }
+    .fsa-criterion-summary__notes { font-size: 0.8125rem; color: #505a5f; margin: 0.25rem 0 0 0; }
+
+    @@media (max-width: 768px) {
+        .fsa-summary-grid { grid-template-columns: repeat(2, 1fr); }
+        .fsa-summary-card--headline { grid-column: span 2; }
+        .fsa-criterion-summary { grid-template-columns: 1fr; }
+    }
+</style>

@@ -1,0 +1,123 @@
+@model Compass.ViewModels.Modern.ModernRaidMakeIssueFromRiskPageVm
+@using Compass.ViewModels.Modern
+@{
+  ViewData["Title"] = "Make issue from risk";
+  var riskDetailUrl = Url.Action("RiskDetail", "ModernRaid", new { id = Model.RiskId }) ?? "#";
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="/modern/raid/dashboard">RAID</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="/modern/raid/risks">Risks</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@riskDetailUrl">@Model.RiskReference</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">Make issue</li>
+}
+
+<div class="modern-work-page">
+  <p class="govuk-body govuk-!-margin-bottom-2">
+    <a href="@riskDetailUrl" class="govuk-back-link govuk-!-margin-bottom-0">Back to risk</a>
+  </p>
+
+  @await Html.PartialAsync("~/Views/Modern/Shared/_ModernPageHeader.cshtml", new ModernPageHeaderViewModel {
+    Caption = Model.RiskReference,
+    Title = "Make issue from risk"
+  })
+  <p class="govuk-body govuk-!-margin-bottom-6">Create an issue using this risk’s title, description, cause, and associations. Choose whether the risk stays open or is closed as materialised.</p>
+
+  @if (Model.HasExistingMaterialisedIssue && Model.ExistingIssueId is int existingId)
+  {
+    <div class="govuk-warning-text govuk-!-margin-bottom-4">
+      <span class="govuk-warning-text__icon" aria-hidden="true">!</span>
+      <strong class="govuk-warning-text__text">
+        <span class="govuk-warning-text__assistive">Warning</span>
+        An issue has already been raised from this risk (@(Model.ExistingIssueReference ?? $"I-{existingId:D4}")).
+        <a class="govuk-link" href="@(Url.Action("IssueDetail", "ModernRaid", new { id = existingId }) ?? "#")">View that issue</a>.
+      </strong>
+    </div>
+  }
+  else if (Model.RiskIsClosed)
+  {
+    <div class="govuk-inset-text govuk-!-margin-bottom-4">
+      <p class="govuk-body govuk-!-margin-bottom-0">This risk is already closed. You cannot raise a new issue from it.</p>
+    </div>
+  }
+  else
+  {
+    <div class="govuk-summary-card govuk-!-margin-bottom-6">
+      <div class="govuk-summary-card__title-wrapper">
+        <h2 class="govuk-summary-card__title">Information to copy</h2>
+      </div>
+      <div class="govuk-summary-card__content">
+        <dl class="govuk-summary-list govuk-!-margin-bottom-0">
+          <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">Title</dt>
+            <dd class="govuk-summary-list__value">@Model.Title</dd>
+          </div>
+          @if (!string.IsNullOrWhiteSpace(Model.Description))
+          {
+            <div class="govuk-summary-list__row">
+              <dt class="govuk-summary-list__key">Description</dt>
+              <dd class="govuk-summary-list__value" style="white-space:pre-wrap;">@Model.Description</dd>
+            </div>
+          }
+          @if (!string.IsNullOrWhiteSpace(Model.Cause))
+          {
+            <div class="govuk-summary-list__row">
+              <dt class="govuk-summary-list__key">Cause</dt>
+              <dd class="govuk-summary-list__value" style="white-space:pre-wrap;">@Model.Cause</dd>
+            </div>
+          }
+          @if (!string.IsNullOrWhiteSpace(Model.ImpactIfRealised))
+          {
+            <div class="govuk-summary-list__row">
+              <dt class="govuk-summary-list__key">Impact if realised</dt>
+              <dd class="govuk-summary-list__value" style="white-space:pre-wrap;">@Model.ImpactIfRealised</dd>
+            </div>
+          }
+        </dl>
+      </div>
+    </div>
+
+    <form method="post" action="@Url.Action("RiskMakeIssuePost", "ModernRaid", new { id = Model.RiskId })" novalidate>
+      @Html.AntiForgeryToken()
+      <input type="hidden" name="RiskId" value="@Model.RiskId" />
+
+      <div class="govuk-form-group govuk-!-margin-bottom-6">
+        <fieldset class="govuk-fieldset">
+          <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">After creating the issue, what should happen to the risk?</legend>
+          <div class="govuk-radios" data-module="govuk-radios">
+            <div class="govuk-radios__item">
+              <input class="govuk-radios__input" id="risk-after-close" name="RiskAfterIssue" type="radio" value="close" checked />
+              <label class="govuk-label govuk-radios__label" for="risk-after-close">
+                Close the risk as materialised
+              </label>
+              <div id="risk-after-close-hint" class="govuk-hint govuk-radios__hint">
+                The risk is marked materialised/closed and linked to the new issue. Use when the risk has happened or is no longer tracked separately.
+              </div>
+            </div>
+            <div class="govuk-radios__item">
+              <input class="govuk-radios__input" id="risk-after-open" name="RiskAfterIssue" type="radio" value="keep_open" />
+              <label class="govuk-label govuk-radios__label" for="risk-after-open">
+                Keep the risk open
+              </label>
+              <div id="risk-after-open-hint" class="govuk-hint govuk-radios__hint">
+                The issue is linked to the risk, but the risk stays on the register for ongoing management.
+              </div>
+            </div>
+          </div>
+        </fieldset>
+      </div>
+
+      <div class="govuk-form-group">
+        <label class="govuk-label" for="MaterialisationNote">Note (optional)</label>
+        <div id="MaterialisationNote-hint" class="govuk-hint">Recorded on the risk if you close it, and appended to the issue description.</div>
+        <textarea class="govuk-textarea" id="MaterialisationNote" name="MaterialisationNote" rows="4" aria-describedby="MaterialisationNote-hint"></textarea>
+      </div>
+
+      <div class="govuk-button-group">
+        <button type="submit" class="govuk-button" data-module="govuk-button">Create issue</button>
+        <a class="govuk-button govuk-button--secondary" href="@riskDetailUrl">Cancel</a>
+      </div>
+    </form>
+  }
+</div>

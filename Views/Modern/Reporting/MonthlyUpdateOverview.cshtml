@@ -1,4 +1,5 @@
 @using Compass.Controllers
+@using Compass.ViewModels.Modern
 @{
   ViewData["Title"] = "Reporting compliance";
   var periodStats = ViewBag.PeriodStats as MonthlyUpdateStats;
@@ -9,56 +10,60 @@
 }
 
 @section Breadcrumbs {
-  <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="@Url.Action("Dashboard", "ModernWork")">Work</a></li>
-  <li class="dfe-c-breadcrumb__item" aria-current="page">Reporting compliance</li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernWork")">Work</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">Reporting compliance</li>
 }
 
-<div class="dfe-c-page-title dfe-c-mb-3">
-  <div class="dfe-c-page-title__caption">Work</div>
-  <h1 class="dfe-c-page-title__heading">Monthly reporting compliance</h1>
-  <p class="dfe-c-body dfe-c-text-muted dfe-c-mb-0">Status of project monthly returns for @monthName. Due date: @(dueDate?.ToString("d MMMM yyyy") ?? "—").</p>
-</div>
+@{
+  var complianceLedeText = $"Status of project monthly returns for {monthName}. Due date: {(dueDate?.ToString("d MMMM yyyy") ?? "—")}.";
+  var complianceLede = await Html.PartialAsync("_GovukBodyParagraph", complianceLedeText);
+}
+@await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+  Caption = "Work",
+  Title = "Monthly reporting compliance",
+  Lede = complianceLede
+})
 
 @if (TempData["ErrorMessage"] != null)
 {
-  <div class="dfe-c-error-summary dfe-c-mb-3" role="alert">
-    <p class="dfe-c-body dfe-c-mb-0">@TempData["ErrorMessage"]</p>
+ <div class="dfe-c-error-summary govuk-!-margin-bottom-3" role="alert">
+ <p class="dfe-c-body">@TempData["ErrorMessage"]</p>
   </div>
 }
 
 <div class="dfe-c-mb-3 dfe-c-body-s">
   @if (ViewBag.HasPreviousMonth == true)
   {
-    <a class="dfe-c-link" href="@Url.Action("MonthlyUpdateOverview", "ModernReporting", new { year = ViewBag.PreviousYear, month = ViewBag.PreviousMonth })">← Previous month</a>
+ <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("MonthlyUpdateOverview", "ModernReporting", new { year = ViewBag.PreviousYear, month = ViewBag.PreviousMonth })">← Previous month</a>
   }
   @if (ViewBag.HasNextMonth == true)
   {
-    <span class="dfe-c-text-muted"> · </span>
-    <a class="dfe-c-link" href="@Url.Action("MonthlyUpdateOverview", "ModernReporting", new { year = ViewBag.NextYear, month = ViewBag.NextMonth })">Next month →</a>
+ <span class="dfe-c-text-muted"> · </span>
+ <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("MonthlyUpdateOverview", "ModernReporting", new { year = ViewBag.NextYear, month = ViewBag.NextMonth })">Next month →</a>
   }
 </div>
 
 @if (periodStats != null)
 {
-  <div class="dfe-c-grid" style="grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
-    <div class="dfe-c-scard" style="padding:1rem;">
-      <div class="dfe-c-body-s dfe-c-text-muted">Total active projects</div>
+ <div class="dfe-c-grid" style="grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+ <div class="dfe-c-scard" style="padding:1rem;">
+ <div class="dfe-c-body-s dfe-c-text-muted">Total active projects</div>
       <div style="font-size:1.75rem;font-weight:700;">@periodStats.TotalProjects</div>
     </div>
-    <div class="dfe-c-scard" style="padding:1rem;">
-      <div class="dfe-c-body-s dfe-c-text-muted">Submitted</div>
+ <div class="dfe-c-scard" style="padding:1rem;">
+ <div class="dfe-c-body-s dfe-c-text-muted">Submitted</div>
       <div style="font-size:1.75rem;font-weight:700;color:#00703c;">@periodStats.Submitted</div>
     </div>
-    <div class="dfe-c-scard" style="padding:1rem;">
-      <div class="dfe-c-body-s dfe-c-text-muted">In progress</div>
+ <div class="dfe-c-scard" style="padding:1rem;">
+ <div class="dfe-c-body-s dfe-c-text-muted">In progress</div>
       <div style="font-size:1.75rem;font-weight:700;">@periodStats.InProgress</div>
     </div>
-    <div class="dfe-c-scard" style="padding:1rem;">
-      <div class="dfe-c-body-s dfe-c-text-muted">Not started</div>
+ <div class="dfe-c-scard" style="padding:1rem;">
+ <div class="dfe-c-body-s dfe-c-text-muted">Not started</div>
       <div style="font-size:1.75rem;font-weight:700;">@periodStats.NotStarted</div>
     </div>
-    <div class="dfe-c-scard" style="padding:1rem;">
-      <div class="dfe-c-body-s dfe-c-text-muted">Late</div>
+ <div class="dfe-c-scard" style="padding:1rem;">
+ <div class="dfe-c-body-s dfe-c-text-muted">Late</div>
       <div style="font-size:1.75rem;font-weight:700;color:#d4351c;">@periodStats.Late</div>
     </div>
   </div>
@@ -67,29 +72,36 @@
 <h2 class="dfe-c-heading-m dfe-c-mb-2">By status</h2>
 @foreach (var kv in statusGroups)
 {
-  <h3 class="dfe-c-heading-s dfe-c-mt-3 dfe-c-mb-2">@kv.Key (@kv.Value.Count)</h3>
+ <h3 class="dfe-c-heading-s dfe-c-mt-3 dfe-c-mb-2">@kv.Key (@kv.Value.Count)</h3>
   @if (kv.Value.Count == 0)
   {
-    <p class="dfe-c-body-s dfe-c-text-muted">None.</p>
+ <p class="dfe-c-body-s dfe-c-text-muted">None.</p>
   }
   else
   {
-    <div class="dfe-c-table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th scope="col">Work item</th>
-            <th scope="col">Business area</th>
-            <th scope="col">Primary contact</th>
+ <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+      <table class="govuk-table">
+        <thead class="govuk-table__head">
+          <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Work item</button>
+        </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Business area</button>
+        </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Primary contact</button>
+        </th>
           </tr>
         </thead>
-        <tbody>
+        <tbody class="govuk-table__body">
         @foreach (var p in kv.Value)
         {
-          <tr>
-            <td><a class="dfe-c-link dfe-c-fw-bold" href="@Url.Action("Detail", "ModernWork", new { id = p.Id })">@p.Title</a></td>
-            <td>@(p.BusinessAreaLookup?.Name ?? "—")</td>
-            <td>@(p.PrimaryContactUser?.Name ?? "—")</td>
+          <tr class="govuk-table__row">
+ <td class="govuk-table__cell"><a class="govuk-link govuk-!-font-weight-bold govuk-link--no-visited-state" href="@Url.Action("Detail", "ModernWork", new { id = p.Id })">@p.Title</a></td>
+            <td class="govuk-table__cell">@(p.BusinessAreaLookup?.Name ?? "—")</td>
+            <td class="govuk-table__cell">@(p.PrimaryContactUser?.Name ?? "—")</td>
           </tr>
         }
         </tbody>
@@ -102,27 +114,32 @@
 @foreach (var kv in businessAreaGroups.OrderBy(x => x.Key))
 {
   var g = kv.Value;
-  <h3 class="dfe-c-heading-s dfe-c-mt-3 dfe-c-mb-2">@g.BusinessAreaName — @g.SubmittedCount / @g.TotalProjects submitted</h3>
+ <h3 class="dfe-c-heading-s dfe-c-mt-3 dfe-c-mb-2">@g.BusinessAreaName — @g.SubmittedCount / @g.TotalProjects submitted</h3>
   @if (g.Projects.Count == 0)
   {
-    <p class="dfe-c-body-s dfe-c-text-muted">No projects.</p>
+ <p class="dfe-c-body-s dfe-c-text-muted">No projects.</p>
   }
   else
   {
-    <div class="dfe-c-table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th scope="col">Work item</th>
-            <th scope="col">Primary contact</th>
+ <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+      <table class="govuk-table">
+        <thead class="govuk-table__head">
+          <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Work item</button>
+        </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Primary contact</button>
+        </th>
           </tr>
         </thead>
-        <tbody>
+        <tbody class="govuk-table__body">
         @foreach (var p in g.Projects)
         {
-          <tr>
-            <td><a class="dfe-c-link" href="@Url.Action("Detail", "ModernWork", new { id = p.Id })">@p.Title</a></td>
-            <td>@(p.PrimaryContactUser?.Name ?? "—")</td>
+          <tr class="govuk-table__row">
+ <td class="govuk-table__cell"><a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("Detail", "ModernWork", new { id = p.Id })">@p.Title</a></td>
+            <td class="govuk-table__cell">@(p.PrimaryContactUser?.Name ?? "—")</td>
           </tr>
         }
         </tbody>

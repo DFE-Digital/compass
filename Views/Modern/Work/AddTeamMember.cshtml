@@ -1,10 +1,13 @@
 @model Compass.Models.Modern.Work.WorkItemTeamMember
+@using Compass.ViewModels.Modern
+@using System.Linq
 @{
     var work = ViewBag.WorkItem as Compass.Models.Modern.Work.WorkItem;
     var fundingOptions = (List<Compass.Models.Modern.Work.LookupOption>)ViewBag.TeamMemberFundingOptions ?? new List<Compass.Models.Modern.Work.LookupOption>();
     var typeOptions = (List<Compass.Models.Modern.Work.LookupOption>)ViewBag.TeamMemberTypeOptions ?? new List<Compass.Models.Modern.Work.LookupOption>();
     var roleOptions = (List<Compass.Models.Modern.Work.LookupOption>)ViewBag.TeamMemberRoleOptions ?? new List<Compass.Models.Modern.Work.LookupOption>();
     ViewData["Title"] = "Add team member";
+    var wiRef = ViewBag.WorkIdShort as string ?? Model.WorkItemId.ToString("D8");
     var userPicker = new Compass.Models.UserPickerViewModel
     {
         FieldName = "AppUserId",
@@ -12,123 +15,159 @@
         DefaultSummaryText = "No user selected.",
         DefaultUserId = Model.AppUserId > 0 ? Model.AppUserId : null,
         DefaultName = ViewBag.OwnerName as string,
-        DefaultEmail = ViewBag.OwnerEmail as string
+        DefaultEmail = ViewBag.OwnerEmail as string,
+        UseGovUkStyling = true
     };
+    bool HasErr(string field) => ViewData.ModelState[field]?.Errors?.Any() == true;
+    string? ErrMsg(string field) => ViewData.ModelState[field]?.Errors?.FirstOrDefault()?.ErrorMessage;
 }
 @section Breadcrumbs {
-    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="/">Home</a></li>
-    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="@Url.Action("Index", "ModernWork")">Work</a></li>
-    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="@Url.Action("Detail", "ModernWork", new { id = Model.WorkItemId })">@(work?.Title ?? "Work")</a></li>
-    <li class="dfe-c-breadcrumb__item" aria-current="page">Add team member</li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="/">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernWork")">Work</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Detail", "ModernWork", new { id = Model.WorkItemId })">@(work?.Title ?? "Work")</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">Add team member</li>
 }
 
 <div id="sc-work-addteammember">
-  @await Html.PartialAsync("_WorkItemChrome", ViewBag.WorkItem as Compass.Models.Modern.Work.WorkItem)
-  <h2 class="dfe-c-heading-m dfe-c-mt-0">Add team member</h2>
-  <p class="dfe-c-body muted dfe-c-mb-3">Add a team member with role, funding, time allocation and type.</p>
+  @await Html.PartialAsync("_WorkItemChrome", work)
 
-  @if (!ViewData.ModelState.IsValid)
-  {
-    <div class="dfe-c-error-summary" aria-labelledby="error-summary-title" role="alert" data-module="dfe-c-error-summary">
-      <h2 class="dfe-c-error-summary__title" id="error-summary-title">There is a problem</h2>
-      <div class="dfe-c-error-summary__body">
-        <ul class="dfe-c-list dfe-c-error-summary__list">
-          @foreach (var kv in ViewData.ModelState)
+@{
+  var addTeamLede = await Html.PartialAsync("_GovukBodyParagraph", "Add someone to this work item with role, funding, time allocation and type.");
+}
+@await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+  Caption = $"WI-{wiRef} · {work?.Title ?? "Work"}",
+  Title = "Add team member",
+  HeadingTag = "h2",
+  HeadingClass = "govuk-heading-l",
+  Lede = addTeamLede
+})
+
+ <div class="dfe-c-form-layout">
+ <div class="dfe-c-form-layout__main">
+ <div class="dfe-c-card dfe-c-card--plain">
+        <form asp-controller="ModernWork" asp-action="AddTeamMember" asp-route-id="@Model.WorkItemId" method="post" novalidate>
+          @Html.AntiForgeryToken()
+
+          @if (!ViewData.ModelState.IsValid)
           {
-            if (kv.Value?.Errors?.Count > 0)
-            {
-              <li><a href="#@kv.Key">@(kv.Value.Errors[0].ErrorMessage)</a></li>
-            }
+ <div class="govuk-error-summary" data-module="govuk-error-summary" role="alert" aria-labelledby="add-teammember-error-summary-title">
+ <h2 class="govuk-error-summary__title" id="add-teammember-error-summary-title">There is a problem</h2>
+ <div class="govuk-error-summary__body">
+ <ul class="govuk-list govuk-error-summary__list">
+                  @foreach (var kv in ViewData.ModelState)
+                  {
+                    if (kv.Value?.Errors == null || kv.Value.Errors.Count == 0) continue;
+                    foreach (var err in kv.Value.Errors)
+                    {
+                      var anchor = string.IsNullOrEmpty(kv.Key) ? "AppUserId" : kv.Key == "AppUserId" ? "user-picker-AppUserId" : kv.Key;
+                      <li><a href="#@anchor">@err.ErrorMessage</a></li>
+                    }
+                  }
+                </ul>
+              </div>
+            </div>
           }
-        </ul>
+
+ <fieldset class="govuk-fieldset">
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Team member details</legend>
+
+              @await Html.PartialAsync("_UserPicker", userPicker)
+
+ <div class="govuk-form-group @(HasErr("Role") ? "govuk-form-group--error" : "")">
+ <label class="govuk-label govuk-label--m" for="Role">Role</label>
+ <div id="Role-hint" class="govuk-hint">From Admin → Lookups → Organisational settings → Roles.</div>
+                @if (HasErr("Role"))
+                {
+ <p id="Role-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span>@ErrMsg("Role")</p>
+                }
+ <select class="govuk-select govuk-!-width-one-half @(HasErr("Role") ? "govuk-select--error" : "")" asp-for="Role" id="Role" aria-describedby="Role-hint @(HasErr("Role") ? "Role-error" : "")">
+                  <option value="">— Select role —</option>
+                  @foreach (var o in roleOptions)
+                  {
+                    <option value="@o.Name" selected="@(Model.Role == o.Name)">@o.Name</option>
+                  }
+                </select>
+              </div>
+
+ <div class="govuk-form-group @(HasErr("FundingOptionId") ? "govuk-form-group--error" : "")">
+ <label class="govuk-label govuk-label--m" for="FundingOptionId">Funding</label>
+                @if (HasErr("FundingOptionId"))
+                {
+ <p id="FundingOptionId-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span>@ErrMsg("FundingOptionId")</p>
+                }
+ <select class="govuk-select govuk-!-width-one-half @(HasErr("FundingOptionId") ? "govuk-select--error" : "")" asp-for="FundingOptionId" id="FundingOptionId" aria-describedby="@(HasErr("FundingOptionId") ? "FundingOptionId-error" : null)">
+                  <option value="">— Select —</option>
+                  @foreach (var o in fundingOptions)
+                  {
+                    <option value="@o.Id" selected="@(Model.FundingOptionId == o.Id)">@o.Name</option>
+                  }
+                </select>
+              </div>
+
+ <div class="govuk-form-group @(HasErr("TimeAllocationPct") ? "govuk-form-group--error" : "")">
+ <label class="govuk-label govuk-label--m" for="TimeAllocationPct">Time allocation %</label>
+                @if (HasErr("TimeAllocationPct"))
+                {
+ <p id="TimeAllocationPct-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span>@ErrMsg("TimeAllocationPct")</p>
+                }
+ <select class="govuk-select govuk-!-width-one-half @(HasErr("TimeAllocationPct") ? "govuk-select--error" : "")" asp-for="TimeAllocationPct" id="TimeAllocationPct" aria-describedby="@(HasErr("TimeAllocationPct") ? "TimeAllocationPct-error" : null)">
+                  <option value="">—</option>
+                  <option value="10" selected="@(Model.TimeAllocationPct == 10)">10%</option>
+                  <option value="20" selected="@(Model.TimeAllocationPct == 20)">20%</option>
+                  <option value="30" selected="@(Model.TimeAllocationPct == 30)">30%</option>
+                  <option value="40" selected="@(Model.TimeAllocationPct == 40)">40%</option>
+                  <option value="50" selected="@(Model.TimeAllocationPct == 50)">50%</option>
+                  <option value="60" selected="@(Model.TimeAllocationPct == 60)">60%</option>
+                  <option value="70" selected="@(Model.TimeAllocationPct == 70)">70%</option>
+                  <option value="80" selected="@(Model.TimeAllocationPct == 80)">80%</option>
+                  <option value="90" selected="@(Model.TimeAllocationPct == 90)">90%</option>
+                  <option value="100" selected="@(Model.TimeAllocationPct == 100)">100%</option>
+                </select>
+              </div>
+
+ <div class="govuk-form-group @(HasErr("TypeOptionId") ? "govuk-form-group--error" : "")">
+ <label class="govuk-label govuk-label--m" for="TypeOptionId">Type</label>
+                @if (HasErr("TypeOptionId"))
+                {
+ <p id="TypeOptionId-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span>@ErrMsg("TypeOptionId")</p>
+                }
+ <select class="govuk-select govuk-!-width-one-half @(HasErr("TypeOptionId") ? "govuk-select--error" : "")" asp-for="TypeOptionId" id="TypeOptionId" aria-describedby="@(HasErr("TypeOptionId") ? "TypeOptionId-error" : null)">
+                  <option value="">— Select —</option>
+                  @foreach (var o in typeOptions)
+                  {
+                    <option value="@o.Id" selected="@(Model.TypeOptionId == o.Id)">@o.Name</option>
+                  }
+                </select>
+              </div>
+
+ <div class="govuk-form-group">
+ <label class="govuk-label govuk-label--m" for="TeamStatus">Team status</label>
+ <select class="govuk-select govuk-!-width-one-half" asp-for="TeamStatus" id="TeamStatus">
+                  <option value="active" selected="@(Model.TeamStatus == "active")">Active</option>
+                  <option value="inactive" selected="@(Model.TeamStatus == "inactive")">Inactive</option>
+                </select>
+              </div>
+            </fieldset>
+
+ <div class="govuk-button-group">
+ <button type="submit" class="govuk-button" data-module="govuk-button">Add team member</button>
+ <a href="@Url.Action("Detail", "ModernWork", new { id = Model.WorkItemId })" class="govuk-link govuk-link--no-visited-state govuk-!-margin-left-3">Cancel</a>
+          </div>
+        </form>
       </div>
     </div>
-  }
-  <div class="dfe-c-grid-row">
-    <div class="dfe-c-grid-col dfe-c-grid-col--two-thirds">
-<form asp-controller="ModernWork" asp-action="AddTeamMember" asp-route-id="@Model.WorkItemId" method="post" class="dfe-c-mb-4">
-  @Html.AntiForgeryToken()
 
-  @await Html.PartialAsync("_UserPicker", userPicker)
-
-  <div class="dfe-c-form__group @(ViewData.ModelState["Role"]?.Errors?.Any() == true ? "dfe-c-form__group--error" : "")">
-    <label class="dfe-c-form__label" asp-for="Role">Role</label>
-    <div class="dfe-c-form__hint">From Admin → Lookups → Organisational settings → Roles.</div>
-    @if (ViewData.ModelState["Role"]?.Errors?.Any() == true)
-    {
-      <span class="dfe-c-form__error" id="Role-error">@ViewData.ModelState["Role"]?.Errors?.FirstOrDefault()?.ErrorMessage</span>
-    }
-    <select class="dfe-c-width-full" asp-for="Role" aria-describedby="@(ViewData.ModelState["Role"]?.Errors?.Any() == true ? "Role-error" : null)">
-      <option value="">— Select role —</option>
-      @foreach (var o in roleOptions)
-      {
-        <option value="@o.Name" selected="@(Model.Role == o.Name)">@o.Name</option>
-      }
-    </select>
-  </div>
-
-  <div class="dfe-c-form__group @(ViewData.ModelState["FundingOptionId"]?.Errors?.Any() == true ? "dfe-c-form__group--error" : "")">
-    <label class="dfe-c-form__label" asp-for="FundingOptionId">Funding</label>
-    @if (ViewData.ModelState["FundingOptionId"]?.Errors?.Any() == true)
-    {
-      <span class="dfe-c-form__error">@ViewData.ModelState["FundingOptionId"]?.Errors?.FirstOrDefault()?.ErrorMessage</span>
-    }
-    <select class="dfe-c-width-full" asp-for="FundingOptionId">
-      <option value="">— Select —</option>
-      @foreach (var o in fundingOptions)
-      {
-        <option value="@o.Id" selected="@(Model.FundingOptionId == o.Id)">@o.Name</option>
-      }
-    </select>
-  </div>
-
-  <div class="dfe-c-form__group @(ViewData.ModelState["TimeAllocationPct"]?.Errors?.Any() == true ? "dfe-c-form__group--error" : "")">
-    <label class="dfe-c-form__label" asp-for="TimeAllocationPct">Time allocation %</label>
-    @if (ViewData.ModelState["TimeAllocationPct"]?.Errors?.Any() == true)
-    {
-      <span class="dfe-c-form__error">@ViewData.ModelState["TimeAllocationPct"]?.Errors?.FirstOrDefault()?.ErrorMessage</span>
-    }
-    <select class="dfe-c-width-full" asp-for="TimeAllocationPct">
-      <option value="">—</option>
-      <option value="10" selected="@(Model.TimeAllocationPct == 10)">10%</option>
-      <option value="20" selected="@(Model.TimeAllocationPct == 20)">20%</option>
-      <option value="30" selected="@(Model.TimeAllocationPct == 30)">30%</option>
-      <option value="40" selected="@(Model.TimeAllocationPct == 40)">40%</option>
-      <option value="50" selected="@(Model.TimeAllocationPct == 50)">50%</option>
-      <option value="60" selected="@(Model.TimeAllocationPct == 60)">60%</option>
-      <option value="70" selected="@(Model.TimeAllocationPct == 70)">70%</option>
-      <option value="80" selected="@(Model.TimeAllocationPct == 80)">80%</option>
-      <option value="90" selected="@(Model.TimeAllocationPct == 90)">90%</option>
-      <option value="100" selected="@(Model.TimeAllocationPct == 100)">100%</option>
-    </select>
-  </div>
-
-  <div class="dfe-c-form__group @(ViewData.ModelState["TypeOptionId"]?.Errors?.Any() == true ? "dfe-c-form__group--error" : "")">
-    <label class="dfe-c-form__label" asp-for="TypeOptionId">Type</label>
-    @if (ViewData.ModelState["TypeOptionId"]?.Errors?.Any() == true)
-    {
-      <span class="dfe-c-form__error">@ViewData.ModelState["TypeOptionId"]?.Errors?.FirstOrDefault()?.ErrorMessage</span>
-    }
-    <select class="dfe-c-width-full" asp-for="TypeOptionId">
-      <option value="">— Select —</option>
-      @foreach (var o in typeOptions)
-      {
-        <option value="@o.Id" selected="@(Model.TypeOptionId == o.Id)">@o.Name</option>
-      }
-    </select>
-  </div>
-
-  <div class="dfe-c-form__group">
-    <label class="dfe-c-form__label" asp-for="TeamStatus">Team status</label>
-    <select class="dfe-c-width-full" asp-for="TeamStatus">
-      <option value="active" selected="@(Model.TeamStatus == "active")">Active</option>
-      <option value="inactive" selected="@(Model.TeamStatus == "inactive")">Inactive</option>
-    </select>
-  </div>
-
-  <button type="submit" class="dfe-c-button dfe-c-button--primary">Add team member</button>
-  <a href="@Url.Action("Detail", "ModernWork", new { id = Model.WorkItemId })" class="dfe-c-button dfe-c-button--secondary dfe-c-ms-2">Cancel</a>
-</form>
+ <div class="dfe-c-form-layout__aside">
+ <div class="dfe-c-sidebar">
+ <div class="dfe-c-scard">
+ <div class="dfe-c-scard__title">Who to add</div>
+          <p class="govuk-body-s govuk-!-margin-bottom-0">Search for a colleague by name or email. They must already exist in the directory.</p>
+        </div>
+ <div class="dfe-c-scard">
+ <div class="dfe-c-scard__title">Role and allocation</div>
+          <p class="govuk-body-s govuk-!-margin-bottom-0">Role comes from your organisation’s lookup list. Time allocation reflects how much of their capacity this work item uses.</p>
+        </div>
+      </div>
     </div>
   </div>
 </div>

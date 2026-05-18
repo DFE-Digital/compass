@@ -1,112 +1,365 @@
 @* Sub-navs — visibility driven by ViewBag.MainNavSection; active item by ViewBag.SubNavItem *@
-
-@* ── DEMAND ──────────────────────────────────────────────────────────────── *@
-<nav class="dfe-c-sub-nav @(ViewBag.MainNavSection == "demand" ? "dfe-c-sub-nav--visible" : "")" id="subnav-demand" aria-label="Demand navigation">
-  <div class="govuk-width-container dfe-c-sub-nav__inner">
-    <a class="dfe-c-sub-nav__link @(ViewBag.SubNavItem == "demand-dashboard"    ? "dfe-c-sub-nav__link--active" : "")" data-sub="demand-dashboard" href="@Url.Action("Dashboard", "Demand")">Dashboard</a>
-    <a class="dfe-c-sub-nav__link @(ViewBag.SubNavItem == "demand-work-report"  ? "dfe-c-sub-nav__link--active" : "")" data-sub="demand-work-report" href="@Url.Action("WorkDemandReport", "Demand")">Work demand report</a>
-    <a class="dfe-c-sub-nav__link @(ViewBag.SubNavItem == "demand-businesscase" ? "dfe-c-sub-nav__link--active" : "")" data-sub="demand-businesscase" href="@Url.Action("Index", "Horizon")">Business case</a>
-    <a class="dfe-c-sub-nav__link @(ViewBag.SubNavItem == "demand-register" || ViewBag.SubNavItem == "demand-detail" || ViewBag.SubNavItem == "demand-submit" ? "dfe-c-sub-nav__link--active" : "")" data-sub="demand-register demand-detail demand-submit" href="@Url.Action("Index", "Demand")">Active demand</a>
-    <a class="dfe-c-sub-nav__link @(ViewBag.SubNavItem == "demand-explore" ? "dfe-c-sub-nav__link--active" : "")" data-sub="demand-explore" href="@Url.Action("Index", "Explore")">Explore</a>
-    <a class="dfe-c-sub-nav__link @(ViewBag.SubNavItem == "demand-scoring"      ? "dfe-c-sub-nav__link--active" : "")" data-sub="demand-scoring" href="@Url.Action("Index", "Scoring")">Scoring</a>
-    <a class="dfe-c-sub-nav__link @(ViewBag.SubNavItem == "demand-triage"       ? "dfe-c-sub-nav__link--active" : "")" data-sub="demand-triage" href="@Url.Action("Index", "Triage")">Triage</a>
-    <a class="dfe-c-sub-nav__link @(ViewBag.SubNavItem == "demand-exports"      ? "dfe-c-sub-nav__link--active" : "")" data-sub="demand-exports" href="@Url.Action("Index", "Exports")">Exports</a>
-  </div>
-</nav>
-
-@* ── WORK ─────────────────────────────────────────────────────────────────── *@
-<nav class="dfe-c-sub-nav @(ViewBag.MainNavSection == "work" ? "dfe-c-sub-nav--visible" : "")" id="subnav-work" aria-label="Work navigation">
-  <div class="govuk-width-container dfe-c-sub-nav__inner">
-    <a class="dfe-c-sub-nav__link @(ViewBag.SubNavItem == "work-dashboard" ? "dfe-c-sub-nav__link--active" : "")" data-sub="work-dashboard" href="@Url.Action("Dashboard", "ModernWork")">Dashboard</a>
-    <a class="dfe-c-sub-nav__link @(ViewBag.SubNavItem == "work-allwork" ? "dfe-c-sub-nav__link--active" : "")" data-sub="work-allwork" href="@Url.Action("AllWork", "ModernWork")">All work</a>
-    <a class="dfe-c-sub-nav__link @(ViewBag.SubNavItem == "work-watching" ? "dfe-c-sub-nav__link--active" : "")" data-sub="work-watching" href="@Url.Action("Watching", "ModernWork")">Watching</a>
-    <a class="dfe-c-sub-nav__link @(ViewBag.SubNavItem == "work-bypriority" ? "dfe-c-sub-nav__link--active" : "")" data-sub="work-bypriority" href="@Url.Action("ByPriority", "ModernWork")">By Priority</a>
-    <a class="dfe-c-sub-nav__link @(ViewBag.SubNavItem == "work-flagship" ? "dfe-c-sub-nav__link--active" : "")" data-sub="work-flagship" href="@Url.Action("Flagship", "ModernWork")">Flagship Work</a>
-    <a class="dfe-c-sub-nav__link @(ViewBag.SubNavItem == "work-directorates" ? "dfe-c-sub-nav__link--active" : "")" data-sub="work-directorates" href="@Url.Action("Directorates", "ModernWork")">Directorates</a>
-    <a class="dfe-c-sub-nav__link @(ViewBag.SubNavItem == "work-exports" ? "dfe-c-sub-nav__link--active" : "")" data-sub="work-exports" href="@Url.Action("Index", "Exports", new { section = "work" })">Exports</a>
-  </div>
-</nav>
-
-@* ── OPERATIONS (risk_issues group) ───────────────────────────────────────── *@
-@if (ViewBag.CanAccessOperations == true)
-{
-<nav class="dfe-c-sub-nav @(ViewBag.MainNavSection == "operations" ? "dfe-c-sub-nav--visible" : "")" id="subnav-operations" aria-label="Operations navigation">
-  <div class="govuk-width-container dfe-c-sub-nav__inner">
-    <a class="dfe-c-sub-nav__link @(ViewBag.SubNavItem == "operations-risks-issues" ? "dfe-c-sub-nav__link--active" : "")" data-sub="operations-risks-issues" href="@Url.RouteUrl("operations-section", new { action = "RisksIssues" })">Risks and issues</a>
-  </div>
-</nav>
+@{
+  var navSection = (ViewBag.MainNavSection as string ?? "").Trim();
+  bool IsSection(string key) => string.Equals(navSection, key, StringComparison.OrdinalIgnoreCase);
 }
 
-@* ── PRODUCTS AND SERVICES ───────────────────────────────────────────────── *@
-<nav class="dfe-c-sub-nav @(ViewBag.MainNavSection == "products-services" ? "dfe-c-sub-nav--visible" : "")" id="subnav-products-services" aria-label="Products and services navigation">
-  <div class="govuk-width-container dfe-c-sub-nav__inner">
-    <a class="dfe-c-sub-nav__link @(ViewBag.SubNavItem == "products-services-dashboard" ? "dfe-c-sub-nav__link--active" : "")" data-sub="products-services-dashboard" href="@Url.RouteUrl("products-services-section", new { action = "Dashboard" })">Dashboard</a>
-    <a class="dfe-c-sub-nav__link @(ViewBag.SubNavItem == "products-services-catalogue" || ViewBag.SubNavItem == "products-services-detail" ? "dfe-c-sub-nav__link--active" : "")" data-sub="products-services-catalogue products-services-detail" href="@Url.RouteUrl("products-services-section", new { action = "Index" })">All products</a>
-    <a class="dfe-c-sub-nav__link @(ViewBag.SubNavItem == "products-services-yours" ? "dfe-c-sub-nav__link--active" : "")" data-sub="products-services-yours" href="@Url.RouteUrl("products-services-section", new { action = "YourProducts" })">Your products</a>
-    <a class="dfe-c-sub-nav__link @(ViewBag.SubNavItem == "products-services-portfolio" ? "dfe-c-sub-nav__link--active" : "")" data-sub="products-services-portfolio" href="@Url.RouteUrl("products-services-section", new { action = "Portfolio" })">Portfolio</a>
-    <a class="dfe-c-sub-nav__link @(ViewBag.SubNavItem == "products-services-use-data" ? "dfe-c-sub-nav__link--active" : "")" data-sub="products-services-use-data" href="@Url.RouteUrl("products-services-section", new { action = "UseTheData" })">Use the data</a>
+<style>
+.no-border-bottom {
+  box-shadow: none !important;
+}
+</style>
+
+@* ── DEMAND ──────────────────────────────────────────────────────────────── *@
+@if (ViewBag.ShowDemandNavigation == true)
+{
+<div class="dfe-f-sub-nav-anchor@(IsSection("demand") ? " dfe-f-sub-navigation-wrapper" : "")">
+<nav class="dfe-f-sub-navigation dfe-c-sub-nav @(IsSection("demand") ? "dfe-c-sub-nav--visible" : "")" id="subnav-demand" aria-label="Demand navigation">
+  <div class="govuk-width-container">
+    <ul class="dfe-f-sub-navigation__list no-border-bottom">
+      <li class="dfe-f-sub-navigation__item">
+        <a class="dfe-f-sub-navigation__link govuk-link" data-sub="demand-dashboard" href="@Url.Action("Dashboard", "ModernDemand")"@if (ViewBag.SubNavItem =="demand-dashboard") { <text> aria-current="page"</text> }>Dashboard</a>
+      </li>
+      <li class="dfe-f-sub-navigation__item">
+        <a class="dfe-f-sub-navigation__link govuk-link" data-sub="demand-businesscase" href="@Url.Action("BusinessCase", "ModernDemand")"@if (ViewBag.SubNavItem =="demand-businesscase") { <text> aria-current="page"</text> }>Business case</a>
+      </li>
+      <li class="dfe-f-sub-navigation__item">
+        <a class="dfe-f-sub-navigation__link govuk-link" data-sub="demand-register demand-detail demand-submit" href="@Url.Action("Register", "ModernDemand")"@if (ViewBag.SubNavItem =="demand-register" || ViewBag.SubNavItem == "demand-detail" || ViewBag.SubNavItem == "demand-submit") { <text> aria-current="page"</text> }>Demand</a>
+      </li>
+      <li class="dfe-f-sub-navigation__item">
+        <a class="dfe-f-sub-navigation__link govuk-link" data-sub="demand-explore" href="@Url.Action("Explore", "ModernDemand")"@if (ViewBag.SubNavItem =="demand-explore") { <text> aria-current="page"</text> }>Explore</a>
+      </li>
+      <li class="dfe-f-sub-navigation__item">
+        <a class="dfe-f-sub-navigation__link govuk-link" data-sub="demand-scoring" href="@Url.Action("Scoring", "ModernDemand")"@if (ViewBag.SubNavItem =="demand-scoring") { <text> aria-current="page"</text> }>Scoring</a>
+      </li>
+      <li class="dfe-f-sub-navigation__item">
+        <a class="dfe-f-sub-navigation__link govuk-link" data-sub="demand-triage" href="@Url.Action("Triage", "ModernDemand")"@if (ViewBag.SubNavItem =="demand-triage") { <text> aria-current="page"</text> }>Triage</a>
+      </li>
+    </ul>
   </div>
 </nav>
+</div>
+}
+
+
+@* ── RAID ───────────────────────────────────────────────────────────────────── *@
+@if (ViewBag.ShowRaidNavigation == true)
+{
+<div class="dfe-f-sub-nav-anchor@(IsSection("raid") ? " dfe-f-sub-navigation-wrapper" : "")">
+<nav class="dfe-f-sub-navigation dfe-c-sub-nav @(IsSection("raid") ? "dfe-c-sub-nav--visible" : "")" id="subnav-raid" aria-label="RAID navigation">
+  <div class="govuk-width-container">
+    <ul class="dfe-f-sub-navigation__list no-border-bottom  ">
+      <li class="dfe-f-sub-navigation__item">
+        <a class="dfe-f-sub-navigation__link govuk-link" data-sub="raid-dashboard" href="@Url.Action("Dashboard", "ModernRaid")"@if (ViewBag.SubNavItem =="raid-dashboard") { <text> aria-current="page"</text> }>Dashboard</a>
+      </li>
+      <li class="dfe-f-sub-navigation__item">
+        <a class="dfe-f-sub-navigation__link govuk-link" data-sub="raid-risks" href="@Url.Action("Risks", "ModernRaid")"@if (ViewBag.SubNavItem =="raid-risks") { <text> aria-current="page"</text> }>Risks</a>
+      </li>
+      <li class="dfe-f-sub-navigation__item">
+        <a class="dfe-f-sub-navigation__link govuk-link" data-sub="raid-issues" href="@Url.Action("Issues", "ModernRaid")"@if (ViewBag.SubNavItem =="raid-issues") { <text> aria-current="page"</text> }>Issues</a>
+      </li>
+      <li class="dfe-f-sub-navigation__item">
+        <a class="dfe-f-sub-navigation__link govuk-link" data-sub="raid-dependencies" href="@Url.Action("Dependencies", "ModernRaid")"@if (ViewBag.SubNavItem =="raid-dependencies") { <text> aria-current="page"</text> }>Dependencies</a>
+      </li>
+      <li class="dfe-f-sub-navigation__item">
+        <a class="dfe-f-sub-navigation__link govuk-link" data-sub="raid-assumptions" href="@Url.Action("Assumptions", "ModernRaid")"@if (ViewBag.SubNavItem =="raid-assumptions") { <text> aria-current="page"</text> }>Assumptions</a>
+      </li>
+      <li class="dfe-f-sub-navigation__item">
+        <a class="dfe-f-sub-navigation__link govuk-link" data-sub="raid-near-misses" href="@Url.Action("NearMisses", "ModernRaid")"@if (ViewBag.SubNavItem =="raid-near-misses") { <text> aria-current="page"</text> }>Near misses</a>
+      </li>
+      <li class="dfe-f-sub-navigation__item">
+        <a class="dfe-f-sub-navigation__link govuk-link" data-sub="raid-tier" href="@Url.Action("Tier", "ModernRaid")"@if (ViewBag.SubNavItem =="raid-tier") { <text> aria-current="page"</text> }>By tier</a>
+      </li>
+      <li class="dfe-f-sub-navigation__item">
+        <a class="dfe-f-sub-navigation__link govuk-link" data-sub="raid-directorate" href="@Url.Action("Directorate", "ModernRaid")"@if (ViewBag.SubNavItem =="raid-directorate") { <text> aria-current="page"</text> }>Directorate</a>
+      </li>
+      <li class="dfe-f-sub-navigation__item">
+        <a class="dfe-f-sub-navigation__link govuk-link" data-sub="raid-business-areas" href="@Url.Action("BusinessAreas", "ModernRaid")"@if (ViewBag.SubNavItem =="raid-business-areas") { <text> aria-current="page"</text> }>Business areas</a>
+      </li>
+      <li class="dfe-f-sub-navigation__item">
+        <a class="dfe-f-sub-navigation__link govuk-link" data-sub="raid-review" href="@Url.Action("ReviewStart", "ModernRaid")"@if (ViewBag.SubNavItem =="raid-review") { <text> aria-current="page"</text> }>Monthly review</a>
+      </li>
+    </ul>
+  </div>
+</nav>
+</div>
+}
+
+@* ── DDR (Design Decision Records) ───────────────────────────────────────── *@
+@if (ViewBag.ShowDdrNavigation == true)
+{
+<div class="dfe-f-sub-nav-anchor@(IsSection("ddr") ? " dfe-f-sub-navigation-wrapper" : "")">
+<nav class="dfe-f-sub-navigation dfe-c-sub-nav @(IsSection("ddr") ? "dfe-c-sub-nav--visible" : "")" id="subnav-ddr" aria-label="Decisions navigation">
+  <div class="govuk-width-container">
+    <ul class="dfe-f-sub-navigation__list no-border-bottom">
+      <li class="dfe-f-sub-navigation__item">
+        <a class="dfe-f-sub-navigation__link govuk-link" data-sub="ddr-dashboard" href="@Url.Action("Dashboard", "ModernDesignDecisionRecords")"@if (ViewBag.SubNavItem == "ddr-dashboard") { <text> aria-current="page"</text> }>Dashboard</a>
+      </li>
+      <li class="dfe-f-sub-navigation__item">
+        <a class="dfe-f-sub-navigation__link govuk-link" data-sub="ddr-register" href="@Url.Action("Register", "ModernDesignDecisionRecords")"@if (ViewBag.SubNavItem == "ddr-register") { <text> aria-current="page"</text> }>Register</a>
+      </li>
+      <li class="dfe-f-sub-navigation__item">
+        <a class="dfe-f-sub-navigation__link govuk-link" data-sub="ddr-new" href="@Url.Action("New", "ModernDesignDecisionRecords")"@if (ViewBag.SubNavItem == "ddr-new") { <text> aria-current="page"</text> }>Create</a>
+      </li>
+      <li class="dfe-f-sub-navigation__item">
+        <a class="dfe-f-sub-navigation__link govuk-link" data-sub="ddr-oversight" href="@Url.Action("Oversight", "ModernDesignDecisionRecords")"@if (ViewBag.SubNavItem == "ddr-oversight") { <text> aria-current="page"</text> }>Oversight</a>
+      </li>
+      <li class="dfe-f-sub-navigation__item">
+        <a class="dfe-f-sub-navigation__link govuk-link" data-sub="ddr-reporting" href="@Url.Action("DesignDecisionRecords", "ModernReporting")"@if (ViewBag.SubNavItem == "ddr-reporting") { <text> aria-current="page"</text> }>Reporting</a>
+      </li>
+    </ul>
+  </div>
+</nav>
+</div>
+}
+
+@* ── WORK ─────────────────────────────────────────────────────────────────── *@
+<div class="dfe-f-sub-nav-anchor@(IsSection("work") ? " dfe-f-sub-navigation-wrapper" : "")">
+<nav class="dfe-f-sub-navigation dfe-c-sub-nav @(IsSection("work") ? "dfe-c-sub-nav--visible" : "")" id="subnav-work" aria-label="Work navigation">
+  <div class="govuk-width-container">
+    <ul class="dfe-f-sub-navigation__list no-border-bottom">
+      <li class="dfe-f-sub-navigation__item">
+        <a class="dfe-f-sub-navigation__link govuk-link" data-sub="work-dashboard" href="@Url.Action("Dashboard", "ModernWork")"@if (ViewBag.SubNavItem =="work-dashboard") { <text> aria-current="page"</text> }>Dashboard</a>
+      </li>
+      <li class="dfe-f-sub-navigation__item">
+        <a class="dfe-f-sub-navigation__link govuk-link" data-sub="work-allwork" href="@Url.Action("AllWork", "ModernWork")"@if (ViewBag.SubNavItem =="work-allwork") { <text> aria-current="page"</text> }>All work</a>
+      </li>
+      <li class="dfe-f-sub-navigation__item">
+        <a class="dfe-f-sub-navigation__link govuk-link" data-sub="work-watching" href="@Url.Action("Watching", "ModernWork")"@if (ViewBag.SubNavItem =="work-watching") { <text> aria-current="page"</text> }>Watching</a>
+      </li>
+      <li class="dfe-f-sub-navigation__item">
+        <a class="dfe-f-sub-navigation__link govuk-link" data-sub="work-bypriority" href="@Url.Action("ByPriority", "ModernWork")"@if (ViewBag.SubNavItem =="work-bypriority") { <text> aria-current="page"</text> }>By Priority</a>
+      </li>
+      <li class="dfe-f-sub-navigation__item">
+        <a class="dfe-f-sub-navigation__link govuk-link" data-sub="work-flagship" href="@Url.Action("Flagship", "ModernWork")"@if (ViewBag.SubNavItem =="work-flagship") { <text> aria-current="page"</text> }>Flagship Work</a>
+      </li>
+      <li class="dfe-f-sub-navigation__item">
+        <a class="dfe-f-sub-navigation__link govuk-link" data-sub="work-directorates" href="@Url.Action("Directorates", "ModernWork")"@if (ViewBag.SubNavItem =="work-directorates") { <text> aria-current="page"</text> }>Directorates</a>
+      </li>
+      <li class="dfe-f-sub-navigation__item">
+        <a class="dfe-f-sub-navigation__link govuk-link" data-sub="work-business-areas" href="@Url.Action("BusinessAreas", "ModernWork")"@if (ViewBag.SubNavItem =="work-business-areas") { <text> aria-current="page"</text> }>Business areas</a>
+      </li>
+    </ul>
+  </div>
+</nav>
+</div>
+
+@* ── OPERATIONS (Central Operations Admin only) ──────────────────────────── *@
+@if (ViewBag.CanAccessOperations == true)
+{
+<div class="dfe-f-sub-nav-anchor@(IsSection("operations") ? " dfe-f-sub-navigation-wrapper" : "")">
+<nav class="dfe-f-sub-navigation dfe-c-sub-nav @(IsSection("operations") ? "dfe-c-sub-nav--visible" : "")" id="subnav-operations" aria-label="Operations navigation">
+  <div class="govuk-width-container">
+    <ul class="dfe-f-sub-navigation__list no-border-bottom">
+      <li class="dfe-f-sub-navigation__item">
+        <a class="dfe-f-sub-navigation__link govuk-link" data-sub="operations-dashboard" href="@Url.Action("Dashboard", "ModernOperations")"@if (ViewBag.SubNavItem =="operations-dashboard") { <text> aria-current="page"</text> }>Dashboard</a>
+      </li>
+      @if (ViewBag.ShowDdrNavigation == true)
+      {
+      <li class="dfe-f-sub-navigation__item">
+        <a class="dfe-f-sub-navigation__link govuk-link" data-sub="operations-ddr" href="@Url.Action("Ddr", "ModernOperations")"@if (ViewBag.SubNavItem == "operations-ddr") { <text> aria-current="page"</text> }>DDR</a>
+      </li>
+      }
+      <li class="dfe-f-sub-navigation__item">
+        <a class="dfe-f-sub-navigation__link govuk-link" data-sub="operations-manage-work" href="@Url.Action("ManageWork", "ModernOperations")"@if (ViewBag.SubNavItem =="operations-manage-work") { <text> aria-current="page"</text> }>Manage work</a>
+      </li>
+      @if (ViewBag.ShowDemandNavigation == true)
+      {
+      <li class="dfe-f-sub-navigation__item">
+        <a class="dfe-f-sub-navigation__link govuk-link" data-sub="operations-manage-demand" href="@Url.Action("ManageDemand", "ModernOperations")"@if (ViewBag.SubNavItem =="operations-manage-demand") { <text> aria-current="page"</text> }>Manage demand</a>
+      </li>
+      <li class="dfe-f-sub-navigation__item">
+        <a class="dfe-f-sub-navigation__link govuk-link" data-sub="operations-manage-triage" href="@Url.Action("ManageTriage", "ModernOperations")"@if (ViewBag.SubNavItem =="operations-manage-triage") { <text> aria-current="page"</text> }>Manage triage</a>
+      </li>
+      }
+      <li class="dfe-f-sub-navigation__item">
+        <a class="dfe-f-sub-navigation__link govuk-link" data-sub="operations-manage-performance" href="@Url.Action("ManagePerformance", "ModernOperations")"@if (ViewBag.SubNavItem =="operations-manage-performance") { <text> aria-current="page"</text> }>Manage performance</a>
+      </li>
+      @if (ViewBag.ShowRaidNavigation == true)
+      {
+      <li class="dfe-f-sub-navigation__item">
+        <a class="dfe-f-sub-navigation__link govuk-link" data-sub="operations-raid" href="@Url.Action("RaidEscalations", "ModernOperations")"@if (ViewBag.SubNavItem =="operations-raid") { <text> aria-current="page"</text> }>RAID</a>
+      </li>
+      }
+      <li class="dfe-f-sub-navigation__item">
+        <a class="dfe-f-sub-navigation__link govuk-link" data-sub="operations-cms-requests" href="@Url.Action("CmsRequests", "ModernOperations")"@if (ViewBag.SubNavItem =="operations-cms-requests") { <text> aria-current="page"</text> }>CMS requests</a>
+      </li>
+      @if (ViewBag.ShowFipsDatabaseServiceRegister == true)
+      {
+      <li class="dfe-f-sub-navigation__item">
+        <a class="dfe-f-sub-navigation__link govuk-link" data-sub="operations-service-register" href="@Url.Action("ServiceRegister", "ModernOperations")"@if (ViewBag.SubNavItem =="operations-service-register") { <text> aria-current="page"</text> }>Service register</a>
+      </li>
+      }
+    </ul>
+  </div>
+</nav>
+</div>
+}
+
+@* ── SERVICE REGISTER (FIPS products) ───────────────────────────────────── *@
+@if (ViewBag.ShowFipsDatabaseServiceRegister == true)
+{
+<div class="dfe-f-sub-nav-anchor@(IsSection("manage") ? " dfe-f-sub-navigation-wrapper" : "")">
+<nav class="dfe-f-sub-navigation dfe-c-sub-nav @(IsSection("manage") ? "dfe-c-sub-nav--visible" : "")" id="subnav-manage" aria-label="Service register navigation">
+  <div class="govuk-width-container">
+    <ul class="dfe-f-sub-navigation__list no-border-bottom">
+      <li class="dfe-f-sub-navigation__item">
+        <a class="dfe-f-sub-navigation__link govuk-link" data-sub="manage-fips-dashboard" href="@Url.Action("FipsDashboard", "ModernManage")"@if (ViewBag.SubNavItem =="manage-fips-dashboard") { <text> aria-current="page"</text> }>Dashboard</a>
+      </li>
+      <li class="dfe-f-sub-navigation__item">
+        <a class="dfe-f-sub-navigation__link govuk-link" data-sub="manage-fips-products" href="@Url.Action("Fips", "ModernManage")"@if (ViewBag.SubNavItem =="manage-fips-products") { <text> aria-current="page"</text> }>Products</a>
+      </li>
+      <li class="dfe-f-sub-navigation__item">
+        <a class="dfe-f-sub-navigation__link govuk-link" data-sub="manage-service-lines" href="@Url.Action("ServiceLines", "ModernManage")"@if (ViewBag.SubNavItem =="manage-service-lines") { <text> aria-current="page"</text> }>Service lines</a>
+      </li>
+    </ul>
+  </div>
+</nav>
+</div>
+}
 
 @* ── PERFORMANCE ──────────────────────────────────────────────────────────── *@
-<nav class="dfe-c-sub-nav @(ViewBag.MainNavSection == "performance" ? "dfe-c-sub-nav--visible" : "")" id="subnav-performance" aria-label="Performance navigation">
-  <div class="govuk-width-container dfe-c-sub-nav__inner">
-    <a class="dfe-c-sub-nav__link @(ViewBag.SubNavItem == "perf-dashboard" ? "dfe-c-sub-nav__link--active" : "")" data-sub="perf-dashboard" href="@Url.Action("Index", "Performance")">Dashboard</a>
-    <a class="dfe-c-sub-nav__link @(ViewBag.SubNavItem == "perf-products" ? "dfe-c-sub-nav__link--active" : "")" data-sub="perf-products" href="@Url.Action("Products", "Performance")">Products</a>
+<div class="dfe-f-sub-nav-anchor@(IsSection("performance") ? " dfe-f-sub-navigation-wrapper" : "")">
+<nav class="dfe-f-sub-navigation dfe-c-sub-nav @(IsSection("performance") ? "dfe-c-sub-nav--visible" : "")" id="subnav-performance" aria-label="Performance navigation">
+  <div class="govuk-width-container">
+    <ul class="dfe-f-sub-navigation__list no-border-bottom">
+      <li class="dfe-f-sub-navigation__item">
+        <a class="dfe-f-sub-navigation__link govuk-link" data-sub="perf-dashboard" href="@Url.Action("Index", "ModernPerformance")"@if (ViewBag.SubNavItem =="perf-dashboard") { <text> aria-current="page"</text> }>Commissions</a>
+      </li>
+      <li class="dfe-f-sub-navigation__item">
+        <a class="dfe-f-sub-navigation__link govuk-link" data-sub="perf-guidance" href="@Url.Action("Guidance", "ModernPerformance")"@if (ViewBag.SubNavItem =="perf-guidance") { <text> aria-current="page"</text> }>Guidance</a>
+      </li>
+    </ul>
   </div>
 </nav>
+</div>
 
 @* ── RISKS AND ISSUES ─────────────────────────────────────────────────────── *@
-@* Use risks-issues-section route so links go to /risks-issues/{action}, not default /Risks/{action} *@
-<nav class="dfe-c-sub-nav @(ViewBag.MainNavSection == "risks" ? "dfe-c-sub-nav--visible" : "")" id="subnav-risks" aria-label="Risks and Issues navigation">
-  <div class="govuk-width-container dfe-c-sub-nav__inner">
-    <a class="dfe-c-sub-nav__link @(ViewBag.SubNavItem == "risks-dashboard" ? "dfe-c-sub-nav__link--active" : "")" data-sub="risks-dashboard" href="@Url.RouteUrl("risks-issues-section", new { action = "Dashboard" })">Dashboard</a>
-    <a class="dfe-c-sub-nav__link @(ViewBag.SubNavItem == "risks-register" ? "dfe-c-sub-nav__link--active" : "")" data-sub="risks-register" href="@Url.RouteUrl("risks-issues-section", new { action = "Register" })">All</a>
-    <a class="dfe-c-sub-nav__link @(ViewBag.SubNavItem == "risks-index" ? "dfe-c-sub-nav__link--active" : "")" data-sub="risks-index" href="@Url.RouteUrl("risks-issues-section", new { action = "Index", view = "active" })">Risks</a>
-    <a class="dfe-c-sub-nav__link @(ViewBag.SubNavItem == "risks-issues" ? "dfe-c-sub-nav__link--active" : "")" data-sub="risks-issues" href="@Url.RouteUrl("risks-issues-section", new { action = "Issues", view = "active" })">Issues</a>
-    <a class="dfe-c-sub-nav__link @(ViewBag.SubNavItem == "risks-bydirectorate" || ViewBag.SubNavItem == "risks-issues-bydirectorate" ? "dfe-c-sub-nav__link--active" : "")" data-sub="risks-bydirectorate risks-issues-bydirectorate" href="@Url.RouteUrl("risks-issues-section", new { action = "ByDirectorate" })">By directorate</a>
-    <a class="dfe-c-sub-nav__link @(ViewBag.SubNavItem == "risks-byportfolio" || ViewBag.SubNavItem == "risks-issues-byportfolio" ? "dfe-c-sub-nav__link--active" : "")" data-sub="risks-byportfolio risks-issues-byportfolio" href="@Url.RouteUrl("risks-issues-section", new { action = "ByPortfolio" })">By portfolio</a>
-    <a class="dfe-c-sub-nav__link @(ViewBag.SubNavItem == "risks-intelligence" ? "dfe-c-sub-nav__link--active" : "")" data-sub="risks-intelligence" href="@Url.RouteUrl("risks-issues-section", new { action = "Intelligence" })">Intelligence</a>
+@if (ViewBag.ShowRaidNavigation == true)
+{
+<div class="dfe-f-sub-nav-anchor@(IsSection("risks") ? " dfe-f-sub-navigation-wrapper" : "")">
+<nav class="dfe-f-sub-navigation dfe-c-sub-nav @(IsSection("risks") ? "dfe-c-sub-nav--visible" : "")" id="subnav-risks" aria-label="Risks and Issues navigation">
+  <div class="govuk-width-container">
+    <ul class="dfe-f-sub-navigation__list no-border-bottom    ">
+      <li class="dfe-f-sub-navigation__item">
+        <a class="dfe-f-sub-navigation__link govuk-link" data-sub="risks-dashboard" href="@Url.RouteUrl("risks-issues-section", new { action = "Dashboard" })"@if (ViewBag.SubNavItem =="risks-dashboard") { <text> aria-current="page"</text> }>Dashboard</a>
+      </li>
+      <li class="dfe-f-sub-navigation__item">
+        <a class="dfe-f-sub-navigation__link govuk-link" data-sub="risks-register" href="@Url.RouteUrl("risks-issues-section", new { action = "Register" })"@if (ViewBag.SubNavItem =="risks-register") { <text> aria-current="page"</text> }>All</a>
+      </li>
+      <li class="dfe-f-sub-navigation__item">
+        <a class="dfe-f-sub-navigation__link govuk-link" data-sub="risks-index" href="@Url.RouteUrl("risks-issues-section", new { action = "Index", view = "active" })"@if (ViewBag.SubNavItem =="risks-index") { <text> aria-current="page"</text> }>Risks</a>
+      </li>
+      <li class="dfe-f-sub-navigation__item">
+        <a class="dfe-f-sub-navigation__link govuk-link" data-sub="risks-issues" href="@Url.RouteUrl("risks-issues-section", new { action = "Issues", view = "active" })"@if (ViewBag.SubNavItem =="risks-issues") { <text> aria-current="page"</text> }>Issues</a>
+      </li>
+      <li class="dfe-f-sub-navigation__item">
+        <a class="dfe-f-sub-navigation__link govuk-link" data-sub="risks-bydirectorate risks-issues-bydirectorate" href="@Url.RouteUrl("risks-issues-section", new { action = "ByDirectorate" })"@if (ViewBag.SubNavItem =="risks-bydirectorate" || ViewBag.SubNavItem == "risks-issues-bydirectorate") { <text> aria-current="page"</text> }>By directorate</a>
+      </li>
+      <li class="dfe-f-sub-navigation__item">
+        <a class="dfe-f-sub-navigation__link govuk-link" data-sub="risks-byportfolio risks-issues-byportfolio" href="@Url.RouteUrl("risks-issues-section", new { action = "ByPortfolio" })"@if (ViewBag.SubNavItem =="risks-byportfolio" || ViewBag.SubNavItem == "risks-issues-byportfolio") { <text> aria-current="page"</text> }>By portfolio</a>
+      </li>
+      <li class="dfe-f-sub-navigation__item">
+        <a class="dfe-f-sub-navigation__link govuk-link" data-sub="risks-intelligence" href="@Url.RouteUrl("risks-issues-section", new { action = "Intelligence" })"@if (ViewBag.SubNavItem =="risks-intelligence") { <text> aria-current="page"</text> }>Intelligence</a>
+      </li>
+    </ul>
   </div>
 </nav>
+</div>
+}
 
 @* ── STANDARDS ─────────────────────────────────────────────────────────────── *@
-<nav class="dfe-c-sub-nav @(ViewBag.MainNavSection == "standards" ? "dfe-c-sub-nav--visible" : "")" id="subnav-standards" aria-label="Standards navigation">
-  <div class="govuk-width-container dfe-c-sub-nav__inner">
-    <a class="dfe-c-sub-nav__link @(ViewBag.SubNavItem == "standards-dashboard" ? "dfe-c-sub-nav__link--active" : "")" data-sub="standards-dashboard" href="@Url.RouteUrl("standards-dashboard")">Dashboard</a>
-    <a class="dfe-c-sub-nav__link @(ViewBag.SubNavItem == "standards-ddt" ? "dfe-c-sub-nav__link--active" : "")" data-sub="standards-ddt" href="@Url.RouteUrl("standards-section", new { action = "DdtStandards" })">DDT Standards</a>
-    <a class="dfe-c-sub-nav__link @(ViewBag.SubNavItem == "standards-functional" ? "dfe-c-sub-nav__link--active" : "")" data-sub="standards-functional" href="@Url.RouteUrl("standards-section", new { action = "FunctionalStandards" })">Functional Standards</a>
-    @if (ViewBag.CanAccessStandardsManagement == true)
-    {
-    <a class="dfe-c-sub-nav__link @(ViewBag.SubNavItem == "standards-management" ? "dfe-c-sub-nav__link--active" : "")" data-sub="standards-management" href="@Url.RouteUrl("standards-section", new { action = "Management" })">Management</a>
-    }
+@if (ViewBag.ShowStandardsNavigation == true)
+{
+<div class="dfe-f-sub-nav-anchor@(IsSection("standards") ? " dfe-f-sub-navigation-wrapper" : "")">
+<nav class="dfe-f-sub-navigation dfe-c-sub-nav @(IsSection("standards") ? "dfe-c-sub-nav--visible" : "")" id="subnav-standards" aria-label="Standards navigation">
+  <div class="govuk-width-container">
+    <ul class="dfe-f-sub-navigation__list no-border-bottom">
+      <li class="dfe-f-sub-navigation__item">
+        <a class="dfe-f-sub-navigation__link govuk-link" data-sub="standards-dashboard" href="@Url.Action("Dashboard", "ModernStandards")"@if (ViewBag.SubNavItem =="standards-dashboard") { <text> aria-current="page"</text> }>Dashboard</a>
+      </li>
+      <li class="dfe-f-sub-navigation__item">
+        <a class="dfe-f-sub-navigation__link govuk-link" data-sub="standards-ddt" href="@Url.Action("DdtStandards", "ModernStandards")"@if (ViewBag.SubNavItem =="standards-ddt") { <text> aria-current="page"</text> }>DDT Standards</a>
+      </li>
+      <li class="dfe-f-sub-navigation__item">
+        <a class="dfe-f-sub-navigation__link govuk-link" data-sub="standards-functional" href="@Url.Action("FunctionalStandards", "ModernStandards")"@if (ViewBag.SubNavItem =="standards-functional") { <text> aria-current="page"</text> }>Functional Standards</a>
+      </li>
+      @if (ViewBag.CanAccessStandardsManagement == true)
+      {
+      <li class="dfe-f-sub-navigation__item">
+        <a class="dfe-f-sub-navigation__link govuk-link" data-sub="standards-management" href="@Url.Action("Management", "ModernStandards")"@if (ViewBag.SubNavItem =="standards-management") { <text> aria-current="page"</text> }>Management</a>
+      </li>
+      }
+    </ul>
   </div>
 </nav>
+</div>
+}
 
 @* ── REPORTING ────────────────────────────────────────────────────────────── *@
-<nav class="dfe-c-sub-nav @(ViewBag.MainNavSection == "reporting" ? "dfe-c-sub-nav--visible" : "")" id="subnav-reporting" aria-label="Reporting navigation">
-  <div class="govuk-width-container dfe-c-sub-nav__inner">
-    <a class="dfe-c-sub-nav__link @(ViewBag.SubNavItem == "reporting-library" ? "dfe-c-sub-nav__link--active" : "")" data-sub="reporting-library" href="@Url.Action("Index", "Reporting")">Hub</a>
-    <a class="dfe-c-sub-nav__link @(ViewBag.SubNavItem == "reporting-monthly" ? "dfe-c-sub-nav__link--active" : "")" data-sub="reporting-monthly" href="@Url.Action("MonthlyUpdateOverview", "ModernReporting")">Monthly update</a>
-    <a class="dfe-c-sub-nav__link @(ViewBag.SubNavItem == "reporting-overview" ? "dfe-c-sub-nav__link--active" : "")" data-sub="reporting-overview" href="@Url.Action("Dashboard", "Reporting", new { section = "overview" })">Reporting snapshot</a>
-    <a class="dfe-c-sub-nav__link @(ViewBag.SubNavItem == "reporting-directorate" ? "dfe-c-sub-nav__link--active" : "")" data-sub="reporting-directorate" href="@Url.Action("Dashboard", "Reporting", new { section = "directorate" })">Directorate</a>
-    <a class="dfe-c-sub-nav__link @(ViewBag.SubNavItem == "reporting-portfolio" ? "dfe-c-sub-nav__link--active" : "")" data-sub="reporting-portfolio" href="@Url.Action("Dashboard", "Reporting", new { section = "portfolio" })">Portfolio</a>
-    <a class="dfe-c-sub-nav__link @(ViewBag.SubNavItem == "reporting-priority-outcomes" ? "dfe-c-sub-nav__link--active" : "")" data-sub="reporting-priority-outcomes" href="@Url.Action("Dashboard", "Reporting", new { section = "priority-outcomes" })">Priority Outcomes</a>
-    <a class="dfe-c-sub-nav__link @(ViewBag.SubNavItem == "reporting-risk" ? "dfe-c-sub-nav__link--active" : "")" data-sub="reporting-risk" href="@Url.Action("Dashboard", "Reporting", new { section = "risk" })">Risk</a>
-    <a class="dfe-c-sub-nav__link @(ViewBag.SubNavItem == "reporting-performance" ? "dfe-c-sub-nav__link--active" : "")" data-sub="reporting-performance" href="@Url.Action("Dashboard", "Reporting", new { section = "performance" })">Performance metrics</a>
-    <a class="dfe-c-sub-nav__link @(ViewBag.SubNavItem == "reporting-service-assessments" ? "dfe-c-sub-nav__link--active" : "")" data-sub="reporting-service-assessments" href="@Url.Action("ServiceAssessments", "Reporting")">Service assessments</a>
+<div class="dfe-f-sub-nav-anchor@(IsSection("reporting") ? " dfe-f-sub-navigation-wrapper" : "")">
+<nav class="dfe-f-sub-navigation dfe-c-sub-nav @(IsSection("reporting") ? "dfe-c-sub-nav--visible" : "")" id="subnav-reporting" aria-label="Reporting navigation">
+  <div class="govuk-width-container">
+    <ul class="dfe-f-sub-navigation__list no-border-bottom">
+      <li class="dfe-f-sub-navigation__item">
+        <a class="dfe-f-sub-navigation__link govuk-link" data-sub="reporting-dashboard" href="@Url.Action("Dashboard", "ModernReporting")"@if (ViewBag.SubNavItem =="reporting-dashboard") { <text> aria-current="page"</text> }>Dashboard</a>
+      </li>
+      <li class="dfe-f-sub-navigation__item">
+        <a class="dfe-f-sub-navigation__link govuk-link" data-sub="reporting-monthly" href="@Url.Action("MonthlyUpdate", "ModernReporting")"@if (ViewBag.SubNavItem =="reporting-monthly") { <text> aria-current="page"</text> }>Monthly update</a>
+      </li>
+      <li class="dfe-f-sub-navigation__item">
+        <a class="dfe-f-sub-navigation__link govuk-link" data-sub="reporting-monthly-submission" href="@Url.Action("MonthlySubmissionProgress", "ModernReporting")"@if (ViewBag.SubNavItem =="reporting-monthly-submission") { <text> aria-current="page"</text> }>Submission progress</a>
+      </li>
+      <li class="dfe-f-sub-navigation__item">
+        <a class="dfe-f-sub-navigation__link govuk-link" data-sub="reporting-performance" href="@Url.Action("Performance", "ModernReporting")"@if (ViewBag.SubNavItem =="reporting-performance") { <text> aria-current="page"</text> }>Performance</a>
+      </li>
+      <li class="dfe-f-sub-navigation__item">
+        <a class="dfe-f-sub-navigation__link govuk-link" data-sub="reporting-assessments" href="@Url.Action("Assessments", "ModernReporting")"@if (ViewBag.SubNavItem =="reporting-assessments") { <text> aria-current="page"</text> }>Assessments</a>
+      </li>
+      @if (ViewBag.CanAccessOperations == true)
+      {
+      <li class="dfe-f-sub-navigation__item">
+        <a class="dfe-f-sub-navigation__link govuk-link" data-sub="reporting-accessibility" href="@Url.Action("Accessibility", "ModernReporting")"@if (ViewBag.SubNavItem =="reporting-accessibility") { <text> aria-current="page"</text> }>Accessibility</a>
+      </li>
+      }
+      @if (ViewBag.ShowRaidNavigation == true)
+      {
+      <li class="dfe-f-sub-navigation__item">
+        <a class="dfe-f-sub-navigation__link govuk-link" data-sub="reporting-raid" href="@Url.Action("Raid", "ModernReporting")"@if (ViewBag.SubNavItem =="reporting-raid") { <text> aria-current="page"</text> }>RAID</a>
+      </li>
+      <li class="dfe-f-sub-navigation__item">
+        <a class="dfe-f-sub-navigation__link govuk-link" data-sub="reporting-raid-review" href="@Url.Action("RaidReviewProgress", "ModernReporting")"@if (ViewBag.SubNavItem =="reporting-raid-review") { <text> aria-current="page"</text> }>RAID review</a>
+      </li>
+      }
+      <li class="dfe-f-sub-navigation__item">
+        <a class="dfe-f-sub-navigation__link govuk-link" data-sub="reporting-exports" href="@Url.Action("Index", "Exports", new { section = "reporting" })"@if (ViewBag.SubNavItem =="reporting-exports") { <text> aria-current="page"</text> }>Exports</a>
+      </li>
+    </ul>
   </div>
 </nav>
+</div>
 
 @* ── ADMIN ────────────────────────────────────────────────────────────────── *@
-<nav class="dfe-c-sub-nav @(ViewBag.MainNavSection == "admin" ? "dfe-c-sub-nav--visible" : "")" id="subnav-admin" aria-label="Admin navigation">
-  <div class="govuk-width-container dfe-c-sub-nav__inner">
-    <a class="dfe-c-sub-nav__link @(ViewBag.SubNavItem == "admin-index" ? "dfe-c-sub-nav__link--active" : "")" data-sub="admin-index" href="@Url.Action("Index", "Admin")">Overview</a>
-    <a class="dfe-c-sub-nav__link @(ViewBag.SubNavItem == "admin-roles" ? "dfe-c-sub-nav__link--active" : "")" data-sub="admin-roles" href="@Url.Action("Groups", "Admin")">Access control</a>
-    <a class="dfe-c-sub-nav__link @(ViewBag.SubNavItem == "admin-lookups" ? "dfe-c-sub-nav__link--active" : "")" data-sub="admin-lookups" href="@Url.Action("Lookups", "Admin")">Lookups</a>
-    <a class="dfe-c-sub-nav__link @(ViewBag.SubNavItem == "admin-work-reporting" ? "dfe-c-sub-nav__link--active" : "")" data-sub="admin-work-reporting" href="@Url.Action("WorkReporting", "Admin")">Work reporting</a>
-    <a class="dfe-c-sub-nav__link @(ViewBag.SubNavItem == "admin-perf-reporting" ? "dfe-c-sub-nav__link--active" : "")" data-sub="admin-perf-reporting" href="@Url.Action("PerformanceReporting", "Admin", new { tab = "product-rules" })">Performance reporting</a>
-    <a class="dfe-c-sub-nav__link @(ViewBag.SubNavItem == "admin-risk-scoring" ? "dfe-c-sub-nav__link--active" : "")" data-sub="admin-risk-scoring" href="@Url.Action("RiskScoringFramework", "Admin")">Risk scoring framework</a>
-    <a class="dfe-c-sub-nav__link @(ViewBag.SubNavItem == "admin-system-settings" ? "dfe-c-sub-nav__link--active" : "")" data-sub="admin-system-settings" href="@Url.Action("SystemSettings", "Admin")">System settings</a>
+<div class="dfe-f-sub-nav-anchor@(IsSection("admin") ? " dfe-f-sub-navigation-wrapper" : "")">
+<nav class="dfe-f-sub-navigation dfe-c-sub-nav @(IsSection("admin") ? "dfe-c-sub-nav--visible" : "")" id="subnav-admin" aria-label="Admin navigation">
+  <div class="govuk-width-container">
+    <ul class="dfe-f-sub-navigation__list no-border-bottom">
+      <li class="dfe-f-sub-navigation__item">
+        <a class="dfe-f-sub-navigation__link govuk-link" data-sub="admin-index" href="@Url.Action("Index", "ModernAdmin")"@if (ViewBag.SubNavItem =="admin-index") { <text> aria-current="page"</text> }>Overview</a>
+      </li>
+      <li class="dfe-f-sub-navigation__item">
+        <a class="dfe-f-sub-navigation__link govuk-link" data-sub="admin-notification-settings admin-notification-email-log" href="@Url.Action("NotificationSettings", "ModernAdminNotificationSettings")"@if (ViewBag.SubNavItem == "admin-notification-settings" || ViewBag.SubNavItem == "admin-notification-email-log") { <text> aria-current="page"</text> }>Notification management</a>
+      </li>
+      <li class="dfe-f-sub-navigation__item">
+        <a class="dfe-f-sub-navigation__link govuk-link" data-sub="admin-work-reporting" href="@Url.Action("WorkReporting", "ModernAdmin")"@if (ViewBag.SubNavItem =="admin-work-reporting") { <text> aria-current="page"</text> }>Work reporting</a>
+      </li>
+      <li class="dfe-f-sub-navigation__item">
+        <a class="dfe-f-sub-navigation__link govuk-link" data-sub="admin-perf-reporting" href="@Url.Action("PerformanceReporting", "ModernAdmin", new { panel = "commissions" })"@if (ViewBag.SubNavItem =="admin-perf-reporting") { <text> aria-current="page"</text> }>Performance reporting</a>
+      </li>
+      <li class="dfe-f-sub-navigation__item">
+        <a class="dfe-f-sub-navigation__link govuk-link" data-sub="admin-standards" href="@Url.Action("StandardsConfig", "ModernAdmin")"@if (ViewBag.SubNavItem =="admin-standards") { <text> aria-current="page"</text> }>Standards</a>
+      </li>
+    </ul>
   </div>
 </nav>
+</div>

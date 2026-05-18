@@ -55,6 +55,27 @@ public class Commission
     /// </summary>
     public bool IsActive { get; set; } = true;
 
+    /// <summary>
+    /// Comma-separated product phases that are in scope for this commission (matches <see cref="ProductDto.Phase"/>).
+    /// When null or empty, any phase is allowed (subject to global catalogue rules such as excluding decommissioned products).
+    /// </summary>
+    [StringLength(2000)]
+    public string? InScopePhases { get; set; }
+
+    /// <summary>
+    /// Comma-separated product &quot;Type&quot; category values that are in scope.
+    /// When null or empty, any type is allowed (subject to global rules such as data-only exclusions).
+    /// </summary>
+    [StringLength(2000)]
+    public string? InScopeTypes { get; set; }
+
+    /// <summary>
+    /// Comma-separated <see cref="PerformanceMetric"/> ids that may appear on returns for this commission.
+    /// When null or empty, all enabled metrics valid for the commission period are candidates; each product still only sees metrics that match its phase/type and conditions.
+    /// </summary>
+    [StringLength(4000)]
+    public string? IncludedPerformanceMetricIds { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;

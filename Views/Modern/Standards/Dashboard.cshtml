@@ -1,0 +1,160 @@
+@model Compass.ViewModels.Modern.StandardsDashboardViewModel
+@using Compass.ViewModels.Modern
+@{
+  ViewData["Title"] = "Standards dashboard";
+  string DdtDetailHref(int id) => Url.Action("DdtDetail", "ModernStandards", new { id }) ?? "#";
+  string AssessmentHref(Compass.ViewModels.Modern.StandardsDashboardAssessmentRow r) =>
+    r.IsSubmitted
+      ? Url.Action("AssessmentSummary", "ModernStandards", new { assessmentId = r.Id }) ?? "#"
+      : Url.Action("ConductAssessment", "ModernStandards", new { assessmentId = r.Id }) ?? "#";
+  var ddtRegisterHref = Url.Action("DdtStandards", "ModernStandards") ?? "#";
+  var functionalHref = Url.Action("FunctionalStandards", "ModernStandards") ?? "#";
+  var functionalInProgressHref = Url.Action("FunctionalStandards", "ModernStandards", new { tab = "in-progress" }) ?? "#";
+  var functionalCompletedHref = Url.Action("FunctionalStandards", "ModernStandards", new { tab = "completed" }) ?? "#";
+}
+
+@section Breadcrumbs {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">Standards</li>
+}
+
+@await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+  Caption = "Standards",
+  Title = "Standards dashboard"
+})
+
+  @if (!string.IsNullOrEmpty(Model.ReviewCalloutHeading))
+  {
+ <div class="dfe-c-callout dfe-c-callout--warning govuk-!-margin-bottom-3">
+ <div class="dfe-c-callout__heading">@Model.ReviewCalloutHeading</div>
+    </div>
+  }
+
+ <div class="dfe-f-card-grid govuk-!-margin-bottom-9">
+ <div class="dfe-f-stat-card dfe-f-stat-card--tint-blue">
+ <p class="govuk-body-s dfe-f-stat-card__label">DDT standards published</p>
+ <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@Model.PublishedDdtCount</p>
+ <p class="govuk-body-s govuk-!-margin-top-2 govuk-!-margin-bottom-0">
+ <a class="govuk-link govuk-link--no-visited-state" href="@ddtRegisterHref">View published</a>
+ </p>
+    </div>
+ <div class="dfe-f-stat-card dfe-f-stat-card--tint-blue">
+ <p class="govuk-body-s dfe-f-stat-card__label">Functional standards (GovS)</p>
+ <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@Model.FunctionalStandardsCount</p>
+ <p class="govuk-body-s govuk-!-margin-top-2 govuk-!-margin-bottom-0">
+ <a class="govuk-link govuk-link--no-visited-state" href="@functionalHref">View functional standards</a>
+ </p>
+    </div>
+ <div class="dfe-f-stat-card dfe-f-stat-card--tint-orange">
+ <p class="govuk-body-s dfe-f-stat-card__label">Assessments in progress</p>
+ <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@Model.InProgressAssessmentsCount</p>
+ <p class="govuk-body-s govuk-!-margin-top-2 govuk-!-margin-bottom-0">
+ <a class="govuk-link govuk-link--no-visited-state" href="@functionalInProgressHref">View assessments</a>
+ </p>
+    </div>
+ <div class="dfe-f-stat-card dfe-f-stat-card--tint-teal">
+ <p class="govuk-body-s dfe-f-stat-card__label">Assessments complete (YTD)</p>
+ <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@Model.CompleteAssessmentsYtdCount</p>
+ <p class="govuk-body-s govuk-!-margin-top-2 govuk-!-margin-bottom-0">
+ <a class="govuk-link govuk-link--no-visited-state" href="@functionalCompletedHref">View completed assessments</a>
+ </p>
+    </div>
+  </div>
+
+ <div class="std-dash-tables">
+    <section class="govuk-!-margin-bottom-6" aria-labelledby="dash-ddt-heading">
+      <h2 class="govuk-heading-m govuk-!-margin-bottom-0" id="dash-ddt-heading">Recently published DDT standards</h2>
+ <p class="govuk-hint govuk-!-margin-bottom-3">Latest additions and republications on the published register.</p>
+ <div class="dfe-f-table-wrapper govuk-!-margin-bottom-0" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+        <table class="govuk-table govuk-table--small-text-until-tablet govuk-!-margin-bottom-0">
+          <caption class="govuk-table__caption govuk-table__caption--m govuk-visually-hidden">Recently published DDT standards</caption>
+          <thead class="govuk-table__head">
+            <tr class="govuk-table__row">
+              <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Standard</button>
+        </th>
+              <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Version</button>
+        </th>
+              <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Published</button>
+        </th>
+            </tr>
+          </thead>
+          <tbody class="govuk-table__body">
+          @if (Model.DdtRows == null || Model.DdtRows.Count == 0)
+          {
+            <tr class="govuk-table__row">
+ <td colspan="3" class="govuk-table__cell govuk-body-s dfe-c-text-muted">No published DDT standards yet.</td>
+            </tr>
+          }
+          else
+          {
+            foreach (var s in Model.DdtRows)
+            {
+              <tr class="govuk-table__row">
+                <td class="govuk-table__cell">
+                  <a class="govuk-link govuk-link--no-visited-state govuk-!-font-weight-bold" href="@DdtDetailHref(s.StandardId)">@s.Title</a>
+                </td>
+                <td class="govuk-table__cell">
+                  <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--grey">@s.VersionDisplay</span>
+                </td>
+                <td class="govuk-table__cell govuk-body-s">@s.PublishedDisplay</td>
+              </tr>
+            }
+          }
+          </tbody>
+        </table>
+      </div>
+    </section>
+    <section class="govuk-!-margin-bottom-6" aria-labelledby="dash-assess-heading">
+      <h2 class="govuk-heading-m govuk-!-margin-bottom-0" id="dash-assess-heading">Functional standards</h2>
+ <p class="govuk-hint govuk-!-margin-bottom-3">Continue or review functional standard assessments that have not been submitted</p>
+ <div class="dfe-f-table-wrapper govuk-!-margin-bottom-0" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+        <table class="govuk-table govuk-table--small-text-until-tablet govuk-!-margin-bottom-0">
+          <caption class="govuk-table__caption govuk-table__caption--m govuk-visually-hidden">Functional standard assessments in progress</caption>
+          <thead class="govuk-table__head">
+            <tr class="govuk-table__row">
+              <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Assessment</button>
+        </th>
+              <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Standard</button>
+        </th>
+              <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Status</button>
+        </th>
+            </tr>
+          </thead>
+          <tbody class="govuk-table__body">
+          @if (Model.AssessmentRows == null || Model.AssessmentRows.Count == 0)
+          {
+            <tr class="govuk-table__row">
+ <td colspan="3" class="govuk-table__cell govuk-body-s dfe-c-text-muted">No assessments in progress.</td>
+            </tr>
+          }
+          else
+          {
+            foreach (var a in Model.AssessmentRows)
+            {
+              <tr class="govuk-table__row">
+                <td class="govuk-table__cell">
+                  <a class="govuk-link govuk-link--no-visited-state govuk-!-font-weight-bold" href="@AssessmentHref(a)">@a.AssessmentTitle</a>
+                  <div class="govuk-body-s govuk-!-margin-top-1 govuk-!-margin-bottom-0 dfe-c-text-muted">@a.Reference</div>
+                </td>
+                <td class="govuk-table__cell">
+ <a class="govuk-link govuk-link--no-visited-state" href="@(Url.Action("FunctionalStandardDashboard", "ModernStandards", new { id = a.FunctionalStandardId }) ?? "#")">@a.StandardRef</a>
+                </td>
+                <td class="govuk-table__cell">
+                  <span class="dfe-f-badge dfe-f-badge--small @a.StatusTagClass">@a.StatusLabel</span>
+                </td>
+              </tr>
+            }
+          }
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>

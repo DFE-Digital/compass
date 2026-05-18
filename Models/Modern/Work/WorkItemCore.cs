@@ -51,6 +51,10 @@ public class WorkItem
 
     public ICollection<WorkItemPriorityOutcome> PriorityOutcomes { get; set; } = new List<WorkItemPriorityOutcome>();
     public ICollection<WorkItemMissionPillar> MissionPillars { get; set; } = new List<WorkItemMissionPillar>();
+
+    /// <summary>Custom tags from admin (<see cref="Compass.Models.WorkItemTagLookup"/>).</summary>
+    public List<WorkItemTagRef> Tags { get; set; } = new();
+
     public ICollection<WorkItemContact> Contacts { get; set; } = new List<WorkItemContact>();
     public ICollection<WorkItemTeamMember> TeamMembers { get; set; } = new List<WorkItemTeamMember>();
     public ICollection<WorkItemDependency> Dependencies { get; set; } = new List<WorkItemDependency>();
@@ -60,6 +64,18 @@ public class WorkItem
     public ICollection<Milestone> Milestones { get; set; } = new List<Milestone>();
     public ICollection<MonthlyUpdate> MonthlyUpdates { get; set; } = new List<MonthlyUpdate>();
     public ICollection<WorkItemRiskOrIssue> RiskOrIssues { get; set; } = new List<WorkItemRiskOrIssue>();
+
+    /// <summary>RAID assumptions scoped to this work item (see project link on assumption records).</summary>
+    public ICollection<WorkItemAssumptionRef> Assumptions { get; set; } = new List<WorkItemAssumptionRef>();
+}
+
+/// <summary>Lightweight assumption row for work item detail.</summary>
+public class WorkItemAssumptionRef
+{
+    public int Id { get; set; }
+    public string Description { get; set; } = "";
+    public string? Criticality { get; set; }
+    public string? Status { get; set; }
 }
 
 public class WorkItemPriorityOutcome
@@ -76,6 +92,13 @@ public class WorkItemMissionPillar
     public WorkLookupOption? MissionPillar { get; set; }
 }
 
+public class WorkItemTagRef
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string? Description { get; set; }
+}
+
 public class ContactRoleType
 {
     public int Id { get; set; }
@@ -87,6 +110,10 @@ public class WorkItemContact
     public int Id { get; set; }
     public int WorkItemId { get; set; }
     public int? ContactRoleTypeId { get; set; }
+    /// <summary>When <see cref="ContactRoleTypeId"/> is custom (5), the label stored in <see cref="ProjectContact.Role"/>.</summary>
+    public string? RoleName { get; set; }
+    /// <summary>Display name stored on <see cref="Compass.Models.ProjectContact.Name"/> (editable on the work item).</summary>
+    public string DisplayName { get; set; } = "";
     public User? AppUser { get; set; }
 }
 
@@ -145,12 +172,19 @@ public class AuditLog
     public string? NewValue { get; set; }
 }
 
-/// <summary>Reporting period row for work detail monthly updates tab (stub for compass-2 shape).</summary>
+/// <summary>Reporting period row for work detail monthly updates tab.</summary>
 public class ReportingCyclePeriod
 {
     public string PeriodKey { get; set; } = string.Empty;
     public string? PeriodLabel { get; set; }
+    /// <summary>Submission deadline (explicit period closes date, or legacy-calculated due date).</summary>
     public DateTime DueDate { get; set; }
+    public DateTime? SubmissionOpens { get; set; }
+    public DateTime? SubmissionCloses { get; set; }
+    /// <summary>Rollup matching UpdateSubmissionStatus (Upcoming, Due, Late, Submitted).</summary>
+    public string UpdateStatus { get; set; } = "Upcoming";
+    /// <summary>False when an explicit period exists and the current date is outside the submission window.</summary>
+    public bool WindowAllowsEditing { get; set; } = true;
 }
 
 /// <summary>Monthly update block for modern work views (aligned with <see cref="ProjectMonthlyUpdate"/> fields used in UI).</summary>
@@ -161,11 +195,16 @@ public class MonthlyUpdate
     public DateTime ReportMonth { get; set; }
     public string? Narrative { get; set; }
     public int? RagStatusId { get; set; }
+    /// <summary>Resolved display label for submitted returns (includes legacy/history fallbacks).</summary>
+    public string? RagDisplayName { get; set; }
+    public string? RagCssClass { get; set; }
     public string? RagJustification { get; set; }
     public string? PathToGreen { get; set; }
     public string? SubmittedBy { get; set; }
     public DateTime? SubmittedAt { get; set; }
     public int? SubmittedByUserId { get; set; }
+    public decimal? PermFte { get; set; }
+    public decimal? MspFte { get; set; }
 }
 
 public class WorkAppUser

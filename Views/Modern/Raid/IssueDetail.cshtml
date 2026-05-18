@@ -1,0 +1,457 @@
+@model Compass.Models.Issue
+@using Compass.Models
+@using Compass.ViewModels.Modern
+@using System.Globalization
+@using System.Linq
+@{
+  ViewData["Title"] = "Issue — " + Model.Title;
+  var activeTab = (ViewBag.ActiveTab as string ?? "detail").ToLowerInvariant();
+  var wi = Model.ProjectId;
+  var originRisk = ViewBag.OriginRisk;
+
+  var catLabels = Model.IssueIssueCategories?
+    .Select(x => x.IssueCategory?.Label)
+    .Where(x => !string.IsNullOrWhiteSpace(x))
+    .Distinct()
+    .ToList() ?? new List<string?>();
+  if (catLabels.Count == 0 && Model.CategoryLookup?.Label != null)
+    catLabels = new List<string?> { Model.CategoryLookup.Label };
+
+  var issueDivLabels = Model.IssueDivisions?
+    .Select(x => x.Division?.Name)
+    .Where(x => !string.IsNullOrWhiteSpace(x))
+    .ToList() ?? new List<string?>();
+  var issueBaLabels = Model.IssueBusinessAreas?
+    .Select(x => x.BusinessAreaLookup?.Name)
+    .Where(x => !string.IsNullOrWhiteSpace(x))
+    .ToList() ?? new List<string?>();
+
+  var resolutionTierFull = ViewBag.ResolutionTierLabel as string ?? "—";
+  var openPhrase = ViewBag.OpenDurationPhrase as string ?? "—";
+  var daysOpen = ViewBag.DaysOpenCount is int dc ? dc : 0;
+
+  var teamLabel = Model.Project?.BusinessAreaLookup?.Name ?? Model.BusinessArea ?? "—";
+  var groupLabel = Model.Project?.PrimaryOrganizationalGroup?.Name ?? "—";
+  var ownerDisplay = Model.OwnerUser?.Name ?? Model.OwnerUser?.Email ?? "—";
+  var sroDisplay = Model.SroUser?.Name ?? Model.SroUser?.Email ?? "—";
+  var raisedByDisplay = Model.CreatedByUser?.Name ?? Model.CreatedByUser?.Email ?? "—";
+  var updatedByDisplay = Model.UpdatedByUser?.Name ?? Model.UpdatedByUser?.Email ?? "—";
+
+  /// <summary>Matches <c>Issues.cshtml</c> register table styling.</summary>
+  string IssuePriorityTagClass()
+  {
+    var p = (Model.PriorityLookup?.Label ?? Model.Priority ?? "").ToLowerInvariant();
+    if (p.Contains("critical")) return "dfe-c-tag dfe-c-tag--red";
+    if (p.Contains("high")) return "dfe-c-tag dfe-c-tag--amber";
+    return "dfe-c-tag dfe-c-tag--grey";
+  }
+
+  /// <summary>Matches <c>Issues.cshtml</c> register table styling.</summary>
+  string IssueSeverityTagClass()
+  {
+    var s = (Model.SeverityLookup?.Label ?? Model.Severity ?? "").ToLowerInvariant();
+    if (s.Contains("critical")) return "dfe-c-tag dfe-c-tag--red";
+    if (s.Contains("major")) return "dfe-c-tag dfe-c-tag--amber";
+    return "dfe-c-tag dfe-c-tag--green";
+  }
+
+  string StatusTagClass()
+  {
+    var s = (Model.StatusLookup?.Label ?? Model.Status ?? "").ToLowerInvariant();
+    if (s.Contains("escalat")) return "dfe-c-tag dfe-c-tag--red";
+    if (s.Contains("closed") || s.Contains("resolved")) return "dfe-c-tag dfe-c-tag--green";
+    return "dfe-c-tag dfe-c-tag--blue";
+  }
+
+  string OriginRiskRating(object? scoreObj)
+  {
+    if (scoreObj == null) return "—";
+    var score = Convert.ToInt32(scoreObj);
+    if (score >= 20) return "Crisis / Likely";
+    if (score >= 16) return "Critical / Possible";
+    if (score >= 11) return "High / Possible";
+    if (score >= 6) return "Moderate / Possible";
+    return "Low / Unlikely";
+  }
+
+  var severitySub = Model.SeverityLookup?.Description ?? "";
+
+  var stLower = (Model.StatusLookup?.Label ?? Model.Status ?? "").ToLowerInvariant();
+  var showEscalationCallout = stLower.Contains("escalat");
+
+  var canChangeIssue = ViewBag.CanChangeIssueDetail as bool? ?? false;
+  var issueEditUrl = Url.Action("IssueEdit", "ModernRaid", new { id = Model.Id }) ?? "#";
+  var actionsTabUrl = Url.Action("IssueDetail", "ModernRaid", new { id = Model.Id, tab = "actions" }) ?? "#";
+  var detectedDateUk = Model.DetectedDate.ToString("d MMMM yyyy", CultureInfo.GetCultureInfo("en-GB"));
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="/modern/raid/dashboard">RAID</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="/modern/raid/issues">Issues</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">@Model.Title</li>
+}
+
+<div id="sc-issue-view" class="dfe-c-screen dfe-c-screen--active">
+<div class="modern-work-page">
+  @if (TempData["Message"] is string tm)
+  {
+    <div class="govuk-notification-banner govuk-notification-banner--success govuk-!-margin-bottom-4" role="region">
+      <div class="govuk-notification-banner__header"><h2 class="govuk-notification-banner__title">Success</h2></div>
+      <div class="govuk-notification-banner__content"><p class="govuk-notification-banner__heading">@tm</p></div>
+    </div>
+  }
+
+  <p class="dfe-c-body govuk-!-margin-bottom-2">
+    <a href="/modern/raid/issues" class="govuk-link govuk-link--no-visited-state">← Back to issues register</a>
+  </p>
+  @{
+    ViewBag.IssueDetailActionsTabUrl = actionsTabUrl;
+    ViewBag.CanChangeIssueDetail = canChangeIssue;
+    ViewBag.IssueDetailEditUrl = issueEditUrl;
+    var issueDetailLede = await Html.PartialAsync("~/Views/Modern/Raid/_RaidIssueDetailHeaderLede.cshtml", Model);
+    var issueDetailActions = await Html.PartialAsync("~/Views/Modern/Raid/_RaidIssueDetailHeaderActions.cshtml", Model);
+  }
+  @await Html.PartialAsync("~/Views/Modern/Shared/_ModernPageHeader.cshtml", new ModernPageHeaderViewModel {
+    Caption = $"I-{Model.Id:D4} · {teamLabel} · Owner: {ownerDisplay}",
+    Title = Model.Title,
+    Lede = issueDetailLede,
+    Actions = issueDetailActions
+  })
+
+  @if (showEscalationCallout)
+  {
+    <div class="dfe-c-callout dfe-c-callout--error dfe-c-mb-2">
+      <div class="dfe-c-callout__heading">
+        @(Model.TargetResolutionDate.HasValue
+          ? $"Escalated — resolution required by {Model.TargetResolutionDate.Value:d MMMM yyyy}"
+          : "Escalated — resolution required")
+      </div>
+      <p class="dfe-c-callout__body">
+        @(string.IsNullOrWhiteSpace(Model.UserImpactSummary ?? Model.ServiceImpactSummary)
+          ? (Model.Description != null && Model.Description.Length > 280 ? Model.Description[..280] + "…" : Model.Description ?? "This issue is escalated for senior attention.")
+          : (Model.UserImpactSummary ?? Model.ServiceImpactSummary))
+      </p>
+    </div>
+  }
+
+  <div class="dfe-c-grid dfe-c-grid--content">
+    <div>
+      <nav class="dfe-f-sub-navigation govuk-!-margin-bottom-4" aria-label="Issue sections">
+        <ul class="dfe-f-sub-navigation__list">
+        <li class="dfe-f-sub-navigation__item@(activeTab == "detail" ? " dfe-f-sub-navigation__item--active" : "")">
+        <a class="dfe-f-sub-navigation__link govuk-link govuk-link--no-visited-state" href="/modern/raid/issues/@Model.Id?tab=detail" id="tab-issue-detail"@if (activeTab == "detail") { <text> aria-current="page"</text> }>Issue detail</a>
+        </li>
+        <li class="dfe-f-sub-navigation__item@(activeTab == "assurance" ? " dfe-f-sub-navigation__item--active" : "")">
+        <a class="dfe-f-sub-navigation__link govuk-link govuk-link--no-visited-state" href="/modern/raid/issues/@Model.Id?tab=assurance" id="tab-issue-assurance"@if (activeTab == "assurance") { <text> aria-current="page"</text> }>Assurance</a>
+        </li>
+        <li class="dfe-f-sub-navigation__item@(activeTab == "actions" ? " dfe-f-sub-navigation__item--active" : "")">
+        <a class="dfe-f-sub-navigation__link govuk-link govuk-link--no-visited-state" href="/modern/raid/issues/@Model.Id?tab=actions" id="tab-issue-actions"@if (activeTab == "actions") { <text> aria-current="page"</text> }>Actions</a>
+        </li>
+        <li class="dfe-f-sub-navigation__item@(activeTab == "history" ? " dfe-f-sub-navigation__item--active" : "")">
+        <a class="dfe-f-sub-navigation__link govuk-link govuk-link--no-visited-state" href="/modern/raid/issues/@Model.Id?tab=history" id="tab-issue-history"@if (activeTab == "history") { <text> aria-current="page"</text> }>Update history</a>
+        </li>
+        <li class="dfe-f-sub-navigation__item@(activeTab == "close" ? " dfe-f-sub-navigation__item--active" : "")">
+        <a class="dfe-f-sub-navigation__link govuk-link govuk-link--no-visited-state" href="/modern/raid/issues/@Model.Id?tab=close" id="tab-issue-close"@if (activeTab == "close") { <text> aria-current="page"</text> }>Close issue</a>
+        </li>
+        </ul>
+      </nav>
+
+      <div id="issue-detail" class="tab-pane @(activeTab == "detail" ? "on" : "")" role="tabpanel" aria-labelledby="tab-issue-detail">
+        <div class="dfe-c-flex--between govuk-!-margin-bottom-4" style="align-items:flex-start;flex-wrap:wrap;gap:0.75rem;">
+          <div>
+            <h2 class="govuk-heading-s govuk-!-margin-bottom-1">Issue summary</h2>
+            <p class="govuk-body-s govuk-!-margin-bottom-0 dfe-c-text-muted">Key fields for this issue. Use Change to jump to the matching section on the edit form.</p>
+          </div>
+          @if (canChangeIssue)
+          {
+            <a class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0" href="@issueEditUrl">Edit issue</a>
+          }
+        </div>
+        <dl class="govuk-summary-list govuk-!-margin-bottom-0">
+          <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">Description</dt>
+            <dd class="govuk-summary-list__value">@if (string.IsNullOrWhiteSpace(Model.Description)) { <text>—</text> } else { <span class="govuk-body" style="white-space:pre-wrap;">@Model.Description</span> }</dd>
+            @if (canChangeIssue)
+            {
+              <dd class="govuk-summary-list__actions">
+                <a class="govuk-link govuk-link--no-visited-state" href="@($"{issueEditUrl}#raid-issue-edit-description")">Change<span class="govuk-visually-hidden"> description</span></a>
+              </dd>
+            }
+          </div>
+          <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">Associated with</dt>
+            <dd class="govuk-summary-list__value">@(Model.PrimaryProduct?.DisplayName ?? Model.Project?.Title ?? "Organisation")</dd>
+            @if (canChangeIssue)
+            {
+              <dd class="govuk-summary-list__actions">
+                <a class="govuk-link govuk-link--no-visited-state" href="@($"{issueEditUrl}#raid-issue-edit-association")">Change<span class="govuk-visually-hidden"> associated with</span></a>
+              </dd>
+            }
+          </div>
+          <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">Workaround / mitigation</dt>
+            <dd class="govuk-summary-list__value">@if (string.IsNullOrWhiteSpace(Model.Workaround)) { <text>—</text> } else { <span class="govuk-body" style="white-space:pre-wrap;">@Model.Workaround</span> }</dd>
+            @if (canChangeIssue)
+            {
+              <dd class="govuk-summary-list__actions">
+                <a class="govuk-link govuk-link--no-visited-state" href="@($"{issueEditUrl}#raid-issue-edit-workaround")">Change<span class="govuk-visually-hidden"> workaround or mitigation</span></a>
+              </dd>
+            }
+          </div>
+          <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">Size of issue</dt>
+            <dd class="govuk-summary-list__value">
+              <span class="@IssueSeverityTagClass()">@((Model.SeverityLookup?.Label ?? Model.Severity ?? "—").ToUpperInvariant())</span>
+              @if (!string.IsNullOrWhiteSpace(severitySub))
+              {<span class="govuk-body-s dfe-c-text-muted" style="margin-left:0.5rem;">@severitySub</span>}
+            </dd>
+            @if (canChangeIssue)
+            {
+              <dd class="govuk-summary-list__actions">
+                <a class="govuk-link govuk-link--no-visited-state" href="@($"{issueEditUrl}#raid-issue-edit-severity")">Change<span class="govuk-visually-hidden"> size of issue</span></a>
+              </dd>
+            }
+          </div>
+          <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">Resolution tier</dt>
+            <dd class="govuk-summary-list__value"><strong>@resolutionTierFull</strong></dd>
+            @if (canChangeIssue)
+            {
+              <dd class="govuk-summary-list__actions">
+                <a class="govuk-link govuk-link--no-visited-state" href="@($"{issueEditUrl}#raid-issue-edit-severity")">Change<span class="govuk-visually-hidden"> resolution tier</span></a>
+              </dd>
+            }
+          </div>
+          @if (catLabels.Count > 0)
+          {
+            <div class="govuk-summary-list__row">
+              <dt class="govuk-summary-list__key">Impact type</dt>
+              <dd class="govuk-summary-list__value">
+                @foreach (var c in catLabels)
+                {<span class="dfe-c-tag dfe-c-tag--teal">@c?.ToUpperInvariant()</span>@(" ")}
+              </dd>
+              @if (canChangeIssue)
+              {
+                <dd class="govuk-summary-list__actions">
+                  <a class="govuk-link govuk-link--no-visited-state" href="@($"{issueEditUrl}#raid-issue-edit-categories")">Change<span class="govuk-visually-hidden"> impact type</span></a>
+                </dd>
+              }
+            </div>
+          }
+          <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">Impact</dt>
+            <dd class="govuk-summary-list__value">@(string.IsNullOrWhiteSpace(Model.UserImpactSummary ?? Model.ServiceImpactSummary) ? "—" : (Model.UserImpactSummary ?? Model.ServiceImpactSummary))</dd>
+          </div>
+          @if (originRisk != null)
+          {
+            dynamic or = originRisk;
+            <div class="govuk-summary-list__row">
+              <dt class="govuk-summary-list__key">Originating risk</dt>
+              <dd class="govuk-summary-list__value">
+                <a class="govuk-link govuk-link--no-visited-state" href="/modern/raid/risks/@((int)or.Id)">R-@(((int)or.Id).ToString("D4")) — @or.Title</a>
+                <span class="govuk-body-s dfe-c-text-muted"> (@OriginRiskRating(or.RiskScore), @(or.Status ?? "—"))</span>
+              </dd>
+              @if (canChangeIssue)
+              {
+                <dd class="govuk-summary-list__actions"></dd>
+              }
+            </div>
+          }
+          <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">Date raised</dt>
+            <dd class="govuk-summary-list__value">@Model.DetectedDate.ToString("d MMMM yyyy, h:mm tt", CultureInfo.InvariantCulture)</dd>
+          </div>
+          <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">Blocked?</dt>
+            <dd class="govuk-summary-list__value">@(Model.BlockedFlag ? "Yes — marked as blocked" : "No")</dd>
+          </div>
+          <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">Target resolution</dt>
+            <dd class="govuk-summary-list__value">@(Model.TargetResolutionDate?.ToString("d MMMM yyyy", CultureInfo.GetCultureInfo("en-GB")) ?? "—")</dd>
+            @if (canChangeIssue)
+            {
+              <dd class="govuk-summary-list__actions">
+                <a class="govuk-link govuk-link--no-visited-state" href="@($"{issueEditUrl}#raid-issue-edit-target-resolution")">Change<span class="govuk-visually-hidden"> target resolution date</span></a>
+              </dd>
+            }
+          </div>
+        </dl>
+      </div>
+
+      <div id="issue-assurance" class="tab-pane @(activeTab == "assurance" ? "on" : "")" role="tabpanel" aria-labelledby="tab-issue-assurance">
+        @{
+          var assuranceRows = Model.AssuranceEvents.OrderBy(x => x.SortOrder).ThenBy(x => x.Id).ToList();
+          string KindLabel(string k) =>
+              string.IsNullOrWhiteSpace(k) ? "—" : char.ToUpperInvariant(k.Trim()[0]) + (k.Trim().Length > 1 ? k.Trim()[1..].ToLowerInvariant() : "");
+        }
+        <h2 class="govuk-heading-m govuk-!-margin-bottom-3">Detailed cause</h2>
+        <p class="govuk-body govuk-!-margin-bottom-4">@(string.IsNullOrWhiteSpace(Model.DetailedCause) ? "—" : Model.DetailedCause)</p>
+
+        <h2 class="govuk-heading-m govuk-!-margin-bottom-3">Assurance arrangements</h2>
+        <p class="govuk-body govuk-!-margin-bottom-4">@(string.IsNullOrWhiteSpace(Model.AssuranceArrangements) ? "—" : Model.AssuranceArrangements)</p>
+
+        <h2 class="govuk-heading-m govuk-!-margin-bottom-3">Assurance events</h2>
+        @if (!assuranceRows.Any())
+        {
+          <p class="govuk-body govuk-!-margin-bottom-4">
+            No assurance events recorded yet.
+            @if (canChangeIssue)
+            {<span>Add boards, reviews or events from <a class="govuk-link govuk-link--no-visited-state" href="@issueEditUrl">edit issue</a>.</span>}
+          </p>
+        }
+        else
+        {
+          <div class="dfe-f-table-wrapper govuk-!-margin-bottom-4" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+            <table class="govuk-table govuk-table--small-text-until-tablet">
+              <thead class="govuk-table__head">
+                <tr class="govuk-table__row">
+                  <th scope="col" class="govuk-table__header">Type</th>
+                  <th scope="col" class="govuk-table__header">Name</th>
+                  <th scope="col" class="govuk-table__header">Date</th>
+                  <th scope="col" class="govuk-table__header">Decision taken or expected</th>
+                </tr>
+              </thead>
+              <tbody class="govuk-table__body">
+                @foreach (var ae in assuranceRows)
+                {
+                  <tr class="govuk-table__row">
+                    <td class="govuk-table__cell">@KindLabel(ae.EventKind)</td>
+                    <td class="govuk-table__cell">@ae.Title</td>
+                    <td class="govuk-table__cell">@(ae.EventDate.HasValue ? ae.EventDate.Value.ToString("d MMM yyyy", CultureInfo.InvariantCulture) : "—")</td>
+                    <td class="govuk-table__cell">@(string.IsNullOrWhiteSpace(ae.DecisionSummary) ? "—" : ae.DecisionSummary)</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+        @if (canChangeIssue)
+        {
+          <p class="govuk-body govuk-!-margin-bottom-0"><a class="govuk-link govuk-link--no-visited-state govuk-!-font-weight-bold" href="@issueEditUrl">Edit cause and assurance</a></p>
+        }
+      </div>
+
+      <div id="issue-actions" class="tab-pane @(activeTab == "actions" ? "on" : "")" role="tabpanel" aria-labelledby="tab-issue-actions">
+        @if (Model.IssueActions.Any())
+        {
+          <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+            <table class="govuk-table" id="raid-issue-actions-table">
+              <thead class="govuk-table__head"><tr class="govuk-table__row"><th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Action</button>
+        </th><th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Owner</button>
+        </th><th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Due</button>
+        </th><th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Status</button>
+        </th></tr></thead>
+              <tbody class="govuk-table__body">
+                @foreach (var ia in Model.IssueActions)
+                {
+                  <tr class="govuk-table__row">
+                    <td class="govuk-table__cell">@ia.Action.Title</td>
+                    <td class="govuk-table__cell">@(ia.Action.AssignedToUser?.Name ?? ia.Action.AssignedToEmail ?? "—")</td>
+                    <td class="govuk-table__cell">@(ia.Action.DueDate?.ToString("d MMM yyyy", CultureInfo.InvariantCulture) ?? "—")</td>
+                    <td class="govuk-table__cell"><span class="dfe-c-tag @((ia.Action.Status ?? "").Contains("complete", StringComparison.OrdinalIgnoreCase) ? "dfe-c-tag--green" : "dfe-c-tag--blue")">@ia.Action.Status</span></td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+        else
+        {
+          <p class="govuk-body">No issue actions linked yet.</p>
+        }
+      </div>
+
+      <div id="issue-history" class="tab-pane @(activeTab == "history" ? "on" : "")" role="tabpanel" aria-labelledby="tab-issue-history">
+        <div class="govuk-inset-text">
+          Latest update: @Model.UpdatedAt.ToString("d MMM yyyy HH:mm", CultureInfo.InvariantCulture) UTC @(string.IsNullOrEmpty(updatedByDisplay) ? "" : $"· {updatedByDisplay}")<br />
+          Created: @Model.CreatedAt.ToString("d MMM yyyy HH:mm", CultureInfo.InvariantCulture) UTC.
+        </div>
+      </div>
+
+      <div id="issue-close" class="tab-pane @(activeTab == "close" ? "on" : "")" role="tabpanel" aria-labelledby="tab-issue-close">
+        <p class="govuk-body">To close this issue formally, record the resolution summary and closure details on the edit screen.</p>
+        <div class="govuk-button-group">
+          @if (canChangeIssue)
+          {
+            <a href="@issueEditUrl" class="govuk-button">Go to edit issue</a>
+          }
+          <a href="/modern/raid/issues/@Model.Id?tab=actions" class="govuk-button govuk-button--secondary">Review actions first</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="dfe-c-sidebar">
+      <div class="dfe-c-scard">
+        <div class="dfe-c-scard__title">Open duration</div>
+        <div style="font-size:1.25rem;font-weight:700;">@openPhrase</div>
+        <div style="font-size:0.8125rem;color:var(--grey-4);margin-top:0.35rem;line-height:1.35;">Raised @detectedDateUk</div>
+      </div>
+
+      <div class="dfe-c-scard">
+        <div class="dfe-c-scard__title">Ownership</div>
+        <div class="dfe-c-kv"><span class="dfe-c-kv__k">SRO</span><span class="dfe-c-kv__v">@sroDisplay</span></div>
+        <div class="dfe-c-kv"><span class="dfe-c-kv__k">Issue owner</span><span class="dfe-c-kv__v">@ownerDisplay</span></div>
+        <div class="dfe-c-kv"><span class="dfe-c-kv__k">Created by</span><span class="dfe-c-kv__v">@raisedByDisplay</span></div>
+        <div class="dfe-c-kv"><span class="dfe-c-kv__k">Group</span><span class="dfe-c-kv__v">@groupLabel</span></div>
+        <div class="dfe-c-kv"><span class="dfe-c-kv__k">Team</span><span class="dfe-c-kv__v">@teamLabel</span></div>
+      </div>
+
+      <div class="dfe-c-scard">
+        <div class="dfe-c-scard__title">Classification</div>
+        <div class="dfe-c-kv"><span class="dfe-c-kv__k">Reference</span><span class="dfe-c-kv__v dfe-c-mono">I-@Model.Id.ToString("D4")</span></div>
+        <div class="dfe-c-kv"><span class="dfe-c-kv__k">Size</span><span class="dfe-c-kv__v"><strong style="color:var(--rag-r);">@(Model.SeverityLookup?.Label ?? Model.Severity ?? "—")</strong></span></div>
+        <div class="dfe-c-kv"><span class="dfe-c-kv__k">Resolution tier</span><span class="dfe-c-kv__v"><strong>@(resolutionTierFull.Split('\u2014', '-').FirstOrDefault()?.Trim() ?? resolutionTierFull)</strong></span></div>
+        <div class="dfe-c-kv"><span class="dfe-c-kv__k">Impact type</span><span class="dfe-c-kv__v">@(catLabels.FirstOrDefault() ?? Model.CategoryLookup?.Label ?? "—")</span></div>
+        <div class="dfe-c-kv"><span class="dfe-c-kv__k">Divisions</span><span class="dfe-c-kv__v">@(issueDivLabels.Count > 0 ? string.Join(", ", issueDivLabels!) : "—")</span></div>
+        <div class="dfe-c-kv"><span class="dfe-c-kv__k">Business areas</span><span class="dfe-c-kv__v">@(issueBaLabels.Count > 0 ? string.Join(", ", issueBaLabels!) : "—")</span></div>
+        <div class="dfe-c-kv"><span class="dfe-c-kv__k">Status</span><span class="dfe-c-kv__v"><span class="@StatusTagClass()">@(Model.StatusLookup?.Label ?? Model.Status ?? "—")</span></span></div>
+        <div class="dfe-c-kv"><span class="dfe-c-kv__k">Days open</span><span class="dfe-c-kv__v"><strong style="color:var(--rag-r);">@daysOpen</strong></span></div>
+        <div class="dfe-c-kv"><span class="dfe-c-kv__k">Resolution due</span><span class="dfe-c-kv__v">@(Model.TargetResolutionDate?.ToString("d MMM yyyy", CultureInfo.InvariantCulture) ?? "—")</span></div>
+      </div>
+
+      <div class="dfe-c-scard">
+        <div class="dfe-c-scard__title">Linked records</div>
+        @if (originRisk != null)
+        {
+          dynamic or = originRisk;
+          <div class="dfe-c-kv"><span class="dfe-c-kv__k">Origin risk</span><span class="dfe-c-kv__v"><a class="govuk-link govuk-link--no-visited-state" href="/modern/raid/risks/@((int)or.Id)">R-@(((int)or.Id).ToString("D4"))</a></span></div>
+        }
+        else
+        {
+          <div class="dfe-c-kv"><span class="dfe-c-kv__k">Origin risk</span><span class="dfe-c-kv__v">—</span></div>
+        }
+        @if (wi.HasValue && Model.Project != null)
+        {
+          <div class="dfe-c-kv"><span class="dfe-c-kv__k">Work item</span><span class="dfe-c-kv__v"><a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("Detail", "ModernWork", new { id = wi.Value, tab = "issues" })#wd-issues">@(string.IsNullOrWhiteSpace(Model.Project.ProjectCode) ? $"WI-{wi.Value:D8}" : Model.Project.ProjectCode)</a></span></div>
+        }
+        else
+        {
+          <div class="dfe-c-kv"><span class="dfe-c-kv__k">Work item</span><span class="dfe-c-kv__v">—</span></div>
+        }
+        @if (Model.PrimaryProductId.HasValue)
+        {
+          <div class="dfe-c-kv"><span class="dfe-c-kv__k">Product</span><span class="dfe-c-kv__v">@(Model.PrimaryProduct?.FipsId ?? Model.PrimaryProduct?.DisplayName ?? $"#{Model.PrimaryProductId}")</span></div>
+        }
+      </div>
+
+      <div class="dfe-c-scard">
+        <div class="dfe-c-scard__title">Quick actions</div>
+        <div style="display:flex;flex-direction:column;gap:0.5rem;">
+          <a href="/modern/raid/issues/@Model.Id/edit" class="govuk-button govuk-button--secondary" style="width:100%;margin-bottom:0;">Edit this issue</a>
+          <a href="/modern/raid/issues/@Model.Id?tab=actions" class="govuk-button govuk-button--secondary" style="width:100%;margin-bottom:0;">Manage actions</a>
+          <a href="/modern/raid/issues/@Model.Id?tab=close" class="govuk-button govuk-button--secondary" style="width:100%;margin-bottom:0;">Close issue</a>
+          <a href="/modern/raid/issues" class="govuk-button govuk-button--secondary" style="width:100%;margin-bottom:0;">Issue log</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>

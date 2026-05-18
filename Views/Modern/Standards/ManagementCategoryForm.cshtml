@@ -1,0 +1,58 @@
+@model Compass.ViewModels.Modern.StandardsManagementCategoryFormViewModel
+@{
+  ViewData["Title"] = "Add category";
+  var managementHref = Url.Action("Management", "ModernStandards", new { section = "categories" }) ?? "#";
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernStandards")">Standards</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@managementHref">Management</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">Add category</li>
+}
+
+@{
+  var formLede = await Html.PartialAsync("_GovukBodyParagraph", "Top-level categories used when classifying DDT standards.");
+}
+@await Html.PartialAsync("_ModernPageHeader", new Compass.ViewModels.Modern.ModernPageHeaderViewModel {
+  Caption = "Standards management",
+  Title = "Add category",
+  Lede = formLede
+})
+
+@if (TempData["ErrorMessage"] is string formError && !string.IsNullOrWhiteSpace(formError))
+{
+  <div class="govuk-notification-banner govuk-notification-banner--error" role="alert" aria-labelledby="category-form-error-title" data-module="govuk-notification-banner">
+    <div class="govuk-notification-banner__header">
+      <h2 class="govuk-notification-banner__title" id="category-form-error-title">There is a problem</h2>
+    </div>
+    <div class="govuk-notification-banner__content">
+      <p class="govuk-notification-banner__heading">@formError</p>
+    </div>
+  </div>
+}
+
+<form method="post" action="@Url.Action("ManagementCategoryCreate", "ModernStandards")" class="govuk-!-margin-top-4">
+  @Html.AntiForgeryToken()
+
+  <div class="govuk-form-group">
+    <label class="govuk-label govuk-label--m" for="category-name">Name</label>
+    <input class="govuk-input" id="category-name" name="name" type="text" value="@Model.Name" required maxlength="200" />
+  </div>
+
+  <div class="govuk-form-group">
+    <label class="govuk-label" for="category-description">Description</label>
+    <textarea class="govuk-textarea" id="category-description" name="description" rows="3" maxlength="1000">@Model.Description</textarea>
+  </div>
+
+  <div class="govuk-form-group">
+    <label class="govuk-label" for="category-sort">Sort order</label>
+    <span class="govuk-hint">Lower numbers appear first in lists.</span>
+    <input class="govuk-input govuk-input--width-4" id="category-sort" name="sortOrder" type="number" value="@Model.SortOrder" />
+  </div>
+
+  <div class="govuk-button-group govuk-!-margin-top-6">
+    <button type="submit" class="govuk-button">Add category</button>
+    <a class="govuk-link govuk-link--no-visited-state" href="@managementHref">Cancel</a>
+  </div>
+</form>

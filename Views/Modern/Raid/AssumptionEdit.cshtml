@@ -1,0 +1,252 @@
+@model Compass.ViewModels.Modern.ModernRaidCreateAssumptionForm
+@using Compass.Models
+@using Compass.Models.Modern.Work
+@using Compass.ViewModels.Modern
+@using Microsoft.AspNetCore.Html
+@{
+  ViewData["Title"] = "Edit assumption";
+  var crit = ViewBag.AssumptionCriticalityOptions as IList<AssumptionCriticality> ?? new List<AssumptionCriticality>();
+  var st = ViewBag.AssumptionStatusOptions as IList<AssumptionStatus> ?? new List<AssumptionStatus>();
+  var pj = ViewBag.ProjectOptions as List<RiskIssueNamedIntOption> ?? new List<RiskIssueNamedIntOption>();
+  var fp = ViewBag.FipsProductOptions as List<RiskIssueNamedIntOption> ?? new List<RiskIssueNamedIntOption>();
+  var divs = ViewBag.DivisionOptions as List<RiskIssueNamedIntOption> ?? new List<RiskIssueNamedIntOption>();
+  var baOpts = ViewBag.BusinessAreaOptions as List<RiskIssueNamedIntOption> ?? new List<RiskIssueNamedIntOption>();
+  var assoc = Model.AssociationKind ?? "work";
+  var aid = Model.Id ?? 0;
+  var ms = ViewData.ModelState;
+
+  string? RaidErr(string key) =>
+      ms.TryGetValue(key, out var stErr) && stErr!.Errors.Count > 0 ? stErr.Errors[0].ErrorMessage : null;
+
+  var reviewErr = RaidErr("Review");
+  var descErr = RaidErr(nameof(Model.Description));
+  var projectErr = RaidErr(nameof(Model.ProjectId));
+  var productErr = RaidErr(nameof(Model.PrimaryProductId));
+  var critErr = RaidErr(nameof(Model.AssumptionCriticalityId));
+  var statusErr = RaidErr(nameof(Model.AssumptionStatusId));
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernRaid")">RAID</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Assumptions", "ModernRaid")">Assumptions</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">Edit assumption</li>
+}
+
+<div id="sc-raid-assumption-edit" class="modern-work-page">
+<p class="dfe-c-body govuk-!-margin-bottom-3">
+  <a href="@Url.Action("AssumptionDetail", "ModernRaid", new { id = aid })" class="dfe-c-link">← Back to assumption</a>
+</p>
+
+@await Html.PartialAsync("~/Views/Modern/Shared/_ModernPageHeader.cshtml", new ModernPageHeaderViewModel {
+  Caption = "RAID",
+  Title = "Edit assumption",
+  Lede = new HtmlString("<p class=\"govuk-body govuk-!-margin-bottom-0\">Update this assumption and how it is scoped in the RAID register (work item, service register product, or organisation-wide).</p>")
+})
+
+<div class="govuk-grid-row">
+  <div class="govuk-grid-column-three-quarters">
+    <div class="dfe-c-card dfe-c-card--plain">
+      <form method="post" novalidate action="@Url.Action("AssumptionEditPost", "ModernRaid", new { id = aid })">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="@nameof(Model.Id)" value="@Model.Id" />
+
+        @if (!ViewData.ModelState.IsValid)
+        {
+        <div class="govuk-error-summary" data-module="govuk-error-summary" role="alert" aria-labelledby="error-summary-title">
+          <h2 class="govuk-error-summary__title" id="error-summary-title">There is a problem</h2>
+          <div class="govuk-error-summary__body">
+            <ul class="govuk-list govuk-error-summary__list">
+              @foreach (var kv in ViewData.ModelState)
+              {
+                if (string.IsNullOrEmpty(kv.Key)) { continue; }
+                if (kv.Value?.Errors?.Count > 0)
+                {
+                  <li><a href="#@kv.Key">@kv.Value.Errors[0].ErrorMessage</a></li>
+                }
+              }
+            </ul>
+          </div>
+        </div>
+        }
+
+        <fieldset class="govuk-fieldset govuk-!-margin-bottom-6" id="raid-asm-edit-association">
+          <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Associated with</legend>
+          <div class="govuk-radios govuk-radios--small" data-module="govuk-radios">
+            <div class="govuk-radios__item">
+              <input class="govuk-radios__input" id="raid-asm-edit-assoc-work" name="AssociationKind" type="radio" value="work" data-aria-controls="raid-asm-edit-cond-work" @(assoc == "work" ? "checked" : null) />
+              <label class="govuk-label govuk-radios__label" for="raid-asm-edit-assoc-work">Work item</label>
+            </div>
+            <div class="govuk-radios__conditional@(assoc != "work" ? " govuk-radios__conditional--hidden" : null)" id="raid-asm-edit-cond-work">
+              <div class="govuk-form-group govuk-!-margin-bottom-0@(projectErr != null ? " govuk-form-group--error" : "")" id="@nameof(Model.ProjectId)">
+                <label class="govuk-label" for="raid-asm-edit-project-select">Work item</label>
+                @if (projectErr != null)
+                {
+                  <p class="govuk-error-message"><span class="govuk-visually-hidden">Error: </span>@projectErr</p>
+                }
+                <select class="govuk-select govuk-!-width-full@(projectErr != null ? " govuk-select--error" : "")" id="raid-asm-edit-project-select" name="@nameof(Model.ProjectId)">
+                  <option value="">— Select —</option>
+                  @foreach (var o in pj)
+                  {
+                    if (Model.ProjectId == o.Id) { <option value="@o.Id" selected>@o.Name</option> }
+                    else { <option value="@o.Id">@o.Name</option> }
+                  }
+                </select>
+              </div>
+            </div>
+
+            <div class="govuk-radios__item">
+              <input class="govuk-radios__input" id="raid-asm-edit-assoc-product" name="AssociationKind" type="radio" value="product" data-aria-controls="raid-asm-edit-cond-product" @(assoc == "product" ? "checked" : null) />
+              <label class="govuk-label govuk-radios__label" for="raid-asm-edit-assoc-product">Service register product</label>
+            </div>
+            <div class="govuk-radios__conditional@(assoc != "product" ? " govuk-radios__conditional--hidden" : null)" id="raid-asm-edit-cond-product">
+              <div class="govuk-form-group govuk-!-margin-bottom-0@(productErr != null ? " govuk-form-group--error" : "")" id="@nameof(Model.PrimaryProductId)">
+                <label class="govuk-label" for="raid-asm-edit-product-select">Product</label>
+                <div id="raid-asm-edit-product-hint" class="govuk-hint">From the Operations service register (active services).</div>
+                @if (productErr != null)
+                {
+                  <p class="govuk-error-message"><span class="govuk-visually-hidden">Error: </span>@productErr</p>
+                }
+                <select class="govuk-select govuk-!-width-full@(productErr != null ? " govuk-select--error" : "")" id="raid-asm-edit-product-select" name="@nameof(Model.PrimaryProductId)" aria-describedby="raid-asm-edit-product-hint">
+                  <option value="">— Select —</option>
+                  @foreach (var o in fp)
+                  {
+                    if (Model.PrimaryProductId == o.Id) { <option value="@o.Id" selected>@o.Name</option> }
+                    else { <option value="@o.Id">@o.Name</option> }
+                  }
+                </select>
+              </div>
+            </div>
+
+            <div class="govuk-radios__item">
+              <input class="govuk-radios__input" id="raid-asm-edit-assoc-org" name="AssociationKind" type="radio" value="organisation" data-aria-controls="raid-asm-edit-cond-org" @(assoc == "organisation" ? "checked" : null) />
+              <label class="govuk-label govuk-radios__label" for="raid-asm-edit-assoc-org">Organisation</label>
+            </div>
+            <div class="govuk-radios__conditional@(assoc != "organisation" ? " govuk-radios__conditional--hidden" : null)" id="raid-asm-edit-cond-org">
+              <div class="govuk-form-group govuk-!-margin-bottom-0">
+                <p class="govuk-body-s govuk-!-margin-bottom-0">Organisational assumption — not linked to a specific work item or product.</p>
+              </div>
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset class="govuk-fieldset govuk-!-margin-bottom-4" id="raid-asm-edit-divisions">
+          <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Divisions</legend>
+          <div class="govuk-hint">Select all that apply.</div>
+          <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes">
+            @foreach (var o in divs)
+            {
+              var dChk = Model.DivisionIds != null && Model.DivisionIds.Contains(o.Id);
+              <div class="govuk-checkboxes__item">
+                @if (dChk)
+                {<input class="govuk-checkboxes__input" id="raid-asm-edit-div-@o.Id" name="@nameof(Model.DivisionIds)" type="checkbox" value="@o.Id" checked />}
+                else
+                {<input class="govuk-checkboxes__input" id="raid-asm-edit-div-@o.Id" name="@nameof(Model.DivisionIds)" type="checkbox" value="@o.Id" />}
+                <label class="govuk-label govuk-checkboxes__label" for="raid-asm-edit-div-@o.Id">@o.Name</label>
+              </div>
+            }
+          </div>
+        </fieldset>
+
+        <fieldset class="govuk-fieldset govuk-!-margin-bottom-4" id="raid-asm-edit-business-areas">
+          <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Business areas</legend>
+          <div class="govuk-hint">From admin settings — select all that apply.</div>
+          <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes">
+            @foreach (var o in baOpts)
+            {
+              var baChk = Model.BusinessAreaLookupIds != null && Model.BusinessAreaLookupIds.Contains(o.Id);
+              <div class="govuk-checkboxes__item">
+                @if (baChk)
+                {<input class="govuk-checkboxes__input" id="raid-asm-edit-ba-@o.Id" name="@nameof(Model.BusinessAreaLookupIds)" type="checkbox" value="@o.Id" checked />}
+                else
+                {<input class="govuk-checkboxes__input" id="raid-asm-edit-ba-@o.Id" name="@nameof(Model.BusinessAreaLookupIds)" type="checkbox" value="@o.Id" />}
+                <label class="govuk-label govuk-checkboxes__label" for="raid-asm-edit-ba-@o.Id">@o.Name</label>
+              </div>
+            }
+          </div>
+        </fieldset>
+
+        <div class="govuk-form-group@(descErr != null ? " govuk-form-group--error" : "")" id="@nameof(Model.Description)">
+          <label class="govuk-label" for="raid-asm-edit-description">Assumption</label>
+          @if (descErr != null)
+          {
+            <p class="govuk-error-message"><span class="govuk-visually-hidden">Error: </span>@descErr</p>
+          }
+          <textarea class="govuk-textarea@(descErr != null ? " govuk-textarea--error" : "")" id="raid-asm-edit-description" name="@nameof(Model.Description)" rows="6">@Model.Description</textarea>
+        </div>
+
+        <div class="govuk-form-group govuk-!-margin-bottom-4@(critErr != null ? " govuk-form-group--error" : "")" id="@nameof(Model.AssumptionCriticalityId)">
+          <fieldset class="govuk-fieldset">
+            <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Criticality</legend>
+            @if (critErr != null)
+            {
+              <p class="govuk-error-message"><span class="govuk-visually-hidden">Error: </span>@critErr</p>
+            }
+            <div class="govuk-radios govuk-radios--small">
+              @foreach (var o in crit)
+              {
+                <div class="govuk-radios__item">
+                  @if (Model.AssumptionCriticalityId == o.Id)
+                  {<input class="govuk-radios__input" id="raid-asm-edit-crit-@o.Id" name="@nameof(Model.AssumptionCriticalityId)" type="radio" value="@o.Id" checked />}
+                  else
+                  {<input class="govuk-radios__input" id="raid-asm-edit-crit-@o.Id" name="@nameof(Model.AssumptionCriticalityId)" type="radio" value="@o.Id" />}
+                  <label class="govuk-label govuk-radios__label" for="raid-asm-edit-crit-@o.Id">@o.Label</label>
+                </div>
+              }
+            </div>
+          </fieldset>
+        </div>
+
+        <div class="govuk-form-group govuk-!-margin-bottom-6@(statusErr != null ? " govuk-form-group--error" : "")" id="@nameof(Model.AssumptionStatusId)">
+          <fieldset class="govuk-fieldset">
+            <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Status</legend>
+            @if (statusErr != null)
+            {
+              <p class="govuk-error-message"><span class="govuk-visually-hidden">Error: </span>@statusErr</p>
+            }
+            <div class="govuk-radios govuk-radios--small">
+              @foreach (var o in st)
+              {
+                <div class="govuk-radios__item">
+                  @if (Model.AssumptionStatusId == o.Id)
+                  {<input class="govuk-radios__input" id="raid-asm-edit-st-@o.Id" name="@nameof(Model.AssumptionStatusId)" type="radio" value="@o.Id" checked />}
+                  else
+                  {<input class="govuk-radios__input" id="raid-asm-edit-st-@o.Id" name="@nameof(Model.AssumptionStatusId)" type="radio" value="@o.Id" />}
+                  <label class="govuk-label govuk-radios__label" for="raid-asm-edit-st-@o.Id">@o.Label</label>
+                </div>
+              }
+            </div>
+          </fieldset>
+        </div>
+
+        @await Html.PartialAsync("~/Views/Modern/Raid/_RaidGovUkDateInput.cshtml", new RaidGovUkDateFieldVm
+        {
+          NamePrefix = "Review",
+          Legend = "Review date",
+          Hint = "Enter today's date or a future date.",
+          Day = Model.ReviewDay,
+          Month = Model.ReviewMonth,
+          Year = Model.ReviewYear,
+          FieldIdPrefix = "raid-asm-edit-review",
+          FormGroupId = "Review",
+          HasError = reviewErr != null,
+          ErrorMessage = reviewErr,
+        })
+
+        <div id="raid-asm-edit-ownership">
+        @await Html.PartialAsync("~/Views/Shared/_UserPicker.cshtml", ViewBag.OwnerUserPicker as UserPickerViewModel)
+        @await Html.PartialAsync("~/Views/Shared/_UserPicker.cshtml", ViewBag.SroUserPicker as UserPickerViewModel)
+        </div>
+
+        <div class="govuk-button-group">
+          <button type="submit" class="govuk-button" data-module="govuk-button">Save changes</button>
+          <a class="govuk-button govuk-button--secondary" href="@Url.Action("AssumptionDetail", "ModernRaid", new { id = aid })">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </div>
+  <div class="govuk-grid-column-one-quarter">
+    @await Html.PartialAsync("~/Views/Modern/Raid/_RaidGuidanceAside.cshtml", "assumption")
+  </div>
+</div>
+</div>

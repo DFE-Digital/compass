@@ -1,0 +1,382 @@
+@model Compass.ViewModels.Modern.DdtStandardsRegisterViewModel
+@using System.Globalization
+@using Compass.ViewModels.Modern
+@{
+  ViewData["Title"] = "DDT standards register";
+  var tab = Model.Tab ?? (Model.ShowYourStandardsTab ? "yours" : "published");
+  var culture = CultureInfo.GetCultureInfo("en-GB");
+
+  string StageTagClass(string stage) => stage switch
+  {
+    "Published" => "dfe-c-tag dfe-c-tag--green",
+    "Draft" => "dfe-c-tag dfe-c-tag--grey",
+    "For Approval" or "Under Review" => "dfe-c-tag dfe-c-tag--amber",
+    "Awaiting Publication" => "dfe-c-tag dfe-c-tag--blue",
+    "Archived" => "dfe-c-tag dfe-c-tag--red",
+    _ => "dfe-c-tag dfe-c-tag--grey"
+  };
+
+  string StageTagLabel(string stage) => stage switch
+  {
+    "For Approval" => "IN REVIEW",
+    "Awaiting Publication" => "AWAITING PUBLISH",
+    "Under Review" => "IN REVIEW",
+    _ => stage.ToUpperInvariant()
+  };
+
+  string TabAriaId(string tabVal) => tabVal switch
+  {
+    "yours" => "tab-ddt-yours",
+    "review" => "tab-ddt-review",
+    "awaiting" => "tab-ddt-awaiting",
+    "draft" => "tab-ddt-draft",
+    "withdrawn" => "tab-ddt-withdrawn",
+    _ => "tab-ddt-published"
+  };
+  var cat = Model.CategoryFilter ?? "";
+  var search = Model.Search;
+  var owner = Model.OwnerFilter;
+  var categories = Model.CategoryOptions ?? new List<string>();
+
+  string DdtUrl(string tabVal) => Url.Action("DdtStandards", "ModernStandards", new
+  {
+    tab = tabVal,
+    search = string.IsNullOrWhiteSpace(search) ? null : search,
+    category = string.IsNullOrWhiteSpace(cat) ? null : cat,
+    owner = owner
+  }) ?? "#";
+
+  string TabCount(int count) => count > 0 ? $" ({count})" : "";
+
+  var clearUrl = Url.Action("DdtStandards", "ModernStandards", new { tab });
+  var formAction = Url.Action("DdtStandards", "ModernStandards");
+  var exportUrl = Url.Action("DdtStandards", "ModernStandards", new
+  {
+    tab,
+    category = string.IsNullOrWhiteSpace(cat) ? null : cat,
+    owner,
+    search = string.IsNullOrWhiteSpace(search) ? null : search,
+    export = "csv"
+  });
+}
+
+@section Breadcrumbs {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernStandards")">Standards</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">DDT standards register</li>
+}
+
+<div id="sc-standards-ddtstandards">
+@{
+  var ddtRegActions = await Html.PartialAsync("_DdtStandardsHeaderActions");
+}
+@await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+  Caption = "Standards",
+  Title = "DDT standards register",
+  Actions = ddtRegActions
+})
+
+<form method="get" action="@formAction" id="ddt-filter-form" class="dfe-c-mb-3">
+  <input type="hidden" name="tab" value="@tab" />
+  <div id="search-and-filter">
+ <div class="filter-toolbar">
+ <div class="filter-toolbar__search-wrap">
+ <input type="search" name="search" id="ddt-register-search" placeholder="Search standards…" class="filter-search" autocomplete="off" aria-label="Search standards" value="@search" />
+ <button type="submit" class="govuk-button govuk-button--secondary filter-toolbar__search-submit" id="ddt-search-submit">Search</button>
+      </div>
+ <button type="button" class="filter-toggle-btn" id="ddt-filter-btn" aria-expanded="false" aria-controls="ddt-filter-panel">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="flex-shrink:0;" aria-hidden="true"><path d="M1 3h14v1.5l-5 5V14l-4-2V9.5L1 4.5V3z"></path></svg>
+ <span class="filter-toggle-label">Filter</span>
+      </button>
+    </div>
+ <div class="filter-panel" id="ddt-filter-panel">
+ <div class="filter-panel__grid">
+        <div>
+          <label for="ddt-filter-category">Category</label>
+ <select name="category" id="ddt-filter-category" class="govuk-select">
+            <option value="">All categories</option>
+            @foreach (var c in categories)
+            {
+              <option value="@c" selected="@(string.Equals(cat, c, StringComparison.OrdinalIgnoreCase))">@c</option>
+            }
+          </select>
+        </div>
+        <div>
+          <label for="ddt-filter-owner">Owner</label>
+ <select name="owner" id="ddt-filter-owner" class="govuk-select">
+            <option value="">All owners</option>
+            @foreach (var o in Model.OwnerOptions)
+            {
+              <option value="@o.Id" selected="@(owner == o.Id)">@o.Name</option>
+            }
+          </select>
+        </div>
+      </div>
+ <div class="filter-panel__actions">
+ <button type="submit" class="govuk-button">Apply filters</button>
+ <a href="@clearUrl" class="govuk-link govuk-link--no-visited-state">Clear filters</a>
+      </div>
+    </div>
+  </div>
+</form>
+
+<nav class="dfe-f-sub-navigation govuk-!-margin-bottom-4" aria-label="DDT standards register sections">
+ <ul class="dfe-f-sub-navigation__list" style="flex-wrap:wrap;">
+    @if (Model.ShowYourStandardsTab)
+    {
+ <li class="dfe-f-sub-navigation__item@(tab == "yours" ? " dfe-f-sub-navigation__item--active" : "")">
+ <a href="@DdtUrl("yours")" class="dfe-f-sub-navigation__link govuk-link govuk-link--no-visited-state" id="tab-ddt-yours" aria-controls="d-ddt-register"@if (tab == "yours") { <text> aria-current="page"</text> }>Your standards<span class="dfe-c-fw-regular">@TabCount(Model.YourStandardsCount)</span></a>
+    </li>
+    }
+ <li class="dfe-f-sub-navigation__item@(tab == "published" ? " dfe-f-sub-navigation__item--active" : "")">
+ <a href="@DdtUrl("published")" class="dfe-f-sub-navigation__link govuk-link govuk-link--no-visited-state" id="tab-ddt-published" aria-controls="d-ddt-register"@if (tab == "published") { <text> aria-current="page"</text> }>Published<span class="dfe-c-fw-regular">@TabCount(Model.PublishedCount)</span></a>
+    </li>
+ <li class="dfe-f-sub-navigation__item@(tab == "review" ? " dfe-f-sub-navigation__item--active" : "")">
+ <a href="@DdtUrl("review")" class="dfe-f-sub-navigation__link govuk-link govuk-link--no-visited-state" id="tab-ddt-review" aria-controls="d-ddt-register"@if (tab == "review") { <text> aria-current="page"</text> }>In review<span class="dfe-c-fw-regular">@TabCount(Model.ReviewCount)</span></a>
+    </li>
+ <li class="dfe-f-sub-navigation__item@(tab == "awaiting" ? " dfe-f-sub-navigation__item--active" : "")">
+ <a href="@DdtUrl("awaiting")" class="dfe-f-sub-navigation__link govuk-link govuk-link--no-visited-state" id="tab-ddt-awaiting" aria-controls="d-ddt-register"@if (tab == "awaiting") { <text> aria-current="page"</text> }>Awaiting publish<span class="dfe-c-fw-regular">@TabCount(Model.AwaitingPublishCount)</span></a>
+    </li>
+ <li class="dfe-f-sub-navigation__item@(tab == "draft" ? " dfe-f-sub-navigation__item--active" : "")">
+ <a href="@DdtUrl("draft")" class="dfe-f-sub-navigation__link govuk-link govuk-link--no-visited-state" id="tab-ddt-draft" aria-controls="d-ddt-register"@if (tab == "draft") { <text> aria-current="page"</text> }>Draft<span class="dfe-c-fw-regular">@TabCount(Model.DraftCount)</span></a>
+    </li>
+ <li class="dfe-f-sub-navigation__item@(tab == "withdrawn" ? " dfe-f-sub-navigation__item--active" : "")">
+ <a href="@DdtUrl("withdrawn")" class="dfe-f-sub-navigation__link govuk-link govuk-link--no-visited-state" id="tab-ddt-withdrawn" aria-controls="d-ddt-register"@if (tab == "withdrawn") { <text> aria-current="page"</text> }>Withdrawn<span class="dfe-c-fw-regular">@TabCount(Model.WithdrawnCount)</span></a>
+    </li>
+  </ul>
+</nav>
+
+<div id="d-ddt-register" class="tab-pane on" role="tabpanel" aria-labelledby="@TabAriaId(tab)">
+@if (Model.Items == null || !Model.Items.Any())
+{
+ <p class="dfe-c-body dfe-c-text-muted">No standards found for this tab.</p>
+}
+else if (tab == "yours")
+{
+ <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+    <table class="govuk-table">
+ <caption class="govuk-visually-hidden">Your DDT standards (owner or contact)</caption>
+      <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+ <th scope="col" class="govuk-table__header" aria-sort="none">
+ <button type="button" class="dfe-f-table-sort-button">Standard</button>
+          </th>
+ <th scope="col" class="govuk-table__header" aria-sort="none">
+ <button type="button" class="dfe-f-table-sort-button">Category</button>
+          </th>
+ <th scope="col" class="govuk-table__header" aria-sort="none">
+ <button type="button" class="dfe-f-table-sort-button">Version</button>
+          </th>
+ <th scope="col" class="govuk-table__header" aria-sort="none">
+ <button type="button" class="dfe-f-table-sort-button">Status</button>
+          </th>
+ <th scope="col" class="govuk-table__header" aria-sort="none">
+ <button type="button" class="dfe-f-table-sort-button">Owner</button>
+          </th>
+        </tr>
+      </thead>
+      <tbody class="govuk-table__body">
+      @foreach (var s in Model.Items)
+      {
+        <tr class="govuk-table__row">
+          <td class="govuk-table__cell"><a class="govuk-link govuk-link--no-visited-state govuk-!-font-weight-bold" href="@Url.Action("DdtDetail", "ModernStandards", new { id = s.Id })">@s.Title</a></td>
+          <td class="govuk-table__cell">@(string.IsNullOrEmpty(s.CategoryDisplay) ? "—" : s.CategoryDisplay)</td>
+          <td class="govuk-table__cell">@await Html.PartialAsync("~/Views/Modern/Standards/_DdtStandardVersionBadge.cshtml", (object)(s.Version ?? ""))</td>
+          <td class="govuk-table__cell"><span class="@StageTagClass(s.Stage)">@StageTagLabel(s.Stage)</span></td>
+          <td class="govuk-table__cell">@(string.IsNullOrEmpty(s.OwnerDisplay) ? "—" : s.OwnerDisplay)</td>
+        </tr>
+      }
+      </tbody>
+    </table>
+  </div>
+}
+else if (tab == "published")
+{
+ <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+    <table class="govuk-table">
+ <caption class="govuk-visually-hidden">Published DDT standards matching your filters</caption>
+      <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+ <th scope="col" class="govuk-table__header" aria-sort="none">
+ <button type="button" class="dfe-f-table-sort-button">Standard</button>
+          </th>
+ <th scope="col" class="govuk-table__header" aria-sort="none">
+ <button type="button" class="dfe-f-table-sort-button">Category</button>
+          </th>
+ <th scope="col" class="govuk-table__header" aria-sort="none">
+ <button type="button" class="dfe-f-table-sort-button">Version</button>
+          </th>
+ <th scope="col" class="govuk-table__header" aria-sort="none">
+ <button type="button" class="dfe-f-table-sort-button">Published</button>
+          </th>
+ <th scope="col" class="govuk-table__header" aria-sort="none">
+ <button type="button" class="dfe-f-table-sort-button">Owner</button>
+          </th>
+        </tr>
+      </thead>
+      <tbody class="govuk-table__body">
+      @foreach (var s in Model.Items)
+      {
+        var pub = s.PublishedAt.HasValue ? s.PublishedAt.Value.ToString("MMM yyyy", culture) : "—";
+        <tr class="govuk-table__row">
+          <td class="govuk-table__cell"><a class="govuk-link govuk-link--no-visited-state govuk-!-font-weight-bold" href="@Url.Action("DdtDetail", "ModernStandards", new { id = s.Id })">@s.Title</a></td>
+          <td class="govuk-table__cell">@(string.IsNullOrEmpty(s.CategoryDisplay) ? "—" : s.CategoryDisplay)</td>
+          <td class="govuk-table__cell">@await Html.PartialAsync("~/Views/Modern/Standards/_DdtStandardVersionBadge.cshtml", (object)(s.Version ?? ""))</td>
+          <td class="govuk-table__cell">@pub</td>
+          <td class="govuk-table__cell">@(string.IsNullOrEmpty(s.OwnerDisplay) ? "—" : s.OwnerDisplay)</td>
+        </tr>
+      }
+      </tbody>
+    </table>
+  </div>
+}
+else if (tab == "review")
+{
+ <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+    <table class="govuk-table">
+ <caption class="govuk-visually-hidden">DDT standards in review</caption>
+      <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+ <th scope="col" class="govuk-table__header" aria-sort="none">
+ <button type="button" class="dfe-f-table-sort-button">Standard</button>
+          </th>
+ <th scope="col" class="govuk-table__header" aria-sort="none">
+ <button type="button" class="dfe-f-table-sort-button">Category</button>
+          </th>
+ <th scope="col" class="govuk-table__header" aria-sort="none">
+ <button type="button" class="dfe-f-table-sort-button">Version</button>
+          </th>
+ <th scope="col" class="govuk-table__header" aria-sort="none">
+ <button type="button" class="dfe-f-table-sort-button">Status</button>
+          </th>
+ <th scope="col" class="govuk-table__header" aria-sort="none">
+ <button type="button" class="dfe-f-table-sort-button">Owner</button>
+          </th>
+        </tr>
+      </thead>
+      <tbody class="govuk-table__body">
+      @foreach (var s in Model.Items)
+      {
+        <tr class="govuk-table__row">
+          <td class="govuk-table__cell"><a class="govuk-link govuk-link--no-visited-state govuk-!-font-weight-bold" href="@Url.Action("DdtDetail", "ModernStandards", new { id = s.Id })">@s.Title</a></td>
+          <td class="govuk-table__cell">@(string.IsNullOrEmpty(s.CategoryDisplay) ? "—" : s.CategoryDisplay)</td>
+          <td class="govuk-table__cell">@await Html.PartialAsync("~/Views/Modern/Standards/_DdtStandardVersionBadge.cshtml", (object)(s.Version ?? ""))</td>
+ <td class="govuk-table__cell"><span class="dfe-c-tag dfe-c-tag--amber">AWAITING SIGN-OFF</span></td>
+          <td class="govuk-table__cell">@(string.IsNullOrEmpty(s.OwnerDisplay) ? "—" : s.OwnerDisplay)</td>
+        </tr>
+      }
+      </tbody>
+    </table>
+  </div>
+}
+else if (tab == "awaiting")
+{
+ <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+    <table class="govuk-table">
+ <caption class="govuk-visually-hidden">DDT standards awaiting publication</caption>
+      <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+ <th scope="col" class="govuk-table__header"><button type="button" class="dfe-f-table-sort-button">Standard</button></th>
+ <th scope="col" class="govuk-table__header"><button type="button" class="dfe-f-table-sort-button">Category</button></th>
+ <th scope="col" class="govuk-table__header"><button type="button" class="dfe-f-table-sort-button">Version</button></th>
+ <th scope="col" class="govuk-table__header"><button type="button" class="dfe-f-table-sort-button">Owner</button></th>
+        </tr>
+      </thead>
+      <tbody class="govuk-table__body">
+      @foreach (var s in Model.Items)
+      {
+        <tr class="govuk-table__row">
+          <td class="govuk-table__cell"><a class="govuk-link govuk-link--no-visited-state govuk-!-font-weight-bold" href="@Url.Action("DdtDetail", "ModernStandards", new { id = s.Id })">@s.Title</a></td>
+          <td class="govuk-table__cell">@(string.IsNullOrEmpty(s.CategoryDisplay) ? "—" : s.CategoryDisplay)</td>
+          <td class="govuk-table__cell">@await Html.PartialAsync("~/Views/Modern/Standards/_DdtStandardVersionBadge.cshtml", (object)(s.Version ?? ""))</td>
+          <td class="govuk-table__cell">@(string.IsNullOrEmpty(s.OwnerDisplay) ? "—" : s.OwnerDisplay)</td>
+        </tr>
+      }
+      </tbody>
+    </table>
+  </div>
+}
+else if (tab == "draft")
+{
+ <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+    <table class="govuk-table">
+ <caption class="govuk-visually-hidden">Draft DDT standards</caption>
+      <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+ <th scope="col" class="govuk-table__header" aria-sort="none">
+ <button type="button" class="dfe-f-table-sort-button">Standard</button>
+          </th>
+ <th scope="col" class="govuk-table__header" aria-sort="none">
+ <button type="button" class="dfe-f-table-sort-button">Category</button>
+          </th>
+ <th scope="col" class="govuk-table__header" aria-sort="none">
+ <button type="button" class="dfe-f-table-sort-button">Draft version</button>
+          </th>
+ <th scope="col" class="govuk-table__header" aria-sort="none">
+ <button type="button" class="dfe-f-table-sort-button">Owner</button>
+          </th>
+ <th scope="col" class="govuk-table__header" aria-sort="none">
+ <button type="button" class="dfe-f-table-sort-button">Started</button>
+          </th>
+        </tr>
+      </thead>
+      <tbody class="govuk-table__body">
+      @foreach (var s in Model.Items)
+      {
+        var started = s.DraftCreated.ToString("MMM yyyy", culture);
+        <tr class="govuk-table__row">
+          <td class="govuk-table__cell"><a class="govuk-link govuk-link--no-visited-state govuk-!-font-weight-bold" href="@Url.Action("DdtCreate", "ModernStandards", new { id = s.Id })">@s.Title</a></td>
+          <td class="govuk-table__cell">@(string.IsNullOrEmpty(s.CategoryDisplay) ? "—" : s.CategoryDisplay)</td>
+          <td class="govuk-table__cell">@await Html.PartialAsync("~/Views/Modern/Standards/_DdtStandardVersionBadge.cshtml", (object)(s.Version ?? ""))</td>
+          <td class="govuk-table__cell">@(string.IsNullOrEmpty(s.OwnerDisplay) ? "—" : s.OwnerDisplay)</td>
+          <td class="govuk-table__cell">@started</td>
+        </tr>
+      }
+      </tbody>
+    </table>
+  </div>
+}
+else
+{
+ <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+    <table class="govuk-table">
+ <caption class="govuk-visually-hidden">Withdrawn DDT standards</caption>
+      <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+ <th scope="col" class="govuk-table__header" aria-sort="none">
+ <button type="button" class="dfe-f-table-sort-button">Standard</button>
+          </th>
+ <th scope="col" class="govuk-table__header" aria-sort="none">
+ <button type="button" class="dfe-f-table-sort-button">Category</button>
+          </th>
+ <th scope="col" class="govuk-table__header" aria-sort="none">
+ <button type="button" class="dfe-f-table-sort-button">Version</button>
+          </th>
+ <th scope="col" class="govuk-table__header" aria-sort="none">
+ <button type="button" class="dfe-f-table-sort-button">Reason</button>
+          </th>
+        </tr>
+      </thead>
+      <tbody class="govuk-table__body">
+      @foreach (var s in Model.Items)
+      {
+        var reason = string.IsNullOrEmpty(s.WithdrawalNote) ? "—" : s.WithdrawalNote;
+        <tr class="govuk-table__row">
+          <td class="govuk-table__cell"><a class="govuk-link govuk-link--no-visited-state govuk-!-font-weight-bold" href="@Url.Action("DdtDetail", "ModernStandards", new { id = s.Id })">@s.Title</a></td>
+          <td class="govuk-table__cell">@(string.IsNullOrEmpty(s.CategoryDisplay) ? "—" : s.CategoryDisplay)</td>
+          <td class="govuk-table__cell">@await Html.PartialAsync("~/Views/Modern/Standards/_DdtStandardVersionBadge.cshtml", (object)(s.Version ?? ""))</td>
+          <td class="govuk-table__cell">@reason</td>
+        </tr>
+      }
+      </tbody>
+    </table>
+  </div>
+}
+</div>
+</div>

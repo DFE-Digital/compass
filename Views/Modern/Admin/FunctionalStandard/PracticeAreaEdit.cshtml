@@ -1,0 +1,55 @@
+@model Compass.Models.PracticeArea
+@using Compass.ViewModels.Modern
+@using Microsoft.AspNetCore.Html
+@using System.Net
+@{
+    var theme = ViewBag.Theme as Compass.Models.FunctionalStandardTheme;
+    var standard = ViewBag.Standard as Compass.Models.FunctionalStandard;
+    ViewData["Title"] = $"Edit practice area — {Model.Title}";
+    string PaUrl() => Url.Action("FsPracticeAreaDetail", "ModernAdmin", new { standardId = standard!.Id, themeId = theme!.ThemeId, paId = Model.Id }) ?? "#";
+}
+
+@section Breadcrumbs {
+    <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+    <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernAdmin")">Admin</a></li>
+    <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernAdmin", new { panel = "std-functional" })">Functional standards</a></li>
+    <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("FunctionalStandardDetail", "ModernAdmin", new { id = standard!.Id })">@standard.Title</a></li>
+    <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("FsThemeDetail", "ModernAdmin", new { standardId = standard.Id, themeId = theme!.ThemeId })">Theme @theme.ThemeId</a></li>
+    <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@PaUrl()">PA @Model.PracticeAreaId</a></li>
+    <li class="govuk-breadcrumbs__list-item" aria-current="page">Edit</li>
+}
+
+<div class="admin-hub">
+    @await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+        Caption = $"{standard.Title} — Theme {theme.ThemeId} — PA {Model.PracticeAreaId}",
+        Title = "Edit practice area",
+        Lede = new HtmlString($"<p class=\"govuk-body govuk-!-margin-bottom-0\"><a class=\"govuk-link govuk-link--no-visited-state\" href=\"{PaUrl()}\">Back to {WebUtility.HtmlEncode(Model.Title)}</a></p>")
+    })
+
+    @if (ViewBag.AdminError != null)
+    {
+        <div class="govuk-error-summary" role="alert" data-module="govuk-error-summary" style="margin-bottom:1.5rem;">
+            <h2 class="govuk-error-summary__title">There is a problem</h2>
+            <div class="govuk-error-summary__body">@ViewBag.AdminError</div>
+        </div>
+    }
+
+    <div class="dfe-c-card dfe-c-mb-4" style="border:1px solid var(--grey-2);border-left:4px solid var(--blue);padding:1.25rem 1.5rem;background:var(--white);max-width:40rem;">
+        <h2 class="govuk-heading-m govuk-!-margin-top-0">Practice area details</h2>
+        <form method="post" action="@Url.Action("FsPracticeAreaEdit", "ModernAdmin", new { standardId = standard.Id, themeId = theme.ThemeId, paId = Model.Id })" novalidate>
+            @Html.AntiForgeryToken()
+            <div class="govuk-form-group govuk-!-margin-bottom-3">
+                <label class="govuk-label" for="pa-title">Title</label>
+                <input class="govuk-input govuk-!-width-two-thirds" type="text" name="title" id="pa-title" required autocomplete="off" maxlength="255" value="@Model.Title" />
+            </div>
+            <div class="govuk-form-group govuk-!-margin-bottom-3">
+                <label class="govuk-label" for="pa-desc">Description <span class="govuk-hint govuk-!-display-inline">(optional)</span></label>
+                <textarea class="govuk-textarea govuk-!-width-two-thirds" name="description" id="pa-desc" rows="4">@Model.Description</textarea>
+            </div>
+            <div class="govuk-button-group">
+                <button type="submit" class="govuk-button" data-module="govuk-button">Save changes</button>
+                <a href="@PaUrl()" class="govuk-link govuk-link--no-visited-state govuk-!-margin-left-2">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>

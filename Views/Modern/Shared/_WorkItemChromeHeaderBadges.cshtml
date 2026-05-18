@@ -1,0 +1,42 @@
+@model Compass.Models.Modern.Work.WorkItem
+@using Compass.Models.Modern.Work
+@{
+  var work = Model;
+  var deliveryPhaseName = ViewBag.DeliveryPhaseName as string ?? "—";
+  var priorityName = ViewBag.PriorityName as string ?? "—";
+  var latestRag = ViewBag.LatestRag as ChromeRagSnapshot ?? work.RagHistory?.OrderByDescending(r => r.UpdatedAt).FirstOrDefault();
+  var ragDisplayName = latestRag?.RagStatus?.Name ?? ViewBag.CurrentRagName as string;
+  var currentRagBgKey = ViewBag.CurrentRagBackgroundColourKey as string;
+  var currentRagTextKey = ViewBag.CurrentRagTextColourKey as string;
+  var currentRagCssClass = ViewBag.CurrentRagCssClass as string;
+  var monthlyReportDue = ViewBag.MonthlyReportDue as bool? ?? false;
+  var ragTagClass = (!string.IsNullOrEmpty(currentRagBgKey) || !string.IsNullOrEmpty(currentRagTextKey))
+    ? ""
+    : WorkBadgeCss.RagDfeTagClass(currentRagCssClass, ragDisplayName);
+  var priorityTagClass = WorkBadgeCss.PriorityDfeTagClass(priorityName);
+}
+<div class="dfe-c-flex" style="gap:0.5rem;flex-wrap:wrap;align-items:center;">
+  @if (!string.IsNullOrEmpty(ragDisplayName))
+  {
+    @if (!string.IsNullOrEmpty(currentRagBgKey) || !string.IsNullOrEmpty(currentRagTextKey))
+    {
+      <span class="rag-badge" style="@(string.IsNullOrEmpty(currentRagBgKey) ? "" : "background-color: var(--govuk-colour-" + currentRagBgKey + ");")@(string.IsNullOrEmpty(currentRagTextKey) ? "" : " color: var(--govuk-colour-" + currentRagTextKey + ");")">@ragDisplayName.ToUpperInvariant() RAG</span>
+    }
+    else
+    {
+      <span class="@ragTagClass">@ragDisplayName.ToUpperInvariant() RAG</span>
+    }
+  }
+  @if (monthlyReportDue)
+  {
+    <span class="dfe-c-tag dfe-c-tag--red">MONTHLY UPDATE OVERDUE</span>
+  }
+  @if (!string.IsNullOrWhiteSpace(priorityName) && priorityName != "—")
+  {
+    <span class="@priorityTagClass">@(priorityName.ToUpperInvariant()) PRIORITY</span>
+  }
+  @if (work.FlagshipProject)
+  {
+    <span class="dfe-c-tag dfe-c-tag--teal">FLAGSHIP</span>
+  }
+</div>

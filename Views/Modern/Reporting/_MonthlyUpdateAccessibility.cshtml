@@ -1,0 +1,176 @@
+@using Compass.Services.Aiss
+@model Compass.ViewModels.ModernMonthlyReportDashboardViewModel
+@{
+  var m = Model;
+  var rows = m.AccessibilityAreaRows ?? Array.Empty<AissByBusinessAreaRow>();
+  var accOpen = rows.Sum(r => r.Open);
+  var filterBaName = m.FilterBusinessAreaId is int fId
+    ? m.BusinessAreas?.FirstOrDefault(b => b.Id == fId)?.Name
+    : null;
+  var isBaFiltered = m.FilterBusinessAreaId is not null;
+  var accCriteria = m.AccessibilityIssueCriteria;
+  var accCriteriaAria = isBaFiltered
+    ? "Accessibility issue criteria for selected business area"
+    : "Accessibility issue criteria, all in scope";
+  string CriterionLabel(string key) => key switch
+  {
+    "a" => "WCAG A",
+    "aa" => "WCAG AA",
+    "aaa" => "WCAG AAA",
+    "bp" => "Best practice",
+    "ux" => "Usability (UX)",
+    "other" => "Other",
+    _ => key
+  };
+}
+
+<div class="mr-report-section-panel dfe-f-toggle govuk-!-margin-bottom-3" data-module="dfe-f-toggle" id="mr-p-accessibility" data-mr-section-id="accessibility" data-mr-section-title="Accessibility">
+  <div class="dfe-f-toggle__title-wrapper">
+    <h2 class="dfe-f-toggle__heading">
+      <button type="button" class="dfe-f-toggle__button" aria-expanded="false" aria-controls="mr-toggle-accessibility-content" id="mr-toggle-accessibility-button">
+        <span class="dfe-f-toggle__icon" aria-hidden="true"></span>
+        <span class="dfe-f-toggle__title" id="mr-h-accessibility">Accessibility</span>
+        <span class="mr-toggle-panel__meta"><span class="govuk-tag @(accOpen > 0 ? "govuk-tag--red" : "govuk-tag--grey")">@accOpen open</span></span>
+      </button>
+    </h2>
+  </div>
+  <div id="mr-toggle-accessibility-content" class="dfe-f-toggle__content" hidden>
+  <div class="dfe-f-toggle__body govuk-body">
+  <div id="d-mr-accessibility" role="region" aria-labelledby="mr-h-accessibility">
+    <p class="dfe-c-body-s dfe-c-text-muted govuk-!-margin-top-0">
+      Data from the <a class="govuk-link govuk-link--no-visited-state" href="https://accessibility-statements.education.gov.uk" rel="noopener noreferrer" target="_blank">Accessibility issues and statement service (opens in new tab)</a>.
+    </p>
+    @if (!string.IsNullOrWhiteSpace(m.AccessibilitySummaryError))
+    {
+      <div class="govuk-inset-text govuk-!-margin-bottom-0" role="status">@m.AccessibilitySummaryError</div>
+    }
+    else if (m.AccessibilitySummary is { } sum)
+    {
+      <div class="dfe-f-card-grid govuk-!-margin-bottom-3">
+        <div class="dfe-f-stat-card dfe-f-stat-card--tint-red">
+          <p class="govuk-body-s dfe-f-stat-card__label">Open issues (total in scope)</p>
+          <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@(sum.Issues?.Open.ToString() ?? "—")</p>
+        </div>
+        <div class="dfe-f-stat-card dfe-f-stat-card--tint-blue">
+          <p class="govuk-body-s dfe-f-stat-card__label">Overdue (open)</p>
+          <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@(sum.Issues?.Overdue.ToString() ?? "—")</p>
+        </div>
+        <div class="dfe-f-stat-card dfe-f-stat-card--tint-teal">
+          <p class="govuk-body-s dfe-f-stat-card__label">Onboarded (AISS)</p>
+          <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@(sum.Services?.Onboarded.ToString() ?? "—")</p>
+        </div>
+        <div class="dfe-f-stat-card dfe-f-stat-card--tint-green">
+          <p class="govuk-body-s dfe-f-stat-card__label">Statement installed</p>
+          <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@(sum.Services?.Installed.ToString() ?? "—")</p>
+        </div>
+      </div>
+
+      <h3 class="govuk-heading-s govuk-!-margin-bottom-1">@(isBaFiltered && !string.IsNullOrWhiteSpace(filterBaName) ? "Accessibility for " + filterBaName : "By business area (AISS)")</h3>
+      @if (isBaFiltered && !string.IsNullOrWhiteSpace(filterBaName) && rows.Count == 0)
+      {
+        <p class="govuk-body dfe-c-text-muted govuk-!-margin-bottom-0">No AISS row matched business area <strong>@filterBaName</strong>. FIPS / register labels in COMPASS and AISS must use the same primary business area name for the product.</p>
+      }
+      else if (rows.Count == 0)
+      {
+        <p class="govuk-body dfe-c-text-muted govuk-!-margin-bottom-0">No per–business area breakdown in this response.</p>
+      }
+      else
+      {
+        <div class="mr-submission-ba-wrap dfe-f-table-wrapper" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+          <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed mr-aiss-ba-table">
+            <caption class="govuk-table__caption govuk-table__caption--m govuk-visually-hidden">Accessibility issues by business area</caption>
+            <thead class="govuk-table__head">
+              <tr class="govuk-table__row">
+                <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Business area</button>
+        </th>
+                <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Open</button>
+        </th>
+                <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Overdue</button>
+        </th>
+                <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Closed</button>
+        </th>
+                <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Total</button>
+        </th>
+              </tr>
+            </thead>
+            <tbody class="govuk-table__body">
+            @foreach (var row in rows)
+            {
+              <tr class="govuk-table__row">
+                <th scope="row" class="govuk-table__header mr-aiss-ba-table__area">@(string.IsNullOrWhiteSpace(row.BusinessArea) ? "—" : row.BusinessArea)</th>
+                <td class="govuk-table__cell govuk-table__cell--numeric">@row.Open</td>
+                <td class="govuk-table__cell govuk-table__cell--numeric">@row.Overdue</td>
+                <td class="govuk-table__cell govuk-table__cell--numeric">@row.Closed</td>
+                <td class="govuk-table__cell govuk-table__cell--numeric">@row.Total</td>
+              </tr>
+            }
+            </tbody>
+          </table>
+        </div>
+      }
+      @if (accCriteria is { } ic)
+      {
+        <h4 class="govuk-heading-s @((rows.Count > 0) ? "govuk-!-margin-top-3" : "govuk-!-margin-top-0") govuk-!-margin-bottom-1">By WCAG and category</h4>
+        <div class="dfe-f-table-wrapper mr-acc-wcag-wrap" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+          <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed mr-acc-wcag-table" aria-label="@accCriteriaAria">
+            <thead class="govuk-table__head">
+              <tr class="govuk-table__row">
+                <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Criterion</button>
+        </th>
+                <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Open</button>
+        </th>
+                <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Overdue (open)</button>
+        </th>
+                <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Closed</button>
+        </th>
+              </tr>
+            </thead>
+            <tbody class="govuk-table__body">
+              @foreach (var ck in new (string k, AissCriterionTrio? t)[]
+              { ("a", ic.A), ("aa", ic.Aa), ("aaa", ic.Aaa), ("bp", ic.Bp), ("ux", ic.Ux), ("other", ic.Other) })
+              {
+                <tr class="govuk-table__row">
+                  <th scope="row" class="govuk-table__header">@CriterionLabel(ck.k)</th>
+                  <td class="govuk-table__cell govuk-table__cell--numeric">@(ck.t?.Open.ToString() ?? "—")</td>
+                  <td class="govuk-table__cell govuk-table__cell--numeric">@(ck.t?.Overdue.ToString() ?? "—")</td>
+                  <td class="govuk-table__cell govuk-table__cell--numeric">@(ck.t?.Closed.ToString() ?? "—")</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    }
+  </div>
+  </div>
+  </div>
+</div>
+<style>
+  .mr-aiss-summary-strip {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(10.5rem, 1fr));
+    gap: 0.5rem 0.75rem;
+  }
+  .mr-aiss-ba-table { width: 100%; min-width: min(100%, 36rem); border-collapse: collapse; }
+  .mr-aiss-ba-table thead .govuk-table__header--numeric .dfe-f-table-sort-button { width: 100%; justify-content: flex-end; }
+  .mr-aiss-ba-table__area {
+    max-width: 22rem;
+    font-weight: 600;
+    text-align: left;
+    vertical-align: top;
+  }
+  .mr-acc-wcag-wrap { overflow-x: auto; }
+  .mr-acc-wcag-table { margin-bottom: 0; min-width: min(100%, 32rem); }
+  .mr-acc-wcag-table thead .govuk-table__header--numeric .dfe-f-table-sort-button { width: 100%; justify-content: flex-end; }
+</style>

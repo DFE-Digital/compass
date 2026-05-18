@@ -1,0 +1,45 @@
+@model Compass.ViewModels.ModernRaidReportingViewModel
+@{
+  var m = Model;
+  var maxCell = m.IssuePrioritySeverityGrid.Length == 0 ? 0 : m.IssuePrioritySeverityGrid.Max(row => row.Length == 0 ? 0 : row.Max());
+  string CellStyle(int c)
+  {
+    if (c == 0) return "background:#f3f2f1;color:#b1b4b6;";
+    var t = maxCell == 0 ? 0.5 : (double)c / maxCell;
+    var alpha = 0.08 + t * 0.62;
+    return $"background:rgba(29,112,184,{alpha:F3});color:#0b0c0c;font-weight:600;";
+  }
+}
+@if (m.IssueSeverityColumns.Count == 0 || m.IssuePriorityRows.Count == 0)
+{
+  <p class="govuk-body">No severity and priority data to show a matrix. @m.IssuesMissingSeverityOrPriority issue(s) missing severity or priority.</p>
+}
+else
+{
+  <table class="govuk-table raid-matrix-scroll-table" aria-label="Open issues by priority and severity" style="display:block;overflow-x:auto;">
+    <caption class="govuk-visually-hidden">Open issues: rows are priority, columns are severity</caption>
+    <thead class="govuk-table__head">
+      <tr class="govuk-table__row">
+        <th scope="col">Priority ↓ / Severity →</th>
+        @foreach (var col in m.IssueSeverityColumns) { <th scope="col" class="govuk-table__header" style="text-align:center;">@col.Label</th> }
+        <th scope="col" class="govuk-table__header" style="text-align:center;">Total</th>
+      </tr>
+    </thead>
+    <tbody class="govuk-table__body">
+      @for (var pr = 0; pr < m.IssuePriorityRows.Count; pr++)
+      {
+        var rowSum = 0;
+        <tr class="govuk-table__row">
+          <th scope="row" class="govuk-table__header">@m.IssuePriorityRows[pr].Label</th>
+          @for (var sc = 0; sc < m.IssueSeverityColumns.Count; sc++)
+          {
+            var c = m.IssuePrioritySeverityGrid[pr][sc];
+            rowSum += c;
+            <td class="govuk-table__cell" style="text-align:center;@CellStyle(c)">@(c == 0 ? "—" : c.ToString())</td>
+          }
+          <td class="govuk-table__cell" style="text-align:center;background:#f4f4f4;"><strong>@rowSum</strong></td>
+        </tr>
+      }
+    </tbody>
+  </table>
+}

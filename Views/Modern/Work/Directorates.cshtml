@@ -1,75 +1,329 @@
 @using Compass.Models
+@using Compass.Models.Modern.Work
+@using Compass.ViewModels.Modern
+@using System.Globalization
+@using static Compass.ViewModels.Modern.WorkV2GroupingIntroKind
+@using Microsoft.AspNetCore.Routing
+@using Microsoft.AspNetCore.WebUtilities
 @{
     ViewData["Title"] = "Directorates";
-    var directorates = (List<Directorate>)ViewBag.Directorates ?? new List<Directorate>();
+    var directoratesNav = (List<Directorate>)ViewBag.DirectoratesNav ?? new List<Directorate>();
     var workCountByDirectorateId = (Dictionary<int, int>)ViewBag.WorkCountByDirectorateId ?? new Dictionary<int, int>();
     var search = ViewBag.Search as string;
+    var workItemsFilter = ViewBag.WorkItemsFilter as string ?? "all";
+    var countBeforeWorkFilter = ViewBag.CountBeforeWorkFilter as int?;
+    var selectedDirectorateId = ViewBag.SelectedDirectorateId as int?;
+    var showAllDirectorates = ViewBag.ShowAllDirectorates as bool? ?? false;
+    var canSetDefaultDirectorateView = ViewBag.CanSetDefaultDirectorateView as bool? ?? false;
+    var isCurrentViewSavedDefault = ViewBag.IsCurrentViewSavedDefault as bool? ?? false;
+    var filterKey = (ViewBag.DirectorateFilterKey as string ?? "all").Trim();
+    var pagedWorkItems = ViewBag.PagedWorkItems as List<WorkItem> ?? new List<WorkItem>();
+    var registerPage = ViewBag.RegisterPage as int? ?? 1;
+    var registerPageCount = ViewBag.RegisterPageCount as int? ?? 1;
+    var registerTotalCount = ViewBag.RegisterTotalCount as int? ?? 0;
+    var registerDisplayRowStart = ViewBag.RegisterDisplayRowStart as int? ?? 0;
+    var registerDisplayRowEnd = ViewBag.RegisterDisplayRowEnd as int? ?? 0;
+    var registerIsPaginated = ViewBag.RegisterIsPaginated as bool? ?? false;
+    var activeTab = ViewBag.ActiveTab as string ?? "active";
+
+    var selectedDirectorate = selectedDirectorateId.HasValue
+        ? directoratesNav.FirstOrDefault(d => d.Id == selectedDirectorateId.Value)
+        : null;
+
+    object DirPageQuery(int p)
+    {
+        if (showAllDirectorates)
+            return new { tab = activeTab, search, workItems = workItemsFilter, directorateKey = "all", page = p };
+        if (selectedDirectorateId.HasValue)
+            return new { tab = activeTab, search, workItems = workItemsFilter, directorateKey = selectedDirectorateId.Value.ToString(CultureInfo.InvariantCulture), page = p };
+        return new { tab = activeTab, search, workItems = workItemsFilter, page = p };
+    }
+
+    var returnUrl = Context.Request.Path + Context.Request.QueryString;
+
+    string DirectoratesUrl(object? values = null)
+    {
+        const string path = "/modern/work/directorates";
+        if (values == null) return path;
+        var rd = new RouteValueDictionary(values);
+        var query = rd
+            .Where(kv => kv.Value != null && !string.IsNullOrEmpty(Convert.ToString(kv.Value, CultureInfo.InvariantCulture)))
+            .ToDictionary(kv => kv.Key!, kv => Convert.ToString(kv.Value, CultureInfo.InvariantCulture)!);
+        return query.Count == 0 ? path : QueryHelpers.AddQueryString(path, query);
+    }
 }
 @section Breadcrumbs {
-    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
-    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="@Url.Action("Dashboard", "ModernWork")">Work</a></li>
-    <li class="dfe-c-breadcrumb__item" aria-current="page">Directorates</li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernWork")">Work</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">Directorates</li>
 }
 
 <div id="sc-work-directorates" class="modern-work-page">
-  <div class="dfe-c-flex--between dfe-c-mb-3" style="flex-wrap:wrap;gap:1rem;">
-    <div class="dfe-c-page-title" style="margin:0;">
-      <div class="dfe-c-page-title__caption">Work</div>
-      <h1 class="dfe-c-page-title__heading">Directorates</h1>
-      <p class="dfe-c-page-title__lede">Work items can be associated with one or more directorates. View work by directorate below.</p>
+@if (TempData["SuccessMessage"] is string successMessage && !string.IsNullOrWhiteSpace(successMessage))
+{
+ <div class="govuk-notification-banner govuk-notification-banner--success govuk-!-margin-bottom-3" role="region" aria-labelledby="dir-default-view-banner-title">
+ <div class="govuk-notification-banner__header">
+ <h2 class="govuk-notification-banner__title" id="dir-default-view-banner-title">Success</h2>
+      </div>
+ <div class="govuk-notification-banner__content">
+ <p class="govuk-notification-banner__heading govuk-!-margin-bottom-0">@successMessage</p>
+      </div>
     </div>
-    <div class="dfe-c-flex" style="gap:0.75rem;flex-wrap:wrap;">
-      <a href="@Url.Action("Create", "ModernWork")" class="govuk-button">New work item</a>
-    </div>
-  </div>
+}
+@{
+  var directoratesLede = await Html.PartialAsync("_GovukBodyParagraph", "Work items can be linked to one or more directorates. Use the filters to choose a directorate or view every work item together.");
+}
+@await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+  Caption = "Work",
+  Title = "Directorates",
+  Lede = directoratesLede
+})
 
-  <form method="get" action="@Url.Action("Directorates", "ModernWork")" id="directorates-search-form" class="dfe-c-mb-3">
+ <form method="get" action="@DirectoratesUrl()" id="directorates-search-form" class="dfe-c-mb-3">
+    <input type="hidden" name="tab" value="@activeTab" />
     <div id="search-and-filter">
-      <div class="filter-toolbar">
-        <div class="filter-toolbar__search-wrap">
-          <input type="search" name="search" id="directorates-search" value="@search" placeholder="Search directorates…" class="filter-search" autocomplete="off" aria-label="Search directorates" />
-          <button type="submit" class="govuk-button govuk-button--secondary filter-toolbar__search-submit">Search</button>
+ <div class="filter-toolbar">
+ <div class="filter-toolbar__search-wrap">
+ <input type="search" name="search" id="directorates-register-search" value="@search" placeholder="Search directorates…" class="filter-search" autocomplete="off" aria-label="Search directorates" />
+ <button type="submit" class="govuk-button govuk-button--secondary filter-toolbar__search-submit">Search</button>
+        </div>
+ <button type="button" class="filter-toggle-btn" id="directorates-filter-btn" aria-expanded="false" aria-controls="directorates-filter-panel">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="flex-shrink:0;" aria-hidden="true"><path d="M1 3h14v1.5l-5 5V14l-4-2V9.5L1 4.5V3z"></path></svg>
+ <span class="filter-toggle-label">Filter</span>
+        </button>
+      </div>
+ <div class="filter-panel filter-panel--allwork" id="directorates-filter-panel">
+ <div class="filter-panel__grid">
+        <div>
+          <label for="directorates-filter-directorate">Directorate</label>
+ <select name="directorateKey" id="directorates-filter-directorate" class="govuk-select">
+            @if (string.Equals(filterKey, "all", StringComparison.OrdinalIgnoreCase))
+            {
+              <option value="all" selected>All work items</option>
+            }
+            else
+            {
+              <option value="all">All work items</option>
+            }
+            @foreach (var d in directoratesNav)
+            {
+              var count = workCountByDirectorateId.TryGetValue(d.Id, out var c) ? c : 0;
+              var key = d.Id.ToString(CultureInfo.InvariantCulture);
+              var isSel = string.Equals(filterKey, key, StringComparison.Ordinal);
+              if (isSel)
+              {
+                <option value="@key" selected>@d.Name (@count)</option>
+              }
+              else
+              {
+                <option value="@key">@d.Name (@count)</option>
+              }
+            }
+          </select>
+        </div>
+        <div>
+          <label for="directorates-filter-workitems">Work items</label>
+ <select name="workItems" id="directorates-filter-workitems" class="govuk-select">
+            @if (workItemsFilter == "all")
+            {
+              <option value="all" selected>All directorates</option>
+            }
+            else
+            {
+              <option value="all">All directorates</option>
+            }
+            @if (workItemsFilter == "with")
+            {
+              <option value="with" selected>With linked work</option>
+            }
+            else
+            {
+              <option value="with">With linked work</option>
+            }
+            @if (workItemsFilter == "without")
+            {
+              <option value="without" selected>No linked work</option>
+            }
+            else
+            {
+              <option value="without">No linked work</option>
+            }
+          </select>
+        </div>
+      </div>
+ <div class="filter-panel__actions">
+ <button type="submit" class="govuk-button govuk-button--primary">Apply</button>
+ <a href="@DirectoratesUrl()" class="govuk-button govuk-button--secondary">Clear filters</a>
         </div>
       </div>
     </div>
   </form>
 
-  @if (directorates == null || !directorates.Any())
+  @if (ViewBag.WorkRegisterSubNav is WorkRegisterSubNavViewModel workRegisterSubNav)
   {
-    <div class="dfe-c-body dfe-c-text-muted">No directorates defined. Add directorates in Admin.</div>
+    @await Html.PartialAsync("_WorkRegisterSubNav", workRegisterSubNav)
+  }
+
+  @if (directoratesNav == null || !directoratesNav.Any())
+  {
+ <div class="dfe-c-body dfe-c-text-muted">
+      @if (countBeforeWorkFilter is > 0)
+      {
+        <text>No directorates match the work items filter. Try changing the filter or </text>
+        <a class="govuk-link govuk-link--no-visited-state" href="@DirectoratesUrl(new { search })">clear filters</a><text>.</text>
+      }
+      else if (!string.IsNullOrWhiteSpace(search))
+      {
+        <text>No directorates match your search.</text>
+      }
+      else
+      {
+        <text>No directorates defined. Add directorates in Admin.</text>
+      }
+    </div>
   }
   else
   {
-    <div class="dfe-c-table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th scope="col">Directorate</th>
-            <th scope="col" style="text-align:right;">Work items</th>
-            <th scope="col"><span class="dfe-c-sr-only">Actions</span></th>
-          </tr>
-        </thead>
-        <tbody>
-          @foreach (var d in directorates)
-          {
-            var count = workCountByDirectorateId.TryGetValue(d.Id, out var c) ? c : 0;
-            <tr>
-              <td>
-                <strong>@d.Name</strong>
-                @if (!string.IsNullOrEmpty(d.Description))
-                {
-                  <p class="dfe-c-body-s dfe-c-text-muted dfe-c-m-0 dfe-c-mt-1">@d.Description</p>
-                }
-              </td>
-              <td style="text-align:right;">@count</td>
-              <td>
-                <a href="@Url.Action("AllWork", "ModernWork", new { directorateId = d.Id })" class="dfe-c-link">View work →</a>
-              </td>
-            </tr>
-          }
-        </tbody>
-      </table>
-    </div>
-    <p class="dfe-c-body-s dfe-c-text-muted dfe-c-mt-2">@directorates.Count directorate@(directorates.Count == 1 ? "" : "s").</p>
-  }
+ <div class="modern-work-dir-register govuk-!-margin-top-4">
+ <div class="work-grouping-main-header">
+ <div class="work-grouping-main-header__titles">
+ @if (showAllDirectorates)
+ {
+ <h2 class="govuk-heading-m govuk-!-margin-top-0">All work items</h2>
+ <p class="dfe-c-body-s dfe-c-text-muted govuk-!-margin-bottom-0">Every work item, including items with no directorate link.</p>
+ }
+ else if (selectedDirectorate != null)
+ {
+ <h2 class="govuk-heading-m govuk-!-margin-top-0">@selectedDirectorate.Name</h2>
+   @if (!string.IsNullOrEmpty(selectedDirectorate.Description))
+   {
+ <p class="dfe-c-body-s dfe-c-text-muted govuk-!-margin-bottom-0">@selectedDirectorate.Description</p>
+   }
+   else
+   {
+ <p class="dfe-c-body-s dfe-c-text-muted govuk-!-margin-bottom-0">Work items linked to this directorate.</p>
+   }
+ }
+ else
+ {
+ <h2 class="govuk-heading-m govuk-!-margin-top-0">Work items</h2>
+ }
+ </div>
+ <div class="work-grouping-main-header__actions">
+ @if (isCurrentViewSavedDefault)
+ {
+ <form method="post" asp-action="ClearDefaultDirectorateView" asp-controller="ModernWork" class="govuk-!-margin-bottom-0">
+ @Html.AntiForgeryToken()
+ <button type="submit" class="govuk-button">Reset view</button>
+ </form>
+ }
+ else if (canSetDefaultDirectorateView && selectedDirectorateId.HasValue)
+ {
+ <form method="post" action="@Url.Action("SetDefaultDirectorateView", "ModernWork")" class="govuk-!-margin-bottom-0">
+ @Html.AntiForgeryToken()
+ <input type="hidden" name="directorateId" value="@selectedDirectorateId.Value" />
+ <input type="hidden" name="returnUrl" value="@returnUrl" />
+ <button type="submit" class="govuk-button">Make default view</button>
+ </form>
+ }
+ </div>
+ </div>
+
+ @if (!pagedWorkItems.Any())
+ {
+ <p class="dfe-c-body dfe-c-text-muted govuk-!-margin-bottom-0 govuk-!-margin-top-4">No work items to show for this selection.</p>
+ }
+ else
+ {
+ <div class="dfe-f-table-wrapper dfe-f-table-wrapper--stacked govuk-!-margin-top-3 modern-work-dir-table-wrap govuk-!-width-full" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+                <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed modern-work-table govuk-!-width-full"><caption class="govuk-table__caption govuk-visually-hidden">Work items</caption>
+                  <thead class="govuk-table__head">
+                    <tr class="govuk-table__row">
+                      <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Work item</button>
+        </th>
+                      <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Business area</button>
+        </th>
+                      <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Directorate</button>
+        </th>
+                      <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Priority</button>
+        </th>
+                      <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">RAG</button>
+        </th>
+                      <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Primary contact</button>
+        </th>
+                      <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Status</button>
+        </th>
+                    </tr>
+                  </thead>
+                  <tbody class="govuk-table__body">
+                    @await Html.PartialAsync("_ByPriorityWorkRows", pagedWorkItems)
+                  </tbody>
+                </table>
+              </div>
+
+ <div class="work-grouping-register-footer">
+    @if (registerIsPaginated)
+    {
+ <p class="dfe-c-text-muted work-grouping-register-footer__count" id="dir-showing-count">Showing @registerDisplayRowStart–@registerDisplayRowEnd of @registerTotalCount work items</p>
+    }
+    @if (registerIsPaginated && registerPageCount > 1)
+    {
+ @await Html.PartialAsync("~/Views/Modern/Shared/_GovUkPagination.cshtml", new GovUkPaginationViewModel {
+   CurrentPage = registerPage,
+   TotalPages = registerPageCount,
+   PageUrl = p => DirectoratesUrl(DirPageQuery(p)),
+   NavigationAriaLabel = "Directorates work items"
+ })
+    }
+  </div>
+ }
+ </div>
+}
+
+  @await Html.PartialAsync("~/Views/Modern/Work/_WorkV2GroupingIntroModal.cshtml", new WorkV2GroupingIntroModalModel(Directorates))
 </div>
+
+@section Scripts {
+<script src="~/modern/js/work-grouping-v2-intro.js" asp-append-version="true" nonce="@Context.Items["Nonce"]"></script>
+}
+
+@section Styles {
+<style>
+  .modern-work-dir-register {
+    max-width: 100%;
+  }
+  .modern-work-dir-table-wrap {
+    max-width: 100%;
+  }
+  .work-grouping-main-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+  .work-grouping-main-header__titles { flex: 1 1 12rem; min-width: 0; }
+  .work-grouping-main-header__actions { flex-shrink: 0; display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+  .work-grouping-register-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 0.875rem;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .work-grouping-register-footer__count { margin: 0; }
+  #sc-work-directorates .dfe-f-table-wrapper .govuk-table {
+    margin-bottom: 0;
+    width: 100%;
+  }
+</style>
+}

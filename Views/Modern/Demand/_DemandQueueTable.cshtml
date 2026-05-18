@@ -1,0 +1,114 @@
+@model IEnumerable<DemandPipelineRequest>
+@{
+  var list = Model?.ToList() ?? new List<DemandPipelineRequest>();
+}
+@functions {
+  string StatusTagMod(string? s) => s switch {
+    "Draft" => "dfe-c-tag--grey",
+    "Submitted" => "dfe-c-tag--blue",
+    "ExploratoryReview" => "dfe-c-tag--amber",
+    "Scoring" => "dfe-c-tag--amber",
+    "Scored" => "dfe-c-tag--green",
+    "TriagePending" or "Triage Pending" => "dfe-c-tag--amber",
+    "Triaged" => "dfe-c-tag--green",
+    "Closed" => "dfe-c-tag--grey",
+    "Returned" => "dfe-c-tag--amber",
+    "Backlog" => "dfe-c-tag--green",
+    "Progressed to delivery" => "dfe-c-tag--green",
+    "Closed - Progressed to delivery" => "dfe-c-tag--grey",
+    "Rejected" => "dfe-c-tag--red",
+    "Paused" => "dfe-c-tag--grey",
+    _ => "dfe-c-tag--grey"
+  };
+  string StatusTagLabel(string? s) => s switch {
+    "Draft" => "DRAFT",
+    "Submitted" => "SUBMITTED",
+    "ExploratoryReview" => "EXPLORATORY REVIEW",
+    "Scoring" => "SCORING",
+    "Scored" => "SCORED",
+    "TriagePending" or "Triage Pending" => "TRIAGE PENDING",
+    "Triaged" => "TRIAGED",
+    "Closed" => "CLOSED",
+    "Returned" => "RETURNED",
+    "Backlog" => "BACKLOG",
+    "Progressed to delivery" => "PROGRESSED",
+    "Closed - Progressed to delivery" => "CLOSED",
+    "Rejected" => "REJECTED",
+    "Paused" => "PAUSED",
+    _ => (s ?? "—").ToUpperInvariant()
+  };
+  string BandClass(string? b) => b switch { "MustDo" => "dfe-c-band--must", "CouldDo" => "dfe-c-band--could", "DoNotDo" => "dfe-c-band--not", _ => "" };
+  string BandDisplay(string? b) => b switch { "MustDo" => "MUST DO", "CouldDo" => "COULD DO", "DoNotDo" => "DO NOT DO", _ => "" };
+  string ScoreColour(int? score) {
+    if (score == null) return "inherit";
+    if (score >= 57) return "var(--green)";
+    if (score >= 21) return "var(--rag-a)";
+    return "var(--rag-r)";
+  }
+}
+
+@if (!list.Any())
+{
+ <p class="dfe-c-body dfe-c-text-muted">@(ViewBag.QueueEmptyMessage as string ?? "No demand requests found.")</p>
+}
+else
+{
+ <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+    <table class="govuk-table">
+      <thead class="govuk-table__head"><tr class="govuk-table__row"><th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Request</button>
+        </th><th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Business area</button>
+        </th><th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">SRO</button>
+        </th><th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Status</button>
+        </th><th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Score</button>
+        </th><th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Band</button>
+        </th></tr></thead>
+      <tbody class="govuk-table__body">
+        @foreach (var d in list)
+        {
+          var rowHref = d.Status == "Draft"
+            ? Url.Action("Submit", "ModernDemand", new { id = d.Id })
+            : d.Status == "ExploratoryReview"
+              ? Url.Action("RequestDetail", "ModernDemand", new { id = d.Id, tab = "explore" })
+              : Url.Action("RequestDetail", "ModernDemand", new { id = d.Id });
+          <tr class="govuk-table__row">
+            <td class="govuk-table__cell">
+              <a class="govuk-link govuk-link--no-visited-state" href="@rowHref">@d.Title</a>
+ <span class="dfe-c-table-ref">@d.Reference</span>
+            </td>
+            <td class="govuk-table__cell">@(d.DepartmentGroup ?? "—")</td>
+            <td class="govuk-table__cell">@(d.Sro ?? "—")</td>
+ <td class="govuk-table__cell"><span class="dfe-c-tag @StatusTagMod(d.Status)">@StatusTagLabel(d.Status)</span></td>
+            <td class="govuk-table__cell">
+              @if (d.TotalScore.HasValue)
+              {
+                <strong style="color:@ScoreColour(d.TotalScore)">@d.TotalScore</strong>
+              }
+              else
+              {
+ <span class="dfe-c-text-muted">—</span>
+              }
+            </td>
+            <td class="govuk-table__cell">
+              @if (!string.IsNullOrEmpty(d.SuggestedBand) && !string.IsNullOrEmpty(BandClass(d.SuggestedBand)))
+              {
+ <span class="@BandClass(d.SuggestedBand)">@BandDisplay(d.SuggestedBand)</span>
+              }
+              else
+              {
+ <span class="dfe-c-text-muted">—</span>
+              }
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+ <p class="dfe-c-text-muted dfe-c-mt-1">Showing @list.Count</p>
+}

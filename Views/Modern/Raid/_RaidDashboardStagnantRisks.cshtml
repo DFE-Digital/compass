@@ -1,0 +1,61 @@
+@model Compass.ViewModels.Modern.ModernRaidDashboardViewModel
+@{
+  var scopeNote = Model.IsScoped
+    ? "Only open risks in this scope are listed."
+    : "Only your open risks are listed.";
+}
+<section class="modern-dashboard__section" aria-labelledby="raid-dash-attention-title" id="raid-dash-attention">
+  <h2 id="raid-dash-attention-title" class="govuk-heading-m govuk-!-margin-top-0 modern-dashboard__section-heading">Needs your attention</h2>
+  <p class="govuk-body-s dfe-c-text-muted govuk-!-margin-bottom-4 modern-dashboard__section-desc">
+    Open risks whose inherent rating (impact × likelihood) has not changed in 90+ days, from the audit log. @scopeNote
+  </p>
+  <article class="dfe-f-card raid-dash-panel-card raid-dash-panel--table">
+    <div class="dfe-f-card__inner">
+      <header class="dfe-f-card__header">
+        <h3 class="govuk-heading-s dfe-f-card__heading govuk-!-margin-top-0">Stagnant inherent ratings</h3>
+      </header>
+      <div class="dfe-f-card__body govuk-body govuk-!-margin-bottom-0">
+        <div class="dfe-f-table-wrapper govuk-!-margin-bottom-0 govuk-!-width-full raid-dash-stagnant-scroll" data-module="dfe-f-table">
+          <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+          <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed raid-dash-data-table raid-dash-stagnant-table govuk-!-margin-bottom-0">
+            <caption class="govuk-table__caption govuk-visually-hidden">Open risks with no inherent rating change in 90 days</caption>
+            <thead class="govuk-table__head">
+              <tr class="govuk-table__row">
+                <th scope="col" class="govuk-table__header raid-dash-stagnant-col--ref" aria-sort="none">
+                  <button type="button" class="dfe-f-table-sort-button">Ref</button>
+                </th>
+                <th scope="col" class="govuk-table__header raid-dash-stagnant-col--title" aria-sort="none">
+                  <button type="button" class="dfe-f-table-sort-button">Title</button>
+                </th>
+                <th scope="col" class="govuk-table__header govuk-table__header--numeric raid-dash-stagnant-col--days" aria-sort="none">
+                  <button type="button" class="dfe-f-table-sort-button"><abbr title="Days since last inherent rating change">Days idle</abbr></button>
+                </th>
+              </tr>
+            </thead>
+            <tbody class="govuk-table__body">
+              @if (Model.RisksInherentRatingUnchangedThreePlusMonths.Count == 0)
+              {
+                <tr class="govuk-table__row">
+                  <td colspan="3" class="govuk-table__cell govuk-body-s dfe-c-text-muted">No stagnant risks in this view — good news.</td>
+                </tr>
+              }
+              else
+              {
+                @foreach (var a in Model.RisksInherentRatingUnchangedThreePlusMonths)
+                {
+                  <tr class="govuk-table__row">
+                    <td class="govuk-table__cell dfe-c-mono govuk-body-s raid-dash-stagnant-col--ref">
+                      <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("RiskDetail", "ModernRaid", new { id = a.Id })">@a.Reference</a>
+                    </td>
+                    <td class="govuk-table__cell govuk-body-s raid-dash-stagnant-title">@a.Title</td>
+                    <td class="govuk-table__cell govuk-table__cell--numeric govuk-body-s dfe-f-u-tabular-numbers raid-dash-stagnant-col--days">@(a.DaysSinceLastRatingChange?.ToString() ?? "—")</td>
+                  </tr>
+                }
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </article>
+</section>

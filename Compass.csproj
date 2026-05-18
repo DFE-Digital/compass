@@ -1,33 +1,44 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Transitional: many views/queries still reference legacy Project.RagStatus mapping until lookup migration is finished -->
+    <NoWarn>$(NoWarn);CS0618</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Azure.Identity" Version="1.17.0" />
     <PackageReference Include="CsvHelper" Version="33.1.0" />
     <PackageReference Include="ClosedXML" Version="0.104.0" />
-    <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="8.0.0" />
+    <PackageReference Include="DfEDigital.Frontend.AspNetCore" Version="3.0.3" />
+    <PackageReference Include="DocumentFormat.OpenXml" Version="3.2.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="10.0.0" />
     <PackageReference Include="Microsoft.Graph" Version="5.94.0" />
+    <!-- Override transitive Kiota &lt; 1.22.0 (GHSA-7j59-v9qr-6fq9) from Microsoft.Graph -->
+    <PackageReference Include="Microsoft.Kiota.Abstractions" Version="1.22.1" />
+    <PackageReference Include="Microsoft.Kiota.Authentication.Azure" Version="1.22.1" />
+    <PackageReference Include="Microsoft.Kiota.Http.HttpClientLibrary" Version="1.22.1" />
+    <PackageReference Include="Microsoft.Kiota.Serialization.Form" Version="1.22.1" />
+    <PackageReference Include="Microsoft.Kiota.Serialization.Json" Version="1.22.1" />
+    <PackageReference Include="Microsoft.Kiota.Serialization.Multipart" Version="1.22.1" />
+    <PackageReference Include="Microsoft.Kiota.Serialization.Text" Version="1.22.1" />
     <PackageReference Include="Microsoft.Identity.Web" Version="2.15.1" />
     <PackageReference Include="Microsoft.Identity.Web.UI" Version="2.15.1" />
-    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.0" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.9" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="9.0.9" />
-    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.0.2" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="9.0.9">
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.0" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.0">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.9">
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.0">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="Microsoft.Extensions.Http" Version="8.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Http.Polly" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Http.Polly" Version="10.0.0" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="Serilog.Extensions.Logging.File" Version="3.0.0" />
     <PackageReference Include="Microsoft.ApplicationInsights.AspNetCore" Version="2.22.0" />
@@ -37,6 +48,7 @@
     <PackageReference Include="Markdig" Version="0.41.3" />
     <PackageReference Include="GovukNotify" Version="7.0.0" />
     <PackageReference Include="QuestPDF" Version="2024.12.0" />
+    <PackageReference Include="System.IO.Packaging" Version="10.0.5" />
   </ItemGroup>
 
   <Target Name="BuildCSS" BeforeTargets="Build">
@@ -45,6 +57,17 @@
 
   <Target Name="WatchCSS" Condition="'$(Configuration)' == 'Debug' AND '$(WatchCSS)' == 'true'">
     <Exec Command="npm run watch-css" ContinueOnError="true" />
+  </Target>
+
+  <!-- DfEDigital.Frontend.AspNetCore 3.0.3: static web assets list dfe/.gitkeep but NuGet pack omits dotfiles (NU5119), breaking publish on Linux CI. -->
+  <Target Name="EnsureDfEFrontendAspNetCoreGitKeep"
+          BeforeTargets="ResolveStaticWebAssetsInputs;ComputeStaticWebAssetsPublishManifest;GetCopyToPublishDirectoryItems">
+    <PropertyGroup>
+      <_DfEFrontendPackageRoot Condition="'$(NuGetPackageRoot)' != ''">$([MSBuild]::EnsureTrailingSlash($(NuGetPackageRoot)))dfedigital.frontend.aspnetcore/3.0.3/</_DfEFrontendPackageRoot>
+      <_DfEFrontendGitKeep>$(_DfEFrontendPackageRoot)staticwebassets/dfe/.gitkeep</_DfEFrontendGitKeep>
+    </PropertyGroup>
+    <MakeDir Directories="$(_DfEFrontendPackageRoot)staticwebassets/dfe" Condition="'$(_DfEFrontendPackageRoot)' != '' and !Exists('$(_DfEFrontendGitKeep)')" />
+    <WriteLinesToFile File="$(_DfEFrontendGitKeep)" Lines="" Overwrite="false" Condition="'$(_DfEFrontendPackageRoot)' != '' and !Exists('$(_DfEFrontendGitKeep)')" />
   </Target>
 
 </Project>

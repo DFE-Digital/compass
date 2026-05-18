@@ -1,0 +1,83 @@
+@model Compass.ViewModels.Modern.ModernRaidDashboardViewModel
+@{
+  var tierUrl = Url.Action("Tier", "ModernRaid") ?? "/modern/raid/tier";
+}
+<div class="govuk-!-margin-top-4">
+  <p class="govuk-body govuk-!-margin-bottom-4">
+    All open risks and issues across DfE in Compass.
+    <a class="govuk-link" href="@tierUrl">View tier report</a>.
+  </p>
+
+  <div class="dfe-f-card-grid dfe-c-mb-4">
+    @await Html.PartialAsync("~/Views/Modern/Raid/_RaidDashboardStatCard.cshtml", new Compass.ViewModels.Modern.RaidDashboardStatCardVm {
+      Label = "Organisation — open risks",
+      Value = Model.OrganisationTotals.OpenRiskCount.ToString("N0"),
+      Trend = "All open risks in Compass",
+      Href = Url.Action("Risks", "ModernRaid"),
+      TintClass = "dfe-f-stat-card--tint-grey"
+    })
+    @await Html.PartialAsync("~/Views/Modern/Raid/_RaidDashboardStatCard.cshtml", new Compass.ViewModels.Modern.RaidDashboardStatCardVm {
+      Label = "Organisation — open issues",
+      Value = Model.OrganisationTotals.OpenIssueCount.ToString("N0"),
+      Trend = "All open issues in Compass",
+      Href = Url.Action("Issues", "ModernRaid"),
+      TintClass = "dfe-f-stat-card--tint-grey"
+    })
+  </div>
+
+  <div class="dfe-f-card-grid govuk-!-margin-bottom-6">
+    @await Html.PartialAsync("~/Views/Modern/Raid/_RaidDashboardPanelCard.cshtml", (
+      "Open risks by tier",
+      await Html.PartialAsync("~/Views/Modern/Raid/_RaidDashboardBreakdownTable.cshtml", ("Organisation open risks by tier", "Tier", Model.OrganisationOpenRiskTierBreakdown))
+    ))
+    @await Html.PartialAsync("~/Views/Modern/Raid/_RaidDashboardPanelCard.cshtml", (
+      "Inherent risk bands (all open)",
+      await Html.PartialAsync("~/Views/Modern/Raid/_RaidDashboardInherentRiskBandsGrid.cshtml", (Model.OrganisationInherentRiskBands, tierUrl))
+    ))
+  </div>
+
+  <h3 class="govuk-heading-s">Open issues by severity and priority</h3>
+  <div class="dfe-f-card-grid govuk-!-margin-bottom-6">
+    @await Html.PartialAsync("~/Views/Modern/Raid/_RaidDashboardPanelCard.cshtml", (
+      "By severity",
+      await Html.PartialAsync("~/Views/Modern/Raid/_RaidDashboardBreakdownTable.cshtml", ("By severity", "Severity", Model.OrganisationOpenIssueSeverityBreakdown))
+    ))
+    @await Html.PartialAsync("~/Views/Modern/Raid/_RaidDashboardPanelCard.cshtml", (
+      "By priority",
+      await Html.PartialAsync("~/Views/Modern/Raid/_RaidDashboardBreakdownTable.cshtml", ("By priority", "Priority", Model.OrganisationOpenIssuePriorityBreakdown))
+    ))
+  </div>
+
+  <h3 class="govuk-heading-s">Risk health and attention</h3>
+  <p class="govuk-body-s dfe-c-text-muted govuk-!-margin-bottom-3">Organisation-wide indicators — each card links to the full risks register.</p>
+  <div class="dfe-f-card-grid govuk-!-margin-bottom-6">
+    @foreach (var metric in Model.OrganisationRiskHealthMetrics)
+    {
+      @await Html.PartialAsync("~/Views/Modern/Raid/_RaidDashboardStatCard.cshtml", new Compass.ViewModels.Modern.RaidDashboardStatCardVm {
+        Label = metric.Label,
+        Value = metric.Count.ToString("N0"),
+        Trend = metric.Description,
+        Href = metric.DrillUrl,
+        AriaLabel = $"{metric.Label}: {metric.Count}. {metric.Description}",
+        TintClass = "dfe-f-stat-card--tint-grey"
+      })
+    }
+  </div>
+
+  <h3 class="govuk-heading-s">Risk intelligence — where to focus</h3>
+  <p class="govuk-body-s dfe-c-text-muted govuk-!-margin-bottom-4">Top groupings by open risk count. Elevated+ is inherent score 15 or higher.</p>
+  <div class="dfe-f-card-grid">
+    @await Html.PartialAsync("~/Views/Modern/Raid/_RaidDashboardPanelCard.cshtml", (
+      "By business area",
+      await Html.PartialAsync("~/Views/Modern/Raid/_RaidDashboardIntelligenceTable.cshtml", ("Business areas", Model.IntelligenceByBusinessArea))
+    ))
+    @await Html.PartialAsync("~/Views/Modern/Raid/_RaidDashboardPanelCard.cshtml", (
+      "By product",
+      await Html.PartialAsync("~/Views/Modern/Raid/_RaidDashboardIntelligenceTable.cshtml", ("Products", Model.IntelligenceByProduct))
+    ))
+    @await Html.PartialAsync("~/Views/Modern/Raid/_RaidDashboardPanelCard.cshtml", (
+      "By work item",
+      await Html.PartialAsync("~/Views/Modern/Raid/_RaidDashboardIntelligenceTable.cshtml", ("Work items", Model.IntelligenceByWorkItem))
+    ))
+  </div>
+</div>

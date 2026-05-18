@@ -1,0 +1,49 @@
+@model Compass.ViewModels.ModernRaidMeetingReportViewModel
+@{
+  var s = Model.Review;
+  var gap = s.ActualProgressPercent - Model.ExpectedProgressPercent;
+  var gapClass = gap >= 0 ? "govuk-tag--green" : (gap >= -10 ? "govuk-tag--yellow" : "govuk-tag--red");
+}
+<section class="mr-report-section-panel dfe-f-toggle govuk-!-margin-bottom-3" data-module="dfe-f-toggle" data-mr-section-id="review" data-mr-section-title="Monthly RAID review">
+  <header class="dfe-f-toggle__title-wrapper">
+    <h2 class="dfe-f-toggle__heading">
+      <button type="button" class="dfe-f-toggle__button" aria-expanded="false" aria-controls="rr-toggle-review-content" id="rr-toggle-review-button">
+        <span class="dfe-f-toggle__icon" aria-hidden="true"></span>
+        <span class="dfe-f-toggle__title">Monthly RAID review</span>
+        <span class="mr-toggle-panel__meta"><span class="govuk-tag @gapClass">@s.ActualProgressPercent% reviewed</span></span>
+      </button>
+    </h2>
+  </header>
+  <section id="rr-toggle-review-content" class="dfe-f-toggle__content" hidden>
+    <section class="dfe-f-toggle__body govuk-body">
+      <p class="govuk-body-s govuk-!-margin-top-0">
+        Review window @Model.ReviewWindowStart.ToString("d MMM") – @Model.ReviewWindowEnd.ToString("d MMM yyyy")
+        · Due by <strong>@Model.ReviewDueLabel</strong>
+        · Target pace today <strong>@Model.ExpectedProgressPercent%</strong>
+      </p>
+      <section class="dfe-f-card-grid govuk-!-margin-bottom-4">
+        <article class="dfe-f-stat-card dfe-f-stat-card--tint-grey">
+          <p class="govuk-body-s dfe-f-stat-card__label">Open risks / issues</p>
+          <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@s.OpenRisks / @s.OpenIssues</p>
+        </article>
+        <article class="dfe-f-stat-card dfe-f-stat-card--tint-green">
+          <p class="govuk-body-s dfe-f-stat-card__label">Reviewed this month</p>
+          <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@s.TotalReviewed <span class="govuk-body-s">of @s.TotalOpen</span></p>
+        </article>
+        <article class="dfe-f-stat-card dfe-f-stat-card--tint-red">
+          <p class="govuk-body-s dfe-f-stat-card__label">Not yet reviewed</p>
+          <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@s.TotalNotReviewed</p>
+        </article>
+        <article class="dfe-f-stat-card dfe-f-stat-card--tint-grey">
+          <p class="govuk-body-s dfe-f-stat-card__label">Progress vs target</p>
+          <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@(gap >= 0 ? "+" : "")@gap.ToString("0.#")%</p>
+        </article>
+      </section>
+      <p class="govuk-body govuk-!-margin-bottom-0">
+        <a class="govuk-link" href="@Url.Action("ReviewWork", "ModernRaid")">Continue monthly review</a>
+        <span aria-hidden="true"> · </span>
+        <a class="govuk-link" href="@Url.Action("RaidReviewProgress", "ModernReporting", new { year = Model.PeriodToolbar.ReportYear, month = Model.PeriodToolbar.ReportMonth, businessAreaId = Model.FilterBusinessAreaId, directorateId = Model.FilterDirectorateId })">Full review progress report</a>
+      </p>
+    </section>
+  </section>
+</section>

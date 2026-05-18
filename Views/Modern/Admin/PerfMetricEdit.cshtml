@@ -1,0 +1,207 @@
+@model Compass.ViewModels.Modern.PerfMetricRow
+@using Compass.ViewModels.Modern
+@using Microsoft.AspNetCore.Html
+@using System.Net
+@{
+  ViewData["Title"] = "Edit metric";
+  var perfError = ViewBag.PerfError as string;
+  var adminMessage = ViewBag.AdminMessage as string;
+  var metricValueTypes = new (int Val, string Label)[] { (0, "Text"), (1, "Number"), (2, "Decimal"), (3, "Percentage") };
+}
+@section Breadcrumbs {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernAdmin")">Admin</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("PerformanceReporting", "ModernAdmin", new { panel = "metrics" })">Performance reporting</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">Edit metric</li>
+}
+
+<div id="sc-admin-pm-edit" class="dfe-c-mb-4">
+ @{
+   var pmEditLede = new HtmlString($"<p class=\"govuk-body govuk-!-margin-bottom-0\">Update the definition for <code>{WebUtility.HtmlEncode(Model.Identifier)}</code>.</p>");
+ }
+ @await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+   Caption = "Admin",
+   Title = "Edit metric",
+   Lede = pmEditLede
+ })
+
+ <div class="dfe-c-form-layout">
+ <div class="dfe-c-form-layout__main">
+
+      @if (!string.IsNullOrWhiteSpace(adminMessage))
+      {
+ <div class="govuk-notification-banner govuk-notification-banner--success govuk-!-margin-bottom-3" role="region" aria-labelledby="pm-notif-title">
+ <div class="govuk-notification-banner__header">
+ <h2 class="govuk-notification-banner__title" id="pm-notif-title">Success</h2>
+          </div>
+ <div class="govuk-notification-banner__content">
+ <p class="govuk-notification-banner__heading">@adminMessage</p>
+          </div>
+        </div>
+      }
+
+ <div class="dfe-c-card dfe-c-card--plain dfe-c-mb-4">
+        <form method="post" action="@Url.Action("PerfMetricEdit", "ModernAdmin", new { id = Model.Id })" id="pm-edit-form" novalidate>
+          @Html.AntiForgeryToken()
+
+          @if (!string.IsNullOrWhiteSpace(perfError))
+          {
+ <div class="govuk-error-summary" data-module="govuk-error-summary" role="alert">
+ <h2 class="govuk-error-summary__title">There is a problem</h2>
+ <div class="govuk-error-summary__body">
+ <ul class="govuk-list govuk-error-summary__list">
+                  <li><a href="#identifier">@perfError</a></li>
+                </ul>
+              </div>
+            </div>
+          }
+
+ <h2 class="govuk-heading-m">Metric identity</h2>
+
+ <div class="govuk-form-group @(!string.IsNullOrWhiteSpace(perfError) ?"govuk-form-group--error" : "")">
+ <label class="govuk-label govuk-label--s" for="identifier">Identifier <span style="color:#d4351c">*</span></label>
+ <div id="identifier-hint" class="govuk-hint">A stable, unique code. Changing this may break references in existing submissions.</div>
+            @if (!string.IsNullOrWhiteSpace(perfError))
+            {
+ <p id="identifier-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @perfError</p>
+            }
+ <input class="govuk-input govuk-!-width-two-thirds @(!string.IsNullOrWhiteSpace(perfError) ?"govuk-input--error" : "")" id="identifier" name="identifier" type="text" value="@Model.Identifier" maxlength="120" autocomplete="off" aria-describedby="identifier-hint" />
+          </div>
+
+ <div class="govuk-form-group">
+ <label class="govuk-label govuk-label--s" for="title">Title <span style="color:#d4351c">*</span></label>
+ <div id="title-hint" class="govuk-hint">A human-readable name shown to product owners when they submit data.</div>
+ <input class="govuk-input" id="title" name="title" type="text" value="@Model.Title" maxlength="200" aria-describedby="title-hint" />
+          </div>
+
+ <div class="govuk-form-group">
+ <label class="govuk-label govuk-label--s" for="description">Description <span class="govuk-hint" style="display:inline;font-size:inherit;">(optional)</span></label>
+ <div id="description-hint" class="govuk-hint">Explain what this metric measures and how product teams should calculate their value.</div>
+ <textarea class="govuk-textarea" id="description" name="description" rows="4" maxlength="2000" aria-describedby="description-hint">@Model.Description</textarea>
+          </div>
+
+ <hr class="govuk-section-break govuk-section-break--l govuk-section-break--visible" />
+
+ <h2 class="govuk-heading-m">Data type and validity</h2>
+
+ <div class="govuk-form-group">
+ <label class="govuk-label govuk-label--s" for="valueType">Value type</label>
+ <div id="valueType-hint" class="govuk-hint">The data format expected when teams submit this metric.</div>
+ <select class="govuk-select" name="valueType" id="valueType" aria-describedby="valueType-hint">
+              @foreach (var vt in metricValueTypes)
+              {
+                if (Model.ValueTypeInt == vt.Val)
+                { <option value="@vt.Val" selected>@vt.Label</option> }
+                else
+                { <option value="@vt.Val">@vt.Label</option> }
+              }
+            </select>
+          </div>
+
+ <div class="govuk-form-group">
+ <label class="govuk-label govuk-label--s" for="validFromYear">Valid from year</label>
+ <div id="validFromYear-hint" class="govuk-hint">The first reporting period (year) this metric applies to.</div>
+ <input class="govuk-input govuk-input--width-4" id="validFromYear" name="validFromYear" type="number" min="2000" max="2100" value="@Model.ValidFromYear" aria-describedby="validFromYear-hint" />
+          </div>
+
+ <div class="govuk-form-group">
+ <label class="govuk-label govuk-label--s" for="validFromMonth">Valid from month</label>
+ <div id="validFromMonth-hint" class="govuk-hint">The first reporting period (month, 1–12) this metric applies to.</div>
+ <input class="govuk-input govuk-input--width-4" id="validFromMonth" name="validFromMonth" type="number" min="1" max="12" value="@Model.ValidFromMonth" aria-describedby="validFromMonth-hint" />
+          </div>
+
+          @await Html.PartialAsync("_PerfMetricAdvancedFields", Model)
+
+ <div class="govuk-button-group">
+ <button type="submit" class="govuk-button" data-module="govuk-button">Save changes</button>
+ <a class="govuk-link" href="@Url.Action("PerformanceReporting", "ModernAdmin", new { panel = "metrics" })">Cancel</a>
+          </div>
+        </form>
+      </div>
+
+ <hr class="govuk-section-break govuk-section-break--l govuk-section-break--visible" />
+
+ <div class="dfe-c-card dfe-c-card--plain">
+ <h2 class="govuk-heading-m">Status</h2>
+ <p class="govuk-body">
+          This metric is currently
+ @if (Model.IsDisabled) { <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--grey">Disabled</span> }
+ else { <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--green">Active</span> }
+        </p>
+ <p class="govuk-hint">@(Model.IsDisabled ? "Disabled metrics are hidden from new submissions. Re-enable to make them available again." : "Active metrics appear in new submissions. Disable to hide from future submissions without deleting historical data.")</p>
+        <form method="post" action="@Url.Action("PerfMetricToggle", "ModernAdmin", new { id = Model.Id })">
+          @Html.AntiForgeryToken()
+ <button type="submit" class="govuk-button govuk-button--@(Model.IsDisabled ?"secondary" : "warning")" data-module="govuk-button">
+            @(Model.IsDisabled ? "Enable metric" : "Disable metric")
+          </button>
+        </form>
+      </div>
+    </div>
+
+ <div class="dfe-c-form-layout__aside">
+ <div class="dfe-c-sidebar">
+ <div class="dfe-c-scard">
+ <div class="dfe-c-scard__title">Identifiers</div>
+          <div style="font-size:0.8125rem;color:var(--grey-4);line-height:1.6;">
+            <p style="margin:0 0 0.5rem;">The identifier is the stable key used in submissions and exports. Changing it may break references in existing data.</p>
+            <p style="margin:0;"><strong style="color:var(--black);">Convention:</strong> lowercase with hyphens, e.g. <code>perf-monthly-active-users</code>.</p>
+          </div>
+        </div>
+ <div class="dfe-c-scard">
+ <div class="dfe-c-scard__title">Value types</div>
+          <div style="font-size:0.8125rem;display:flex;flex-direction:column;gap:0.5rem;">
+            <div><strong style="color:var(--black);">Text</strong><span style="color:var(--grey-4);margin-left:0.5rem;">Free-text responses.</span></div>
+            <div><strong style="color:var(--black);">Number</strong><span style="color:var(--grey-4);margin-left:0.5rem;">Whole numbers.</span></div>
+            <div><strong style="color:var(--black);">Decimal</strong><span style="color:var(--grey-4);margin-left:0.5rem;">Numbers with decimals.</span></div>
+            <div><strong style="color:var(--black);">Percentage</strong><span style="color:var(--grey-4);margin-left:0.5rem;">0–100%.</span></div>
+          </div>
+        </div>
+ <div class="dfe-c-scard">
+ <div class="dfe-c-scard__title">Disabling vs deleting</div>
+          <ul style="font-size:0.8125rem;color:var(--grey-4);padding-left:1.25rem;margin:0;line-height:1.6;">
+            <li style="margin-bottom:0.25rem;"><strong style="color:var(--black);">Disable</strong> hides the metric from new submissions but keeps all historical data intact.</li>
+            <li>You can re-enable a disabled metric at any time.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+@section Scripts {
+  <script nonce="@Context.Items["Nonce"]">
+    (function () {
+      var valueTypeSelect = document.getElementById("valueType");
+      var rulesTextarea = document.getElementById("validationRulesJson");
+      if (!valueTypeSelect || !rulesTextarea) return;
+
+      valueTypeSelect.addEventListener("change", function () {
+        var valueType = valueTypeSelect.value;
+        var currentRules = {};
+        try {
+          currentRules = JSON.parse(rulesTextarea.value || "{}");
+        } catch (e) {
+          currentRules = { required: true, allowNull: false };
+        }
+
+        if (valueType === "1") {
+          currentRules.minimumValue = 0;
+          currentRules.maximumValue = 100000000;
+          delete currentRules.decimalPlaces;
+        } else if (valueType === "2") {
+          currentRules.minimumValue = 0;
+          currentRules.maximumValue = 100000000;
+        } else if (valueType === "3") {
+          currentRules.minimumValue = 0;
+          currentRules.maximumValue = 100;
+        } else {
+          delete currentRules.minimumValue;
+          delete currentRules.maximumValue;
+          delete currentRules.decimalPlaces;
+        }
+
+        rulesTextarea.value = JSON.stringify(currentRules, null, 2);
+      });
+    })();
+  </script>
+}

@@ -1,0 +1,199 @@
+@model Compass.ViewModels.Modern.ModernRaidDashboardViewModel
+@using System.Globalization
+@using Compass.ViewModels.Modern
+@using Compass.Models.Modern.Work
+@{
+  var enGb = CultureInfo.GetCultureInfo("en-GB");
+  var isScoped = Model.IsScoped;
+  var scopeLabel = Model.ScopeKind == RaidDashboardScopeKind.Directorate ? "Directorate" : "Business area";
+  var pageTitle = isScoped ? (Model.ScopeTitle ?? scopeLabel) : "Dashboard";
+  ViewData["Title"] = pageTitle;
+  var risksRegisterUrl = isScoped && Model.ScopeDirectorateId is int sd
+    ? $"{Url.Action("Risks", "ModernRaid")}?divisionId={sd}"
+    : isScoped && Model.ScopeBusinessAreaId is int sb
+      ? $"{Url.Action("Risks", "ModernRaid")}?businessAreaId={sb}"
+      : Url.Action("Risks", "ModernRaid") ?? "/modern/raid/risks";
+  var issuesRegisterUrl = isScoped && Model.ScopeDirectorateId is int sd2
+    ? $"{Url.Action("Issues", "ModernRaid")}?divisionId={sd2}"
+    : isScoped && Model.ScopeBusinessAreaId is int sb2
+      ? $"{Url.Action("Issues", "ModernRaid")}?businessAreaId={sb2}"
+      : Url.Action("Issues", "ModernRaid") ?? "/modern/raid/issues";
+  var nearMissesRegisterUrl = $"{Url.Action("NearMisses", "ModernRaid")}?tab=open";
+  var listHeading = isScoped ? "Open risks and issues" : "Your open risks and issues";
+  var attentionHeading = isScoped ? "Requires attention" : "Requires your attention";
+  var matrixListUrl = isScoped && Model.ScopeKind == RaidDashboardScopeKind.Directorate
+    ? Url.Action("Directorate", "ModernRaid")
+    : isScoped
+      ? Url.Action("BusinessAreas", "ModernRaid")
+      : null;
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernRaid")">RAID</a></li>
+  @if (isScoped && !string.IsNullOrEmpty(matrixListUrl))
+  {
+    <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@matrixListUrl">@scopeLabel</a></li>
+    <li class="govuk-breadcrumbs__list-item" aria-current="page">@pageTitle</li>
+  }
+  else
+  {
+    <li class="govuk-breadcrumbs__list-item" aria-current="page">@pageTitle</li>
+  }
+}
+
+<div class="modern-work-page raid-dashboard-simple govuk-!-padding-bottom-6">
+  @await Html.PartialAsync("~/Views/Modern/Shared/_ModernPageHeader.cshtml", new ModernPageHeaderViewModel
+  {
+    Caption = isScoped ? $"RAID · {scopeLabel}" : null,
+    Title = pageTitle,
+    Lede = isScoped && !string.IsNullOrWhiteSpace(Model.ScopeSubtitle)
+      ? new Microsoft.AspNetCore.Html.HtmlString($"<p class=\"govuk-body-s govuk-!-margin-bottom-0\">{System.Net.WebUtility.HtmlEncode(Model.ScopeSubtitle)}</p>")
+      : null,
+    BackLinkHref = isScoped ? Model.ScopeListUrl : null,
+    BackLinkText = isScoped ? $"Back to {scopeLabel.ToLowerInvariant()} matrix" : null
+  })
+
+  <section class="govuk-!-margin-top-6" aria-labelledby="raid-dash-summary-heading">
+    <h2 id="raid-dash-summary-heading" class="govuk-visually-hidden">Summary</h2>
+    <div class="dfe-f-card-grid">
+      @await Html.PartialAsync("~/Views/Modern/Raid/_RaidDashboardStatCard.cshtml", new RaidDashboardStatCardVm
+      {
+        Label = "Open risks",
+        Value = Model.YourOpenRiskCount.ToString("N0", enGb),
+        Href = risksRegisterUrl,
+        AriaLabel = $"{Model.YourOpenRiskCount} open risks",
+        TintClass = "dfe-f-stat-card--tint-red"
+      })
+      @await Html.PartialAsync("~/Views/Modern/Raid/_RaidDashboardStatCard.cshtml", new RaidDashboardStatCardVm
+      {
+        Label = "Open issues",
+        Value = Model.YourOpenIssueCount.ToString("N0", enGb),
+        Href = issuesRegisterUrl,
+        AriaLabel = $"{Model.YourOpenIssueCount} open issues",
+        TintClass = "dfe-f-stat-card--tint-orange"
+      })
+      @await Html.PartialAsync("~/Views/Modern/Raid/_RaidDashboardStatCard.cshtml", new RaidDashboardStatCardVm
+      {
+        Label = "Open near misses",
+        Value = Model.OpenNearMissCount.ToString("N0", enGb),
+        Href = nearMissesRegisterUrl,
+        AriaLabel = $"{Model.OpenNearMissCount} open near misses",
+        TintClass = "dfe-f-stat-card--tint-blue"
+      })
+      @if (Model.AttentionRows.Count > 0)
+      {
+        @await Html.PartialAsync("~/Views/Modern/Raid/_RaidDashboardStatCard.cshtml", new RaidDashboardStatCardVm
+        {
+          Label = attentionHeading,
+          Value = Model.AttentionRows.Count.ToString("N0", enGb),
+          Href = "#raid-dash-attention",
+          AriaLabel = $"{Model.AttentionRows.Count} items requiring attention",
+          TintClass = "dfe-f-stat-card--tint-red"
+        })
+      }
+    </div>
+  </section>
+
+  @if (Model.AttentionRows.Count > 0)
+  {
+    <section class="govuk-!-margin-top-8" aria-labelledby="raid-dash-attention-heading" id="raid-dash-attention">
+      <h2 id="raid-dash-attention-heading" class="govuk-heading-m">@attentionHeading</h2>
+      <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+        <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed">
+          <caption class="govuk-table__caption govuk-table__caption--m govuk-visually-hidden">
+            @attentionHeading (@Model.AttentionRows.Count.ToString("N0", enGb))
+          </caption>
+          <thead class="govuk-table__head">
+            <tr class="govuk-table__row">
+              <th scope="col" class="govuk-table__header">Title</th>
+              <th scope="col" class="govuk-table__header">Type</th>
+              <th scope="col" class="govuk-table__header">Why</th>
+            </tr>
+          </thead>
+          <tbody class="govuk-table__body">
+            @foreach (var row in Model.AttentionRows)
+            {
+              var detailUrl = row.Kind == "Risk"
+                ? Url.Action("RiskDetail", "ModernRaid", new { id = row.Id })
+                : Url.Action("IssueDetail", "ModernRaid", new { id = row.Id });
+              <tr class="govuk-table__row">
+                @await Html.PartialAsync("~/Views/Modern/Raid/_RaidRegisterItemTitleCell.cshtml", new RaidRegisterItemTitleVm(detailUrl ?? "#", row.Title, row.Reference))
+                <td class="govuk-table__cell govuk-body-s">@row.Kind</td>
+                <td class="govuk-table__cell govuk-body-s">@row.Reason</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+  }
+
+  <section class="govuk-!-margin-top-8" aria-labelledby="raid-dash-table-heading">
+    <h2 id="raid-dash-table-heading" class="govuk-heading-m">@listHeading</h2>
+
+    @if (Model.TableRows.Count == 0)
+    {
+      <p class="govuk-body">There are no open risks or issues in scope.</p>
+      <p class="govuk-body">
+        <a class="govuk-link govuk-link--no-visited-state" href="@risksRegisterUrl">Browse risks</a>
+        <span aria-hidden="true"> · </span>
+        <a class="govuk-link govuk-link--no-visited-state" href="@issuesRegisterUrl">Browse issues</a>
+      </p>
+    }
+    else
+    {
+      <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+        <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+        <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed">
+          <caption class="govuk-table__caption govuk-table__caption--m govuk-visually-hidden">
+            @listHeading (@Model.TableRows.Count.ToString("N0", enGb))
+          </caption>
+          <thead class="govuk-table__head">
+            <tr class="govuk-table__row">
+              <th scope="col" class="govuk-table__header" aria-sort="none">
+                <button type="button" class="dfe-f-table-sort-button">Title</button>
+              </th>
+              <th scope="col" class="govuk-table__header" aria-sort="none">
+                <button type="button" class="dfe-f-table-sort-button">Type</button>
+              </th>
+              <th scope="col" class="govuk-table__header" aria-sort="none">
+                <button type="button" class="dfe-f-table-sort-button">Rating</button>
+              </th>
+              <th scope="col" class="govuk-table__header" aria-sort="none">
+                <button type="button" class="dfe-f-table-sort-button">Owner</button>
+              </th>
+              <th scope="col" class="govuk-table__header" aria-sort="none">
+                <button type="button" class="dfe-f-table-sort-button">Last updated</button>
+              </th>
+            </tr>
+          </thead>
+          <tbody class="govuk-table__body">
+            @foreach (var row in Model.TableRows)
+            {
+              var detailUrl = row.Kind == "Risk"
+                ? Url.Action("RiskDetail", "ModernRaid", new { id = row.Id })
+                : Url.Action("IssueDetail", "ModernRaid", new { id = row.Id });
+              <tr class="govuk-table__row">
+                @await Html.PartialAsync("~/Views/Modern/Raid/_RaidRegisterItemTitleCell.cshtml", new RaidRegisterItemTitleVm(detailUrl ?? "#", row.Title, row.Reference))
+                <td class="govuk-table__cell govuk-body-s">@row.Kind</td>
+                <td class="govuk-table__cell govuk-body-s raid-risks-badge-cell">
+                  <span class="@row.RatingBadgeClass dfe-f-u-tabular-numbers" aria-label="@row.RatingAriaLabel">
+                    <span aria-hidden="true">@row.RatingBadgeText</span>
+                  </span>
+                </td>
+                <td class="govuk-table__cell govuk-body-s">@(string.IsNullOrWhiteSpace(row.OwnerName) ? "—" : row.OwnerName)</td>
+                <td class="govuk-table__cell govuk-body-s">@row.UpdatedAt.ToString("d MMM yyyy", enGb)</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      <p class="govuk-body-s govuk-!-margin-top-4">
+        <a class="govuk-link govuk-link--no-visited-state" href="@risksRegisterUrl">View all risks</a>
+        <span aria-hidden="true"> · </span>
+        <a class="govuk-link govuk-link--no-visited-state" href="@issuesRegisterUrl">View all issues</a>
+      </p>
+    }
+  </section>
+</div>

@@ -1,0 +1,62 @@
+@using Compass.Helpers
+@using Compass.ViewModels
+@model IReadOnlyList<RaidReviewLeagueRow>
+@{
+  var rows = Model ?? Array.Empty<RaidReviewLeagueRow>();
+  string GapClass(decimal gap) => gap >= 0 ? "msp-gap--ahead" : "msp-gap--behind";
+  string GapLabel(decimal gap) => gap > 0 ? $"+{gap:0.#}%" : $"{gap:0.#}%";
+}
+@if (rows.Count == 0)
+{
+  <p class="govuk-body dfe-c-text-muted">No open risks or issues in scope for this filter.</p>
+}
+else
+{
+  <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
+    <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+      <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+      <table class="govuk-table mr-ba-table">
+        <caption class="govuk-visually-hidden">RAID review progress league table</caption>
+        <thead class="govuk-table__head">
+          <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header mr-ba-table__fixed">Name</th>
+            <th scope="col" class="govuk-table__header govuk-table__header--numeric">Open R</th>
+            <th scope="col" class="govuk-table__header govuk-table__header--numeric">Open I</th>
+            <th scope="col" class="govuk-table__header govuk-table__header--numeric">Total</th>
+            <th scope="col" class="govuk-table__header govuk-table__header--numeric">Rev R</th>
+            <th scope="col" class="govuk-table__header govuk-table__header--numeric">Rev I</th>
+            <th scope="col" class="govuk-table__header govuk-table__header--numeric">Not rev</th>
+            <th scope="col" class="govuk-table__header govuk-table__header--numeric">Actual %</th>
+            <th scope="col" class="govuk-table__header govuk-table__header--numeric">Target %</th>
+            <th scope="col" class="govuk-table__header govuk-table__header--numeric">Gap</th>
+            <th scope="col" class="govuk-table__header msp-league__progress">Progress</th>
+          </tr>
+        </thead>
+        <tbody class="govuk-table__body">
+          @foreach (var row in rows)
+          {
+            <tr class="govuk-table__row">
+              <th scope="row" class="govuk-table__cell mr-ba-table__fixed">@row.Name</th>
+              <td class="govuk-table__cell govuk-table__cell--numeric">@row.OpenRisks</td>
+              <td class="govuk-table__cell govuk-table__cell--numeric">@row.OpenIssues</td>
+              <td class="govuk-table__cell govuk-table__cell--numeric">@row.TotalOpen</td>
+              <td class="govuk-table__cell govuk-table__cell--numeric">@row.ReviewedRisks</td>
+              <td class="govuk-table__cell govuk-table__cell--numeric">@row.ReviewedIssues</td>
+              <td class="govuk-table__cell govuk-table__cell--numeric">@row.NotReviewed</td>
+              <td class="govuk-table__cell govuk-table__cell--numeric"><strong>@row.ActualProgressPercent%</strong></td>
+              <td class="govuk-table__cell govuk-table__cell--numeric">@row.ExpectedProgressPercent%</td>
+              <td class="govuk-table__cell govuk-table__cell--numeric"><span class="@GapClass(row.ProgressGapPercent)">@GapLabel(row.ProgressGapPercent)</span></td>
+              <td class="govuk-table__cell msp-league__progress">
+                <div class="mr-progress-bar mr-progress-bar--compact" aria-hidden="true">
+                  <div class="mr-progress-bar__track">
+                    <div class="mr-progress-bar__fill @ReportingProgressBarHelper.FillToneModifier(row.ActualProgressPercent)" style="width:@(row.ActualProgressPercent.ToString(System.Globalization.CultureInfo.InvariantCulture))%;"></div>
+                  </div>
+                </div>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  </div>
+}

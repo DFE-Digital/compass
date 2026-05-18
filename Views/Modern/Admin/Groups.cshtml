@@ -1,0 +1,94 @@
+@model Compass.ViewModels.Modern.AdminGroupsViewModel
+@using Compass.ViewModels.Modern
+@using Microsoft.AspNetCore.Html
+@{
+    ViewData["Title"] = "Groups";
+}
+
+@section Breadcrumbs {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernAdmin")">Admin</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">Groups</li>
+}
+
+<div class="admin-hub">
+ @await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+   Caption = "Administration",
+   Title = "Groups",
+   Lede = new HtmlString("<p class=\"govuk-body govuk-!-margin-bottom-0\">Create groups, assign members, and attach feature permissions for access control.</p>")
+ })
+
+  @if (ViewBag.AdminError != null)
+  {
+ <div class="govuk-error-summary" role="alert" data-module="govuk-error-summary" style="margin-bottom:1.5rem;">
+ <h2 class="govuk-error-summary__title">There is a problem</h2>
+ <div class="govuk-error-summary__body">@ViewBag.AdminError</div>
+    </div>
+  }
+  @if (ViewBag.AdminMessage != null)
+  {
+ <div class="govuk-notification-banner govuk-notification-banner--success govuk-!-margin-bottom-3" role="region" aria-labelledby="groups-notif-title">
+ <div class="govuk-notification-banner__header">
+ <h2 class="govuk-notification-banner__title" id="groups-notif-title">Success</h2>
+      </div>
+ <div class="govuk-notification-banner__content">
+ <p class="govuk-notification-banner__heading">@ViewBag.AdminMessage</p>
+      </div>
+    </div>
+  }
+
+ <div class="dfe-c-flex dfe-c-flex--between dfe-c-mb-2" style="align-items:center;flex-wrap:wrap;gap:0.75rem;">
+ <h2 class="govuk-heading-m" style="margin:0;">All groups</h2>
+ <a class="govuk-button" href="@Url.Action("GroupCreate", "ModernAdmin")" id="btn-add-group">Add group</a>
+  </div>
+
+ <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+    <table class="govuk-table govuk-table--small dfe-f-table--condensed">
+      <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+ <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Name</button></th>
+ <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Description</button></th>
+ <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Members</button></th>
+ <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Features</button></th>
+ <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Status</button></th>
+ <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Type</button></th>
+ <th scope="col" class="govuk-table__header govuk-table__header--numeric"><span class="govuk-visually-hidden">Actions</span></th>
+        </tr>
+      </thead>
+      <tbody class="govuk-table__body">
+        @if (Model.Groups.Count == 0)
+        {
+ <tr class="govuk-table__row"><td colspan="7" class="dfe-c-text-muted">No groups yet. Use <strong>Add group</strong> to create one.</td></tr>
+        }
+        else
+        {
+          foreach (var row in Model.Groups)
+          {
+            <tr class="govuk-table__row">
+              <td class="govuk-table__cell">
+ <a href="@Url.Action("GroupDetail", "ModernAdmin", new { id = row.Id })" class="govuk-link govuk-link--no-visited-state"><strong>@row.Name</strong></a>
+              </td>
+              <td class="govuk-table__cell">@(string.IsNullOrEmpty(row.Description) ? "—" : row.Description)</td>
+              <td class="govuk-table__cell">@row.MemberCount</td>
+              <td class="govuk-table__cell">@row.FeatureCount</td>
+              <td class="govuk-table__cell">
+ @if (row.IsActive) { <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--green">Active</span> }
+ else { <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--grey">Inactive</span> }
+              </td>
+              <td class="govuk-table__cell">
+ @if (row.IsSystemGroup) { <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--blue">System</span> }
+ else { <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--grey">Custom</span> }
+              </td>
+              <td class="govuk-table__cell" style="text-align:right;white-space:nowrap;">
+ <a href="@Url.Action("GroupDetail", "ModernAdmin", new { id = row.Id })" class="govuk-link govuk-link--no-visited-state">Manage</a>
+                <span style="margin:0 0.25rem;" aria-hidden="true">·</span>
+ <a href="@Url.Action("GroupEdit", "ModernAdmin", new { id = row.Id })" class="govuk-link govuk-link--no-visited-state">Edit</a>
+              </td>
+            </tr>
+          }
+        }
+      </tbody>
+    </table>
+  </div>
+</div>

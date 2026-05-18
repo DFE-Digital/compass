@@ -1,39 +1,103 @@
+@using Compass.ViewModels.Modern
 @{
-    ViewData["Title"] = "Exports";
-    var isWorkSection = string.Equals(ViewBag.MainNavSection as string, "work", StringComparison.OrdinalIgnoreCase);
-    var sectionName = isWorkSection ? "Work" : "Demand";
-    var sectionDashboardUrl = isWorkSection
-        ? Url.Action("Dashboard", "ModernWork")
-        : Url.Action("Dashboard", "Demand");
+   ViewData["Title"] = "Exports";
+   var section = (ViewBag.ExportsSection as string
+      ?? Context.Request.Query["section"].ToString() ?? "reporting").Trim().ToLowerInvariant();
+   if (section is not ("work" or "demand" or "performance" or "reporting"))
+      section = "reporting";
+   var sectionName = section switch
+   {
+      "work" => "Work",
+      "demand" => "Demand",
+      "performance" => "Performance",
+      _ => "Reporting"
+   };
+   var sectionDashboardUrl = section switch
+   {
+      "work" => Url.Action("Dashboard", "ModernWork"),
+      "demand" => Url.Action("Dashboard", "ModernDemand"),
+      "performance" => Url.Action("Index", "ModernPerformance"),
+      _ => Url.Action("Dashboard", "ModernReporting")
+   };
+   var showDemandExportRows = ViewBag.ShowDemandExportRows as bool? ?? (ViewBag.ShowDemandNavigation as bool? == true);
+   var showWorkRow = section is "work" or "reporting";
+   var showPerformanceRow = section is "performance" or "reporting";
+   var showDemandRows = showDemandExportRows && (section is "demand" or "reporting");
 }
 
 @section Breadcrumbs {
-    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
-    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="@sectionDashboardUrl">@sectionName</a></li>
-    <li class="dfe-c-breadcrumb__item" aria-current="page">Exports</li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@sectionDashboardUrl">@sectionName</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">Exports</li>
 }
 
-<div id="sc-exports-hub">
-  <div class="dfe-c-page-title dfe-c-mb-3">
-    <div class="dfe-c-page-title__caption">Data</div>
-    <h1 class="dfe-c-page-title__heading">Exports</h1>
-    <p class="dfe-c-body dfe-c-mb-0 exports-page__subtitle">Download data for reporting and offline analysis.</p>
-  </div>
+<div class="modern-work-page" id="sc-exports-hub">
+@{
+  var exportsLede = await Html.PartialAsync("~/Views/Modern/Exports/_ExportsHeaderLede.cshtml");
+}
+@await Html.PartialAsync("~/Views/Modern/Shared/_ModernPageHeader.cshtml", new ModernPageHeaderViewModel {
+  Caption = sectionName,
+  Title = "Exports",
+  Lede = exportsLede
+})
 
-  <h2 class="dfe-c-heading-m dfe-c-mb-2">Compass workbooks</h2>
-  <p class="dfe-c-body muted dfe-c-mb-3">Full Excel exports from Compass (multiple sheets per file).</p>
-  <div class="exports-page__grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:1rem;">
-    <div class="dfe-c-card dfe-c-card--plain">
-      <div class="dfe-c-heading-s dfe-c-mb-2">Demand export</div>
-      <p class="dfe-c-body muted">All data across the demand pipeline (legacy Compass schema).</p>
-      <p class="dfe-c-body-s dfe-c-mb-3" style="color:var(--govuk-secondary-text-colour,#505a5f);">File: Compass-demand-export-YYYYMMDD-HHmm.xlsx</p>
-      <p class="dfe-c-mb-0"><a href="@Url.Action("DownloadExcel", "Exports")" class="dfe-c-link">Download Excel</a></p>
-    </div>
-    <div class="dfe-c-card dfe-c-card--plain">
-      <div class="dfe-c-heading-s dfe-c-mb-2">Work export</div>
-      <p class="dfe-c-body muted">All data across the work pipeline (projects, milestones, monthly updates).</p>
-      <p class="dfe-c-body-s dfe-c-mb-3" style="color:var(--govuk-secondary-text-colour,#505a5f);">File: Compass-work-export-YYYYMMDD-HHmm.xlsx</p>
-      <p class="dfe-c-mb-0"><a href="@Url.Action("DownloadWorkExcel", "Exports")" class="dfe-c-link">Download Excel</a></p>
-    </div>
-  </div>
+ <h2 class="govuk-heading-m govuk-!-margin-top-4 govuk-!-margin-bottom-2">Available exports</h2>
+ <div class="dfe-f-table-wrapper govuk-!-margin-bottom-6" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+ <table class="govuk-table">
+ <caption class="govuk-table__caption govuk-table__caption--m">Exportable datasets and file contents</caption>
+ <thead class="govuk-table__head">
+ <tr class="govuk-table__row">
+ <th scope="col" class="govuk-table__header">Export</th>
+ <th scope="col" class="govuk-table__header">What it contains</th>
+ <th scope="col" class="govuk-table__header">Format</th>
+ <th scope="col" class="govuk-table__header">Download</th>
+ </tr>
+ </thead>
+ <tbody class="govuk-table__body">
+ @if (showWorkRow)
+ {
+ <tr class="govuk-table__row">
+ <th scope="row" class="govuk-table__header">Work data</th>
+ <td class="govuk-table__cell">
+ <p class="govuk-body govuk-!-margin-bottom-1"><strong>Work items (master)</strong> — one row per active work item: titles, aims, phase and delivery fields, RAG and priority, portfolio, contacts (primary, SROs, service owners, PMO, team listing), divisions, tags, linked products, counts (open risks/issues, assumptions, milestones), beta phase dates, and <strong>latest monthly return</strong> (period, submitted date, main narrative, additional narrative blocks, monthly FTE, draft RAG fields, audit metadata).</p>
+ <p class="govuk-body govuk-!-margin-bottom-1"><strong>Milestones</strong> — one row per milestone for those work items.</p>
+ <p class="govuk-body govuk-!-margin-bottom-0"><strong>Monthly updates (history)</strong> — every stored monthly return per work item with full narrative and draft fields.</p>
+ </td>
+ <td class="govuk-table__cell">Excel (.xlsx)<br /><span class="govuk-hint govuk-!-margin-bottom-0">Compass-work-export-YYYYMMDD-HHmm.xlsx</span></td>
+ <td class="govuk-table__cell"><a href="@Url.Action("DownloadWorkExcel", "Exports")" class="govuk-link govuk-link--no-visited-state" data-report-download data-generating-modal-title="Generating export">Download Work Excel</a></td>
+ </tr>
+ }
+ @if (showPerformanceRow)
+ {
+ <tr class="govuk-table__row">
+ <th scope="row" class="govuk-table__header">Performance reporting</th>
+ <td class="govuk-table__cell">
+ <p class="govuk-body govuk-!-margin-bottom-1"><strong>Commissions</strong> — reporting rounds (dates, scope, included metrics).</p>
+ <p class="govuk-body govuk-!-margin-bottom-1"><strong>Commission submissions</strong> — product rows submitted into each commission.</p>
+ <p class="govuk-body govuk-!-margin-bottom-1"><strong>Performance metrics</strong> — metric definitions (identifiers, phases, types).</p>
+ <p class="govuk-body govuk-!-margin-bottom-0"><strong>Metric values</strong> — captured values per submission (including completeness and reasons).</p>
+ </td>
+ <td class="govuk-table__cell">Excel (.xlsx)<br /><span class="govuk-hint govuk-!-margin-bottom-0">Compass-performance-export-YYYYMMDD-HHmm.xlsx</span></td>
+ <td class="govuk-table__cell"><a href="@Url.Action("DownloadPerformanceExcel", "Exports")" class="govuk-link govuk-link--no-visited-state" data-report-download data-generating-modal-title="Generating export">Download Performance Excel</a></td>
+ </tr>
+ }
+ @if (showDemandRows)
+ {
+ <tr class="govuk-table__row">
+ <th scope="row" class="govuk-table__header">Demand pipeline</th>
+ <td class="govuk-table__cell">Business cases, demand requests, triage outcomes, scorecards and exploratory reviews in a single workbook.</td>
+ <td class="govuk-table__cell">Excel (.xlsx)<br /><span class="govuk-hint govuk-!-margin-bottom-0">Compass-demand-export-YYYYMMDD-HHmm.xlsx</span></td>
+ <td class="govuk-table__cell"><a href="@Url.Action("DownloadDemandExcel", "Exports")" class="govuk-link govuk-link--no-visited-state" data-report-download data-generating-modal-title="Generating export">Download Demand Excel</a></td>
+ </tr>
+ <tr class="govuk-table__row">
+ <th scope="row" class="govuk-table__header">Demand register</th>
+ <td class="govuk-table__cell">Flat list of pipeline demand requests for quick analysis outside Excel.</td>
+ <td class="govuk-table__cell">CSV<br /><span class="govuk-hint govuk-!-margin-bottom-0">Compass-demand-register-YYYYMMDD-HHmm.csv</span></td>
+ <td class="govuk-table__cell"><a href="@Url.Action("DownloadDemandRegisterCsv", "Exports")" class="govuk-link govuk-link--no-visited-state" data-report-download data-generating-modal-title="Generating export">Download CSV</a></td>
+ </tr>
+ }
+ </tbody>
+ </table>
+ </div>
 </div>

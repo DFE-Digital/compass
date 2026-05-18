@@ -1,0 +1,297 @@
+@model Compass.ViewModels.Modern.DdtStandardEditViewModel
+@using Compass.Models
+@using Compass.ViewModels.Modern
+@{
+  ViewData["Title"] = Model.Id.HasValue ? "Edit DDT standard" : "Create DDT standard";
+  var isEdit = Model.Id.HasValue;
+  var workflowCtx = new DdtStandardWorkflowContextViewModel
+  {
+    StandardId = Model.Id ?? 0,
+    Stage = Model.Stage,
+    WorkflowStepIndex = Model.WorkflowStepIndex,
+    CanEdit = Model.CanEdit,
+    CanSubmit = Model.CanSubmit,
+    CanDelete = Model.CanDelete
+  };
+  var sectionsNavId = "ddt-create-sections-nav";
+  var sections = new (string Id, string Label)[]
+  {
+    ("basic-details", "Basic details"),
+    ("purpose-criteria", "Purpose and criteria"),
+    ("compliance-governance", "Compliance and governance"),
+    ("categorisation", "Categorisation"),
+    ("owners-contacts", "Owners and contacts")
+  };
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernStandards")">Standards</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("DdtStandards", "ModernStandards")">DDT standards register</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">@(isEdit ? "Edit draft" : "New standard")</li>
+}
+
+@await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+  BackLinkHref = isEdit ? Url.Action("DdtDetail", "ModernStandards", new { id = Model.Id }) : Url.Action("DdtStandards", "ModernStandards"),
+  BackLinkText = isEdit ? "Back to standard" : "Back to register",
+  Caption = "Standards",
+  Title = isEdit ? "Edit draft standard" : "Create a new standard",
+  Lede = await Html.PartialAsync("_GovukBodyParagraph", "Draft your standard, save progress, then submit to the standards forum for review.")
+})
+
+@if (TempData["SuccessMessage"] != null)
+{
+  <div class="govuk-notification-banner govuk-notification-banner--success govuk-!-margin-bottom-4" role="region">
+    <div class="govuk-notification-banner__header">
+      <h2 class="govuk-notification-banner__title">Success</h2>
+    </div>
+    <div class="govuk-notification-banner__content">
+      <p class="govuk-notification-banner__heading">@TempData["SuccessMessage"]</p>
+    </div>
+  </div>
+}
+@if (TempData["ErrorMessage"] != null)
+{
+  <div class="govuk-error-summary govuk-!-margin-bottom-4" role="alert">
+    <h2 class="govuk-error-summary__title">There is a problem</h2>
+    <div class="govuk-error-summary__body">
+      <p>@TempData["ErrorMessage"]</p>
+    </div>
+  </div>
+}
+
+@if (isEdit)
+{
+  @await Html.PartialAsync("_DdtWorkflowBanner", workflowCtx)
+}
+
+<div id="ddt-create" class="ddt-create govuk-!-margin-top-2">
+  <div class="govuk-grid-row ddt-create__layout">
+    <div class="govuk-grid-column-one-quarter-from-desktop ddt-create__nav">
+      <div class="dfe-f-u-sticky" style="--dfe-f-sticky-top: 1rem;">
+        <nav class="dfe-f-side-navigation ddt-create-side-nav"
+             aria-label="Standard sections"
+             data-module="dfe-f-side-navigation">
+          <button type="button"
+                  class="dfe-f-side-navigation__toggle"
+                  aria-controls="@sectionsNavId"
+                  aria-expanded="false">Sections</button>
+          <ul id="@sectionsNavId" class="dfe-f-side-navigation__list" hidden>
+            @foreach (var navItem in sections)
+            {
+              <li class="dfe-f-side-navigation__item">
+                <a class="dfe-f-side-navigation__link govuk-link govuk-link--no-visited-state govuk-link--no-underline"
+                   href="#@navItem.Id">@navItem.Label</a>
+              </li>
+            }
+          </ul>
+        </nav>
+
+        @if (isEdit)
+        {
+          <div class="ddt-create__status govuk-!-margin-top-4 govuk-!-padding-4">
+            <h2 class="govuk-heading-s">Draft status</h2>
+            <p class="govuk-body-s govuk-!-margin-bottom-1">Draft version <strong>@Model.Version</strong></p>
+            @if (!string.IsNullOrWhiteSpace(Model.PublishedVersion))
+            {
+              <p class="govuk-body-s govuk-!-margin-bottom-1">Published version <strong>@Model.PublishedVersion</strong></p>
+            }
+            <p class="govuk-body-s govuk-!-margin-bottom-4">Stage: <strong>@Model.Stage</strong></p>
+            @if (Model.CanDelete)
+            {
+              <form method="post" action="@Url.Action("DdtDeleteDraft", "ModernStandards", new { id = Model.Id })"
+                    data-confirm-title="Delete this draft?"
+                    data-confirm-message="This cannot be undone.">
+                @Html.AntiForgeryToken()
+                <button type="submit" class="govuk-button govuk-button--warning">Delete draft</button>
+              </form>
+            }
+          </div>
+        }
+      </div>
+    </div>
+
+    <div class="govuk-grid-column-three-quarters-from-desktop ddt-create__main">
+      <form id="ddt-standard-draft-form" method="post" action="@Url.Action("DdtCreatePost", "ModernStandards")" novalidate>
+        @Html.AntiForgeryToken()
+        @if (Model.Id.HasValue)
+        {
+          <input type="hidden" name="id" value="@Model.Id" />
+        }
+
+        <section id="basic-details" class="ddt-create-section govuk-!-margin-bottom-6">
+          <h2 class="govuk-heading-m">Basic details</h2>
+          <div class="govuk-form-group">
+            <label class="govuk-label" for="title">Title</label>
+            <input class="govuk-input" id="title" name="title" value="@Model.Title" required maxlength="500" />
+          </div>
+          <div class="govuk-form-group">
+            <label class="govuk-label" for="summary">Summary</label>
+            <textarea class="govuk-textarea" id="summary" name="summary" rows="6">@Model.Summary</textarea>
+          </div>
+        </section>
+
+        <section id="purpose-criteria" class="ddt-create-section govuk-!-margin-bottom-6">
+          <h2 class="govuk-heading-m">Purpose and criteria</h2>
+          <div class="govuk-form-group">
+            <label class="govuk-label" for="purpose">Purpose</label>
+            <textarea class="govuk-textarea" id="purpose" name="purpose" rows="6">@Model.Purpose</textarea>
+          </div>
+          <div class="govuk-form-group">
+            <label class="govuk-label" for="criteria">Criteria</label>
+            <div class="govuk-hint">One criterion per line</div>
+            <textarea class="govuk-textarea" id="criteria" name="criteria" rows="6">@Model.Criteria</textarea>
+          </div>
+          <div class="govuk-form-group">
+            <label class="govuk-label" for="howToMeet">How to meet this standard</label>
+            <textarea class="govuk-textarea" id="howToMeet" name="howToMeet" rows="15">@Model.HowToMeet</textarea>
+          </div>
+        </section>
+
+        <section id="compliance-governance" class="ddt-create-section govuk-!-margin-bottom-6">
+          <h2 class="govuk-heading-m">Compliance and governance</h2>
+          <div class="govuk-form-group">
+            <label class="govuk-label" for="governance">Governance</label>
+            <div class="govuk-hint">Required before submitting for review</div>
+            <textarea class="govuk-textarea" id="governance" name="governance" rows="6">@Model.Governance</textarea>
+          </div>
+          <div class="govuk-form-group">
+            <label class="govuk-label" for="validityPeriod">Validity period (months)</label>
+            <input class="govuk-input govuk-input--width-4" id="validityPeriod" name="validityPeriod" type="number" min="1" value="@Model.ValidityPeriod" />
+          </div>
+          <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes">
+            <div class="govuk-checkboxes__item">
+              <input class="govuk-checkboxes__input" id="legalStandard" name="legalStandard" type="checkbox" value="true" @(Model.LegalStandard ? "checked" : "") />
+              <label class="govuk-label govuk-checkboxes__label" for="legalStandard">Legal requirement</label>
+            </div>
+          </div>
+          <div class="govuk-form-group govuk-!-margin-top-4">
+            <label class="govuk-label" for="legalBasis">Legal basis</label>
+            <textarea class="govuk-textarea" id="legalBasis" name="legalBasis" rows="6">@Model.LegalBasis</textarea>
+          </div>
+          <div class="govuk-form-group">
+            <label class="govuk-label" for="relatedGuidance">Related guidance</label>
+            <textarea class="govuk-textarea" id="relatedGuidance" name="relatedGuidance" rows="6">@Model.RelatedGuidance</textarea>
+          </div>
+        </section>
+
+        <section id="categorisation" class="ddt-create-section govuk-!-margin-bottom-6">
+          <h2 class="govuk-heading-m">Categorisation</h2>
+          @if (Model.Categories.Any())
+          {
+            <div class="govuk-form-group">
+              <fieldset class="govuk-fieldset">
+                <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Categories</legend>
+                <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes">
+                  @foreach (var cat in Model.Categories)
+                  {
+                    var cid = $"cat-{cat.Id}";
+                    <div class="govuk-checkboxes__item">
+                      <input class="govuk-checkboxes__input" id="@cid" name="categoryIds" type="checkbox" value="@cat.Id"
+                             @(Model.SelectedCategoryIds.Contains(cat.Id) ? "checked" : "") />
+                      <label class="govuk-label govuk-checkboxes__label" for="@cid">@cat.Name</label>
+                    </div>
+                  }
+                </div>
+              </fieldset>
+            </div>
+          }
+          @if (Model.Phases.Any())
+          {
+            <div class="govuk-form-group">
+              <fieldset class="govuk-fieldset">
+                <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Applicable phases</legend>
+                <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes">
+                  @foreach (var ph in Model.Phases)
+                  {
+                    var pid = $"phase-{ph.Id}";
+                    <div class="govuk-checkboxes__item">
+                      <input class="govuk-checkboxes__input" id="@pid" name="phaseIds" type="checkbox" value="@ph.Id"
+                             @(Model.SelectedPhaseIds.Contains(ph.Id) ? "checked" : "") />
+                      <label class="govuk-label govuk-checkboxes__label" for="@pid">@ph.Name</label>
+                    </div>
+                  }
+                </div>
+              </fieldset>
+            </div>
+          }
+        </section>
+
+        <section id="owners-contacts" class="ddt-create-section govuk-!-margin-bottom-6">
+          <h2 class="govuk-heading-m">Owners and contacts</h2>
+          <p class="govuk-hint">At least one owner is required before you can submit for review.</p>
+          <div class="govuk-form-group">
+            <label class="govuk-label" for="owner-picker-input">Standard owner</label>
+            <div class="user-picker" data-user-picker data-search-url="/api/users/search" data-select-url="/api/users/select">
+              <div style="position:relative;">
+                <input type="text" class="govuk-input js-user-picker-input" id="owner-picker-input" autocomplete="off" placeholder="Search by name or email" />
+                <span class="user-picker__spinner js-user-picker-spinner" aria-hidden="true">Searching…</span>
+                <div class="user-picker__results js-user-picker-results" role="listbox" aria-live="polite"></div>
+              </div>
+              <input type="hidden" name="ownerObjectIds" class="js-user-picker-objectid" value="@Model.OwnerObjectIds" />
+              <div class="user-picker__selected js-user-picker-summary" data-default-text="No owner selected."></div>
+            </div>
+          </div>
+          <div class="govuk-form-group">
+            <label class="govuk-label" for="contact-picker-input">Contact (optional)</label>
+            <div class="user-picker" data-user-picker data-search-url="/api/users/search" data-select-url="/api/users/select">
+              <div style="position:relative;">
+                <input type="text" class="govuk-input js-user-picker-input" id="contact-picker-input" autocomplete="off" placeholder="Search by name or email" />
+                <span class="user-picker__spinner js-user-picker-spinner" aria-hidden="true">Searching…</span>
+                <div class="user-picker__results js-user-picker-results" role="listbox" aria-live="polite"></div>
+              </div>
+              <input type="hidden" name="contactObjectIds" class="js-user-picker-objectid" value="@Model.ContactObjectIds" />
+              <div class="user-picker__selected js-user-picker-summary" data-default-text="No contact selected."></div>
+            </div>
+          </div>
+        </section>
+
+        <div class="govuk-button-group">
+          <button type="submit" name="submitAction" value="save" class="govuk-button">Save draft</button>
+          @if (isEdit && Model.CanSubmit)
+          {
+            <button type="submit" name="submitAction" value="submit" class="govuk-button govuk-button--secondary"
+                    data-confirm-title="Submit for review?"
+                    data-confirm-message="The standards forum will review your standard. You will not be able to edit it until it is approved or rejected.">
+              Save and submit for review
+            </button>
+          }
+          @if (isEdit)
+          {
+            <a class="govuk-link" href="@Url.Action("DdtDetail", "ModernStandards", new { id = Model.Id })">Cancel</a>
+          }
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+@section Scripts {
+  <script src="~/modern/js/user-picker.js" nonce="@(Context.Items["Nonce"]?.ToString() ?? "")"></script>
+  <script nonce="@(Context.Items["Nonce"]?.ToString() ?? "")">
+  (function () {
+    var form = document.getElementById('ddt-standard-draft-form');
+    if (!form) return;
+    var allowSubmit = false;
+    form.addEventListener('submit', function (e) {
+      if (allowSubmit) return;
+      var sub = e.submitter;
+      if (!sub || sub.name !== 'submitAction' || sub.value !== 'submit') return;
+      if (typeof window.showConfirmModal !== 'function') return;
+      e.preventDefault();
+      window.showConfirmModal(
+        sub.getAttribute('data-confirm-title') || 'Submit for review?',
+        sub.getAttribute('data-confirm-message') || 'Are you sure?',
+        function () {
+          allowSubmit = true;
+          if (typeof form.requestSubmit === 'function') {
+            form.requestSubmit(sub);
+          } else {
+            form.submit();
+          }
+        }
+      );
+    });
+  })();
+  </script>
+}

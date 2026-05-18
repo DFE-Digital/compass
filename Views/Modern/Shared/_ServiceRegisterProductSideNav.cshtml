@@ -1,0 +1,51 @@
+@model FipsProductDetailViewModel
+@{
+  var p = Model.Product;
+  var tab = Model.ActiveDetailTab ?? "information";
+  string TabHref(string t) =>
+      Url.Action("ServiceRegisterProduct", "ModernOperations", new { id = p.Id, tab = t }) ?? "#";
+  bool raid = ViewBag.ShowRaidNavigation as bool? == true;
+  bool IsCurrent(string t) => string.Equals(tab, t, StringComparison.OrdinalIgnoreCase);
+  const string navListId = "ops-fips-product-side-nav-list";
+}
+
+<nav class="dfe-f-side-navigation ops-fips-product-side-nav"
+     aria-label="Product sections"
+     data-module="dfe-f-side-navigation">
+  <button type="button"
+          class="dfe-f-side-navigation__toggle"
+          aria-controls="@navListId"
+          aria-expanded="false">
+    Sections
+  </button>
+  <ul id="@navListId" class="dfe-f-side-navigation__list" hidden>
+    <li class="dfe-f-side-navigation__item@(IsCurrent("information") ? " dfe-f-side-navigation__item--current" : "")">
+      <a class="dfe-f-side-navigation__link govuk-link govuk-link--no-visited-state"
+         href="@TabHref("information")"
+         id="ops-fips-tab-information"@if (IsCurrent("information")) { <text> aria-current="page"</text> }>Information</a>
+    </li>
+    <li class="dfe-f-side-navigation__item@(IsCurrent("history") ? " dfe-f-side-navigation__item--current" : "")">
+      <a class="dfe-f-side-navigation__link govuk-link govuk-link--no-visited-state"
+         href="@TabHref("history")"
+         id="ops-fips-tab-history"@if (IsCurrent("history")) { <text> aria-current="page"</text> }>History</a>
+    </li>
+    @if (raid)
+    {
+      <li class="dfe-f-side-navigation__item@(IsCurrent("risks") ? " dfe-f-side-navigation__item--current" : "")">
+        <a class="dfe-f-side-navigation__link govuk-link govuk-link--no-visited-state"
+           href="@TabHref("risks")"
+           id="ops-fips-tab-risks"@if (IsCurrent("risks")) { <text> aria-current="page"</text> }>Risks (@Model.ProductRisks.Count)</a>
+      </li>
+      <li class="dfe-f-side-navigation__item@(IsCurrent("issues") ? " dfe-f-side-navigation__item--current" : "")">
+        <a class="dfe-f-side-navigation__link govuk-link govuk-link--no-visited-state"
+           href="@TabHref("issues")"
+           id="ops-fips-tab-issues"@if (IsCurrent("issues")) { <text> aria-current="page"</text> }>Issues (@Model.ProductIssues.Count)</a>
+      </li>
+    }
+    <li class="dfe-f-side-navigation__item@(IsCurrent("cmdb") ? " dfe-f-side-navigation__item--current" : "")">
+      <a class="dfe-f-side-navigation__link govuk-link govuk-link--no-visited-state"
+         href="@TabHref("cmdb")"
+         id="ops-fips-tab-cmdb"@if (IsCurrent("cmdb")) { <text> aria-current="page"</text> }>CMDB snapshot (JSON)</a>
+    </li>
+  </ul>
+</nav>

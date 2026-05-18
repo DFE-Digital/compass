@@ -1,0 +1,273 @@
+@model Compass.Models.DemandDashboardViewModel
+@using Compass.ViewModels.Modern
+@{
+  ViewData["Title"] = "Demand dashboard";
+}
+@functions {
+  string ScoreColour(int? s) => s switch
+  {
+    null => "",
+    var n when n >= 57 => "var(--green)",
+    var n when n >= 30 => "var(--rag-a)",
+    _ => "var(--rag-r)"
+  };
+  (string CssClass, string Label) BandParts(string? b) => b switch
+  {
+    "MustDo" => ("dfe-c-band--must", "MUST DO"),
+    "CouldDo" => ("dfe-c-band--could", "COULD DO"),
+    "DoNotDo" => ("dfe-c-band--not", "DO NOT DO"),
+    _ => ("", "")
+  };
+  string DemandsReadyPhrase(int n) => n == 1 ? "1 demand ready" : $"{n} demands ready";
+  string DaysUntilPhrase(int? days) => days switch
+  {
+    null => "",
+    0 => "Today",
+    1 => "1 day",
+    var d when d > 1 => $"{d} days",
+    _ => "Past date"
+  };
+}
+
+@section Breadcrumbs {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Register", "ModernDemand")">Demand</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">Dashboard</li>
+}
+
+<div id="sc-demand-dash">
+@{
+  var demandDashboardActions = await Html.PartialAsync("_DemandDashboardHeaderActions");
+  var demandDashboardLede = await Html.PartialAsync("_GovukBodyParagraph", "Pipeline overview, recent submissions, and the next triage meeting");
+}
+@await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+  Caption = "Demand pipeline",
+  Title = "Demand dashboard",
+  Lede = demandDashboardLede,
+  Actions = demandDashboardActions
+})
+
+<div class="dfe-f-card-grid govuk-!-margin-bottom-4">
+ @await Html.PartialAsync("~/Views/Modern/Raid/_RaidDashboardStatCard.cshtml", new RaidDashboardStatCardVm
+ {
+   Label = "Total requests",
+   Value = Model.TotalRequests.ToString(),
+   Trend = "View all demand",
+   Href = Url.Action("Register", "ModernDemand") ?? "#",
+   TintClass = "dfe-f-stat-card--tint-grey"
+ })
+ @await Html.PartialAsync("~/Views/Modern/Raid/_RaidDashboardStatCard.cshtml", new RaidDashboardStatCardVm
+ {
+   Label = "Submitted",
+   Value = Model.SubmittedCount.ToString(),
+   Trend = "View submitted",
+   Href = Url.Action("Register", "ModernDemand", new { stage = "submitted" }) ?? "#",
+   TintClass = "dfe-f-stat-card--tint-blue"
+ })
+ @await Html.PartialAsync("~/Views/Modern/Raid/_RaidDashboardStatCard.cshtml", new RaidDashboardStatCardVm
+ {
+   Label = "In explore",
+   Value = Model.InExploreCount.ToString(),
+   Trend = "View explore queue",
+   Href = Url.Action("Explore", "ModernDemand") ?? "#",
+   TintClass = "dfe-f-stat-card--tint-orange"
+ })
+ @await Html.PartialAsync("~/Views/Modern/Raid/_RaidDashboardStatCard.cshtml", new RaidDashboardStatCardVm
+ {
+   Label = "In scoring",
+   Value = Model.ScoringCount.ToString(),
+   Trend = "View scoring queue",
+   Href = Url.Action("Scoring", "ModernDemand") ?? "#",
+   TintClass = "dfe-f-stat-card--tint-teal"
+ })
+ @await Html.PartialAsync("~/Views/Modern/Raid/_RaidDashboardStatCard.cshtml", new RaidDashboardStatCardVm
+ {
+   Label = "Triage pending",
+   Value = Model.TriagePendingCount.ToString(),
+   Trend = Model.TriagePendingCount > 0 ? "Action required" : "View triage queue",
+   Href = Url.Action("Triage", "ModernDemand") ?? "#",
+   TintClass = Model.TriagePendingCount > 0 ? "dfe-f-stat-card--tint-red" : "dfe-f-stat-card--tint-grey"
+ })
+ @await Html.PartialAsync("~/Views/Modern/Raid/_RaidDashboardStatCard.cshtml", new RaidDashboardStatCardVm
+ {
+   Label = "Closed",
+   Value = Model.ClosedCount.ToString(),
+   Trend = "View closed demand",
+   Href = Url.Action("WorkDemandReport", "ModernDemand") ?? "#",
+   TintClass = "dfe-f-stat-card--tint-grey"
+ })
+</div>
+
+<div class="dfe-c-mb-4">
+ <div class="dfe-c-section-header">
+  <h2>Recent submissions</h2>
+  <a class="dfe-c-button--link" style="font-size:0.875rem;" href="@Url.Action("Register", "ModernDemand")">Full register →</a>
+ </div>
+ <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+  <table class="govuk-table">
+   <thead class="govuk-table__head"><tr class="govuk-table__row"><th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Request</button>
+        </th><th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Business area</button>
+        </th><th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Status</button>
+        </th><th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Score</button>
+        </th><th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Band</button>
+        </th></tr></thead>
+   <tbody class="govuk-table__body">
+    @if (!Model.RecentSubmissions.Any())
+    {
+ <tr class="govuk-table__row"><td colspan="5" class="dfe-c-text-muted">No submitted demand requests yet.</td></tr>
+    }
+    else
+    {
+     foreach (var row in Model.RecentSubmissions)
+     {
+      var band = BandParts(row.SuggestedBand);
+      <tr class="govuk-table__row">
+       <td class="govuk-table__cell">
+ <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("RequestDetail", "ModernDemand", new { id = row.Id })">@row.Title</a><span class="dfe-c-table-ref">@row.Reference</span>
+       </td>
+       <td class="govuk-table__cell">@row.Department</td>
+ <td class="govuk-table__cell"><span class="dfe-c-tag @row.StatusTagClass">@row.StatusLabel</span></td>
+       <td class="govuk-table__cell">
+        @if (row.TotalScore.HasValue)
+        {
+         <strong style="color:@ScoreColour(row.TotalScore);">@row.TotalScore</strong>
+        }
+        else
+        {
+ <span class="dfe-c-text-muted">—</span>
+        }
+       </td>
+       <td class="govuk-table__cell">
+        @if (!string.IsNullOrEmpty(band.CssClass))
+        {
+ <span class="@band.CssClass">@band.Label</span>
+        }
+        else
+        {
+ <span class="dfe-c-text-muted">—</span>
+        }
+       </td>
+      </tr>
+     }
+    }
+   </tbody>
+  </table>
+ </div>
+</div>
+
+<!-- Next triage meeting items -->
+<div class="dfe-c-mb-4">
+ <div class="dfe-c-section-header">
+  <h2>Next triage meeting</h2>
+  <a class="dfe-c-button--link" style="font-size:0.875rem;" href="@Url.Action("Triage", "ModernDemand")">View triage →</a>
+ </div>
+  @if (Model.NextTriageMeetingDate == null)
+  {
+ <p class="govuk-body dfe-c-text-muted">No upcoming meeting scheduled.</p>
+  }
+  else
+  {
+ <p class="govuk-body">
+  <strong>@Model.NextTriageMeetingDate.Value.ToString("d MMMM yyyy")</strong>
+  @if (!string.IsNullOrEmpty(Model.NextTriageMeetingName)) { <text> — @Model.NextTriageMeetingName</text> }
+  @{ var dayLabel = DaysUntilPhrase(Model.NextTriageMeetingDaysUntil); }
+  @if (!string.IsNullOrEmpty(dayLabel)) { <span class="dfe-c-text-muted"> · @dayLabel</span> }
+  · @DemandsReadyPhrase(Model.NextMeetingItems.Count)
+ </p>
+ <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+  <table class="govuk-table">
+   <thead class="govuk-table__head"><tr class="govuk-table__row"><th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Request</button>
+        </th><th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Business area</button>
+        </th><th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Status</button>
+        </th><th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Score</button>
+        </th><th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Band</button>
+        </th></tr></thead>
+   <tbody class="govuk-table__body">
+    @if (!Model.NextMeetingItems.Any())
+    {
+ <tr class="govuk-table__row"><td colspan="5" class="dfe-c-text-muted">No scored demands on this agenda yet.</td></tr>
+    }
+    else
+    {
+     foreach (var item in Model.NextMeetingItems)
+     {
+      <tr class="govuk-table__row">
+       <td class="govuk-table__cell">
+ <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("RequestDetail", "ModernDemand", new { id = item.Id })">@item.Title</a><span class="dfe-c-table-ref">@item.Reference</span>
+       </td>
+       <td class="govuk-table__cell">@item.Department</td>
+ <td class="govuk-table__cell"><span class="dfe-c-tag @item.StatusTagClass">@item.StatusLabel</span></td>
+       <td class="govuk-table__cell">
+        @if (item.TotalScore.HasValue)
+        {
+         <strong style="color:@ScoreColour(item.TotalScore);">@item.TotalScore</strong>
+        }
+        else
+        {
+ <span class="dfe-c-text-muted">—</span>
+        }
+       </td>
+ <td class="govuk-table__cell"><span class="@item.BandClass">@item.BandLabel</span></td>
+      </tr>
+     }
+    }
+   </tbody>
+  </table>
+ </div>
+  }
+</div>
+
+<!-- Business cases with no demand -->
+<div class="dfe-c-mb-4">
+ <div class="dfe-c-section-header">
+  <h2>Business cases with no demand created</h2>
+  <a class="dfe-c-button--link" style="font-size:0.875rem;" href="@Url.Action("BusinessCaseNew", "ModernDemand")">Add business case →</a>
+ </div>
+ <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+  <table class="govuk-table">
+   <thead class="govuk-table__head"><tr class="govuk-table__row"><th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Business case</button>
+        </th><th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Stage</button>
+        </th><th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Business area</button>
+        </th><th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Created</button>
+        </th></tr></thead>
+   <tbody class="govuk-table__body">
+    @if (!Model.OrphanBusinessCases.Any())
+    {
+ <tr class="govuk-table__row"><td colspan="4" class="dfe-c-text-muted">All business cases have a demand request.</td></tr>
+    }
+    else
+    {
+     foreach (var bc in Model.OrphanBusinessCases)
+     {
+      <tr class="govuk-table__row">
+       <td class="govuk-table__cell">
+ <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("BusinessCase", "ModernDemand", new { id = bc.Id })">@bc.Title</a><span class="dfe-c-table-ref">@bc.Reference</span>
+       </td>
+ <td class="govuk-table__cell"><span class="dfe-c-tag dfe-c-tag--grey">@bc.Stage</span></td>
+       <td class="govuk-table__cell">@(string.IsNullOrEmpty(bc.BusinessArea) ? "—" : bc.BusinessArea)</td>
+       <td class="govuk-table__cell">@bc.CreatedAt.ToString("d MMM yyyy")</td>
+      </tr>
+     }
+    }
+   </tbody>
+  </table>
+ </div>
+</div>
+</div>

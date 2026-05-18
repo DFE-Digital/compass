@@ -1,0 +1,437 @@
+@model FipsProductsViewModel
+@using Compass.Models.Fips
+@using Compass.ViewModels.Modern
+@{
+    ViewData["Title"] = "Service register — Products";
+    var tab = Model.ActiveTab;
+    var bulkNew = string.Equals(tab, "new", StringComparison.OrdinalIgnoreCase);
+    var isEnterpriseTab = string.Equals(tab, "enterprise", StringComparison.OrdinalIgnoreCase);
+    var bulkPanelOpen = bulkNew || isEnterpriseTab;
+    var isSearchResults = Model.IsSearchResults || string.Equals(tab, "search", StringComparison.OrdinalIgnoreCase);
+    var showBulkManagement = bulkNew
+        || string.Equals(tab, "all", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(tab, "active", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(tab, "enterprise", StringComparison.OrdinalIgnoreCase);
+    var showAllTabExtraColumns = string.Equals(tab, "all", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(tab, "enterprise", StringComparison.OrdinalIgnoreCase)
+        || isSearchResults;
+    var showStatusColumn = string.Equals(tab, "all", StringComparison.OrdinalIgnoreCase) || isSearchResults;
+}
+
+@section Breadcrumbs {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernOperations")">Operations</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">Service register</li>
+}
+
+@functions {
+    string TabCount(int count) => count > 0 ? $" ({count})" : "";
+
+    string StatusLabel(CMDBProductStatus status) => status switch
+    {
+        CMDBProductStatus.Active => "Active",
+        CMDBProductStatus.New => "New",
+        CMDBProductStatus.Inactive => "Retired",
+        CMDBProductStatus.Rejected => "Rejected",
+        _ => status.ToString()
+    };
+
+    string StatusTagClass(CMDBProductStatus status) => status switch
+    {
+        CMDBProductStatus.Active => "dfe-c-tag--green",
+        CMDBProductStatus.New => "dfe-c-tag--blue",
+        CMDBProductStatus.Inactive => "dfe-c-tag--grey",
+        CMDBProductStatus.Rejected => "dfe-c-tag--red",
+        _ => "dfe-c-tag--grey"
+    };
+}
+
+@if (TempData["Success"] != null)
+{
+ <div class="govuk-notification-banner govuk-notification-banner--success" role="region" aria-labelledby="fips-sync-success-title">
+ <div class="govuk-notification-banner__header">
+ <h2 class="govuk-notification-banner__title" id="fips-sync-success-title">Success</h2>
+        </div>
+ <div class="govuk-notification-banner__content">
+ <p class="govuk-notification-banner__heading">@TempData["Success"]</p>
+        </div>
+    </div>
+}
+@if (TempData["Error"] != null)
+{
+ <div class="govuk-error-summary" role="alert" style="margin-bottom:1.5rem;">
+ <h2 class="govuk-error-summary__title">Something went wrong</h2>
+ <div class="govuk-error-summary__body">@TempData["Error"]</div>
+    </div>
+}
+
+@{
+  var srLede = await Html.PartialAsync("_ServiceRegisterHeaderLede");
+}
+@await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+  Caption = "Operations",
+  Title = "Service register",
+  Lede = srLede
+})
+
+@await Html.PartialAsync("_ServiceRegisterSubNav", Model)
+
+@if (tab == "inactive")
+{
+  <p class="govuk-body-s govuk-!-margin-bottom-3" style="color:#505a5f;"><strong>Inactive</strong> — status inactive (retired) or rejected (excluded). Retired rows also appear under <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("ServiceRegister", "ModernOperations", new { tab = "retired" })">Retired</a>. Use the checkboxes for bulk actions where available.</p>
+}
+else if (tab == "retired")
+{
+  <p class="govuk-body-s govuk-!-margin-bottom-3" style="color:#505a5f;"><strong>Retired</strong> — status inactive (retired; CMDB sync does not update these). These rows are included in <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("ServiceRegister", "ModernOperations", new { tab = "inactive" })">Inactive</a> too.</p>
+}
+else if (bulkNew)
+{
+  <p class="govuk-body-s govuk-!-margin-bottom-3" style="color:#505a5f;">New products are not yet live in the register. Use the checkboxes to select products, then set status and/or details in bulk.</p>
+}
+else if (isSearchResults)
+{
+  <p class="govuk-body-s govuk-!-margin-bottom-3" style="color:#505a5f;">
+    <strong>Search results</strong> — matching products in every status (@Model.Products.Count.ToString("N0") shown).
+    @if (!string.IsNullOrWhiteSpace(Model.Search))
+    {
+      <span>Query: <strong>@Model.Search</strong>.</span>
+    }
+  </p>
+}
+else if (string.Equals(tab, "all", StringComparison.OrdinalIgnoreCase))
+{
+  <p class="govuk-body-s govuk-!-margin-bottom-3" style="color:#505a5f;"><strong>All</strong> — every product regardless of status. Use the checkboxes for bulk actions where available.</p>
+}
+else if (isEnterpriseTab)
+{
+  <p class="govuk-body-s govuk-!-margin-bottom-3" style="color:#505a5f;"><strong>Enterprise</strong> — active products flagged as enterprise services. Select products and use bulk management to mark or clear the enterprise flag.</p>
+}
+
+<div style="margin-top:15px;">
+@await Html.PartialAsync("_SearchAndFilter", (SearchAndFilterViewModel)ViewBag.SearchAndFilter)
+</div>
+
+<div id="d-@tab" class="tab-pane on" role="tabpanel">
+    @if (Model.Products.Count == 0)
+    {
+        <div class="govuk-inset-text">
+            <p class="govuk-body govuk-!-margin-bottom-0">
+                @(isSearchResults ? "No products match your search." : "No products in this list.")
+            </p>
+        </div>
+    }
+    else if (showBulkManagement)
+    {
+        <form method="post" asp-controller="ModernOperations" asp-action="ServiceRegisterBulkNewProducts" class="govuk-!-margin-bottom-0" id="sr-bulk-new-form" novalidate>
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="SourceTab" value="@tab" />
+            <input type="hidden" name="RSearch" value="@(Model.Search ?? "")" />
+            <input type="hidden" name="RBusinessAreaId" value="@(Model.BusinessAreaId?.ToString() ?? "")" />
+            <input type="hidden" name="RChannelId" value="@(Model.ChannelId?.ToString() ?? "")" />
+            <input type="hidden" name="RUserGroupId" value="@(Model.UserGroupId?.ToString() ?? "")" />
+            <input type="hidden" name="RTypeId" value="@(Model.TypeId?.ToString() ?? "")" />
+            <input type="hidden" name="RPhaseId" value="@(Model.PhaseId?.ToString() ?? "")" />
+
+            <div class="dfe-f-toggle govuk-!-margin-bottom-3" data-module="dfe-f-toggle" id="sr-bulk-management-toggle">
+                <div class="dfe-f-toggle__title-wrapper">
+                    <h2 class="dfe-f-toggle__heading govuk-!-margin-bottom-0">
+                        <button type="button"
+                                class="dfe-f-toggle__button"
+                                id="sr-bulk-management-toggle-btn"
+                                aria-expanded="@(bulkPanelOpen ? "true" : "false")"
+                                aria-controls="sr-bulk-management-panel">
+                            <span class="dfe-f-toggle__icon" aria-hidden="true"></span>
+                            <span class="dfe-f-toggle__title">Bulk management</span>
+                        </button>
+                    </h2>
+                </div>
+                <div id="sr-bulk-management-panel" class="dfe-f-toggle__content"@if (!bulkPanelOpen) { <text> hidden</text> }>
+                    <div class="dfe-f-toggle__body">
+                    <div class="dfe-c-card dfe-c-card--plain govuk-!-margin-top-0 govuk-!-margin-bottom-0">
+                <p class="govuk-body-s dfe-c-text-muted govuk-!-margin-bottom-3">Tick the actions to apply, choose values, then <strong>Apply to selected</strong>. Unticked rows keep their current values for that field. For enterprise, choose <strong>Yes</strong> or <strong>No</strong> (not “No change”).</p>
+
+                <div class="govuk-form-group govuk-!-margin-bottom-3">
+                    <label class="govuk-label" for="sr-bulk-enterprise">Enterprise service</label>
+                    <select class="govuk-select" name="BulkEnterpriseAction" id="sr-bulk-enterprise" aria-describedby="sr-bulk-enterprise-hint">
+                        <option value="">— No change —</option>
+                        <option value="true">Yes — mark as enterprise service</option>
+                        <option value="false">No — clear enterprise flag</option>
+                    </select>
+                    <p class="govuk-hint govuk-!-margin-bottom-0" id="sr-bulk-enterprise-hint">Products with the flag cleared leave this tab but stay on Active. Products marked Yes appear here when active.</p>
+                </div>
+
+                <div class="govuk-form-group govuk-!-margin-bottom-3">
+                    <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes">
+                        <div class="govuk-checkboxes__item">
+                            <input class="govuk-checkboxes__input" type="checkbox" name="ApplyStatus" id="sr-bulk-apply-status" value="true" />
+                            <label class="govuk-label govuk-checkboxes__label" for="sr-bulk-apply-status">Set status for selected</label>
+                        </div>
+                    </div>
+                    <div class="govuk-!-margin-top-1 govuk-!-padding-left-4" style="border-left:3px solid #b1b4b6">
+                        <label class="govuk-label" for="sr-bulk-target-status">Target status</label>
+                        <select class="govuk-select" name="TargetStatus" id="sr-bulk-target-status" aria-describedby="sr-bulk-status-hint">
+                            <option value="">— Select —</option>
+                            <option value="1">Active (live in register)</option>
+                            <option value="3">Excluded from register (inactive)</option>
+                            <option value="2">Retired</option>
+                        </select>
+                        <p class="govuk-hint govuk-!-margin-bottom-0" id="sr-bulk-status-hint">“Excluded” matches the Inactive tab; “Retired” matches the Retired tab.</p>
+                    </div>
+                </div>
+
+                <div class="govuk-form-group govuk-!-margin-bottom-3">
+                    <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes">
+                        <div class="govuk-checkboxes__item">
+                            <input class="govuk-checkboxes__input" type="checkbox" name="ApplyPhase" id="sr-bulk-apply-phase" value="true" />
+                            <label class="govuk-label govuk-checkboxes__label" for="sr-bulk-apply-phase">Set phase for selected</label>
+                        </div>
+                    </div>
+                    <div class="govuk-!-margin-top-1 govuk-!-padding-left-4" style="border-left:3px solid #b1b4b6">
+                        <label class="govuk-label" for="sr-bulk-phase">Phase</label>
+                        <select class="govuk-select" name="BulkPhaseId" id="sr-bulk-phase">
+                            <option value="">— None —</option>
+                            @foreach (var ph in Model.PhaseOptions)
+                            {
+                                <option value="@ph.Id">@ph.Name</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+
+                <div class="govuk-form-group govuk-!-margin-bottom-3">
+                    <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes">
+                        <div class="govuk-checkboxes__item">
+                            <input class="govuk-checkboxes__input" type="checkbox" name="ApplyBusinessArea" id="sr-bulk-apply-ba" value="true" />
+                            <label class="govuk-label govuk-checkboxes__label" for="sr-bulk-apply-ba">Set business area(s) for selected</label>
+                        </div>
+                    </div>
+                    <div class="govuk-!-margin-top-1 govuk-!-padding-left-4" style="border-left:3px solid #b1b4b6">
+                        <fieldset class="govuk-fieldset">
+                            <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Business area</legend>
+                            <div class="govuk-hint" id="sr-bulk-ba-hint">Replaces all business areas on each selected product.</div>
+                            <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes" aria-describedby="sr-bulk-ba-hint" style="max-height:12rem;overflow-y:auto">
+                                @foreach (var ba in Model.BusinessAreaLookups)
+                                {
+                                    <div class="govuk-checkboxes__item">
+                                        <input class="govuk-checkboxes__input" type="checkbox" name="BusinessAreaLookupIds" value="@ba.Id" id="sr-bulk-ba-@ba.Id" />
+                                        <label class="govuk-label govuk-checkboxes__label" for="sr-bulk-ba-@ba.Id">@ba.Name</label>
+                                    </div>
+                                }
+                            </div>
+                        </fieldset>
+                    </div>
+                </div>
+
+                <div class="govuk-form-group govuk-!-margin-bottom-3">
+                    <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes">
+                        <div class="govuk-checkboxes__item">
+                            <input class="govuk-checkboxes__input" type="checkbox" name="ApplyChannel" id="sr-bulk-apply-ch" value="true" />
+                            <label class="govuk-label govuk-checkboxes__label" for="sr-bulk-apply-ch">Set channel(s) for selected</label>
+                        </div>
+                    </div>
+                    <div class="govuk-!-margin-top-1 govuk-!-padding-left-4" style="border-left:3px solid #b1b4b6">
+                        <div class="govuk-hint" id="sr-bulk-ch-hint">Replaces all channels on each product.</div>
+                        <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes" aria-describedby="sr-bulk-ch-hint" style="max-height:10rem;overflow-y:auto">
+                            @foreach (var ch in Model.ChannelOptions)
+                            {
+                                <div class="govuk-checkboxes__item">
+                                    <input class="govuk-checkboxes__input" type="checkbox" name="BulkChannelIds" value="@ch.Id" id="sr-bulk-ch-@ch.Id" />
+                                    <label class="govuk-label govuk-checkboxes__label" for="sr-bulk-ch-@ch.Id">@ch.Name</label>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+
+                <div class="govuk-form-group govuk-!-margin-bottom-0">
+                    <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes">
+                        <div class="govuk-checkboxes__item">
+                            <input class="govuk-checkboxes__input" type="checkbox" name="ApplyType" id="sr-bulk-apply-ty" value="true" />
+                            <label class="govuk-label govuk-checkboxes__label" for="sr-bulk-apply-ty">Set type(s) for selected</label>
+                        </div>
+                    </div>
+                    <div class="govuk-!-margin-top-1 govuk-!-padding-left-4" style="border-left:3px solid #b1b4b6">
+                        <div class="govuk-hint" id="sr-bulk-ty-hint">Replaces all types on each product.</div>
+                        <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes" aria-describedby="sr-bulk-ty-hint" style="max-height:10rem;overflow-y:auto">
+                            @foreach (var tp in Model.TypeOptions)
+                            {
+                                <div class="govuk-checkboxes__item">
+                                    <input class="govuk-checkboxes__input" type="checkbox" name="BulkTypeIds" value="@tp.Id" id="sr-bulk-ty-@tp.Id" />
+                                    <label class="govuk-label govuk-checkboxes__label" for="sr-bulk-ty-@tp.Id">@tp.Name</label>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+
+                <div class="govuk-button-group govuk-!-margin-top-3 govuk-!-margin-bottom-0">
+                    <button type="submit" class="govuk-button" data-module="govuk-button">Apply to selected</button>
+                </div>
+                    </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="dfe-f-table-wrapper modern-service-register-table" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+                <table class="govuk-table">
+                    <caption class="govuk-visually-hidden">Products (select for bulk management)</caption>
+                    <thead class="govuk-table__head">
+                        <tr class="govuk-table__row">
+                            <th scope="col" class="govuk-table__header modern-service-register-table__select-head">
+                                <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes">
+                                    <div class="govuk-checkboxes__item">
+                                        <input class="govuk-checkboxes__input" type="checkbox" id="sr-bulk-select-all" title="Select all" />
+                                        <label class="govuk-label govuk-checkboxes__label" for="sr-bulk-select-all"><span class="govuk-visually-hidden">Select all</span></label>
+                                    </div>
+                                </div>
+                            </th>
+                            <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Name</button>
+        </th>
+                            @if (showStatusColumn)
+                            {
+                                <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Status</button>
+        </th>
+                            }
+                            <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Phase</button>
+        </th>
+                            <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Business area</button>
+        </th>
+                            @if (showAllTabExtraColumns)
+                            {
+                                <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Types</button>
+        </th>
+                                <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Channels</button>
+        </th>
+                                <th scope="col" class="govuk-table__header govuk-!-text-align-centre modern-service-register-table__count-head">User groups</th>
+                                <th scope="col" class="govuk-table__header govuk-!-text-align-centre modern-service-register-table__count-head">Contacts</th>
+                            }
+                            <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Service owner</button>
+        </th>
+                            <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Reporting contact</button>
+        </th>
+                        </tr>
+                    </thead>
+                    <tbody class="govuk-table__body">
+                        @foreach (var p in Model.Products)
+                        {
+                            <tr class="govuk-table__row">
+                                <td class="govuk-table__cell">
+                                    <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes">
+                                        <div class="govuk-checkboxes__item">
+                                            <input class="govuk-checkboxes__input sr-bulk-row-cb" type="checkbox" name="ProductIds" value="@p.Id" id="sr-bulk-p-@p.Id" />
+                                            <label class="govuk-label govuk-checkboxes__label" for="sr-bulk-p-@p.Id"><span class="govuk-visually-hidden">@p.Title</span></label>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td class="govuk-table__cell">
+                                    <a href="@Url.Action("ServiceRegisterProduct", "ModernOperations", new { id = p.Id })" class="govuk-link govuk-link--no-visited-state govuk-!-font-weight-bold">@p.Title</a>
+                                    <span class="govuk-body-s dfe-c-text-muted" style="display:block;">ID: @p.UniqueID</span>
+                                </td>
+                                @if (showStatusColumn)
+                                {
+                                    <td class="govuk-table__cell">
+                                        <span class="dfe-c-tag @StatusTagClass(p.Status)">@StatusLabel(p.Status)</span>
+                                    </td>
+                                }
+                                <td class="govuk-table__cell">@(p.PhaseName ?? "—")</td>
+                                <td class="govuk-table__cell">@(string.IsNullOrWhiteSpace(p.BusinessAreaDisplay) ? "—" : p.BusinessAreaDisplay)</td>
+                                @if (showAllTabExtraColumns)
+                                {
+                                    <td class="govuk-table__cell govuk-body-s">@(string.IsNullOrWhiteSpace(p.TypesDisplay) ? "—" : p.TypesDisplay)</td>
+                                    <td class="govuk-table__cell govuk-body-s">@(string.IsNullOrWhiteSpace(p.ChannelsDisplay) ? "—" : p.ChannelsDisplay)</td>
+                                    <td class="govuk-table__cell govuk-body-s govuk-!-text-align-centre modern-service-register-table__count-cell">@p.UserGroupCount.ToString("N0")</td>
+                                    <td class="govuk-table__cell govuk-body-s govuk-!-text-align-centre modern-service-register-table__count-cell">@p.ContactCount.ToString("N0")</td>
+                                }
+                                <td class="govuk-table__cell">@(p.ServiceOwner ?? "—")</td>
+                                <td class="govuk-table__cell">@(p.ReportingContact ?? "—")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </form>
+    }
+    else
+    {
+        <div class="dfe-f-table-wrapper modern-service-register-table" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+            <table class="govuk-table">
+                <caption class="govuk-visually-hidden">Products</caption>
+                <thead class="govuk-table__head">
+                    <tr class="govuk-table__row">
+                        <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Name</button>
+        </th>
+                        @if (showStatusColumn)
+                        {
+                            <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Status</button>
+        </th>
+                        }
+                        <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Phase</button>
+        </th>
+                        <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Business area</button>
+        </th>
+                        <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Service owner</button>
+        </th>
+                        <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Reporting contact</button>
+        </th>
+                    </tr>
+                </thead>
+                <tbody class="govuk-table__body">
+                    @foreach (var p in Model.Products)
+                    {
+                        <tr class="govuk-table__row">
+                            <td class="govuk-table__cell">
+                                <a href="@Url.Action("ServiceRegisterProduct", "ModernOperations", new { id = p.Id })" class="govuk-link govuk-link--no-visited-state govuk-!-font-weight-bold">@p.Title</a>
+                                <span class="govuk-body-s dfe-c-text-muted" style="display:block;">ID: @p.UniqueID</span>
+                            </td>
+                            @if (showStatusColumn)
+                            {
+                                <td class="govuk-table__cell">
+                                    <span class="dfe-c-tag @StatusTagClass(p.Status)">@StatusLabel(p.Status)</span>
+                                </td>
+                            }
+                            <td class="govuk-table__cell">@(p.PhaseName ?? "—")</td>
+                            <td class="govuk-table__cell">@(string.IsNullOrWhiteSpace(p.BusinessAreaDisplay) ? "—" : p.BusinessAreaDisplay)</td>
+                            <td class="govuk-table__cell">@(p.ServiceOwner ?? "—")</td>
+                            <td class="govuk-table__cell">@(p.ReportingContact ?? "—")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@section Scripts {
+    @if (showBulkManagement)
+    {
+        <script nonce="@Context.Items["Nonce"]">
+            (function () {
+                var all = document.getElementById('sr-bulk-select-all');
+                var form = document.getElementById('sr-bulk-new-form');
+                if (!all || !form) return;
+                all.addEventListener('change', function () {
+                    var on = all.checked;
+                    form.querySelectorAll('input.sr-bulk-row-cb[type="checkbox"]').forEach(function (cb) {
+                        cb.checked = on;
+                    });
+                });
+            })();
+        </script>
+    }
+}

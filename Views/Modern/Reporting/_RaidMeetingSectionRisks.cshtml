@@ -1,0 +1,78 @@
+@model Compass.ViewModels.ModernRaidMeetingReportViewModel
+@{
+  var m = Model.Reporting;
+  var r = m.RiskKpis;
+  var focus = m.Intel.FocusRisks.Take(10).ToList();
+}
+<section class="mr-report-section-panel dfe-f-toggle govuk-!-margin-bottom-3" data-module="dfe-f-toggle" data-mr-section-id="risks" data-mr-section-title="Risks">
+  <header class="dfe-f-toggle__title-wrapper">
+    <h2 class="dfe-f-toggle__heading">
+      <button type="button" class="dfe-f-toggle__button" aria-expanded="false" aria-controls="rr-toggle-risks-content" id="rr-toggle-risks-button">
+        <span class="dfe-f-toggle__icon" aria-hidden="true"></span>
+        <span class="dfe-f-toggle__title">Risks</span>
+        <span class="mr-toggle-panel__meta"><span class="govuk-tag @(r.OpenRisks > 0 ? "govuk-tag--red" : "govuk-tag--grey")">@r.OpenRisks open</span></span>
+      </button>
+    </h2>
+  </header>
+  <section id="rr-toggle-risks-content" class="dfe-f-toggle__content" hidden>
+    <section class="dfe-f-toggle__body govuk-body">
+      <section class="dfe-f-card-grid govuk-!-margin-bottom-4">
+        <article class="dfe-f-stat-card dfe-f-stat-card--tint-grey"><p class="govuk-body-s dfe-f-stat-card__label">Open</p><p class="dfe-f-stat-card__value govuk-body-l">@r.OpenRisks</p></article>
+        <article class="dfe-f-stat-card dfe-f-stat-card--tint-red"><p class="govuk-body-s dfe-f-stat-card__label">Score ≥ 15</p><p class="dfe-f-stat-card__value govuk-body-l">@r.HighRiskScoreCount</p></article>
+        <article class="dfe-f-stat-card dfe-f-stat-card--tint-red"><p class="govuk-body-s dfe-f-stat-card__label">Review overdue</p><p class="dfe-f-stat-card__value govuk-body-l">@r.ReviewOverdueCount</p></article>
+        <article class="dfe-f-stat-card dfe-f-stat-card--tint-grey"><p class="govuk-body-s dfe-f-stat-card__label">Avg score</p><p class="dfe-f-stat-card__value govuk-body-l">@r.AvgRiskScore.ToString("0.#")</p></article>
+      </section>
+
+      <h3 class="govuk-heading-s">Inherent risk matrix</h3>
+      @await Html.PartialAsync("_RaidMeetingRiskMatrix", m)
+
+      @if (m.RiskTierCounts.Count > 0)
+      {
+        <h3 class="govuk-heading-s govuk-!-margin-top-4">By tier</h3>
+        <ul class="govuk-list govuk-list--bullet govuk-!-margin-bottom-4">
+          @foreach (var kv in m.RiskTierCounts.OrderByDescending(x => x.Value))
+          {
+            <li><strong>@kv.Key</strong> — @kv.Value</li>
+          }
+        </ul>
+      }
+
+      <h3 class="govuk-heading-s">Highest scores (talking points)</h3>
+      @if (m.TopRisks.Count == 0)
+      {
+        <p class="govuk-body">No open risks in scope.</p>
+      }
+      else
+      {
+        <table class="govuk-table govuk-table--small-text-until-tablet">
+          <thead class="govuk-table__head"><tr><th>Title</th><th>Score</th><th>Tier</th></tr></thead>
+          <tbody class="govuk-table__body">
+            @foreach (var risk in m.TopRisks)
+            {
+              <tr>
+                <td class="govuk-table__cell"><a class="govuk-link" href="@Url.Action("RiskDetail", "ModernRaid", new { id = risk.Id })">@risk.Title</a></td>
+                <td class="govuk-table__cell">@risk.RiskScore</td>
+                <td class="govuk-table__cell">@(risk.TierName ?? "—")</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      }
+
+      @if (focus.Count > 0)
+      {
+        <h3 class="govuk-heading-s govuk-!-margin-top-4">Priority focus</h3>
+        <ul class="govuk-list">
+          @foreach (var row in focus)
+          {
+            <li class="govuk-!-margin-bottom-2">
+              <a class="govuk-link" href="@Url.Action("RiskDetail", "ModernRaid", new { id = row.Id })">@row.ReferenceLabel</a> — score @row.RiskScore
+              @if (row.ReviewOverdue) { <span class="govuk-tag govuk-tag--red govuk-!-margin-left-1">Review overdue</span> }
+              <p class="govuk-body-s govuk-!-margin-bottom-0">@row.Insight</p>
+            </li>
+          }
+        </ul>
+      }
+    </section>
+  </section>
+</section>

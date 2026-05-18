@@ -1,0 +1,408 @@
+@using Compass.Models
+@using Compass.Models.Modern.Work
+@using Compass.ViewModels.Modern
+@model ModernPerformanceCommissionDetailViewModel
+@{
+  ViewData["Title"] = Model.Commission.Name + " — products";
+  var c = Model.Commission;
+  var grouped = Model.GroupedProductRows;
+  var useGroups = grouped is { Count: > 0 };
+
+  var showBaCol = Model.Tab is "businessarea" or "all" && !(useGroups && Model.Tab == "businessarea");
+  var showDirCol = Model.Tab is "directorate" or "all" && !(useGroups && Model.Tab == "directorate");
+
+  var colCount = 2 + (showBaCol ? 1 : 0) + (showDirCol ? 1 : 0) + 2;
+
+  string StatusLabel(CommissionSubmissionStatus s) => s switch
+  {
+    CommissionSubmissionStatus.NotStarted => "Not started",
+    CommissionSubmissionStatus.InProgress => "In progress",
+    CommissionSubmissionStatus.Submitted => "Submitted",
+    CommissionSubmissionStatus.Late => "Late",
+    _ => s.ToString()
+  };
+  bool IsSubmittedView(CommissionSubmissionStatus s) =>
+    s == CommissionSubmissionStatus.Submitted || s == CommissionSubmissionStatus.Late;
+
+  string ClearFiltersHref() =>
+      Url.Action("Commission", "ModernPerformance", new { commissionId = c.Id, tab = Model.Tab }) ?? "#";
+}
+
+@section Breadcrumbs {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernPerformance")">Performance</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">@c.Name</li>
+}
+
+@{
+  var commissionDetailLede = await Html.PartialAsync("_PerformanceCommissionDetailHeaderLede", Model);
+  var commissionDetailActions = await Html.PartialAsync("_PerformanceCommissionDetailHeaderActions", Model);
+}
+@await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+  Caption = "Commission",
+  Title = c.Name,
+  Lede = commissionDetailLede,
+  Actions = commissionDetailActions
+})
+
+@if (TempData["ErrorMessage"] != null)
+{
+ <div class="govuk-error-summary govuk-!-margin-bottom-3" role="alert"><p class="govuk-body">@TempData["ErrorMessage"]</p></div>
+}
+@if (TempData["SuccessMessage"] != null)
+{
+ <div class="govuk-notification-banner govuk-notification-banner--success govuk-!-margin-bottom-3" role="region">
+ <div class="govuk-notification-banner__content"><p class="govuk-body">@TempData["SuccessMessage"]</p></div>
+  </div>
+}
+
+@await Html.PartialAsync("_PerformanceCommissionScopeSubNav", new PerformanceCommissionScopeNavViewModel {
+  CommissionId = c.Id,
+  Tab = Model.Tab,
+  BusinessArea = Model.BusinessAreaFilter,
+  Directorate = Model.DirectorateFilter,
+  Search = Model.Search
+})
+
+<form method="get" action="@Url.Action("Commission", "ModernPerformance", new { commissionId = c.Id })" class="filter-toolbar govuk-!-margin-bottom-3">
+ <input type="hidden" name="tab" value="@Model.Tab" />
+ <div class="filter-toolbar__search-wrap">
+ <label for="perf-commission-search" class="govuk-visually-hidden">Search products</label>
+ <input type="search" name="search" id="perf-commission-search" value="@Model.Search" placeholder="Search title, FIPS id or document id…" class="filter-search" autocomplete="off" aria-label="Search products" />
+ <button type="submit" class="govuk-button govuk-button--secondary filter-toolbar__search-submit">Search</button>
+ </div>
+ <details class="filter-toolbar__details">
+ <summary class="filter-toggle-btn filter-toolbar__filter-summary" aria-controls="perf-commission-filters">
+ <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="flex-shrink:0;" aria-hidden="true"><path d="M1 3h14v1.5l-5 5V14l-4-2V9.5L1 4.5V3z"></path></svg>
+ <span class="filter-toggle-label">Filter</span>
+ </summary>
+ <div class="filter-panel" id="perf-commission-filters">
+ <div class="filter-panel__grid">
+ <div>
+ <label for="perf-filter-ba">Business area</label>
+ <select name="businessArea" id="perf-filter-ba" class="govuk-select">
+ <option value="">All</option>
+ @foreach (var opt in Model.BusinessAreaOptions)
+ {
+   var sel = string.Equals(Model.BusinessAreaFilter, opt, StringComparison.OrdinalIgnoreCase);
+   if (sel)
+   {
+ <option value="@opt" selected>@opt</option>
+   }
+   else
+   {
+ <option value="@opt">@opt</option>
+   }
+ }
+ </select>
+ </div>
+ <div>
+ <label for="perf-filter-dir">Directorate</label>
+ <select name="directorate" id="perf-filter-dir" class="govuk-select">
+ <option value="">All</option>
+ @foreach (var opt in Model.DirectorateOptions)
+ {
+   var sel = string.Equals(Model.DirectorateFilter, opt, StringComparison.OrdinalIgnoreCase);
+   if (sel)
+   {
+ <option value="@opt" selected>@opt</option>
+   }
+   else
+   {
+ <option value="@opt">@opt</option>
+   }
+ }
+ </select>
+ </div>
+ </div>
+ <div class="filter-panel__actions govuk-!-margin-top-3">
+ <button type="submit" class="govuk-button">Apply filters</button>
+ <a class="govuk-link govuk-!-margin-left-3 govuk-link--no-visited-state" href="@ClearFiltersHref()">Clear filters</a>
+ </div>
+ </div>
+ </details>
+</form>
+
+@if (Model.ScopeProductCount > 0 && Model.Rows.Count < Model.ScopeProductCount)
+{
+<p class="dfe-c-body-s dfe-c-text-muted govuk-!-margin-bottom-2">Showing <strong>@Model.Rows.Count</strong> of <strong>@Model.ScopeProductCount</strong> products in this tab (filters applied).</p>
+}
+
+<div id="d-scope" class="tab-pane on perf-commission-scope" role="tabpanel">
+@if (Model.ScopeProductCount == 0)
+{
+ <div class="dfe-f-table-wrapper dfe-c-mt-2" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+    <table class="govuk-table">
+      <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+          <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Product</button></th>
+          <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Phase</button></th>
+          @if (showBaCol)
+          {
+            <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Business area</button></th>
+          }
+          @if (showDirCol)
+          {
+            <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Directorate</button></th>
+          }
+          <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Status</button></th>
+          <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Actions</button></th>
+        </tr>
+      </thead>
+ <tbody class="govuk-table__body">
+ <tr class="govuk-table__row"><td colspan="@colCount" class="dfe-c-body muted">No products in this scope for this commission (check phase/type rules and active published products).</td></tr>
+ </tbody>
+    </table>
+  </div>
+}
+else if (Model.Rows.Count == 0)
+{
+ <div class="dfe-f-table-wrapper dfe-c-mt-2" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+    <table class="govuk-table">
+      <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+          <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Product</button></th>
+          <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Phase</button></th>
+          @if (showBaCol)
+          {
+            <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Business area</button></th>
+          }
+          @if (showDirCol)
+          {
+            <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Directorate</button></th>
+          }
+          <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Status</button></th>
+          <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Actions</button></th>
+        </tr>
+      </thead>
+ <tbody class="govuk-table__body">
+ <tr class="govuk-table__row"><td colspan="@colCount" class="dfe-c-body muted">No products match your search or filters.</td></tr>
+ </tbody>
+    </table>
+  </div>
+}
+else if (useGroups && grouped != null)
+{
+<div class="dfe-f-toggle-group perf-commission-toggle-group govuk-!-margin-bottom-2" data-module="dfe-f-toggle-group">
+ <div class="dfe-f-toggle-group__controls govuk-body-s govuk-!-margin-bottom-2">
+ <button type="button" class="dfe-f-toggle-group__action" data-dfe-toggle-expand-all>Expand all</button>
+ <span class="dfe-f-toggle-group__separator" aria-hidden="true"> · </span>
+ <button type="button" class="dfe-f-toggle-group__action" data-dfe-toggle-collapse-all>Collapse all</button>
+ </div>
+ <div class="dfe-f-toggle-group__items">
+  @for (var gi = 0; gi < grouped.Count; gi++)
+  {
+    var sec = grouped[gi];
+    var panelId = $"perf-cm-{c.Id}-grp-{gi}";
+    var btnId = $"perf-cm-{c.Id}-grp-btn-{gi}";
+ <div class="dfe-f-toggle govuk-!-margin-bottom-3 perf-commission-group-toggle" data-module="dfe-f-toggle">
+ <div class="dfe-f-toggle__title-wrapper">
+ <h2 class="dfe-f-toggle__heading govuk-!-margin-bottom-0">
+ <button type="button" class="dfe-f-toggle__button" aria-expanded="false" aria-controls="@panelId" id="@btnId">
+ <span class="dfe-f-toggle__icon" aria-hidden="true"></span>
+ <span class="dfe-f-toggle__title">@sec.GroupHeading<span class="govuk-visually-hidden">,</span> <span class="govuk-body-s dfe-c-text-muted">@($"({sec.Rows.Count} {(sec.Rows.Count == 1 ? "product" : "products")})")</span></span>
+ </button>
+ </h2>
+ </div>
+ <div id="@panelId" class="dfe-f-toggle__content" hidden>
+ <div class="dfe-f-toggle__body govuk-!-margin-bottom-0">
+ <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+    <table class="govuk-table">
+      <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+          <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Product</button></th>
+          <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Phase</button></th>
+          @if (showBaCol)
+          {
+            <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Business area</button></th>
+          }
+          @if (showDirCol)
+          {
+            <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Directorate</button></th>
+          }
+          <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Status</button></th>
+          <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Actions</button></th>
+        </tr>
+      </thead>
+      <tbody class="govuk-table__body">
+ @foreach (var r in sec.Rows)
+ {
+          var doc = r.Product.DocumentId ?? "";
+          var ba = CommissionReportingProductScope.GetBusinessArea(r.Product);
+          var dir = CommissionReportingProductScope.GetDirectorate(r.Product);
+          <tr class="govuk-table__row">
+            <td class="govuk-table__cell">@r.Product.Title</td>
+            <td class="govuk-table__cell">@r.Product.Phase</td>
+            @if (showBaCol)
+            {
+              <td class="govuk-table__cell">@(ba ?? "—")</td>
+            }
+            @if (showDirCol)
+            {
+              <td class="govuk-table__cell">@(dir ?? "—")</td>
+            }
+ <td class="govuk-table__cell"><span class="@WorkBadgeCss.CommissionSubmissionDfeFrontendBadgeClass(r.Status)">@StatusLabel(r.Status)</span></td>
+            <td class="govuk-table__cell">
+              @if (!string.IsNullOrEmpty(doc))
+              {
+                if (IsSubmittedView(r.Status))
+                {
+ <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("Submission", "ModernPerformance", new { commissionId = c.Id, documentId = doc, returnTab = Model.Tab })">View submission</a>
+                }
+                else
+                {
+ <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("CommissionSubmit", "ModernPerformance", new { commissionId = c.Id, documentId = doc, returnTab = Model.Tab })">Enter metrics</a>
+                }
+              }
+            </td>
+          </tr>
+ }
+      </tbody>
+    </table>
+  </div>
+ </div>
+ </div>
+ </div>
+  }
+ </div>
+</div>
+}
+else
+{
+  if (string.Equals(Model.Tab, "all", StringComparison.OrdinalIgnoreCase))
+  {
+    var allPanelId = $"perf-cm-{c.Id}-all-products";
+    var allBtnId = $"perf-cm-{c.Id}-all-products-btn";
+ <div class="dfe-f-toggle govuk-!-margin-bottom-3 perf-commission-group-toggle dfe-c-mt-2" data-module="dfe-f-toggle">
+ <div class="dfe-f-toggle__title-wrapper">
+ <h2 class="dfe-f-toggle__heading govuk-!-margin-bottom-0">
+ <button type="button" class="dfe-f-toggle__button" aria-expanded="true" aria-controls="@allPanelId" id="@allBtnId">
+ <span class="dfe-f-toggle__icon" aria-hidden="true"></span>
+ <span class="dfe-f-toggle__title">All products<span class="govuk-visually-hidden">,</span> <span class="govuk-body-s dfe-c-text-muted">(@Model.Rows.Count @(Model.Rows.Count == 1 ? "product" : "products"))</span></span>
+ </button>
+ </h2>
+ </div>
+ <div id="@allPanelId" class="dfe-f-toggle__content">
+ <div class="dfe-f-toggle__body govuk-!-margin-bottom-0">
+ <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+    <table class="govuk-table">
+      <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+          <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Product</button></th>
+          <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Phase</button></th>
+          @if (showBaCol)
+          {
+            <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Business area</button></th>
+          }
+          @if (showDirCol)
+          {
+            <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Directorate</button></th>
+          }
+          <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Status</button></th>
+          <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Actions</button></th>
+        </tr>
+      </thead>
+ <tbody class="govuk-table__body">
+        @foreach (var r in Model.Rows)
+        {
+          var doc = r.Product.DocumentId ?? "";
+          var ba = CommissionReportingProductScope.GetBusinessArea(r.Product);
+          var dir = CommissionReportingProductScope.GetDirectorate(r.Product);
+          <tr class="govuk-table__row">
+            <td class="govuk-table__cell">@r.Product.Title</td>
+            <td class="govuk-table__cell">@r.Product.Phase</td>
+            @if (showBaCol)
+            {
+              <td class="govuk-table__cell">@(ba ?? "—")</td>
+            }
+            @if (showDirCol)
+            {
+              <td class="govuk-table__cell">@(dir ?? "—")</td>
+            }
+ <td class="govuk-table__cell"><span class="@WorkBadgeCss.CommissionSubmissionDfeFrontendBadgeClass(r.Status)">@StatusLabel(r.Status)</span></td>
+            <td class="govuk-table__cell">
+              @if (!string.IsNullOrEmpty(doc))
+              {
+                if (IsSubmittedView(r.Status))
+                {
+ <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("Submission", "ModernPerformance", new { commissionId = c.Id, documentId = doc, returnTab = Model.Tab })">View submission</a>
+                }
+                else
+                {
+ <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("CommissionSubmit", "ModernPerformance", new { commissionId = c.Id, documentId = doc, returnTab = Model.Tab })">Enter metrics</a>
+                }
+              }
+            </td>
+          </tr>
+        }
+ </tbody>
+    </table>
+  </div>
+ </div>
+ </div>
+ </div>
+  }
+  else
+  {
+ <div class="dfe-f-table-wrapper dfe-c-mt-2" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+    <table class="govuk-table">
+      <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+          <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Product</button></th>
+          <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Phase</button></th>
+          @if (showBaCol)
+          {
+            <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Business area</button></th>
+          }
+          @if (showDirCol)
+          {
+            <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Directorate</button></th>
+          }
+          <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Status</button></th>
+          <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Actions</button></th>
+        </tr>
+      </thead>
+ <tbody class="govuk-table__body">
+        @foreach (var r in Model.Rows)
+        {
+          var doc = r.Product.DocumentId ?? "";
+          var ba = CommissionReportingProductScope.GetBusinessArea(r.Product);
+          var dir = CommissionReportingProductScope.GetDirectorate(r.Product);
+          <tr class="govuk-table__row">
+            <td class="govuk-table__cell">@r.Product.Title</td>
+            <td class="govuk-table__cell">@r.Product.Phase</td>
+            @if (showBaCol)
+            {
+              <td class="govuk-table__cell">@(ba ?? "—")</td>
+            }
+            @if (showDirCol)
+            {
+              <td class="govuk-table__cell">@(dir ?? "—")</td>
+            }
+ <td class="govuk-table__cell"><span class="@WorkBadgeCss.CommissionSubmissionDfeFrontendBadgeClass(r.Status)">@StatusLabel(r.Status)</span></td>
+            <td class="govuk-table__cell">
+              @if (!string.IsNullOrEmpty(doc))
+              {
+                if (IsSubmittedView(r.Status))
+                {
+ <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("Submission", "ModernPerformance", new { commissionId = c.Id, documentId = doc, returnTab = Model.Tab })">View submission</a>
+                }
+                else
+                {
+ <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("CommissionSubmit", "ModernPerformance", new { commissionId = c.Id, documentId = doc, returnTab = Model.Tab })">Enter metrics</a>
+                }
+              }
+            </td>
+          </tr>
+        }
+ </tbody>
+    </table>
+  </div>
+  }
+}
+</div>

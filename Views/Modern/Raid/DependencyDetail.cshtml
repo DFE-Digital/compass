@@ -1,0 +1,78 @@
+@model Compass.Models.Dependency
+@using Compass.ViewModels.Modern
+@using Microsoft.AspNetCore.Html
+@{
+  ViewData["Title"] = "Dependency #" + Model.Id;
+  var src = ViewBag.SourceTitle as string ?? $"{Model.SourceEntityType} #{Model.SourceEntityId}";
+  var tgt = ViewBag.TargetTitle as string ?? $"{Model.TargetEntityType} #{Model.TargetEntityId}";
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernRaid")">RAID</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dependencies", "ModernRaid")">Dependencies</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">Dependency #@Model.Id</li>
+}
+
+<div class="dfe-c-page modern-work-page">
+  @if (TempData["Message"] is string tm)
+  {
+    <div class="govuk-notification-banner govuk-notification-banner--success" role="region">
+      <div class="govuk-notification-banner__header"><h2 class="govuk-notification-banner__title">Success</h2></div>
+      <div class="govuk-notification-banner__content"><p class="govuk-notification-banner__heading">@tm</p></div>
+    </div>
+  }
+
+  @{
+    var depTitle = "#" + Model.Id + " — " + (Model.LinkTypeLookup?.Label ?? Model.DependencyType ?? "Link");
+    var depActions = new HtmlString($"<div class=\"dfe-c-flex\" style=\"gap:0.5rem;\"><a href=\"{Url.Action("DependencyEdit", "ModernRaid", new { id = Model.Id }) ?? "#"}\" class=\"govuk-button\">Edit</a></div>");
+  }
+  @await Html.PartialAsync("~/Views/Modern/Shared/_ModernPageHeader.cshtml", new ModernPageHeaderViewModel {
+    Caption = "Dependency",
+    Title = depTitle,
+    Actions = depActions
+  })
+
+  <dl class="govuk-summary-list govuk-!-margin-bottom-9">
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Source</dt>
+      <dd class="govuk-summary-list__value">@src</dd>
+    </div>
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Target</dt>
+      <dd class="govuk-summary-list__value">@tgt</dd>
+    </div>
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Link type</dt>
+      <dd class="govuk-summary-list__value">@(Model.LinkTypeLookup?.Label ?? Model.DependencyType ?? "—")</dd>
+    </div>
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Criticality</dt>
+      <dd class="govuk-summary-list__value">@(Model.CriticalityLookup?.Label ?? "—")</dd>
+    </div>
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Status</dt>
+      <dd class="govuk-summary-list__value">@(Model.Status ?? "—")</dd>
+    </div>
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Organisation</dt>
+      <dd class="govuk-summary-list__value">@(Model.Organisation ?? "—")</dd>
+    </div>
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Owner</dt>
+      <dd class="govuk-summary-list__value">@(Model.OwnerUser != null ? (Model.OwnerUser.Name ?? Model.OwnerUser.Email) : "—")</dd>
+    </div>
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Due date</dt>
+      <dd class="govuk-summary-list__value">@(Model.DueDate.HasValue ? Model.DueDate.Value.ToString("d MMM yyyy") : "—")</dd>
+    </div>
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Description</dt>
+      <dd class="govuk-summary-list__value govuk-body">@(string.IsNullOrEmpty(Model.Description) ? "—" : Model.Description)</dd>
+    </div>
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Updated</dt>
+      <dd class="govuk-summary-list__value">@Model.UpdatedAt.ToString("d MMM yyyy HH:mm") UTC</dd>
+    </div>
+  </dl>
+</div>

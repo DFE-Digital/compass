@@ -1,7 +1,11 @@
+using Compass.Attributes;
 using Compass.Controllers;
 using Compass.Data;
 using Compass.Models;
 using Compass.Services;
+using Compass.Services.Aiss;
+using Compass.ViewModels;
+using Compass.ViewModels.Modern;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -15,60 +19,131 @@ public class ModernReportingController : Controller
 {
     private readonly CompassDbContext _context;
     private readonly IMonthlyUpdateService _monthlyUpdateService;
+    private readonly ModernMonthlyReportService _monthlyReportService;
+    private readonly ModernRaidReviewProgressService _raidReviewProgressService;
+    private readonly ModernRaidReportingService _raidReportingService;
+    private readonly ModernRaidReportService _raidReportService;
+    private readonly CommissionReportingAnalyticsService _commissionReportingAnalytics;
+    private readonly IServiceAssessmentApiService _serviceAssessmentApi;
+    private readonly IAissSummaryService _aissSummary;
+    private readonly IConfiguration _configuration;
     private readonly ILogger<ModernReportingController> _logger;
 
     public ModernReportingController(
         CompassDbContext context,
         IMonthlyUpdateService monthlyUpdateService,
+        ModernMonthlyReportService monthlyReportService,
+        ModernRaidReviewProgressService raidReviewProgressService,
+        ModernRaidReportingService raidReportingService,
+        ModernRaidReportService raidReportService,
+        CommissionReportingAnalyticsService commissionReportingAnalytics,
+        IServiceAssessmentApiService serviceAssessmentApi,
+        IAissSummaryService aissSummary,
+        IConfiguration configuration,
         ILogger<ModernReportingController> logger)
     {
         _context = context;
         _monthlyUpdateService = monthlyUpdateService;
+        _monthlyReportService = monthlyReportService;
+        _raidReviewProgressService = raidReviewProgressService;
+        _raidReportingService = raidReportingService;
+        _raidReportService = raidReportService;
+        _commissionReportingAnalytics = commissionReportingAnalytics;
+        _serviceAssessmentApi = serviceAssessmentApi;
+        _aissSummary = aissSummary;
+        _configuration = configuration;
         _logger = logger;
     }
 
-    private static MonthlyUpdateStats CalculateMonthlyUpdateStats(
-        List<Project> projects,
-        int year,
-        int month,
-        IMonthlyUpdateService monthlyUpdateService)
+    private void SetNav(string subNavItem)
     {
-        var totalProjects = projects.Count;
-        var dueDate = monthlyUpdateService.GetMonthlyUpdateDueDate(year, month);
-        var currentDate = DateTime.UtcNow;
-
-        var submitted = 0;
-        var notStarted = 0;
-        var inProgress = 0;
-        var late = 0;
-
-        foreach (var project in projects)
-        {
-            var update = project.MonthlyUpdates?.FirstOrDefault(u => u.Year == year && u.Month == month);
-
-            if (update != null && update.SubmittedAt.HasValue)
-                submitted++;
-            else if (currentDate > dueDate)
-                late++;
-            else if (update != null && !update.SubmittedAt.HasValue)
-                inProgress++;
-            else
-                notStarted++;
-        }
-
-        return new MonthlyUpdateStats
-        {
-            Year = year,
-            Month = month,
-            TotalProjects = totalProjects,
-            Submitted = submitted,
-            NotStarted = notStarted,
-            InProgress = inProgress,
-            Late = late,
-            DueDate = dueDate
-        };
+        ViewBag.MainNavSection = "reporting";
+        ViewBag.SubNavItem = subNavItem;
     }
 
+    /// <summary>Landing URL — redirects to Dashboard.</summary>
+    [HttpGet("")]
+    public IActionResult Index() => RedirectToAction(nameof(Dashboard));
+
+    /// <summary>Reporting dashboard — entry points to report areas.</summary>
+    [HttpGet("dashboard")]
+    public IActionResult Dashboard()
+    {
+        SetNav("reporting-dashboard");
+        return View("~/Views/Modern/Reporting/Dashboard.cshtml", new ModernReportingDashboardViewModel());
+    }
+
+    /// <summary>Monthly submission progress — chart and league tables for monthly return completion.</summary>
+    [HttpGet("monthly-submission-progress")]
+    public async Task<IActionResult> MonthlySubmissionProgress(int? year, int? month, int? businessAreaId, int? directorateId)
+    {
+        try
+        {
+            var model = await _monthlyReportService.BuildSubmissionProgressAsync(year, month, businessAreaId, directorateId);
+            SetNav("reporting-monthly-submission");
+            return View("~/Views/Modern/Reporting/MonthlySubmissionProgress.cshtml", model);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading monthly submission progress report");
+            TempData["ErrorMessage"] = "An error occurred while loading monthly submission progress. Please try again.";
+            SetNav("reporting-monthly-submission");
+            return View("~/Views/Modern/Reporting/MonthlySubmissionProgress.cshtml", new ModernMonthlySubmissionProgressViewModel
+            {
+                MinReportYear = 2026,
+                MaxReportYear = Math.Max(2026, DateTime.UtcNow.Year)
+            });
+        }
+    }
+
+    /// <summary>RAID monthly review progress — chart and league tables for review completion.</summary>
+    [HttpGet("raid-review-progress")]
+    [ServiceFilter(typeof(Compass.Filters.RaidFeatureGateFilter))]
+    public async Task<IActionResult> RaidReviewProgress(int? year, int? month, int? businessAreaId, int? directorateId)
+    {
+        try
+        {
+            var model = await _raidReviewProgressService.BuildAsync(year, month, businessAreaId, directorateId);
+            SetNav("reporting-raid-review");
+            return View("~/Views/Modern/Reporting/RaidReviewProgress.cshtml", model);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading RAID review progress report");
+            TempData["ErrorMessage"] = "An error occurred while loading the RAID review report. Please try again.";
+            SetNav("reporting-raid-review");
+            return View("~/Views/Modern/Reporting/RaidReviewProgress.cshtml", new ModernRaidReviewProgressViewModel
+            {
+                MinReportYear = 2026,
+                MaxReportYear = Math.Max(2026, DateTime.UtcNow.Year)
+            });
+        }
+    }
+
+    /// <summary>Monthly reporting dashboard — portfolio health, milestones, RAG/priority, and business area summary.</summary>
+    [HttpGet("monthly-update")]
+    public async Task<IActionResult> MonthlyUpdate(int? year, int? month, int? businessAreaId, int? directorateId)
+    {
+        try
+        {
+            var model = await _monthlyReportService.BuildDashboardAsync(year, month, businessAreaId, directorateId);
+            SetNav("reporting-monthly");
+            return View("~/Views/Modern/Reporting/MonthlyUpdate.cshtml", model);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading modern monthly report dashboard");
+            TempData["ErrorMessage"] = "An error occurred while loading the monthly report. Please try again.";
+            SetNav("reporting-monthly");
+            return View("~/Views/Modern/Reporting/MonthlyUpdate.cshtml", new ModernMonthlyReportDashboardViewModel
+            {
+                MinReportYear = 2026,
+                MaxReportYear = Math.Max(2026, DateTime.UtcNow.Year)
+            });
+        }
+    }
+
+    /// <summary>Full monthly update overview with stats (existing logic).</summary>
     [HttpGet("monthly-update-overview")]
     public async Task<IActionResult> MonthlyUpdateOverview(int? year, int? month, string? status)
     {
@@ -196,8 +271,7 @@ public class ModernReportingController : Controller
             ViewBag.NextMonth = nextMonthMonth;
             ViewBag.HasNextMonth = nextMonthAllowed;
 
-            ViewBag.MainNavSection = "work";
-            ViewBag.SubNavItem = "work-dashboard";
+            SetNav("reporting-monthly");
 
             return View("~/Views/Modern/Reporting/MonthlyUpdateOverview.cshtml");
         }
@@ -205,9 +279,442 @@ public class ModernReportingController : Controller
         {
             _logger.LogError(ex, "Error loading modern monthly update overview");
             TempData["ErrorMessage"] = "An error occurred while loading reporting compliance. Please try again.";
-            ViewBag.MainNavSection = "work";
-            ViewBag.SubNavItem = "work-dashboard";
+            SetNav("reporting-monthly");
             return View("~/Views/Modern/Reporting/MonthlyUpdateOverview.cshtml");
         }
+    }
+
+    /// <summary>Performance commissions — completed rounds, return rates, metric completion, and business area breakdown (catalogue scope).</summary>
+    [HttpGet("performance")]
+    public async Task<IActionResult> Performance(int? commissionId, int? businessAreaId, int? directorateId, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var model = await _commissionReportingAnalytics.BuildPerformancePageAsync(commissionId, businessAreaId, directorateId, cancellationToken);
+            SetNav("reporting-performance");
+            return View("~/Views/Modern/Reporting/Performance.cshtml", model);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading performance commission reporting");
+            TempData["ErrorMessage"] = "Could not load performance commission reporting. Please try again.";
+            SetNav("reporting-performance");
+            return View("~/Views/Modern/Reporting/Performance.cshtml", new ModernReportingPerformancePageViewModel());
+        }
+    }
+
+    /// <summary>Published service assessments from SAS: portfolio summary, published list, and actions by standard.</summary>
+    [HttpGet("assessments")]
+    public async Task<IActionResult> Assessments(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var summaryTask = _serviceAssessmentApi.GetPublishedSummaryAsync(cancellationToken);
+            var byStandardTask = _serviceAssessmentApi.GetPublishedActionsByStandardAsync(cancellationToken);
+            var allWithActionsTask = _serviceAssessmentApi.GetActionsByStandardAsync();
+            var assessorsTask = _serviceAssessmentApi.GetAssessorsSummaryAsync(cancellationToken);
+            await Task.WhenAll(summaryTask, byStandardTask, allWithActionsTask, assessorsTask);
+
+            var summary = await summaryTask;
+            var byStandard = await byStandardTask;
+            var allWithActions = await allWithActionsTask;
+            var assessorsSummary = await assessorsTask;
+
+            var reportBase = (_configuration["FipsSync:Sas:ReportBaseUrl"] ?? "https://service-assessments.education.gov.uk/reports/report")
+                .TrimEnd('/');
+
+            var vm = new ModernServiceAssessmentsReportViewModel
+            {
+                SummaryLoadFailed = summary is null,
+                SasReportBaseUrl = reportBase
+            };
+
+            if (summary?.Summaries != null)
+            {
+                var s = summary.Summaries;
+                vm.TotalAssessments = s.TotalAssessments;
+                vm.ByType = SortCountDictionary(s.ByType);
+                vm.ByPhase = OrderPhases(s.ByPhase);
+                vm.ByYear = SortCountDictionary(s.ByYear, yearSort: true, yearAscending: true);
+            }
+
+            if (summary?.Assessments is { Count: > 0 } list)
+            {
+                vm.ByOutcome = OrderRagOutcomeRows(CountOutcomesForServiceAssessmentsOnly(list));
+
+                var rows = list
+                    .Select(a => new SasAssessmentListItem
+                    {
+                        AssessmentId = a.AssessmentID,
+                        Name = a.Name,
+                        Type = a.Type,
+                        Phase = a.Phase,
+                        Outcome = a.Outcome,
+                        Portfolio = a.Portfolio,
+                        AssessmentDate = a.AssessmentDateTime
+                    })
+                    .OrderByDescending(x => x.AssessmentDate)
+                    .ThenBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                vm.AssessmentRows = rows;
+                vm.AssessmentsGroupedByType = rows
+                    .GroupBy(x => string.IsNullOrWhiteSpace(x.Type) ? "Other" : x.Type!.Trim(), StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(g => AssessmentTypeSortKey(g.Key))
+                    .ThenBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
+                    .Select(g => new SasAssessmentsTypeGroup
+                    {
+                        TypeLabel = g.Key,
+                        Items = g
+                            .OrderByDescending(x => x.AssessmentDate)
+                            .ThenBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
+                            .ToList()
+                    })
+                    .ToList();
+            }
+
+            {
+                var (stdRows, outcomeDetail) = ServiceAssessmentStandardActionOutcomeBuilder.Build(
+                    byStandard,
+                    allWithActions,
+                    summary?.Assessments);
+                vm.StandardActionRows = stdRows;
+                vm.ServiceStandardOutcomeBreakdownAvailable = outcomeDetail;
+            }
+
+            vm.ActionsByStandardLoadFailed = byStandard is null && allWithActions is null;
+
+            vm.StandardsAnalysis = ServiceAssessmentStandardsAnalyticsBuilder.Build(
+                allWithActions,
+                summary?.Assessments,
+                vm.StandardActionRows,
+                vm.ServiceStandardOutcomeBreakdownAvailable);
+
+            vm.AssessorAnalysis = ServiceAssessmentAssessorAnalyticsBuilder.Build(assessorsSummary);
+
+            if (vm.SummaryLoadFailed || (byStandard is null && allWithActions is null))
+            {
+                TempData["ErrorMessage"] =
+                    "Part of the service assessment data could not be loaded. Check the SAS connection or try again.";
+            }
+
+            SetNav("reporting-assessments");
+            return View("~/Views/Modern/Reporting/Assessments.cshtml", vm);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading service assessments report");
+            TempData["ErrorMessage"] = "Could not load service assessments. Please try again.";
+            SetNav("reporting-assessments");
+            return View("~/Views/Modern/Reporting/Assessments.cshtml", new ModernServiceAssessmentsReportViewModel
+            {
+                SummaryLoadFailed = true,
+                ActionsByStandardLoadFailed = true
+            });
+        }
+    }
+
+    /// <summary>AISS portfolio summary and issue trend charts (accessibility report).</summary>
+    [HttpGet("accessibility")]
+    [RequireCentralOpsAdmin]
+    public async Task<IActionResult> Accessibility(CancellationToken cancellationToken = default)
+    {
+        SetNav("reporting-accessibility");
+        var summaryTask = _aissSummary.GetSummaryAsync(cancellationToken);
+        var trendsTask = _aissSummary.GetCriterionTrendsAsync(12, cancellationToken);
+        await Task.WhenAll(summaryTask, trendsTask);
+        var (summary, error) = await summaryTask;
+        var (trends, trendsError) = await trendsTask;
+        var vm = new ModernOperationsAccessibilityViewModel
+        {
+            Summary = summary,
+            Trends = trends,
+            ErrorMessage = error,
+            TrendsError = trendsError
+        };
+        return View("~/Views/Modern/Reporting/Accessibility.cshtml", vm);
+    }
+
+    private static readonly string[] DeliveryPhaseOrder =
+    [
+        "Discovery", "Alpha", "Private Beta", "Public Beta", "Live"
+    ];
+
+    /// <summary>Green → Amber → Red, then other labels alphabetically — consistent legend and table order.</summary>
+    private static List<KeyValuePair<string, int>> OrderRagOutcomeRows(
+        List<KeyValuePair<string, int>> rows)
+    {
+        if (rows.Count == 0)
+        {
+            return rows;
+        }
+
+        static int OutcomeSortKey(string key)
+        {
+            var t = (key ?? string.Empty).Trim();
+            if (t.Equals("Green", StringComparison.OrdinalIgnoreCase))
+            {
+                return 0;
+            }
+
+            if (t.Equals("Amber", StringComparison.OrdinalIgnoreCase)
+                || t.Contains("Amber", StringComparison.OrdinalIgnoreCase))
+            {
+                return 1;
+            }
+
+            if (t.Equals("Red", StringComparison.OrdinalIgnoreCase))
+            {
+                return 2;
+            }
+
+            if (t.Equals("—", StringComparison.Ordinal) || t.Equals("–", StringComparison.Ordinal))
+            {
+                return 50;
+            }
+
+            return 10;
+        }
+
+        return rows
+            .OrderBy(x => OutcomeSortKey(x.Key))
+            .ThenBy(x => x.Key, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private static int AssessmentTypeSortKey(string typeLabel)
+    {
+        if (string.Equals(typeLabel.Trim(), "Service assessment", StringComparison.OrdinalIgnoreCase))
+        {
+            return 0;
+        }
+
+        return 1;
+    }
+
+    private static List<KeyValuePair<string, int>> CountOutcomesForServiceAssessmentsOnly(
+        IEnumerable<SasPublishedAssessmentRow> list)
+    {
+        var d = list
+            .Where(r => string.Equals(r.Type?.Trim(), "Service assessment", StringComparison.OrdinalIgnoreCase))
+            .GroupBy(
+                r => string.IsNullOrWhiteSpace(r.Outcome) ? "—" : r.Outcome!.Trim(),
+                StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase);
+        return SortCountDictionary(d, yearSort: false);
+    }
+
+    /// <summary>Phases: Discovery, Alpha, Private Beta, Public Beta, Live, then any other known labels.</summary>
+    private static List<KeyValuePair<string, int>> OrderPhases(Dictionary<string, int>? d)
+    {
+        if (d is null or { Count: 0 })
+        {
+            return new List<KeyValuePair<string, int>>();
+        }
+
+        var result = new List<KeyValuePair<string, int>>();
+        var matchedKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var canonical in DeliveryPhaseOrder)
+        {
+            var p = d.FirstOrDefault(
+                x => !matchedKeys.Contains(x.Key) &&
+                     string.Equals(x.Key.Trim(), canonical, StringComparison.OrdinalIgnoreCase));
+            if (!string.IsNullOrEmpty(p.Key))
+            {
+                result.Add(new KeyValuePair<string, int>(canonical, p.Value));
+                matchedKeys.Add(p.Key);
+            }
+        }
+
+        foreach (var p in d.OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase))
+        {
+            if (matchedKeys.Contains(p.Key)) continue;
+            result.Add(p);
+            matchedKeys.Add(p.Key);
+        }
+
+        return result;
+    }
+
+    private static List<KeyValuePair<string, int>> SortCountDictionary(
+        Dictionary<string, int>? d,
+        bool yearSort = false,
+        bool yearAscending = true)
+    {
+        if (d is null or { Count: 0 })
+        {
+            return new List<KeyValuePair<string, int>>();
+        }
+
+        if (yearSort)
+        {
+            return yearAscending
+                ? d.OrderBy(p => int.TryParse(p.Key, out var y) ? y : 9999).ToList()
+                : d.OrderByDescending(p => int.TryParse(p.Key, out var y) ? y : 0).ToList();
+        }
+
+        return d
+            .OrderByDescending(p => p.Value)
+            .ThenBy(p => p.Key, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    /// <summary>Canonical detail URL redirects to the unified performance report with <c>commissionId</c>.</summary>
+    [HttpGet("performance/{commissionId:int}")]
+    public IActionResult PerformanceCommission(int commissionId)
+    {
+        return RedirectToAction(nameof(Performance), new { commissionId });
+    }
+
+    /// <summary>Legacy URL — consolidated into <see cref="Raid"/>.</summary>
+    [HttpGet("risk")]
+    [ServiceFilter(typeof(Compass.Filters.RaidFeatureGateFilter))]
+    public IActionResult Risk() => RedirectToAction(nameof(Raid), new { tab = "risks" });
+
+    /// <summary>Design Decision Records (DDR) reporting (§14). Gated by the DDR feature flag.</summary>
+    [HttpGet("design-decision-records")]
+    [ServiceFilter(typeof(Compass.Filters.DdrFeatureGateFilter))]
+    public async Task<IActionResult> DesignDecisionRecords(CancellationToken cancellationToken = default)
+    {
+        SetNav("reporting-ddr");
+
+        try
+        {
+            var monthStart = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1);
+            var today = DateTime.UtcNow.Date;
+            var openStatuses = new[] { "Proposed", "In use", "Approved", "Under review" };
+
+            var totalDdrs = await _context.DesignDecisionRecords.AsNoTracking()
+                .CountAsync(r => r.DeletedAt == null, cancellationToken);
+            var thisMonth = await _context.DesignDecisionRecords.AsNoTracking()
+                .CountAsync(r => r.DeletedAt == null && r.CreatedAt >= monthStart, cancellationToken);
+
+            var byStatus = await _context.DesignDecisionRecords.AsNoTracking()
+                .Where(r => r.DeletedAt == null)
+                .GroupBy(r => r.Status)
+                .Select(g => new { g.Key, Count = g.Count() })
+                .ToListAsync(cancellationToken);
+            var byCategory = await _context.DesignDecisionRecords.AsNoTracking()
+                .Where(r => r.DeletedAt == null)
+                .GroupBy(r => r.Category)
+                .Select(g => new { g.Key, Count = g.Count() })
+                .ToListAsync(cancellationToken);
+
+            var deviationsByType = await _context.DesignDecisionRecords.AsNoTracking()
+                .Where(r => r.DeletedAt == null && r.DeviationFlag && r.DeviationType != null)
+                .GroupBy(r => r.DeviationType)
+                .Select(g => new { g.Key, Count = g.Count() })
+                .ToListAsync(cancellationToken);
+            var deviationsCount = await _context.DesignDecisionRecords.AsNoTracking()
+                .CountAsync(r => r.DeletedAt == null && r.DeviationFlag, cancellationToken);
+            var overdueCount = await _context.DesignDecisionRecords.AsNoTracking()
+                .CountAsync(r => r.DeletedAt == null
+                    && r.ReviewDate != null && r.ReviewDate < today
+                    && openStatuses.Contains(r.Status), cancellationToken);
+            var retroCount = await _context.DesignDecisionRecords.AsNoTracking()
+                .CountAsync(r => r.DeletedAt == null && r.RetrospectiveRecord, cancellationToken);
+
+            var insightCounts = await _context.DdrInsightClassifications.AsNoTracking()
+                .GroupBy(c => c.Classification)
+                .Select(g => new { g.Key, Count = g.Count() })
+                .ToListAsync(cancellationToken);
+
+            var productsWithDdrs = await _context.DdrProductLinks.AsNoTracking()
+                .Select(l => l.FipsProductId).Distinct().CountAsync(cancellationToken);
+            var totalProducts = await _context.CMDBProducts.AsNoTracking()
+                .CountAsync(p => p.Status == Compass.Models.Fips.CMDBProductStatus.Active, cancellationToken);
+
+            var model = new Compass.ViewModels.Modern.Ddr.DdrReportingViewModel
+            {
+                TotalDdrs = totalDdrs,
+                DdrsThisMonth = thisMonth,
+                ByStatus = byStatus.ToDictionary(x => x.Key ?? "(unknown)", x => x.Count),
+                ByCategory = byCategory.ToDictionary(x => x.Key ?? "(unknown)", x => x.Count),
+                DeviationsByType = deviationsByType.ToDictionary(x => x.Key ?? "(unknown)", x => x.Count),
+                DeviationsCount = deviationsCount,
+                OverdueReviewCount = overdueCount,
+                RetrospectiveCount = retroCount,
+                InsightCounts = insightCounts.ToDictionary(x => x.Key ?? "(unknown)", x => x.Count),
+                ProductsWithDdrs = productsWithDdrs,
+                TotalProducts = totalProducts,
+            };
+            return View("~/Views/Modern/Reporting/DesignDecisionRecords.cshtml", model);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading DDR reporting dashboard");
+            TempData["ErrorMessage"] = "Could not load Design Decision Records reporting. Please try again.";
+            return View("~/Views/Modern/Reporting/DesignDecisionRecords.cshtml",
+                new Compass.ViewModels.Modern.Ddr.DdrReportingViewModel());
+        }
+    }
+
+    /// <summary>RAID analytics — risk/issue heatmaps, trends, and portfolio signals.</summary>
+    [HttpGet("raid")]
+    [ServiceFilter(typeof(Compass.Filters.RaidFeatureGateFilter))]
+    public async Task<IActionResult> Raid(
+        string? tab,
+        int? businessAreaId,
+        int? directorateId,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var model = await _raidReportService.BuildAsync(
+                tab,
+                businessAreaId,
+                directorateId,
+                cancellationToken);
+            SetNav("reporting-raid");
+            return View("~/Views/Modern/Reporting/Raid.cshtml", model);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading RAID report");
+            TempData["ErrorMessage"] = "Could not load the RAID report. Please try again.";
+            SetNav("reporting-raid");
+            return View("~/Views/Modern/Reporting/Raid.cshtml", new ModernRaidReportViewModel());
+        }
+    }
+
+    private static MonthlyUpdateStats CalculateMonthlyUpdateStats(
+        List<Project> projects,
+        int year,
+        int month,
+        IMonthlyUpdateService monthlyUpdateService)
+    {
+        var totalProjects = projects.Count;
+        var dueDate = monthlyUpdateService.GetMonthlyUpdateDueDate(year, month);
+        var currentDate = DateTime.UtcNow;
+
+        var submitted = 0;
+        var notStarted = 0;
+        var inProgress = 0;
+        var late = 0;
+
+        foreach (var project in projects)
+        {
+            var update = project.MonthlyUpdates?.FirstOrDefault(u => u.Year == year && u.Month == month);
+
+            if (update != null && update.SubmittedAt.HasValue)
+                submitted++;
+            else if (currentDate > dueDate)
+                late++;
+            else if (update != null && !update.SubmittedAt.HasValue)
+                inProgress++;
+            else
+                notStarted++;
+        }
+
+        return new MonthlyUpdateStats
+        {
+            Year = year,
+            Month = month,
+            TotalProjects = totalProjects,
+            Submitted = submitted,
+            NotStarted = notStarted,
+            InProgress = inProgress,
+            Late = late,
+            DueDate = dueDate
+        };
     }
 }

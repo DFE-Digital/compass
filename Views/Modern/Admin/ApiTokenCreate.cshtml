@@ -1,0 +1,84 @@
+@using Compass.ViewModels.Modern
+@using Microsoft.AspNetCore.Html
+@{
+    ViewData["Title"] = "Create API token";
+}
+
+@section Breadcrumbs {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernAdmin")">Admin</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernAdmin", new { panel = "api-tokens" })">API tokens</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">Create token</li>
+}
+
+<div class="admin-hub">
+
+ @await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+   Caption = "API tokens",
+   Title = "Create API token",
+   Lede = new HtmlString("<p class=\"govuk-body govuk-!-margin-bottom-0\">Create a token for service-to-service access. You will be able to set permissions on the next screen.</p>")
+ })
+
+ @if (ViewBag.AdminError != null)
+ {
+ <div class="govuk-error-summary" role="alert" data-module="govuk-error-summary" style="margin-bottom:1.5rem;">
+  <h2 class="govuk-error-summary__title">There is a problem</h2>
+  <div class="govuk-error-summary__body">@ViewBag.AdminError</div>
+ </div>
+ }
+
+ <div class="govuk-grid-row">
+  <div class="govuk-grid-column-two-thirds">
+
+   <div class="dfe-c-card dfe-c-card--plain" style="margin-bottom:1.5rem;">
+    <form method="post" action="@Url.Action("ApiTokenCreate", "ModernAdmin")" novalidate>
+     @Html.AntiForgeryToken()
+
+     <div class="govuk-form-group">
+      <label class="govuk-label govuk-label--s" for="name">Token name</label>
+      <div class="govuk-hint" id="name-hint">Use a name that clearly identifies the integration, for example the product or system using this token.</div>
+      <input class="govuk-input" id="name" name="name" type="text" maxlength="200" required aria-describedby="name-hint" autocomplete="off" />
+     </div>
+
+     <div class="govuk-form-group">
+      <label class="govuk-label govuk-label--s" for="description">Description (optional)</label>
+      <textarea class="govuk-textarea" id="description" name="description" rows="3" maxlength="1000" aria-describedby="description-hint"></textarea>
+      <div class="govuk-hint" id="description-hint">What this token is for — helps other administrators in future.</div>
+     </div>
+
+     <div class="govuk-form-group">
+      <label class="govuk-label govuk-label--s" for="expiresAt">Expiry date (optional)</label>
+      <div class="govuk-hint" id="expiresAt-hint">Leave blank for a token that does not expire automatically.</div>
+      <input class="govuk-input govuk-!-width-one-third" id="expiresAt" name="expiresAt" type="date" min="@DateTime.UtcNow.AddDays(1).ToString("yyyy-MM-dd")" aria-describedby="expiresAt-hint" />
+     </div>
+
+     <div class="govuk-inset-text govuk-!-margin-bottom-4">
+      After the token is created, copy the value on the next page immediately. It cannot be shown in full again.
+     </div>
+
+     <div class="govuk-button-group">
+      <button type="submit" class="govuk-button" data-module="govuk-button">Create token</button>
+      <a href="@Url.Action("Index", "ModernAdmin", new { panel = "api-tokens" })" class="govuk-button govuk-button--secondary">Cancel</a>
+     </div>
+    </form>
+   </div>
+  </div>
+
+  <div class="govuk-grid-column-one-third">
+   <div class="dfe-c-card dfe-c-card--plain" style="margin-bottom:1.5rem;">
+    <h2 class="govuk-heading-s">About API tokens</h2>
+    <p class="govuk-body-s">API tokens let external services call Compass data over HTTPS using a bearer token. Grant only the permissions the integration needs.</p>
+   </div>
+   <div class="dfe-c-card dfe-c-card--plain">
+    <h2 class="govuk-heading-s">Good practice</h2>
+    <ul class="govuk-list govuk-list--bullet govuk-!-font-size-16">
+     <li>Store tokens in secure configuration, not in source code</li>
+     <li>Rotate or recycle if a token may have been exposed</li>
+     <li>Delete tokens when an integration is retired</li>
+    </ul>
+    <p class="govuk-body-s govuk-!-margin-top-2 govuk-!-margin-bottom-0">Tokens are prefixed with <code>cps_</code> to identify them as Compass tokens.</p>
+   </div>
+  </div>
+ </div>
+
+</div>

@@ -1,0 +1,62 @@
+@model FipsProductDetailViewModel
+@{
+  string SasOutcomeBadgeModifier(string? o) => o switch
+  {
+    { } s when s.Equals("Green", StringComparison.OrdinalIgnoreCase) => "dfe-f-badge--green",
+    { } s when s.Equals("Amber", StringComparison.OrdinalIgnoreCase) => "dfe-f-badge--orange",
+    { } s when s.Equals("Red", StringComparison.OrdinalIgnoreCase) => "dfe-f-badge--red",
+    _ => "dfe-f-badge--grey"
+  };
+}
+
+<div id="d-fips-assurance" class="tab-pane @(Model.ActiveDetailTab == "assurance" ? "on" : "")" role="tabpanel">
+  <h2 class="govuk-heading-m govuk-!-margin-top-0">Assurance</h2>
+  <p class="govuk-body govuk-!-margin-bottom-4">Service assessments from the Service Assessment Service (SAS) linked to this product.</p>
+
+  @if (Model.ServiceAssessments.Count == 0)
+  {
+    <p class="govuk-body govuk-!-margin-bottom-0">No service assessments are linked to this product in SAS.</p>
+  }
+  else
+  {
+    <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+      <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+      <table class="govuk-table govuk-!-margin-bottom-0">
+        <thead class="govuk-table__head">
+          <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Type</button></th>
+            <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Phase</button></th>
+            <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Outcome</button></th>
+            <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Assessment date</button></th>
+            <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Report</button></th>
+          </tr>
+        </thead>
+        <tbody class="govuk-table__body">
+          @foreach (var row in Model.ServiceAssessments)
+          {
+            <tr class="govuk-table__row">
+              <td class="govuk-table__cell">@(row.Type ?? "—")</td>
+              <td class="govuk-table__cell">@(row.Phase ?? "—")</td>
+              <td class="govuk-table__cell">
+                @if (!string.IsNullOrEmpty(row.Outcome))
+                {
+                  <span class="dfe-f-badge dfe-f-badge--small @SasOutcomeBadgeModifier(row.Outcome)">@row.Outcome</span>
+                }
+                else
+                {
+                  <span class="govuk-body">—</span>
+                }
+              </td>
+              <td class="govuk-table__cell">
+                @(row.AssessmentDate is { } ad ? ad.ToString("d MMM yyyy", System.Globalization.CultureInfo.GetCultureInfo("en-GB")) : "—")
+              </td>
+              <td class="govuk-table__cell">
+                <a class="govuk-link govuk-link--no-visited-state" href="@row.ReportUrl" rel="noopener noreferrer" target="_blank">View report<span class="govuk-visually-hidden"> (opens in new tab)</span></a>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</div>

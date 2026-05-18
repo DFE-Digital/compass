@@ -1,0 +1,558 @@
+@model Compass.ViewModels.Modern.ModernRaidRiskEditorForm
+@using Compass.Models
+@using Compass.Models.Modern.Work
+@using Compass.ViewModels.Modern
+@using Microsoft.AspNetCore.Html
+@{
+  ViewData["Title"] = ViewBag.EditorTitle as string ?? "Risk";
+  var lh = ViewBag.RiskLikelihoodOptions as List<RiskIssueNamedIntOption> ?? new List<RiskIssueNamedIntOption>();
+  var imp = ViewBag.RiskImpactLevelOptions as List<RiskIssueNamedIntOption> ?? new List<RiskIssueNamedIntOption>();
+  var px = ViewBag.RiskProximityOptions as List<RiskIssueNamedIntOption> ?? new List<RiskIssueNamedIntOption>();
+  var cat = ViewBag.RiskCategoryOptions as List<RiskIssueNamedIntOption> ?? new List<RiskIssueNamedIntOption>();
+  var divs = ViewBag.DivisionOptions as List<RiskIssueNamedIntOption> ?? new List<RiskIssueNamedIntOption>();
+  var baOpts = ViewBag.BusinessAreaOptions as List<RiskIssueNamedIntOption> ?? new List<RiskIssueNamedIntOption>();
+  var st = ViewBag.RiskStatusOptions as List<RiskIssueNamedIntOption> ?? new List<RiskIssueNamedIntOption>();
+  var pr = ViewBag.RiskPriorityOptions as List<RiskIssueNamedIntOption> ?? new List<RiskIssueNamedIntOption>();
+  var rt = ViewBag.RiskTreatmentOptions as List<RiskIssueNamedIntOption> ?? new List<RiskIssueNamedIntOption>();
+  var tier = ViewBag.RiskTierOptions as List<RiskIssueNamedIntOption> ?? new List<RiskIssueNamedIntOption>();
+  var pj = ViewBag.ProjectOptions as List<RiskIssueNamedIntOption> ?? new List<RiskIssueNamedIntOption>();
+  var fp = ViewBag.FipsProductOptions as List<RiskIssueNamedIntOption> ?? new List<RiskIssueNamedIntOption>();
+  var assoc = Model.AssociationKind ?? "";
+  var isEdit = Model.Id.HasValue;
+  var ms = ViewData.ModelState;
+  var opsMode = ViewBag.OperationsRiskEdit as bool? == true;
+  var opsFormUrl = ViewBag.OperationsFormPostUrl as string;
+  var opsListUrl = ViewBag.OperationsListUrl as string;
+  var opsSummary = ViewBag.OperationsRiskSummary as OperationsRiskEditorSummaryVm;
+  var workCtx = ViewBag.RaidRiskEditorWorkItemContext as RaidRiskEditorWorkItemContext;
+  string? formPostAction;
+  if (workCtx != null && !isEdit)
+    formPostAction = workCtx.FormPostAction;
+  else if (opsMode && isEdit && !string.IsNullOrEmpty(opsFormUrl))
+    formPostAction = opsFormUrl;
+  else if (isEdit)
+    formPostAction = Url.Action("RiskEditPost", "ModernRaid", new { id = Model!.Id!.Value });
+  else
+    formPostAction = Url.Action("RiskCreatePost", "ModernRaid");
+
+  string? RaidErr(string key) =>
+      ms.TryGetValue(key, out var stErr) && stErr!.Errors.Count > 0 ? stErr.Errors[0].ErrorMessage : null;
+}
+
+@section Breadcrumbs {
+  @if (workCtx != null)
+  {
+    <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+    <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernWork")">Work</a></li>
+    <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@workCtx.WorkDetailUrl">@workCtx.WorkTitle</a></li>
+    <li class="govuk-breadcrumbs__list-item" aria-current="page">@ViewData["Title"]</li>
+  }
+  else
+  {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  @if (opsMode)
+  {
+    <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernOperations")">Operations</a></li>
+    <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@(string.IsNullOrEmpty(opsListUrl) ? Url.Action("RaidEscalations", "ModernOperations", new { tab = "active" }) : opsListUrl)">RAID</a></li>
+  }
+  else
+  {
+    <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernRaid")">RAID</a></li>
+    <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Risks", "ModernRaid")">Risks</a></li>
+  }
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">@ViewData["Title"]</li>
+  }
+}
+
+@{
+  var workItemChrome = ViewBag.WorkItem as WorkItem;
+}
+@if (workItemChrome != null)
+{
+  @await Html.PartialAsync("~/Views/Modern/Shared/_WorkItemChrome.cshtml", workItemChrome)
+}
+
+<div id="sc-raid-risk-editor" class="modern-work-page@(opsMode ? " modern-operations-raid-escalations" : "")">
+<p class="dfe-c-body govuk-!-margin-bottom-3">
+  <a href="@(workCtx != null ? workCtx.CancelUrl : (opsMode && !string.IsNullOrEmpty(opsListUrl) ? opsListUrl : (isEdit ? Url.Action("RiskDetail", "ModernRaid", new { id = Model.Id }) : Url.Action("Risks", "ModernRaid"))))" class="dfe-c-link">← @(workCtx != null ? "Back to risks" : (opsMode ? "Back to Active risks" : (isEdit ? "Back to risk" : "Back to risks")))</a>
+</p>
+
+@{
+  var editorTitleStr = ViewBag.EditorTitle as string ?? "";
+  var riskEditorLede = opsMode
+    ? "Update any field including risk tier. A reason is required and is recorded in the risk notes."
+    : workCtx != null
+    ? "Use the same RAID register fields as when adding a risk from the RAID area. This risk is recorded against the current work item."
+    : "Record or update a risk for the RAID register. Associate it with a work item, a service register product, or organisation-wide scope.";
+  var headerCaption = opsMode ? "Operations · RAID" : (workCtx != null ? "Work item" : "RAID");
+}
+@await Html.PartialAsync("~/Views/Modern/Shared/_ModernPageHeader.cshtml", new ModernPageHeaderViewModel {
+  Caption = headerCaption,
+  Title = editorTitleStr,
+  Lede = new HtmlString($"<p class=\"govuk-body govuk-!-margin-bottom-0\">{riskEditorLede}</p>")
+})
+
+@if (opsMode && isEdit && opsSummary != null)
+{
+  <section class="govuk-!-margin-bottom-4" aria-labelledby="raid-ops-edit-summary-h">
+    <h2 class="govuk-heading-m govuk-!-margin-bottom-2" id="raid-ops-edit-summary-h">Risk record</h2>
+    <dl class="govuk-summary-list govuk-summary-list--no-border">
+      <div class="govuk-summary-list__row">
+        <dt class="govuk-summary-list__key">Reference</dt>
+        <dd class="govuk-summary-list__value dfe-c-mono">@opsSummary.Reference</dd>
+      </div>
+      <div class="govuk-summary-list__row">
+        <dt class="govuk-summary-list__key">Title</dt>
+        <dd class="govuk-summary-list__value">@opsSummary.Title</dd>
+      </div>
+      <div class="govuk-summary-list__row">
+        <dt class="govuk-summary-list__key">Tier</dt>
+        <dd class="govuk-summary-list__value">@(string.IsNullOrWhiteSpace(opsSummary.TierName) ? "—" : opsSummary.TierName)</dd>
+      </div>
+      <div class="govuk-summary-list__row">
+        <dt class="govuk-summary-list__key">Status</dt>
+        <dd class="govuk-summary-list__value">@(string.IsNullOrWhiteSpace(opsSummary.StatusLabel) ? "—" : opsSummary.StatusLabel)</dd>
+      </div>
+      <div class="govuk-summary-list__row">
+        <dt class="govuk-summary-list__key">Inherent (score @opsSummary.RiskScore)</dt>
+        <dd class="govuk-summary-list__value">@opsSummary.InherentLabel</dd>
+      </div>
+    </dl>
+  </section>
+}
+
+<div class="govuk-grid-row">
+  <div class="govuk-grid-column-three-quarters">
+    <div class="dfe-c-card dfe-c-card--plain">
+      <form method="post" novalidate action="@formPostAction">
+        @Html.AntiForgeryToken()
+
+        @if (!ViewData.ModelState.IsValid)
+        {
+        <div class="govuk-error-summary" data-module="govuk-error-summary" role="alert" aria-labelledby="error-summary-title">
+          <h2 class="govuk-error-summary__title" id="error-summary-title">There is a problem</h2>
+          <div class="govuk-error-summary__body">
+            <ul class="govuk-list govuk-error-summary__list">
+              @foreach (var kv in ViewData.ModelState)
+              {
+                if (kv.Value?.Errors?.Count > 0)
+                {
+                  <li><a href="#@kv.Key">@kv.Value.Errors[0].ErrorMessage</a></li>
+                }
+              }
+            </ul>
+          </div>
+        </div>
+        }
+
+        @if (workCtx != null)
+        {
+        <div class="govuk-form-group govuk-!-margin-bottom-6" id="AssociationKind" data-raid-field="association">
+          <div class="govuk-inset-text govuk-!-margin-top-0">
+            <p class="govuk-body govuk-!-margin-bottom-2"><strong>Associated with work item</strong></p>
+            <p class="govuk-body govuk-!-margin-bottom-0">@workCtx.WorkTitle</p>
+          </div>
+          <input type="hidden" name="AssociationKind" value="work" />
+          <input type="hidden" name="ProjectId" value="@workCtx.ProjectId" />
+        </div>
+        }
+        else
+        {
+        <div class="govuk-form-group govuk-!-margin-bottom-6" id="AssociationKind" data-raid-field="association">
+          <fieldset class="govuk-fieldset" aria-describedby="raid-risk-association-hint">
+            <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Associated with</legend>
+            <div id="raid-risk-association-hint" class="govuk-hint">Select one option.</div>
+            <div class="govuk-radios" data-module="govuk-radios">
+            <div class="govuk-radios__item">
+              <input class="govuk-radios__input" id="raid-risk-assoc-work" name="AssociationKind" type="radio" value="work" data-aria-controls="conditional-raid-risk-assoc-work" @(assoc == "work" ? "checked" : null) />
+              <label class="govuk-label govuk-radios__label" for="raid-risk-assoc-work">Work item</label>
+            </div>
+            <div class="govuk-radios__conditional@(assoc != "work" ? " govuk-radios__conditional--hidden" : null)" id="conditional-raid-risk-assoc-work">
+              <div class="govuk-form-group govuk-!-margin-bottom-0">
+                <label class="govuk-label" for="ProjectId">Work item</label>
+                <select class="govuk-select govuk-!-width-full" id="ProjectId" name="ProjectId">
+                  <option value="">— Select —</option>
+                  @foreach (var o in pj)
+                  {
+                    if (Model.ProjectId == o.Id) { <option value="@o.Id" selected>@o.Name</option> }
+                    else { <option value="@o.Id">@o.Name</option> }
+                  }
+                </select>
+              </div>
+            </div>
+
+            <div class="govuk-radios__item">
+              <input class="govuk-radios__input" id="raid-risk-assoc-product" name="AssociationKind" type="radio" value="product" data-aria-controls="conditional-raid-risk-assoc-product" @(assoc == "product" ? "checked" : null) />
+              <label class="govuk-label govuk-radios__label" for="raid-risk-assoc-product">Service register product</label>
+            </div>
+            <div class="govuk-radios__conditional@(assoc != "product" ? " govuk-radios__conditional--hidden" : null)" id="conditional-raid-risk-assoc-product">
+              <div class="govuk-form-group govuk-!-margin-bottom-0">
+                <label class="govuk-label" for="PrimaryProductId">Product</label>
+                <div id="PrimaryProductId-hint" class="govuk-hint">From the Operations service register (active services).</div>
+                <select class="govuk-select govuk-!-width-full" id="PrimaryProductId" name="PrimaryProductId" aria-describedby="PrimaryProductId-hint">
+                  <option value="">— Select —</option>
+                  @foreach (var o in fp)
+                  {
+                    if (Model.PrimaryProductId == o.Id) { <option value="@o.Id" selected>@o.Name</option> }
+                    else { <option value="@o.Id">@o.Name</option> }
+                  }
+                </select>
+              </div>
+            </div>
+
+            <div class="govuk-radios__item">
+              <input class="govuk-radios__input" id="raid-risk-assoc-org" name="AssociationKind" type="radio" value="organisation" data-aria-controls="conditional-raid-risk-assoc-org" @(assoc == "organisation" ? "checked" : null) />
+              <label class="govuk-label govuk-radios__label" for="raid-risk-assoc-org">Organisation</label>
+            </div>
+            <div class="govuk-radios__conditional@(assoc != "organisation" ? " govuk-radios__conditional--hidden" : null)" id="conditional-raid-risk-assoc-org">
+              <div class="govuk-form-group govuk-!-margin-bottom-0">
+                <p class="govuk-body-s govuk-!-margin-bottom-0">This is a risk which is not associated with any specific product or work item. This could relate to people or funding for example.</p>
+              </div>
+            </div>
+            </div>
+          </fieldset>
+        </div>
+        }
+
+        @if (isEdit)
+        {
+          <input type="hidden" asp-for="Title" />
+          <div class="govuk-form-group" data-raid-field="title">
+            <span class="govuk-label">Title</span>
+            <p class="govuk-body govuk-!-margin-bottom-1 govuk-!-font-weight-bold" id="raid-risk-title-readonly">@Model.Title</p>
+            <p class="govuk-hint govuk-!-margin-bottom-0">Risk titles cannot be amended once created to retain immutability for audit purposes.</p>
+          </div>
+        }
+        else
+        {
+          <div class="govuk-form-group" data-raid-field="title">
+            <label class="govuk-label" for="Title">Title</label>
+            <div class="govuk-hint">Risk titles cannot be amended once created to retain immutability for audit purposes.</div>
+            <input class="govuk-input" id="Title" name="Title" type="text" value="@Model.Title" required maxlength="200" />
+          </div>
+        }
+
+        <div class="govuk-form-group" id="raid-risk-edit-description" data-raid-field="description">
+          <label class="govuk-label" for="Description">Description</label>
+          <textarea class="govuk-textarea" id="Description" name="Description" rows="5">@Model.Description</textarea>
+        </div>
+
+        <div class="govuk-form-group" id="raid-risk-edit-cause" data-raid-field="cause">
+          <label class="govuk-label" for="Cause">Cause</label>
+          <div class="govuk-hint">What causes or drives this risk (root cause, precursors, or context).</div>
+          <textarea class="govuk-textarea" id="Cause" name="Cause" rows="4">@Model.Cause</textarea>
+        </div>
+
+        <div class="govuk-form-group" id="raid-risk-edit-impact-realised" data-raid-field="impactIfRealised">
+          <label class="govuk-label" for="ImpactIfRealised">Impact if realised</label>
+          <div class="govuk-hint">The consequence for users, the service, or the organisation if the risk materialises.</div>
+          <textarea class="govuk-textarea" id="ImpactIfRealised" name="ImpactIfRealised" rows="4">@Model.ImpactIfRealised</textarea>
+        </div>
+
+        <div class="govuk-form-group" id="raid-risk-edit-mitigation" data-raid-field="mitigation">
+          <label class="govuk-label" for="ResponseStrategy">How do you intend to mitigate this risk?</label>
+          <textarea class="govuk-textarea" id="ResponseStrategy" name="ResponseStrategy" rows="4">@Model.ResponseStrategy</textarea>
+        </div>
+
+        <fieldset class="govuk-fieldset govuk-!-margin-bottom-4" data-raid-field="tier">
+          <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Tier</legend>
+          <div class="govuk-radios govuk-radios--small">
+            @foreach (var o in tier)
+            {
+              var tierIsProposed = o.Name != null && o.Name.Contains("Proposed", StringComparison.OrdinalIgnoreCase);
+              <div class="govuk-radios__item">
+                @if (Model.RiskTierId == o.Id)
+                {<input class="govuk-radios__input" id="raid-risk-tier-@o.Id" name="RiskTierId" type="radio" value="@o.Id" checked />}
+                else
+                {<input class="govuk-radios__input" id="raid-risk-tier-@o.Id" name="RiskTierId" type="radio" value="@o.Id" />}
+                <label class="govuk-label govuk-radios__label" for="raid-risk-tier-@o.Id">@o.Name</label>
+                @if (tierIsProposed)
+                {
+                  <div class="govuk-hint govuk-radios__hint" id="raid-risk-tier-hint-@o.Id">Central Operations will need to approve risks at these tiers</div>
+                }
+              </div>
+            }
+          </div>
+        </fieldset>
+
+        @if (isEdit || opsMode)
+        {
+        <fieldset class="govuk-fieldset govuk-!-margin-bottom-4" data-raid-field="status">
+          <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Status</legend>
+          <div class="govuk-radios govuk-radios--small">
+            @foreach (var o in st)
+            {
+              <div class="govuk-radios__item">
+                @if (Model.RiskStatusId == o.Id)
+                {<input class="govuk-radios__input" id="raid-risk-status-@o.Id" name="RiskStatusId" type="radio" value="@o.Id" checked />}
+                else
+                {<input class="govuk-radios__input" id="raid-risk-status-@o.Id" name="RiskStatusId" type="radio" value="@o.Id" />}
+                <label class="govuk-label govuk-radios__label" for="raid-risk-status-@o.Id">@o.Name</label>
+              </div>
+            }
+          </div>
+        </fieldset>
+        }
+
+        <fieldset class="govuk-fieldset govuk-!-margin-bottom-4" data-raid-field="priority">
+          <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Priority</legend>
+          <div class="govuk-radios govuk-radios--small">
+            @foreach (var o in pr)
+            {
+              <div class="govuk-radios__item">
+                @if (Model.RiskPriorityId == o.Id)
+                {<input class="govuk-radios__input" id="raid-risk-pri-@o.Id" name="RiskPriorityId" type="radio" value="@o.Id" checked />}
+                else
+                {<input class="govuk-radios__input" id="raid-risk-pri-@o.Id" name="RiskPriorityId" type="radio" value="@o.Id" />}
+                <label class="govuk-label govuk-radios__label" for="raid-risk-pri-@o.Id">@o.Name</label>
+                @if (!string.IsNullOrEmpty(o.Description))
+                {<div class="govuk-hint govuk-radios__hint" id="raid-risk-pri-h-@o.Id">@o.Description</div>}
+              </div>
+            }
+          </div>
+        </fieldset>
+
+        <fieldset class="govuk-fieldset govuk-!-margin-bottom-4" data-raid-field="likelihood">
+          <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Likelihood</legend>
+          <div class="govuk-radios govuk-radios--small">
+            @foreach (var o in lh)
+            {
+              var lhMs = o.MatrixScore;
+              var lhMsAttr = lhMs.HasValue ? $" data-raid-matrix=\"{lhMs.Value}\"" : "";
+              <div class="govuk-radios__item">
+                @if (Model.RiskLikelihoodId == o.Id)
+                {<input class="govuk-radios__input" id="raid-risk-lh-@o.Id" name="RiskLikelihoodId" type="radio" value="@o.Id"@Html.Raw(lhMsAttr) checked />}
+                else
+                {<input class="govuk-radios__input" id="raid-risk-lh-@o.Id" name="RiskLikelihoodId" type="radio" value="@o.Id"@Html.Raw(lhMsAttr) />}
+                <label class="govuk-label govuk-radios__label" for="raid-risk-lh-@o.Id">@o.Name</label>
+                @if (!string.IsNullOrEmpty(o.Description))
+                {<div class="govuk-hint govuk-radios__hint" id="raid-risk-lh-h-@o.Id">@o.Description</div>}
+              </div>
+            }
+          </div>
+        </fieldset>
+
+        <fieldset class="govuk-fieldset govuk-!-margin-bottom-4" data-raid-field="impact">
+          <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Impact level</legend>
+          <div class="govuk-radios govuk-radios--small">
+            @foreach (var o in imp)
+            {
+              var impMs = o.MatrixScore;
+              var impMsAttr = impMs.HasValue ? $" data-raid-matrix=\"{impMs.Value}\"" : "";
+              <div class="govuk-radios__item">
+                @if (Model.RiskImpactLevelId == o.Id)
+                {<input class="govuk-radios__input" id="raid-risk-imp-@o.Id" name="RiskImpactLevelId" type="radio" value="@o.Id"@Html.Raw(impMsAttr) checked />}
+                else
+                {<input class="govuk-radios__input" id="raid-risk-imp-@o.Id" name="RiskImpactLevelId" type="radio" value="@o.Id"@Html.Raw(impMsAttr) />}
+                <label class="govuk-label govuk-radios__label" for="raid-risk-imp-@o.Id">@o.Name</label>
+                @if (!string.IsNullOrEmpty(o.Description))
+                {<div class="govuk-hint govuk-radios__hint" id="raid-risk-imp-h-@o.Id">@o.Description</div>}
+              </div>
+            }
+          </div>
+        </fieldset>
+
+        <fieldset class="govuk-fieldset govuk-!-margin-bottom-4" data-raid-field="proximity">
+          <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Proximity</legend>
+          <div class="govuk-radios govuk-radios--small">
+            @foreach (var o in px)
+            {
+              <div class="govuk-radios__item">
+                @if (Model.RiskProximityId == o.Id)
+                {<input class="govuk-radios__input" id="raid-risk-px-@o.Id" name="RiskProximityId" type="radio" value="@o.Id" checked />}
+                else
+                {<input class="govuk-radios__input" id="raid-risk-px-@o.Id" name="RiskProximityId" type="radio" value="@o.Id" />}
+                <label class="govuk-label govuk-radios__label" for="raid-risk-px-@o.Id">@o.Name</label>
+                @if (!string.IsNullOrEmpty(o.Description))
+                {<div class="govuk-hint govuk-radios__hint" id="raid-risk-px-h-@o.Id">@o.Description</div>}
+              </div>
+            }
+          </div>
+        </fieldset>
+
+        <fieldset class="govuk-fieldset govuk-!-margin-bottom-4" data-raid-field="treatment">
+          <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Treatment</legend>
+          <div class="govuk-hint">Select the primary treatment approach for this risk.</div>
+          <div class="govuk-radios govuk-radios--small">
+            @foreach (var o in rt)
+            {
+              <div class="govuk-radios__item">
+                @if (Model.RiskTreatmentId == o.Id)
+                {<input class="govuk-radios__input" id="raid-risk-treat-@o.Id" name="RiskTreatmentId" type="radio" value="@o.Id" checked />}
+                else
+                {<input class="govuk-radios__input" id="raid-risk-treat-@o.Id" name="RiskTreatmentId" type="radio" value="@o.Id" />}
+                <label class="govuk-label govuk-radios__label" for="raid-risk-treat-@o.Id">@o.Name</label>
+                @if (!string.IsNullOrEmpty(o.Description))
+                {<div class="govuk-hint govuk-radios__hint" id="raid-risk-treat-h-@o.Id">@o.Description</div>}
+              </div>
+            }
+          </div>
+        </fieldset>
+
+        <fieldset class="govuk-fieldset govuk-!-margin-bottom-4 @(RaidErr("PrimaryRiskCategoryId") != null || RaidErr("SecondaryRiskCategoryId") != null ? "govuk-form-group--error" : null)" data-raid-field="categories" id="PrimaryRiskCategoryId">
+          <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Primary category</legend>
+          <div class="govuk-hint">Select one. Add an optional different secondary category below.</div>
+          <div class="govuk-radios govuk-radios--small" data-module="govuk-radios">
+            <div class="govuk-radios__item">
+              <input class="govuk-radios__input" id="raid-risk-pri-cat-none" name="PrimaryRiskCategoryId" type="radio" value="" @(!Model.PrimaryRiskCategoryId.HasValue || Model.PrimaryRiskCategoryId == 0 ? "checked" : null) />
+              <label class="govuk-label govuk-radios__label" for="raid-risk-pri-cat-none">Not selected</label>
+            </div>
+            @foreach (var o in cat)
+            {
+              <div class="govuk-radios__item">
+                @if (Model.PrimaryRiskCategoryId == o.Id)
+                {<input class="govuk-radios__input" id="raid-risk-pri-cat-@o.Id" name="PrimaryRiskCategoryId" type="radio" value="@o.Id" checked />}
+                else
+                {<input class="govuk-radios__input" id="raid-risk-pri-cat-@o.Id" name="PrimaryRiskCategoryId" type="radio" value="@o.Id" />}
+                <label class="govuk-label govuk-radios__label" for="raid-risk-pri-cat-@o.Id">@o.Name</label>
+              </div>
+            }
+          </div>
+          @if (RaidErr("PrimaryRiskCategoryId") != null)
+          {<p class="govuk-error-message">@RaidErr("PrimaryRiskCategoryId")</p>}
+        </fieldset>
+        <fieldset class="govuk-fieldset govuk-!-margin-bottom-6 @(RaidErr("PrimaryRiskCategoryId") != null || RaidErr("SecondaryRiskCategoryId") != null ? "govuk-form-group--error" : null)" id="SecondaryRiskCategoryId">
+          <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Secondary category (optional)</legend>
+          <div class="govuk-hint">Not required. Must be different from the primary category if selected.</div>
+          <div class="govuk-radios govuk-radios--small" data-module="govuk-radios">
+            <div class="govuk-radios__item">
+              <input class="govuk-radios__input" id="raid-risk-sec-cat-none" name="SecondaryRiskCategoryId" type="radio" value="" @(!Model.SecondaryRiskCategoryId.HasValue || Model.SecondaryRiskCategoryId == 0 ? "checked" : null) />
+              <label class="govuk-label govuk-radios__label" for="raid-risk-sec-cat-none">No secondary category</label>
+            </div>
+            @foreach (var o in cat)
+            {
+              <div class="govuk-radios__item">
+                @if (Model.SecondaryRiskCategoryId == o.Id)
+                {<input class="govuk-radios__input" id="raid-risk-sec-cat-@o.Id" name="SecondaryRiskCategoryId" type="radio" value="@o.Id" checked />}
+                else
+                {<input class="govuk-radios__input" id="raid-risk-sec-cat-@o.Id" name="SecondaryRiskCategoryId" type="radio" value="@o.Id" />}
+                <label class="govuk-label govuk-radios__label" for="raid-risk-sec-cat-@o.Id">@o.Name</label>
+              </div>
+            }
+          </div>
+          @if (RaidErr("SecondaryRiskCategoryId") != null)
+          {<p class="govuk-error-message">@RaidErr("SecondaryRiskCategoryId")</p>}
+        </fieldset>
+
+        <fieldset class="govuk-fieldset govuk-!-margin-bottom-4" data-raid-field="divisions">
+          <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Divisions</legend>
+          <div class="govuk-hint">Select all that apply.</div>
+          <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes">
+            @foreach (var o in divs)
+            {
+              var divChk = Model.DivisionIds != null && Model.DivisionIds.Contains(o.Id);
+              <div class="govuk-checkboxes__item">
+                @if (divChk)
+                {<input class="govuk-checkboxes__input" id="raid-risk-div-@o.Id" name="DivisionIds" type="checkbox" value="@o.Id" checked />}
+                else
+                {<input class="govuk-checkboxes__input" id="raid-risk-div-@o.Id" name="DivisionIds" type="checkbox" value="@o.Id" />}
+                <label class="govuk-label govuk-checkboxes__label" for="raid-risk-div-@o.Id">@o.Name</label>
+              </div>
+            }
+          </div>
+        </fieldset>
+
+        <fieldset class="govuk-fieldset govuk-!-margin-bottom-4" data-raid-field="business-areas">
+          <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Business areas</legend>
+          <div class="govuk-hint">From admin settings — select all that apply.</div>
+          <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes">
+            @foreach (var o in baOpts)
+            {
+              var baChk = Model.BusinessAreaLookupIds != null && Model.BusinessAreaLookupIds.Contains(o.Id);
+              <div class="govuk-checkboxes__item">
+                @if (baChk)
+                {<input class="govuk-checkboxes__input" id="raid-risk-ba-@o.Id" name="BusinessAreaLookupIds" type="checkbox" value="@o.Id" checked />}
+                else
+                {<input class="govuk-checkboxes__input" id="raid-risk-ba-@o.Id" name="BusinessAreaLookupIds" type="checkbox" value="@o.Id" />}
+                <label class="govuk-label govuk-checkboxes__label" for="raid-risk-ba-@o.Id">@o.Name</label>
+              </div>
+            }
+          </div>
+        </fieldset>
+
+        <div class="user-picker-wrapper user-picker-wrapper--full-width" data-raid-field="owner">
+          @await Html.PartialAsync("~/Views/Shared/_UserPicker.cshtml", ViewBag.OwnerUserPicker as UserPickerViewModel)
+        </div>
+        <div class="user-picker-wrapper user-picker-wrapper--full-width" data-raid-field="sro">
+          @await Html.PartialAsync("~/Views/Shared/_UserPicker.cshtml", ViewBag.SroUserPicker as UserPickerViewModel)
+        </div>
+
+        @{
+          var identErr = RaidErr("Identified");
+          var nextErr = RaidErr("NextReview");
+        }
+        <div id="raid-risk-edit-identified" data-raid-field="identified">
+        @await Html.PartialAsync("~/Views/Modern/Raid/_RaidGovUkDateInput.cshtml", new RaidGovUkDateFieldVm
+        {
+          NamePrefix = "Identified",
+          Legend = "Identified date",
+          Hint = "Leave blank on create to default to today.",
+          Day = Model.IdentifiedDay,
+          Month = Model.IdentifiedMonth,
+          Year = Model.IdentifiedYear,
+          FieldIdPrefix = "raid-risk-identified",
+          HasError = identErr != null,
+          ErrorMessage = identErr,
+        })
+        </div>
+
+        <div id="raid-risk-edit-nextreview" data-raid-field="nextReview">
+        @await Html.PartialAsync("~/Views/Modern/Raid/_RaidGovUkDateInput.cshtml", new RaidGovUkDateFieldVm
+        {
+          NamePrefix = "NextReview",
+          Legend = "Next review",
+          Hint = "Optional.",
+          Day = Model.NextReviewDay,
+          Month = Model.NextReviewMonth,
+          Year = Model.NextReviewYear,
+          FieldIdPrefix = "raid-risk-nextreview",
+          HasError = nextErr != null,
+          ErrorMessage = nextErr,
+        })
+        </div>
+
+        @if (opsMode)
+        {
+          var reasonErr = RaidErr("operationsChangeReason");
+          var reasonDraft = ViewBag.OperationsChangeReasonDraft as string ?? "";
+          <div class="govuk-form-group@(reasonErr != null ? " govuk-form-group--error" : "")" id="raid-ops-change-reason">
+            <label class="govuk-label govuk-label--m" for="operationsChangeReason">Reason for this change</label>
+            <div id="operationsChangeReason-hint" class="govuk-hint">Required. At least 10 characters. This is recorded on the risk (appended to notes) with your email and a timestamp.</div>
+            <textarea class="govuk-textarea@(reasonErr != null ? " govuk-textarea--error" : "")"
+                      id="operationsChangeReason"
+                      name="operationsChangeReason"
+                      rows="4"
+                      aria-describedby="operationsChangeReason-hint@(reasonErr != null ? " operationsChangeReason-error" : "")">@reasonDraft</textarea>
+            @if (reasonErr != null)
+            {
+              <p id="operationsChangeReason-error" class="govuk-error-message">@reasonErr</p>
+            }
+          </div>
+        }
+
+        <div class="govuk-button-group">
+          <button type="submit" class="govuk-button" data-module="govuk-button">@(opsMode ? "Save (Operations)" : (isEdit ? "Save changes" : "Create risk"))</button>
+          @if (isEdit)
+          {
+            <a class="govuk-button govuk-button--secondary" href="@(opsMode && !string.IsNullOrEmpty(opsListUrl) ? opsListUrl : Url.Action("RiskDetail", "ModernRaid", new { id = Model.Id }))">Cancel</a>
+          }
+          else
+          {
+            <a class="govuk-button govuk-button--secondary" href="@(workCtx != null ? workCtx.CancelUrl : Url.Action("Risks", "ModernRaid"))">Cancel</a>
+          }
+        </div>
+      </form>
+    </div>
+  </div>
+  <div class="govuk-grid-column-one-quarter">
+    @{
+      var matrixJson = ViewBag.RiskMatrixScoresJson as string;
+    }
+    @await Html.PartialAsync("~/Views/Modern/Raid/_RaidEditorGuidanceAside.cshtml", new RaidEditorGuidanceAsideVm
+    {
+      Mode = "risk",
+      MatrixScoresJson = matrixJson ?? "{\"likelihood\":{},\"impact\":{}}"
+    })
+  </div>
+</div>
+</div>

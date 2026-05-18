@@ -1,0 +1,63 @@
+@model Compass.ViewModels.Modern.AdminBusinessAreaAdminCreateViewModel
+@using Compass.ViewModels.Modern
+@using Microsoft.AspNetCore.Html
+@{
+    ViewData["Title"] = "Add business area permission";
+    var picker = new Compass.Models.UserPickerViewModel
+    {
+        FieldName = "userId",
+        Label = "Find user in directory",
+        Hint = "Search by name or email, select the person, then choose their business area and submit.",
+        InputIdSuffix = "ba-admin-add",
+        DefaultSummaryText = "No user selected yet.",
+        UseGovUkStyling = true
+    };
+}
+
+@section Breadcrumbs {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernAdmin")">Admin</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("BusinessAreaAdmins", "ModernAdmin")">Business area permissions</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">Add permission</li>
+}
+
+<div class="admin-hub">
+ @await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+   Caption = "Administration",
+   Title = "Add business area permission",
+   Lede = new HtmlString($"<p class=\"govuk-body govuk-!-margin-bottom-0\"><a class=\"govuk-link govuk-link--no-visited-state\" href=\"{Url.Action("BusinessAreaAdmins", "ModernAdmin") ?? "#"}\">Back to business area permissions</a></p>")
+ })
+
+  @if (ViewBag.AdminError != null)
+  {
+ <div class="govuk-error-summary" role="alert" data-module="govuk-error-summary" style="margin-bottom:1.5rem;">
+ <h2 class="govuk-error-summary__title">There is a problem</h2>
+ <div class="govuk-error-summary__body">@ViewBag.AdminError</div>
+    </div>
+  }
+
+ <div class="dfe-c-card dfe-c-mb-4" style="border:1px solid var(--grey-2);border-left:4px solid var(--blue);padding:1.25rem 1.5rem;background:var(--white);max-width:40rem;">
+ <h2 class="govuk-heading-m govuk-!-margin-top-0">Delegated admin</h2>
+ <p class="govuk-hint govuk-!-margin-bottom-3">
+      Assign a user who can manage work items, RAID items and performance reporting scoped to one Compass business area (in addition to owners and contributors).
+    </p>
+    <form method="post" action="@Url.Action("BusinessAreaAdminCreate", "ModernAdmin")" novalidate>
+      @Html.AntiForgeryToken()
+ <div class="govuk-form-group govuk-!-margin-bottom-4">
+ <label class="govuk-label govuk-label--s" for="ba-adm-create-ba">Business area</label>
+ <select name="businessAreaLookupId" id="ba-adm-create-ba" class="govuk-select govuk-!-width-two-thirds" required>
+        <option value="">Choose…</option>
+        @foreach (var o in Model.BusinessAreaOptions)
+        {
+          <option value="@o.Id">@o.Name</option>
+        }
+      </select>
+      </div>
+      @await Html.PartialAsync("~/Views/Modern/Shared/_UserPicker.cshtml", picker)
+ <div class="govuk-button-group govuk-!-margin-top-4">
+ <button type="submit" class="govuk-button" data-module="govuk-button">Add permission</button>
+ <a href="@Url.Action("BusinessAreaAdmins", "ModernAdmin")" class="govuk-link govuk-link--no-visited-state govuk-!-margin-left-2">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>

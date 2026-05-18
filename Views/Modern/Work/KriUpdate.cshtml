@@ -1,5 +1,6 @@
 @model Compass.Models.Modern.Work.WorkItemKriUpdate
 @using Compass.Models.Modern.Work
+@using Compass.ViewModels.Modern
 @{
     var kriRef = ViewBag.KriRef as string ?? "KRI-001";
     var riRef = ViewBag.RiRef as string ?? "RI-00000";
@@ -10,33 +11,35 @@
     ViewData["Title"] = "KRI update — " + kriRef;
 }
 @section Breadcrumbs {
-    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="@Url.Action("Index", "ModernWork")">Work</a></li>
-    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="@Url.Action("Detail", "ModernWork", new { id = workId })">@(work?.Title ?? "Work")</a></li>
-    <li class="dfe-c-breadcrumb__item"><a class="dfe-c-breadcrumb__link" href="@Url.Action("KriDetail", "ModernWork", new { workId, riskOrIssueId, kriId })">@kriRef</a></li>
-    <li class="dfe-c-breadcrumb__item" aria-current="page">Provide update</li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernWork")">Work</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Detail", "ModernWork", new { id = workId })">@(work?.Title ?? "Work")</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("KriDetail", "ModernWork", new { workId, riskOrIssueId, kriId })">@kriRef</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">Provide update</li>
 }
 
 <div id="sc-work-kriupdate">
   @await Html.PartialAsync("_WorkItemChrome", work)
 
-  <div class="dfe-c-page-title">
-    <div class="dfe-c-page-title__caption">WI-@(ViewBag.WorkIdShort ?? "") · @(work?.Title) · @riRef · @kriRef</div>
-    <h1>Provide KRI update</h1>
-  </div>
+ @await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+   Caption = $"WI-{ViewBag.WorkIdShort ?? ""} · {work?.Title} · {riRef} · {kriRef}",
+   Title = "Provide KRI update",
+   HeadingTag = "h2",
+   HeadingClass = "govuk-heading-l"
+ })
 
-  <div class="dfe-c-grid-row">
-    <div class="dfe-c-grid-col dfe-c-grid-col--two-thirds">
-      <p class="dfe-c-body muted dfe-c-mb-3">Record the latest measurement and status. This appends to the KRI history.</p>
+ <div class="dfe-c-grid-row">
+ <div class="dfe-c-grid-col dfe-c-grid-col--two-thirds">
+ <p class="dfe-c-body muted govuk-!-margin-bottom-3">Record the latest measurement and status. This appends to the KRI history.</p>
 
-      <form method="post" action="@Url.Action("KriUpdate", "ModernWork", new { workId, riskOrIssueId, kriId })" class="dfe-c-mb-4">
+ <form method="post" action="@Url.Action("KriUpdate", "ModernWork", new { workId, riskOrIssueId, kriId })" class="dfe-c-mb-4">
         @Html.AntiForgeryToken()
 
         @if (!ViewData.ModelState.IsValid)
         {
-          <div class="dfe-c-error-summary" aria-labelledby="error-summary-title" role="alert" data-module="dfe-c-error-summary">
-            <h2 class="dfe-c-error-summary__title" id="error-summary-title">There is a problem</h2>
-            <div class="dfe-c-error-summary__body">
-              <ul class="dfe-c-list dfe-c-error-summary__list">
+ <div class="dfe-c-error-summary" aria-labelledby="error-summary-title" role="alert" data-module="dfe-c-error-summary">
+ <h2 class="dfe-c-error-summary__title" id="error-summary-title">There is a problem</h2>
+ <div class="dfe-c-error-summary__body">
+ <ul class="dfe-c-list dfe-c-error-summary__list">
                 @foreach (var kv in ViewData.ModelState)
                 {
                   @if (kv.Value?.Errors?.Count > 0)
@@ -53,39 +56,39 @@
           </div>
         }
 
-        <div class="dfe-c-form__group">
-          <label class="dfe-c-form__label" for="MeasuredValue">Measured value</label>
-          <span class="dfe-c-form__hint">Current reading or percentage as recorded.</span>
-          <input class="dfe-c-width-full" id="MeasuredValue" name="MeasuredValue" type="text" value="@Model.MeasuredValue" autocomplete="off" />
+ <div class="dfe-c-form__group">
+ <label class="dfe-c-form__label" for="MeasuredValue">Measured value</label>
+ <span class="dfe-c-form__hint">Current reading or percentage as recorded.</span>
+ <input class="dfe-c-width-full" id="MeasuredValue" name="MeasuredValue" type="text" value="@Model.MeasuredValue" autocomplete="off" />
         </div>
 
-        <div class="dfe-c-form__group">
-          <label class="dfe-c-form__label" for="Status">Status</label>
-          <select class="dfe-c-width-full" id="Status" name="Status" required>
+ <div class="dfe-c-form__group">
+ <label class="dfe-c-form__label" for="Status">Status</label>
+ <select class="dfe-c-width-full" id="Status" name="Status" required>
             <option value="OnTrack" selected="@(string.Equals(Model.Status, "OnTrack", StringComparison.OrdinalIgnoreCase))">On track</option>
             <option value="AtRisk" selected="@(string.Equals(Model.Status, "AtRisk", StringComparison.OrdinalIgnoreCase))">At risk</option>
             <option value="Breached" selected="@(string.Equals(Model.Status, "Breached", StringComparison.OrdinalIgnoreCase))">Breached</option>
           </select>
         </div>
 
-        <div class="dfe-c-form__group">
-          <label class="dfe-c-form__label" for="ProximityUpdate">Proximity / context</label>
-          <span class="dfe-c-form__hint">How close is the risk to materialising against this indicator?</span>
-          <textarea class="dfe-c-width-full" id="ProximityUpdate" name="ProximityUpdate" rows="3">@Model.ProximityUpdate</textarea>
+ <div class="dfe-c-form__group">
+ <label class="dfe-c-form__label" for="ProximityUpdate">Proximity / context</label>
+ <span class="dfe-c-form__hint">How close is the risk to materialising against this indicator?</span>
+ <textarea class="dfe-c-width-full" id="ProximityUpdate" name="ProximityUpdate" rows="3">@Model.ProximityUpdate</textarea>
         </div>
 
-        <div class="dfe-c-form__group">
-          <label class="dfe-c-form__label" for="ActionsTaken">Actions taken</label>
-          <textarea class="dfe-c-width-full" id="ActionsTaken" name="ActionsTaken" rows="4">@Model.ActionsTaken</textarea>
+ <div class="dfe-c-form__group">
+ <label class="dfe-c-form__label" for="ActionsTaken">Actions taken</label>
+ <textarea class="dfe-c-width-full" id="ActionsTaken" name="ActionsTaken" rows="4">@Model.ActionsTaken</textarea>
         </div>
 
-        <div class="dfe-c-form__group">
-          <label class="dfe-c-form__label" for="NextReviewDate">Next review date</label>
-          <input class="dfe-c-width-full" id="NextReviewDate" name="NextReviewDate" type="date" value="@(Model.NextReviewDate?.ToString("yyyy-MM-dd"))" />
+ <div class="dfe-c-form__group">
+ <label class="dfe-c-form__label" for="NextReviewDate">Next review date</label>
+ <input class="dfe-c-width-full" id="NextReviewDate" name="NextReviewDate" type="date" value="@(Model.NextReviewDate?.ToString("yyyy-MM-dd"))" />
         </div>
 
-        <button type="submit" class="dfe-c-button dfe-c-button--primary">Save update</button>
-        <a href="@Url.Action("KriDetail", "ModernWork", new { workId, riskOrIssueId, kriId })" class="dfe-c-button dfe-c-button--secondary dfe-c-ms-2">Cancel</a>
+ <button type="submit" class="govuk-button">Save update</button>
+ <a href="@Url.Action("KriDetail", "ModernWork", new { workId, riskOrIssueId, kriId })" class="govuk-button govuk-button--secondary dfe-c-ms-2">Cancel</a>
       </form>
     </div>
   </div>

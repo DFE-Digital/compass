@@ -61,6 +61,18 @@ public class ProjectMonthlyUpdate
     [Column(TypeName = "decimal(18,2)")]
     public decimal? MonthlyMspFte { get; set; }
 
+    /// <summary>Draft RAG selection for an in-progress monthly return (before submit). Persisted on save draft; cleared on submit.</summary>
+    public int? DraftRagStatusLookupId { get; set; }
+
+    [ForeignKey(nameof(DraftRagStatusLookupId))]
+    public RagStatusLookup? DraftRagStatusLookup { get; set; }
+
+    [MaxLength(4000)]
+    public string? DraftRagJustification { get; set; }
+
+    [MaxLength(4000)]
+    public string? DraftPathToGreen { get; set; }
+
     // Navigation property for individual narrative entries
     public ICollection<MonthlyUpdateNarrative> MonthlyUpdateNarratives { get; set; } = new List<MonthlyUpdateNarrative>();
 }

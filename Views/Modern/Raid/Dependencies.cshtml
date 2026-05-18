@@ -1,0 +1,267 @@
+@model Compass.ViewModels.Modern.ModernRaidDependenciesPageViewModel
+@using System
+@using Compass.Models.Modern.Work
+@using Compass.ViewModels.Modern
+@using Microsoft.AspNetCore.Html
+@{
+  ViewData["Title"] = "RAID — Dependencies";
+  var formAction = "/modern/raid/dependencies";
+  var clearUrl = "/modern/raid/dependencies";
+  var activeTab = string.IsNullOrWhiteSpace(Model.ActiveTab) ? "open" : Model.ActiveTab;
+  var cspNonce = Context.Items["Nonce"]?.ToString() ?? "";
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="/modern/raid/dashboard">RAID</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">Dependencies</li>
+}
+
+<div class="modern-work-page raid-dependencies-page">
+  <style>
+    .raid-dependencies-page .raid-dependencies-data-shell {
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      overflow: hidden;
+      padding: 0;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+    }
+    .raid-dependencies-page .raid-dependencies-data-shell .dfe-f-table-wrapper { margin-bottom: 0; }
+    .raid-dependencies-page .raid-dependencies-data-table { margin-bottom: 0; }
+    .raid-dependencies-page .raid-dependencies-data-table thead .govuk-table__header {
+      background: #f3f2f1;
+      border-bottom: 2px solid #0b0c0c;
+      font-weight: 700;
+      vertical-align: bottom;
+    }
+    .raid-dependencies-page .raid-dependencies-data-table tbody tr:nth-child(even) { background: #fafafa; }
+    .raid-dependencies-page .raid-dependencies-data-table tbody td,
+    .raid-dependencies-page .raid-dependencies-data-table tbody th { vertical-align: middle; }
+  </style>
+  @{
+    var dependenciesActions = new HtmlString("<button type=\"button\" class=\"govuk-button\" id=\"raid-deps-managed-at-work-open\">Add dependency<span class=\"govuk-visually-hidden\"> (opens in a dialog)</span></button>");
+  }
+  @await Html.PartialAsync("~/Views/Modern/Shared/_ModernPageHeader.cshtml", new ModernPageHeaderViewModel {
+    Caption = "RAID",
+    Title = "Dependencies register",
+    Lede = new HtmlString($"<p class=\"govuk-body govuk-!-margin-bottom-0\">Aggregated view of dependencies recorded against work items ({Model.TotalFiltered:N0} matched). Use <strong>Add dependency</strong> to see how to add new links.</p>"),
+    Actions = dependenciesActions
+  })
+
+  <form method="get" action="@formAction" id="raid-deps-register-form" class="govuk-!-margin-bottom-0">
+    <input type="hidden" name="tab" value="@activeTab" />
+    <input type="hidden" name="page" value="1" />
+    <div id="search-and-filter">
+      <div class="filter-toolbar">
+        <div class="filter-toolbar__search-wrap">
+          <input type="search" name="search" id="raid-deps-search" value="@Model.Search" placeholder="Search description or types…" class="filter-search" autocomplete="off" aria-label="Search dependencies" />
+          <button type="submit" class="govuk-button govuk-button--secondary filter-toolbar__search-submit">Search</button>
+        </div>
+        <button type="button" class="filter-toggle-btn" id="raid-deps-filter-btn" aria-expanded="false" aria-controls="raid-deps-filter-panel">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="flex-shrink:0;" aria-hidden="true"><path d="M1 3h14v1.5l-5 5V14l-4-2V9.5L1 4.5V3z"></path></svg>
+          <span class="filter-toggle-label">Filter</span>
+        </button>
+      </div>
+      <div class="filter-panel filter-panel--allwork" id="raid-deps-filter-panel">
+        <div class="filter-panel__grid">
+          <div>
+            <label for="raid-deps-lt">Link type</label>
+            <select name="linkTypeId" id="raid-deps-lt" class="govuk-select">
+              <option value="">All</option>
+              @foreach (var o in Model.LinkTypeOptions)
+              {
+                if (Model.LinkTypeId == o.Id) { <option value="@o.Id" selected>@o.Name</option> }
+                else { <option value="@o.Id">@o.Name</option> }
+              }
+            </select>
+          </div>
+          <div>
+            <label for="raid-deps-cr">Criticality</label>
+            <select name="criticalityId" id="raid-deps-cr" class="govuk-select">
+              <option value="">All</option>
+              @foreach (var o in Model.CriticalityOptions)
+              {
+                if (Model.CriticalityId == o.Id) { <option value="@o.Id" selected>@o.Name</option> }
+                else { <option value="@o.Id">@o.Name</option> }
+              }
+            </select>
+          </div>
+          <div>
+            <label for="raid-deps-st">Status</label>
+            <select name="status" id="raid-deps-st" class="govuk-select">
+              <option value="">All</option>
+              @foreach (var s in Model.StatusChoices)
+              {
+                if (Model.Status == s) { <option value="@s" selected>@s</option> }
+                else { <option value="@s">@s</option> }
+              }
+            </select>
+          </div>
+        </div>
+        <div class="filter-panel__actions" style="margin-top:0.75rem;display:flex;gap:0.5rem;flex-wrap:wrap;">
+          <button type="submit" class="govuk-button">Apply filters</button>
+          <a class="govuk-button govuk-button--secondary" href="@clearUrl">Clear</a>
+        </div>
+      </div>
+    </div>
+  </form>
+
+  @{
+    var depsScopeNav = new RaidRegisterScopeNavViewModel
+    {
+      AriaLabel = "Dependencies register views",
+      ActiveTab = activeTab,
+      Links = new[]
+      {
+        new RaidRegisterScopeNavLink
+        {
+          TabKey = "open",
+          Label = "Open dependencies",
+          Href = $"/modern/raid/dependencies?tab=open&page=1&search={Uri.EscapeDataString(Model.Search ?? "")}&linkTypeId={Model.LinkTypeId}&criticalityId={Model.CriticalityId}&status={Uri.EscapeDataString(Model.Status ?? "")}",
+          Count = Model.OpenCount
+        },
+        new RaidRegisterScopeNavLink
+        {
+          TabKey = "closed",
+          Label = "Closed dependencies",
+          Href = $"/modern/raid/dependencies?tab=closed&page=1&search={Uri.EscapeDataString(Model.Search ?? "")}&linkTypeId={Model.LinkTypeId}&criticalityId={Model.CriticalityId}&status={Uri.EscapeDataString(Model.Status ?? "")}",
+          Count = Model.ClosedCount
+        },
+        new RaidRegisterScopeNavLink
+        {
+          TabKey = "all",
+          Label = "All dependencies",
+          Href = $"/modern/raid/dependencies?tab=all&page=1&search={Uri.EscapeDataString(Model.Search ?? "")}&linkTypeId={Model.LinkTypeId}&criticalityId={Model.CriticalityId}&status={Uri.EscapeDataString(Model.Status ?? "")}",
+          Count = Model.AllCount
+        }
+      }
+    };
+  }
+  @await Html.PartialAsync("~/Views/Modern/Raid/_RaidRegisterScopeNav.cshtml", depsScopeNav)
+
+  @if (Model.Rows.Count == 0)
+  {
+    <p class="govuk-body">No dependencies match your filters.</p>
+  }
+  else
+  {
+    <div class="raid-dependencies-data-shell govuk-!-margin-top-0">
+    <div class="dfe-f-table-wrapper govuk-!-margin-bottom-0" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+      <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed raid-dependencies-data-table govuk-!-margin-bottom-0" id="raid-dependencies-table">
+        <caption class="govuk-visually-hidden">Dependencies matching current filters</caption>
+        <thead class="govuk-table__head">
+          <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+              <button type="button" class="dfe-f-table-sort-button">From</button>
+            </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+              <button type="button" class="dfe-f-table-sort-button">To</button>
+            </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+              <button type="button" class="dfe-f-table-sort-button">Link / type</button>
+            </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+              <button type="button" class="dfe-f-table-sort-button">Criticality</button>
+            </th>
+          </tr>
+        </thead>
+        <tbody class="govuk-table__body">
+          @foreach (var d in Model.Rows)
+          {
+            <tr class="govuk-table__row">
+              <td class="govuk-table__cell">
+                <p class="govuk-!-margin-bottom-1 govuk-!-font-weight-bold">@d.SourceType</p>
+                <p class="govuk-!-margin-bottom-1">
+                  <a class="govuk-link govuk-link--no-visited-state govuk-!-font-weight-bold" href="/modern/raid/dependencies/@d.Id">@(d.SourceTitle ?? ($"{d.SourceType} #{d.SourceId}"))</a>
+                </p>
+                <p class="govuk-body-s govuk-!-margin-bottom-0">D-@d.Id.ToString("D4")</p>
+              </td>
+              <td class="govuk-table__cell">
+                @{
+                  var targetLabel = d.TargetTitle ?? $"{d.TargetType} #{d.TargetId}";
+                }
+                <p class="govuk-!-margin-bottom-1 govuk-!-font-weight-bold">@d.TargetType</p>
+                <p class="govuk-!-margin-bottom-0">
+                  @if (!string.IsNullOrEmpty(d.TargetDetailUrl))
+                  {
+                    <a class="govuk-link govuk-link--no-visited-state govuk-!-font-weight-bold" href="@d.TargetDetailUrl">@targetLabel</a>
+                  }
+                  else
+                  {
+                    @targetLabel
+                  }
+                </p>
+              </td>
+              <td class="govuk-table__cell">
+                <span class="@WorkBadgeCss.RaidDependencyLinkTypeDfeFrontendBadgeClass(d.LinkTypeLabel ?? d.DependencyType) dfe-f-badge--small">@((d.LinkTypeLabel ?? d.DependencyType ?? "—").ToUpperInvariant())</span>
+              </td>
+              <td class="govuk-table__cell">
+                <span class="@WorkBadgeCss.RaidDependencyCriticalityDfeFrontendBadgeClass(d.CriticalityLabel) dfe-f-badge--small">@((d.CriticalityLabel ?? "—").ToUpperInvariant())</span>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+    </div>
+  }
+  @if (Model.TotalFiltered > 0)
+  {
+    var depsRowStart = Model.TotalFiltered == 0 ? 0 : (Model.Page - 1) * Model.PageSize + 1;
+    var depsRowEnd = Model.TotalFiltered == 0 ? 0 : Math.Min(Model.Page * Model.PageSize, Model.TotalFiltered);
+    <p class="govuk-body govuk-!-margin-top-6 govuk-!-margin-bottom-2">
+      Showing @depsRowStart–@depsRowEnd of @Model.TotalFiltered.ToString("N0") dependencies
+    </p>
+  }
+  @if (Model.TotalPages > 1)
+  {
+    Func<int, string> depsPageUrl = p =>
+      $"/modern/raid/dependencies?tab={activeTab}&search={Uri.EscapeDataString(Model.Search ?? "")}&linkTypeId={Model.LinkTypeId}&criticalityId={Model.CriticalityId}&status={Uri.EscapeDataString(Model.Status ?? "")}&page={p}";
+    <div class="govuk-!-margin-top-2">
+      @await Html.PartialAsync("~/Views/Modern/Shared/_GovUkPagination.cshtml", new GovUkPaginationViewModel {
+        CurrentPage = Model.Page,
+        TotalPages = Model.TotalPages,
+        PageUrl = depsPageUrl,
+        NavigationAriaLabel = "Dependencies results"
+      })
+    </div>
+  }
+</div>
+
+<dialog id="raid-deps-managed-at-work-modal"
+        class="dfe-f-modal govuk-!-margin-0"
+        data-module="dfe-f-modal"
+        aria-labelledby="raid-deps-managed-at-work-title"
+        aria-modal="true"
+        role="dialog">
+  <div class="dfe-f-modal__panel">
+    <header class="dfe-f-modal__header">
+      <h2 id="raid-deps-managed-at-work-title" class="govuk-heading-m dfe-f-modal__title">Add a dependency</h2>
+      <button type="button" class="dfe-f-modal__close" data-dfe-modal-close aria-label="Close">
+        <span class="dfe-f-modal__close-x" aria-hidden="true">×</span>
+      </button>
+    </header>
+    <div class="dfe-f-modal__body">
+      <p class="govuk-body">Dependencies in this register are collated from dependency records attached to individual work items. You do not add dependencies from this page.</p>
+      <p class="govuk-body govuk-!-margin-bottom-0">Open the relevant work item and use the <strong>Dependencies</strong> tab to create or remove dependency links for that entry.</p>
+      <div class="govuk-button-group govuk-!-margin-top-4 govuk-!-margin-bottom-0">
+        <a class="govuk-button" href="@Url.Action("AllWork", "ModernWork")">Browse work items</a>
+        <button type="button" class="govuk-button govuk-button--secondary" data-dfe-modal-close>Close</button>
+      </div>
+    </div>
+  </div>
+</dialog>
+<script nonce="@cspNonce">
+(function () {
+  var openBtn = document.getElementById('raid-deps-managed-at-work-open');
+  var dlg = document.getElementById('raid-deps-managed-at-work-modal');
+  if (openBtn && dlg instanceof HTMLDialogElement && typeof dlg.showModal === 'function') {
+    openBtn.addEventListener('click', function (e) {
+      e.preventDefault();
+      if (!dlg.open) dlg.showModal();
+    });
+  }
+})();
+</script>

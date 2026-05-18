@@ -1,0 +1,160 @@
+@model Compass.ViewModels.Modern.ModernRaidDependencyEditorForm
+@using Compass.Models.Modern.Work
+@using Compass.ViewModels.Modern
+@using Microsoft.AspNetCore.Html
+@{
+  ViewData["Title"] = ViewBag.EditorTitle as string ?? "Dependency";
+  var lt = ViewBag.LinkTypeOptions as List<RiskIssueNamedIntOption> ?? new List<RiskIssueNamedIntOption>();
+  var cr = ViewBag.CriticalityOptions as List<RiskIssueNamedIntOption> ?? new List<RiskIssueNamedIntOption>();
+  var isEdit = Model.Id.HasValue;
+  var ms = ViewData.ModelState;
+
+  string? RaidErr(string key) =>
+      ms.TryGetValue(key, out var stErr) && stErr!.Errors.Count > 0 ? stErr.Errors[0].ErrorMessage : null;
+
+  var dueErr = RaidErr("Due");
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernRaid")">RAID</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dependencies", "ModernRaid")">Dependencies</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">@ViewData["Title"]</li>
+}
+
+<div id="sc-raid-dependency-editor" class="modern-work-page">
+<p class="dfe-c-body govuk-!-margin-bottom-3">
+  <a href="@(isEdit ? Url.Action("DependencyDetail", "ModernRaid", new { id = Model.Id }) : Url.Action("Dependencies", "ModernRaid"))" class="dfe-c-link">← @(isEdit ? "Back to dependency" : "Back to dependencies")</a>
+</p>
+
+@await Html.PartialAsync("~/Views/Modern/Shared/_ModernPageHeader.cshtml", new ModernPageHeaderViewModel {
+  Caption = "RAID",
+  Title = ViewBag.EditorTitle as string ?? "Dependency",
+  Lede = new HtmlString("<p class=\"govuk-body govuk-!-margin-bottom-0\">Register a directed dependency between two RAID entities for tracking and reporting.</p>")
+})
+
+<div class="dfe-c-form-layout">
+  <div class="dfe-c-form-layout__main">
+    <div class="dfe-c-card dfe-c-card--plain">
+      <form method="post" novalidate action="@(isEdit ? Url.Action("DependencyEditPost", "ModernRaid", new { id = Model!.Id!.Value }) : Url.Action("DependencyCreatePost", "ModernRaid"))">
+        @Html.AntiForgeryToken()
+
+        @if (!ViewData.ModelState.IsValid)
+        {
+        <div class="govuk-error-summary" data-module="govuk-error-summary" role="alert" aria-labelledby="error-summary-title">
+          <h2 class="govuk-error-summary__title" id="error-summary-title">There is a problem</h2>
+          <div class="govuk-error-summary__body">
+            <ul class="govuk-list govuk-error-summary__list">
+              @foreach (var kv in ViewData.ModelState)
+              {
+                if (kv.Value?.Errors?.Count > 0)
+                {
+                  <li><a href="#@kv.Key">@kv.Value.Errors[0].ErrorMessage</a></li>
+                }
+              }
+            </ul>
+          </div>
+        </div>
+        }
+
+      <p class="govuk-body">Use entity types such as <code class="govuk-body">Project</code>, <code class="govuk-body">Risk</code>, <code class="govuk-body">Issue</code> with the numeric id of that record.</p>
+
+        <div class="govuk-form-group">
+          <label class="govuk-label" for="SourceEntityType">Source entity type</label>
+          <input class="govuk-input" id="SourceEntityType" name="SourceEntityType" type="text" value="@Model.SourceEntityType" required maxlength="50" />
+        </div>
+        <div class="govuk-form-group">
+          <label class="govuk-label" for="SourceEntityId">Source entity id</label>
+          <input class="govuk-input govuk-input--width-10" id="SourceEntityId" name="SourceEntityId" type="number" value="@Model.SourceEntityId" required />
+        </div>
+
+        <div class="govuk-form-group">
+          <label class="govuk-label" for="TargetEntityType">Target entity type</label>
+          <input class="govuk-input" id="TargetEntityType" name="TargetEntityType" type="text" value="@Model.TargetEntityType" required maxlength="50" />
+        </div>
+        <div class="govuk-form-group">
+          <label class="govuk-label" for="TargetEntityId">Target entity id</label>
+          <input class="govuk-input govuk-input--width-10" id="TargetEntityId" name="TargetEntityId" type="number" value="@Model.TargetEntityId" required />
+        </div>
+
+        <div class="govuk-form-group">
+          <label class="govuk-label" for="DependencyLinkTypeId">Link type</label>
+          <select class="govuk-select govuk-!-width-full" id="DependencyLinkTypeId" name="DependencyLinkTypeId">
+            <option value="">—</option>
+            @foreach (var o in lt)
+            {
+              if (Model.DependencyLinkTypeId == o.Id) { <option value="@o.Id" selected>@o.Name</option> }
+              else { <option value="@o.Id">@o.Name</option> }
+            }
+          </select>
+        </div>
+
+        <div class="govuk-form-group">
+          <label class="govuk-label" for="DependencyCriticalityId">Criticality</label>
+          <select class="govuk-select govuk-!-width-full" id="DependencyCriticalityId" name="DependencyCriticalityId">
+            <option value="">—</option>
+            @foreach (var o in cr)
+            {
+              if (Model.DependencyCriticalityId == o.Id) { <option value="@o.Id" selected>@o.Name</option> }
+              else { <option value="@o.Id">@o.Name</option> }
+            }
+          </select>
+        </div>
+
+        <div class="govuk-form-group">
+          <label class="govuk-label" for="DependencyType">Legacy type label (optional)</label>
+          <input class="govuk-input" id="DependencyType" name="DependencyType" type="text" value="@Model.DependencyType" maxlength="200" />
+        </div>
+
+        <div class="govuk-form-group">
+          <label class="govuk-label" for="Status">Status</label>
+          <input class="govuk-input govuk-input--width-20" id="Status" name="Status" type="text" value="@Model.Status" maxlength="20" placeholder="Active" />
+        </div>
+
+        <div class="govuk-form-group">
+          <label class="govuk-label" for="Organisation">Organisation</label>
+          <input class="govuk-input" id="Organisation" name="Organisation" type="text" value="@Model.Organisation" maxlength="200" />
+        </div>
+
+        <div class="govuk-form-group">
+          <label class="govuk-label" for="OwnerUserId">Owner user id (optional)</label>
+          <input class="govuk-input govuk-input--width-10" id="OwnerUserId" name="OwnerUserId" type="number" value="@Model.OwnerUserId" />
+        </div>
+
+        @await Html.PartialAsync("~/Views/Modern/Raid/_RaidGovUkDateInput.cshtml", new RaidGovUkDateFieldVm
+        {
+          NamePrefix = "Due",
+          Legend = "Due date",
+          Hint = "Optional.",
+          Day = Model.DueDay,
+          Month = Model.DueMonth,
+          Year = Model.DueYear,
+          FieldIdPrefix = "raid-dep-due",
+          HasError = dueErr != null,
+          ErrorMessage = dueErr,
+        })
+
+        <div class="govuk-form-group">
+          <label class="govuk-label" for="Description">Description</label>
+          <textarea class="govuk-textarea" id="Description" name="Description" rows="5">@Model.Description</textarea>
+        </div>
+
+        <div class="govuk-button-group">
+          <button type="submit" class="govuk-button" data-module="govuk-button">@(isEdit ? "Save changes" : "Create dependency")</button>
+          @if (isEdit)
+          {
+            <a class="govuk-button govuk-button--secondary" href="@Url.Action("DependencyDetail", "ModernRaid", new { id = Model.Id })">Cancel</a>
+          }
+          else
+          {
+            <a class="govuk-button govuk-button--secondary" href="@Url.Action("Dependencies", "ModernRaid")">Cancel</a>
+          }
+        </div>
+      </form>
+    </div>
+  </div>
+  <div class="dfe-c-form-layout__aside">
+    @await Html.PartialAsync("~/Views/Modern/Raid/_RaidGuidanceAside.cshtml", "dependency")
+  </div>
+</div>
+</div>

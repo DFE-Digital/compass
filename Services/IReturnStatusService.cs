@@ -8,5 +8,6 @@ public interface IReturnStatusService
     ReturnStatus CalculateReturnStatus(int year, int month, DateTime? submittedDate);
     bool IsWorkingDay(DateTime date);
     DateTime GetThirdWorkingDayOfMonth(int year, int month);
+    DateTime GetLastWorkingDayOfMonth(int year, int month);
 }
 

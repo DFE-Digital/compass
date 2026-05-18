@@ -1,8 +1,11 @@
 @model Compass.Controllers.FipsManagerProductDetailsViewModel
 @{
-    ViewData["Title"] = $"FIPS Manager - {Model.Product.Title}";
-    var product = Model.Product;
+    var product = Model.Product ?? throw new InvalidOperationException("Product is required.");
+    ViewData["Title"] = $"FIPS Manager - {product.Title}";
     var completion = Model.CompletionItem;
+
+    var singleUserRoles = new[] { "service_owner", "Information_asset_owner", "senior_responsible_officer" };
+    var multipleUserRoles = new[] { "delivery_manager", "product_manager", "reporting_user", "service_designs", "user_researchers" };
 }
 
 @section Breadcrumbs {
@@ -23,29 +26,6 @@
             <li class="breadcrumb-item active" aria-current="page" style="color: #0b0c0c; font-weight: 600;">@product.Title</li>
         </ol>
     </nav>
-}
-
-@{
-    
-    // Single-user roles
-    var singleUserRoles = new[] { "service_owner", "Information_asset_owner", "senior_responsible_officer" };
-    
-    // Multiple-user roles
-    var multipleUserRoles = new[] { "delivery_manager", "product_manager", "reporting_user", "service_designs", "user_researchers" };
-    
-    string FormatUsers(List<Compass.Models.EntraUserDto>? users)
-    {
-        if (users == null || !users.Any())
-        {
-            return "Not set";
-        }
-        var labels = users
-            .Select(u => !string.IsNullOrWhiteSpace(u.DisplayName) ? u.DisplayName : u.EmailAddress)
-            .Where(u => !string.IsNullOrWhiteSpace(u))
-            .Select(u => u!)
-            .ToList();
-        return labels.Any() ? string.Join(", ", labels) : "Not set";
-    }
 }
 
 <div class="content-header">

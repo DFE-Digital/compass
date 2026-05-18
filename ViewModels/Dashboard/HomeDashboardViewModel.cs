@@ -33,6 +33,23 @@ public class HomeDashboardViewModel
     public IReadOnlyCollection<ProjectSuccess> RecentSuccesses { get; set; } = Array.Empty<ProjectSuccess>();
     public IReadOnlyCollection<(ProductDto Product, ReturnStatus Status, DateTime DueDate)> ProductsNeedingReturns { get; set; } = Array.Empty<(ProductDto, ReturnStatus, DateTime)>();
     public IReadOnlyCollection<(Project Project, UpdateSubmissionStatus Status, DateTime DueDate)> ProjectsNeedingMonthlyUpdates { get; set; } = Array.Empty<(Project, UpdateSubmissionStatus, DateTime)>();
+
+    /// <summary>Monthly update status per project for the applicable reporting period (matches tasks / project table logic).</summary>
+    public IReadOnlyDictionary<int, UpdateSubmissionStatus> MonthlyUpdateStatusByProjectId { get; set; } =
+        new Dictionary<int, UpdateSubmissionStatus>();
+
+    /// <summary>Applicable reporting period year/month for monthly delivery updates (aligned with deadline rules).</summary>
+    public int ApplicableMonthlyUpdateYear { get; set; }
+    public int ApplicableMonthlyUpdateMonth { get; set; }
+
+    /// <summary>Display label for <see cref="ApplicableMonthlyUpdateYear"/> / <see cref="ApplicableMonthlyUpdateMonth"/> (explicit Admin period label when set).</summary>
+    public string ApplicableMonthlyUpdatePeriodLabel { get; set; } = "";
+
+    /// <summary>Whether the monthly delivery update submission window is open for the applicable period.</summary>
+    public bool MonthlyReportingWindowOpen { get; set; }
+
+    /// <summary>Active or paused work items still due or late for the applicable monthly period.</summary>
+    public int MonthlyReportingRemainingCount { get; set; }
     public IReadOnlyCollection<(ProductDto Product, Commission Commission, CommissionSubmissionStatus Status, DateTime DueDate)> ProductsNeedingCommissionReporting { get; set; } = Array.Empty<(ProductDto, Commission, CommissionSubmissionStatus, DateTime)>();
     public IReadOnlyCollection<Project> OversightProjects { get; set; } = Array.Empty<Project>();
     public IReadOnlyCollection<UserBusinessAreaRoleAssignment> LeadershipAssignments { get; set; } = Array.Empty<UserBusinessAreaRoleAssignment>();

@@ -1,0 +1,160 @@
+@model Compass.ViewModels.Modern.CompassNotificationSettingsPageViewModel
+@using System.Text.RegularExpressions
+@using Compass.ViewModels.Modern
+@using Microsoft.AspNetCore.Html
+@{
+  ViewData["Title"] = "Notification settings";
+
+  string NotifCategoryAnchorId(string category) =>
+      "notif-cat-" + Regex.Replace(category.ToLowerInvariant(), @"[^a-z0-9]+", "-").Trim('-');
+
+  var seenCats = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+  var categoryLinks = new List<NotificationAdminSideNavCategoryLink>();
+  foreach (var r in Model.Rows)
+  {
+    if (seenCats.Add(r.Category))
+    {
+      categoryLinks.Add(new NotificationAdminSideNavCategoryLink
+      {
+        AnchorId = NotifCategoryAnchorId(r.Category),
+        CategoryTitle = r.Category
+      });
+    }
+  }
+
+  var notificationSideNav = new NotificationAdminSideNavViewModel
+  {
+    IsEmailLogPage = false,
+    SettingsCategories = categoryLinks
+  };
+}
+
+@section Breadcrumbs {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernAdmin")">Admin</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">Notification settings</li>
+}
+
+<div class="admin-hub">
+ @{
+   var notifSettingsLede = new HtmlString("<p class=\"govuk-body govuk-!-margin-bottom-0\">Defaults for Compass reminder emails — who receives each type of notification when automation runs. Delivery hooks use these flags when sending; Central Operations addresses resolve from configuration at send time.</p>");
+   var notifSettingsActions = new HtmlString($"<a class=\"govuk-link govuk-link--no-visited-state govuk-!-font-weight-bold\" href=\"{Url.Action("NotificationEmailLog", "ModernAdminNotificationSettings") ?? "#"}\">Notification email log</a>");
+ }
+ @await Html.PartialAsync("~/Views/Modern/Shared/_ModernPageHeader.cshtml", new ModernPageHeaderViewModel {
+   Caption = "Administration",
+   Title = "Notification settings",
+   Lede = notifSettingsLede,
+   Actions = notifSettingsActions
+ })
+
+  @if (ViewBag.AdminError != null)
+  {
+ <div class="govuk-error-summary" role="alert" data-module="govuk-error-summary" style="margin-bottom:1.5rem;">
+ <h2 class="govuk-error-summary__title">There is a problem</h2>
+ <div class="govuk-error-summary__body">@ViewBag.AdminError</div>
+    </div>
+  }
+  @if (ViewBag.AdminMessage != null)
+  {
+ <div class="govuk-notification-banner govuk-notification-banner--success govuk-!-margin-bottom-3" role="region" aria-labelledby="ns-msg-title">
+ <div class="govuk-notification-banner__header">
+ <h2 class="govuk-notification-banner__title" id="ns-msg-title">Success</h2>
+      </div>
+ <div class="govuk-notification-banner__content">
+ <p class="govuk-notification-banner__heading">@ViewBag.AdminMessage</p>
+      </div>
+    </div>
+  }
+
+ <div class="govuk-grid-row notification-settings-layout">
+ <div class="govuk-grid-column-one-quarter-from-desktop notification-settings-layout__nav">
+ @await Html.PartialAsync("~/Views/Modern/Admin/_NotificationAdminSideNav.cshtml", notificationSideNav)
+ </div>
+ <div class="govuk-grid-column-three-quarters-from-desktop">
+ <div id="notification-settings-main">
+ <form method="post" action="@Url.Action("NotificationSettings", "ModernAdminNotificationSettings")">
+    @Html.AntiForgeryToken()
+
+    @{
+      string? prevCat = null;
+    }
+ @for (var i = 0; i < Model.Rows.Count; i++)
+    {
+      var row = Model.Rows[i];
+ @if (!string.Equals(prevCat, row.Category, StringComparison.Ordinal))
+      {
+        prevCat = row.Category;
+ <h2 id="@NotifCategoryAnchorId(row.Category)" class="govuk-heading-m govuk-!-margin-bottom-3 notification-settings-layout__category-anchor @(i > 0 ? "govuk-!-margin-top-8" : "")">@row.Category</h2>
+      }
+
+ <div class="dfe-c-card dfe-c-mb-4" style="border:1px solid var(--grey-2);padding:1.25rem 1.5rem;background:var(--white);">
+ <h3 class="govuk-heading-s govuk-!-margin-top-0">@row.Label</h3>
+ <fieldset class="govuk-fieldset">
+ <legend class="govuk-visually-hidden">@row.Category — @row.Label</legend>
+ <p class="govuk-body-s dfe-c-text-muted govuk-!-margin-bottom-3">@row.Help</p>
+
+ <input type="hidden" name="Rows[@i].EventKey" value="@row.EventKey" />
+
+ <div class="govuk-checkboxes govuk-checkboxes--small govuk-!-margin-bottom-4" data-module="govuk-checkboxes">
+          <div class="govuk-checkboxes__item">
+ <input type="hidden" name="Rows[@i].IsEnabled" value="false" />
+ <input class="govuk-checkboxes__input" id="en-@i" name="Rows[@i].IsEnabled" type="checkbox" value="true" @(row.IsEnabled ? "checked" : null) />
+ <label class="govuk-label govuk-checkboxes__label" for="en-@i">Send this notification when triggered</label>
+          </div>
+        </div>
+
+ @{
+          var anyRecipient = row.ShowFipsServiceOwner || row.ShowPrimaryWorkContact || row.ShowCentralOps ||
+                             row.ShowRiskIssueOwnerOrCreator;
+        }
+ @if (anyRecipient)
+        {
+ <p class="govuk-body govuk-!-margin-bottom-2 govuk-!-font-weight-bold">Send to</p>
+ <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes">
+ @if (row.ShowFipsServiceOwner)
+            {
+              <div class="govuk-checkboxes__item">
+ <input type="hidden" name="Rows[@i].SendToFipsServiceOwner" value="false" />
+ <input class="govuk-checkboxes__input" id="fips-@i" name="Rows[@i].SendToFipsServiceOwner" type="checkbox" value="true" @(row.SendToFipsServiceOwner ? "checked" : null) />
+ <label class="govuk-label govuk-checkboxes__label" for="fips-@i">Service owner (FIPS product)</label>
+              </div>
+            }
+ @if (row.ShowPrimaryWorkContact)
+            {
+              <div class="govuk-checkboxes__item">
+ <input type="hidden" name="Rows[@i].SendToPrimaryWorkContact" value="false" />
+ <input class="govuk-checkboxes__input" id="pc-@i" name="Rows[@i].SendToPrimaryWorkContact" type="checkbox" value="true" @(row.SendToPrimaryWorkContact ? "checked" : null) />
+ <label class="govuk-label govuk-checkboxes__label" for="pc-@i">Primary contact (work item)</label>
+              </div>
+            }
+ @if (row.ShowCentralOps)
+            {
+              <div class="govuk-checkboxes__item">
+ <input type="hidden" name="Rows[@i].SendToCentralOps" value="false" />
+ <input class="govuk-checkboxes__input" id="ops-@i" name="Rows[@i].SendToCentralOps" type="checkbox" value="true" @(row.SendToCentralOps ? "checked" : null) />
+ <label class="govuk-label govuk-checkboxes__label" for="ops-@i">Central Operations</label>
+              </div>
+            }
+ @if (row.ShowRiskIssueOwnerOrCreator)
+            {
+              <div class="govuk-checkboxes__item">
+ <input type="hidden" name="Rows[@i].SendToRiskIssueOwnerOrCreator" value="false" />
+ <input class="govuk-checkboxes__input" id="own-@i" name="Rows[@i].SendToRiskIssueOwnerOrCreator" type="checkbox" value="true" @(row.SendToRiskIssueOwnerOrCreator ? "checked" : null) />
+ <label class="govuk-label govuk-checkboxes__label" for="own-@i">Risk or issue owner / creator</label>
+              </div>
+            }
+          </div>
+        }
+      </fieldset>
+    </div>
+    }
+
+ <div class="govuk-button-group govuk-!-margin-top-6">
+ <button type="submit" class="govuk-button" data-module="govuk-button">Save settings</button>
+ <a class="govuk-link govuk-link--no-visited-state govuk-!-margin-left-2" href="@Url.Action("Index", "ModernAdmin")">Cancel</a>
+    </div>
+  </form>
+ </div>
+ </div>
+ </div>
+</div>

@@ -1,0 +1,56 @@
+@model Compass.ViewModels.Modern.ModernRaidReviewSetupViewModel
+@using Compass.ViewModels.Modern
+@{
+  ViewData["Title"] = "Choose business areas — RAID review";
+  var storageKey = ViewBag.RaidReviewStorageKey as string ?? "compass.raidReview.businessAreaIds";
+  var suggested = Model.SuggestedBusinessAreaIds.ToHashSet();
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernRaid")">RAID</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("ReviewStart", "ModernRaid")">Monthly review</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">Business areas</li>
+}
+
+<div class="modern-work-page raid-review-setup">
+  @await Html.PartialAsync("~/Views/Modern/Shared/_ModernPageHeader.cshtml", new ModernPageHeaderViewModel
+  {
+    Caption = "RAID monthly review",
+    Title = "Which business areas are you reviewing?",
+    Lede = new Microsoft.AspNetCore.Html.HtmlString("<p class=\"govuk-body govuk-!-margin-bottom-0\">Select all areas you are responsible for. Your choice is saved in this browser so future reviews start with your overview.</p>")
+  })
+
+  <form id="raid-review-setup-form" class="govuk-!-margin-top-6" novalidate>
+    <div class="govuk-form-group" id="raid-review-ba-group">
+      <fieldset class="govuk-fieldset" aria-describedby="raid-review-ba-hint">
+        <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Business areas</legend>
+        <div id="raid-review-ba-hint" class="govuk-hint">Select one or more.</div>
+        <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes">
+          @foreach (var o in Model.BusinessAreaOptions)
+          {
+            var id = $"raid-review-ba-{o.Id}";
+            var chk = suggested.Contains(o.Id) ? " checked" : "";
+            <div class="govuk-checkboxes__item">
+              <input class="govuk-checkboxes__input" type="checkbox" name="businessAreaIds" value="@o.Id" id="@id"@chk />
+              <label class="govuk-label govuk-checkboxes__label" for="@id">@o.Name</label>
+            </div>
+          }
+        </div>
+      </fieldset>
+    </div>
+    <p class="govuk-body govuk-!-margin-bottom-0" id="raid-review-setup-error" hidden>
+      <span class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> Select at least one business area.</span>
+    </p>
+    <button type="submit" class="govuk-button govuk-!-margin-top-4">Continue to overview</button>
+  </form>
+</div>
+
+@section Scripts {
+  <script src="~/modern/js/raid-monthly-review.js" asp-append-version="true" nonce="@(Context.Items["Nonce"]?.ToString() ?? "")"></script>
+  <script nonce="@(Context.Items["Nonce"]?.ToString() ?? "")">
+    window.compassRaidReview = window.compassRaidReview || {};
+    window.compassRaidReview.storageKey = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(storageKey));
+    window.compassRaidReview.initSetupForm();
+  </script>
+}

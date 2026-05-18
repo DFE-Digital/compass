@@ -1,0 +1,136 @@
+@model List<Compass.Models.DemandPipeline.DemandPipelineRequest>
+@using Compass.ViewModels.Modern
+@{
+    ViewData["Title"] = "Manage demand";
+    var allStatuses = new[] { "Draft", "Submitted", "Active", "ExploratoryReview", "Scoring", "Scored", "TriagePending", "Triaged", "Progressed to delivery", "Closed - Progressed to delivery", "Returned", "Rejected", "Paused", "Closed" };
+}
+
+@functions {
+    string StatusTagMod(string? s) => s switch {
+        "Draft" => "dfe-c-tag--grey",
+        "Submitted" => "dfe-c-tag--grey",
+        "Active" => "dfe-c-tag--blue",
+        "ExploratoryReview" => "dfe-c-tag--amber",
+        "Scoring" => "dfe-c-tag--blue",
+        "Scored" => "dfe-c-tag--teal",
+        "TriagePending" => "dfe-c-tag--red",
+        "Triaged" => "dfe-c-tag--green",
+        "Progressed to delivery" => "dfe-c-tag--green",
+        "Closed - Progressed to delivery" => "dfe-c-tag--green",
+        "Returned" => "dfe-c-tag--amber",
+        "Rejected" => "dfe-c-tag--red",
+        "Paused" => "dfe-c-tag--grey",
+        "Closed" => "dfe-c-tag--grey",
+        _ => "dfe-c-tag--grey"
+    };
+    string StatusLabel(string? s) => s switch {
+        "ExploratoryReview" => "EXPLORE",
+        "TriagePending" => "TRIAGE PENDING",
+        "Progressed to delivery" => "PROGRESSED",
+        "Closed - Progressed to delivery" => "CLOSED",
+        _ => (s ?? "—").ToUpperInvariant()
+    };
+}
+
+@section Breadcrumbs {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernOperations")">Operations</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">Manage demand</li>
+}
+
+@if (TempData["Success"] != null)
+{
+ <div class="govuk-notification-banner govuk-notification-banner--success" role="region" aria-labelledby="ops-demand-success-title">
+ <div class="govuk-notification-banner__header">
+ <h2 class="govuk-notification-banner__title" id="ops-demand-success-title">Success</h2>
+    </div>
+ <div class="govuk-notification-banner__content">
+ <p class="govuk-notification-banner__heading">@TempData["Success"]</p>
+    </div>
+ </div>
+}
+
+@{
+  var opsDemandLede = await Html.PartialAsync("_ManageDemandHeaderLede");
+}
+@await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+  Caption = "Operations",
+  Title = "Manage demand",
+  Lede = opsDemandLede
+})
+
+@await Html.PartialAsync("_SearchAndFilter", (Compass.Models.SearchAndFilterViewModel)ViewBag.SearchAndFilter)
+
+<p class="govuk-body-s govuk-!-margin-bottom-2" style="color:#505a5f;">Showing @Model.Count demand request@(Model.Count == 1 ? "" : "s").</p>
+
+@if (Model.Count == 0)
+{
+ <p class="govuk-body">No demand requests found.</p>
+}
+else
+{
+ <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+ <table class="govuk-table">
+ <caption class="govuk-visually-hidden">Demand pipeline requests</caption>
+    <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Reference</button>
+        </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Title</button>
+        </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Department</button>
+        </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">SRO</button>
+        </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Status</button>
+        </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Change status</button>
+        </th>
+        </tr>
+    </thead>
+    <tbody class="govuk-table__body">
+    @foreach (var d in Model)
+    {
+        <tr class="govuk-table__row">
+            <td class="govuk-table__cell">
+                <a href="@Url.Action("RequestDetail", "ModernDemand", new { id = d.Id })" class="govuk-link govuk-link--no-visited-state">@d.Reference</a>
+            </td>
+            <td class="govuk-table__cell">@d.Title</td>
+            <td class="govuk-table__cell">@(d.DepartmentGroup ?? "—")</td>
+            <td class="govuk-table__cell">@(d.Sro ?? "—")</td>
+            <td class="govuk-table__cell"><span class="dfe-c-tag @StatusTagMod(d.Status)">@StatusLabel(d.Status)</span></td>
+            <td class="govuk-table__cell">
+                <form method="post" action="@Url.Action("ManageDemandUpdateStatus", "ModernOperations", new { id = d.Id })" class="govuk-!-margin-bottom-0" style="display:flex;gap:0.5rem;align-items:center;">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="search" value="@Context.Request.Query["search"]" />
+                    <input type="hidden" name="status" value="@Context.Request.Query["status"]" />
+                    <input type="hidden" name="department" value="@Context.Request.Query["department"]" />
+                    <select name="newStatus" class="govuk-select govuk-!-font-size-14" style="min-width:10rem;">
+                    @foreach (var s in allStatuses)
+                    {
+                        if (s == d.Status)
+                        {
+                            <option value="@s" selected>@s</option>
+                        }
+                        else
+                        {
+                            <option value="@s">@s</option>
+                        }
+                    }
+                    </select>
+                    <button type="submit" class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0" style="font-size:14px;padding:4px 10px;">Update</button>
+                </form>
+            </td>
+        </tr>
+    }
+    </tbody>
+ </table>
+ </div>
+}

@@ -1,79 +1,102 @@
 /**
- * Confirm modal for destructive actions (delete, suspend, etc.).
- * Add data-confirm-title and data-confirm-message to any form;
- * on submit the modal is shown and the form is only submitted after "Confirm".
+ * Confirm modal (DfE native dialog element). Forms: data-confirm-title + data-confirm-message on submit.
+ * Programmatic: window.showConfirmModal(title, message, onConfirm).
  */
 (function () {
   function init() {
-    var overlay = document.getElementById('confirm-modal-overlay');
     var dialog = document.getElementById('confirm-modal');
     var titleEl = document.getElementById('confirm-modal-title');
-    var descEl = document.getElementById('confirm-modal-description');
+    var descEl = document.getElementById('confirm-modal-message');
     var cancelBtn = document.getElementById('confirm-modal-cancel');
     var confirmBtn = document.getElementById('confirm-modal-confirm');
 
-    if (!overlay || !dialog || !titleEl || !descEl || !cancelBtn || !confirmBtn) return;
+    if (!dialog || !titleEl || !descEl || !cancelBtn || !confirmBtn) return;
 
     var pendingForm = null;
+    /** @type {null | (() => void)} */
+    var pendingCallback = null;
+
+    function initModalComponents() {
+      if (typeof window.DfeFrontend !== 'undefined' && typeof window.DfeFrontend.initAll === 'function') {
+        window.DfeFrontend.initAll();
+      }
+    }
 
     function show(title, message) {
       titleEl.textContent = title || 'Confirm';
       descEl.textContent = message || 'Are you sure?';
-      overlay.style.display = 'flex';
-      overlay.setAttribute('aria-hidden', 'false');
-      dialog.style.display = 'block';
-      cancelBtn.focus();
+      if (typeof dialog.showModal === 'function') {
+        dialog.showModal();
+      } else {
+        dialog.setAttribute('open', '');
+      }
+      initModalComponents();
     }
 
     function hide() {
-      overlay.style.display = 'none';
-      overlay.setAttribute('aria-hidden', 'true');
-      dialog.style.display = 'none';
-      pendingForm = null;
-    }
-
-    function doConfirm() {
-      if (pendingForm && typeof pendingForm.submit === 'function') {
-        var form = pendingForm;
-        pendingForm = null;
-        hide();
-        form.submit();
+      if (typeof dialog.close === 'function') {
+        dialog.close();
       } else {
-        hide();
+        dialog.removeAttribute('open');
+        pendingForm = null;
+        pendingCallback = null;
       }
     }
 
-    cancelBtn.addEventListener('click', function () {
+    dialog.addEventListener('close', function () {
       pendingForm = null;
+      pendingCallback = null;
+    });
+
+    function doConfirm() {
+      if (pendingCallback) {
+        var cb = pendingCallback;
+        hide();
+        try {
+          cb();
+        } catch (e) {}
+        return;
+      }
+      if (pendingForm && typeof pendingForm.submit === 'function') {
+        var form = pendingForm;
+        hide();
+        form.submit();
+        return;
+      }
+      hide();
+    }
+
+    cancelBtn.addEventListener('click', function () {
       hide();
     });
 
     confirmBtn.addEventListener('click', doConfirm);
 
-    overlay.addEventListener('click', function (e) {
-      if (e.target === overlay) {
-        pendingForm = null;
-        hide();
-      }
-    });
+    /**
+     * @param {string} title
+     * @param {string} message
+     * @param {() => void} onConfirm
+     */
+    window.showConfirmModal = function (title, message, onConfirm) {
+      pendingCallback = typeof onConfirm === 'function' ? onConfirm : null;
+      pendingForm = null;
+      show(title || 'Confirm', message || 'Are you sure?');
+    };
 
-    document.addEventListener('keydown', function (e) {
-      if (dialog.style.display !== 'block') return;
-      if (e.key === 'Escape') {
-        pendingForm = null;
-        hide();
-      }
-    });
-
-    document.addEventListener('submit', function (e) {
-      var form = e.target;
-      if (form.getAttribute('data-confirm-title')) {
-        e.preventDefault();
-        var msg = form.getAttribute('data-confirm-message') || 'Are you sure?';
-        pendingForm = form;
-        show(form.getAttribute('data-confirm-title'), msg);
-      }
-    }, true);
+    document.addEventListener(
+      'submit',
+      function (e) {
+        var form = e.target;
+        if (form.getAttribute('data-confirm-title')) {
+          e.preventDefault();
+          var msg = form.getAttribute('data-confirm-message') || 'Are you sure?';
+          pendingForm = form;
+          pendingCallback = null;
+          show(form.getAttribute('data-confirm-title'), msg);
+        }
+      },
+      true
+    );
   }
 
   if (document.readyState === 'loading') {

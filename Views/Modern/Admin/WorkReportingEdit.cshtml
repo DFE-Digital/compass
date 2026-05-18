@@ -1,0 +1,132 @@
+@model Compass.ViewModels.Modern.DeadlineConfigRow
+@using Compass.ViewModels.Modern
+@using Microsoft.AspNetCore.Html
+@{
+    ViewData["Title"] = "Edit reporting window — " + Model.Name;
+    var id = Model.Id;
+}
+
+@section Breadcrumbs {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernAdmin")">Admin</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("WorkReporting", "ModernAdmin")">Work reporting</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">Edit reporting window</li>
+}
+
+<div class="admin-hub" id="sc-admin-workreporting-edit">
+ @await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+   Caption = "Administration",
+   Title = "Edit reporting window",
+   Lede = new HtmlString($"<p class=\"govuk-body govuk-!-margin-bottom-0\"><a class=\"govuk-link govuk-link--no-visited-state\" href=\"{Url.Action("WorkReporting", "ModernAdmin") ?? "#"}\">Back to work reporting</a></p>")
+ })
+
+  @if (ViewBag.AdminError != null)
+  {
+ <div class="govuk-error-summary" role="alert" data-module="govuk-error-summary" style="margin-bottom:1.5rem;">
+ <h2 class="govuk-error-summary__title">There is a problem</h2>
+ <div class="govuk-error-summary__body">@ViewBag.AdminError</div>
+    </div>
+  }
+  @if (ViewBag.AdminMessage != null)
+  {
+ <div class="govuk-notification-banner govuk-notification-banner--success govuk-!-margin-bottom-3" role="region">
+ <div class="govuk-notification-banner__content"><p class="govuk-notification-banner__heading">@ViewBag.AdminMessage</p></div>
+    </div>
+  }
+
+ <div class="dfe-c-card dfe-c-mb-4" style="border:1px solid var(--grey-2);border-left:4px solid var(--blue);padding:1.25rem 1.5rem;background:var(--white);max-width:56rem;">
+ <h2 class="govuk-heading-m govuk-!-margin-top-0">Deadline configuration</h2>
+ <p class="govuk-hint govuk-!-margin-bottom-3">Update when returns are due, the reporting-month rule, and how many days before month-end submission opens. Use <strong>Active</strong> below to deactivate this window (it will not apply to due dates until set back to Yes).</p>
+
+ <div class="dfe-c-flex govuk-!-margin-bottom-4" style="gap:0.5rem;flex-wrap:wrap;">
+      @if (Model.IsCurrentlyEffective)
+      {
+ <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--green">LIVE</span>
+      }
+      else if (Model.IsActive && Model.EffectiveFrom > DateTime.UtcNow)
+      {
+ <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--blue">FUTURE</span>
+      }
+      else if (Model.IsActive)
+      {
+ <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--grey">EXPIRED</span>
+      }
+      else
+      {
+ <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--grey">OFF</span>
+      }
+      @if (Model.IsDefault)
+      {
+ <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--blue">Default</span>
+      }
+    </div>
+
+    <form method="post" action="@Url.Action("DeadlineConfigEdit", "ModernAdmin", new { id })" novalidate>
+      @Html.AntiForgeryToken()
+
+      <div class="govuk-form-group">
+        <label class="govuk-label govuk-label--s" for="ed-dl-name">Name</label>
+        <input class="govuk-input govuk-!-width-two-thirds" type="text" name="name" id="ed-dl-name" value="@Model.Name" required maxlength="200" />
+      </div>
+
+      <div class="govuk-form-group">
+        <label class="govuk-label govuk-label--s" for="ed-dl-offset">Due month</label>
+        <div id="ed-dl-offset-hint" class="govuk-hint">Which month the deadline falls in relative to the reporting period.</div>
+        <select class="govuk-select" name="dueMonthOffset" id="ed-dl-offset" aria-describedby="ed-dl-offset-hint">
+          @if (Model.DueMonthOffset == 0) { <option value="0" selected>Reporting month</option><option value="1">Following month</option> }
+          else { <option value="0">Reporting month</option><option value="1" selected>Following month</option> }
+        </select>
+      </div>
+
+      <div class="govuk-form-group">
+        <label class="govuk-label govuk-label--s" for="ed-dl-day">Due day of month</label>
+        <div id="ed-dl-day-hint" class="govuk-hint">The calendar day (1–31) when returns are due.</div>
+        <input class="govuk-input govuk-input--width-4" type="number" name="dueCalendarDay" id="ed-dl-day" min="1" max="31" value="@Model.DueCalendarDay" aria-describedby="ed-dl-day-hint" />
+      </div>
+
+      <div class="govuk-form-group">
+        <label class="govuk-label govuk-label--s" for="ed-dl-comm">Commission days before month end</label>
+        <div id="ed-dl-comm-hint" class="govuk-hint">How many days before the end of the month submission opens.</div>
+        <input class="govuk-input govuk-input--width-4" type="number" name="commissionDaysBeforeMonthEnd" id="ed-dl-comm" min="1" max="30" value="@Model.CommissionDaysBeforeMonthEnd" aria-describedby="ed-dl-comm-hint" />
+      </div>
+
+      <div class="govuk-form-group">
+        <label class="govuk-label govuk-label--s" for="ed-dl-from">Effective from</label>
+        <input class="govuk-input govuk-input--width-10" type="date" name="effectiveFrom" id="ed-dl-from" value="@Model.EffectiveFrom.ToString("yyyy-MM-dd")" />
+      </div>
+
+      <div class="govuk-form-group">
+        <label class="govuk-label govuk-label--s" for="ed-dl-until">Effective until (optional)</label>
+        <div id="ed-dl-until-hint" class="govuk-hint">Leave blank if the window has no end date.</div>
+        <input class="govuk-input govuk-input--width-10" type="date" name="effectiveUntil" id="ed-dl-until" value="@(Model.EffectiveUntil?.ToString("yyyy-MM-dd"))" aria-describedby="ed-dl-until-hint" />
+      </div>
+
+      <div class="govuk-form-group">
+        <label class="govuk-label govuk-label--s" for="ed-dl-active">Active</label>
+        <div id="ed-dl-active-hint" class="govuk-hint">Choose No to deactivate this reporting window. It will not apply to due dates until set back to Yes.</div>
+        <select class="govuk-select" name="isActive" id="ed-dl-active" aria-describedby="ed-dl-active-hint">
+          @if (Model.IsActive) { <option value="true" selected>Yes</option><option value="false">No — deactivated</option> }
+          else { <option value="true">Yes</option><option value="false" selected>No — deactivated</option> }
+        </select>
+      </div>
+
+      <div class="govuk-form-group">
+        <label class="govuk-label govuk-label--s" for="ed-dl-default">Default</label>
+        <select class="govuk-select" name="isDefault" id="ed-dl-default">
+          @if (Model.IsDefault) { <option value="true" selected>Yes</option><option value="false">No</option> }
+          else { <option value="true">Yes</option><option value="false" selected>No</option> }
+        </select>
+      </div>
+
+      <div class="govuk-form-group">
+        <label class="govuk-label govuk-label--s" for="ed-dl-notes">Notes (optional)</label>
+        <input class="govuk-input govuk-!-width-two-thirds" type="text" name="notes" id="ed-dl-notes" value="@Model.Notes" maxlength="500" />
+      </div>
+
+      <div class="govuk-button-group">
+        <button type="submit" class="govuk-button" data-module="govuk-button">Save changes</button>
+        <a href="@Url.Action("WorkReporting", "ModernAdmin")" class="govuk-link govuk-link--no-visited-state">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>

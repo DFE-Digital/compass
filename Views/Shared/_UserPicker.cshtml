@@ -1,0 +1,69 @@
+@model Compass.Models.UserPickerViewModel
+@{
+    var hasError = ViewData.ModelState[Model?.FieldName ?? ""]?.Errors?.Any() == true;
+    var inputId = "user-picker-" + (Model?.FieldName ?? "user") + (!string.IsNullOrEmpty(Model?.InputIdSuffix) ? "-" + Model.InputIdSuffix : "");
+    var useGov = Model?.UseGovUkStyling == true;
+    var groupClass = useGov ? "govuk-form-group" : "dfe-c-form__group";
+    if (hasError)
+        groupClass += useGov ? " govuk-form-group--error" : " dfe-c-form__group--error";
+    var labelClass = useGov ? "govuk-label govuk-label--m" : "dfe-c-form__label dfe-c-form__label--s";
+    var hintClass = useGov ? "govuk-hint" : "dfe-c-form__hint";
+    var inputClass = (useGov ? "govuk-input govuk-!-width-one-half" : "dfe-c-width-20") + " js-user-picker-input";
+    var errorClass = useGov ? "govuk-error-message" : "dfe-c-form__error";
+    var messageClass = useGov ? "govuk-body-s js-user-picker-message" : "dfe-c-body-s js-user-picker-message";
+    var selectedCardClass = useGov ? "govuk-inset-text govuk-!-margin-top-2 govuk-!-margin-bottom-0" : "user-picker__selected-dfe-c-legacy-card";
+}
+<div class="@groupClass" id="@(Model?.FieldName ?? "")">
+ <label class="@labelClass" for="@inputId">@(Model?.Label ?? "Select user")</label>
+  @if (!string.IsNullOrEmpty(Model?.Hint))
+  {
+<div class="@hintClass">@Model.Hint</div>
+  }
+ <div class="user-picker" data-user-picker data-search-url="/api/users/search" data-select-url="/api/users/select">
+    <div style="position:relative;">
+      <input type="text"
+ class="@inputClass"
+             id="@inputId"
+             autocomplete="off"
+             placeholder="@(Model?.Placeholder ?? "e.g. Alex Smith or alex.smith@education.gov.uk")"
+             value="@Model?.DefaultName" />
+ <span class="user-picker__spinner js-user-picker-spinner" aria-hidden="true">Searching…</span>
+ <div class="user-picker__results js-user-picker-results" role="listbox" aria-live="polite"></div>
+    </div>
+ <p class="@messageClass" style="margin-top:0.25rem;display:none;"></p>
+    @if (Model?.IncludeHiddenNameEmailFields == true)
+    {
+ <input type="hidden" name="@Model.HiddenNameFieldName" class="js-user-picker-name" value="@Model.DefaultName" />
+ <input type="hidden" name="@Model.HiddenEmailFieldName" class="js-user-picker-email" value="@Model.DefaultEmail" />
+    }
+ <input type="hidden" name="@(Model?.FieldName ?? "UserId")" class="js-user-picker-value" value="@(Model?.DefaultUserId.HasValue == true ? Model.DefaultUserId.Value.ToString() : "")" />
+<div class="user-picker__selected js-user-picker-summary" style="margin-top:0.5rem;" data-default-text="@(Model?.DefaultSummaryText ?? "No user selected.")">
+      @if (!string.IsNullOrEmpty(Model?.DefaultName) || Model?.DefaultUserId != null)
+      {
+<div class="@selectedCardClass">
+ <div class="user-picker__selected-name">@(Model.DefaultName ?? "—")</div>
+          @if (!string.IsNullOrEmpty(Model.DefaultEmail))
+          {
+ <div class="user-picker__selected-meta">@Model.DefaultEmail</div>
+          }
+<button type="button" class="@(useGov ? "govuk-link" : "dfe-c-link dfe-c-body-s") js-user-picker-clear">Remove</button>
+        </div>
+      }
+      else
+      {
+<span class="@hintClass">@(Model?.DefaultSummaryText ?? "No user selected.")</span>
+      }
+    </div>
+  </div>
+  @if (hasError && Model != null)
+  {
+    if (useGov)
+    {
+<p class="@errorClass"><span class="govuk-visually-hidden">Error:</span>@ViewData.ModelState[Model.FieldName]?.Errors?.FirstOrDefault()?.ErrorMessage</p>
+    }
+    else
+    {
+<span class="@errorClass">@ViewData.ModelState[Model.FieldName]?.Errors?.FirstOrDefault()?.ErrorMessage</span>
+    }
+  }
+</div>

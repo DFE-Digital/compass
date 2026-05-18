@@ -1,0 +1,371 @@
+@model Compass.ViewModels.Modern.ModernRaidRisksPageViewModel
+@using System
+@using System.Linq
+@using Compass.Models.Modern.Work
+@using Compass.ViewModels.Modern
+@{
+  ViewData["Title"] = (ViewData["RaidRegisterTitleOverride"] as string) ?? (
+    (ViewData["RaidRegisterMode"] as string) switch
+    {
+      "tier" => "RAID — Risks by tier",
+      "directorate" => "RAID — Directorate — Risk register",
+      "business-areas" => "RAID — Business areas — Risk register",
+      _ => "RAID — Risks"
+    });
+  var mode = ViewData["RaidRegisterMode"] as string ?? "risks";
+  var listPathOverride = ViewData["RaidRegisterListPathOverride"] as string;
+  var listPath = string.IsNullOrWhiteSpace(listPathOverride)
+    ? mode switch
+    {
+      "tier" => "/modern/raid/tier",
+      "directorate" => "/modern/raid/directorate",
+      "business-areas" => "/modern/raid/business-areas",
+      _ => "/modern/raid/risks"
+    }
+    : listPathOverride!;
+  var hideHero = ViewData["RaidRegisterHideHero"] as bool? ?? false;
+  var formAction = listPath;
+  var clearUrl = listPath;
+  var activeTab = string.IsNullOrWhiteSpace(Model.ActiveTab)
+    ? (mode is "risks" or "tier" or "directorate" or "business-areas" ? "my" : "all")
+    : Model.ActiveTab;
+  var baQ = Model.RaidBusinessAreaQueryFragment;
+  var baSuffix = string.IsNullOrEmpty(baQ) ? "" : "&" + baQ;
+  var modeTitle = mode switch
+  {
+    "tier" => "Risks by tier",
+    "directorate" => "Risk register",
+    "business-areas" => "Risk register",
+    _ => "Risks register"
+  };
+  var modeLede = mode switch
+  {
+    "tier" => $"View risks grouped by escalation tier and monitor movement between T1/T2/T3 ({Model.TotalFiltered:N0} matched).",
+    "directorate" => $"Filtered risks for the selected scope ({Model.TotalFiltered:N0} matched).",
+    "business-areas" => $"Filtered risks for the selected business area scope ({Model.TotalFiltered:N0} matched).",
+    _ => $"Browse and filter risks across work items ({Model.TotalFiltered:N0} matched)."
+  };
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="/modern/raid/dashboard">RAID</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">
+    @(mode switch { "tier" => "Risks by tier", "directorate" => "Directorate", "business-areas" => "Business areas", _ => "Risks" })
+  </li>
+}
+
+<div class="modern-work-page raid-risks-page">
+  <style>
+    .raid-risks-page .raid-risks-data-table .raid-risks-badge-cell { white-space: nowrap; }
+    .raid-risks-page .raid-risks-data-table thead th.govuk-table__header--numeric .dfe-f-table-sort-button { justify-content: flex-end; }
+    .raid-risks-page .raid-risks-data-table tbody td.govuk-table__cell--numeric { text-align: right; }
+    .raid-risks-page .raid-risks-data-shell {
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 0;
+      overflow: hidden;
+      padding: 0;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+    }
+    .raid-risks-page .filter-toolbar input[type="search"],
+    .raid-risks-page .filter-toolbar .filter-search,
+    .raid-risks-page .filter-toolbar__search-wrap .filter-search,
+    .raid-risks-page .filter-toolbar__search-wrap input[type="search"],
+    .raid-risks-page .filter-toolbar__search-submit,
+    .raid-risks-page .filter-toggle-btn,
+    .raid-risks-page .filter-panel select,
+    .raid-risks-page .filter-panel input,
+    .raid-risks-page a.filter-active-chip,
+    .raid-risks-page .dfe-c-tag,
+    .raid-risks-page .govuk-button,
+    .raid-risks-page .govuk-select {
+      border-radius: 0;
+    }
+    .raid-risks-page .raid-risks-data-shell .dfe-f-table-wrapper { margin-bottom: 0; }
+    .raid-risks-page .raid-risks-data-table { margin-bottom: 0; }
+    .raid-risks-page .raid-risks-data-table thead .govuk-table__header {
+      background: #f3f2f1;
+      border-bottom: 2px solid #0b0c0c;
+      font-weight: 700;
+      vertical-align: bottom;
+    }
+    .raid-risks-page .raid-risks-data-table tbody tr:nth-child(even):not(.raid-risks-tier-group) { background: #fafafa; }
+    .raid-risks-page .raid-risks-data-table tbody td,
+    .raid-risks-page .raid-risks-data-table tbody th { vertical-align: middle; }
+    .raid-risks-page .raid-risks-tier-group .govuk-table__cell {
+      background: #f3f2f1;
+      border-bottom: 2px solid #0b0c0c;
+      padding-top: 0.75rem;
+      padding-bottom: 0.5rem;
+    }
+  </style>
+  @if (!hideHero)
+  {
+    ViewBag.RaidRisksHeroMode = mode;
+    ViewBag.RaidRisksHeroModeLede = modeLede;
+    var risksHeroLede = await Html.PartialAsync("~/Views/Modern/Raid/_RaidRisksRegisterHeroLede.cshtml", Model);
+    Microsoft.AspNetCore.Html.IHtmlContent? risksHeroActions = mode == "risks"
+      ? await Html.PartialAsync("~/Views/Modern/Raid/_RaidRisksRegisterHeroActions.cshtml")
+      : null;
+    @await Html.PartialAsync("~/Views/Modern/Shared/_ModernPageHeader.cshtml", new ModernPageHeaderViewModel {
+      Caption = "RAID",
+      Title = modeTitle,
+      Lede = risksHeroLede,
+      Actions = risksHeroActions
+    })
+  }
+
+  @if (TempData["Message"] is string raidPrefMsg && !string.IsNullOrWhiteSpace(raidPrefMsg))
+  {
+    <div class="govuk-notification-banner govuk-notification-banner--success govuk-!-margin-bottom-4" role="region" aria-labelledby="raid-pref-banner-title">
+      <div class="govuk-notification-banner__header">
+        <h2 class="govuk-notification-banner__title" id="raid-pref-banner-title">Success</h2>
+      </div>
+      <div class="govuk-notification-banner__content">
+        <p class="govuk-notification-banner__heading">@raidPrefMsg</p>
+      </div>
+    </div>
+  }
+  @if (TempData["ErrorMessage"] is string raidPrefErr && !string.IsNullOrWhiteSpace(raidPrefErr))
+  {
+    <div class="govuk-error-summary govuk-!-margin-bottom-4" tabindex="-1">
+      <h2 class="govuk-error-summary__title">There is a problem</h2>
+      <div class="govuk-error-summary__body">@raidPrefErr</div>
+    </div>
+  }
+
+  <form method="get" action="@formAction" id="raid-risks-register-form" class="govuk-!-margin-bottom-0">
+    <input type="hidden" name="tab" value="@activeTab" />
+    <input type="hidden" name="page" value="1" />
+    <div id="search-and-filter">
+      <div class="filter-toolbar">
+        <div class="filter-toolbar__search-wrap">
+          <input type="search" name="search" id="raid-risks-search" value="@Model.Search" placeholder="Search title, notes, description…" class="filter-search" autocomplete="off" aria-label="Search risks" />
+          <button type="submit" class="govuk-button govuk-button--secondary filter-toolbar__search-submit">Search</button>
+        </div>
+        <button type="button" class="filter-toggle-btn" id="raid-risks-filter-btn" aria-expanded="false" aria-controls="raid-risks-filter-panel">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="flex-shrink:0;" aria-hidden="true"><path d="M1 3h14v1.5l-5 5V14l-4-2V9.5L1 4.5V3z"></path></svg>
+          <span class="filter-toggle-label">Filter</span>
+        </button>
+      </div>
+      <div class="filter-panel filter-panel--allwork" id="raid-risks-filter-panel">
+        <div class="filter-panel__grid">
+          @if (Model.DivisionOptions.Count > 0)
+          {
+            <div>
+              <label for="raid-risks-division">@(mode == "directorate" ? "Directorate" : "Division")</label>
+              <select name="divisionId" id="raid-risks-division" class="govuk-select">
+                <option value="">@(mode == "directorate" ? "All directorates" : "All divisions")</option>
+                @foreach (var o in Model.DivisionOptions)
+                {
+                  if (Model.DivisionId == o.Id) { <option value="@o.Id" selected>@o.Name</option> }
+                  else { <option value="@o.Id">@o.Name</option> }
+                }
+              </select>
+            </div>
+          }
+          @if (Model.BusinessAreaOptions.Count > 0)
+          {
+            <div>
+              <label for="raid-risks-ba">Business area</label>
+              <select name="businessAreaId" id="raid-risks-ba" class="govuk-select">
+                @if (mode == "risks")
+                {
+                  if (Model.RaidBusinessAreaExplicitNone || Model.BusinessAreaId is not > 0)
+                  { <option value="0" selected>All business areas</option> }
+                  else
+                  { <option value="0">All business areas</option> }
+                  @foreach (var o in Model.BusinessAreaOptions)
+                  {
+                    var optSelected = !Model.RaidBusinessAreaExplicitNone && Model.BusinessAreaId == o.Id;
+                    if (optSelected) { <option value="@o.Id" selected>@o.Name</option> }
+                    else { <option value="@o.Id">@o.Name</option> }
+                  }
+                }
+                else
+                {
+                  <option value="">All business areas</option>
+                  @foreach (var o in Model.BusinessAreaOptions)
+                  {
+                    if (Model.BusinessAreaId == o.Id) { <option value="@o.Id" selected>@o.Name</option> }
+                    else { <option value="@o.Id">@o.Name</option> }
+                  }
+                }
+              </select>
+            </div>
+          }
+          <div>
+            <label for="raid-risks-project">Work item</label>
+            <select name="projectId" id="raid-risks-project" class="govuk-select">
+              <option value="">All</option>
+              @foreach (var o in Model.ProjectOptions)
+              {
+                if (Model.ProjectId == o.Id) { <option value="@o.Id" selected>@o.Name</option> }
+                else { <option value="@o.Id">@o.Name</option> }
+              }
+            </select>
+          </div>
+          <div>
+            <label for="raid-risks-status">Status</label>
+            <select name="riskStatusId" id="raid-risks-status" class="govuk-select">
+              <option value="">All</option>
+              @foreach (var o in Model.RiskStatusOptions)
+              {
+                if (Model.RiskStatusId == o.Id) { <option value="@o.Id" selected>@o.Name</option> }
+                else { <option value="@o.Id">@o.Name</option> }
+              }
+            </select>
+          </div>
+          <div>
+            <label for="raid-risks-tier">Tier</label>
+            <select name="riskTierId" id="raid-risks-tier" class="govuk-select">
+              <option value="">All</option>
+              @foreach (var o in Model.TierOptions)
+              {
+                if (Model.RiskTierId == o.Id) { <option value="@o.Id" selected>@o.Name</option> }
+                else { <option value="@o.Id">@o.Name</option> }
+              }
+            </select>
+          </div>
+        </div>
+        <div class="filter-panel__actions" style="margin-top:0.75rem;display:flex;gap:0.5rem;flex-wrap:wrap;">
+          <button type="submit" class="govuk-button">Apply filters</button>
+          <a class="govuk-button govuk-button--secondary" href="@clearUrl">Clear</a>
+        </div>
+      </div>
+    </div>
+  </form>
+
+  @if (mode == "directorate" && Model.DivisionId != null)
+  {
+    <p class="govuk-body-s govuk-!-margin-bottom-3"><a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("DirectorateDetail", "ModernRaid", new { id = Model.DivisionId.Value })">Directorate profile</a></p>
+  }
+  @if (mode == "business-areas" && Model.BusinessAreaId != null)
+  {
+    <p class="govuk-body-s govuk-!-margin-bottom-3"><a class="govuk-link govuk-link--no-visited-state" href="@(Url.Action("BusinessAreaDetail", "ModernRaid", new { id = Model.BusinessAreaId.Value }) ?? "#")">Business area profile</a></p>
+  }
+
+  @{
+    var risksScopeNav = new RaidRegisterScopeNavViewModel
+    {
+      AriaLabel = "Risk register views",
+      ActiveTab = activeTab,
+      Links = new[]
+      {
+        new RaidRegisterScopeNavLink
+        {
+          TabKey = "my",
+          Label = "Your risks",
+          Href = $"{listPath}?tab=my&page=1&search={Uri.EscapeDataString(Model.Search ?? "")}&divisionId={Model.DivisionId}&projectId={Model.ProjectId}&riskStatusId={Model.RiskStatusId}&riskTierId={Model.RiskTierId}{baSuffix}",
+          Count = Model.MyCount
+        },
+        new RaidRegisterScopeNavLink
+        {
+          TabKey = "open",
+          Label = "Open risks",
+          Href = $"{listPath}?tab=open&page=1&search={Uri.EscapeDataString(Model.Search ?? "")}&divisionId={Model.DivisionId}&projectId={Model.ProjectId}&riskStatusId={Model.RiskStatusId}&riskTierId={Model.RiskTierId}{baSuffix}",
+          Count = Model.OpenCount
+        },
+        new RaidRegisterScopeNavLink
+        {
+          TabKey = "closed",
+          Label = "Closed risks",
+          Href = $"{listPath}?tab=closed&page=1&search={Uri.EscapeDataString(Model.Search ?? "")}&divisionId={Model.DivisionId}&projectId={Model.ProjectId}&riskStatusId={Model.RiskStatusId}&riskTierId={Model.RiskTierId}{baSuffix}",
+          Count = Model.ClosedCount
+        },
+        new RaidRegisterScopeNavLink
+        {
+          TabKey = "all",
+          Label = "All risks",
+          Href = $"{listPath}?tab=all&page=1&search={Uri.EscapeDataString(Model.Search ?? "")}&divisionId={Model.DivisionId}&projectId={Model.ProjectId}&riskStatusId={Model.RiskStatusId}&riskTierId={Model.RiskTierId}{baSuffix}",
+          Count = Model.AllCount
+        }
+      }
+    };
+  }
+  @await Html.PartialAsync("~/Views/Modern/Raid/_RaidRegisterScopeNav.cshtml", risksScopeNav)
+
+  @if (Model.Rows.Count == 0)
+  {
+    <p class="govuk-body">No risks match your filters.</p>
+  }
+  else
+  {
+    <div class="raid-risks-data-shell govuk-!-margin-top-0">
+    <div class="dfe-f-table-wrapper govuk-!-margin-bottom-0" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+      <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed raid-risks-data-table govuk-!-margin-bottom-0" id="raid-risks-table">
+        <caption class="govuk-visually-hidden">Risks matching current filters</caption>
+        <thead class="govuk-table__head">
+          <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+              <button type="button" class="dfe-f-table-sort-button">Risk</button>
+            </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+              <button type="button" class="dfe-f-table-sort-button">Tier</button>
+            </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+              <button type="button" class="dfe-f-table-sort-button">Likelihood</button>
+            </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+              <button type="button" class="dfe-f-table-sort-button">Impact</button>
+            </th>
+            <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none">
+              <button type="button" class="dfe-f-table-sort-button">Score (inherent)</button>
+            </th>
+          </tr>
+        </thead>
+        <tbody class="govuk-table__body">
+          @{
+            string? prevTierKey = null;
+          }
+          @foreach (var r in Model.Rows)
+          {
+            var tierKey = r.Tier ?? "";
+            @if (Model.GroupRowsByRiskTier && prevTierKey != tierKey)
+            {
+              var heading = string.IsNullOrEmpty(r.Tier) ? "Unassigned tier" : r.Tier;
+              <tr class="govuk-table__row raid-risks-tier-group">
+                <td class="govuk-table__cell" colspan="5"><h2 class="govuk-heading-s govuk-!-margin-bottom-0">@heading</h2></td>
+              </tr>
+              prevTierKey = tierKey;
+            }
+            <tr class="govuk-table__row">
+              @{
+                var riskDetailUrl = Url.Action("RiskDetail", "ModernRaid", new { id = r.Id }) ?? "#";
+              }
+              @await Html.PartialAsync("~/Views/Modern/Raid/_RaidRegisterItemTitleCell.cshtml", new RaidRegisterItemTitleVm(riskDetailUrl, r.Title, $"R-{r.Id:D4}"))
+              <td class="govuk-table__cell govuk-body-s raid-risks-badge-cell">
+                <span class="@WorkBadgeCss.RaidTierDfeFrontendBadgeClass(r.Tier)">@(string.IsNullOrWhiteSpace(r.Tier) ? "—" : r.Tier)</span>
+              </td>
+              <td class="govuk-table__cell govuk-body-s raid-risks-badge-cell">
+                <span class="@WorkBadgeCss.RaidRiskLikelihoodImpactLabelDfeFrontendBadgeClass(r.LikelihoodLabel)">@(r.LikelihoodLabel ?? "—")</span>
+              </td>
+              <td class="govuk-table__cell govuk-body-s raid-risks-badge-cell">
+                <span class="@WorkBadgeCss.RaidRiskLikelihoodImpactLabelDfeFrontendBadgeClass(r.ImpactLabel)">@(r.ImpactLabel ?? "—")</span>
+              </td>
+              <td class="govuk-table__cell govuk-table__cell--numeric govuk-body-s raid-risks-badge-cell">
+                <span class="@WorkBadgeCss.RaidRiskScoreDfeFrontendBadgeClass(r.RiskScore)">@r.RiskScore</span>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+    </div>
+  }
+  @if (Model.TotalPages > 1)
+  {
+    Func<int, string> risksPageUrl = p =>
+      $"{listPath}?tab={activeTab}&search={Uri.EscapeDataString(Model.Search ?? "")}&divisionId={Model.DivisionId}&projectId={Model.ProjectId}&riskStatusId={Model.RiskStatusId}&riskTierId={Model.RiskTierId}{baSuffix}&page={p}";
+    <div class="govuk-!-margin-top-6">
+      @await Html.PartialAsync("~/Views/Modern/Shared/_GovUkPagination.cshtml", new GovUkPaginationViewModel {
+        CurrentPage = Model.Page,
+        TotalPages = Model.TotalPages,
+        PageUrl = risksPageUrl,
+        NavigationAriaLabel = "Risks results"
+      })
+    </div>
+  }
+</div>

@@ -1,0 +1,223 @@
+@model List<Compass.Models.PerformanceMetric>
+@using System.Text.Json
+@using Compass.ViewModels.Modern
+@using Microsoft.AspNetCore.Html
+@{
+  ViewData["Title"] = "Performance metric guidance";
+
+  Compass.Models.ValidationRules? ParseRules(string? json)
+  {
+    if (string.IsNullOrWhiteSpace(json)) return null;
+    try { return JsonSerializer.Deserialize<Compass.Models.ValidationRules>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }); }
+    catch { return null; }
+  }
+
+  string FormatValueType(Compass.Models.ValueType vt) => vt switch
+  {
+    Compass.Models.ValueType.Text => "Text",
+    Compass.Models.ValueType.Number => "Whole number",
+    Compass.Models.ValueType.Decimal => "Decimal",
+    Compass.Models.ValueType.Percentage => "Percentage",
+    _ => vt.ToString()
+  };
+
+  string Slugify(string title) => System.Text.RegularExpressions.Regex.Replace(title.Trim().ToLowerInvariant(), @"[^a-z0-9]+", "-").Trim('-');
+
+  string MetricAnchorId(Compass.Models.PerformanceMetric m) => "metric-" + Slugify(m.Identifier);
+
+  var metricsOrdered = Model.OrderBy(m => m.Identifier).ToList();
+  var sideNavId = "perf-guidance-side-nav-list";
+}
+
+@section Breadcrumbs {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernPerformance")">Performance</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">Guidance</li>
+}
+
+<div class="perf-guidance-page admin-hub">
+ @await Html.PartialAsync("~/Views/Modern/Shared/_ModernPageHeader.cshtml", new ModernPageHeaderViewModel {
+   Caption = "Performance",
+   Title = "Metric guidance",
+   Lede = new HtmlString("<p class=\"govuk-body govuk-!-margin-bottom-0\">Reference for all active performance metrics including descriptions, data types, validation rules and applicable criteria.</p>")
+ })
+
+@if (Model.Count == 0)
+{
+ <p class="govuk-body dfe-c-text-muted">No active performance metrics found.</p>
+}
+else
+{
+  <div class="govuk-grid-row perf-guidance-layout">
+    <div class="govuk-grid-column-one-quarter-from-desktop">
+      <nav class="dfe-f-side-navigation perf-guidance-side-nav" aria-label="Metric sections" data-module="dfe-f-side-navigation">
+        <button type="button" class="dfe-f-side-navigation__toggle" aria-controls="@sideNavId" aria-expanded="false">Metrics</button>
+        <ul id="@sideNavId" class="dfe-f-side-navigation__list" hidden>
+          @foreach (var cm in metricsOrdered)
+          {
+            var anchor = MetricAnchorId(cm);
+            <li class="dfe-f-side-navigation__item">
+              <a class="dfe-f-side-navigation__link govuk-link govuk-link--no-visited-state govuk-link--no-underline" href="#@anchor">@cm.Title <span class="govuk-visually-hidden">(@cm.Identifier)</span></a>
+            </li>
+          }
+        </ul>
+      </nav>
+    </div>
+
+    <div class="govuk-grid-column-three-quarters-from-desktop">
+      <p class="govuk-body dfe-c-mb-4">There are <strong>@Model.Count</strong> active metrics. Expand a metric to see full guidance.</p>
+
+      <div class="dfe-f-toggle-group dfe-c-mb-4" data-module="dfe-f-toggle-group">
+        <div class="dfe-f-toggle-group__controls govuk-body-s">
+          <button type="button" class="dfe-f-toggle-group__action" data-dfe-toggle-expand-all>Expand all</button>
+          <span class="dfe-f-toggle-group__separator" aria-hidden="true"> · </span>
+          <button type="button" class="dfe-f-toggle-group__action" data-dfe-toggle-collapse-all>Collapse all</button>
+        </div>
+        <div class="dfe-f-toggle-group__items">
+      @{ var metricIndex = 0; }
+      @foreach (var m in metricsOrdered)
+      {
+        metricIndex++;
+        var rules = ParseRules(m.ValidationRules);
+        var phases = string.IsNullOrWhiteSpace(m.ApplicablePhases) ? null : m.ApplicablePhases.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var types = string.IsNullOrWhiteSpace(m.ApplicableTypes) ? null : m.ApplicableTypes.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var toggleBtnId = $"perf-guidance-toggle-{metricIndex}";
+        var togglePanelId = $"perf-guidance-panel-{metricIndex}";
+
+          <div class="dfe-f-toggle" data-module="dfe-f-toggle">
+            <div class="dfe-f-toggle__title-wrapper">
+              <h2 class="dfe-f-toggle__heading">
+                <button type="button" id="@toggleBtnId" class="dfe-f-toggle__button" aria-expanded="false" aria-controls="@togglePanelId">
+                  <span class="dfe-f-toggle__icon" aria-hidden="true"></span>
+                  <span class="dfe-f-toggle__title">@m.Title</span>
+                </button>
+              </h2>
+            </div>
+            <div id="@togglePanelId" class="dfe-f-toggle__content" hidden>
+              <div class="dfe-f-toggle__body govuk-body">
+            <div id="@MetricAnchorId(m)" class="perf-guidance-metric-anchor" tabindex="-1"></div>
+            <p class="govuk-body-s govuk-!-margin-bottom-3 govuk-!-margin-top-0"><span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--grey">@m.Identifier</span></p>
+            <dl class="govuk-summary-list govuk-summary-list--no-border govuk-!-margin-bottom-0">
+              <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">Description</dt>
+                <dd class="govuk-summary-list__value">@m.Description</dd>
+              </div>
+              @if (!string.IsNullOrWhiteSpace(m.Purpose))
+              {
+              <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">Purpose</dt>
+                <dd class="govuk-summary-list__value">@m.Purpose</dd>
+              </div>
+              }
+              @if (!string.IsNullOrWhiteSpace(m.HintText))
+              {
+              <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">Hint</dt>
+                <dd class="govuk-summary-list__value">@m.HintText</dd>
+              </div>
+              }
+              <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">Data type</dt>
+                <dd class="govuk-summary-list__value">@FormatValueType(m.ValueType)</dd>
+              </div>
+              @if (rules != null)
+              {
+              <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">Validation rules</dt>
+                <dd class="govuk-summary-list__value">
+                  <ul class="govuk-list govuk-list--bullet govuk-!-margin-bottom-0">
+                    <li>Required: <strong>@(rules.Required ? "Yes" : "No")</strong></li>
+                    @if (rules.AllowNull)
+                    {
+                      <li>Allows "not captured"</li>
+                    }
+                    @if (rules.MinimumValue.HasValue)
+                    {
+                      <li>Minimum value: <strong>@rules.MinimumValue</strong></li>
+                    }
+                    @if (rules.MaximumValue.HasValue)
+                    {
+                      <li>Maximum value: <strong>@rules.MaximumValue</strong></li>
+                    }
+                    @if (rules.DecimalPlaces.HasValue)
+                    {
+                      <li>Decimal places: <strong>@rules.DecimalPlaces</strong></li>
+                    }
+                    @if (rules.Range != null)
+                    {
+                      <li>Range: @(rules.Range.Min?.ToString() ?? "—") to @(rules.Range.Max?.ToString() ?? "—")</li>
+                    }
+                  </ul>
+                </dd>
+              </div>
+              }
+              <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">Applicable phases</dt>
+                <dd class="govuk-summary-list__value">
+                  @if (phases == null || phases.Length == 0)
+                  {
+                    <span>All phases</span>
+                  }
+                  else
+                  {
+                    @string.Join(", ", phases)
+                  }
+                </dd>
+              </div>
+              <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">Applicable types</dt>
+                <dd class="govuk-summary-list__value">
+                  @if (types == null || types.Length == 0)
+                  {
+                    <span>All types</span>
+                  }
+                  else
+                  {
+                    @string.Join(", ", types)
+                  }
+                </dd>
+              </div>
+              <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">Valid from</dt>
+                <dd class="govuk-summary-list__value">@m.ValidFromMonth/@m.ValidFromYear</dd>
+              </div>
+            </dl>
+              </div>
+            </div>
+          </div>
+      }
+        </div>
+      </div>
+    </div>
+  </div>
+}
+</div>
+
+@section Scripts {
+<script nonce="@(Context.Items["Nonce"]?.ToString() ?? "")">
+  (function () {
+    function expandHashMetric() {
+      var hash = (window.location.hash || '').replace(/^#/, '');
+      if (!hash) return;
+      var el = document.getElementById(hash);
+      if (!el || !el.classList.contains('perf-guidance-metric-anchor')) return;
+      var toggleRoot = el.closest('.dfe-f-toggle');
+      if (!toggleRoot) return;
+      var btn = toggleRoot.querySelector('.dfe-f-toggle__button');
+      function scrollToAnchor() {
+        el.scrollIntoView({ block: 'start', behavior: 'auto' });
+      }
+      if (btn && btn.getAttribute('aria-expanded') === 'false') {
+        btn.click();
+        window.setTimeout(scrollToAnchor, 80);
+      } else {
+        window.requestAnimationFrame(scrollToAnchor);
+      }
+    }
+    window.addEventListener('load', function () {
+      window.setTimeout(expandHashMetric, 0);
+    });
+    window.addEventListener('hashchange', expandHashMetric);
+  })();
+</script>
+}

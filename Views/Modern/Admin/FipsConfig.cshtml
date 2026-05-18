@@ -1,0 +1,233 @@
+@model FipsAdminViewModel
+@{
+    ViewData["Title"] = "FIPS configuration — Admin";
+    var tab = Model.ActiveTab;
+}
+
+@section Breadcrumbs {
+    <li><a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("Index", "ModernAdmin")">Admin</a></li>
+    <li>FIPS configuration</li>
+}
+
+<div class="dfe-c-page">
+ <h1 class="govuk-heading-l">FIPS configuration</h1>
+ <p class="govuk-body">Manage the lookup categories used across FIPS products. Phase configuration is managed via the existing <a href="@Url.Action("Index", "ModernAdmin", new { panel = "phases" })" class="govuk-link govuk-link--no-visited-state">Phases</a> admin panel.</p>
+
+ <nav class="dfe-f-sub-navigation govuk-!-margin-bottom-4" aria-label="FIPS config sections">
+ <ul class="dfe-f-sub-navigation__list">
+ <li class="dfe-f-sub-navigation__item@(tab == "channels" ? " dfe-f-sub-navigation__item--active" : "")">
+ <a class="dfe-f-sub-navigation__link govuk-link govuk-link--no-visited-state" href="@Url.Action("FipsConfig", "ModernAdmin", new { tab = "channels" })" id="tab-channels"@if (tab == "channels") { <text> aria-current="page"</text> }>Channels</a>
+ </li>
+ <li class="dfe-f-sub-navigation__item@(tab == "types" ? " dfe-f-sub-navigation__item--active" : "")">
+ <a class="dfe-f-sub-navigation__link govuk-link govuk-link--no-visited-state" href="@Url.Action("FipsConfig", "ModernAdmin", new { tab = "types" })" id="tab-types"@if (tab == "types") { <text> aria-current="page"</text> }>Types</a>
+ </li>
+ <li class="dfe-f-sub-navigation__item@(tab == "businessareas" ? " dfe-f-sub-navigation__item--active" : "")">
+ <a class="dfe-f-sub-navigation__link govuk-link govuk-link--no-visited-state" href="@Url.Action("FipsConfig", "ModernAdmin", new { tab = "businessareas" })" id="tab-businessareas"@if (tab == "businessareas") { <text> aria-current="page"</text> }>Business areas</a>
+ </li>
+ <li class="dfe-f-sub-navigation__item@(tab == "usergroups" ? " dfe-f-sub-navigation__item--active" : "")">
+ <a class="dfe-f-sub-navigation__link govuk-link govuk-link--no-visited-state" href="@Url.Action("FipsConfig", "ModernAdmin", new { tab = "usergroups" })" id="tab-usergroups"@if (tab == "usergroups") { <text> aria-current="page"</text> }>User groups</a>
+ </li>
+ <li class="dfe-f-sub-navigation__item@(tab == "contactroles" ? " dfe-f-sub-navigation__item--active" : "")">
+ <a class="dfe-f-sub-navigation__link govuk-link govuk-link--no-visited-state" href="@Url.Action("FipsConfig", "ModernAdmin", new { tab = "contactroles" })" id="tab-contactroles"@if (tab == "contactroles") { <text> aria-current="page"</text> }>Contact roles</a>
+ </li>
+ </ul>
+    </nav>
+
+    @* ── Channels ── *@
+ <div id="d-channels" class="tab-pane @(tab =="channels" ? "on" : "")" role="tabpanel">
+        @await Html.PartialAsync("_FipsConfigSimpleList", new ViewDataDictionary(ViewData) {
+            { "Items", Model.Channels.Select(x => new { x.Id, x.Name, x.Description, x.DisplayOrder, x.Active }).ToList() },
+            { "AddAction", Url.Action("FipsAddChannel", "ModernAdmin") },
+            { "ToggleAction", "FipsToggleChannel" },
+            { "EntityLabel", "channel" }
+        })
+    </div>
+
+    @* ── Types ── *@
+ <div id="d-types" class="tab-pane @(tab =="types" ? "on" : "")" role="tabpanel">
+        @await Html.PartialAsync("_FipsConfigSimpleList", new ViewDataDictionary(ViewData) {
+            { "Items", Model.Types.Select(x => new { x.Id, x.Name, x.Description, x.DisplayOrder, x.Active }).ToList() },
+            { "AddAction", Url.Action("FipsAddType", "ModernAdmin") },
+            { "ToggleAction", "FipsToggleType" },
+            { "EntityLabel", "type" }
+        })
+    </div>
+
+    @* ── Business areas ── *@
+ <div id="d-businessareas" class="tab-pane @(tab =="businessareas" ? "on" : "")" role="tabpanel">
+        @await Html.PartialAsync("_FipsConfigSimpleList", new ViewDataDictionary(ViewData) {
+            { "Items", Model.BusinessAreas.Select(x => new { x.Id, x.Name, x.Description, x.DisplayOrder, x.Active }).ToList() },
+            { "AddAction", Url.Action("FipsAddBusinessArea", "ModernAdmin") },
+            { "ToggleAction", "FipsToggleBusinessArea" },
+            { "EntityLabel", "business area" }
+        })
+    </div>
+
+    @* ── User groups ── *@
+ <div id="d-usergroups" class="tab-pane @(tab =="usergroups" ? "on" : "")" role="tabpanel">
+ <h2 class="govuk-heading-m">User groups</h2>
+        @if (Model.UserGroups.Count == 0)
+        {
+ <p class="govuk-body">No user groups configured.</p>
+        }
+        else
+        {
+ <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+                <table class="govuk-table">
+                    <thead class="govuk-table__head">
+                        <tr class="govuk-table__row">
+ <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Name</button></th>
+ <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Children</button></th>
+ <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Synonyms</button></th>
+ <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Order</button></th>
+ <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Status</button></th>
+ <th scope="col" class="govuk-table__header govuk-table__header--numeric"><span class="govuk-visually-hidden">Actions</span></th>
+                        </tr>
+                    </thead>
+                    <tbody class="govuk-table__body">
+                        @foreach (var g in Model.UserGroups)
+                        {
+                            <tr class="govuk-table__row">
+                                <td class="govuk-table__cell"><strong>@g.Name</strong></td>
+                                <td class="govuk-table__cell">@(g.Children.Count > 0 ? string.Join(", ", g.Children.Select(c => c.Name)) : "—")</td>
+                                <td class="govuk-table__cell">@(g.Synonyms.Count > 0 ? string.Join(", ", g.Synonyms.Select(s => s.Synonym)) : "—")</td>
+                                <td class="govuk-table__cell" style="text-align:right;">@g.DisplayOrder</td>
+ <td class="govuk-table__cell"><span class="dfe-f-badge dfe-f-badge--small @(g.Active ? "dfe-f-badge--green" : "dfe-f-badge--grey")">@(g.Active ? "Active" : "Inactive")</span></td>
+                                <td class="govuk-table__cell" style="text-align:right;">
+                                    <form method="post" action="@Url.Action("FipsToggleUserGroup", "ModernAdmin", new { id = g.Id })" style="display:inline;">
+                                        @Html.AntiForgeryToken()
+ <button type="submit" class="govuk-button govuk-button--secondary govuk-button--small govuk-!-margin-bottom-0">@(g.Active ? "Deactivate" : "Activate")</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+
+ <details class="govuk-details" style="margin-top:1rem;">
+ <summary class="govuk-details__summary"><span class="govuk-details__summary-text">Add user group</span></summary>
+ <form method="post" action="@Url.Action("FipsAddUserGroup", "ModernAdmin")" class="govuk-form-group">
+                @Html.AntiForgeryToken()
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="ug-name">Name</label>
+ <input class="govuk-input govuk-input--width-20" id="ug-name" name="name" required>
+                </div>
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="ug-desc">Description</label>
+ <input class="govuk-input govuk-input--width-30" id="ug-desc" name="description">
+                </div>
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="ug-parent">Parent (optional)</label>
+ <select class="govuk-select" id="ug-parent" name="parentId">
+                        <option value="">— None (top level) —</option>
+                        @foreach (var g in Model.UserGroups)
+                        {
+                            <option value="@g.Id">@g.Name</option>
+                        }
+                    </select>
+                </div>
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="ug-order">Display order</label>
+ <input class="govuk-input govuk-input--width-5" id="ug-order" name="displayOrder" type="number" value="0">
+                </div>
+ <button type="submit" class="govuk-button">Add</button>
+            </form>
+        </details>
+
+ <details class="govuk-details">
+ <summary class="govuk-details__summary"><span class="govuk-details__summary-text">Add synonym</span></summary>
+ <form method="post" action="" id="synonym-form" class="govuk-form-group">
+                @Html.AntiForgeryToken()
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="syn-group">User group</label>
+ <select class="govuk-select" id="syn-group" name="id" onchange="document.getElementById('synonym-form').action='@Url.Action("FipsAddUserGroupSynonym", "ModernAdmin", new { id = 0 })'.replace('/0/', '/' + this.value + '/');">
+                        <option value="">— Select —</option>
+                        @foreach (var g in Model.UserGroups)
+                        {
+                            <option value="@g.Id">@g.Name</option>
+                        }
+                    </select>
+                </div>
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="syn-value">Synonym</label>
+ <input class="govuk-input govuk-input--width-20" id="syn-value" name="synonym" required>
+                </div>
+ <button type="submit" class="govuk-button">Add synonym</button>
+            </form>
+        </details>
+    </div>
+
+    @* ── Contact roles ── *@
+ <div id="d-contactroles" class="tab-pane @(tab =="contactroles" ? "on" : "")" role="tabpanel">
+ <h2 class="govuk-heading-m">Contact roles</h2>
+        @if (Model.ContactRoles.Count == 0)
+        {
+ <p class="govuk-body">No contact roles configured.</p>
+        }
+        else
+        {
+ <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+                <table class="govuk-table">
+                    <thead class="govuk-table__head">
+                        <tr class="govuk-table__row">
+ <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Name</button></th>
+ <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Description</button></th>
+ <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Allow multiple</button></th>
+ <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Order</button></th>
+ <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Status</button></th>
+ <th scope="col" class="govuk-table__header govuk-table__header--numeric"><span class="govuk-visually-hidden">Actions</span></th>
+                        </tr>
+                    </thead>
+                    <tbody class="govuk-table__body">
+                        @foreach (var r in Model.ContactRoles)
+                        {
+                            <tr class="govuk-table__row">
+                                <td class="govuk-table__cell"><strong>@r.Name</strong></td>
+                                <td class="govuk-table__cell">@(r.Description ?? "—")</td>
+                                <td class="govuk-table__cell">@(r.AllowMultiple ? "Yes" : "No")</td>
+                                <td class="govuk-table__cell" style="text-align:right;">@r.DisplayOrder</td>
+ <td class="govuk-table__cell"><span class="dfe-f-badge dfe-f-badge--small @(r.Active ? "dfe-f-badge--green" : "dfe-f-badge--grey")">@(r.Active ? "Active" : "Inactive")</span></td>
+                                <td class="govuk-table__cell" style="text-align:right;">
+                                    <form method="post" action="@Url.Action("FipsToggleContactRole", "ModernAdmin", new { id = r.Id })" style="display:inline;">
+                                        @Html.AntiForgeryToken()
+ <button type="submit" class="govuk-button govuk-button--secondary govuk-button--small govuk-!-margin-bottom-0">@(r.Active ? "Deactivate" : "Activate")</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+
+ <details class="govuk-details" style="margin-top:1rem;">
+ <summary class="govuk-details__summary"><span class="govuk-details__summary-text">Add contact role</span></summary>
+ <form method="post" action="@Url.Action("FipsAddContactRole", "ModernAdmin")" class="govuk-form-group">
+                @Html.AntiForgeryToken()
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="cr-name">Name</label>
+ <input class="govuk-input govuk-input--width-20" id="cr-name" name="name" required>
+                </div>
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="cr-desc">Description</label>
+ <input class="govuk-input govuk-input--width-30" id="cr-desc" name="description">
+                </div>
+ <div class="govuk-checkboxes govuk-checkboxes--small">
+ <div class="govuk-checkboxes__item">
+ <input class="govuk-checkboxes__input" id="cr-multi" name="allowMultiple" type="checkbox" value="true">
+ <label class="govuk-checkboxes__label" for="cr-multi">Allow multiple users at this role</label>
+                    </div>
+                </div>
+ <div class="govuk-form-group" style="margin-top:1rem;">
+ <label class="govuk-label" for="cr-order">Display order</label>
+ <input class="govuk-input govuk-input--width-5" id="cr-order" name="displayOrder" type="number" value="0">
+                </div>
+ <button type="submit" class="govuk-button">Add</button>
+            </form>
+        </details>
+    </div>
+</div>

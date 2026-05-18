@@ -1,0 +1,180 @@
+@model Compass.Models.NearMiss
+@using Compass.Models
+@using System.Globalization
+@{
+  ViewData["Title"] = Model.Reference;
+  var enGb = CultureInfo.GetCultureInfo("en-GB");
+  var owners = Model.NearMissOwners.Select(o => o.User).Where(u => u != null).ToList();
+  string UserLabel(User u) => !string.IsNullOrWhiteSpace(u.Name) ? u.Name! : $"{u.FirstName} {u.LastName}".Trim();
+  var auditLogs = ViewBag.NearMissAuditLogs as IList<Compass.Models.AuditLog> ?? new List<Compass.Models.AuditLog>();
+  var ragCss = Model.PostMitigationRagStatusLookup?.CssClass;
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernRaid")">RAID</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("NearMisses", "ModernRaid")">Near misses</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">@Model.Reference</li>
+}
+
+<div class="modern-work-page">
+  @await Html.PartialAsync("~/Views/Modern/Shared/_ModernPageHeader.cshtml", new Compass.ViewModels.Modern.ModernPageHeaderViewModel {
+    Caption = "RAID",
+    Title = Model.Reference,
+    Lede = new Microsoft.AspNetCore.Html.HtmlString($"<p class=\"govuk-body govuk-!-margin-bottom-0\">{Model.TypeLookup?.Label ?? "Near miss"} · {Model.DateLogged.ToString("d MMMM yyyy", enGb)}</p>"),
+    Actions = new Microsoft.AspNetCore.Html.HtmlString($"<a class=\"govuk-button\" href=\"{Url.Action("NearMissEdit", "ModernRaid", new { id = Model.Id })}\">Edit near miss</a>")
+  })
+
+  @if (TempData["Message"] is string msg)
+  {
+    <div class="govuk-notification-banner govuk-notification-banner--success" role="alert">
+      <div class="govuk-notification-banner__header"><h2 class="govuk-notification-banner__title">Success</h2></div>
+      <div class="govuk-notification-banner__content"><p class="govuk-notification-banner__heading">@msg</p></div>
+    </div>
+  }
+
+  <dl class="govuk-summary-list govuk-!-margin-bottom-6">
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Record</dt>
+      <dd class="govuk-summary-list__value">@Model.Id</dd>
+    </div>
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Near miss / unexpected issue ID</dt>
+      <dd class="govuk-summary-list__value">@Model.Reference</dd>
+    </div>
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Date incident logged</dt>
+      <dd class="govuk-summary-list__value">@Model.DateLogged.ToString("d MMMM yyyy", enGb)</dd>
+    </div>
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Type</dt>
+      <dd class="govuk-summary-list__value">@(Model.TypeLookup?.Label ?? "—")</dd>
+    </div>
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Directorate</dt>
+      <dd class="govuk-summary-list__value">@(Model.DirectorateLookup?.Name ?? "—")</dd>
+    </div>
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Business area</dt>
+      <dd class="govuk-summary-list__value">@(Model.BusinessAreaLookup?.Name ?? "—")</dd>
+    </div>
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Owners</dt>
+      <dd class="govuk-summary-list__value">
+        @if (owners.Count == 0) { <text>—</text> }
+        else { @string.Join(", ", owners.Select(u => UserLabel(u!))) }
+      </dd>
+    </div>
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Seriousness</dt>
+      <dd class="govuk-summary-list__value">@(Model.SeriousnessLookup?.Label ?? "—")</dd>
+    </div>
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Post mitigations RAG</dt>
+      <dd class="govuk-summary-list__value">
+        @if (Model.PostMitigationRagStatusLookup != null)
+        {
+          <span class="dfe-f-badge dfe-f-badge--small @(ragCss != null ? $"dfe-c-tag--{ragCss}" : "")">@Model.PostMitigationRagStatusLookup.Name</span>
+        }
+        else { <text>—</text> }
+      </dd>
+    </div>
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Tier</dt>
+      <dd class="govuk-summary-list__value">@(Model.RiskTier?.Name ?? "—")</dd>
+    </div>
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Status</dt>
+      <dd class="govuk-summary-list__value">@(Model.StatusLookup?.Label ?? "—")</dd>
+    </div>
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Created</dt>
+      <dd class="govuk-summary-list__value">@Model.CreatedAt.ToString("d MMM yyyy HH:mm", enGb) @(Model.CreatedByUser != null ? $"by {UserLabel(Model.CreatedByUser)}" : "")</dd>
+    </div>
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Last updated</dt>
+      <dd class="govuk-summary-list__value">@Model.UpdatedAt.ToString("d MMM yyyy HH:mm", enGb) @(Model.UpdatedByUser != null ? $"by {UserLabel(Model.UpdatedByUser)}" : "")</dd>
+    </div>
+  </dl>
+
+  @if (!string.IsNullOrWhiteSpace(Model.Impact))
+  {
+    <h2 class="govuk-heading-m">Impact</h2>
+    <p class="govuk-body" style="white-space:pre-wrap;">@Model.Impact</p>
+  }
+
+  <h2 class="govuk-heading-m govuk-!-margin-top-6">Actions</h2>
+  @if (Model.NearMissActions.Count == 0)
+  {
+    <p class="govuk-body">No actions recorded.</p>
+  }
+  else
+  {
+    <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+      <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed">
+        <thead class="govuk-table__head">
+          <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header">Date</th>
+            <th scope="col" class="govuk-table__header">Action</th>
+            <th scope="col" class="govuk-table__header">Recorded by</th>
+          </tr>
+        </thead>
+        <tbody class="govuk-table__body">
+          @foreach (var a in Model.NearMissActions.OrderBy(x => x.ActionDate))
+          {
+            <tr class="govuk-table__row">
+              <td class="govuk-table__cell">@a.ActionDate.ToString("d MMM yyyy", enGb)</td>
+              <td class="govuk-table__cell" style="white-space:pre-wrap;">@a.ActionText</td>
+              <td class="govuk-table__cell">@(a.RecordedByUser != null ? UserLabel(a.RecordedByUser) : "—")</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+
+  <h2 class="govuk-heading-m govuk-!-margin-top-6">Mitigations</h2>
+  @if (Model.NearMissMitigations.Count == 0)
+  {
+    <p class="govuk-body">No mitigations recorded.</p>
+  }
+  else
+  {
+    <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+      <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed">
+        <thead class="govuk-table__head">
+          <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header">Date</th>
+            <th scope="col" class="govuk-table__header">Assurance taken place</th>
+            <th scope="col" class="govuk-table__header">Recorded by</th>
+          </tr>
+        </thead>
+        <tbody class="govuk-table__body">
+          @foreach (var m in Model.NearMissMitigations.OrderBy(x => x.MitigationDate))
+          {
+            <tr class="govuk-table__row">
+              <td class="govuk-table__cell">@m.MitigationDate.ToString("d MMM yyyy", enGb)</td>
+              <td class="govuk-table__cell" style="white-space:pre-wrap;">@m.AssuranceTakenPlace</td>
+              <td class="govuk-table__cell">@(m.RecordedByUser != null ? UserLabel(m.RecordedByUser) : "—")</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+
+  <h2 class="govuk-heading-m govuk-!-margin-top-8">Audit log</h2>
+  @if (auditLogs.Count == 0)
+  {
+    <p class="govuk-body-s">No audit entries yet.</p>
+  }
+  else
+  {
+    <ul class="govuk-list govuk-list--bullet">
+      @foreach (var log in auditLogs)
+      {
+        <li class="govuk-body-s">@log.ChangedUtc.ToString("d MMM yyyy HH:mm", enGb) — @log.Action @(log.ChangedBy != null ? $"({log.ChangedBy})" : "")</li>
+      }
+    </ul>
+  }
+</div>

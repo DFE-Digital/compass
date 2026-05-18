@@ -309,7 +309,6 @@ namespace Compass.Controllers
         {
             int added = 0, updated = 0, errors = 0;
             int page = 1;
-            const int pageSize = 20;
 
             try
             {

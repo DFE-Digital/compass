@@ -174,13 +174,19 @@ public class HomeDashboardViewModelBuilder : IHomeDashboardViewModelBuilder
             .ToList();
 
         var now = DateTime.UtcNow;
-        // Use same applicable reporting period logic as your-work /api/project/your-work (and _ProjectTable)
         var reportYear = now.Year;
         var reportMonth = now.Month;
         var currentPeriodDueDate = _monthlyUpdateService.GetMonthlyUpdateDueDate(reportYear, reportMonth);
         var daysUntilCurrentPeriodDueDate = (currentPeriodDueDate - now).Days;
-        var applicableYear = daysUntilCurrentPeriodDueDate <= 10 ? reportYear : (reportMonth == 1 ? reportYear - 1 : reportYear);
-        var applicableMonth = daysUntilCurrentPeriodDueDate <= 10 ? reportMonth : (reportMonth == 1 ? 12 : reportMonth - 1);
+        // Performance returns still use legacy applicable-period heuristic.
+        var performanceReturnYear = daysUntilCurrentPeriodDueDate <= 10 ? reportYear : (reportMonth == 1 ? reportYear - 1 : reportYear);
+        var performanceReturnMonth = daysUntilCurrentPeriodDueDate <= 10 ? reportMonth : (reportMonth == 1 ? 12 : reportMonth - 1);
+        // Monthly delivery updates: align with work dashboard (open submission window for calendar month when active).
+        var (applicableYear, applicableMonth) = _monthlyUpdateService.ResolveDashboardReportingPeriod(now);
+        var explicitMonthlyPeriod = _monthlyUpdateService.TryGetActiveExplicitReportingPeriod(applicableYear, applicableMonth);
+        var applicableMonthlyUpdatePeriodLabel = !string.IsNullOrWhiteSpace(explicitMonthlyPeriod?.PeriodLabel)
+            ? explicitMonthlyPeriod!.PeriodLabel.Trim()
+            : new DateTime(applicableYear, applicableMonth, 1).ToString("MMMM yyyy", System.Globalization.CultureInfo.GetCultureInfo("en-GB"));
 
         var productsNeedingReturns = new List<(ProductDto Product, ReturnStatus Status, DateTime DueDate)>();
         var enableMonthlyPerformanceReporting = _configuration.GetValue<bool>("FeatureFlags:EnableMonthlyPerformanceReporting", true);
@@ -190,35 +196,49 @@ public class HomeDashboardViewModelBuilder : IHomeDashboardViewModelBuilder
             foreach (var product in myProducts.Where(p => !string.IsNullOrEmpty(p.FipsId)))
             {
                 var productReturn = await _context.ProductReturns
-                    .Where(pr => pr.FipsId == product.FipsId && pr.Year == applicableYear && pr.Month == applicableMonth)
+                    .Where(pr => pr.FipsId == product.FipsId && pr.Year == performanceReturnYear && pr.Month == performanceReturnMonth)
                     .FirstOrDefaultAsync();
 
                 var status = _returnStatusService.CalculateReturnStatus(
-                    applicableYear,
-                    applicableMonth,
+                    performanceReturnYear,
+                    performanceReturnMonth,
                     productReturn?.SubmittedDate);
 
                 if (status == ReturnStatus.Due || status == ReturnStatus.Late)
                 {
-                    var dueDate = _returnStatusService.GetReturnDueDate(applicableYear, applicableMonth);
+                    var dueDate = _returnStatusService.GetReturnDueDate(performanceReturnYear, performanceReturnMonth);
                     productsNeedingReturns.Add((product, status, dueDate));
                 }
             }
         }
 
-        // Calculate projects needing monthly updates (same applicable period as your-work)
-        var projectsNeedingMonthlyUpdates = new List<(Project Project, UpdateSubmissionStatus Status, DateTime DueDate)>();
+        // Monthly update status per project (aligned with work dashboard submission window)
+        var monthlyUpdateStatusByProjectId = new Dictionary<int, UpdateSubmissionStatus>();
         foreach (var project in myProjects)
         {
             var update = project.MonthlyUpdates?.FirstOrDefault(u => u.Year == applicableYear && u.Month == applicableMonth);
             var updateStatus = _monthlyUpdateService.CalculateUpdateStatus(applicableYear, applicableMonth, update?.SubmittedAt);
-            
+            monthlyUpdateStatusByProjectId[project.Id] = updateStatus;
+        }
+
+        var projectsNeedingMonthlyUpdates = new List<(Project Project, UpdateSubmissionStatus Status, DateTime DueDate)>();
+        foreach (var project in myProjects)
+        {
+            if (!monthlyUpdateStatusByProjectId.TryGetValue(project.Id, out var updateStatus))
+                continue;
             if (updateStatus == UpdateSubmissionStatus.Due || updateStatus == UpdateSubmissionStatus.Late)
             {
                 var dueDate = _monthlyUpdateService.GetMonthlyUpdateDueDate(applicableYear, applicableMonth);
                 projectsNeedingMonthlyUpdates.Add((project, updateStatus, dueDate));
             }
         }
+
+        var hasReportingEligibleWork = myProjects.Any(p =>
+            string.Equals(p.Status, "Active", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(p.Status, "Paused", StringComparison.OrdinalIgnoreCase));
+        var monthlyReportingWindowOpen = hasReportingEligibleWork &&
+            _monthlyUpdateService.IsMonthlyReportEditingAllowed(applicableYear, applicableMonth);
+        var monthlyReportingRemainingCount = projectsNeedingMonthlyUpdates.Count;
 
         // Calculate products needing commission reporting
         var productsNeedingCommissionReporting = new List<(ProductDto Product, Commission Commission, CommissionSubmissionStatus Status, DateTime DueDate)>();
@@ -572,6 +592,12 @@ public class HomeDashboardViewModelBuilder : IHomeDashboardViewModelBuilder
             RecentSuccesses = recentSuccesses,
             ProductsNeedingReturns = productsNeedingReturns,
             ProjectsNeedingMonthlyUpdates = projectsNeedingMonthlyUpdates,
+            ApplicableMonthlyUpdateYear = applicableYear,
+            ApplicableMonthlyUpdateMonth = applicableMonth,
+            ApplicableMonthlyUpdatePeriodLabel = applicableMonthlyUpdatePeriodLabel,
+            MonthlyReportingWindowOpen = monthlyReportingWindowOpen,
+            MonthlyReportingRemainingCount = monthlyReportingRemainingCount,
+            MonthlyUpdateStatusByProjectId = monthlyUpdateStatusByProjectId,
             ProductsNeedingCommissionReporting = productsNeedingCommissionReporting,
             LeadershipAssignments = leadershipAssignments,
             LeadershipBusinessAreas = leadershipBusinessAreas,

@@ -1,0 +1,566 @@
+@model Compass.ViewModels.Modern.ModernRaidTierReportingViewModel
+@using Compass.ViewModels.Modern
+@using Microsoft.AspNetCore.Html
+@functions {
+  private static Microsoft.AspNetCore.Html.IHtmlContent TierCountCell(int count, bool canDrill, string dataAttrs, string positiveClass)
+  {
+    if (count <= 0)
+      return new Microsoft.AspNetCore.Html.HtmlString($"<span class=\"mr-ba-num mr-ba-num--muted\" aria-hidden=\"true\">{count}</span><span class=\"govuk-visually-hidden\">0 records</span>");
+    if (!canDrill)
+      return new Microsoft.AspNetCore.Html.HtmlString($"<span class=\"mr-ba-num {positiveClass}\">{count}</span>");
+    return new Microsoft.AspNetCore.Html.HtmlString(
+      $"<a class=\"govuk-link govuk-link--no-visited-state mr-ba-num mr-ba-num--drill raid-tier-drill {positiveClass}\" href=\"#raid-tier-matching\" {dataAttrs} aria-label=\"View {count} matching records\">{count}<span class=\"govuk-visually-hidden\"> — view records</span></a>");
+  }
+}
+@{
+  ViewData["Title"] = "RAID — Risks by tier";
+  var m = Model ?? new Compass.ViewModels.Modern.ModernRaidTierReportingViewModel();
+  var tierRowCount = m.MatrixRows?.Count ?? 0;
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="/modern/raid/dashboard">RAID</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">Risks by tier</li>
+}
+
+<style>
+  .raid-tier-matrix.mr-ba-table { border-collapse: collapse; font-size: 1rem; width: 100%; min-width: 44rem; }
+  .raid-tier-matrix.mr-ba-table th, .raid-tier-matrix.mr-ba-table td {
+    padding: 0.4rem 0.35rem;
+    border: 1px solid var(--rpt-border, #e5e7eb);
+    vertical-align: middle;
+  }
+  .raid-tier-matrix.mr-ba-table thead th {
+    background: #f3f2f1;
+    font-weight: 700;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    text-align: center;
+  }
+  .raid-tier-matrix .mr-ba-table__area-col {
+    text-align: left !important;
+    white-space: normal;
+    min-width: 10rem;
+    max-width: 22rem;
+    font-weight: 600;
+    font-size: 1rem;
+    hyphens: auto;
+  }
+  .raid-tier-matrix .mr-ba-table__num { text-align: center !important; font-variant-numeric: tabular-nums; }
+  .raid-tier-matrix .mr-ba-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.75rem;
+    padding: 0.2rem 0.45rem;
+    font-weight: 600;
+    font-size: 1rem;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.2;
+    background: #f3f2f1;
+    color: #505a5f;
+    text-decoration: none;
+    box-sizing: border-box;
+  }
+  .raid-tier-matrix a.mr-ba-num { cursor: pointer; }
+  .raid-tier-matrix a.mr-ba-num--drill {
+    border: 2px solid #1d70b8;
+    box-shadow: 0 2px 0 #0b0c0c;
+    text-decoration: none;
+    font-weight: 700;
+    transition: background 0.1s ease, color 0.1s ease, box-shadow 0.1s ease;
+  }
+  .raid-tier-matrix a.mr-ba-num--drill:hover,
+  .raid-tier-matrix a.mr-ba-num--drill:focus {
+    background: #1d70b8;
+    color: #fff;
+    outline: 3px solid #fd0;
+    outline-offset: 1px;
+    text-decoration: none;
+  }
+  .raid-tier-matrix a.mr-ba-num--drill.raid-tier-drill--active {
+    background: #003078;
+    color: #fff;
+    border-color: #003078;
+    box-shadow: 0 0 0 3px #fd0;
+  }
+  .mr-ba-num--strong { background: #e8eaed; color: #0b0c0c; font-weight: 700; }
+  .mr-ba-num--muted { opacity: 0.45; font-weight: 500; }
+  .mr-ba-num--highlight { background: #e8f5e9; color: #005a30; }
+  .mr-ba-num--warn { background: #fff3cd; color: #6e4900; }
+  .mr-ba-num--rag-red { background: #fde8e5; color: #942514; }
+  .mr-ba-num--rag-amber-red { background: #ffeee5; color: #80340a; }
+  .mr-ba-num--rag-amber-grn { background: #fff8e6; color: #6e4900; }
+  .mr-ba-num--rag-green { background: #e3f5eb; color: #005a30; }
+  .mr-ba-num--pri-crit { background: #fde8e5; color: #942514; }
+  .mr-ba-num--pri-high { background: #ffeee5; color: #80340a; }
+  .mr-ba-num--pri-med { background: #fff8e6; color: #6e4900; }
+  .mr-ba-num--pri-low { background: #e3f5eb; color: #005a30; }
+  .mr-ba-table__group { font-weight: 700; }
+  .mr-ba-table__group--ms { background: #f0f4f5; border-bottom: 3px solid #5694ca; }
+  .mr-ba-table__group--rag { background: #fef7f0; border-bottom: 3px solid #f47738; }
+  .mr-ba-table__group--pri { background: #f0f5ef; border-bottom: 3px solid #00703c; }
+  .mr-ba-table__sub { font-weight: 600; font-size: 0.875rem; }
+  .mr-ba-table__sub--ms { background: #f7fafb; }
+  .mr-ba-table__sub--rag { background: #fffcf8; }
+  .mr-ba-table__sub--pri { background: #f7faf6; }
+  .mr-ba-table__cell--ms { background: rgba(86, 148, 202, 0.04); }
+  .mr-ba-table__cell--rag { background: rgba(244, 119, 56, 0.04); }
+  .mr-ba-table__cell--pri { background: rgba(0, 112, 60, 0.04); }
+  .mr-ba-table__fixed { position: sticky; left: 0; background: #fff; z-index: 1; box-shadow: 2px 0 4px rgba(0,0,0,0.04); }
+  .raid-tier-matrix.mr-ba-table thead .mr-ba-table__fixed { background: #f3f2f1; z-index: 2; }
+  .raid-tier-matrix.mr-ba-table tbody tr:nth-child(even) { background: #fafafa; }
+  .raid-tier-matrix.mr-ba-table tbody tr:nth-child(even) .mr-ba-table__fixed { background: #fafafa; }
+  .raid-tier-summary-hint {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 1rem;
+    margin-bottom: 0.75rem;
+    padding: 0.75rem 1rem;
+    background: #f3f2f1;
+    border-left: 4px solid #1d70b8;
+  }
+  .raid-tier-summary-hint__sample {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.75rem;
+    padding: 0.2rem 0.45rem;
+    border: 2px solid #1d70b8;
+    font-weight: 700;
+    font-size: 1rem;
+    background: #e8f5e9;
+    color: #005a30;
+  }
+  .mr-ba-drilldown-host { margin-top: 1.5rem; }
+  .raid-tier-drill-empty {
+    padding: 1.25rem 1rem;
+    background: #f3f2f1;
+    border: 1px solid #b1b4b6;
+  }
+  #raid-tier-drill-table { margin-bottom: 0; }
+  #raid-tier-drill-table thead .govuk-table__header {
+    background: #f3f2f1;
+    border-bottom: 2px solid #0b0c0c;
+    font-weight: 700;
+  }
+  #raid-tier-drill-table tbody tr:nth-child(even) { background: #fafafa; }
+</style>
+
+<div class="modern-work-page">
+  @await Html.PartialAsync("~/Views/Modern/Shared/_ModernPageHeader.cshtml", new ModernPageHeaderViewModel {
+    Caption = "RAID",
+    Title = "Risks by tier",
+    Lede = new HtmlString("<p class=\"govuk-body govuk-!-margin-bottom-0 govuk-!-margin-top-2\" style=\"max-width:44rem;\">Tier matrix with the same layout and colour cues as monthly reporting. <strong>Select a count</strong> in the summary (outlined numbers) to load matching risks or issues below.</p>")
+  })
+
+  <form method="get" action="@Url.Action("Tier", "ModernRaid")" id="raid-tier-report-filters" class="dfe-c-mb-3">
+    <div id="search-and-filter">
+      <div class="filter-toolbar">
+        <div class="filter-toolbar__search-wrap">
+          <input type="search" name="search" id="raid-tier-search" value="@m.Search" placeholder="Search title, notes, description…" class="filter-search" autocomplete="off" aria-label="Search risks" />
+          <button type="submit" class="govuk-button govuk-button--secondary filter-toolbar__search-submit">Search</button>
+        </div>
+        <button type="button" class="filter-toggle-btn" id="raid-tier-filter-btn" aria-expanded="false" aria-controls="raid-tier-filter-panel">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="flex-shrink:0;" aria-hidden="true"><path d="M1 3h14v1.5l-5 5V14l-4-2V9.5L1 4.5V3z"></path></svg>
+          <span class="filter-toggle-label">Filter</span>
+        </button>
+      </div>
+      <div class="filter-panel filter-panel--allwork" id="raid-tier-filter-panel">
+        <div class="filter-panel__grid">
+          <div>
+            <label for="raid-tier-ba">Business area</label>
+            <select name="businessAreaId" id="raid-tier-ba" class="govuk-select">
+              @{
+                var baScoped = m.BusinessAreaId is int xba && xba > 0;
+              }
+              @if (baScoped)
+              {
+                <option value="0">All business areas</option>
+              }
+              else
+              {
+                <option value="0" selected>All business areas</option>
+              }
+              @foreach (var o in m.BusinessAreaOptions)
+              {
+                var sel = !m.RaidBusinessAreaExplicitNone && m.BusinessAreaId == o.Id;
+                if (sel)
+                {
+                  <option value="@o.Id" selected>@o.Name</option>
+                }
+                else
+                {
+                  <option value="@o.Id">@o.Name</option>
+                }
+              }
+            </select>
+          </div>
+          <div>
+            <label for="raid-tier-dir">Directorate</label>
+            <select name="directorateId" id="raid-tier-dir" class="govuk-select">
+              <option value="">All directorates</option>
+              @foreach (var o in m.DirectorateOptions)
+              {
+                if (m.DirectorateId == o.Id)
+                {
+                  <option value="@o.Id" selected>@o.Name</option>
+                }
+                else
+                {
+                  <option value="@o.Id">@o.Name</option>
+                }
+              }
+            </select>
+          </div>
+          <div>
+            <label for="raid-tier-proj">Work item</label>
+            <select name="projectId" id="raid-tier-proj" class="govuk-select">
+              <option value="">All</option>
+              @foreach (var o in m.ProjectOptions)
+              {
+                if (m.ProjectId == o.Id)
+                {
+                  <option value="@o.Id" selected>@o.Name</option>
+                }
+                else
+                {
+                  <option value="@o.Id">@o.Name</option>
+                }
+              }
+            </select>
+          </div>
+        </div>
+        <div class="filter-panel__actions" style="margin-top:0.75rem;display:flex;gap:0.75rem;flex-wrap:wrap;align-items:center;">
+          <button type="submit" class="govuk-button">Apply filters</button>
+          <a class="govuk-button govuk-button--secondary" href="@Url.Action("Tier", "ModernRaid")">Clear</a>
+          @if (!string.IsNullOrEmpty(m.ExportExcelUrl))
+          {
+            <a href="@m.ExportExcelUrl" class="govuk-link govuk-link--no-visited-state govuk-!-font-weight-bold">Export Excel</a>
+          }
+        </div>
+      </div>
+    </div>
+  </form>
+
+  <section aria-labelledby="raid-tier-summary-heading">
+    <h2 id="raid-tier-summary-heading" class="govuk-heading-m">Tier summary <span class="govuk-!-font-weight-regular">(@tierRowCount tiers)</span></h2>
+    <p class="raid-tier-summary-hint govuk-body govuk-!-margin-bottom-0" id="raid-tier-summary-hint">
+      <span class="raid-tier-summary-hint__sample" aria-hidden="true">12</span>
+      <span>Outlined counts are links — select one to view matching risks or issues below.</span>
+    </p>
+    <div class="govuk-!-margin-top-3" style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
+      <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+        <table class="govuk-table mr-ba-table raid-tier-matrix" id="raid-tier-matrix-table">
+          <caption class="govuk-visually-hidden">Risk and issue counts by tier and slice</caption>
+          <thead class="govuk-table__head">
+            <tr class="govuk-table__row">
+              <th scope="col" rowspan="2" class="mr-ba-table__fixed mr-ba-table__area-col">Tier</th>
+              <th scope="col" colspan="3" class="mr-ba-table__group mr-ba-table__group--ms">Risks — status</th>
+              <th scope="col" colspan="4" class="mr-ba-table__group mr-ba-table__group--rag">Risks — score (open)</th>
+              <th scope="col" colspan="3" class="mr-ba-table__group mr-ba-table__group--pri">Issues — status</th>
+              <th scope="col" colspan="4" class="mr-ba-table__group mr-ba-table__group--pri">Issues — severity (open)</th>
+            </tr>
+            <tr class="govuk-table__row">
+              <th class="mr-ba-table__sub mr-ba-table__sub--ms" scope="col">Open</th>
+              <th class="mr-ba-table__sub mr-ba-table__sub--ms" scope="col">Overdue</th>
+              <th class="mr-ba-table__sub mr-ba-table__sub--ms" scope="col">Closed</th>
+              <th class="mr-ba-table__sub mr-ba-table__sub--rag" scope="col">20–25</th>
+              <th class="mr-ba-table__sub mr-ba-table__sub--rag" scope="col">15–19</th>
+              <th class="mr-ba-table__sub mr-ba-table__sub--rag" scope="col">8–14</th>
+              <th class="mr-ba-table__sub mr-ba-table__sub--rag" scope="col">1–7</th>
+              <th class="mr-ba-table__sub mr-ba-table__sub--pri" scope="col">Open</th>
+              <th class="mr-ba-table__sub mr-ba-table__sub--pri" scope="col">Overdue</th>
+              <th class="mr-ba-table__sub mr-ba-table__sub--pri" scope="col">Closed</th>
+              <th class="mr-ba-table__sub mr-ba-table__sub--pri" scope="col">Low</th>
+              <th class="mr-ba-table__sub mr-ba-table__sub--pri" scope="col">Medium</th>
+              <th class="mr-ba-table__sub mr-ba-table__sub--pri" scope="col">High</th>
+              <th class="mr-ba-table__sub mr-ba-table__sub--pri" scope="col">Critical</th>
+            </tr>
+          </thead>
+          <tbody class="govuk-table__body">
+            @foreach (var row in m.MatrixRows)
+            {
+              string K(string slice) => $"data-tier-id=\"{row.TierId}\" data-slice=\"{slice}\"";
+              bool CanDrillIssue(string slice) => !row.IsProposedTier && slice.StartsWith("issue-", StringComparison.Ordinal);
+              <tr class="govuk-table__row">
+                <th scope="row" class="mr-ba-table__fixed mr-ba-table__area-col">
+                  @row.TierName
+                  @if (row.IsProposedTier)
+                  {
+                    <span class="govuk-visually-hidden"> (proposed tier)</span>
+                  }
+                </th>
+                <td class="mr-ba-table__num mr-ba-table__cell--ms">
+                  @TierCountCell(row.RisksOpen, true, K("risk-open"), "mr-ba-num--highlight")
+                </td>
+                <td class="mr-ba-table__num mr-ba-table__cell--ms">
+                  @TierCountCell(row.RisksOverdue, true, K("risk-overdue"), "mr-ba-num--warn")
+                </td>
+                <td class="mr-ba-table__num mr-ba-table__cell--ms">
+                  @TierCountCell(row.RisksClosed, true, K("risk-closed"), "mr-ba-num--strong")
+                </td>
+                <td class="mr-ba-table__num mr-ba-table__cell--rag">
+                  @TierCountCell(row.RiskScoreHighest, true, K("risk-highest"), "mr-ba-num--rag-red")
+                </td>
+                <td class="mr-ba-table__num mr-ba-table__cell--rag">
+                  @TierCountCell(row.RiskScoreElevated, true, K("risk-elevated"), "mr-ba-num--rag-amber-red")
+                </td>
+                <td class="mr-ba-table__num mr-ba-table__cell--rag">
+                  @TierCountCell(row.RiskScoreMedium, true, K("risk-medium"), "mr-ba-num--rag-amber-grn")
+                </td>
+                <td class="mr-ba-table__num mr-ba-table__cell--rag">
+                  @TierCountCell(row.RiskScoreLower, true, K("risk-lower"), "mr-ba-num--rag-green")
+                </td>
+                <td class="mr-ba-table__num mr-ba-table__cell--pri">
+                  @TierCountCell(row.IssuesOpen, CanDrillIssue("issue-open"), K("issue-open"), "mr-ba-num--highlight")
+                </td>
+                <td class="mr-ba-table__num mr-ba-table__cell--pri">
+                  @TierCountCell(row.IssuesOverdue, CanDrillIssue("issue-overdue"), K("issue-overdue"), "mr-ba-num--warn")
+                </td>
+                <td class="mr-ba-table__num mr-ba-table__cell--pri">
+                  @TierCountCell(row.IssuesClosed, CanDrillIssue("issue-closed"), K("issue-closed"), "mr-ba-num--strong")
+                </td>
+                <td class="mr-ba-table__num mr-ba-table__cell--pri">
+                  @TierCountCell(row.IssuesLow, CanDrillIssue("issue-low"), K("issue-low"), "mr-ba-num--pri-low")
+                </td>
+                <td class="mr-ba-table__num mr-ba-table__cell--pri">
+                  @TierCountCell(row.IssuesMedium, CanDrillIssue("issue-medium"), K("issue-medium"), "mr-ba-num--pri-med")
+                </td>
+                <td class="mr-ba-table__num mr-ba-table__cell--pri">
+                  @TierCountCell(row.IssuesHigh, CanDrillIssue("issue-high"), K("issue-high"), "mr-ba-num--pri-high")
+                </td>
+                <td class="mr-ba-table__num mr-ba-table__cell--pri">
+                  @TierCountCell(row.IssuesCritical, CanDrillIssue("issue-critical"), K("issue-critical"), "mr-ba-num--pri-crit")
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section id="raid-tier-matching" class="mr-ba-drilldown-host" aria-live="polite" aria-labelledby="raid-tier-matching-heading">
+    <h2 id="raid-tier-matching-heading" class="govuk-heading-m">Matching records</h2>
+    <div id="raid-tier-drill-empty" class="raid-tier-drill-empty" role="status">
+      <p class="govuk-body govuk-!-margin-bottom-0" id="raid-tier-drill-lede">Select a count in the tier summary to view matching risks or issues here.</p>
+    </div>
+    <div id="raid-tier-drill-error" class="govuk-error-summary govuk-!-margin-bottom-4" role="alert" hidden>
+      <p class="govuk-error-summary__body govuk-!-margin-bottom-0" id="raid-tier-drill-error-text"></p>
+    </div>
+    <div id="raid-tier-drill-results" hidden>
+      <p class="govuk-!-margin-bottom-3">
+        <span class="govuk-!-font-weight-bold" id="raid-tier-drill-title" aria-live="polite"></span>
+        <span class="govuk-body-s dfe-c-text-muted govuk-!-margin-left-2" id="raid-tier-drill-count"></span>
+        <a href="#" class="govuk-link govuk-!-margin-left-2 govuk-link--no-visited-state" id="raid-tier-drill-clear">Clear selection</a>
+      </p>
+      <table class="govuk-table" id="raid-tier-drill-table">
+        <caption class="govuk-visually-hidden">Records for the selected tier and slice</caption>
+        <thead class="govuk-table__head">
+          <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header">Title</th>
+            <th scope="col" class="govuk-table__header">Type</th>
+            <th scope="col" class="govuk-table__header">Tier</th>
+            <th scope="col" class="govuk-table__header">Likelihood</th>
+            <th scope="col" class="govuk-table__header">Impact</th>
+            <th scope="col" class="govuk-table__header govuk-!-text-align-right">Score</th>
+            <th scope="col" class="govuk-table__header">Opened</th>
+          </tr>
+        </thead>
+        <tbody id="raid-tier-drill-tbody"></tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+@section Scripts {
+<script nonce="@Context.Items["Nonce"]">
+(function () {
+  var endpoint = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.DrillEndpoint ?? ""));
+  var form = document.getElementById("raid-tier-report-filters");
+
+  function filterQuery() {
+    var fd = new FormData(form);
+    var p = new URLSearchParams();
+    fd.forEach(function (v, k) {
+      if (v !== null && v !== "") p.set(k, v);
+    });
+    return p.toString();
+  }
+
+  function escapeHtml(s) {
+    return (s || "").replace(/[&<>"']/g, function (c) {
+      return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" })[c];
+    });
+  }
+
+  function escapeAttr(s) {
+    return (s + "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+  }
+
+  function riskScoreBadgeClass(score) {
+    if (score == null) return "dfe-f-badge dfe-f-badge--small dfe-f-badge--grey";
+    if (score >= 20) return "dfe-f-badge dfe-f-badge--small dfe-f-badge--red";
+    if (score >= 15) return "dfe-f-badge dfe-f-badge--small dfe-f-badge--orange";
+    if (score >= 8) return "dfe-f-badge dfe-f-badge--small dfe-f-badge--orange";
+    if (score <= 0) return "dfe-f-badge dfe-f-badge--small dfe-f-badge--grey";
+    return "dfe-f-badge dfe-f-badge--small dfe-f-badge--green";
+  }
+
+  function formatOpened(iso) {
+    if (!iso) return "—";
+    var d = new Date(iso + "T00:00:00");
+    if (isNaN(d.getTime())) return escapeHtml(iso);
+    return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+  }
+
+  function typeCell(kind) {
+    var isIssue = kind === "issue";
+    var tagClass = isIssue ? "dfe-f-badge dfe-f-badge--blue" : "dfe-f-badge dfe-f-badge--grey";
+    var label = isIssue ? "Issue" : "Risk";
+    return '<td class="govuk-table__cell"><span class="' + tagClass + ' dfe-f-badge--small">' + label + "</span></td>";
+  }
+
+  function scoreCell(x, kind) {
+    if (kind === "issue") {
+      var sev = x.issueSeverityLabel != null ? x.issueSeverityLabel : x.IssueSeverityLabel;
+      return '<td class="govuk-table__cell govuk-!-text-align-right"><span class="dfe-f-badge dfe-f-badge--blue dfe-f-badge--small">' + escapeHtml((sev || "—").toUpperCase()) + "</span></td>";
+    }
+    var sc = x.riskScore != null ? x.riskScore : x.RiskScore;
+    if (sc == null) return '<td class="govuk-table__cell govuk-!-text-align-right">—</td>';
+    return '<td class="govuk-table__cell govuk-!-text-align-right"><span class="' + riskScoreBadgeClass(sc) + '">' + sc + "</span></td>";
+  }
+
+  function titleCell(href, title, ref, businessArea) {
+    var meta = escapeHtml(ref);
+    if (businessArea && businessArea.length) {
+      meta += " · " + escapeHtml(businessArea);
+    }
+    return '<td class="govuk-table__cell"><a class="govuk-link govuk-link--no-visited-state govuk-!-font-weight-bold" href="' + escapeAttr(href) + '">' + escapeHtml(title) + "</a>" +
+      '<p class="govuk-body-s govuk-!-margin-top-1 govuk-!-margin-bottom-0">' + meta + "</p></td>";
+  }
+
+  function bind() {
+    var tbody = document.getElementById("raid-tier-drill-tbody");
+    var errBox = document.getElementById("raid-tier-drill-error");
+    var errText = document.getElementById("raid-tier-drill-error-text");
+    var emptyBox = document.getElementById("raid-tier-drill-empty");
+    var resultsBox = document.getElementById("raid-tier-drill-results");
+    var lede = document.getElementById("raid-tier-drill-lede");
+    var titleEl = document.getElementById("raid-tier-drill-title");
+    var countEl = document.getElementById("raid-tier-drill-count");
+    var clearLink = document.getElementById("raid-tier-drill-clear");
+
+    function showEmpty() {
+      if (emptyBox) emptyBox.hidden = false;
+      if (resultsBox) resultsBox.hidden = true;
+      if (lede) lede.textContent = "Select a count in the tier summary to view matching risks or issues here.";
+      errBox.hidden = true;
+      tbody.innerHTML = "";
+      document.querySelectorAll("a.raid-tier-drill").forEach(function (a) {
+        a.classList.remove("raid-tier-drill--active");
+      });
+    }
+
+    function showResults() {
+      if (emptyBox) emptyBox.hidden = true;
+      if (resultsBox) resultsBox.hidden = false;
+    }
+
+    function itemRow(x) {
+      var href = (x.url || x.Url || "#").toString();
+      var id = x.id != null ? x.id : x.Id;
+      var kind = (x.kind || x.Kind || "").toLowerCase();
+      var ref = x.reference || x.Reference || (kind === "issue" ? "I-" + String(id).padStart(4, "0") : "R-" + String(id).padStart(4, "0"));
+      var t = (x.title || x.Title || "");
+      var tier = (x.tierName != null ? x.tierName : x.TierName) || "—";
+      var ba = x.businessAreaLabel != null ? x.businessAreaLabel : x.BusinessAreaLabel;
+      var li = (x.likelihoodLabel != null ? x.likelihoodLabel : x.LikelihoodLabel) || "—";
+      var im = (x.impactLabel != null ? x.impactLabel : x.ImpactLabel) || "—";
+      var opened = x.openedDate != null ? x.openedDate : x.OpenedDate;
+      if (kind === "issue") { li = "—"; im = "—"; }
+      return (
+        titleCell(href, t, ref, ba) +
+        typeCell(kind) +
+        '<td class="govuk-table__cell">' + escapeHtml(tier) + "</td>" +
+        '<td class="govuk-table__cell">' + escapeHtml(li) + "</td>" +
+        '<td class="govuk-table__cell">' + escapeHtml(im) + "</td>" +
+        scoreCell(x, kind) +
+        '<td class="govuk-table__cell">' + formatOpened(opened) + "</td>"
+      );
+    }
+
+    function loadDrill(el) {
+      var tierId = el.getAttribute("data-tier-id");
+      var slice = el.getAttribute("data-slice");
+      var qs = filterQuery();
+      var url = endpoint + (endpoint.indexOf("?") >= 0 ? "&" : "?") +
+        "tierId=" + encodeURIComponent(tierId) +
+        "&slice=" + encodeURIComponent(slice) +
+        (qs ? "&" + qs : "");
+
+      document.querySelectorAll("a.raid-tier-drill").forEach(function (a) {
+        a.classList.toggle("raid-tier-drill--active", a === el);
+      });
+
+      errBox.hidden = true;
+      showResults();
+      if (titleEl) titleEl.textContent = "Loading…";
+      if (countEl) countEl.textContent = "";
+      tbody.innerHTML = '<tr class="govuk-table__row"><td colspan="7" class="govuk-table__cell">Loading…</td></tr>';
+
+      fetch(url, { credentials: "same-origin" })
+        .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error("Request failed")); })
+        .then(function (data) {
+          var t = data.title || data.Title || "";
+          if (titleEl) titleEl.textContent = t || "Matching records";
+          var items = data.items || data.Items || [];
+          if (countEl) {
+            countEl.textContent = items.length === 0
+              ? "(none)"
+              : "(" + items.length + (items.length === 1 ? " record" : " records") + ")";
+          }
+          if (items.length === 0) {
+            tbody.innerHTML = '<tr class="govuk-table__row"><td colspan="7" class="govuk-table__cell">No records found for this slice.</td></tr>';
+          } else {
+            tbody.innerHTML = items.map(function (x) {
+              return '<tr class="govuk-table__row">' + itemRow(x) + "</tr>";
+            }).join("");
+          }
+          var panel = document.getElementById("raid-tier-matching");
+          if (panel) panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        })
+        .catch(function () {
+          showEmpty();
+          errBox.hidden = false;
+          errText.textContent = "Could not load the breakdown. Try again.";
+        });
+    }
+
+    document.querySelectorAll("a.raid-tier-drill").forEach(function (el) {
+      el.addEventListener("click", function (e) {
+        e.preventDefault();
+        loadDrill(el);
+      });
+    });
+
+    if (clearLink) {
+      clearLink.addEventListener("click", function (e) {
+        e.preventDefault();
+        showEmpty();
+      });
+    }
+
+    showEmpty();
+  }
+
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", bind);
+  else bind();
+})();
+</script>
+}

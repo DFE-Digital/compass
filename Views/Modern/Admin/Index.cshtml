@@ -1,0 +1,262 @@
+@model Compass.ViewModels.Modern.AdminHubViewModel
+@using System
+@using Compass.ViewModels.Modern
+@using Microsoft.AspNetCore.Html
+@{
+  ViewData["Title"] = "Admin";
+  string P(string id) => Url.Action("Index", "ModernAdmin", new { panel = id }) ?? "#";
+  var cur = Model.Panel;
+  var g = cur switch
+  {
+    "hub" => 0,
+    "risk-categories" or "issue-categories" or "risk-tiers"
+      or "risk-statuses" or "risk-priorities" or "risk-likelihoods" or "risk-impact-levels" or "risk-proximities" or "risk-treatments" or "risk-appetites"
+      or "action-statuses" or "action-priorities" or "action-types" or "action-categories"
+      or "action-impact-levels" or "action-reminder-frequencies" or "action-escalation-thresholds"
+      or "issue-statuses" or "issue-priorities" or "issue-severities"
+      or "decision-statuses" or "decision-priorities" or "decision-outcomes" or "decision-implementation-statuses"
+      or "raid-evidence-types" or "governance-boards" or "demand-request-statuses" or "triage-outcome-stages"
+      or "assumption-statuses" or "assumption-criticalities" or "dependency-criticalities" or "dependency-link-types"
+      or "near-miss-types" or "near-miss-seriousness" or "near-miss-statuses" => 2,
+    "scoring-fw" or "perf-cycles" or "assess-cycles" => 3,
+    "groups" or "api-tokens" or "cms-access-products" or "business-area-admins" or "business-area-leadership" or "directorate-leadership" => 4,
+    "audit" or "migration" or "feature-settings" => 5,
+    "fips-channels" or "fips-types" or "fips-business-areas" or "fips-user-groups" or "fips-contact-roles" or "fips-categorisation" => 6,
+    "std-categories" or "std-subcategories" or "std-functional" => 7,
+    "work-tagging" => 8,
+    _ => 1
+  };
+  bool Og(int n) => g == n;
+}
+
+@section Breadcrumbs {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">Admin</li>
+}
+
+@* Do not use .dfe-c-screen here: compass2-design-file.js calls ss('home') when any .dfe-c-screen exists, which hides MVC content and forces Home in the nav. *@
+<div class="admin-hub">
+ @await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+   Caption = "Administration",
+   Title = "Admin",
+   Lede = new HtmlString("<p class=\"govuk-body govuk-!-margin-bottom-0\">System configuration — Compass administrators only</p>")
+ })
+
+  @if (ViewBag.AdminMessage != null)
+  {
+ <div class="govuk-notification-banner govuk-notification-banner--success" role="region" aria-labelledby="admin-msg-title" style="margin-bottom:1.5rem;">
+ <div class="govuk-notification-banner__header">
+ <h2 class="govuk-notification-banner__title" id="admin-msg-title">Success</h2>
+      </div>
+ <div class="govuk-notification-banner__content">
+ <p class="govuk-notification-banner__heading">@ViewBag.AdminMessage</p>
+      </div>
+    </div>
+  }
+
+  <div class="admin-hub__layout">
+
+    <nav class="admin-hub__config-nav" aria-label="Configuration areas">
+      <div class="admin-hub__config-nav-title">Configuration areas</div>
+
+ <details class="admin-nav-group @(Og(1) ?"admin-nav-group--open" : "")" id="ang-lookups" @(Og(1) ? "open" : null)>
+ <summary class="admin-nav-group__header">
+ <span class="admin-nav-group__icon-open" aria-hidden="true">−</span>
+ <span class="admin-nav-group__icon-closed" aria-hidden="true">+</span>
+          <span>Lookups &amp; taxonomy</span>
+        </summary>
+ <div class="admin-nav-group__body">
+ <a class="admin-nav-link @(cur =="activity-types" ? "admin-nav-link--active" : "")" href="@P("activity-types")">Activity types</a>
+ <a class="admin-nav-link @(cur =="business-areas" ? "admin-nav-link--active" : "")" href="@P("business-areas")">Business areas</a>
+ <a class="admin-nav-link @(cur =="universal-barriers" ? "admin-nav-link--active" : "")" href="@P("universal-barriers")">Universal barriers</a>
+ <a class="admin-nav-link @(cur =="phases" ? "admin-nav-link--active" : "")" href="@P("phases")">Delivery phases</a>
+ <a class="admin-nav-link @(cur =="directorates" ? "admin-nav-link--active" : "")" href="@P("directorates")">Directorates</a>
+ <a class="admin-nav-link @(cur =="departments" ? "admin-nav-link--active" : "")" href="@P("departments")">Government departments</a>
+ <a class="admin-nav-link @(cur =="issue-categories" ? "admin-nav-link--active" : "")" href="@P("issue-categories")">Issue categories</a>
+ <a class="admin-nav-link @(cur =="mission-pillars" ? "admin-nav-link--active" : "")" href="@P("mission-pillars")">Mission pillars</a>
+ <a class="admin-nav-link @(cur =="priorities" ? "admin-nav-link--active" : "")" href="@P("priorities")">Priority levels</a>
+ <a class="admin-nav-link @(cur =="priority-outcomes" ? "admin-nav-link--active" : "")" href="@P("priority-outcomes")">Priority outcomes</a>
+ <a class="admin-nav-link @(cur =="rag-defns" ? "admin-nav-link--active" : "")" href="@P("rag-defns")">RAG definitions</a>
+        </div>
+      </details>
+
+ <details class="admin-nav-group @(Og(2) ?"admin-nav-group--open" : "")" id="ang-raid" @(Og(2) ? "open" : null)>
+ <summary class="admin-nav-group__header">
+ <span class="admin-nav-group__icon-open" aria-hidden="true">−</span>
+ <span class="admin-nav-group__icon-closed" aria-hidden="true">+</span>
+          <span>RAID</span>
+        </summary>
+ <div class="admin-nav-group__body">
+ <span class="admin-nav-label">Risks</span>
+ <a class="admin-nav-link @(cur =="risk-categories" ? "admin-nav-link--active" : "")" href="@P("risk-categories")">Risk categories</a>
+ <a class="admin-nav-link @(cur =="risk-tiers" ? "admin-nav-link--active" : "")" href="@P("risk-tiers")">Risk tiers</a>
+ <a class="admin-nav-link @(cur =="risk-statuses" ? "admin-nav-link--active" : "")" href="@P("risk-statuses")">Risk statuses</a>
+ <a class="admin-nav-link @(cur =="risk-priorities" ? "admin-nav-link--active" : "")" href="@P("risk-priorities")">Risk priorities</a>
+ <a class="admin-nav-link @(cur =="risk-likelihoods" ? "admin-nav-link--active" : "")" href="@P("risk-likelihoods")">Risk likelihoods</a>
+ <a class="admin-nav-link @(cur =="risk-impact-levels" ? "admin-nav-link--active" : "")" href="@P("risk-impact-levels")">Risk impact levels</a>
+ <a class="admin-nav-link @(cur =="risk-proximities" ? "admin-nav-link--active" : "")" href="@P("risk-proximities")">Risk proximities</a>
+<a class="admin-nav-link @(cur =="risk-treatments" ? "admin-nav-link--active" : "")" href="@P("risk-treatments")">Risk treatments</a>
+<a class="admin-nav-link @(cur =="risk-appetites" ? "admin-nav-link--active" : "")" href="@P("risk-appetites")">Risk appetites</a>
+ <span class="admin-nav-label">Actions</span>
+ <a class="admin-nav-link @(cur =="action-statuses" ? "admin-nav-link--active" : "")" href="@P("action-statuses")">Action statuses</a>
+ <a class="admin-nav-link @(cur =="action-priorities" ? "admin-nav-link--active" : "")" href="@P("action-priorities")">Action priorities</a>
+ <a class="admin-nav-link @(cur =="action-types" ? "admin-nav-link--active" : "")" href="@P("action-types")">Action types</a>
+ <a class="admin-nav-link @(cur =="action-categories" ? "admin-nav-link--active" : "")" href="@P("action-categories")">Action categories</a>
+ <a class="admin-nav-link @(cur =="action-impact-levels" ? "admin-nav-link--active" : "")" href="@P("action-impact-levels")">Action impact levels</a>
+ <a class="admin-nav-link @(cur =="action-reminder-frequencies" ? "admin-nav-link--active" : "")" href="@P("action-reminder-frequencies")">Action reminders</a>
+ <a class="admin-nav-link @(cur =="action-escalation-thresholds" ? "admin-nav-link--active" : "")" href="@P("action-escalation-thresholds")">Action escalation</a>
+ <span class="admin-nav-label">Issues</span>
+ <a class="admin-nav-link @(cur =="issue-statuses" ? "admin-nav-link--active" : "")" href="@P("issue-statuses")">Issue statuses</a>
+ <a class="admin-nav-link @(cur =="issue-priorities" ? "admin-nav-link--active" : "")" href="@P("issue-priorities")">Issue priorities</a>
+ <a class="admin-nav-link @(cur =="issue-severities" ? "admin-nav-link--active" : "")" href="@P("issue-severities")">Issue severities</a>
+ <span class="admin-nav-label">Assumptions</span>
+ <a class="admin-nav-link @(cur =="assumption-statuses" ? "admin-nav-link--active" : "")" href="@P("assumption-statuses")">Assumption statuses</a>
+ <a class="admin-nav-link @(cur =="assumption-criticalities" ? "admin-nav-link--active" : "")" href="@P("assumption-criticalities")">Assumption criticalities</a>
+ <span class="admin-nav-label">Dependencies</span>
+ <a class="admin-nav-link @(cur =="dependency-criticalities" ? "admin-nav-link--active" : "")" href="@P("dependency-criticalities")">Dependency criticalities</a>
+ <a class="admin-nav-link @(cur =="dependency-link-types" ? "admin-nav-link--active" : "")" href="@P("dependency-link-types")">Dependency link types</a>
+ <span class="admin-nav-label">Near misses</span>
+ <a class="admin-nav-link @(cur =="near-miss-types" ? "admin-nav-link--active" : "")" href="@P("near-miss-types")">Near miss types</a>
+ <a class="admin-nav-link @(cur =="near-miss-seriousness" ? "admin-nav-link--active" : "")" href="@P("near-miss-seriousness")">Near miss seriousness</a>
+ <a class="admin-nav-link @(cur =="near-miss-statuses" ? "admin-nav-link--active" : "")" href="@P("near-miss-statuses")">Near miss statuses</a>
+ <span class="admin-nav-label">Decisions</span>
+ <a class="admin-nav-link @(cur =="decision-statuses" ? "admin-nav-link--active" : "")" href="@P("decision-statuses")">Decision statuses</a>
+ <a class="admin-nav-link @(cur =="decision-priorities" ? "admin-nav-link--active" : "")" href="@P("decision-priorities")">Decision priorities</a>
+ <a class="admin-nav-link @(cur =="decision-outcomes" ? "admin-nav-link--active" : "")" href="@P("decision-outcomes")">Decision outcomes</a>
+ <a class="admin-nav-link @(cur =="decision-implementation-statuses" ? "admin-nav-link--active" : "")" href="@P("decision-implementation-statuses")">Decision impl. statuses</a>
+ <span class="admin-nav-label">Shared</span>
+ <a class="admin-nav-link @(cur =="raid-evidence-types" ? "admin-nav-link--active" : "")" href="@P("raid-evidence-types")">Evidence types</a>
+ <a class="admin-nav-link @(cur =="governance-boards" ? "admin-nav-link--active" : "")" href="@P("governance-boards")">Governance boards</a>
+ @if (ViewBag.ShowDemandNavigation == true)
+ {
+ <a class="admin-nav-link @(cur =="demand-request-statuses" ? "admin-nav-link--active" : "")" href="@P("demand-request-statuses")">Demand request statuses</a>
+ <a class="admin-nav-link @(cur =="triage-outcome-stages" ? "admin-nav-link--active" : "")" href="@P("triage-outcome-stages")">Triage outcome stages</a>
+ }
+        </div>
+      </details>
+
+ <details class="admin-nav-group @(Og(8) ?"admin-nav-group--open" : "")" id="ang-work" @(Og(8) ? "open" : null)>
+ <summary class="admin-nav-group__header">
+ <span class="admin-nav-group__icon-open" aria-hidden="true">−</span>
+ <span class="admin-nav-group__icon-closed" aria-hidden="true">+</span>
+          <span>Work</span>
+        </summary>
+ <div class="admin-nav-group__body">
+ <a class="admin-nav-link @(cur =="work-tagging" ? "admin-nav-link--active" : "")" href="@P("work-tagging")">Tagging</a>
+        </div>
+      </details>
+
+ <details class="admin-nav-group @(Og(3) ?"admin-nav-group--open" : "")" id="ang-frameworks" @(Og(3) ? "open" : null)>
+ <summary class="admin-nav-group__header">
+ <span class="admin-nav-group__icon-open" aria-hidden="true">−</span>
+ <span class="admin-nav-group__icon-closed" aria-hidden="true">+</span>
+          <span>Frameworks &amp; cycles</span>
+        </summary>
+ <div class="admin-nav-group__body">
+ <a class="admin-nav-link @(cur =="assess-cycles" ? "admin-nav-link--active" : "")" href="@P("assess-cycles")">Assessment cycles</a>
+ <a class="admin-nav-link @(cur =="perf-cycles" ? "admin-nav-link--active" : "")" href="@P("perf-cycles")">Performance cycles</a>
+ <a class="admin-nav-link" href="@Url.Action("WorkReporting", "ModernAdmin")">Work reporting deadlines</a>
+ <a class="admin-nav-link @(cur =="scoring-fw" ? "admin-nav-link--active" : "")" href="@P("scoring-fw")">Scoring framework</a>
+        </div>
+      </details>
+
+ <details class="admin-nav-group @(Og(4) ?"admin-nav-group--open" : "")" id="ang-access" @(Og(4) ? "open" : null)>
+ <summary class="admin-nav-group__header">
+ <span class="admin-nav-group__icon-open" aria-hidden="true">−</span>
+ <span class="admin-nav-group__icon-closed" aria-hidden="true">+</span>
+          <span>Access &amp; integration</span>
+        </summary>
+ <div class="admin-nav-group__body">
+ <a class="admin-nav-link @(cur =="groups" ? "admin-nav-link--active" : "")" href="@P("groups")">Groups</a>
+ <a class="admin-nav-link @(cur =="business-area-admins" ? "admin-nav-link--active" : "")" href="@P("business-area-admins")">Business area permissions</a>
+ <a class="admin-nav-link @(cur =="business-area-leadership" ? "admin-nav-link--active" : "")" href="@P("business-area-leadership")">Business area leadership (DD)</a>
+ <a class="admin-nav-link @(cur =="directorate-leadership" ? "admin-nav-link--active" : "")" href="@P("directorate-leadership")">Directorate leadership</a>
+ <a class="admin-nav-link" href="@Url.Action("OrganisationStructure", "ModernAdmin")">Organisation structure</a>
+ <a class="admin-nav-link @(cur =="api-tokens" ? "admin-nav-link--active" : "")" href="@P("api-tokens")">API tokens</a>
+ <a class="admin-nav-link @(cur =="cms-access-products" ? "admin-nav-link--active" : "")" href="@P("cms-access-products")">CMS access products</a>
+        </div>
+      </details>
+
+ <details class="admin-nav-group @(Og(5) ?"admin-nav-group--open" : "")" id="ang-system" @(Og(5) ? "open" : null)>
+ <summary class="admin-nav-group__header">
+ <span class="admin-nav-group__icon-open" aria-hidden="true">−</span>
+ <span class="admin-nav-group__icon-closed" aria-hidden="true">+</span>
+          <span>System</span>
+        </summary>
+ <div class="admin-nav-group__body">
+ <a class="admin-nav-link @(cur =="audit" ? "admin-nav-link--active" : "")" href="@P("audit")">Audit log</a>
+ <a class="admin-nav-link @(cur =="migration" ? "admin-nav-link--active" : "")" href="@P("migration")">Legacy migration import</a>
+ <a class="admin-nav-link @(cur =="feature-settings" ? "admin-nav-link--active" : "")" href="@P("feature-settings")">Feature settings</a>
+        </div>
+      </details>
+
+ @if (ViewBag.ShowFipsDatabaseServiceRegister == true)
+ {
+ <details class="admin-nav-group @(Og(6) ?"admin-nav-group--open" : "")" id="ang-fips" @(Og(6) ? "open" : null)>
+ <summary class="admin-nav-group__header">
+ <span class="admin-nav-group__icon-open" aria-hidden="true">−</span>
+ <span class="admin-nav-group__icon-closed" aria-hidden="true">+</span>
+          <span>FIPS</span>
+        </summary>
+ <div class="admin-nav-group__body">
+ <a class="admin-nav-link @(cur =="fips-channels" ? "admin-nav-link--active" : "")" href="@P("fips-channels")">Channels</a>
+ <a class="admin-nav-link @(cur =="fips-types" ? "admin-nav-link--active" : "")" href="@P("fips-types")">Types</a>
+ <a class="admin-nav-link @(cur =="fips-business-areas" ? "admin-nav-link--active" : "")" href="@P("fips-business-areas")">Business areas</a>
+ <a class="admin-nav-link @(cur =="fips-user-groups" ? "admin-nav-link--active" : "")" href="@P("fips-user-groups")">User groups</a>
+ <a class="admin-nav-link @(cur =="fips-contact-roles" ? "admin-nav-link--active" : "")" href="@P("fips-contact-roles")">Contact roles</a>
+ <a class="admin-nav-link @(cur =="fips-categorisation" ? "admin-nav-link--active" : "")" href="@P("fips-categorisation")">Categorisation groups</a>
+        </div>
+      </details>
+ }
+
+ @if (ViewBag.ShowStandardsNavigation == true)
+ {
+ <details class="admin-nav-group @(Og(7) ?"admin-nav-group--open" : "")" id="ang-standards" @(Og(7) ? "open" : null)>
+ <summary class="admin-nav-group__header">
+ <span class="admin-nav-group__icon-open" aria-hidden="true">−</span>
+ <span class="admin-nav-group__icon-closed" aria-hidden="true">+</span>
+          <span>Standards</span>
+        </summary>
+ <div class="admin-nav-group__body">
+ <a class="admin-nav-link @(cur =="std-categories" ? "admin-nav-link--active" : "")" href="@P("std-categories")">DDT Standards</a>
+ <a class="admin-nav-link @(cur =="std-subcategories" ? "admin-nav-link--active" : "")" href="@P("std-subcategories")">Sub-categories</a>
+ <a class="admin-nav-link @(cur =="std-functional" ? "admin-nav-link--active" : "")" href="@P("std-functional")">Functional Standards</a>
+        </div>
+      </details>
+ }
+    </nav>
+
+    <div>
+      @await Html.PartialAsync("~/Views/Modern/Admin/_AdminHubPanels.cshtml", Model)
+    </div>
+  </div>
+</div>
+
+@section Scripts {
+  @if (string.Equals(Model.Panel, "feature-settings", StringComparison.OrdinalIgnoreCase))
+  {
+  <script nonce="@(Context.Items["Nonce"] as string)">
+    (function () {
+      function sync() {
+        document.querySelectorAll('[data-feature-allow-box]').forEach(function (box) {
+          var id = box.getAttribute('data-feature-allow-box');
+          var on = document.getElementById('f-access-' + id + '-some');
+          var show = on && on.checked;
+          box.classList.toggle('govuk-!-display-none', !show);
+          if (box.getAttribute('aria-hidden') != null) box.setAttribute('aria-hidden', show ? 'false' : 'true');
+        });
+      }
+      document.querySelectorAll('input[type="radio"][name*="AccessMode"]').forEach(function (r) { r.addEventListener('change', sync); });
+      sync();
+    })();
+  </script>
+  }
+
+  <script nonce="@(Context.Items["Nonce"] as string)">
+    document.querySelectorAll('[data-confirm]').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        if (!confirm(btn.getAttribute('data-confirm'))) e.preventDefault();
+      });
+    });
+  </script>
+}

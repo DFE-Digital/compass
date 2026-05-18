@@ -8,6 +8,12 @@ public class RiskIssueNamedIntOption
 {
     public int Id { get; set; }
     public string Name { get; set; } = string.Empty;
+
+    /// <summary>Optional supporting text (e.g. <see cref="Compass.Models.RaidLookupBase.Description"/>).</summary>
+    public string? Description { get; set; }
+
+    /// <summary>For risk likelihood / impact lookups: admin matrix weight (1–5).</summary>
+    public int? MatrixScore { get; set; }
 }
 
 /// <summary>Form POST body for modern work Log issue / Log risk pages.</summary>
@@ -23,6 +29,22 @@ public class ModernWorkLogRaidForm
     public DateTime? TargetResolutionDate { get; set; }
     public string? MitigationOrAction { get; set; }
     public int? LinkedMilestoneId { get; set; }
+
+    /// <summary>RaidLookupBase likelihood row id.</summary>
+    public int? RiskLikelihoodId { get; set; }
+    /// <summary>RaidLookupBase impact level row id.</summary>
+    public int? RiskImpactLevelId { get; set; }
+    public int? RiskProximityId { get; set; }
+    public int? RiskCategoryId { get; set; }
+
+    /// <summary>Risk priority lookup (<see cref="Compass.Models.RiskPriority"/>).</summary>
+    public int? RiskPriorityLookupId { get; set; }
+
+    public int? IssueSeverityId { get; set; }
+    /// <summary>Maps to <see cref="Compass.Models.IssuePriority"/>.</summary>
+    public int? IssuePriorityLookupId { get; set; }
+    public int? IssueStatusLookupId { get; set; }
+    public int? IssueCategoryId { get; set; }
 }
 
 /// <summary>Risk or issue row for ported modern work views (maps to Compass <see cref="Risk"/> / <see cref="Issue"/> in a later iteration).</summary>
@@ -49,12 +71,26 @@ public class WorkItemRiskOrIssue
     public WorkLookupOption? RiskLikelihoodLookup { get; set; }
     public int? RiskImpactLookupId { get; set; }
     public WorkLookupOption? RiskImpactLookup { get; set; }
+    public int? RiskProximityLookupId { get; set; }
+    public int? RiskCategoryLookupId { get; set; }
+    public int? RiskPriorityLookupId { get; set; }
+
+    public int? IssueSeverityLookupId { get; set; }
+    public int? IssuePriorityLookupId { get; set; }
+    public string? IssueSeverityLabel { get; set; }
+    public string? IssuePriorityLabel { get; set; }
+    public int? IssueStatusLookupId { get; set; }
+    public int? IssueCategoryLookupId { get; set; }
 
     [Required, MaxLength(50)]
     public string Status { get; set; } = "Open";
 
     public string? ImpactOnDelivery { get; set; }
     public string? MitigationOrAction { get; set; }
+    /// <summary>Inherent/computed score from the core risk row when Type is Risk.</summary>
+    public int? RiskScore { get; set; }
+    public string? LikelihoodLabel { get; set; }
+    public string? ImpactLabel { get; set; }
     [MaxLength(50)]
     public string? Likelihood { get; set; }
     public int? ImpactLevel { get; set; }
@@ -90,6 +126,8 @@ public class WorkItemRiskOrIssue
     public int? RelatesToPortfolioId { get; set; }
     public int? ManagingPortfolioId { get; set; }
     public int? DirectorateId { get; set; }
+    /// <summary>From junction / work item or legacy string; RAID register “Business area” column.</summary>
+    public string? BusinessAreaLabel { get; set; }
     public string? RelatesToOtherDetails { get; set; }
     public Guid? CreationIdempotencyKey { get; set; }
 

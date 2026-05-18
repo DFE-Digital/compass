@@ -1,0 +1,576 @@
+@model Compass.ViewModels.Modern.Ddr.DdrDetailViewModel
+@using Compass.Models.Ddr
+@using Compass.ViewModels.Modern
+@{
+  var record = Model.Record;
+  ViewData["Title"] = $"{record.Reference} — {record.ShortTitle}";
+
+  string TagClass(string status) => status switch
+  {
+    "Draft" => "govuk-tag govuk-tag--grey",
+    "Proposed" => "govuk-tag govuk-tag--blue",
+    "In use" => "govuk-tag govuk-tag--green",
+    "Under review" => "govuk-tag govuk-tag--orange",
+    "Approved" => "govuk-tag govuk-tag--turquoise",
+    "Rejected" => "govuk-tag govuk-tag--red",
+    "Superseded" => "govuk-tag govuk-tag--purple",
+    "Retired" => "govuk-tag govuk-tag--grey",
+    _ => "govuk-tag govuk-tag--grey",
+  };
+
+  string CommentTagClass(string type) => type switch
+  {
+    "Question" => "govuk-tag govuk-tag--blue",
+    "Observation" => "govuk-tag govuk-tag--turquoise",
+    "Action" => "govuk-tag govuk-tag--orange",
+    _ => "govuk-tag govuk-tag--grey",
+  };
+
+  var commentError = TempData["DdrCommentError"] as string;
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Register", "ModernDesignDecisionRecords")">Design decision records</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">@record.Reference</li>
+}
+
+@{
+  var ddrDetailLede = await Html.PartialAsync("~/Views/Modern/DesignDecisionRecords/_DdrDetailHeaderLede.cshtml", Model);
+  var ddrDetailActions = await Html.PartialAsync("~/Views/Modern/DesignDecisionRecords/_DdrDetailHeaderActions.cshtml", Model);
+}
+@await Html.PartialAsync("~/Views/Modern/Shared/_ModernPageHeader.cshtml", new ModernPageHeaderViewModel {
+  Caption = record.Reference,
+  Title = record.ShortTitle,
+  HeadingClass = "govuk-heading-l",
+  Lede = ddrDetailLede,
+  Actions = ddrDetailActions
+})
+
+<div class="govuk-grid-row">
+  <div class="govuk-grid-column-two-thirds">
+
+    <div class="govuk-summary-card">
+      <div class="govuk-summary-card__title-wrapper">
+        <h2 class="govuk-summary-card__title">Summary</h2>
+      </div>
+      <div class="govuk-summary-card__content">
+        <dl class="govuk-summary-list">
+          <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">Reference</dt>
+            <dd class="govuk-summary-list__value">@record.Reference</dd>
+          </div>
+          <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">Category</dt>
+            <dd class="govuk-summary-list__value">@record.Category</dd>
+          </div>
+          <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">Status</dt>
+            <dd class="govuk-summary-list__value"><span class="@TagClass(record.Status)">@record.Status</span></dd>
+          </div>
+          <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">Author</dt>
+            <dd class="govuk-summary-list__value">@record.AuthorDisplayName</dd>
+          </div>
+          <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">Created</dt>
+            <dd class="govuk-summary-list__value">@record.CreatedAt.ToString("d MMM yyyy")</dd>
+          </div>
+          <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">Last updated</dt>
+            <dd class="govuk-summary-list__value">@record.UpdatedAt.ToString("d MMM yyyy")</dd>
+          </div>
+        </dl>
+      </div>
+    </div>
+
+    <div class="govuk-summary-card">
+      <div class="govuk-summary-card__title-wrapper">
+        <h2 class="govuk-summary-card__title">Context and problem statement</h2>
+      </div>
+      <div class="govuk-summary-card__content">
+        <p class="govuk-body" style="white-space:pre-wrap;">@record.ContextProblemStatement</p>
+      </div>
+    </div>
+
+    <div class="govuk-summary-card">
+      <div class="govuk-summary-card__title-wrapper">
+        <h2 class="govuk-summary-card__title">Decision</h2>
+      </div>
+      <div class="govuk-summary-card__content">
+        <p class="govuk-body" style="white-space:pre-wrap;">@record.Decision</p>
+      </div>
+    </div>
+
+    <div class="govuk-summary-card">
+      <div class="govuk-summary-card__title-wrapper">
+        <h2 class="govuk-summary-card__title">Rationale</h2>
+      </div>
+      <div class="govuk-summary-card__content">
+        <p class="govuk-body" style="white-space:pre-wrap;">@record.Rationale</p>
+      </div>
+    </div>
+
+    <div class="govuk-summary-card">
+      <div class="govuk-summary-card__title-wrapper">
+        <h2 class="govuk-summary-card__title">Consequences and trade-offs</h2>
+      </div>
+      <div class="govuk-summary-card__content">
+        <p class="govuk-body" style="white-space:pre-wrap;">@record.ConsequencesTradeoffs</p>
+      </div>
+    </div>
+
+    <div class="govuk-summary-card">
+      <div class="govuk-summary-card__title-wrapper">
+        <h2 class="govuk-summary-card__title">Alternatives considered</h2>
+      </div>
+      <div class="govuk-summary-card__content">
+        @if (Model.Alternatives.Count == 0)
+        {
+          <p class="govuk-body govuk-!-margin-bottom-0" style="color:#505a5f;">No alternatives recorded.</p>
+        }
+        else
+        {
+          <ol class="govuk-list govuk-list--number">
+            @foreach (var alt in Model.Alternatives)
+            {
+              <li>
+                <strong>@alt.AlternativeText</strong>
+                @if (!string.IsNullOrWhiteSpace(alt.Outcome))
+                {
+                  <p class="govuk-body-s govuk-!-margin-top-1 govuk-!-margin-bottom-0" style="color:#505a5f;">@alt.Outcome</p>
+                }
+              </li>
+            }
+          </ol>
+        }
+      </div>
+    </div>
+
+    @if (record.DeviationFlag)
+    {
+      <div class="govuk-summary-card">
+        <div class="govuk-summary-card__title-wrapper">
+          <h2 class="govuk-summary-card__title">Deviation</h2>
+        </div>
+        <div class="govuk-summary-card__content">
+          <dl class="govuk-summary-list">
+            <div class="govuk-summary-list__row">
+              <dt class="govuk-summary-list__key">Type</dt>
+              <dd class="govuk-summary-list__value">@(record.DeviationType ?? "—")</dd>
+            </div>
+            <div class="govuk-summary-list__row">
+              <dt class="govuk-summary-list__key">Details</dt>
+              <dd class="govuk-summary-list__value" style="white-space:pre-wrap;">@(record.DeviationDetails ?? "—")</dd>
+            </div>
+            <div class="govuk-summary-list__row">
+              <dt class="govuk-summary-list__key">Approval route</dt>
+              <dd class="govuk-summary-list__value">@(record.ApprovalRoute ?? "—")</dd>
+            </div>
+            <div class="govuk-summary-list__row">
+              <dt class="govuk-summary-list__key">Approved by</dt>
+              <dd class="govuk-summary-list__value">@(string.IsNullOrWhiteSpace(record.ApprovedBy) ? "—" : record.ApprovedBy)</dd>
+            </div>
+          </dl>
+        </div>
+      </div>
+    }
+
+    @if (record.RetrospectiveRecord)
+    {
+      <div class="govuk-summary-card">
+        <div class="govuk-summary-card__title-wrapper">
+          <h2 class="govuk-summary-card__title">Retrospective context</h2>
+        </div>
+        <div class="govuk-summary-card__content">
+          <dl class="govuk-summary-list">
+            <div class="govuk-summary-list__row">
+              <dt class="govuk-summary-list__key">Original decision date</dt>
+              <dd class="govuk-summary-list__value">@(string.IsNullOrWhiteSpace(record.OriginalDecisionDate) ? "—" : record.OriginalDecisionDate)</dd>
+            </div>
+            <div class="govuk-summary-list__row">
+              <dt class="govuk-summary-list__key">Why recorded now</dt>
+              <dd class="govuk-summary-list__value" style="white-space:pre-wrap;">@(record.RetrospectiveContext ?? "—")</dd>
+            </div>
+            <div class="govuk-summary-list__row">
+              <dt class="govuk-summary-list__key">Current validity</dt>
+              <dd class="govuk-summary-list__value">@(record.CurrentValidity ?? "—")</dd>
+            </div>
+            @if (!string.IsNullOrWhiteSpace(record.CurrentValidityRationale))
+            {
+              <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">Validity rationale</dt>
+                <dd class="govuk-summary-list__value" style="white-space:pre-wrap;">@record.CurrentValidityRationale</dd>
+              </div>
+            }
+          </dl>
+        </div>
+      </div>
+    }
+
+    @if (Model.Evidence.Count > 0)
+    {
+      <div class="govuk-summary-card">
+        <div class="govuk-summary-card__title-wrapper">
+          <h2 class="govuk-summary-card__title">Evidence (@Model.Evidence.Count)</h2>
+        </div>
+        <div class="govuk-summary-card__content">
+          <ul class="govuk-list">
+            @foreach (var ev in Model.Evidence)
+            {
+              <li>
+                @if (!string.IsNullOrWhiteSpace(ev.EvidenceUrl))
+                {
+                  <a class="govuk-link govuk-link--no-visited-state" href="@ev.EvidenceUrl" target="_blank" rel="noopener noreferrer">@ev.EvidenceTitle</a>
+                }
+                else
+                {
+                  <span>@ev.EvidenceTitle</span>
+                }
+                @if (!string.IsNullOrWhiteSpace(ev.EvidenceType))
+                {
+                  <span class="govuk-tag govuk-tag--grey govuk-!-margin-left-2">@ev.EvidenceType</span>
+                }
+                @if (!string.IsNullOrWhiteSpace(ev.EvidenceSummary))
+                {
+                  <p class="govuk-body-s govuk-!-margin-top-1 govuk-!-margin-bottom-0" style="color:#505a5f;">@ev.EvidenceSummary</p>
+                }
+              </li>
+            }
+          </ul>
+        </div>
+      </div>
+    }
+
+    @if (Model.Standards.Count > 0)
+    {
+      <div class="govuk-summary-card">
+        <div class="govuk-summary-card__title-wrapper">
+          <h2 class="govuk-summary-card__title">Linked standards (@Model.Standards.Count)</h2>
+        </div>
+        <div class="govuk-summary-card__content">
+          <ul class="govuk-list">
+            @foreach (var s in Model.Standards)
+            {
+              <li>
+                @if (!string.IsNullOrWhiteSpace(s.StandardUrl))
+                {
+                  <a class="govuk-link govuk-link--no-visited-state" href="@s.StandardUrl" target="_blank" rel="noopener noreferrer">
+                    @(string.IsNullOrWhiteSpace(s.StandardTitle) ? s.StandardReference : s.StandardTitle)
+                  </a>
+                }
+                else
+                {
+                  <span>@(string.IsNullOrWhiteSpace(s.StandardTitle) ? s.StandardReference : s.StandardTitle)</span>
+                }
+                @if (!string.IsNullOrWhiteSpace(s.StandardType))
+                {
+                  <span class="govuk-tag govuk-tag--grey govuk-!-margin-left-2">@s.StandardType</span>
+                }
+              </li>
+            }
+          </ul>
+        </div>
+      </div>
+    }
+
+    @if (Model.ComponentsAndPatterns.Count > 0)
+    {
+      <div class="govuk-summary-card">
+        <div class="govuk-summary-card__title-wrapper">
+          <h2 class="govuk-summary-card__title">Components and patterns (@Model.ComponentsAndPatterns.Count)</h2>
+        </div>
+        <div class="govuk-summary-card__content">
+          <ul class="govuk-list">
+            @foreach (var c in Model.ComponentsAndPatterns)
+            {
+              <li>
+                @if (!string.IsNullOrWhiteSpace(c.ItemUrl))
+                {
+                  <a class="govuk-link govuk-link--no-visited-state" href="@c.ItemUrl" target="_blank" rel="noopener noreferrer">@c.ItemName</a>
+                }
+                else
+                {
+                  <span>@c.ItemName</span>
+                }
+                @if (!string.IsNullOrWhiteSpace(c.SourceSystem))
+                {
+                  <span class="govuk-tag govuk-tag--grey govuk-!-margin-left-2">@c.SourceSystem</span>
+                }
+                @if (!string.IsNullOrWhiteSpace(c.ItemType))
+                {
+                  <span class="govuk-tag govuk-tag--blue govuk-!-margin-left-1">@c.ItemType</span>
+                }
+              </li>
+            }
+          </ul>
+        </div>
+      </div>
+    }
+
+    @if (Model.RecommendedFollowUps.Count > 0)
+    {
+      <div class="govuk-summary-card">
+        <div class="govuk-summary-card__title-wrapper">
+          <h2 class="govuk-summary-card__title">Recommended follow-ups (@Model.RecommendedFollowUps.Count)</h2>
+        </div>
+        <div class="govuk-summary-card__content">
+          <table class="govuk-table">
+            <thead class="govuk-table__head">
+              <tr class="govuk-table__row">
+                <th scope="col" class="govuk-table__header">Action</th>
+                <th scope="col" class="govuk-table__header">Backlog</th>
+                <th scope="col" class="govuk-table__header">Status</th>
+              </tr>
+            </thead>
+            <tbody class="govuk-table__body">
+              @foreach (var f in Model.RecommendedFollowUps)
+              {
+                <tr class="govuk-table__row">
+                  <td class="govuk-table__cell">
+                    @f.FollowUpAction
+                    @if (!string.IsNullOrWhiteSpace(f.Notes))
+                    {
+                      <p class="govuk-body-s govuk-!-margin-top-1 govuk-!-margin-bottom-0" style="color:#505a5f;">@f.Notes</p>
+                    }
+                  </td>
+                  <td class="govuk-table__cell">@(string.IsNullOrWhiteSpace(f.TargetBacklog) ? "—" : f.TargetBacklog)</td>
+                  <td class="govuk-table__cell"><span class="govuk-tag govuk-tag--blue">@f.Status</span></td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(record.MessageToDesignOps))
+    {
+      <div class="govuk-summary-card">
+        <div class="govuk-summary-card__title-wrapper">
+          <h2 class="govuk-summary-card__title">Message to DesignOps</h2>
+        </div>
+        <div class="govuk-summary-card__content">
+          <p class="govuk-body" style="white-space:pre-wrap;">@record.MessageToDesignOps</p>
+        </div>
+      </div>
+    }
+
+    @* ── Comments section ────────────────────────────────────────────────── *@
+    <h2 class="govuk-heading-m govuk-!-margin-top-6">Comments and observations (@Model.Comments.Count)</h2>
+
+    @if (commentError is not null)
+    {
+      <div class="govuk-error-summary" data-module="govuk-error-summary">
+        <div role="alert">
+          <h2 class="govuk-error-summary__title">There is a problem</h2>
+          <div class="govuk-error-summary__body">
+            <ul class="govuk-list govuk-error-summary__list">
+              <li>@commentError</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    }
+
+    <form method="post" action="@Url.Action("AddComment", "ModernDesignDecisionRecords", new { reference = record.Reference })"
+          class="govuk-!-margin-bottom-6">
+      @Html.AntiForgeryToken()
+      <div class="govuk-character-count" data-module="govuk-character-count" data-maxlength="4000">
+        <div class="govuk-form-group">
+          <label class="govuk-label govuk-label--s" for="ddr-comment-text">Add a comment</label>
+          <div id="ddr-comment-text-hint" class="govuk-hint">1 to 4,000 characters.</div>
+          <textarea class="govuk-textarea govuk-js-character-count"
+                    id="ddr-comment-text"
+                    name="commentText"
+                    rows="8"
+                    maxlength="4000"
+                    required
+                    aria-describedby="ddr-comment-text-info ddr-comment-text-hint"></textarea>
+        </div>
+        <div id="ddr-comment-text-info" class="govuk-hint govuk-character-count__message govuk-visually-hidden">
+          You can enter up to 4000 characters
+        </div>
+      </div>
+      <div class="govuk-form-group">
+        <label class="govuk-label" for="ddr-comment-type">Type</label>
+        <select class="govuk-select" id="ddr-comment-type" name="commentType">
+          @foreach (var t in DdrControlledValues.CommentTypes)
+          {
+            <option value="@t">@t</option>
+          }
+        </select>
+      </div>
+      <button type="submit" class="govuk-button" data-module="govuk-button">Save comment</button>
+    </form>
+
+    @if (Model.Comments.Count == 0)
+    {
+      <p class="govuk-body" style="color:#505a5f;">No comments yet.</p>
+    }
+    else
+    {
+      <ul class="govuk-list">
+        @foreach (var c in Model.Comments)
+        {
+          <li class="govuk-!-margin-bottom-4" style="border-left:4px solid #b1b4b6; padding-left:1rem;">
+            <p class="govuk-body govuk-!-margin-bottom-1" style="white-space:pre-wrap;">@c.CommentText</p>
+            <p class="govuk-body-s govuk-!-margin-bottom-0" style="color:#505a5f;">
+              <span class="@CommentTagClass(c.CommentType)">@c.CommentType</span>
+              <span class="govuk-!-margin-left-2">@(string.IsNullOrWhiteSpace(c.CreatedByName) ? c.CreatedBy : c.CreatedByName)</span>
+              <span class="govuk-!-margin-left-2">@c.CreatedAt.ToString("d MMM yyyy HH:mm")</span>
+            </p>
+          </li>
+        }
+      </ul>
+    }
+
+  </div>
+  <div class="govuk-grid-column-one-third">
+
+    <div class="govuk-summary-card">
+      <div class="govuk-summary-card__title-wrapper">
+        <h2 class="govuk-summary-card__title">Review</h2>
+      </div>
+      <div class="govuk-summary-card__content">
+        <dl class="govuk-summary-list">
+          <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">Trigger</dt>
+            <dd class="govuk-summary-list__value">@(string.IsNullOrWhiteSpace(record.ReviewTrigger) ? "—" : record.ReviewTrigger)</dd>
+          </div>
+          <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">Date</dt>
+            <dd class="govuk-summary-list__value">
+              @if (record.ReviewDate is { } d)
+              {
+                if (Model.ReviewOverdue)
+                {
+                  <span class="govuk-tag govuk-tag--red">@d.ToString("d MMM yyyy")</span>
+                }
+                else
+                {
+                  <span>@d.ToString("d MMM yyyy")</span>
+                }
+              }
+              else
+              {
+                <span>—</span>
+              }
+            </dd>
+          </div>
+        </dl>
+      </div>
+    </div>
+
+    <div class="govuk-summary-card">
+      <div class="govuk-summary-card__title-wrapper">
+        <h2 class="govuk-summary-card__title">Linked products</h2>
+      </div>
+      <div class="govuk-summary-card__content">
+        @if (Model.LinkedProducts.Count == 0)
+        {
+          <p class="govuk-body govuk-!-margin-bottom-0" style="color:#505a5f;">None linked.</p>
+        }
+        else
+        {
+          <ul class="govuk-list">
+            @foreach (var p in Model.LinkedProducts)
+            {
+              <li>
+                <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("FipsProduct", "ModernManage", new { id = p.ProductId })">@p.Title</a>
+              </li>
+            }
+          </ul>
+        }
+      </div>
+    </div>
+
+    <div class="govuk-summary-card">
+      <div class="govuk-summary-card__title-wrapper">
+        <h2 class="govuk-summary-card__title">Linked work items</h2>
+      </div>
+      <div class="govuk-summary-card__content">
+        @if (Model.LinkedWorkItems.Count == 0)
+        {
+          <p class="govuk-body govuk-!-margin-bottom-0" style="color:#505a5f;">None linked.</p>
+        }
+        else
+        {
+          <ul class="govuk-list">
+            @foreach (var w in Model.LinkedWorkItems)
+            {
+              <li>
+                <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("Detail", "ModernWork", new { id = w.WorkItemId })">@w.Title</a>
+              </li>
+            }
+          </ul>
+        }
+      </div>
+    </div>
+
+    @if (Model.InsightClassifications.Count > 0)
+    {
+      <div class="govuk-summary-card">
+        <div class="govuk-summary-card__title-wrapper">
+          <h2 class="govuk-summary-card__title">DesignOps classifications</h2>
+        </div>
+        <div class="govuk-summary-card__content">
+          <ul class="govuk-list govuk-list--bullet govuk-!-margin-bottom-0">
+            @foreach (var i in Model.InsightClassifications)
+            {
+              <li>@i.Classification</li>
+            }
+          </ul>
+        </div>
+      </div>
+    }
+
+    @if (Model.GitHubIssueLinks.Count > 0)
+    {
+      <div class="govuk-summary-card">
+        <div class="govuk-summary-card__title-wrapper">
+          <h2 class="govuk-summary-card__title">GitHub issues</h2>
+        </div>
+        <div class="govuk-summary-card__content">
+          <ul class="govuk-list">
+            @foreach (var g in Model.GitHubIssueLinks)
+            {
+              <li>
+                <a class="govuk-link govuk-link--no-visited-state" href="@g.IssueUrl" target="_blank" rel="noopener noreferrer">
+                  @(string.IsNullOrWhiteSpace(g.IssueTitle) ? g.IssueUrl : g.IssueTitle)
+                </a>
+                @if (!string.IsNullOrWhiteSpace(g.BacklogType))
+                {
+                  <p class="govuk-body-s govuk-!-margin-top-1 govuk-!-margin-bottom-0" style="color:#505a5f;">@g.BacklogType</p>
+                }
+              </li>
+            }
+          </ul>
+        </div>
+      </div>
+    }
+
+    @if (Model.AuditEvents.Count > 0)
+    {
+      <details class="govuk-details" data-module="govuk-details">
+        <summary class="govuk-details__summary">
+          <span class="govuk-details__summary-text">Audit history (@Model.AuditEvents.Count)</span>
+        </summary>
+        <div class="govuk-details__text">
+          <ul class="govuk-list govuk-body-s">
+            @foreach (var a in Model.AuditEvents)
+            {
+              <li class="govuk-!-margin-bottom-1">
+                <strong>@a.EventType</strong>
+                @if (!string.IsNullOrWhiteSpace(a.FieldName)) { <span> — @a.FieldName</span> }
+                <br />
+                <span style="color:#505a5f;">@a.CreatedBy · @a.CreatedAt.ToString("d MMM yyyy HH:mm")</span>
+              </li>
+            }
+          </ul>
+        </div>
+      </details>
+    }
+
+  </div>
+</div>
