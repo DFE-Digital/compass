@@ -72,14 +72,8 @@ public class CompassDbSeeder
             return;
         }
 
-        var riskTiers = new[]
-        {
-            new RiskTier { Code = "TIER1", Name = "Tier 1", Description = "Critical risks requiring immediate attention", SortOrder = 1, IsActive = true },
-            new RiskTier { Code = "TIER2", Name = "Tier 2", Description = "High priority risks", SortOrder = 2, IsActive = true },
-            new RiskTier { Code = "TIER3", Name = "Tier 3", Description = "Medium priority risks", SortOrder = 3, IsActive = true },
-            new RiskTier { Code = "TIER4", Name = "Tier 4", Description = "Low priority risks", SortOrder = 4, IsActive = true },
-            new RiskTier { Code = "NONE", Name = "Not Tiered", Description = "Risks not assigned to a tier", SortOrder = 5, IsActive = true }
-        };
+        var utcNow = DateTime.UtcNow;
+        var riskTiers = RiskTierSeedData.Defaults.Select(s => RiskTierSeedData.ToEntity(s, utcNow)).ToArray();
 
         await _targetDb.RiskTiers.AddRangeAsync(riskTiers);
         await _targetDb.SaveChangesAsync();

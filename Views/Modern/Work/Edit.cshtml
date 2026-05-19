@@ -13,6 +13,8 @@
     var deliveryPhaseOptions = (List<LookupOption>)ViewBag.DeliveryPhaseOptions ?? new List<LookupOption>();
     var activityTypeOptions = (List<LookupOption>)ViewBag.ActivityTypeOptions ?? new List<LookupOption>();
     var riskAppetiteOptions = (List<LookupOption>)ViewBag.RiskAppetiteOptions ?? new List<LookupOption>();
+    var workTagOptions = (List<LookupOption>)ViewBag.WorkTagOptions ?? new List<LookupOption>();
+    var selectedWorkTagIds = (int[])ViewBag.SelectedWorkTagIds ?? Array.Empty<int>();
 
     var sD0 = Model.StartDate;
     int? sDay = sD0?.Day, sMonth = sD0?.Month, sYear = sD0?.Year;
@@ -349,6 +351,38 @@
           </div>
       </fieldset>
 
+ <fieldset class="govuk-fieldset govuk-!-margin-bottom-6" id="edit-tags">
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Tags</legend>
+ <div class="govuk-form-group">
+ <fieldset class="govuk-fieldset">
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Custom tags</legend>
+ <div class="govuk-hint" id="wt-hint">Select all that apply. Tags are configured in Admin → Work → Tagging.</div>
+            @if (workTagOptions.Count == 0)
+            {
+ <p class="govuk-body-s govuk-!-margin-bottom-0">No tags configured.</p>
+            }
+            else
+            {
+ <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes" aria-describedby="wt-hint">
+                @foreach (var wt in workTagOptions)
+                {
+                  var wtChecked = selectedWorkTagIds.Contains(wt.Id);
+                  var wtHintId = $"wt-{wt.Id}-hint";
+ <div class="govuk-checkboxes__item">
+ <input class="govuk-checkboxes__input" type="checkbox" name="workTagIds" value="@wt.Id" id="wt-@wt.Id" checked="@wtChecked" @if (!string.IsNullOrWhiteSpace(wt.Value)) { <text>aria-describedby="@wtHintId"</text> } />
+ <label class="govuk-label govuk-checkboxes__label" for="wt-@wt.Id">@wt.Name</label>
+                  @if (!string.IsNullOrWhiteSpace(wt.Value))
+                  {
+ <div id="@wtHintId" class="govuk-hint govuk-checkboxes__hint">@wt.Value</div>
+                  }
+                </div>
+                }
+              </div>
+            }
+          </fieldset>
+        </div>
+      </fieldset>
+
  <fieldset class="govuk-fieldset govuk-!-margin-bottom-6">
  <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Flags</legend>
 
@@ -406,6 +440,10 @@
  <div class="dfe-c-scard">
  <h3 class="dfe-c-scard__heading">People</h3>
  <p class="dfe-c-scard__body">Primary contact is the day-to-day lead. Budget owner is accountable for spend. Both can also be managed from the People tab.</p>
+        </div>
+ <div class="dfe-c-scard">
+ <h3 class="dfe-c-scard__heading">Tags</h3>
+ <p class="dfe-c-scard__body">Custom tags help filter and group work items in registers and reports.</p>
         </div>
  <div class="dfe-c-scard">
  <h3 class="dfe-c-scard__heading">Dates &amp; flags</h3>

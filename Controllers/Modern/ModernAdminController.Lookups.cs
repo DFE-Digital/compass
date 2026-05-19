@@ -1,3 +1,4 @@
+using Compass.Data;
 using Compass.Models;
 using Compass.ViewModels.Modern;
 using Microsoft.AspNetCore.Mvc;
@@ -841,6 +842,27 @@ public partial class ModernAdminController
         await _context.SaveChangesAsync();
         TempData["AdminMessage"] = $"Risk tier is now {(entity.IsActive ? "active" : "inactive")}.";
         return RedirectToAction(nameof(LookupEdit), new { panel = "risk-tiers", id });
+    }
+
+    [HttpPost("risk-tier/seed")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> RiskTierSeed()
+    {
+        var (added, updated) = await RiskTierSeedData.ApplyAsync(_context);
+
+        if (added == 0 && updated == 0)
+        {
+            TempData["AdminMessage"] = "All recommended risk tiers are already present and up to date.";
+            return RedirectToAction(nameof(Index), new { panel = "risk-tiers" });
+        }
+
+        var parts = new List<string>();
+        if (added > 0)
+            parts.Add($"added {added}");
+        if (updated > 0)
+            parts.Add($"updated {updated}");
+        TempData["AdminMessage"] = $"Risk tiers: {string.Join(", ", parts)}.";
+        return RedirectToAction(nameof(Index), new { panel = "risk-tiers" });
     }
 
 }

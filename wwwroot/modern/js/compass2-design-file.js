@@ -6,7 +6,7 @@ const NAV_MAP = {
   'demand-capacity': 'demand', 'create-bc': 'demand', 'create-demand': 'demand', 'demand-horizon': 'demand', 'demand-score-item': 'demand', 'demand-meetings': 'demand', 'demand-closed': 'demand',
   'work-dash': 'work', 'work-register': 'work', 'work-yours': 'work',
   'work-portfolios': 'work', 'work-directorates': 'work', 'work-business-areas': 'work', 'work-priorities': 'work',
-  'work-detail': 'work', 'work-flagship': 'work', 'create-work': 'work',
+  'work-detail': 'work', 'work-by-theme': 'work', 'create-work': 'work',
   'work-add-update': 'work', 'work-view-update': 'work',
   'products-dash': 'products', 'products-index': 'products', 'products-yours': 'products',
   'products-portfolio': 'products', 'product-detail': 'products',

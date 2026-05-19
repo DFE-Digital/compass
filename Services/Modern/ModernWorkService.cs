@@ -9,6 +9,7 @@ using Compass.Models.Modern.Work;
 using Compass.ViewModels.Dashboard;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -26,6 +27,11 @@ public partial class ModernWorkService : IModernWorkService
     private readonly ILogger<ModernWorkService> _logger;
     private readonly IOptions<WorkRegisterDiagnosticsOptions> _workRegisterDiagnostics;
     private readonly IHostEnvironment _hostEnvironment;
+    private readonly WorkRegisterPerfFileLog _workRegisterPerfFileLog;
+    private readonly IMemoryCache _cache;
+
+    private const string FilterLookupsCacheKey = "modern-work-register-filter-lookups-v1";
+    private const string PrimaryContactsCacheKey = "modern-work-register-primary-contacts-v1";
 
     public ModernWorkService(
         CompassDbContext db,
@@ -36,7 +42,9 @@ public partial class ModernWorkService : IModernWorkService
         IDirectorateLeadershipService directorateLeadership,
         ILogger<ModernWorkService> logger,
         IOptions<WorkRegisterDiagnosticsOptions> workRegisterDiagnostics,
-        IHostEnvironment hostEnvironment)
+        IHostEnvironment hostEnvironment,
+        WorkRegisterPerfFileLog workRegisterPerfFileLog,
+        IMemoryCache cache)
     {
         _db = db;
         _monthlyUpdateService = monthlyUpdateService;
@@ -47,6 +55,8 @@ public partial class ModernWorkService : IModernWorkService
         _logger = logger;
         _workRegisterDiagnostics = workRegisterDiagnostics;
         _hostEnvironment = hostEnvironment;
+        _workRegisterPerfFileLog = workRegisterPerfFileLog;
+        _cache = cache;
     }
 
     /// <summary>
@@ -60,36 +70,6 @@ public partial class ModernWorkService : IModernWorkService
         if (!string.IsNullOrEmpty(ba)) return ba;
         var og = p.PrimaryOrganizationalGroup?.Name?.Trim();
         return !string.IsNullOrEmpty(og) ? og : "—";
-    }
-
-    /// <summary>First day submissions open — from Admin work reporting period when configured.</summary>
-    private DateTime GetMonthlySubmissionWindowOpensOn(int reportingYear, int reportingMonth)
-    {
-        var ex = _monthlyUpdateService.TryGetActiveExplicitReportingPeriod(reportingYear, reportingMonth);
-        if (ex != null)
-            return ex.SubmissionOpens.Date;
-
-        var dim = DateTime.DaysInMonth(reportingYear, reportingMonth);
-        var day = Math.Min(20, dim);
-        return new DateTime(reportingYear, reportingMonth, day, 0, 0, 0, DateTimeKind.Utc).Date;
-    }
-
-    /// <summary>Last day submissions are accepted within the window — explicit closes from Admin, else last calendar day of reporting month (legacy).</summary>
-    private DateTime GetMonthlySubmissionWindowClosesOn(int reportingYear, int reportingMonth)
-    {
-        var ex = _monthlyUpdateService.TryGetActiveExplicitReportingPeriod(reportingYear, reportingMonth);
-        if (ex != null)
-            return ex.SubmissionCloses.Date;
-
-        return new DateTime(reportingYear, reportingMonth, DateTime.DaysInMonth(reportingYear, reportingMonth), 0, 0, 0, DateTimeKind.Utc).Date;
-    }
-
-    /// <summary>Whether today falls in the submission window for the reporting month (Admin explicit dates or legacy day 20 → month end).</summary>
-    private bool IsMonthlySubmissionWindowOpen(DateTime todayUtcDate, int reportingYear, int reportingMonth)
-    {
-        var opens = GetMonthlySubmissionWindowOpensOn(reportingYear, reportingMonth);
-        var closes = GetMonthlySubmissionWindowClosesOn(reportingYear, reportingMonth);
-        return todayUtcDate >= opens && todayUtcDate <= closes;
     }
 
     private static string FormatSroShortName(User? u)
@@ -118,30 +98,34 @@ public partial class ModernWorkService : IModernWorkService
     private static string EmailLower(string email) => email.Trim().ToLowerInvariant();
 
     /// <summary>Sets monthly reporting badge fields for the current calendar month (aligned with work dashboard).</summary>
-    private void FillLatestMonthlyDueForRegisterRow(WorkRegisterRow row, Project p, DateTime nowDate, int reportY, int reportM, IUrlHelper url)
+    private static void FillLatestMonthlyDueForRegisterRow(
+        WorkRegisterRow row,
+        Project p,
+        WorkRegisterMonthlyContext monthly,
+        IUrlHelper url)
     {
-        var explicitPeriod = _monthlyUpdateService.TryGetActiveExplicitReportingPeriod(reportY, reportM);
-        row.LatestMonthlyPeriodLabel = !string.IsNullOrWhiteSpace(explicitPeriod?.PeriodLabel)
-            ? explicitPeriod!.PeriodLabel.Trim()
-            : new DateTime(reportY, reportM, 1).ToString("MMMM yyyy", CultureInfo.GetCultureInfo("en-GB"));
-        row.LatestMonthlyStatusLabel = null;
-        row.LatestMonthlyActionLabel = null;
-
         if (p.Status != "Active" && p.Status != "Paused")
         {
             row.LatestMonthlyDueLabel = null;
             row.LatestMonthlyDueAction = "na";
             row.LatestMonthlyDueUrl = null;
             row.LatestMonthlyPeriodLabel = null;
+            row.LatestMonthlyStatusLabel = null;
+            row.LatestMonthlyActionLabel = null;
             return;
         }
 
+        var reportY = monthly.ReportYear;
+        var reportM = monthly.ReportMonth;
+        var explicitPeriod = monthly.ExplicitPeriod;
+        row.LatestMonthlyPeriodLabel = monthly.CurrentPeriodLabel;
+        row.LatestMonthlyStatusLabel = null;
+        row.LatestMonthlyActionLabel = null;
         row.LatestMonthlyDueLabel = explicitPeriod != null
             ? explicitPeriod.PeriodStart.ToString("MMM", CultureInfo.GetCultureInfo("en-GB")) + " Update"
             : new DateTime(reportY, reportM, 1).ToString("MMM", CultureInfo.GetCultureInfo("en-GB")) + " Update";
 
-        var periodOpen = GetMonthlySubmissionWindowOpensOn(reportY, reportM);
-        var windowOpen = IsMonthlySubmissionWindowOpen(nowDate, reportY, reportM);
+        var windowOpen = monthly.SubmissionWindowOpen;
         var mu = p.MonthlyUpdates?.FirstOrDefault(m => m.Year == reportY && m.Month == reportM);
         var submitted = mu?.SubmittedAt != null;
         var draft = mu != null && mu.SubmittedAt == null;
@@ -155,7 +139,7 @@ public partial class ModernWorkService : IModernWorkService
             return;
         }
 
-        if (!windowOpen && nowDate < periodOpen)
+        if (!windowOpen && monthly.NowDate < monthly.SubmissionWindowOpens)
         {
             row.LatestMonthlyDueAction = "not-due";
             row.LatestMonthlyDueUrl = null;
@@ -183,15 +167,16 @@ public partial class ModernWorkService : IModernWorkService
     private WorkRegisterRow? BuildWorkRegisterRow(
         Project p,
         Dictionary<int, (int Id, string Reference)> firstRiskByProject,
-        DateTime nowDate,
-        int reportY,
-        int reportM,
-        DateTime prevMonthDate,
-        string prevMonthLabel,
-        string currentPeriodLabel,
-        DateTime currentDueDate,
+        WorkRegisterMonthlyContext monthly,
         IUrlHelper url)
     {
+        var nowDate = monthly.NowDate;
+        var reportY = monthly.ReportYear;
+        var reportM = monthly.ReportMonth;
+        var prevMonthDate = monthly.PrevMonthDate;
+        var prevMonthLabel = monthly.PrevMonthLabel;
+        var currentPeriodLabel = monthly.CurrentPeriodLabel;
+        var currentDueDate = monthly.CurrentDueDate;
         var currentRag = ProjectCurrentRagResolver.Resolve(p);
         var row = new WorkRegisterRow
         {
@@ -264,7 +249,7 @@ public partial class ModernWorkService : IModernWorkService
             }
             else if (!hasCurrent)
             {
-                if (IsMonthlySubmissionWindowOpen(nowDate, reportY, reportM) && nowDate <= currentDueDate.Date)
+                if (monthly.SubmissionWindowOpen && nowDate <= currentDueDate.Date)
                 {
                     row.MonthlyUpdateStatus = "Complete return due by " + currentDueDate.ToString("d MMMM", CultureInfo.GetCultureInfo("en-GB"));
                     row.MonthlyUpdateStatusLink = "add";
@@ -295,31 +280,184 @@ public partial class ModernWorkService : IModernWorkService
             return null;
         }
 
-        FillLatestMonthlyDueForRegisterRow(row, p, nowDate, reportY, reportM, url);
+        FillLatestMonthlyDueForRegisterRow(row, p, monthly, url);
         return row;
     }
 
-    private async Task<List<Project>> LoadProjectsForWorkRegisterByIdsAsync(IReadOnlyList<int> ids, CancellationToken cancellationToken)
+    private async Task<WorkRegisterFilterLookups> GetFilterLookupsAsync(CancellationToken cancellationToken)
+    {
+        if (_cache.TryGetValue(FilterLookupsCacheKey, out WorkRegisterFilterLookups? cached) && cached != null)
+            return cached;
+
+        var orgGroups = await _db.OrganizationalGroups.AsNoTracking().Where(g => g.IsActive).OrderBy(g => g.Name).ToListAsync(cancellationToken);
+        var portfolios = orgGroups.Select(g => new Portfolio { Id = g.Id, Name = g.Name, IsActive = true }).ToList();
+
+        var businessAreas = await _db.BusinessAreaLookups.AsNoTracking()
+            .Where(b => b.IsActive)
+            .OrderBy(b => b.SortOrder)
+            .ThenBy(b => b.Name)
+            .ToListAsync(cancellationToken);
+
+        var directorates = await _db.Divisions.AsNoTracking().Where(d => d.IsActive).OrderBy(d => d.Name)
+            .Select(d => new Directorate { Id = d.Id, Name = d.Name, IsActive = true }).ToListAsync(cancellationToken);
+
+        var phaseOpts = await _db.PhaseLookups.AsNoTracking().Where(p => p.IsActive)
+            .OrderBy(p => p.SortOrder)
+            .Select(p => new WorkLookupOption { Id = p.Id, Name = p.Name, Value = p.Name })
+            .ToListAsync(cancellationToken);
+
+        var ragOpts = await _db.RagStatusLookups.AsNoTracking().Where(r => r.IsActive).OrderBy(r => r.SortOrder)
+            .Select(r => new RagStatusLookupOption { Id = r.Id, Name = r.Name })
+            .ToListAsync(cancellationToken);
+
+        var priOpts = await _db.DeliveryPriorities.AsNoTracking()
+            .OrderBy(p => p.SortOrder)
+            .Select(p => new WorkLookupOption { Id = p.Id, Name = p.Name, Value = p.Name })
+            .ToListAsync(cancellationToken);
+
+        var tagOpts = await _db.WorkItemTagLookups.AsNoTracking()
+            .Where(t => t.IsActive)
+            .OrderBy(t => t.SortOrder).ThenBy(t => t.Name)
+            .Select(t => new WorkLookupOption { Id = t.Id, Name = t.Name, Value = t.Name })
+            .ToListAsync(cancellationToken);
+
+        var redRag = await _db.RagStatusLookups.AsNoTracking()
+            .Where(r => r.Name != null && r.Name.ToLower() == "red")
+            .Select(r => r.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        var lookups = new WorkRegisterFilterLookups
+        {
+            Portfolios = portfolios,
+            BusinessAreas = businessAreas,
+            Directorates = directorates,
+            PhaseOptions = phaseOpts,
+            RagOptions = ragOpts,
+            PriorityOptions = priOpts,
+            TagOptions = tagOpts,
+            RedRagStatusId = redRag,
+        };
+
+        _cache.Set(FilterLookupsCacheKey, lookups, TimeSpan.FromMinutes(5));
+        return lookups;
+    }
+
+    private static async Task<WorkRegisterStatusCounts> GetRegisterStatusCountsAsync(
+        IQueryable<Project> baseQ,
+        int redRagStatusId,
+        CancellationToken cancellationToken)
+    {
+        var agg = await baseQ
+            .GroupBy(_ => 1)
+            .Select(g => new WorkRegisterStatusCounts(
+                g.Count(p => p.Status == "Active"),
+                g.Count(p => p.Status == "Paused"),
+                g.Count(p => p.Status == "Completed"),
+                g.Count(p => p.Status == "Cancelled"),
+                redRagStatusId != 0
+                    ? g.Count(p => (p.Status == "Active" || p.Status == "Paused") && p.RagStatusLookupId == redRagStatusId)
+                    : 0))
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return agg ?? new WorkRegisterStatusCounts(0, 0, 0, 0, 0);
+    }
+
+    private async Task<List<WorkPrimaryContactOption>> GetPrimaryContactFilterOptionsAsync(CancellationToken cancellationToken)
+    {
+        if (_cache.TryGetValue(PrimaryContactsCacheKey, out List<WorkPrimaryContactOption>? cached) && cached != null)
+            return cached;
+
+        var primaryContactIds = await _db.Projects.AsNoTracking()
+            .Where(p => !p.IsDeleted && p.PrimaryContactUserId != null)
+            .Select(p => p.PrimaryContactUserId!.Value)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+        var options = await _db.Users.AsNoTracking()
+            .Where(u => primaryContactIds.Contains(u.Id))
+            .OrderBy(u => u.Name).ThenBy(u => u.Email)
+            .Select(u => new WorkPrimaryContactOption
+            {
+                UserId = u.Id,
+                DisplayName = u.Name != null ? u.Name : (u.Email ?? "")
+            })
+            .ToListAsync(cancellationToken);
+
+        _cache.Set(PrimaryContactsCacheKey, options, TimeSpan.FromMinutes(5));
+        return options;
+    }
+
+    private static IQueryable<Project> FilterRegisterByTab(IQueryable<Project> baseQ, string tabKey) =>
+        tabKey switch
+        {
+            "completed" => baseQ.Where(p => p.Status == "Completed"),
+            "cancelled" => baseQ.Where(p => p.Status == "Cancelled"),
+            "all" => baseQ.Where(p =>
+                p.Status == "Active" || p.Status == "Paused" || p.Status == "Completed" || p.Status == "Cancelled"),
+            _ => baseQ.Where(p => p.Status == "Active" || p.Status == "Paused"),
+        };
+
+    private enum WorkRegisterGraphDepth
+    {
+        ActivePage,
+        HistoricalPage,
+        HistoricalExport,
+    }
+
+    private static WorkRegisterGraphDepth GraphDepthForTab(string tabKey, bool forExport) =>
+        forExport
+            ? tabKey is "active" or "all"
+                ? WorkRegisterGraphDepth.ActivePage
+                : WorkRegisterGraphDepth.HistoricalExport
+            : tabKey is "active" or "all"
+                ? WorkRegisterGraphDepth.ActivePage
+                : WorkRegisterGraphDepth.HistoricalPage;
+
+    private static bool NeedsRiskLookup(WorkRegisterGraphDepth depth) =>
+        depth is WorkRegisterGraphDepth.ActivePage or WorkRegisterGraphDepth.HistoricalExport;
+
+    private async Task<List<Project>> LoadProjectsForWorkRegisterByIdsAsync(
+        IReadOnlyList<int> ids,
+        WorkRegisterGraphDepth depth,
+        CancellationToken cancellationToken)
     {
         if (ids.Count == 0)
             return new List<Project>();
 
-        var set = await _db.Projects.AsNoTracking()
+        IQueryable<Project> core = _db.Projects.AsNoTracking()
             .Where(p => ids.Contains(p.Id))
             .AsSplitQuery()
             .Include(p => p.RagStatusLookup)
-            .Include(p => p.RagHistory).ThenInclude(r => r.RagStatusLookup)
             .Include(p => p.PhaseLookup)
             .Include(p => p.DeliveryPriority)
             .Include(p => p.PrimaryOrganizationalGroup)
             .Include(p => p.PrimaryContactUser)
-            .Include(p => p.BusinessAreaLookup)
-            .Include(p => p.Directorates).ThenInclude(d => d.Division)
-            .Include(p => p.Milestones)
-            .Include(p => p.MonthlyUpdates).ThenInclude(mu => mu.DraftRagStatusLookup)
-            .Include(p => p.SeniorResponsibleOfficers).ThenInclude(s => s.User)
-            .Include(p => p.ProjectWorkItemTags).ThenInclude(l => l.WorkItemTagLookup)
-            .ToListAsync(cancellationToken);
+            .Include(p => p.BusinessAreaLookup);
+
+        List<Project> set;
+        if (depth is WorkRegisterGraphDepth.ActivePage)
+        {
+            set = await core
+                .Include(p => p.Directorates).ThenInclude(d => d.Division)
+                .Include(p => p.Milestones)
+                .Include(p => p.SeniorResponsibleOfficers).ThenInclude(s => s.User)
+                .Include(p => p.ProjectWorkItemTags).ThenInclude(l => l.WorkItemTagLookup)
+                .Include(p => p.MonthlyUpdates).ThenInclude(mu => mu.DraftRagStatusLookup)
+                .ToListAsync(cancellationToken);
+        }
+        else if (depth is WorkRegisterGraphDepth.HistoricalExport)
+        {
+            set = await core
+                .Include(p => p.Directorates).ThenInclude(d => d.Division)
+                .Include(p => p.Milestones)
+                .Include(p => p.SeniorResponsibleOfficers).ThenInclude(s => s.User)
+                .Include(p => p.ProjectWorkItemTags).ThenInclude(l => l.WorkItemTagLookup)
+                .ToListAsync(cancellationToken);
+        }
+        else
+        {
+            set = await core.ToListAsync(cancellationToken);
+        }
 
         var byId = set.ToDictionary(p => p.Id);
         var ordered = new List<Project>(ids.Count);
@@ -337,7 +475,7 @@ public partial class ModernWorkService : IModernWorkService
         string? registerTab,
         int? registerPage,
         string? monthlyUpdate) =>
-        new(_logger, _workRegisterDiagnostics, _hostEnvironment)
+        new(_logger, _workRegisterDiagnostics, _workRegisterPerfFileLog)
         {
             IsMyWork = isMyWork,
             RegisterTab = registerTab,
@@ -796,25 +934,20 @@ public partial class ModernWorkService : IModernWorkService
             })
             .ToList();
 
-        var reportY = startOfThisMonth.Year;
-        var reportM = startOfThisMonth.Month;
-        var explicitMr = _monthlyUpdateService.TryGetActiveExplicitReportingPeriod(reportY, reportM);
-        var mrPeriodLabel = !string.IsNullOrWhiteSpace(explicitMr?.PeriodLabel)
-            ? explicitMr!.PeriodLabel.Trim()
-            : startOfThisMonth.ToString("MMMM yyyy", CultureInfo.GetCultureInfo("en-GB"));
-        var mrPeriodTitle = explicitMr != null
-            ? explicitMr.PeriodStart.ToString("MMM", CultureInfo.GetCultureInfo("en-GB")) + " Update"
-            : startOfThisMonth.ToString("MMM", CultureInfo.GetCultureInfo("en-GB")) + " Update";
-        DateTime? mrDueDate = explicitMr != null
-            ? explicitMr.SubmissionCloses.Date
-            : _monthlyUpdateService.GetMonthlyUpdateDueDate(reportY, reportM);
+        var monthlyDash = WorkRegisterMonthlyContext.Create(_monthlyUpdateService, DateTime.UtcNow);
+        var reportY = monthlyDash.ReportYear;
+        var reportM = monthlyDash.ReportMonth;
+        var explicitMr = monthlyDash.ExplicitPeriod;
+        var mrPeriodLabel = monthlyDash.CurrentPeriodLabel;
+        var mrPeriodTitle = monthlyDash.RegisterMonthlyColumnHeader;
+        DateTime? mrDueDate = monthlyDash.CurrentDueDate;
         var monthlyUpdateRows = new List<HomeMonthlyUpdateRow>();
         var mrSubmitted = 0;
         var mrDraft = 0;
         var mrMissing = 0;
-        var nowDateDash = DateTime.UtcNow.Date;
-        var periodOpenDash = GetMonthlySubmissionWindowOpensOn(reportY, reportM);
-        var monthlyReportingWindowOpen = IsMonthlySubmissionWindowOpen(nowDateDash, reportY, reportM);
+        var nowDateDash = monthlyDash.NowDate;
+        var periodOpenDash = monthlyDash.SubmissionWindowOpens;
+        var monthlyReportingWindowOpen = monthlyDash.SubmissionWindowOpen;
         var awaitingSubmissionOpens = !monthlyReportingWindowOpen && nowDateDash < periodOpenDash;
 
         foreach (var w in assignedActivePaused.Where(x => x.Status == "Active" || x.Status == "Paused").OrderBy(x => x.Title))
@@ -1030,7 +1163,7 @@ public partial class ModernWorkService : IModernWorkService
         };
     }
 
-    public async Task<WorkRegisterViewModel> BuildWorkRegisterAsync(
+    public async Task<IReadOnlyList<WorkRegisterRow>> BuildWorkRegisterExportRowsAsync(
         bool isMyWork,
         string? search,
         int? portfolioId,
@@ -1042,9 +1175,7 @@ public partial class ModernWorkService : IModernWorkService
         User currentUser,
         string userEmail,
         IUrlHelper url,
-        string? registerTab = null,
-        int? registerPage = null,
-        int registerPageSize = 20,
+        string exportTab,
         int? businessAreaId = null,
         int? primaryContactUserId = null,
         int[]? tagIds = null,
@@ -1052,20 +1183,117 @@ public partial class ModernWorkService : IModernWorkService
         bool registerSortDesc = false,
         CancellationToken cancellationToken = default)
     {
-        var diag = CreateWorkRegisterDiagnostics(isMyWork, registerTab, registerPage, monthlyUpdate);
-        var phaseSw = Stopwatch.StartNew();
+        var diag = CreateWorkRegisterDiagnostics(isMyWork, exportTab, null, monthlyUpdate);
+        using var apiDiagScope = diag.IsEnabled ? WorkRegisterDiagnosticsScope.Begin() : null;
+        if (diag.IsEnabled)
+        {
+            diag.LoadPath = "export-tab";
+            diag.LogApiRequest(new { exportTab, isMyWork, search, registerSort, registerSortDesc });
+        }
 
+        var phaseSw = Stopwatch.StartNew();
         var emailLower = EmailLower(userEmail);
+        var baseQ = await BuildFilteredWorkRegisterQueryAsync(
+            isMyWork, currentUser, emailLower, search, portfolioId, directorateId, phaseId, ragId, priorityId,
+            businessAreaId, primaryContactUserId, tagIds, cancellationToken);
+
+        var tabKey = (exportTab ?? "active").Trim().ToLowerInvariant();
+        if (tabKey is not ("active" or "completed" or "cancelled" or "all"))
+            tabKey = "active";
+
+        var tabQ = FilterRegisterByTab(baseQ, tabKey);
+        var ids = await ApplyRegisterSort(tabQ, registerSort, registerSortDesc)
+            .Select(p => p.Id)
+            .ToListAsync(cancellationToken);
+
+        if (diag.IsEnabled)
+        {
+            diag.Phase("export_ids", phaseSw.ElapsedMilliseconds, $"tab={tabKey} ids={ids.Count}");
+            phaseSw.Restart();
+        }
+
+        var monthly = WorkRegisterMonthlyContext.Create(_monthlyUpdateService, DateTime.UtcNow);
+        var graphDepth = GraphDepthForTab(tabKey, forExport: true);
+        var rows = new List<WorkRegisterRow>();
+
+        if (ids.Count > 0)
+        {
+            var firstRiskByProject = NeedsRiskLookup(graphDepth)
+                ? await LoadFirstRiskByProjectAsync(ids, cancellationToken)
+                : new Dictionary<int, (int Id, string Reference)>();
+            if (diag.IsEnabled)
+            {
+                diag.Phase("export_risks", phaseSw.ElapsedMilliseconds, $"risks={firstRiskByProject.Count}");
+                phaseSw.Restart();
+            }
+
+            var projects = await LoadProjectsForWorkRegisterByIdsAsync(ids, graphDepth, cancellationToken);
+            if (diag.IsEnabled)
+            {
+                diag.RecordEntityLoad(projects);
+                diag.Phase("export_load_projects", phaseSw.ElapsedMilliseconds, $"projects={projects.Count}");
+                phaseSw.Restart();
+            }
+
+            foreach (var p in projects)
+            {
+                var row = BuildWorkRegisterRow(p, firstRiskByProject, monthly, url);
+                if (row != null)
+                    rows.Add(row);
+            }
+
+            if (diag.IsEnabled)
+                diag.Phase("export_build_rows", phaseSw.ElapsedMilliseconds, $"rows={rows.Count}");
+        }
+
+        return rows;
+    }
+
+    private async Task<Dictionary<int, (int Id, string Reference)>> LoadFirstRiskByProjectAsync(
+        IReadOnlyList<int> ids,
+        CancellationToken cancellationToken)
+    {
+        var firstRiskByProject = new Dictionary<int, (int Id, string Reference)>();
+        if (ids.Count == 0)
+            return firstRiskByProject;
+
+        var riskRows = await _db.Risks.AsNoTracking()
+            .Where(r => r.ProjectId.HasValue && ids.Contains(r.ProjectId.Value) && !r.IsDeleted && r.Status != "closed")
+            .OrderBy(r => r.Id)
+            .Select(r => new { ProjectId = r.ProjectId!.Value, r.Id, r.FipsId })
+            .ToListAsync(cancellationToken);
+        foreach (var x in riskRows)
+        {
+            if (firstRiskByProject.ContainsKey(x.ProjectId))
+                continue;
+            var reference = !string.IsNullOrWhiteSpace(x.FipsId) ? x.FipsId : "RISK-" + x.Id.ToString("D5", CultureInfo.InvariantCulture);
+            firstRiskByProject[x.ProjectId] = (x.Id, reference);
+        }
+
+        return firstRiskByProject;
+    }
+
+    private async Task<IQueryable<Project>> BuildFilteredWorkRegisterQueryAsync(
+        bool isMyWork,
+        User currentUser,
+        string emailLower,
+        string? search,
+        int? portfolioId,
+        int? directorateId,
+        int? phaseId,
+        int? ragId,
+        int? priorityId,
+        int? businessAreaId,
+        int? primaryContactUserId,
+        int[]? tagIds,
+        CancellationToken cancellationToken)
+    {
         var neutralQ = _db.Projects.AsNoTracking().Where(p => !p.IsDeleted);
 
         if (!string.IsNullOrWhiteSpace(search))
         {
             var s = search.Trim();
-            neutralQ = neutralQ.Where(p =>
-                p.Title.Contains(s) || (p.Aim != null && p.Aim.Contains(s))
-                || p.ProjectWorkItemTags.Any(t => t.WorkItemTagLookup != null
-                    && t.WorkItemTagLookup.IsActive
-                    && t.WorkItemTagLookup.Name.Contains(s)));
+            neutralQ = neutralQ.Where(p => p.Title.Contains(s));
         }
 
         if (portfolioId.HasValue)
@@ -1108,86 +1336,89 @@ public partial class ModernWorkService : IModernWorkService
             neutralQ = neutralQ.Where(p => p.ProjectWorkItemTags.Any(t => tagIdList.Contains(t.WorkItemTagLookupId)));
 
         var mineScopedQ = WhereAssignedToUser(neutralQ, emailLower, currentUser.Id);
-        var baseQ = isMyWork ? mineScopedQ : neutralQ;
+        return isMyWork ? mineScopedQ : neutralQ;
+    }
 
+    public async Task<WorkRegisterViewModel> BuildWorkRegisterAsync(
+        bool isMyWork,
+        string? search,
+        int? portfolioId,
+        int? directorateId,
+        int? phaseId,
+        int? ragId,
+        int? priorityId,
+        string? monthlyUpdate,
+        User currentUser,
+        string userEmail,
+        IUrlHelper url,
+        string? registerTab = null,
+        int? registerPage = null,
+        int registerPageSize = 20,
+        int? businessAreaId = null,
+        int? primaryContactUserId = null,
+        int[]? tagIds = null,
+        string? registerSort = null,
+        bool registerSortDesc = false,
+        CancellationToken cancellationToken = default)
+    {
+        var diag = CreateWorkRegisterDiagnostics(isMyWork, registerTab, registerPage, monthlyUpdate);
+        using var apiDiagScope = diag.IsEnabled ? WorkRegisterDiagnosticsScope.Begin() : null;
+        if (diag.IsEnabled)
+        {
+            diag.LogApiRequest(new
+            {
+                isMyWork,
+                search,
+                portfolioId,
+                directorateId,
+                phaseId,
+                ragId,
+                priorityId,
+                monthlyUpdate,
+                userEmail,
+                registerTab,
+                registerPage,
+                registerPageSize,
+                businessAreaId,
+                primaryContactUserId,
+                tagIds,
+                registerSort,
+                registerSortDesc,
+            });
+        }
+
+        var phaseSw = Stopwatch.StartNew();
+
+        var emailLower = EmailLower(userEmail);
+        var tagIdList = (tagIds ?? Array.Empty<int>()).Where(id => id > 0).Distinct().ToList();
+        var mineScopedQ = await BuildFilteredWorkRegisterQueryAsync(
+            true, currentUser, emailLower, search, portfolioId, directorateId, phaseId, ragId, priorityId,
+            businessAreaId, primaryContactUserId, tagIds, cancellationToken);
+        var neutralFilteredQ = await BuildFilteredWorkRegisterQueryAsync(
+            false, currentUser, emailLower, search, portfolioId, directorateId, phaseId, ragId, priorityId,
+            businessAreaId, primaryContactUserId, tagIds, cancellationToken);
+        var baseQ = isMyWork ? mineScopedQ : neutralFilteredQ;
+
+        // DbContext is not thread-safe — run these sequentially on the same instance.
         var registerActivePausedCountMine = await mineScopedQ.CountAsync(
             p => p.Status == "Active" || p.Status == "Paused", cancellationToken);
-        var registerActivePausedCountOrg = await neutralQ.CountAsync(
+        var registerActivePausedCountOrg = await neutralFilteredQ.CountAsync(
             p => p.Status == "Active" || p.Status == "Paused", cancellationToken);
+        var filterLookups = await GetFilterLookupsAsync(cancellationToken);
+        var primaryContactOpts = await GetPrimaryContactFilterOptionsAsync(cancellationToken);
         if (diag.IsEnabled)
-            diag.Phase("scope_counts", phaseSw.ElapsedMilliseconds);
+        {
+            diag.Phase("scope_counts_and_filters", phaseSw.ElapsedMilliseconds,
+                $"portfolios={filterLookups.Portfolios.Count} businessAreas={filterLookups.BusinessAreas.Count} primaryContacts={primaryContactOpts.Count}");
+            phaseSw.Restart();
+        }
 
         var sortKeyNorm = NormalizeRegisterSortKey(registerSort);
         var filterTagIdUi = tagIdList.Count == 1 ? tagIdList[0] : (int?)null;
 
-        var nowDate = DateTime.UtcNow.Date;
-        var reportY = nowDate.Year;
-        var reportM = nowDate.Month;
-        var currentDueDate = _monthlyUpdateService.GetMonthlyUpdateDueDate(reportY, reportM);
-        var currentPeriodLabel = new DateTime(reportY, reportM, 1).ToString("MMMM", CultureInfo.GetCultureInfo("en-GB"));
-        var prevMonthDate = nowDate.AddMonths(-1);
-        var prevMonthLabel = prevMonthDate.ToString("MMM", CultureInfo.InvariantCulture);
-        var registerMonthlyColumnHeader = new DateTime(reportY, reportM, 1).ToString("MMM", CultureInfo.GetCultureInfo("en-GB")) + " Update";
+        var monthly = WorkRegisterMonthlyContext.Create(_monthlyUpdateService, DateTime.UtcNow);
 
-        var orgGroups = await _db.OrganizationalGroups.AsNoTracking().Where(g => g.IsActive).OrderBy(g => g.Name).ToListAsync(cancellationToken);
-        var portfolios = orgGroups.Select(g => new Portfolio { Id = g.Id, Name = g.Name, IsActive = true }).ToList();
-
-        var businessAreas = await _db.BusinessAreaLookups.AsNoTracking()
-            .Where(b => b.IsActive)
-            .OrderBy(b => b.SortOrder)
-            .ThenBy(b => b.Name)
-            .ToListAsync(cancellationToken);
-
-        var directorates = await _db.Divisions.AsNoTracking().Where(d => d.IsActive).OrderBy(d => d.Name)
-            .Select(d => new Directorate { Id = d.Id, Name = d.Name, IsActive = true }).ToListAsync(cancellationToken);
-
-        var phaseOpts = await _db.PhaseLookups.AsNoTracking().Where(p => p.IsActive)
-            .OrderBy(p => p.SortOrder)
-            .Select(p => new WorkLookupOption { Id = p.Id, Name = p.Name, Value = p.Name })
-            .ToListAsync(cancellationToken);
-
-        var ragOpts = await _db.RagStatusLookups.AsNoTracking().Where(r => r.IsActive).OrderBy(r => r.SortOrder)
-            .Select(r => new RagStatusLookupOption { Id = r.Id, Name = r.Name })
-            .ToListAsync(cancellationToken);
-
-        var priOpts = await _db.DeliveryPriorities.AsNoTracking()
-            .OrderBy(p => p.SortOrder)
-            .Select(p => new WorkLookupOption { Id = p.Id, Name = p.Name, Value = p.Name })
-            .ToListAsync(cancellationToken);
-
-        var tagOpts = await _db.WorkItemTagLookups.AsNoTracking()
-            .Where(t => t.IsActive)
-            .OrderBy(t => t.SortOrder).ThenBy(t => t.Name)
-            .Select(t => new WorkLookupOption { Id = t.Id, Name = t.Name, Value = t.Name })
-            .ToListAsync(cancellationToken);
-
-        var primaryContactIds = await _db.Projects.AsNoTracking()
-            .Where(p => !p.IsDeleted && p.PrimaryContactUserId != null)
-            .Select(p => p.PrimaryContactUserId!.Value)
-            .Distinct()
-            .ToListAsync(cancellationToken);
-
-        var primaryContactOpts = await _db.Users.AsNoTracking()
-            .Where(u => primaryContactIds.Contains(u.Id))
-            .OrderBy(u => u.Name).ThenBy(u => u.Email)
-            .Select(u => new WorkPrimaryContactOption
-            {
-                UserId = u.Id,
-                DisplayName = u.Name != null ? u.Name : (u.Email ?? "")
-            })
-            .ToListAsync(cancellationToken);
-
-        if (diag.IsEnabled)
-        {
-            diag.Phase("filter_lookups", phaseSw.ElapsedMilliseconds,
-                $"portfolios={portfolios.Count} businessAreas={businessAreas.Count} primaryContacts={primaryContactOpts.Count}");
-            phaseSw.Restart();
-        }
-
-        var redRag = await _db.RagStatusLookups.AsNoTracking()
-            .Where(r => r.Name != null && r.Name.ToLower() == "red")
-            .Select(r => r.Id)
-            .FirstOrDefaultAsync(cancellationToken);
+        var redRag = filterLookups.RedRagStatusId;
 
         var tabKey = (registerTab ?? "active").Trim().ToLowerInvariant();
         if (tabKey is not ("active" or "completed" or "cancelled" or "all"))
@@ -1198,29 +1429,17 @@ public partial class ModernWorkService : IModernWorkService
             diag.LoadPath = "paginated-db";
             var pageSize = registerPageSize < 1 ? 20 : registerPageSize;
 
-            var activeCount = await baseQ.CountAsync(p => p.Status == "Active", cancellationToken);
-            var pausedCount = await baseQ.CountAsync(p => p.Status == "Paused", cancellationToken);
-            var completedCount = await baseQ.CountAsync(p => p.Status == "Completed", cancellationToken);
-            var cancelledCount = await baseQ.CountAsync(p => p.Status == "Cancelled", cancellationToken);
-            var activePausedCountBeforeMonthlyFilter = activeCount + pausedCount;
+            var statusCounts = await GetRegisterStatusCountsAsync(baseQ, redRag, cancellationToken);
+            var activeCount = statusCounts.Active;
+            var pausedCount = statusCounts.Paused;
+            var completedCount = statusCounts.Completed;
+            var cancelledCount = statusCounts.Cancelled;
+            var ragRedCount = statusCounts.RagRed;
+            var activePausedCountBeforeMonthlyFilter = statusCounts.ActivePaused;
 
-            var ragRedCount = 0;
-            if (redRag != 0)
-            {
-                ragRedCount = await baseQ.CountAsync(p =>
-                    (p.Status == "Active" || p.Status == "Paused") && p.RagStatusLookupId == redRag, cancellationToken);
-            }
+            var tabQ = FilterRegisterByTab(baseQ, tabKey);
 
-            IQueryable<Project> tabQ = tabKey switch
-            {
-                "completed" => baseQ.Where(p => p.Status == "Completed"),
-                "cancelled" => baseQ.Where(p => p.Status == "Cancelled"),
-                "all" => baseQ.Where(p =>
-                    p.Status == "Active" || p.Status == "Paused" || p.Status == "Completed" || p.Status == "Cancelled"),
-                _ => baseQ.Where(p => p.Status == "Active" || p.Status == "Paused"),
-            };
-
-            var total = await tabQ.CountAsync(cancellationToken);
+            var total = statusCounts.TabTotal(tabKey);
             var pageCount = total == 0 ? 1 : (total + pageSize - 1) / pageSize;
             var pageClamped = Math.Min(Math.Max(1, registerPage.Value), pageCount);
             var skip = (pageClamped - 1) * pageSize;
@@ -1245,23 +1464,15 @@ public partial class ModernWorkService : IModernWorkService
                 phaseSw.Restart();
             }
 
-            var firstRiskByProject = new Dictionary<int, (int Id, string Reference)>();
             var pageRows = new List<WorkRegisterRow>();
+            var graphDepth = GraphDepthForTab(tabKey, forExport: false);
             if (ids.Count > 0)
             {
-                var riskRows = await _db.Risks.AsNoTracking()
-                    .Where(r => r.ProjectId.HasValue && ids.Contains(r.ProjectId.Value) && !r.IsDeleted && r.Status != "closed")
-                    .OrderBy(r => r.Id)
-                    .Select(r => new { ProjectId = r.ProjectId!.Value, r.Id, r.FipsId })
-                    .ToListAsync(cancellationToken);
-                foreach (var x in riskRows)
-                {
-                    if (firstRiskByProject.ContainsKey(x.ProjectId)) continue;
-                    var reference = !string.IsNullOrWhiteSpace(x.FipsId) ? x.FipsId : "RISK-" + x.Id.ToString("D5", CultureInfo.InvariantCulture);
-                    firstRiskByProject[x.ProjectId] = (x.Id, reference);
-                }
+                var firstRiskByProject = NeedsRiskLookup(graphDepth)
+                    ? await LoadFirstRiskByProjectAsync(ids, cancellationToken)
+                    : new Dictionary<int, (int Id, string Reference)>();
 
-                var pageProjects = await LoadProjectsForWorkRegisterByIdsAsync(ids, cancellationToken);
+                var pageProjects = await LoadProjectsForWorkRegisterByIdsAsync(ids, graphDepth, cancellationToken);
                 if (diag.IsEnabled)
                 {
                     diag.RecordEntityLoad(pageProjects);
@@ -1271,7 +1482,7 @@ public partial class ModernWorkService : IModernWorkService
 
                 foreach (var p in pageProjects)
                 {
-                    var row = BuildWorkRegisterRow(p, firstRiskByProject, nowDate, reportY, reportM, prevMonthDate, prevMonthLabel, currentPeriodLabel, currentDueDate, url);
+                    var row = BuildWorkRegisterRow(p, firstRiskByProject, monthly, url);
                     if (row != null)
                         pageRows.Add(row);
                 }
@@ -1298,16 +1509,16 @@ public partial class ModernWorkService : IModernWorkService
                 ActivePausedCountBeforeMonthlyFilter = activePausedCountBeforeMonthlyFilter,
                 RegisterActivePausedCountMine = registerActivePausedCountMine,
                 RegisterActivePausedCountOrg = registerActivePausedCountOrg,
-                RegisterMonthlyColumnHeader = registerMonthlyColumnHeader,
+                RegisterMonthlyColumnHeader = monthly.RegisterMonthlyColumnHeader,
                 ActivePaused = new List<WorkRegisterRow>(),
                 Completed = new List<WorkRegisterRow>(),
                 Cancelled = new List<WorkRegisterRow>(),
-                Portfolios = portfolios,
-                BusinessAreas = businessAreas,
-                Directorates = directorates,
-                DeliveryPhaseOptions = phaseOpts,
-                RagOptions = ragOpts,
-                PriorityOptions = priOpts,
+                Portfolios = filterLookups.Portfolios.ToList(),
+                BusinessAreas = filterLookups.BusinessAreas.ToList(),
+                Directorates = filterLookups.Directorates.ToList(),
+                DeliveryPhaseOptions = filterLookups.PhaseOptions.ToList(),
+                RagOptions = filterLookups.RagOptions.ToList(),
+                PriorityOptions = filterLookups.PriorityOptions.ToList(),
                 FilterSearch = search,
                 FilterPortfolioId = portfolioId,
                 FilterBusinessAreaId = businessAreaId,
@@ -1319,7 +1530,7 @@ public partial class ModernWorkService : IModernWorkService
                 FilterPrimaryContactUserId = primaryContactUserId,
                 FilterTagIds = tagIdList,
                 PrimaryContactFilterOptions = primaryContactOpts,
-                TagFilterOptions = tagOpts,
+                TagFilterOptions = filterLookups.TagOptions.ToList(),
                 RegisterSortField = sortKeyNorm,
                 RegisterSortDescending = registerSortDesc,
                 FilterTagId = filterTagIdUi,
@@ -1388,7 +1599,7 @@ public partial class ModernWorkService : IModernWorkService
 
         foreach (var p in allProjects)
         {
-            var row = BuildWorkRegisterRow(p, firstRiskByProjectSlow, nowDate, reportY, reportM, prevMonthDate, prevMonthLabel, currentPeriodLabel, currentDueDate, url);
+            var row = BuildWorkRegisterRow(p, firstRiskByProjectSlow, monthly, url);
             if (row == null)
                 continue;
 
@@ -1448,16 +1659,16 @@ public partial class ModernWorkService : IModernWorkService
                 ActivePausedCountBeforeMonthlyFilter = activePausedCountBeforeMonthly,
                 RegisterActivePausedCountMine = registerActivePausedCountMine,
                 RegisterActivePausedCountOrg = registerActivePausedCountOrg,
-                RegisterMonthlyColumnHeader = registerMonthlyColumnHeader,
+                RegisterMonthlyColumnHeader = monthly.RegisterMonthlyColumnHeader,
                 ActivePaused = new List<WorkRegisterRow>(),
                 Completed = new List<WorkRegisterRow>(),
                 Cancelled = new List<WorkRegisterRow>(),
-                Portfolios = portfolios,
-                BusinessAreas = businessAreas,
-                Directorates = directorates,
-                DeliveryPhaseOptions = phaseOpts,
-                RagOptions = ragOpts,
-                PriorityOptions = priOpts,
+                Portfolios = filterLookups.Portfolios.ToList(),
+                BusinessAreas = filterLookups.BusinessAreas.ToList(),
+                Directorates = filterLookups.Directorates.ToList(),
+                DeliveryPhaseOptions = filterLookups.PhaseOptions.ToList(),
+                RagOptions = filterLookups.RagOptions.ToList(),
+                PriorityOptions = filterLookups.PriorityOptions.ToList(),
                 FilterSearch = search,
                 FilterPortfolioId = portfolioId,
                 FilterBusinessAreaId = businessAreaId,
@@ -1469,7 +1680,7 @@ public partial class ModernWorkService : IModernWorkService
                 FilterPrimaryContactUserId = primaryContactUserId,
                 FilterTagIds = tagIdList,
                 PrimaryContactFilterOptions = primaryContactOpts,
-                TagFilterOptions = tagOpts,
+                TagFilterOptions = filterLookups.TagOptions.ToList(),
                 RegisterSortField = sortKeyNorm,
                 RegisterSortDescending = registerSortDesc,
                 FilterTagId = filterTagIdUi,
@@ -1502,16 +1713,16 @@ public partial class ModernWorkService : IModernWorkService
             ActivePausedCountBeforeMonthlyFilter = activePausedCountBeforeMonthly,
             RegisterActivePausedCountMine = registerActivePausedCountMine,
             RegisterActivePausedCountOrg = registerActivePausedCountOrg,
-            RegisterMonthlyColumnHeader = registerMonthlyColumnHeader,
+            RegisterMonthlyColumnHeader = monthly.RegisterMonthlyColumnHeader,
             ActivePaused = activePaused,
             Completed = completed,
             Cancelled = cancelled,
-            Portfolios = portfolios,
-            BusinessAreas = businessAreas,
-            Directorates = directorates,
-            DeliveryPhaseOptions = phaseOpts,
-            RagOptions = ragOpts,
-            PriorityOptions = priOpts,
+            Portfolios = filterLookups.Portfolios.ToList(),
+            BusinessAreas = filterLookups.BusinessAreas.ToList(),
+            Directorates = filterLookups.Directorates.ToList(),
+            DeliveryPhaseOptions = filterLookups.PhaseOptions.ToList(),
+            RagOptions = filterLookups.RagOptions.ToList(),
+            PriorityOptions = filterLookups.PriorityOptions.ToList(),
             FilterSearch = search,
             FilterPortfolioId = portfolioId,
             FilterBusinessAreaId = businessAreaId,
@@ -1523,7 +1734,7 @@ public partial class ModernWorkService : IModernWorkService
             FilterPrimaryContactUserId = primaryContactUserId,
             FilterTagIds = tagIdList,
             PrimaryContactFilterOptions = primaryContactOpts,
-            TagFilterOptions = tagOpts,
+            TagFilterOptions = filterLookups.TagOptions.ToList(),
             RegisterSortField = sortKeyNorm,
             RegisterSortDescending = registerSortDesc,
             FilterTagId = filterTagIdUi

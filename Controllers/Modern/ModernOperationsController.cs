@@ -690,7 +690,7 @@ public class ModernOperationsController : Controller
         ViewBag.SearchAndFilter = new SearchAndFilterViewModel
         {
             IdPrefix = "ops-work",
-            SearchPlaceholder = "Search titles, aims and tag names…",
+            SearchPlaceholder = "Search work item titles…",
             SearchValue = search,
             FormActionUrl = Url.Action(nameof(ManageWork), "ModernOperations", new { tab = activeTab, page = 1 }) ?? manageWorkUrl,
             FormMethod = "get",

@@ -42,6 +42,11 @@ public class ModernMonthlySubmissionProgressViewModel
     public List<MonthlySubmissionLeagueRow> BusinessAreaLeague { get; set; } = new();
     public List<MonthlySubmissionLeagueRow> DirectorateLeague { get; set; } = new();
 
+    /// <summary>Last six reporting months ending at <see cref="ReportYear"/>/<see cref="ReportMonth"/>.</summary>
+    public List<SubmissionTrendMonthColumn> TrendMonthColumns { get; set; } = new();
+
+    public List<BusinessAreaMonthlySubmissionTrendRow> BusinessAreaTrendRows { get; set; } = new();
+
     public bool HasPreviousMonthNav { get; set; }
     public bool HasNextMonthNav { get; set; }
     public int? PreviousNavYear { get; set; }
@@ -80,4 +85,38 @@ public class MonthlySubmissionLeagueRow
 
     public decimal ProgressGapPercent =>
         Math.Round(ActualProgressPercent - ExpectedProgressPercent, 1, MidpointRounding.AwayFromZero);
+}
+
+public class SubmissionTrendMonthColumn
+{
+    public int Year { get; set; }
+    public int Month { get; set; }
+    public string Label { get; set; } = "";
+}
+
+public class BusinessAreaMonthlySubmissionCell
+{
+    public int TotalInScope { get; set; }
+    public int Submitted { get; set; }
+    public decimal CompletionPercent { get; set; }
+
+    /// <summary>Change vs the previous month in the window; <see cref="SubmissionReportingTrend.InsufficientData"/> for the first month.</summary>
+    public SubmissionReportingTrend MonthOverMonth { get; set; } = SubmissionReportingTrend.InsufficientData;
+}
+
+public enum SubmissionReportingTrend
+{
+    InsufficientData,
+    Improving,
+    Stable,
+    Worsening
+}
+
+public class BusinessAreaMonthlySubmissionTrendRow
+{
+    public string BusinessAreaName { get; set; } = "";
+    public int? BusinessAreaId { get; set; }
+    public List<BusinessAreaMonthlySubmissionCell> Months { get; set; } = new();
+    public SubmissionReportingTrend Trend { get; set; }
+    public string TrendSummary { get; set; } = "";
 }

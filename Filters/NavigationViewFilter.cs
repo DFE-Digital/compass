@@ -1,6 +1,7 @@
 using Compass.Helpers;
 using Compass.Models;
 using Compass.Services;
+using Compass.ViewModels.Modern;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using System.Security.Claims;
@@ -16,13 +17,16 @@ public class NavigationViewFilter : IAsyncActionFilter
 {
     private readonly IPermissionService _permissionService;
     private readonly IGlobalFeatureToggleService _globalFeatures;
+    private readonly SubNavExportResolver _subNavExport;
 
     public NavigationViewFilter(
         IPermissionService permissionService,
-        IGlobalFeatureToggleService globalFeatures)
+        IGlobalFeatureToggleService globalFeatures,
+        SubNavExportResolver subNavExport)
     {
         _permissionService = permissionService;
         _globalFeatures = globalFeatures;
+        _subNavExport = subNavExport;
     }
 
     public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
@@ -83,6 +87,13 @@ public class NavigationViewFilter : IAsyncActionFilter
         }
 
         await next();
+
+        if (context.Controller is Controller controllerAfter
+            && controllerAfter.ViewBag.SubNavExport is not SubNavExportOptions)
+        {
+            controllerAfter.ViewBag.SubNavExport =
+                _subNavExport.Resolve(controllerAfter, context.HttpContext);
+        }
     }
 
     private static string GetUserEmail(HttpContext httpContext)

@@ -1,0 +1,113 @@
+@using Compass.ViewModels
+@model (List<SubmissionTrendMonthColumn> Columns, List<BusinessAreaMonthlySubmissionTrendRow> Rows)
+@{
+  var columns = Model.Columns ?? new List<SubmissionTrendMonthColumn>();
+  var rows = Model.Rows ?? new List<BusinessAreaMonthlySubmissionTrendRow>();
+
+  string TrendBadgeClass(SubmissionReportingTrend t) => t switch
+  {
+    SubmissionReportingTrend.Improving => "dfe-f-badge--green",
+    SubmissionReportingTrend.Worsening => "dfe-f-badge--red",
+    SubmissionReportingTrend.Stable => "dfe-f-badge--blue",
+    _ => ""
+  };
+
+  string TrendLabel(SubmissionReportingTrend t) => t switch
+  {
+    SubmissionReportingTrend.Improving => "Improving",
+    SubmissionReportingTrend.Worsening => "Worsening",
+    SubmissionReportingTrend.Stable => "Stable",
+    SubmissionReportingTrend.InsufficientData => "—",
+    _ => "—"
+  };
+
+  string MonthIndicatorSymbol(SubmissionReportingTrend t) => t switch
+  {
+    SubmissionReportingTrend.Improving => "+",
+    SubmissionReportingTrend.Worsening => "−",
+    SubmissionReportingTrend.Stable => "=",
+    _ => ""
+  };
+
+  string MonthIndicatorClass(SubmissionReportingTrend t) => t switch
+  {
+    SubmissionReportingTrend.Improving => "msp-mom--up",
+    SubmissionReportingTrend.Worsening => "msp-mom--down",
+    SubmissionReportingTrend.Stable => "msp-mom--flat",
+    _ => ""
+  };
+
+  string MonthIndicatorLabel(SubmissionReportingTrend t) => t switch
+  {
+    SubmissionReportingTrend.Improving => "Higher completion than previous month",
+    SubmissionReportingTrend.Worsening => "Lower completion than previous month",
+    SubmissionReportingTrend.Stable => "Similar completion to previous month",
+    _ => ""
+  };
+}
+@if (rows.Count == 0 || columns.Count == 0)
+{
+  <p class="govuk-body dfe-c-text-muted">No business area submission history for the last six months.</p>
+}
+else
+{
+  <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
+    <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+      <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+      <table class="govuk-table mr-ba-table msp-trend-table">
+        <caption class="govuk-visually-hidden">Business area monthly submission completion over six months</caption>
+        <thead class="govuk-table__head">
+          <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header mr-ba-table__fixed">Business area</th>
+            @foreach (var col in columns)
+            {
+              <th scope="col" class="govuk-table__header govuk-table__header--numeric">@col.Label</th>
+            }
+            <th scope="col" class="govuk-table__header">Trend</th>
+          </tr>
+        </thead>
+        <tbody class="govuk-table__body">
+          @foreach (var row in rows)
+          {
+            <tr class="govuk-table__row">
+              <th scope="row" class="govuk-table__cell mr-ba-table__fixed">@row.BusinessAreaName</th>
+              @for (var i = 0; i < row.Months.Count && i < columns.Count; i++)
+              {
+                var cell = row.Months[i];
+                <td class="govuk-table__cell govuk-table__cell--numeric">
+                  @if (cell.TotalInScope == 0)
+                  {
+                    <span class="dfe-c-text-muted">—</span>
+                  }
+                  else
+                  {
+                    <span class="govuk-!-display-block">
+                      <strong>@cell.CompletionPercent%</strong>
+                      @if (cell.MonthOverMonth != SubmissionReportingTrend.InsufficientData)
+                      {
+                        <span class="msp-mom @MonthIndicatorClass(cell.MonthOverMonth)" aria-hidden="true">@MonthIndicatorSymbol(cell.MonthOverMonth)</span>
+                        <span class="govuk-visually-hidden">@MonthIndicatorLabel(cell.MonthOverMonth)</span>
+                      }
+                    </span>
+                    <span class="govuk-body-s dfe-c-text-muted">@cell.Submitted/@cell.TotalInScope</span>
+                  }
+                </td>
+              }
+              <td class="govuk-table__cell">
+                @if (row.Trend != SubmissionReportingTrend.InsufficientData)
+                {
+                  <span class="dfe-f-badge dfe-f-badge--small @TrendBadgeClass(row.Trend)">@TrendLabel(row.Trend)</span>
+                  <span class="govuk-body-s dfe-c-text-muted govuk-!-display-block govuk-!-margin-top-1">@row.TrendSummary</span>
+                }
+                else
+                {
+                  <span class="dfe-c-text-muted">—</span>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  </div>
+}

@@ -5,6 +5,7 @@ public enum WorkV2GroupingIntroKind
 {
     Directorates,
     BusinessAreas,
+    ByTheme,
 }
 
 public sealed record WorkV2GroupingIntroModalModel(WorkV2GroupingIntroKind Kind);

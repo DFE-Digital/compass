@@ -276,7 +276,7 @@ public class ModernWorkController : Controller
         ViewBag.SearchAndFilter = new Compass.Models.SearchAndFilterViewModel
         {
             IdPrefix = "work",
-            SearchPlaceholder = "Search titles, aims and tag names…",
+            SearchPlaceholder = "Search work item titles…",
             SearchValue = search,
             FormActionUrl = Url.Action(nameof(AllWork), "ModernWork", new { tab = activeTab, page = 1 }) ?? allWorkUrl,
             FormMethod = "get",
@@ -315,7 +315,7 @@ public class ModernWorkController : Controller
 
         var mergedTags = MergeWorkTagQuery(tagId, tagIds);
 
-        var vm = await _modernWork.BuildWorkRegisterAsync(
+        var rows = await _modernWork.BuildWorkRegisterExportRowsAsync(
             mine,
             search,
             portfolioId,
@@ -327,23 +327,13 @@ public class ModernWorkController : Controller
             currentUser,
             userEmail,
             Url,
-            registerTab: null,
-            registerPage: null,
-            registerPageSize: 20,
+            exportTab,
             businessAreaId: businessAreaId,
             primaryContactUserId: primaryContactUserId,
             tagIds: mergedTags,
             registerSort: sort,
             registerSortDesc: sd,
             cancellationToken);
-
-        IEnumerable<WorkRegisterRow> rows = exportTab switch
-        {
-            "completed" => vm.Completed,
-            "cancelled" => vm.Cancelled,
-            "all" => vm.ActivePaused.Concat(vm.Completed).Concat(vm.Cancelled),
-            _ => vm.ActivePaused
-        };
 
         using var workbook = new XLWorkbook();
         var worksheet = workbook.Worksheets.Add("Work");
@@ -554,6 +544,24 @@ public class ModernWorkController : Controller
             otherDepartmentsJson = JsonSerializer.Serialize(governmentDepartmentIds);
 
         var now = DateTime.UtcNow;
+        var portfolioProject = new Project();
+        var (portfolioOk, portfolioError) = await ApplyPortfolioSelectionAsync(
+            portfolioProject, model.PortfolioId, cancellationToken);
+        if (!portfolioOk)
+        {
+            ModelState.AddModelError(nameof(model.PortfolioId), portfolioError!);
+            await PopulateWorkCreateViewBagAsync(businessCaseId, cancellationToken);
+            ViewBag.SelectedDirectorateIds = directorateIds;
+            ViewBag.SelectedPriorityOutcomeIds = priorityOutcomeIds;
+            ViewBag.SelectedMissionPillarIds = missionPillarIds;
+            ViewBag.SelectedWorkTagIds = workTagIds;
+            ViewBag.InitialRagJustification = initialRagJustification;
+            ViewBag.InitialPathToGreen = initialPathToGreen;
+            ViewBag.SelectedGovernmentDepartmentIds = governmentDepartmentIds;
+            ViewBag.MultiDeptYes = multiDeptYes;
+            return View("~/Views/Modern/Work/Create.cshtml", model);
+        }
+
         var project = new Project
         {
             ProjectCode = $"DDTDEL-{nextNumber:D4}",
@@ -562,8 +570,8 @@ public class ModernWorkController : Controller
             Status = model.Status?.Trim() ?? "Active",
             StartDate = model.StartDate,
             TargetDeliveryDate = model.TargetEndDate,
-            PrimaryOrganizationalGroupId = model.PortfolioId,
-            BusinessAreaId = model.PortfolioId,
+            BusinessAreaId = portfolioProject.BusinessAreaId,
+            PrimaryOrganizationalGroupId = portfolioProject.PrimaryOrganizationalGroupId,
             PhaseId = model.DeliveryPhaseId,
             DeliveryPriorityId = model.PriorityId,
             RagStatusLookupId = model.RagStatusId,
@@ -1965,6 +1973,8 @@ public class ModernWorkController : Controller
         string listAction,
         string? businessAreaFilterKey = null,
         string? directorateFilterKey = null,
+        int[]? tagIds = null,
+        string? themeFilterKey = null,
         CancellationToken cancellationToken = default)
     {
         var currentUser = await GetCurrentUserAsync(cancellationToken);
@@ -1990,6 +2000,7 @@ public class ModernWorkController : Controller
             registerPage: 1,
             registerPageSize: 20,
             businessAreaId,
+            tagIds: tagIds,
             cancellationToken: cancellationToken);
 
         return WorkRegisterSubNavViewModel.FromRegister(
@@ -1998,7 +2009,8 @@ public class ModernWorkController : Controller
             isMyWork: false,
             listAction,
             businessAreaFilterKey,
-            directorateFilterKey);
+            directorateFilterKey,
+            themeFilterKey);
     }
 
     [HttpGet("{id:int}/milestone/add")]
@@ -2629,6 +2641,7 @@ public class ModernWorkController : Controller
         await PopulateWorkCreateViewBagAsync(null, cancellationToken);
         ViewBag.WorkChromeSubPage = true;
         ViewBag.SelectedDirectorateIds = work.Directorates?.Select(d => d.DirectorateId).Distinct().ToArray() ?? Array.Empty<int>();
+        ViewBag.SelectedWorkTagIds = work.Tags?.Select(t => t.Id).ToArray() ?? Array.Empty<int>();
 
         return View("~/Views/Modern/Work/Edit.cshtml", work);
     }
@@ -2640,6 +2653,7 @@ public class ModernWorkController : Controller
         int id,
         WorkItem model,
         int[]? directorateIds,
+        int[]? workTagIds,
         int? startDay,
         int? startMonth,
         int? startYear,
@@ -2662,6 +2676,7 @@ public class ModernWorkController : Controller
             return deny;
 
         directorateIds ??= Array.Empty<int>();
+        workTagIds ??= Array.Empty<int>();
 
         GovUkDateBinding.BindGovUkDate(ModelState, nameof(model.StartDate), startDay, startMonth, startYear, required: false, out var startUtc);
         if (!ModelState.ContainsKey(nameof(model.StartDate)))
@@ -2680,6 +2695,7 @@ public class ModernWorkController : Controller
             await PopulateWorkCreateViewBagAsync(null, cancellationToken);
             ViewBag.WorkChromeSubPage = true;
             ViewBag.SelectedDirectorateIds = directorateIds;
+            ViewBag.SelectedWorkTagIds = workTagIds;
 
             var chrome = await _modernWork.PopulateWorkDetailAsync(
                 this, id, currentUser, userEmail, "overview", null, cancellationToken);
@@ -2691,6 +2707,7 @@ public class ModernWorkController : Controller
         var project = await _context.Projects
             .Include(p => p.ProblemStatements)
             .Include(p => p.Directorates)
+            .Include(p => p.ProjectWorkItemTags)
             .FirstOrDefaultAsync(p => p.Id == id && !p.IsDeleted, cancellationToken);
         if (project == null)
             return NotFound();
@@ -2701,8 +2718,23 @@ public class ModernWorkController : Controller
         project.Title = model.Title.Trim();
         project.Aim = model.Aim?.Trim();
         project.Status = model.Status?.Trim() ?? project.Status;
-        project.PrimaryOrganizationalGroupId = model.PortfolioId;
-        project.BusinessAreaId = model.PortfolioId;
+
+        var (portfolioOk, portfolioError) = await ApplyPortfolioSelectionAsync(
+            project, model.PortfolioId, cancellationToken);
+        if (!portfolioOk)
+        {
+            ModelState.AddModelError(nameof(model.PortfolioId), portfolioError!);
+            model.Id = id;
+            await PopulateWorkCreateViewBagAsync(null, cancellationToken);
+            ViewBag.WorkChromeSubPage = true;
+            ViewBag.SelectedDirectorateIds = directorateIds;
+            ViewBag.SelectedWorkTagIds = workTagIds;
+            var chrome = await _modernWork.PopulateWorkDetailAsync(
+                this, id, currentUser, userEmail, "overview", null, cancellationToken);
+            ViewBag.WorkItem = chrome;
+            return View("~/Views/Modern/Work/Edit.cshtml", model);
+        }
+
         project.PhaseId = model.DeliveryPhaseId;
         project.DeliveryPriorityId = model.PriorityId;
         project.ActivityTypeLookupId = model.ActivityTypeId;
@@ -2748,6 +2780,21 @@ public class ModernWorkController : Controller
                 ProjectId = id,
                 DivisionId = divId,
                 CreatedAt = now
+            });
+        }
+
+        var validTagIds = await _context.WorkItemTagLookups.AsNoTracking()
+            .Where(t => t.IsActive && workTagIds.Contains(t.Id))
+            .Select(t => t.Id)
+            .ToListAsync(cancellationToken);
+
+        _context.ProjectWorkItemTags.RemoveRange(project.ProjectWorkItemTags);
+        foreach (var tagId in validTagIds.Distinct())
+        {
+            _context.ProjectWorkItemTags.Add(new ProjectWorkItemTag
+            {
+                ProjectId = id,
+                WorkItemTagLookupId = tagId
             });
         }
 
@@ -3859,62 +3906,162 @@ public class ModernWorkController : Controller
     }
 
     [HttpGet("flagship")]
-    public async Task<IActionResult> Flagship(
+    public IActionResult Flagship() => RedirectToActionPermanent(nameof(ByTheme));
+
+    [HttpGet("flagship/export")]
+    public IActionResult ExportFlagship() => RedirectToActionPermanent(nameof(ByTheme));
+
+    [HttpGet("by-theme")]
+    [HttpGet("/ModernWork/ByTheme")]
+    public async Task<IActionResult> ByTheme(
+        string? tab,
         string? search,
-        int? portfolioId,
-        int? directorateId,
-        string? status,
+        string? workItems,
+        int? tagId,
+        int? all,
+        string? themeKey = null,
+        int page = 1,
         CancellationToken cancellationToken = default)
     {
         ViewBag.MainNavSection = "work";
-        ViewBag.SubNavItem = "work-flagship";
+        ViewBag.SubNavItem = "work-by-theme";
+        ViewBag.Search = search;
+        var activeTab = NormalizeWorkRegisterTab(tab);
+        ViewBag.ActiveTab = activeTab;
 
-        var items = await _modernWork.GetFlagshipWorkItemsAsync(
-            search, portfolioId, directorateId, status, cancellationToken);
+        var workItemsNorm = (workItems ?? "all").Trim().ToLowerInvariant();
+        if (workItemsNorm != "with" && workItemsNorm != "without")
+            workItemsNorm = "all";
+        ViewBag.WorkItemsFilter = workItemsNorm;
 
-        var portfolioIds = items.Select(w => w.PortfolioId).Where(id => id.HasValue).Select(id => id!.Value).Distinct().ToList();
-        var portfolioNames = portfolioIds.Count > 0
-            ? await _context.OrganizationalGroups.AsNoTracking()
-                .Where(g => portfolioIds.Contains(g.Id))
-                .ToDictionaryAsync(g => g.Id, g => g.Name, cancellationToken)
-            : new Dictionary<int, string>();
-
-        var orgGroups = await _context.OrganizationalGroups.AsNoTracking().Where(g => g.IsActive).OrderBy(g => g.Name).ToListAsync(cancellationToken);
-        ViewBag.Portfolios = orgGroups.Select(g => new Portfolio { Id = g.Id, Name = g.Name, IsActive = true }).ToList();
-        ViewBag.Directorates = await _context.Divisions.AsNoTracking().Where(d => d.IsActive).OrderBy(d => d.Name)
-            .Select(d => new Directorate { Id = d.Id, Name = d.Name, IsActive = true }).ToListAsync(cancellationToken);
-        ViewBag.WorkStatusOptions = new List<LookupOption>
+        var themeKeyRaw = string.IsNullOrWhiteSpace(themeKey?.Trim())
+            ? null
+            : themeKey.Trim();
+        if (string.IsNullOrWhiteSpace(themeKeyRaw))
         {
-            new() { Name = "Active", Value = "Active" },
-            new() { Name = "Paused", Value = "Paused" },
-            new() { Name = "Completed", Value = "Completed" },
-            new() { Name = "Cancelled", Value = "Cancelled" }
-        };
+            if (all == 1)
+                themeKeyRaw = "all";
+            else if (tagId.HasValue)
+                themeKeyRaw = tagId.Value.ToString(CultureInfo.InvariantCulture);
+        }
+
+        var showAll = string.Equals(themeKeyRaw, "all", StringComparison.OrdinalIgnoreCase);
+        int? explicitThemeId = null;
+        if (!showAll && !string.IsNullOrWhiteSpace(themeKeyRaw)
+            && int.TryParse(themeKeyRaw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedTheme) && parsedTheme > 0)
+        {
+            explicitThemeId = parsedTheme;
+        }
+
+        var navRows = await _context.WorkItemTagLookups.AsNoTracking()
+            .Where(t => t.IsActive)
+            .OrderBy(t => t.SortOrder)
+            .ThenBy(t => t.Name)
+            .ToListAsync(cancellationToken);
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var s = search.Trim();
+            navRows = navRows.Where(t => t.Name.Contains(s, StringComparison.OrdinalIgnoreCase)
+                || (t.Description != null && t.Description.Contains(s, StringComparison.OrdinalIgnoreCase))).ToList();
+        }
+
+        var allWorkItems = await _modernWork.GetByPriorityWorkItemsAsync(
+            null, null, null, null, null, cancellationToken);
+
+        var tagLinks = await _context.ProjectWorkItemTags.AsNoTracking()
+            .Where(l => l.WorkItemTagLookup != null && l.WorkItemTagLookup.IsActive)
+            .Select(l => new { l.ProjectId, l.WorkItemTagLookupId })
+            .ToListAsync(cancellationToken);
+
+        var workById = allWorkItems.ToDictionary(w => w.Id);
+        var workItemsByThemeId = new Dictionary<int, List<WorkItem>>();
+        foreach (var link in tagLinks)
+        {
+            if (!workById.TryGetValue(link.ProjectId, out var wi))
+                continue;
+            if (!workItemsByThemeId.ContainsKey(link.WorkItemTagLookupId))
+                workItemsByThemeId[link.WorkItemTagLookupId] = new List<WorkItem>();
+            workItemsByThemeId[link.WorkItemTagLookupId].Add(wi);
+        }
+
+        foreach (var key in workItemsByThemeId.Keys.ToList())
+        {
+            workItemsByThemeId[key] = workItemsByThemeId[key]
+                .GroupBy(x => x.Id).Select(g => g.First()).OrderBy(x => x.Title).ToList();
+        }
+
+        var counts = workItemsByThemeId.ToDictionary(kv => kv.Key, kv => kv.Value.Count);
+
+        var navCandidates = navRows.Select(t => new WorkLookupOption
+        {
+            Id = t.Id,
+            Name = t.Name,
+            Value = t.Name
+        }).ToList();
+
+        List<WorkLookupOption> navThemes;
+        if (workItemsNorm == "with")
+            navThemes = navCandidates.Where(t => counts.TryGetValue(t.Id, out var c) && c > 0).ToList();
+        else if (workItemsNorm == "without")
+            navThemes = navCandidates.Where(t => !counts.TryGetValue(t.Id, out var c) || c == 0).ToList();
+        else
+            navThemes = navCandidates;
+
+        ViewBag.CountBeforeWorkFilter = navCandidates.Count;
+
+        IReadOnlyList<WorkItem> sourceList;
+        int? selectedThemeId = null;
+        if (showAll)
+        {
+            sourceList = allWorkItems.GroupBy(w => w.Id).Select(g => g.First()).OrderBy(w => w.Title).ToList();
+        }
+        else
+        {
+            if (explicitThemeId.HasValue && navThemes.Any(t => t.Id == explicitThemeId.Value))
+                selectedThemeId = explicitThemeId;
+            else
+                selectedThemeId = navThemes.FirstOrDefault(t => counts.TryGetValue(t.Id, out var cc) && cc > 0)?.Id
+                    ?? navThemes.FirstOrDefault()?.Id;
+
+            if (selectedThemeId.HasValue)
+            {
+                sourceList = workItemsByThemeId.TryGetValue(selectedThemeId.Value, out var items)
+                    ? items
+                    : new List<WorkItem>();
+            }
+            else
+            {
+                sourceList = new List<WorkItem>();
+            }
+        }
+
+        sourceList = FilterWorkItemsByRegisterTab(sourceList, activeTab);
+
+        var pageSize = WorkGroupingRegisterPageSize;
+        var total = sourceList.Count;
+        var pageCount = Math.Max(1, (int)Math.Ceiling(total / (double)pageSize));
+        var clampedPage = Math.Max(1, Math.Min(page, pageCount));
+        var paged = sourceList.Skip((clampedPage - 1) * pageSize).Take(pageSize).ToList();
+        var rowStart = total == 0 ? 0 : (clampedPage - 1) * pageSize + 1;
+        var rowEnd = total == 0 ? 0 : Math.Min(clampedPage * pageSize, total);
+
         var phaseNames = await _context.PhaseLookups.AsNoTracking()
             .Where(p => p.IsActive)
             .ToDictionaryAsync(p => p.Id, p => p.Name ?? "", cancellationToken);
         var priorityNames = await _context.DeliveryPriorities.AsNoTracking()
             .ToDictionaryAsync(p => p.Id, p => p.Name ?? "", cancellationToken);
-
-        var flagItemIds = items.Select(w => w.Id).ToList();
-        var primaryContactById = flagItemIds.Count > 0
+        var allItemIds = allWorkItems.Select(w => w.Id).ToList();
+        var primaryContactById = allItemIds.Count > 0
             ? await _context.Projects.AsNoTracking()
-                .Where(p => flagItemIds.Contains(p.Id) && p.PrimaryContactUser != null)
+                .Where(p => allItemIds.Contains(p.Id) && p.PrimaryContactUser != null)
                 .Select(p => new { p.Id, Name = p.PrimaryContactUser!.Name ?? p.PrimaryContactUser.Email })
                 .ToDictionaryAsync(x => x.Id, x => x.Name, cancellationToken)
             : new Dictionary<int, string>();
 
-        ViewBag.Search = search;
-        ViewBag.FilterPortfolioId = portfolioId;
-        ViewBag.FilterDirectorateId = directorateId;
-        ViewBag.StatusFilter = status;
-        ViewBag.PortfolioNames = portfolioNames;
-        ViewBag.PhaseNames = phaseNames;
-        ViewBag.PriorityNames = priorityNames;
-        ViewBag.PrimaryContactById = primaryContactById;
-        var businessAreaById = flagItemIds.Count > 0
+        var themeProjectIds = workItemsByThemeId.Values.SelectMany(w => w).Select(x => x.Id).Distinct().ToList();
+        var businessAreaById = themeProjectIds.Count > 0
             ? await _context.Projects.AsNoTracking()
-                .Where(p => flagItemIds.Contains(p.Id))
+                .Where(p => themeProjectIds.Contains(p.Id))
                 .Select(p => new
                 {
                     p.Id,
@@ -3924,66 +4071,51 @@ public class ModernWorkController : Controller
                 })
                 .ToDictionaryAsync(x => x.Id, x => x.Name ?? "—", cancellationToken)
             : new Dictionary<int, string>();
+
+        ViewBag.ThemesNav = navThemes;
+        ViewBag.WorkCountByThemeId = counts;
+        ViewBag.SelectedThemeId = selectedThemeId;
+        ViewBag.ShowAllThemes = showAll;
+        ViewBag.PagedWorkItems = paged;
+        ViewBag.RegisterPage = clampedPage;
+        ViewBag.RegisterPageCount = pageCount;
+        ViewBag.RegisterTotalCount = total;
+        ViewBag.RegisterDisplayRowStart = rowStart;
+        ViewBag.RegisterDisplayRowEnd = rowEnd;
+        ViewBag.RegisterIsPaginated = total > pageSize;
+        ViewBag.PhaseNames = phaseNames;
+        ViewBag.PriorityNames = priorityNames;
+        ViewBag.PrimaryContactById = primaryContactById;
         ViewBag.BusinessAreaNameByProjectId = businessAreaById;
 
-        return View("~/Views/Modern/Work/Flagship.cshtml", items);
-    }
-
-    [HttpGet("flagship/export")]
-    public async Task<IActionResult> ExportFlagship(
-        string? search,
-        int? portfolioId,
-        int? directorateId,
-        string? status,
-        CancellationToken cancellationToken = default)
-    {
-        var items = await _modernWork.GetFlagshipWorkItemsAsync(
-            search, portfolioId, directorateId, status, cancellationToken);
-
-        var portfolioIds = items.Select(w => w.PortfolioId).Where(id => id.HasValue).Select(id => id!.Value).Distinct().ToList();
-        var portfolioNames = portfolioIds.Count > 0
-            ? await _context.OrganizationalGroups.AsNoTracking()
-                .Where(g => portfolioIds.Contains(g.Id))
-                .ToDictionaryAsync(g => g.Id, g => g.Name, cancellationToken)
-            : new Dictionary<int, string>();
-
-        var csv = BuildFlagshipCsv(items, portfolioNames);
-        var fileName = $"flagship-work-{DateTime.UtcNow:yyyyMMdd-HHmm}.csv";
-        return File(csv, "text/csv; charset=utf-8", fileName);
-    }
-
-    private static byte[] BuildFlagshipCsv(IReadOnlyList<WorkItem> items, IReadOnlyDictionary<int, string> portfolioNames)
-    {
-        static string CsvField(string? value)
+        string? filterKeyForView = themeKeyRaw;
+        if (string.IsNullOrWhiteSpace(filterKeyForView))
         {
-            var s = value ?? "";
-            if (s.Contains('"', StringComparison.Ordinal))
-                s = s.Replace("\"", "\"\"", StringComparison.Ordinal);
-            if (s.Contains(',') || s.Contains('\n') || s.Contains('\r'))
-                return "\"" + s + "\"";
-            return s;
+            if (showAll)
+                filterKeyForView = "all";
+            else if (selectedThemeId.HasValue)
+                filterKeyForView = selectedThemeId.Value.ToString(CultureInfo.InvariantCulture);
         }
 
-        var sb = new StringBuilder();
-        sb.AppendLine("Work item,Reference,Portfolio,RAG,Status,Start date,Target end,Updated");
-        foreach (var w in items)
-        {
-            var latestRag = w.RagHistory?.OrderByDescending(r => r.UpdatedAt).FirstOrDefault();
-            var ragName = latestRag?.RagStatus?.Name ?? "";
-            var portfolio = w.PortfolioId.HasValue && portfolioNames.TryGetValue(w.PortfolioId.Value, out var pn) ? pn : "";
-            sb.Append(CsvField(w.Title)).Append(',')
-                .Append(CsvField("WI-" + w.Id.ToString("D8", CultureInfo.InvariantCulture))).Append(',')
-                .Append(CsvField(portfolio)).Append(',')
-                .Append(CsvField(ragName)).Append(',')
-                .Append(CsvField(w.Status)).Append(',')
-                .Append(CsvField(w.StartDate?.ToString("d MMM yyyy", CultureInfo.InvariantCulture))).Append(',')
-                .Append(CsvField(w.TargetEndDate?.ToString("d MMM yyyy", CultureInfo.InvariantCulture))).Append(',')
-                .Append(CsvField(w.UpdatedAt.ToString("d MMM yyyy", CultureInfo.InvariantCulture)))
-                .AppendLine();
-        }
+        ViewBag.ThemeFilterKey = filterKeyForView;
 
-        var preamble = Encoding.UTF8.GetPreamble();
-        return preamble.Concat(Encoding.UTF8.GetBytes(sb.ToString())).ToArray();
+        var scopedTagIds = showAll || !selectedThemeId.HasValue
+            ? null
+            : new[] { selectedThemeId.Value };
+
+        ViewBag.WorkRegisterSubNav = await BuildWorkRegisterSubNavForScopeAsync(
+            businessAreaId: null,
+            directorateId: null,
+            search,
+            ragId: null,
+            priorityId: null,
+            activeTab,
+            nameof(ByTheme),
+            tagIds: scopedTagIds,
+            themeFilterKey: filterKeyForView,
+            cancellationToken: cancellationToken);
+
+        return View("~/Views/Modern/Work/ByTheme.cshtml");
     }
 
     [HttpGet("directorates")]
@@ -4661,6 +4793,45 @@ public class ModernWorkController : Controller
         return string.IsNullOrEmpty(detailUrl)
             ? RedirectToAction(nameof(Detail), new { id })
             : LocalRedirect(detailUrl + "#wd-strategic-alignment");
+    }
+
+    /// <summary>
+    /// Modern work forms bind business area to <see cref="WorkItem.PortfolioId"/>.
+    /// <see cref="Project.BusinessAreaId"/> is a <see cref="BusinessAreaLookup"/> FK;
+    /// <see cref="Project.PrimaryOrganizationalGroupId"/> is an <see cref="OrganizationalGroup"/> FK.
+    /// </summary>
+    private async Task<(bool ok, string? error)> ApplyPortfolioSelectionAsync(
+        Project project,
+        int? portfolioId,
+        CancellationToken cancellationToken)
+    {
+        if (!portfolioId.HasValue)
+        {
+            project.BusinessAreaId = null;
+            project.PrimaryOrganizationalGroupId = null;
+            return (true, null);
+        }
+
+        var id = portfolioId.Value;
+
+        var isBusinessArea = await _context.BusinessAreaLookups.AsNoTracking()
+            .AnyAsync(b => b.Id == id && b.IsActive, cancellationToken);
+        if (isBusinessArea)
+        {
+            project.BusinessAreaId = id;
+            project.PrimaryOrganizationalGroupId = null;
+            return (true, null);
+        }
+
+        var isOrgGroup = await _context.OrganizationalGroups.AsNoTracking()
+            .AnyAsync(g => g.Id == id && g.IsActive, cancellationToken);
+        if (isOrgGroup)
+        {
+            project.PrimaryOrganizationalGroupId = id;
+            return (true, null);
+        }
+
+        return (false, "Select a valid business area.");
     }
 
     [HttpGet("search-government-departments")]

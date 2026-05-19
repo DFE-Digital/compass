@@ -1,0 +1,109 @@
+@model Compass.ViewModels.Modern.PrioritiesReportGroupSummaryViewModel
+@{
+  var rows = Model.Rows;
+  var totalRow = new Compass.ViewModels.ModernBusinessAreaDashboardRow
+  {
+    BusinessArea = "Total",
+    TotalProjects = rows.Sum(r => r.TotalProjects),
+    SubmittedCount = rows.Sum(r => r.SubmittedCount),
+    NewThisMonth = rows.Sum(r => r.NewThisMonth),
+    MilestonesCompleted = rows.Sum(r => r.MilestonesCompleted),
+    MilestonesUpcoming30Days = rows.Sum(r => r.MilestonesUpcoming30Days),
+    MilestonesLate = rows.Sum(r => r.MilestonesLate),
+    RagRed = rows.Sum(r => r.RagRed),
+    RagAmberRed = rows.Sum(r => r.RagAmberRed),
+    RagAmberGreen = rows.Sum(r => r.RagAmberGreen),
+    RagGreen = rows.Sum(r => r.RagGreen),
+    RagNotSet = rows.Sum(r => r.RagNotSet),
+    PriCritical = rows.Sum(r => r.PriCritical),
+    PriHigh = rows.Sum(r => r.PriHigh),
+    PriMedium = rows.Sum(r => r.PriMedium),
+    PriLow = rows.Sum(r => r.PriLow),
+    PriNotSet = rows.Sum(r => r.PriNotSet)
+  };
+}
+
+<div style="margin-top:0.75rem;">
+  <p class="govuk-body-s dfe-c-text-muted govuk-!-margin-bottom-3">Click a number to see which work items are included.</p>
+  <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
+    <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+      <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+      <table class="govuk-table mr-ba-table" id="@Model.TableId">
+        <thead class="govuk-table__head">
+          <tr class="govuk-table__row">
+            <th scope="col" rowspan="2" class="mr-ba-table__fixed mr-ba-table__area-col">@Model.GroupColumnLabel</th>
+            <th scope="col" rowspan="2" class="mr-ba-table__num-hdr"><abbr title="Total active work items">Tot</abbr></th>
+            <th scope="col" rowspan="2" class="mr-ba-table__num-hdr"><abbr title="Submitted returns">Submitted</abbr></th>
+            <th scope="col" rowspan="2" class="mr-ba-table__num-hdr"><abbr title="New this month">New</abbr></th>
+            <th scope="col" colspan="3" class="mr-ba-table__group mr-ba-table__group--ms">Milestones</th>
+            <th scope="col" colspan="5" class="mr-ba-table__group mr-ba-table__group--rag">RAG status</th>
+            <th scope="col" colspan="5" class="mr-ba-table__group mr-ba-table__group--pri">Delivery priority</th>
+          </tr>
+          <tr class="govuk-table__row">
+            <th class="mr-ba-table__sub mr-ba-table__sub--ms"><abbr title="Completed">Done</abbr></th>
+            <th class="mr-ba-table__sub mr-ba-table__sub--ms"><abbr title="Due in next 30 days">Soon</abbr></th>
+            <th class="mr-ba-table__sub mr-ba-table__sub--ms"><abbr title="Past due">Late</abbr></th>
+            <th class="mr-ba-table__sub mr-ba-table__sub--rag"><abbr title="Red">R</abbr></th>
+            <th class="mr-ba-table__sub mr-ba-table__sub--rag"><abbr title="Amber–Red">A-R</abbr></th>
+            <th class="mr-ba-table__sub mr-ba-table__sub--rag"><abbr title="Amber–Green">A-G</abbr></th>
+            <th class="mr-ba-table__sub mr-ba-table__sub--rag"><abbr title="Green">G</abbr></th>
+            <th class="mr-ba-table__sub mr-ba-table__sub--rag"><abbr title="Not set">N/S</abbr></th>
+            <th class="mr-ba-table__sub mr-ba-table__sub--pri"><abbr title="Critical">C</abbr></th>
+            <th class="mr-ba-table__sub mr-ba-table__sub--pri"><abbr title="High">H</abbr></th>
+            <th class="mr-ba-table__sub mr-ba-table__sub--pri"><abbr title="Medium">M</abbr></th>
+            <th class="mr-ba-table__sub mr-ba-table__sub--pri"><abbr title="Low">L</abbr></th>
+            <th class="mr-ba-table__sub mr-ba-table__sub--pri"><abbr title="Not set">N/S</abbr></th>
+          </tr>
+        </thead>
+        <tbody class="govuk-table__body">
+          @foreach (var row in rows)
+          {
+            var groupKey = row.BusinessArea;
+            var groupEnc = Html.Encode(groupKey);
+            string drillAttrs(string filter) => $"data-dimension=\"{Model.Dimension}\" data-ba=\"{groupEnc}\" data-filter=\"{filter}\" role=\"button\" tabindex=\"0\"";
+            <tr class="govuk-table__row">
+              <th scope="row" class="mr-ba-table__fixed mr-ba-table__area-col">@row.BusinessArea</th>
+              <td class="mr-ba-table__num"><span class="mr-ba-num mr-ba-num--strong mr-ba-drill" @Html.Raw(drillAttrs("total"))>@row.TotalProjects</span></td>
+              <td class="mr-ba-table__num"><span class="mr-ba-num @(row.SubmittedCount > 0 ? "mr-ba-num--highlight mr-ba-drill" : "")" @(row.SubmittedCount > 0 ? Html.Raw(drillAttrs("submitted")) : Html.Raw(""))>@row.SubmittedCount</span></td>
+              <td class="mr-ba-table__num"><span class="mr-ba-num @(row.NewThisMonth > 0 ? "mr-ba-num--highlight mr-ba-drill" : "")" @(row.NewThisMonth > 0 ? Html.Raw(drillAttrs("new")) : Html.Raw(""))>@row.NewThisMonth</span></td>
+              <td class="mr-ba-table__cell--ms mr-ba-table__num"><span class="mr-ba-num @(row.MilestonesCompleted > 0 ? "mr-ba-drill" : "")" @(row.MilestonesCompleted > 0 ? Html.Raw(drillAttrs("ms-done")) : Html.Raw(""))>@row.MilestonesCompleted</span></td>
+              <td class="mr-ba-table__cell--ms mr-ba-table__num"><span class="mr-ba-num @(row.MilestonesUpcoming30Days > 0 ? "mr-ba-drill" : "")" @(row.MilestonesUpcoming30Days > 0 ? Html.Raw(drillAttrs("ms-soon")) : Html.Raw(""))>@row.MilestonesUpcoming30Days</span></td>
+              <td class="mr-ba-table__cell--ms mr-ba-table__num"><span class="mr-ba-num @(row.MilestonesLate > 0 ? "mr-ba-num--warn mr-ba-drill" : "")" @(row.MilestonesLate > 0 ? Html.Raw(drillAttrs("ms-late")) : Html.Raw(""))>@row.MilestonesLate</span></td>
+              <td class="mr-ba-table__cell--rag mr-ba-table__num"><span class="mr-ba-num mr-ba-num--rag @(row.RagRed > 0 ? "mr-ba-num--rag-red mr-ba-drill" : "mr-ba-num--muted")" @(row.RagRed > 0 ? Html.Raw(drillAttrs("rag-Red")) : Html.Raw(""))>@row.RagRed</span></td>
+              <td class="mr-ba-table__cell--rag mr-ba-table__num"><span class="mr-ba-num mr-ba-num--rag @(row.RagAmberRed > 0 ? "mr-ba-num--rag-amber-red mr-ba-drill" : "mr-ba-num--muted")" @(row.RagAmberRed > 0 ? Html.Raw(drillAttrs("rag-Amber-Red")) : Html.Raw(""))>@row.RagAmberRed</span></td>
+              <td class="mr-ba-table__cell--rag mr-ba-table__num"><span class="mr-ba-num mr-ba-num--rag @(row.RagAmberGreen > 0 ? "mr-ba-num--rag-amber-grn mr-ba-drill" : "mr-ba-num--muted")" @(row.RagAmberGreen > 0 ? Html.Raw(drillAttrs("rag-Amber-Green")) : Html.Raw(""))>@row.RagAmberGreen</span></td>
+              <td class="mr-ba-table__cell--rag mr-ba-table__num"><span class="mr-ba-num mr-ba-num--rag @(row.RagGreen > 0 ? "mr-ba-num--rag-green mr-ba-drill" : "mr-ba-num--muted")" @(row.RagGreen > 0 ? Html.Raw(drillAttrs("rag-Green")) : Html.Raw(""))>@row.RagGreen</span></td>
+              <td class="mr-ba-table__cell--rag mr-ba-table__num"><span class="mr-ba-num mr-ba-num--rag @(row.RagNotSet > 0 ? "mr-ba-num--rag-ns mr-ba-drill" : "mr-ba-num--muted")" @(row.RagNotSet > 0 ? Html.Raw(drillAttrs("rag-Not Set")) : Html.Raw(""))>@row.RagNotSet</span></td>
+              <td class="mr-ba-table__cell--pri mr-ba-table__num"><span class="mr-ba-num mr-ba-num--pri @(row.PriCritical > 0 ? "mr-ba-num--pri-crit mr-ba-drill" : "mr-ba-num--muted")" @(row.PriCritical > 0 ? Html.Raw(drillAttrs("pri-Critical")) : Html.Raw(""))>@row.PriCritical</span></td>
+              <td class="mr-ba-table__cell--pri mr-ba-table__num"><span class="mr-ba-num mr-ba-num--pri @(row.PriHigh > 0 ? "mr-ba-num--pri-high mr-ba-drill" : "mr-ba-num--muted")" @(row.PriHigh > 0 ? Html.Raw(drillAttrs("pri-High")) : Html.Raw(""))>@row.PriHigh</span></td>
+              <td class="mr-ba-table__cell--pri mr-ba-table__num"><span class="mr-ba-num mr-ba-num--pri @(row.PriMedium > 0 ? "mr-ba-num--pri-med mr-ba-drill" : "mr-ba-num--muted")" @(row.PriMedium > 0 ? Html.Raw(drillAttrs("pri-Medium")) : Html.Raw(""))>@row.PriMedium</span></td>
+              <td class="mr-ba-table__cell--pri mr-ba-table__num"><span class="mr-ba-num mr-ba-num--pri @(row.PriLow > 0 ? "mr-ba-num--pri-low mr-ba-drill" : "mr-ba-num--muted")" @(row.PriLow > 0 ? Html.Raw(drillAttrs("pri-Low")) : Html.Raw(""))>@row.PriLow</span></td>
+              <td class="mr-ba-table__cell--pri mr-ba-table__num"><span class="mr-ba-num mr-ba-num--pri @(row.PriNotSet > 0 ? "mr-ba-num--pri-ns mr-ba-drill" : "mr-ba-num--muted")" @(row.PriNotSet > 0 ? Html.Raw(drillAttrs("pri-Not Set")) : Html.Raw(""))>@row.PriNotSet</span></td>
+            </tr>
+          }
+        </tbody>
+        <tfoot>
+          <tr class="mr-ba-table__total-row">
+            <th scope="row" class="mr-ba-table__fixed mr-ba-table__area-col">Total</th>
+            <td class="mr-ba-table__num"><span class="mr-ba-num mr-ba-num--strong">@totalRow.TotalProjects</span></td>
+            <td class="mr-ba-table__num"><span class="mr-ba-num mr-ba-num--strong">@totalRow.SubmittedCount</span></td>
+            <td class="mr-ba-table__num"><span class="mr-ba-num mr-ba-num--strong">@totalRow.NewThisMonth</span></td>
+            <td class="mr-ba-table__cell--ms mr-ba-table__num"><span class="mr-ba-num mr-ba-num--strong">@totalRow.MilestonesCompleted</span></td>
+            <td class="mr-ba-table__cell--ms mr-ba-table__num"><span class="mr-ba-num mr-ba-num--strong">@totalRow.MilestonesUpcoming30Days</span></td>
+            <td class="mr-ba-table__cell--ms mr-ba-table__num"><span class="mr-ba-num mr-ba-num--strong">@totalRow.MilestonesLate</span></td>
+            <td class="mr-ba-table__cell--rag mr-ba-table__num"><span class="mr-ba-num mr-ba-num--rag mr-ba-num--rag-red">@totalRow.RagRed</span></td>
+            <td class="mr-ba-table__cell--rag mr-ba-table__num"><span class="mr-ba-num mr-ba-num--rag mr-ba-num--rag-amber-red">@totalRow.RagAmberRed</span></td>
+            <td class="mr-ba-table__cell--rag mr-ba-table__num"><span class="mr-ba-num mr-ba-num--rag mr-ba-num--rag-amber-grn">@totalRow.RagAmberGreen</span></td>
+            <td class="mr-ba-table__cell--rag mr-ba-table__num"><span class="mr-ba-num mr-ba-num--rag mr-ba-num--rag-green">@totalRow.RagGreen</span></td>
+            <td class="mr-ba-table__cell--rag mr-ba-table__num"><span class="mr-ba-num mr-ba-num--rag mr-ba-num--rag-ns">@totalRow.RagNotSet</span></td>
+            <td class="mr-ba-table__cell--pri mr-ba-table__num"><span class="mr-ba-num mr-ba-num--pri mr-ba-num--pri-crit">@totalRow.PriCritical</span></td>
+            <td class="mr-ba-table__cell--pri mr-ba-table__num"><span class="mr-ba-num mr-ba-num--pri mr-ba-num--pri-high">@totalRow.PriHigh</span></td>
+            <td class="mr-ba-table__cell--pri mr-ba-table__num"><span class="mr-ba-num mr-ba-num--pri mr-ba-num--pri-med">@totalRow.PriMedium</span></td>
+            <td class="mr-ba-table__cell--pri mr-ba-table__num"><span class="mr-ba-num mr-ba-num--pri mr-ba-num--pri-low">@totalRow.PriLow</span></td>
+            <td class="mr-ba-table__cell--pri mr-ba-table__num"><span class="mr-ba-num mr-ba-num--pri mr-ba-num--pri-ns">@totalRow.PriNotSet</span></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+</div>

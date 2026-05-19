@@ -1,9 +1,10 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Text.Json;
 using Compass.Configuration;
+using Compass.Services;
 using Compass.Models;
 using Compass.Models.Modern.Work;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -14,6 +15,7 @@ public sealed class WorkRegisterDiagnosticsCollector
 {
     private readonly ILogger _logger;
     private readonly WorkRegisterDiagnosticsOptions _options;
+    private readonly WorkRegisterPerfFileLog? _fileLog;
     private readonly bool _enabled;
     private readonly Stopwatch _total = Stopwatch.StartNew();
     private readonly List<(string Phase, long Ms, string? Detail)> _phases = new();
@@ -28,11 +30,12 @@ public sealed class WorkRegisterDiagnosticsCollector
     public WorkRegisterDiagnosticsCollector(
         ILogger logger,
         IOptions<WorkRegisterDiagnosticsOptions> options,
-        IHostEnvironment env)
+        WorkRegisterPerfFileLog? fileLog = null)
     {
         _logger = logger;
         _options = options.Value;
-        _enabled = _options.Enabled || env.IsDevelopment();
+        _fileLog = fileLog;
+        _enabled = _options.Enabled;
     }
 
     public bool IsEnabled => _enabled;
@@ -45,6 +48,14 @@ public sealed class WorkRegisterDiagnosticsCollector
     public void RecordEntityLoad(IReadOnlyList<Project> projects)
     {
         _entityStats = WorkRegisterEntityLoadStats.FromProjects(projects);
+    }
+
+    public void LogApiRequest(object requestPayload)
+    {
+        if (!IsEnabled || !_options.LogApiData)
+            return;
+
+        _fileLog?.WriteJsonBlock("API REQUEST (BuildWorkRegisterAsync)", requestPayload);
     }
 
     public void Complete(WorkRegisterViewModel vm)
@@ -83,41 +94,28 @@ public sealed class WorkRegisterDiagnosticsCollector
         var phaseSummary = string.Join("; ", _phases.Select(p =>
             string.IsNullOrEmpty(p.Detail) ? $"{p.Phase}={p.Ms}ms" : $"{p.Phase}={p.Ms}ms ({p.Detail})"));
 
-        _logger.LogInformation(
-            "WorkRegister load [{LoadPath}] mine={IsMyWork} tab={Tab} page={Page} monthlyFilter={MonthlyFilter} " +
-            "totalMs={TotalMs} rowsOnPage={RowCount} registerTotal={RegisterTotal} " +
-            "active={Active} paused={Paused} completed={Completed} cancelled={Cancelled} " +
-            "pageRowsJson~{PageRowsJsonKb:F1}KB fullVmJson~{FullVmJsonKb:F1}KB | phases: {Phases}",
-            LoadPath,
-            IsMyWork,
-            RegisterTab ?? "(none)",
-            RegisterPage?.ToString() ?? "(none)",
-            string.IsNullOrWhiteSpace(MonthlyUpdateFilter) ? "(none)" : MonthlyUpdateFilter,
-            _total.ElapsedMilliseconds,
-            rowCount,
-            vm.RegisterTotalCount,
-            vm.ActiveCount,
-            vm.PausedCount,
-            vm.CompletedCount,
-            vm.CancelledCount,
-            BytesToKb(pageRowsJsonBytes),
-            BytesToKb(fullVmJsonBytes),
-            phaseSummary);
+        var loadMessage =
+            $"LOAD [{LoadPath}] mine={IsMyWork} tab={RegisterTab ?? "(none)"} page={RegisterPage?.ToString() ?? "(none)"} " +
+            $"monthlyFilter={(string.IsNullOrWhiteSpace(MonthlyUpdateFilter) ? "(none)" : MonthlyUpdateFilter)} " +
+            $"totalMs={_total.ElapsedMilliseconds} rowsOnPage={rowCount} registerTotal={vm.RegisterTotalCount} " +
+            $"active={vm.ActiveCount} paused={vm.PausedCount} completed={vm.CompletedCount} cancelled={vm.CancelledCount} " +
+            $"pageRowsJson~{FormatKb(pageRowsJsonBytes)}KB fullVmJson~{FormatKb(fullVmJsonBytes)}KB | phases: {phaseSummary}";
+
+        _logger.LogInformation("{LoadMessage}", loadMessage);
+        _fileLog?.Write(loadMessage);
+
+        if (_options.LogApiData)
+            _fileLog?.WriteJsonBlock("API RESPONSE (BuildWorkRegisterAsync)", BuildApiResponsePayload(vm));
 
         if (_entityStats is { } es)
         {
-            _logger.LogInformation(
-                "WorkRegister EF graph loaded for page: projects={Projects} milestones={Milestones} " +
-                "monthlyUpdates={MonthlyUpdates} projectContacts={Contacts} sros={Sros} tags={Tags} " +
-                "directorateLinks={DirectorateLinks} (~{EstimatedGraphKb:F1} KB rough JSON if fully serialized)",
-                es.ProjectCount,
-                es.MilestoneCount,
-                es.MonthlyUpdateCount,
-                es.ProjectContactCount,
-                es.SeniorResponsibleOfficerCount,
-                es.TagLinkCount,
-                es.DirectorateLinkCount,
-                es.EstimatedSerializedKb);
+            var entityMessage =
+                $"EF graph: projects={es.ProjectCount} milestones={es.MilestoneCount} " +
+                $"monthlyUpdates={es.MonthlyUpdateCount} projectContacts={es.ProjectContactCount} " +
+                $"sros={es.SeniorResponsibleOfficerCount} tags={es.TagLinkCount} " +
+                $"directorateLinks={es.DirectorateLinkCount} (~{es.EstimatedSerializedKb:F1} KB rough JSON if fully serialized)";
+            _logger.LogInformation("WorkRegister {EntityMessage}", entityMessage);
+            _fileLog?.Write(entityMessage);
         }
     }
 
@@ -134,6 +132,57 @@ public sealed class WorkRegisterDiagnosticsCollector
     }
 
     private static double? BytesToKb(long? bytes) => bytes.HasValue ? bytes.Value / 1024.0 : null;
+
+    private static string FormatKb(long? bytes) =>
+        BytesToKb(bytes)?.ToString("F1", CultureInfo.InvariantCulture) ?? "?";
+
+    private static object BuildApiResponsePayload(WorkRegisterViewModel vm)
+    {
+        if (vm.RegisterIsPaginated)
+        {
+            return new
+            {
+                vm.RegisterIsPaginated,
+                vm.RegisterTab,
+                vm.RegisterPage,
+                vm.RegisterPageSize,
+                vm.RegisterTotalCount,
+                vm.RegisterPageCount,
+                vm.RegisterDisplayRowStart,
+                vm.RegisterDisplayRowEnd,
+                vm.ActiveCount,
+                vm.PausedCount,
+                vm.CompletedCount,
+                vm.CancelledCount,
+                vm.RagRedCount,
+                filterOptionCounts = new
+                {
+                    portfolios = vm.Portfolios.Count,
+                    businessAreas = vm.BusinessAreas.Count,
+                    directorates = vm.Directorates.Count,
+                    primaryContacts = vm.PrimaryContactFilterOptions.Count,
+                    tags = vm.TagFilterOptions.Count,
+                },
+                vm.RegisterPageRows,
+                vm.ActiveFilterChips,
+            };
+        }
+
+        return new
+        {
+            vm.RegisterIsPaginated,
+            vm.RegisterTab,
+            vm.ActiveCount,
+            vm.PausedCount,
+            vm.CompletedCount,
+            vm.CancelledCount,
+            vm.RegisterPageRows,
+            vm.ActivePaused,
+            vm.Completed,
+            vm.Cancelled,
+            vm.ActiveFilterChips,
+        };
+    }
 
     private sealed class PhaseTimer : IDisposable
     {
