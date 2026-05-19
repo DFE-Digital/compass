@@ -61,6 +61,9 @@ public partial class ModernWorkService
             .Include(x => x.ProjectMissions).ThenInclude(pm => pm.Mission)
             .Include(x => x.ProjectObjectives).ThenInclude(po => po.Objective)
             .Include(x => x.ProjectContacts).ThenInclude(pc => pc.User)
+            .Include(x => x.SeniorResponsibleOfficers).ThenInclude(sro => sro.User)
+            .Include(x => x.ServiceOwners).ThenInclude(so => so.User)
+            .Include(x => x.PmoContacts).ThenInclude(pmo => pmo.User)
             .Include(x => x.BudgetOwners).ThenInclude(bo => bo.BusinessAreaLookup)
             .Include(x => x.ProjectWorkItemTags).ThenInclude(t => t.WorkItemTagLookup)
             .FirstOrDefaultAsync(cancellationToken);
@@ -155,27 +158,7 @@ public partial class ModernWorkService
             }
         }
 
-        var standardRoleToId = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
-        {
-            ["SRO"] = 1,
-            ["Service Owner"] = 2,
-            ["PMO Contact"] = 3,
-            ["Reporting contact"] = 4
-        };
-        work.Contacts.Clear();
-        foreach (var pc in p.ProjectContacts)
-        {
-            int? roleId = standardRoleToId.TryGetValue(pc.Role, out var rid) ? rid : 5;
-            work.Contacts.Add(new WorkItemContact
-            {
-                Id = pc.Id,
-                WorkItemId = p.Id,
-                ContactRoleTypeId = roleId,
-                RoleName = roleId == 5 ? pc.Role : null,
-                DisplayName = pc.Name ?? "",
-                AppUser = pc.User
-            });
-        }
+        ProjectGovernanceContacts.PopulateWorkItemContacts(work, p);
 
         work.RiskOrIssues.Clear();
         foreach (var r in p.Risks.Where(x => !x.IsDeleted))
@@ -560,7 +543,12 @@ public partial class ModernWorkService
             _ => "inprogress"
         };
 
-        var budgetOwnerName = p.BudgetOwners?.FirstOrDefault()?.BusinessAreaLookup?.Name ?? "—";
+        var budgetOwnerNames = p.BudgetOwners?
+            .Where(bo => bo.BusinessAreaLookup != null)
+            .Select(bo => bo.BusinessAreaLookup!.Name)
+            .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
+            .ToList() ?? new List<string>();
+        var budgetOwnerName = budgetOwnerNames.Count > 0 ? string.Join(", ", budgetOwnerNames) : "—";
 
         controller.ViewBag.MainNavSection = "work";
         controller.ViewBag.SubNavItem = "work-allwork";
@@ -572,6 +560,8 @@ public partial class ModernWorkService
         controller.ViewBag.RiskAppetiteOptions = riskAppetiteOpts;
         controller.ViewBag.PrimaryContactName = p.PrimaryContactUser?.Name ?? p.PrimaryContactUser?.Email ?? "—";
         controller.ViewBag.BudgetOwnerName = budgetOwnerName;
+        controller.ViewBag.BudgetOwnerNames = budgetOwnerNames;
+        controller.ViewBag.BusinessCaseApproval = string.IsNullOrWhiteSpace(p.BusinessCaseApproval) ? null : p.BusinessCaseApproval.Trim();
         DemandRequest? linkedDemandVm = null;
         if (p.PipelineDemandRequestId.HasValue)
         {
@@ -606,22 +596,17 @@ public partial class ModernWorkService
         controller.ViewBag.BudgetOwnerUser = (User?)null;
         var keyPeople = new List<(string Key, string Label)>
         {
-            ("PrimaryContact", "Primary contact"),
-            ("BudgetOwner", "Budget owner"),
-            ("ContactRoleType:1", "SRO"),
-            ("ContactRoleType:2", "Service Owner"),
-            ("ContactRoleType:3", "PMO Contact"),
-            ("ContactRoleType:4", "Reporting contact")
-        };
-        var standardRoleNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            "SRO", "Service Owner", "PMO Contact", "Reporting contact"
+            ("ContactRoleType:1", "Senior Responsible Officer(s)"),
+            ("ContactRoleType:2", "Service Owner(s)"),
+            ("PrimaryContact", "Primary Contact"),
+            ("ContactRoleType:3", "PMO Contacts"),
+            ("Directorates", "Directorate(s)"),
+            ("BudgetOwner", "Budget Owner(s)")
         };
         var customKeys = new List<(string Key, string Label)>();
-        foreach (var pc in p.ProjectContacts)
+        foreach (var pc in p.ProjectContacts
+                     .Where(pc => string.Equals(pc.TeamStatus, ProjectGovernanceContacts.GovernanceTeamStatus, StringComparison.OrdinalIgnoreCase)))
         {
-            if (standardRoleNames.Contains(pc.Role))
-                continue;
             var k = "CustomRole:" + Uri.EscapeDataString(pc.Role);
             if (customKeys.All(x => x.Key != k))
                 customKeys.Add((k, pc.Role));

@@ -1,5 +1,6 @@
 @model Compass.Models.Modern.Work.WorkItem
 @using Compass.Models.Modern.Work
+@using Compass.Services.Modern
 @{
     ViewData["Title"] = "Edit key people";
     var work = ViewBag.WorkItem as WorkItem ?? Model;
@@ -88,7 +89,12 @@
                 <strong>@un</strong>
                 @if (!string.IsNullOrEmpty(ue))
  { <br /><span class="govuk-body-s" style="color:#505a5f;">@ue</span> }
-                <a class="govuk-link govuk-!-margin-left-2" href="@Url.Action("EditContact", "ModernWork", new { id = work.Id, contactId = c.Id, returnTo = "EditPeople" })">Change<span class="govuk-visually-hidden"> @un</span></a>
+                @{
+                  var contactEditHref = ProjectGovernanceContacts.IsJunctionContactId(c.Id)
+                    ? Url.Action("EditContact", "ModernWork", new { id = work.Id, kind = ProjectGovernanceContacts.GovernanceRoleKindFromTypeId(c.ContactRoleTypeId ?? 0), returnTo = "EditPeople" })
+                    : Url.Action("EditContact", "ModernWork", new { id = work.Id, contactId = c.Id, returnTo = "EditPeople" });
+                }
+                <a class="govuk-link govuk-!-margin-left-2" href="@contactEditHref">Change<span class="govuk-visually-hidden"> @un</span></a>
                 <form method="post" action="@Url.Action("RemoveContact", "ModernWork", new { id = work.Id, contactId = c.Id })" style="display:inline;margin-left:0.5rem;" data-confirm-title="Remove contact" data-confirm-message="Remove this person from the work item?">
                   @Html.AntiForgeryToken()
  <button type="submit" class="govuk-link" style="padding:0;border:0;background:none;cursor:pointer;font:inherit;color:#d4351c;font-size:0.875rem;">Remove<span class="govuk-visually-hidden"> @un from @roleName</span></button>
@@ -102,7 +108,13 @@
           }
         </dd>
  <dd class="govuk-summary-list__actions">
- <a class="govuk-link" href="@Url.Action("AddContact", "ModernWork", new { id = work.Id, contactRoleTypeId = rt.Id, returnTo = "EditPeople" })">Add<span class="govuk-visually-hidden"> @roleName.ToLowerInvariant()</span></a>
+        @{
+          var roleKind = ProjectGovernanceContacts.GovernanceRoleKindFromTypeId(rt.Id);
+          var roleChangeHref = rt.Id is >= 1 and <= 3 && !string.IsNullOrEmpty(roleKind)
+            ? Url.Action("EditContact", "ModernWork", new { id = work.Id, kind = roleKind, returnTo = "EditPeople" })
+            : Url.Action("AddContact", "ModernWork", new { id = work.Id, contactRoleTypeId = rt.Id, returnTo = "EditPeople" });
+        }
+ <a class="govuk-link" href="@roleChangeHref">@(contacts.Any() ? "Change" : "Add")<span class="govuk-visually-hidden"> @roleName.ToLowerInvariant()</span></a>
         </dd>
       </div>
     }
