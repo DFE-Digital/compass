@@ -2,8 +2,10 @@ using Compass.Attributes;
 using Compass.Controllers;
 using Compass.Data;
 using Compass.Models;
+using Compass.Models.Modern.Work;
 using Compass.Services;
 using Compass.Services.Aiss;
+using Compass.Services.Modern;
 using Compass.ViewModels;
 using Compass.ViewModels.Modern;
 using Microsoft.AspNetCore.Authorization;
@@ -15,7 +17,7 @@ namespace Compass.Controllers.Modern;
 /// <summary>Modern reporting UI at <c>/modern/reporting/*</c> (same period logic as Central Ops monthly reporting).</summary>
 [Authorize]
 [Route("modern/reporting")]
-public class ModernReportingController : Controller
+public partial class ModernReportingController : Controller
 {
     private readonly CompassDbContext _context;
     private readonly IMonthlyUpdateService _monthlyUpdateService;
@@ -26,6 +28,7 @@ public class ModernReportingController : Controller
     private readonly CommissionReportingAnalyticsService _commissionReportingAnalytics;
     private readonly IServiceAssessmentApiService _serviceAssessmentApi;
     private readonly IAissSummaryService _aissSummary;
+    private readonly IModernWorkService _modernWork;
     private readonly IConfiguration _configuration;
     private readonly ILogger<ModernReportingController> _logger;
 
@@ -39,6 +42,7 @@ public class ModernReportingController : Controller
         CommissionReportingAnalyticsService commissionReportingAnalytics,
         IServiceAssessmentApiService serviceAssessmentApi,
         IAissSummaryService aissSummary,
+        IModernWorkService modernWork,
         IConfiguration configuration,
         ILogger<ModernReportingController> logger)
     {
@@ -51,6 +55,7 @@ public class ModernReportingController : Controller
         _commissionReportingAnalytics = commissionReportingAnalytics;
         _serviceAssessmentApi = serviceAssessmentApi;
         _aissSummary = aissSummary;
+        _modernWork = modernWork;
         _configuration = configuration;
         _logger = logger;
     }
@@ -71,6 +76,142 @@ public class ModernReportingController : Controller
     {
         SetNav("reporting-dashboard");
         return View("~/Views/Modern/Reporting/Dashboard.cshtml", new ModernReportingDashboardViewModel());
+    }
+
+    /// <summary>Thematic report — delivery work counts by tag and filtered work register.</summary>
+    [HttpGet("thematic")]
+    public async Task<IActionResult> ThematicReport(
+        int? themeId,
+        string? tab,
+        int page = 1,
+        CancellationToken cancellationToken = default)
+    {
+        SetNav("reporting-thematic");
+
+        var summaryRows = await BuildThematicSummaryAsync(cancellationToken);
+        var selectedRow = themeId.HasValue && themeId.Value > 0
+            ? summaryRows.FirstOrDefault(r => r.TagId == themeId.Value)
+            : null;
+
+        var activeTab = (tab?.ToLowerInvariant()) switch
+        {
+            "completed" => "completed",
+            _ => "active"
+        };
+
+        WorkRegisterViewModel? register = null;
+        if (selectedRow != null)
+        {
+            var userEmail = User.Identity?.Name;
+            if (string.IsNullOrEmpty(userEmail))
+                return Unauthorized();
+
+            var currentUser = await _context.Users
+                .FirstOrDefaultAsync(u => u.Email.ToLower() == userEmail.ToLower(), cancellationToken);
+            if (currentUser == null)
+                return Unauthorized();
+
+            var safePage = page < 1 ? 1 : page;
+            register = await _modernWork.BuildWorkRegisterAsync(
+                isMyWork: false,
+                search: null,
+                portfolioId: null,
+                directorateId: null,
+                phaseId: null,
+                ragId: null,
+                priorityId: null,
+                monthlyUpdate: null,
+                currentUser,
+                userEmail,
+                Url,
+                registerTab: activeTab,
+                registerPage: safePage,
+                registerPageSize: 20,
+                tagIds: new[] { selectedRow.TagId },
+                cancellationToken: cancellationToken);
+        }
+
+        var model = new ModernThematicReportViewModel
+        {
+            SummaryRows = summaryRows,
+            SelectedThemeId = selectedRow?.TagId,
+            SelectedThemeName = selectedRow?.Name,
+            SelectedThemeDescription = selectedRow?.Description,
+            WorkRegister = register,
+            ActiveTab = activeTab
+        };
+
+        return View("~/Views/Modern/Reporting/ThematicReport.cshtml", model);
+    }
+
+    private async Task<List<ThematicReportTagSummaryRow>> BuildThematicSummaryAsync(CancellationToken cancellationToken)
+    {
+        var tags = await _context.WorkItemTagLookups.AsNoTracking()
+            .Where(t => t.IsActive)
+            .OrderBy(t => t.SortOrder)
+            .ThenBy(t => t.Name)
+            .Select(t => new { t.Id, t.Name, t.Description })
+            .ToListAsync(cancellationToken);
+
+        var statusByTag = await _context.ProjectWorkItemTags.AsNoTracking()
+            .Where(l => l.WorkItemTagLookup != null && l.WorkItemTagLookup.IsActive)
+            .Where(l => !l.Project.IsDeleted)
+            .Select(l => new { l.WorkItemTagLookupId, l.Project.Status })
+            .ToListAsync(cancellationToken);
+
+        var countsByTag = statusByTag
+            .GroupBy(x => x.WorkItemTagLookupId)
+            .ToDictionary(
+                g => g.Key,
+                g => new
+                {
+                    Active = g.Count(x => x.Status == "Active" || x.Status == "Paused"),
+                    Completed = g.Count(x => x.Status == "Completed")
+                });
+
+        return tags.Select(t =>
+        {
+            countsByTag.TryGetValue(t.Id, out var counts);
+            return new ThematicReportTagSummaryRow
+            {
+                TagId = t.Id,
+                Name = t.Name,
+                Description = t.Description,
+                ActiveCount = counts?.Active ?? 0,
+                CompletedCount = counts?.Completed ?? 0
+            };
+        }).ToList();
+    }
+
+    /// <summary>Priorities report — monthly metrics by mission pillar, priority outcome, or delivery priority.</summary>
+    [HttpGet("priorities")]
+    public async Task<IActionResult> Priorities(
+        string? dimension,
+        int? year,
+        int? month,
+        int? groupId,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var model = await _monthlyReportService.BuildPrioritiesReportAsync(dimension, year, month, groupId, cancellationToken);
+            SetNav("reporting-priorities");
+            return View("~/Views/Modern/Reporting/PrioritiesReport.cshtml", model);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading priorities report");
+            TempData["ErrorMessage"] = "An error occurred while loading the priorities report. Please try again.";
+            SetNav("reporting-priorities");
+            return View("~/Views/Modern/Reporting/PrioritiesReport.cshtml", new ModernPrioritiesReportViewModel
+            {
+                Report = new ModernMonthlyReportDashboardViewModel
+                {
+                    MinReportYear = 2026,
+                    MaxReportYear = Math.Max(2026, DateTime.UtcNow.Year)
+                }
+            });
+        }
     }
 
     /// <summary>Monthly submission progress — chart and league tables for monthly return completion.</summary>

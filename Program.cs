@@ -137,6 +137,19 @@ if (args.Length > 0 && args[0] == "--seed-gdd-framework")
     return;
 }
 
+if (args.Length > 0 && args[0] == "--seed-risk-tiers")
+{
+    var environment = "Development";
+    for (var i = 1; i < args.Length - 1; i++)
+    {
+        if (args[i] == "--environment")
+            environment = args[i + 1];
+    }
+
+    await Compass.SeedRiskTiers.RunAsync(environment);
+    return;
+}
+
 // Check for migration workbook export command
 if (args.Length > 0 && args[0] == "--export-migration-workbook")
 {
@@ -345,16 +358,18 @@ if (string.IsNullOrEmpty(connectionString))
     throw new InvalidOperationException("Database connection string 'DefaultConnection' not found.");
 }
 
-builder.Services.AddDbContext<CompassDbContext>(options =>
+builder.Services.AddSingleton<Compass.Infrastructure.WorkRegisterSqlDiagnosticsInterceptor>();
+builder.Services.AddDbContext<CompassDbContext>((sp, options) =>
     options.UseSqlServer(connectionString, sqlServerOptions =>
-    {
-        sqlServerOptions.EnableRetryOnFailure(
-            maxRetryCount: 5,
-            maxRetryDelay: TimeSpan.FromSeconds(30),
-            errorNumbersToAdd: null);
-        sqlServerOptions.CommandTimeout(60);
-        sqlServerOptions.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery);
-    }));
+        {
+            sqlServerOptions.EnableRetryOnFailure(
+                maxRetryCount: 5,
+                maxRetryDelay: TimeSpan.FromSeconds(30),
+                errorNumbersToAdd: null);
+            sqlServerOptions.CommandTimeout(60);
+            sqlServerOptions.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery);
+        })
+        .AddInterceptors(sp.GetRequiredService<Compass.Infrastructure.WorkRegisterSqlDiagnosticsInterceptor>()));
 
 // Register HTTP clients for API services
 builder.Services.AddHttpClient<ICmsApiService, CmsApiService>();
@@ -401,6 +416,7 @@ builder.Services.AddHttpClient<IServiceAssessmentApiService, ServiceAssessmentAp
 });
 
 // Register services
+builder.Services.AddSingleton<SubNavExportResolver>();
 builder.Services.AddScoped<IReturnStatusService, ReturnStatusService>();
 builder.Services.AddScoped<IMonthlyUpdateService, MonthlyUpdateService>();
 builder.Services.AddScoped<IPerformanceReportingEligibilityService, PerformanceReportingEligibilityService>();
@@ -429,6 +445,7 @@ builder.Services.AddScoped<Compass.Services.DemandTriage.IDemandTriageService, C
 builder.Services.AddScoped<Compass.Services.Dashboard.IHomeDashboardViewModelBuilder, Compass.Services.Dashboard.HomeDashboardViewModelBuilder>();
 builder.Services.Configure<Compass.Configuration.WorkRegisterDiagnosticsOptions>(
     builder.Configuration.GetSection(Compass.Configuration.WorkRegisterDiagnosticsOptions.SectionName));
+builder.Services.AddSingleton<Compass.Services.WorkRegisterPerfFileLog>();
 builder.Services.AddScoped<Compass.Services.Modern.IModernWorkService, Compass.Services.Modern.ModernWorkService>();
 builder.Services.AddScoped<ModernMonthlyReportService>();
 builder.Services.AddScoped<ModernRaidReviewProgressService>();
@@ -624,7 +641,7 @@ app.Use(async (context, next) =>
         "https://www.clarity.ms https://*.clarity.ms https://c.bing.com";
     var csp =
         $"default-src {defaultSrc}; " +
-        $"script-src 'self' 'nonce-{nonce}' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://cdn.datatables.net https://www.clarity.ms https://*.clarity.ms; " +
+        $"script-src 'self' 'nonce-{nonce}' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://cdn.datatables.net https://www.clarity.ms https://*.clarity.ms https://www.googletagmanager.com; " +
         "style-src 'self' 'unsafe-inline' https://rsms.me https://fonts.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://cdn.datatables.net; " +
         "img-src 'self' data: https:; " +
         "font-src 'self' data: https://rsms.me https://fonts.gstatic.com https://cdnjs.cloudflare.com; " +

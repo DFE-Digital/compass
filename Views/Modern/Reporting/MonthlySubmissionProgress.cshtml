@@ -1,5 +1,5 @@
+@using System.Linq
 @using System.Text.Json
-@using Compass.Helpers
 @using Compass.ViewModels
 @using Compass.ViewModels.Modern
 @model ModernMonthlySubmissionProgressViewModel
@@ -9,6 +9,7 @@
   var st = m.MonthlyUpdateStats;
   var jsonOpts = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
   var chartJson = JsonSerializer.Serialize(m.DailyProgress, jsonOpts);
+  var showSubmissionChart = m.DailyProgress.Count > 0;
   var overallPct = st == null || st.TotalProjects == 0 ? 0m : Math.Round(100m * st.Submitted / st.TotalProjects, 1);
   string MspNavUrl(int? y, int? mo, int? ba, int? dir) =>
     Url.Action("MonthlySubmissionProgress", "ModernReporting", new { year = y, month = mo, businessAreaId = ba, directorateId = dir }) ?? "#";
@@ -78,17 +79,17 @@
           <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@overallPct%</p>
         </div>
       </div>
-      <div class="mr-progress-bar govuk-!-margin-top-3" role="group" aria-label="Overall submission completion">
-        <div class="mr-progress-bar__label govuk-body-s govuk-!-margin-bottom-1">
-          Actual: <strong>@overallPct%</strong> (@st.Submitted of @st.TotalProjects)
-          · Target today: <strong>@m.ExpectedProgressPercentToday%</strong>
-        </div>
-        <div class="mr-progress-bar__track" aria-hidden="true">
-          <div class="mr-progress-bar__fill @ReportingProgressBarHelper.FillToneModifier(overallPct)" style="width:@(overallPct.ToString(System.Globalization.CultureInfo.InvariantCulture))%;"></div>
-        </div>
-      </div>
     </section>
   }
+
+  <section class="mr-section govuk-!-margin-bottom-4" aria-labelledby="msp-h-trend">
+    <h2 id="msp-h-trend" class="govuk-heading-m">Business area completion over the last 6 months</h2>
+    <p class="govuk-body-s govuk-hint">
+      Completion rate (submitted returns as a share of work items in scope) for each month ending at @m.MonthName.
+      Each month shows +, − or = compared with the previous month (completion rate change of at least 3 percentage points).
+    </p>
+    @await Html.PartialAsync("_BusinessAreaSubmissionTrendTable", (m.TrendMonthColumns, m.BusinessAreaTrendRows))
+  </section>
 
   <section class="mr-section govuk-!-margin-bottom-4" aria-labelledby="msp-h-chart">
     <h2 id="msp-h-chart" class="govuk-heading-m">Submission progress over the window</h2>
@@ -127,20 +128,13 @@
   .msp-league__progress { min-width: 8rem; }
   .msp-gap--ahead { color: #00703c; font-weight: 600; }
   .msp-gap--behind { color: #d4351c; font-weight: 600; }
-  .mr-progress-bar__track {
-    height: 0.75rem;
-    background: #f3f2f1;
-    border-radius: 2px;
-    overflow: hidden;
-  }
-  .mr-progress-bar__fill {
-    height: 100%;
-    border-radius: 2px;
-    transition: width 0.2s ease;
-  }
+  .msp-mom { font-weight: 700; font-size: 0.875rem; }
+  .msp-mom--up { color: #00703c; }
+  .msp-mom--down { color: #d4351c; }
+  .msp-mom--flat { color: #505a5f; }
 </style>
 
-@if (m.DailyProgress.Count > 0)
+@if (showSubmissionChart)
 {
   @section Scripts {
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" nonce="@Context.Items["Nonce"]"></script>

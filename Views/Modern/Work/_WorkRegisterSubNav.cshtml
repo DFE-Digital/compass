@@ -6,6 +6,7 @@
   var activeTab = string.IsNullOrWhiteSpace(m.ActiveTab) ? "active" : m.ActiveTab;
   var isBusinessAreas = string.Equals(m.ListAction, "BusinessAreas", StringComparison.Ordinal);
   var isDirectorates = string.Equals(m.ListAction, "Directorates", StringComparison.Ordinal);
+  var isByTheme = string.Equals(m.ListAction, "ByTheme", StringComparison.Ordinal);
 
   string? MonthlyQ() => string.IsNullOrWhiteSpace(m.FilterMonthlyUpdate) ? null : m.FilterMonthlyUpdate;
   int[]? TagIdsQ() => m.FilterTagIds.Count > 0 ? m.FilterTagIds.ToArray() : null;
@@ -45,6 +46,17 @@
       };
     }
 
+    if (isByTheme)
+    {
+      return new
+      {
+        tab,
+        page = 1,
+        themeKey = m.ThemeFilterKey,
+        search = m.FilterSearch
+      };
+    }
+
     return new
     {
       tab,
@@ -74,11 +86,14 @@
       return AppendQuery("/modern/work/business-areas", routeValues);
     if (isDirectorates)
       return AppendQuery("/modern/work/directorates", routeValues);
+    if (isByTheme)
+      return AppendQuery("/modern/work/by-theme", routeValues);
     return Url.Action(m.ListAction, m.ListController, routeValues) ?? "#";
   }
 }
 
 <nav class="dfe-f-sub-navigation govuk-!-margin-bottom-4" aria-label="Work register sections">
+  <div class="dfe-f-sub-navigation__bar">
   <ul class="dfe-f-sub-navigation__list">
     @if (!m.HideYourWorkTab)
     {
@@ -99,4 +114,5 @@
       <a class="dfe-f-sub-navigation__link govuk-link govuk-link--no-visited-state" href="@TabHref(TabQuery("all", null))"@if (activeTab == "all") { <text> aria-current="page"</text> }>All items <span class="dfe-c-fw-regular">(@m.AllItemsCount)</span></a>
     </li>
   </ul>
+  </div>
 </nav>

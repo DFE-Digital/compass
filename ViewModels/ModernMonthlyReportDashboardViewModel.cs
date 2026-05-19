@@ -1,6 +1,7 @@
 using Compass.Controllers;
 using Compass.Models;
 using Compass.Services.Aiss;
+using Compass.ViewModels.Modern;
 
 namespace Compass.ViewModels;
 
@@ -96,6 +97,28 @@ public class ModernMonthlyReportDashboardViewModel
     public MonthlyReportRaidSummary RaidSummary { get; set; } = new();
 
     public MonthlyReportIntelligence Intelligence { get; set; } = new();
+
+    /// <summary>When set, <see cref="BusinessAreaRows"/> are grouped by mission pillar, priority outcome, or delivery priority.</summary>
+    public PrioritiesReportContext? PrioritiesReport { get; set; }
+
+    /// <summary>All work items in the current report scope (for matrix drill-down).</summary>
+    public List<BusinessAreaProjectItem> ScopeProjectItems { get; set; } = new();
+}
+
+/// <summary>Metadata when the monthly report is shown as a priorities report.</summary>
+public class PrioritiesReportContext
+{
+    public string Dimension { get; set; } = "mission";
+
+    public string GroupColumnLabel { get; set; } = "Mission pillar";
+
+    public int? FilterGroupId { get; set; }
+
+    public string? FilterGroupName { get; set; }
+
+    public List<PrioritiesReportGroupOption> GroupOptions { get; set; } = new();
+
+    public List<PrioritiesReportDimensionSection> DimensionSections { get; set; } = new();
 }
 
 /// <summary>Open RAID counts for the monthly report, scoped to the same BA/directorate filters as the page.</summary>

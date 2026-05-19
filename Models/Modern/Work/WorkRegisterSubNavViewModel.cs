@@ -51,6 +51,9 @@ public sealed class WorkRegisterSubNavViewModel
     /// <summary>Directorate scope key for <see cref="ListAction"/> Directorates (id or all).</summary>
     public string? DirectorateFilterKey { get; init; }
 
+    /// <summary>Thematic tag scope key for <see cref="ListAction"/> ByTheme (id or all).</summary>
+    public string? ThemeFilterKey { get; init; }
+
     public bool HideYourWorkTab { get; init; }
 
     public static WorkRegisterSubNavViewModel FromRegister(
@@ -59,7 +62,8 @@ public sealed class WorkRegisterSubNavViewModel
         bool isMyWork,
         string? listAction = null,
         string? businessAreaFilterKey = null,
-        string? directorateFilterKey = null) =>
+        string? directorateFilterKey = null,
+        string? themeFilterKey = null) =>
         new()
         {
             ActiveTab = activeTab,
@@ -84,7 +88,9 @@ public sealed class WorkRegisterSubNavViewModel
             ListAction = listAction ?? "AllWork",
             BusinessAreaFilterKey = businessAreaFilterKey,
             DirectorateFilterKey = directorateFilterKey,
+            ThemeFilterKey = themeFilterKey,
             HideYourWorkTab = string.Equals(listAction, "BusinessAreas", StringComparison.Ordinal)
                 || string.Equals(listAction, "Directorates", StringComparison.Ordinal)
+                || string.Equals(listAction, "ByTheme", StringComparison.Ordinal)
         };
 }

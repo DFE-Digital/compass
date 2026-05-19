@@ -32,6 +32,27 @@ public interface IModernWorkService
         bool registerSortDesc = false,
         CancellationToken cancellationToken = default);
 
+    /// <summary>Rows for Excel export — loads only the requested tab (not the full register).</summary>
+    Task<IReadOnlyList<WorkRegisterRow>> BuildWorkRegisterExportRowsAsync(
+        bool isMyWork,
+        string? search,
+        int? portfolioId,
+        int? directorateId,
+        int? phaseId,
+        int? ragId,
+        int? priorityId,
+        string? monthlyUpdate,
+        User currentUser,
+        string userEmail,
+        IUrlHelper url,
+        string exportTab,
+        int? businessAreaId = null,
+        int? primaryContactUserId = null,
+        int[]? tagIds = null,
+        string? registerSort = null,
+        bool registerSortDesc = false,
+        CancellationToken cancellationToken = default);
+
     /// <summary>Loads a work item for the modern detail page and populates <see cref="Controller.ViewBag"/>.</summary>
     Task<WorkItem?> PopulateWorkDetailAsync(
         Controller controller,
