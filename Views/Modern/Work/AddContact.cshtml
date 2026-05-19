@@ -1,5 +1,7 @@
 @model Compass.Models.Modern.Work.WorkItemContact
+@using Compass.Models
 @using Compass.Models.Modern.Work
+@using Compass.Services.Modern
 @using Compass.ViewModels.Modern
 @using System.Linq
 @{
@@ -11,12 +13,20 @@
     var isEditPrimary = formKind == "EditPrimary";
     var isEditBudget = formKind == "EditBudget";
     var isEditContact = formKind == "EditContact";
+    var isEditDirectorates = formKind == "EditDirectorates";
+    var isEditBusinessCase = formKind == "EditBusinessCase";
+    var isEditGovernanceRole = formKind == "EditGovernanceRole";
+    var governanceRoleTypeId = ViewBag.GovernanceRoleTypeId as int? ?? 0;
+    var governanceRoleKind = ViewBag.GovernanceRoleKind as string ?? "";
     var returnTo = ViewBag.ReturnTo as string ?? "detail";
     var returnToEdit = ViewBag.ReturnToEditPeople as bool? == true;
     var showCustomRole = Model.ContactRoleTypeId == 5 || !string.IsNullOrWhiteSpace(customRolePrefill);
     var rolePreset = Model.ContactRoleTypeId.HasValue && (isAdd || isEditContact);
     var pageTitle = isEditPrimary ? "Change primary contact"
         : isEditBudget ? "Change budget owner"
+        : isEditDirectorates ? "Change directorates"
+        : isEditBusinessCase ? "Change business case approval"
+        : isEditGovernanceRole ? $"Change {ProjectGovernanceContacts.GovernanceRoleDisplayName(governanceRoleTypeId).ToLowerInvariant()}"
         : isEditContact ? "Change contact"
         : "Add contact";
     var submitLabel = isAdd ? "Add contact" : "Save changes";
@@ -24,9 +34,15 @@
         ? "Choose who is the primary contact for this work item."
         : isEditBudget
             ? "Set whether the budget owner is the same as the SRO, or assign a business area."
-            : isEditContact
-                ? "Change who holds this role on the work item."
-                : "Add a contact and role for this work item. Select Other (custom role) to type a bespoke role title.";
+            : isEditDirectorates
+                ? "Select the directorate(s) this work item is associated with."
+                : isEditBusinessCase
+                    ? "Has the business case been approved?"
+                    : isEditGovernanceRole
+                        ? "Search for people and add or remove them for this role."
+                        : isEditContact
+                            ? "Change who holds this role on the work item."
+                            : "Add a contact and role for this work item. Select Other (custom role) to type a bespoke role title.";
     ViewData["Title"] = pageTitle;
     bool HasErr(string field) => ViewData.ModelState[field]?.Errors?.Any() == true;
     string? ErrMsg(string field) => ViewData.ModelState[field]?.Errors?.FirstOrDefault()?.ErrorMessage;
@@ -53,6 +69,14 @@
     var firstSroName = ViewBag.FirstSroName as string;
     var selectedBusinessAreaId = ViewBag.SelectedBusinessAreaLookupId as int?;
     var businessAreas = ViewBag.BusinessAreaOptions as List<LookupOption> ?? new List<LookupOption>();
+    var directorates = ViewBag.Directorates as List<Directorate> ?? new List<Directorate>();
+    var selectedDirectorateIds = ViewBag.SelectedDirectorateIds as int[] ?? Array.Empty<int>();
+    var businessCaseApproval = ViewBag.BusinessCaseApproval as string;
+    var governanceRoleCurrentUsers = ViewBag.GovernanceRoleCurrentUsers as List<Compass.Controllers.Modern.ModernWorkController.GovernanceRoleUserRow>
+        ?? new List<Compass.Controllers.Modern.ModernWorkController.GovernanceRoleUserRow>();
+    var governanceRoleDisplay = isEditGovernanceRole
+        ? ProjectGovernanceContacts.GovernanceRoleDisplayName(governanceRoleTypeId)
+        : "";
     string? RoleDisplayName(int? roleTypeId, string? roleName)
     {
         if (roleTypeId is >= 1 and <= 4)
@@ -124,12 +148,76 @@
  <div class="dfe-c-card dfe-c-card--plain">
  <p class="govuk-body">@ledeText</p>
 
+@if (isEditGovernanceRole)
+{
+  var roleLabel = string.IsNullOrWhiteSpace(governanceRoleDisplay) ? "contact" : governanceRoleDisplay;
+  var roleLabelLower = roleLabel.ToLowerInvariant();
+  var singular = governanceRoleTypeId == 3 ? "PMO contact" : roleLabel;
+  <h3 class="govuk-heading-m govuk-!-margin-bottom-2">Current @roleLabelLower</h3>
+  @if (governanceRoleCurrentUsers.Count == 0)
+  {
+    <p class="govuk-body govuk-!-margin-bottom-4">No-one is assigned to this role yet.</p>
+  }
+  else
+  {
+    <ul class="govuk-list govuk-!-margin-bottom-4" style="border-top:1px solid #b1b4b6;">
+      @foreach (var person in governanceRoleCurrentUsers)
+      {
+        <li class="govuk-!-padding-top-3 govuk-!-padding-bottom-3" style="border-bottom:1px solid #b1b4b6;display:flex;justify-content:space-between;align-items:flex-start;gap:1rem;flex-wrap:wrap;">
+          <div>
+            <p class="govuk-body govuk-!-margin-bottom-0"><strong>@person.Name</strong></p>
+            @if (!string.IsNullOrWhiteSpace(person.Email))
+            {
+              <p class="govuk-body-s govuk-!-margin-bottom-0">@person.Email</p>
+            }
+          </div>
+          <form asp-controller="ModernWork" asp-action="GovernanceRoleRemoveUser" asp-route-id="@Model.WorkItemId" method="post" class="dfe-c-mb-0" data-confirm-title="Remove @singular" data-confirm-message="Remove @person.Name from this role?">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="kind" value="@governanceRoleKind" />
+            <input type="hidden" name="azureObjectId" value="@person.AzureObjectId" />
+            <input type="hidden" name="returnTo" value="@returnTo" />
+            <button type="submit" class="govuk-button govuk-button--warning govuk-!-margin-bottom-0" data-module="govuk-button">Remove</button>
+          </form>
+        </li>
+      }
+    </ul>
+  }
+
+  <h3 class="govuk-heading-m govuk-!-margin-bottom-2">Add a @singular.ToLower()</h3>
+  <form asp-controller="ModernWork" asp-action="GovernanceRoleAddUser" asp-route-id="@Model.WorkItemId" method="post" class="dfe-c-mb-0" novalidate>
+    @Html.AntiForgeryToken()
+    <input type="hidden" name="kind" value="@governanceRoleKind" />
+    <input type="hidden" name="returnTo" value="@returnTo" />
+    <div class="govuk-form-group">
+      <div class="govuk-hint govuk-!-margin-bottom-3">Search by name or email and select someone, then choose <strong>Add @singular.ToLower()</strong>.</div>
+      <div class="user-picker" data-user-picker data-search-url="/api/users/search" data-select-url="/api/users/select">
+        <div style="position:relative;">
+          <input type="text" class="govuk-input govuk-!-width-one-half js-user-picker-input" id="user-picker-governance-add" autocomplete="off" placeholder="e.g. Alex Smith or alex.smith@@education.gov.uk" />
+          <span class="user-picker__spinner js-user-picker-spinner" aria-hidden="true">Searching…</span>
+          <div class="user-picker__results js-user-picker-results" role="listbox" aria-live="polite"></div>
+        </div>
+        <p class="govuk-body-s js-user-picker-message" style="margin-top:0.25rem;display:none;"></p>
+        <input type="hidden" name="appUserId" class="js-user-picker-value" value="" />
+        <input type="hidden" name="azureObjectId" class="js-user-picker-objectid" value="" />
+        <div class="user-picker__selected js-user-picker-summary" style="margin-top:0.5rem;" data-default-text="No-one selected.">
+          <span class="govuk-hint">No-one selected.</span>
+        </div>
+      </div>
+    </div>
+    <div class="dfe-c-button-group">
+      <button type="submit" class="govuk-button" data-module="govuk-button">Add @singular.ToLower()</button>
+      <a href="@cancelUrl" class="govuk-link">Back to contacts</a>
+    </div>
+  </form>
+}
+else
+{
  <form asp-controller="ModernWork" asp-action="@formPostAction" asp-route-id="@Model.WorkItemId" method="post" class="dfe-c-mb-0" novalidate>
           @Html.AntiForgeryToken()
           <input type="hidden" name="returnTo" value="@returnTo" />
           @if (!isAdd)
           {
-            <input type="hidden" name="kind" value="@(isEditPrimary ? "primary" : isEditBudget ? "budget" : "")" />
+            <input type="hidden" name="kind" value="@(isEditPrimary ? "primary" : isEditBudget ? "budget" : isEditDirectorates ? "directorates" : isEditBusinessCase ? "businesscase" : isEditGovernanceRole ? governanceRoleKind : "")" />
             @if (isEditContact)
             {
               <input type="hidden" name="contactId" value="@Model.Id" />
@@ -199,6 +287,47 @@
  </div>
           }
 
+          @if (isEditDirectorates)
+          {
+            <div class="govuk-form-group">
+              <fieldset class="govuk-fieldset">
+                <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Directorate(s)</legend>
+                <div class="govuk-hint" id="directorates-hint">Select one or more directorates.</div>
+                @if (directorates.Count == 0)
+                {
+                  <p class="govuk-body govuk-!-margin-bottom-0">No active directorates are configured.</p>
+                }
+                else
+                {
+                  <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes" aria-describedby="directorates-hint">
+                    @foreach (var d in directorates)
+                    {
+                      var isChecked = selectedDirectorateIds.Contains(d.Id);
+                      <div class="govuk-checkboxes__item">
+                        <input class="govuk-checkboxes__input" type="checkbox" name="directorateIds" value="@d.Id" id="contact-dir-@d.Id" checked="@isChecked" />
+                        <label class="govuk-label govuk-checkboxes__label" for="contact-dir-@d.Id">@d.Name</label>
+                      </div>
+                    }
+                  </div>
+                }
+              </fieldset>
+            </div>
+          }
+
+          @if (isEditBusinessCase)
+          {
+            <div class="govuk-form-group">
+              <label class="govuk-label govuk-label--m" for="businessCaseApprovalInput">Business case approval</label>
+              <div class="govuk-hint">Has the business case been approved?</div>
+              <select class="govuk-select govuk-!-width-one-half" id="businessCaseApprovalInput" name="businessCaseApproval">
+                <option value="">Select an option</option>
+                <option value="Yes" selected="@(businessCaseApproval == "Yes")">Yes</option>
+                <option value="No" selected="@(businessCaseApproval == "No")">No</option>
+                <option value="Not applicable" selected="@(businessCaseApproval == "Not applicable")">Not applicable</option>
+              </select>
+            </div>
+          }
+
           @if (isEditBudget)
           {
  <div id="edit-budget-owner">
@@ -252,6 +381,7 @@
             </form>
           </div>
           }
+}
       </div>
     </div>
   </div>

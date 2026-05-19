@@ -2838,29 +2838,20 @@ public class ModernWorkController : Controller
         var project = await _context.Projects.AsNoTracking()
             .Include(p => p.PrimaryContactUser)
             .Include(p => p.ProjectContacts).ThenInclude(pc => pc.User)
+            .Include(p => p.SeniorResponsibleOfficers).ThenInclude(sro => sro.User)
+            .Include(p => p.ServiceOwners).ThenInclude(so => so.User)
+            .Include(p => p.PmoContacts).ThenInclude(pmo => pmo.User)
             .Include(p => p.BudgetOwners)
             .FirstOrDefaultAsync(p => p.Id == id && !p.IsDeleted, cancellationToken);
 
         if (project != null)
         {
             work.Contacts.Clear();
-            foreach (var pc in project.ProjectContacts)
-            {
-                var matched = roleTypes.FirstOrDefault(r => r.Id != 5 && string.Equals(r.Name, pc.Role, StringComparison.OrdinalIgnoreCase));
-                work.Contacts.Add(new WorkItemContact
-                {
-                    Id = pc.Id,
-                    WorkItemId = id,
-                    ContactRoleTypeId = matched?.Id ?? 5,
-                    RoleName = matched == null ? pc.Role : null,
-                    DisplayName = pc.Name ?? "",
-                    AppUser = pc.User
-                });
-            }
+            ProjectGovernanceContacts.PopulateWorkItemContacts(work, project);
 
-            var sroContact = project.ProjectContacts
-                .FirstOrDefault(c => string.Equals(c.Role, "SRO", StringComparison.OrdinalIgnoreCase));
-            ViewBag.FirstSroName = sroContact?.User?.Name ?? sroContact?.Name;
+            var sroContact = project.SeniorResponsibleOfficers.FirstOrDefault()?.User
+                ?? project.ProjectContacts.FirstOrDefault(c => string.Equals(c.Role, "SRO", StringComparison.OrdinalIgnoreCase))?.User;
+            ViewBag.FirstSroName = sroContact?.Name;
             ViewBag.PrimaryContactSubtitle = project.PrimaryContactUser?.Email;
             if (ViewBag.PrimaryContactName == null || ViewBag.PrimaryContactName == "—")
                 ViewBag.PrimaryContactName = project.PrimaryContactUser?.Name;
@@ -2890,7 +2881,7 @@ public class ModernWorkController : Controller
     [ValidateAntiForgeryToken]
     public Task<IActionResult> SetPrimaryContactPost(int id, [FromForm] int AppUserId, CancellationToken cancellationToken = default)
         => EditContactPost(id, "primary", contactId: null, AppUserId, SameAsSro: false, BusinessAreaLookupId: null,
-            ContactRoleTypeId: null, CustomRole: null, returnTo: "detail", cancellationToken);
+            ContactRoleTypeId: null, CustomRole: null, returnTo: "detail", cancellationToken: cancellationToken);
 
     [HttpGet("{id:int}/budget-owner/set")]
     [HttpGet("/ModernWork/SetBudgetOwner/{id:int}")]
@@ -2903,7 +2894,7 @@ public class ModernWorkController : Controller
     public Task<IActionResult> SetBudgetOwnerPost(int id, [FromForm] bool SameAsSro, [FromForm] int AppUserId, CancellationToken cancellationToken = default)
         => EditContactPost(id, "budget", contactId: null, AppUserId: 0, SameAsSro: SameAsSro,
             BusinessAreaLookupId: AppUserId > 0 ? AppUserId : null, ContactRoleTypeId: null, CustomRole: null,
-            returnTo: "detail", cancellationToken);
+            returnTo: "detail", cancellationToken: cancellationToken);
 
     // ─── RemoveContact ───────────────────────────────────────────
     [HttpPost("{id:int}/contact/{contactId:int}/remove")]
@@ -2914,12 +2905,19 @@ public class ModernWorkController : Controller
         var deny = await EnsureUserCanEditWorkAsync(id, cancellationToken);
         if (deny != null) return deny;
 
-        var contact = await _context.Set<ProjectContact>()
-            .FirstOrDefaultAsync(c => c.Id == contactId && c.ProjectId == id, cancellationToken);
-        if (contact != null)
+        if (ProjectGovernanceContacts.IsJunctionContactId(contactId))
         {
-            _context.Set<ProjectContact>().Remove(contact);
-            await _context.SaveChangesAsync(cancellationToken);
+            await ProjectGovernanceContacts.TryRemoveContactAsync(_context, id, contactId, cancellationToken);
+        }
+        else
+        {
+            var contact = await _context.Set<ProjectContact>()
+                .FirstOrDefaultAsync(c => c.Id == contactId && c.ProjectId == id, cancellationToken);
+            if (contact != null)
+            {
+                _context.Set<ProjectContact>().Remove(contact);
+                await _context.SaveChangesAsync(cancellationToken);
+            }
         }
 
         TempData["SuccessMessage"] = "Contact removed.";
@@ -3054,6 +3052,9 @@ public class ModernWorkController : Controller
 
         if (contactId.HasValue)
         {
+            if (ProjectGovernanceContacts.TryGovernanceRoleKindFromJunctionContactId(contactId.Value, out var junctionKind))
+                return RedirectToAction(nameof(EditContact), new { id, kind = junctionKind, returnTo });
+
             var pc = await _context.Set<ProjectContact>()
                 .Include(c => c.User)
                 .FirstOrDefaultAsync(c => c.Id == contactId.Value && c.ProjectId == id, cancellationToken);
@@ -3096,10 +3097,12 @@ public class ModernWorkController : Controller
             var project = await _context.Projects.AsNoTracking()
                 .Include(p => p.BudgetOwners)
                 .Include(p => p.ProjectContacts).ThenInclude(pc => pc.User)
+                .Include(p => p.SeniorResponsibleOfficers).ThenInclude(sro => sro.User)
                 .FirstOrDefaultAsync(p => p.Id == id && !p.IsDeleted, cancellationToken);
 
-            var sro = project?.ProjectContacts.FirstOrDefault(c => string.Equals(c.Role, "SRO", StringComparison.OrdinalIgnoreCase));
-            ViewBag.FirstSroName = sro?.User?.Name ?? sro?.Name;
+            var sroUser = project?.SeniorResponsibleOfficers.FirstOrDefault()?.User
+                ?? project?.ProjectContacts.FirstOrDefault(c => string.Equals(c.Role, "SRO", StringComparison.OrdinalIgnoreCase))?.User;
+            ViewBag.FirstSroName = sroUser?.Name;
             ViewBag.BudgetOwnerSameAsSro = project == null || !project.BudgetOwners.Any();
             ViewBag.SelectedBusinessAreaLookupId = project?.BudgetOwners.FirstOrDefault()?.BusinessAreaLookupId;
             ViewBag.BusinessAreaOptions = await _context.BusinessAreaLookups.AsNoTracking()
@@ -3110,7 +3113,136 @@ public class ModernWorkController : Controller
             return View("~/Views/Modern/Work/AddContact.cshtml", model);
         }
 
+        if (formKind == "directorates")
+        {
+            ViewBag.ContactFormKind = "EditDirectorates";
+            var prep = await LoadWorkContactFormViewAsync(id, "EditDirectorates", model, returnTo, cancellationToken);
+            if (prep != null) return prep;
+            await PopulateDirectoratesContactFormAsync(id, cancellationToken);
+            return View("~/Views/Modern/Work/AddContact.cshtml", model);
+        }
+
+        if (formKind == "businesscase")
+        {
+            ViewBag.ContactFormKind = "EditBusinessCase";
+            var prep = await LoadWorkContactFormViewAsync(id, "EditBusinessCase", model, returnTo, cancellationToken);
+            if (prep != null) return prep;
+            var project = await _context.Projects.AsNoTracking()
+                .FirstOrDefaultAsync(p => p.Id == id && !p.IsDeleted, cancellationToken);
+            ViewBag.BusinessCaseApproval = project?.BusinessCaseApproval;
+            return View("~/Views/Modern/Work/AddContact.cshtml", model);
+        }
+
+        if (ProjectGovernanceContacts.TryGovernanceRoleKindToTypeId(formKind, out var governanceRoleTypeId))
+        {
+            ViewBag.ContactFormKind = "EditGovernanceRole";
+            ViewBag.GovernanceRoleTypeId = governanceRoleTypeId;
+            ViewBag.GovernanceRoleKind = formKind;
+            var prep = await LoadWorkContactFormViewAsync(id, "EditGovernanceRole", model, returnTo, cancellationToken);
+            if (prep != null) return prep;
+            await PopulateGovernanceRoleContactFormAsync(id, governanceRoleTypeId, cancellationToken);
+            return View("~/Views/Modern/Work/AddContact.cshtml", model);
+        }
+
         return NotFound();
+    }
+
+    private async Task PopulateDirectoratesContactFormAsync(int projectId, CancellationToken cancellationToken)
+    {
+        var directorates = await _context.Divisions.AsNoTracking().Where(d => d.IsActive).OrderBy(d => d.Name)
+            .Select(d => new Directorate { Id = d.Id, Name = d.Name, IsActive = true }).ToListAsync(cancellationToken);
+        ViewBag.Directorates = directorates;
+        var selected = await _context.ProjectDirectorates.AsNoTracking()
+            .Where(pd => pd.ProjectId == projectId)
+            .Select(pd => pd.DivisionId)
+            .ToArrayAsync(cancellationToken);
+        ViewBag.SelectedDirectorateIds = selected;
+    }
+
+    private async Task PopulateGovernanceRoleContactFormAsync(int projectId, int roleTypeId, CancellationToken cancellationToken)
+    {
+        var project = await _context.Projects.AsNoTracking()
+            .Include(p => p.SeniorResponsibleOfficers).ThenInclude(s => s.User)
+            .Include(p => p.ServiceOwners).ThenInclude(s => s.User)
+            .Include(p => p.PmoContacts).ThenInclude(p => p.User)
+            .FirstOrDefaultAsync(p => p.Id == projectId && !p.IsDeleted, cancellationToken);
+
+        IEnumerable<User?> users = project == null
+            ? Enumerable.Empty<User?>()
+            : roleTypeId switch
+            {
+                1 => project.SeniorResponsibleOfficers.OrderBy(s => s.Id).Select(s => s.User),
+                2 => project.ServiceOwners.OrderBy(s => s.Id).Select(s => s.User),
+                3 => project.PmoContacts.OrderBy(s => s.Id).Select(s => s.User),
+                _ => Enumerable.Empty<User?>()
+            };
+
+        ViewBag.GovernanceRoleCurrentUsers = users
+            .Where(u => u != null && !string.IsNullOrEmpty(u!.AzureObjectId))
+            .Select(u => new GovernanceRoleUserRow(
+                u!.AzureObjectId!,
+                u.Name ?? u.Email ?? "—",
+                u.Email ?? ""))
+            .ToList();
+    }
+
+    public sealed record GovernanceRoleUserRow(string AzureObjectId, string Name, string Email);
+
+    [HttpPost("{id:int}/contact/governance/add")]
+    [HttpPost("/ModernWork/GovernanceRoleAdd/{id:int}")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> GovernanceRoleAddUser(
+        int id,
+        [FromForm] string kind,
+        [FromForm] Guid? azureObjectId,
+        [FromForm] string? returnTo,
+        CancellationToken cancellationToken = default)
+    {
+        var deny = await EnsureUserCanEditWorkAsync(id, cancellationToken);
+        if (deny != null) return deny;
+
+        if (!ProjectGovernanceContacts.TryGovernanceRoleKindToTypeId(kind, out var roleTypeId))
+            return NotFound();
+
+        if (!azureObjectId.HasValue)
+        {
+            TempData["ErrorMessage"] = "Select a person from the directory.";
+            return RedirectToAction(nameof(EditContact), new { id, kind, returnTo });
+        }
+
+        await ProjectGovernanceContacts.AddGovernanceRoleUserAsync(
+            _context, id, roleTypeId, azureObjectId.Value, cancellationToken);
+        await _context.SaveChangesAsync(cancellationToken);
+
+        TempData["SuccessMessage"] = $"{ProjectGovernanceContacts.GovernanceRoleDisplayName(roleTypeId)} updated.";
+        return RedirectToAction(nameof(EditContact), new { id, kind, returnTo });
+    }
+
+    [HttpPost("{id:int}/contact/governance/remove")]
+    [HttpPost("/ModernWork/GovernanceRoleRemove/{id:int}")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> GovernanceRoleRemoveUser(
+        int id,
+        [FromForm] string kind,
+        [FromForm] Guid? azureObjectId,
+        [FromForm] string? returnTo,
+        CancellationToken cancellationToken = default)
+    {
+        var deny = await EnsureUserCanEditWorkAsync(id, cancellationToken);
+        if (deny != null) return deny;
+
+        if (!ProjectGovernanceContacts.TryGovernanceRoleKindToTypeId(kind, out var roleTypeId))
+            return NotFound();
+
+        if (!azureObjectId.HasValue)
+            return RedirectToAction(nameof(EditContact), new { id, kind, returnTo });
+
+        await ProjectGovernanceContacts.RemoveGovernanceRoleUserAsync(
+            _context, id, roleTypeId, azureObjectId.Value, cancellationToken);
+        await _context.SaveChangesAsync(cancellationToken);
+
+        TempData["SuccessMessage"] = $"{ProjectGovernanceContacts.GovernanceRoleDisplayName(roleTypeId)} updated.";
+        return RedirectToAction(nameof(EditContact), new { id, kind, returnTo });
     }
 
     [HttpPost("{id:int}/contact/edit")]
@@ -3126,9 +3258,68 @@ public class ModernWorkController : Controller
         [FromForm] int? ContactRoleTypeId,
         [FromForm] string? CustomRole,
         [FromForm] string? returnTo,
+        [FromForm] int[]? directorateIds = null,
+        [FromForm] string? businessCaseApproval = null,
+        [FromForm] string? selectedUserObjectIds = null,
         CancellationToken cancellationToken = default)
     {
         var formKind = (kind ?? "").Trim().ToLowerInvariant();
+
+        if (formKind == "directorates")
+        {
+            var deny = await EnsureUserCanEditWorkAsync(id, cancellationToken);
+            if (deny != null) return deny;
+
+            var project = await _context.Projects
+                .Include(p => p.Directorates)
+                .FirstOrDefaultAsync(p => p.Id == id && !p.IsDeleted, cancellationToken);
+            if (project == null) return NotFound();
+
+            directorateIds ??= Array.Empty<int>();
+            _context.ProjectDirectorates.RemoveRange(project.Directorates);
+            foreach (var divId in directorateIds.Distinct())
+            {
+                _context.ProjectDirectorates.Add(new ProjectDirectorate
+                {
+                    ProjectId = id,
+                    DivisionId = divId,
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
+
+            project.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync(cancellationToken);
+            TempData["SuccessMessage"] = "Directorates updated.";
+            return RedirectAfterContactChange(id, returnTo);
+        }
+
+        if (formKind == "businesscase")
+        {
+            var deny = await EnsureUserCanEditWorkAsync(id, cancellationToken);
+            if (deny != null) return deny;
+
+            var project = await _context.Projects.FirstOrDefaultAsync(p => p.Id == id && !p.IsDeleted, cancellationToken);
+            if (project == null) return NotFound();
+
+            project.BusinessCaseApproval = string.IsNullOrWhiteSpace(businessCaseApproval) ? null : businessCaseApproval.Trim();
+            project.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync(cancellationToken);
+            TempData["SuccessMessage"] = "Business case approval updated.";
+            return RedirectAfterContactChange(id, returnTo);
+        }
+
+        if (ProjectGovernanceContacts.TryGovernanceRoleKindToTypeId(formKind, out var governanceRoleTypeId))
+        {
+            var deny = await EnsureUserCanEditWorkAsync(id, cancellationToken);
+            if (deny != null) return deny;
+
+            var objectIds = ProjectGovernanceContacts.ParseSelectedObjectIds(selectedUserObjectIds);
+            await ProjectGovernanceContacts.ReplaceGovernanceRoleUsersAsync(
+                _context, id, governanceRoleTypeId, objectIds, cancellationToken);
+            await _context.SaveChangesAsync(cancellationToken);
+            TempData["SuccessMessage"] = $"{ProjectGovernanceContacts.GovernanceRoleDisplayName(governanceRoleTypeId)} updated.";
+            return RedirectAfterContactChange(id, returnTo);
+        }
 
         if (formKind == "primary")
         {
@@ -3299,19 +3490,31 @@ public class ModernWorkController : Controller
             return await AddContactViewAsync(id, ContactRoleTypeId, returnTo, ContactRoleTypeId == 5 ? CustomRole?.Trim() : null, cancellationToken);
         }
 
-        var contact = new ProjectContact
+        if (ContactRoleTypeId is >= 1 and <= 3)
         {
-            ProjectId = id,
-            UserId = AppUserId,
-            Role = roleStr,
-            Name = user.Name ?? user.Email ?? "—",
-            Email = user.Email ?? "",
-            SortOrder = 10,
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
-        };
-        _context.Set<ProjectContact>().Add(contact);
-        await _context.SaveChangesAsync(cancellationToken);
+            await ProjectGovernanceContacts.SyncJunctionOnAddContactAsync(
+                _context, id, ContactRoleTypeId.Value, user, cancellationToken);
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+        else
+        {
+            var isGovernanceContact = ContactRoleTypeId == 5
+                && string.Equals(returnTo, "detail", StringComparison.OrdinalIgnoreCase);
+            var contact = new ProjectContact
+            {
+                ProjectId = id,
+                UserId = AppUserId,
+                Role = roleStr,
+                Name = user.Name ?? user.Email ?? "—",
+                Email = user.Email ?? "",
+                TeamStatus = isGovernanceContact ? ProjectGovernanceContacts.GovernanceTeamStatus : "current",
+                SortOrder = 10,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+            _context.Set<ProjectContact>().Add(contact);
+            await _context.SaveChangesAsync(cancellationToken);
+        }
 
         TempData["SuccessMessage"] = "Contact added.";
         return RedirectAfterContactChange(id, returnTo);

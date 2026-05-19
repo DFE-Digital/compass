@@ -3336,7 +3336,8 @@ public partial class ModernAdminController : Controller
         "EnterpriseMetrics", "FunctionalStandards", "AccessibilityIssues",
         "SurveysAdmin", "UserSatisfactionQuestions", "UserSatisfactionResponses", "DdtStandards",
         "ServiceRegister",
-        "CmsAccessRequests"
+        "CmsAccessRequests",
+        "AdminLookups"
     };
 
     [HttpGet("api-tokens/new")]
