@@ -131,9 +131,117 @@
     });
   }
 
+  function setupScrollSpy() {
+    if (!('IntersectionObserver' in window)) return;
+
+    var asides = document.querySelectorAll('.docs-page-grid__aside');
+    asides.forEach(function (aside) {
+      var rawLinks = aside.querySelectorAll('a[href^="#"]');
+      if (!rawLinks.length) return;
+
+      var links = [];
+      var sections = [];
+      var linkBySection = new Map();
+
+      rawLinks.forEach(function (link) {
+        var hash = link.getAttribute('href') || '';
+        var id;
+        try {
+          id = decodeURIComponent(hash.slice(1));
+        } catch (err) {
+          id = hash.slice(1);
+        }
+        if (!id) return;
+        var target = document.getElementById(id);
+        if (!target) return;
+        links.push(link);
+        sections.push(target);
+        linkBySection.set(target, link);
+      });
+
+      if (!sections.length) return;
+
+      var clickPinUntil = 0;
+
+      function setActive(link) {
+        links.forEach(function (l) {
+          if (l === link) {
+            l.setAttribute('aria-current', 'true');
+            l.classList.add('active');
+          } else {
+            l.removeAttribute('aria-current');
+            l.classList.remove('active');
+          }
+        });
+        if (link) keepLinkInView(link);
+      }
+
+      function keepLinkInView(link) {
+        var asideRect = aside.getBoundingClientRect();
+        var linkRect = link.getBoundingClientRect();
+        var overflowsTop = linkRect.top < asideRect.top + 4;
+        var overflowsBottom = linkRect.bottom > asideRect.bottom - 4;
+        if (overflowsTop || overflowsBottom) {
+          link.scrollIntoView({ block: 'nearest' });
+        }
+      }
+
+      function pickActiveFromVisibility(visibleSet) {
+        if (!visibleSet.size) {
+          var topmostAbove = null;
+          var threshold = window.innerHeight * 0.2;
+          for (var i = 0; i < sections.length; i++) {
+            if (sections[i].getBoundingClientRect().top <= threshold) {
+              topmostAbove = sections[i];
+            }
+          }
+          return topmostAbove;
+        }
+        for (var j = 0; j < sections.length; j++) {
+          if (visibleSet.has(sections[j])) return sections[j];
+        }
+        return null;
+      }
+
+      var visible = new Set();
+      var observer = new IntersectionObserver(function (entries) {
+        entries.forEach(function (e) {
+          if (e.isIntersecting) visible.add(e.target);
+          else visible.delete(e.target);
+        });
+        if (Date.now() < clickPinUntil) return;
+        var current = pickActiveFromVisibility(visible);
+        if (current) setActive(linkBySection.get(current));
+      }, {
+        rootMargin: '-15% 0px -70% 0px',
+        threshold: 0
+      });
+
+      sections.forEach(function (s) { observer.observe(s); });
+
+      links.forEach(function (link) {
+        link.addEventListener('click', function () {
+          setActive(link);
+          // Hold the click selection briefly so smooth-scroll doesn't repaint it
+          // to whatever the observer sees mid-scroll.
+          clickPinUntil = Date.now() + 600;
+        });
+      });
+
+      if (window.location.hash) {
+        var initial = linkBySection.get(document.getElementById(window.location.hash.slice(1)));
+        if (initial) setActive(initial);
+      }
+    });
+  }
+
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', enhanceCodeBlocks);
+    document.addEventListener('DOMContentLoaded', function () {
+      enhanceCodeBlocks();
+      setupScrollSpy();
+    });
   } else {
     enhanceCodeBlocks();
+    setupScrollSpy();
   }
 })();
