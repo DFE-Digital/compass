@@ -1,6 +1,7 @@
 @using System.Linq
 @using System.Text.Json
 @using System.Text.Json.Serialization
+@using Compass.Models.Modern.Work
 @using Compass.ViewModels
 @using Compass.ViewModels.Modern
 @model ModernPrioritiesReportViewModel
@@ -12,18 +13,37 @@
   var baProjectsDict = pr.DimensionSections
     .SelectMany(s => s.Rows.Select(r => new { s.Dimension, Row = r }))
     .ToDictionary(x => $"{x.Dimension}|{x.Row.BusinessArea}", x => x.Row.Projects);
-  var baProjectsJson = JsonSerializer.Serialize(baProjectsDict, jsonOpts);
-  var scopeProjectsJson = JsonSerializer.Serialize(m.ScopeProjectItems, jsonOpts);
+  foreach (var section in pr.DimensionSections)
+  {
+    baProjectsDict[$"{section.Dimension}|Total"] = section.Rows
+      .SelectMany(r => r.Projects)
+      .GroupBy(p => p.Id)
+      .Select(g => g.First())
+      .ToList();
+  }
+  var mwDetailPrefix = Url.Content("~/modern/work/detail/") ?? "/modern/work/detail/";
+  var drillExportUrl = Url.Action("ExportDrilldown", "ModernReporting", new { source = "priorities" }) ?? "";
+  var drillScriptModel = ReportingDrilldownConfig.Build(
+    baProjectsDict,
+    m.ScopeProjectItems,
+    drillExportUrl,
+    new Dictionary<string, string?>
+    {
+      ["source"] = "priorities",
+      ["year"] = m.ReportYear.ToString(),
+      ["month"] = m.ReportMonth.ToString(),
+      ["groupId"] = m.PrioritiesReport?.FilterGroupId?.ToString()
+    },
+    mwDetailPrefix,
+    new Dictionary<string, string>
+    {
+      ["mission"] = "Mission pillar",
+      ["outcomes"] = "Priority outcome",
+      ["priority"] = "Delivery priority"
+    });
   var dimensionSections = pr.DimensionSections;
 
-  string RagBadgeClass(string rag) => rag switch
-  {
-    "Red" => "rag-badge rag-red",
-    "Amber-Red" => "rag-badge rag-amber-red",
-    "Amber-Green" => "rag-badge rag-amber",
-    "Green" => "rag-badge rag-green",
-    _ => "rag-badge rag-none"
-  };
+  string RagBadgeClass(string rag) => WorkBadgeCss.RagBadgeClass(rag);
   string PriBadgeClass(string pri) => pri switch
   {
     "Critical" or "High" => "dfe-c-tag dfe-c-tag--red",
@@ -46,7 +66,6 @@
   var ragKeys = new[] { "Red", "Amber-Red", "Amber-Green", "Green", "Not Set" };
   var priKeys = new[] { "Not Set", "Low", "Medium", "High", "Critical" };
   var matrixLookup = m.RagPriorityMatrix.ToDictionary(c => c.Rag + "|" + c.Priority, c => c.Count);
-  var mwDetailPrefix = Url.Content("~/modern/work/detail/") ?? "/modern/work/detail/";
   var prSubmissionTotal = m.MonthlyUpdateStats?.TotalProjects ?? m.TotalActiveProjects;
 }
 
@@ -128,24 +147,8 @@
       </div>
       }
 
-      <div id="mr-ba-drilldown" class="mr-ba-drilldown govuk-!-margin-top-3" style="display:none;">
-        <div class="mr-ba-drilldown__header">
-          <h3 class="mr-ba-drilldown__title" id="mr-ba-drilldown-title"></h3>
-          <button type="button" class="mr-ba-drilldown__close" aria-label="Close drill-down">&times;</button>
-        </div>
-        <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
-          <table class="govuk-table mr-ba-drilldown-table">
-            <thead class="govuk-table__head">
-              <tr class="govuk-table__row">
-                <th scope="col" class="govuk-table__header mr-ba-drilldown-table__col--work">Work item</th>
-                <th scope="col" class="govuk-table__header mr-ba-drilldown-table__col--rag">RAG</th>
-                <th scope="col" class="govuk-table__header mr-ba-drilldown-table__col--pri">Priority</th>
-              </tr>
-            </thead>
-            <tbody id="mr-ba-drilldown-body"></tbody>
-          </table>
-        </div>
-      </div>
+      @await Html.PartialAsync("_ReportingDrilldownPanel")
+      @await Html.PartialAsync("_ReportingWorkItemModal")
 
       <div class="mr-report-section-panel dfe-f-toggle govuk-!-margin-bottom-3" data-module="dfe-f-toggle" data-mr-section-id="matrix" data-mr-section-title="RAG × Priority matrix">
         <div class="dfe-f-toggle__title-wrapper">
@@ -226,144 +229,9 @@
 
 @section Styles {
   @await Html.PartialAsync("_MrReportCoreStyles")
+  <link rel="stylesheet" href="@Url.Content("~/modern/css/reporting-drilldown.css")" asp-append-version="true" />
 }
 
 @section Scripts {
-  <script nonce="@Context.Items["Nonce"]">
-    (function () {
-      var baProjects = @Html.Raw(baProjectsJson);
-      var scopeProjects = @Html.Raw(scopeProjectsJson);
-      var mwDetailPrefix = @Html.Raw(JsonSerializer.Serialize(mwDetailPrefix));
-
-      var filterLabels = {
-        'total': 'All work items',
-        'submitted': 'Submitted this period',
-        'new': 'New this month',
-        'ms-done': 'Milestone completed',
-        'ms-soon': 'Milestone due soon',
-        'ms-late': 'Late milestones',
-        'rag-Red': 'RAG: Red', 'rag-Amber-Red': 'RAG: Amber–Red', 'rag-Amber-Green': 'RAG: Amber–Green',
-        'rag-Green': 'RAG: Green', 'rag-Not Set': 'RAG: Not set',
-        'pri-Critical': 'Priority: Critical', 'pri-High': 'Priority: High', 'pri-Medium': 'Priority: Medium',
-        'pri-Low': 'Priority: Low', 'pri-Not Set': 'Priority: Not set'
-      };
-
-      var ragDfeBadge = {
-        'Red': 'dfe-f-badge dfe-f-badge--small dfe-f-badge--red',
-        'Amber-Red': 'dfe-f-badge dfe-f-badge--small dfe-f-badge--orange',
-        'Amber-Green': 'dfe-f-badge dfe-f-badge--small dfe-f-badge--orange',
-        'Green': 'dfe-f-badge dfe-f-badge--small dfe-f-badge--green',
-        'Not Set': 'dfe-f-badge dfe-f-badge--small dfe-f-badge--grey'
-      };
-      var priDfeBadge = {
-        'Critical': 'dfe-f-badge dfe-f-badge--small dfe-f-badge--red',
-        'High': 'dfe-f-badge dfe-f-badge--small dfe-f-badge--red',
-        'Medium': 'dfe-f-badge dfe-f-badge--small dfe-f-badge--orange',
-        'Low': 'dfe-f-badge dfe-f-badge--small dfe-f-badge--green',
-        'Not Set': 'dfe-f-badge dfe-f-badge--small dfe-f-badge--grey'
-      };
-
-      var dimensionLabels = {
-        'mission': 'Mission pillar',
-        'outcomes': 'Priority outcome',
-        'priority': 'Delivery priority'
-      };
-
-      var panel = document.getElementById('mr-ba-drilldown');
-      var title = document.getElementById('mr-ba-drilldown-title');
-      var body = document.getElementById('mr-ba-drilldown-body');
-      var activeCell = null;
-
-      function filterItems(items, filter) {
-        if (filter.indexOf('mx-') === 0) {
-          var parts = filter.substring(3).split('|');
-          if (parts.length === 2) {
-            return items.filter(function (p) { return p.rag === parts[0] && p.priority === parts[1]; });
-          }
-        }
-        if (filter === 'total') return items;
-        if (filter === 'submitted') return items.filter(function (p) { return p.submittedUpdate; });
-        if (filter === 'new') return items.filter(function (p) { return p.isNew; });
-        if (filter === 'ms-done') return items.filter(function (p) { return p.hasMilestoneCompletedInPeriod; });
-        if (filter === 'ms-soon') return items.filter(function (p) { return p.hasMilestoneUpcomingInWindow; });
-        if (filter === 'ms-late') return items.filter(function (p) { return p.hasLateMilestone; });
-        if (filter.indexOf('rag-') === 0) { var v = filter.substring(4); return items.filter(function (p) { return p.rag === v; }); }
-        if (filter.indexOf('pri-') === 0) { var v = filter.substring(4); return items.filter(function (p) { return p.priority === v; }); }
-        return items;
-      }
-
-      function escHtml(s) {
-        var d = document.createElement('div');
-        d.appendChild(document.createTextNode(s || ''));
-        return d.innerHTML;
-      }
-
-      function renderRows(items) {
-        body.innerHTML = '';
-        items.forEach(function (p) {
-          var tr = document.createElement('tr');
-          var href = mwDetailPrefix + p.id;
-          tr.innerHTML =
-            '<td class="govuk-table__cell mr-ba-drilldown-table__cell--work"><a class="govuk-link govuk-link--no-visited-state" href="' + escHtml(href) + '">' + escHtml(p.title) + '</a></td>' +
-            '<td class="govuk-table__cell mr-ba-drilldown-table__cell--rag"><span class="' + (ragDfeBadge[p.rag] || ragDfeBadge['Not Set']) + '">' + escHtml(p.rag) + '</span></td>' +
-            '<td class="govuk-table__cell mr-ba-drilldown-table__cell--pri"><span class="' + (priDfeBadge[p.priority] || priDfeBadge['Not Set']) + '">' + escHtml(p.priority) + '</span></td>';
-          body.appendChild(tr);
-        });
-      }
-
-      function show(dimension, groupLabel, filter) {
-        var source;
-        if (groupLabel === '__scope__') {
-          source = scopeProjects;
-        } else {
-          var key = dimension ? (dimension + '|' + groupLabel) : groupLabel;
-          source = baProjects[key] || [];
-        }
-        var items = filterItems(source, filter);
-        var dimPrefix = dimension && dimensionLabels[dimension] ? dimensionLabels[dimension] + ': ' : '';
-        var label = groupLabel === '__scope__' ? 'Current scope' : dimPrefix + groupLabel;
-        if (filter.indexOf('mx-') === 0) {
-          var parts = filter.substring(3).split('|');
-          title.textContent = label + ' — RAG ' + parts[0] + ', Priority ' + parts[1] + ' (' + items.length + ')';
-        } else {
-          title.textContent = label + ' — ' + (filterLabels[filter] || filter) + ' (' + items.length + ')';
-        }
-        renderRows(items);
-        panel.style.display = '';
-        panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      }
-
-      function hide() {
-        panel.style.display = 'none';
-        if (activeCell) { activeCell.classList.remove('mr-ba-drill--active'); activeCell = null; }
-      }
-
-      function onDrillClick(e) {
-        var cell = e.target.closest('.mr-ba-drill');
-        if (!cell) return;
-        var ba = cell.getAttribute('data-ba');
-        var filter = cell.getAttribute('data-filter');
-        if (!ba || !filter) return;
-        if (activeCell === cell) { hide(); return; }
-        if (activeCell) activeCell.classList.remove('mr-ba-drill--active');
-        activeCell = cell;
-        cell.classList.add('mr-ba-drill--active');
-        show(cell.getAttribute('data-dimension') || '', ba, filter);
-      }
-
-      function onDrillKeydown(e) {
-        if (e.key === 'Enter' || e.key === ' ') {
-          var cell = e.target.closest('.mr-ba-drill');
-          if (cell) { e.preventDefault(); cell.click(); }
-        }
-      }
-
-      var reportSections = document.getElementById('pr-report-sections');
-      reportSections.addEventListener('click', onDrillClick);
-      reportSections.addEventListener('keydown', onDrillKeydown);
-      document.getElementById('pr-rag-priority-matrix').addEventListener('click', onDrillClick);
-      document.getElementById('pr-rag-priority-matrix').addEventListener('keydown', onDrillKeydown);
-      panel.querySelector('.mr-ba-drilldown__close').addEventListener('click', hide);
-    })();
-  </script>
+  @await Html.PartialAsync("_ReportingDrilldownScripts", drillScriptModel)
 }

@@ -1,0 +1,65 @@
+@using Compass.Models.Modern.Work
+@using Compass.Services
+@using Compass.ViewModels
+@model IReadOnlyList<WorkItemRagSixMonthTrendRow>
+@{
+  var rows = Model ?? Array.Empty<WorkItemRagSixMonthTrendRow>();
+  var monthHeaders = rows.FirstOrDefault()?.Months ?? new List<RagSixMonthSnapshot>();
+  var scopeByProjectId = ViewData["ScopeByProjectId"] as Dictionary<int, BusinessAreaProjectItem> ?? new Dictionary<int, BusinessAreaProjectItem>();
+  string RagDfeBadge(string rag) => WorkBadgeCss.RagCompactBadgeClass(rag);
+  string TrendBadgeClass(string cat) => WorkBadgeCss.RagTrendToggleBadgeClass(cat);
+  string RagFullName(string rag) => rag switch
+  {
+    "Red" => "Red",
+    "Amber-Red" => "Amber-Red",
+    "Amber-Green" => "Amber-Green",
+    "Green" => "Green",
+    _ => "Not set"
+  };
+}
+@if (rows.Count == 0)
+{
+  <p class="govuk-body-s dfe-c-text-muted">No work items in this group.</p>
+}
+else
+{
+  <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+    <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+    <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed mr-rag-trend-table">
+      <caption class="govuk-table__caption govuk-visually-hidden">Work item RAG over the last six months</caption>
+      <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+          <th scope="col" class="govuk-table__header mr-col-work-item" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Work item</button></th>
+          @foreach (var mh in monthHeaders)
+          {
+            <th scope="col" class="govuk-table__header govuk-table__header--numeric mr-rag-trend-table__month" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">@mh.Label</button></th>
+          }
+          <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Trend</button></th>
+        </tr>
+      </thead>
+      <tbody class="govuk-table__body">
+        @foreach (var row in rows)
+        {
+          scopeByProjectId.TryGetValue(row.ProjectId, out var scopeItem);
+          var ba = row.BusinessArea ?? "Not set";
+          <tr class="govuk-table__row mr-rag-trend-row" data-mr-trend="@row.TrendCategory" data-mr-ba="@ba">
+            <td class="govuk-table__cell mr-col-work-item">
+              <button type="button" class="govuk-link govuk-!-font-weight-bold mr-info-btn mr-ba-drill-title-btn" data-mr-project-id="@row.ProjectId" data-mr-title="@row.Title" data-mr-summary="@(scopeItem?.Summary ?? "")" data-mr-rag-just="@(scopeItem?.RagJustification ?? "")" data-mr-narrative="@(scopeItem?.LatestMonthlyUpdateNarrative ?? "")" data-mr-ptg="@(scopeItem?.PathToGreen ?? "")" data-mr-milestones="@(scopeItem?.MilestonesSummary ?? "")" data-mr-ba-label="@ba" data-mr-rag="@(scopeItem?.Rag ?? "")" data-mr-priority="@(scopeItem?.Priority ?? "")" aria-label="Open summary for @row.Title">@row.Title</button>
+              <div class="mr-work-item-meta dfe-c-body-s dfe-c-text-muted">@ba</div>
+            </td>
+            @foreach (var snap in row.Months)
+            {
+              var abbr = MonthlyReportRagTrendAnalyzer.RagAbbreviation(snap.Rag);
+              <td class="govuk-table__cell govuk-table__cell--numeric mr-rag-trend-table__month">
+                <span class="@RagDfeBadge(snap.Rag)" title="@RagFullName(snap.Rag)">@abbr</span>
+              </td>
+            }
+            <td class="govuk-table__cell">
+              <span class="@TrendBadgeClass(row.TrendCategory)">@row.TrendCategory</span>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+}

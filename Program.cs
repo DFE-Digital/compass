@@ -447,6 +447,7 @@ builder.Services.Configure<Compass.Configuration.WorkRegisterDiagnosticsOptions>
     builder.Configuration.GetSection(Compass.Configuration.WorkRegisterDiagnosticsOptions.SectionName));
 builder.Services.AddSingleton<Compass.Services.WorkRegisterPerfFileLog>();
 builder.Services.AddScoped<Compass.Services.Modern.IModernWorkService, Compass.Services.Modern.ModernWorkService>();
+builder.Services.AddScoped<Compass.Services.Modern.IWorkScopedExcelExportService, Compass.Services.Modern.WorkScopedExcelExportService>();
 builder.Services.AddScoped<ModernMonthlyReportService>();
 builder.Services.AddScoped<ModernRaidReviewProgressService>();
 builder.Services.AddScoped<ModernRaidReportingService>();

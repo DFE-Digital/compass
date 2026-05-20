@@ -29,6 +29,7 @@ public partial class ModernReportingController : Controller
     private readonly IServiceAssessmentApiService _serviceAssessmentApi;
     private readonly IAissSummaryService _aissSummary;
     private readonly IModernWorkService _modernWork;
+    private readonly IWorkScopedExcelExportService _workScopedExcelExport;
     private readonly IConfiguration _configuration;
     private readonly ILogger<ModernReportingController> _logger;
 
@@ -43,6 +44,7 @@ public partial class ModernReportingController : Controller
         IServiceAssessmentApiService serviceAssessmentApi,
         IAissSummaryService aissSummary,
         IModernWorkService modernWork,
+        IWorkScopedExcelExportService workScopedExcelExport,
         IConfiguration configuration,
         ILogger<ModernReportingController> logger)
     {
@@ -56,6 +58,7 @@ public partial class ModernReportingController : Controller
         _serviceAssessmentApi = serviceAssessmentApi;
         _aissSummary = aissSummary;
         _modernWork = modernWork;
+        _workScopedExcelExport = workScopedExcelExport;
         _configuration = configuration;
         _logger = logger;
     }
@@ -89,6 +92,7 @@ public partial class ModernReportingController : Controller
         SetNav("reporting-thematic");
 
         var summaryRows = await BuildThematicSummaryAsync(cancellationToken);
+        var dashboard = await _monthlyReportService.BuildThematicReportDashboardAsync(cancellationToken);
         var selectedRow = themeId.HasValue && themeId.Value > 0
             ? summaryRows.FirstOrDefault(r => r.TagId == themeId.Value)
             : null;
@@ -99,45 +103,17 @@ public partial class ModernReportingController : Controller
             _ => "active"
         };
 
-        WorkRegisterViewModel? register = null;
-        if (selectedRow != null)
-        {
-            var userEmail = User.Identity?.Name;
-            if (string.IsNullOrEmpty(userEmail))
-                return Unauthorized();
-
-            var currentUser = await _context.Users
-                .FirstOrDefaultAsync(u => u.Email.ToLower() == userEmail.ToLower(), cancellationToken);
-            if (currentUser == null)
-                return Unauthorized();
-
-            var safePage = page < 1 ? 1 : page;
-            register = await _modernWork.BuildWorkRegisterAsync(
-                isMyWork: false,
-                search: null,
-                portfolioId: null,
-                directorateId: null,
-                phaseId: null,
-                ragId: null,
-                priorityId: null,
-                monthlyUpdate: null,
-                currentUser,
-                userEmail,
-                Url,
-                registerTab: activeTab,
-                registerPage: safePage,
-                registerPageSize: 20,
-                tagIds: new[] { selectedRow.TagId },
-                cancellationToken: cancellationToken);
-        }
-
         var model = new ModernThematicReportViewModel
         {
             SummaryRows = summaryRows,
+            DashboardRows = dashboard.Rows,
+            ScopeProjectItems = dashboard.ScopeProjectItems,
+            ReportYear = dashboard.ReportYear,
+            ReportMonth = dashboard.ReportMonth,
+            MonthName = dashboard.MonthName,
             SelectedThemeId = selectedRow?.TagId,
             SelectedThemeName = selectedRow?.Name,
             SelectedThemeDescription = selectedRow?.Description,
-            WorkRegister = register,
             ActiveTab = activeTab
         };
 

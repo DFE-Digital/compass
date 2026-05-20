@@ -193,6 +193,7 @@ public partial class ModernWorkService : IModernWorkService
             RagCssClass = currentRag.CssClass,
             RagStatusId = currentRag.StatusId,
             MilestoneCount = p.Milestones.Count(m => !m.IsDeleted && !string.Equals(m.Status, "complete", StringComparison.OrdinalIgnoreCase)),
+            TotalMilestoneCount = p.Milestones.Count(m => !m.IsDeleted),
             MonthlyUpdateStatus = "—",
             DirectorateSummary = p.Directorates.Count == 0
                 ? null
@@ -1179,6 +1180,7 @@ public partial class ModernWorkService : IModernWorkService
         int? businessAreaId = null,
         int? primaryContactUserId = null,
         int[]? tagIds = null,
+        int[]? projectIds = null,
         string? registerSort = null,
         bool registerSortDesc = false,
         CancellationToken cancellationToken = default)
@@ -1201,10 +1203,18 @@ public partial class ModernWorkService : IModernWorkService
         if (tabKey is not ("active" or "completed" or "cancelled" or "all"))
             tabKey = "active";
 
-        var tabQ = FilterRegisterByTab(baseQ, tabKey);
-        var ids = await ApplyRegisterSort(tabQ, registerSort, registerSortDesc)
-            .Select(p => p.Id)
-            .ToListAsync(cancellationToken);
+        List<int> ids;
+        if (projectIds is { Length: > 0 })
+        {
+            ids = projectIds.Distinct().ToList();
+        }
+        else
+        {
+            var tabQ = FilterRegisterByTab(baseQ, tabKey);
+            ids = await ApplyRegisterSort(tabQ, registerSort, registerSortDesc)
+                .Select(p => p.Id)
+                .ToListAsync(cancellationToken);
+        }
 
         if (diag.IsEnabled)
         {

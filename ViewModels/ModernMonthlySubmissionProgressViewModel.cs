@@ -85,6 +85,18 @@ public class MonthlySubmissionLeagueRow
 
     public decimal ProgressGapPercent =>
         Math.Round(ActualProgressPercent - ExpectedProgressPercent, 1, MidpointRounding.AwayFromZero);
+
+    /// <summary>Work items in this group for the selected reporting period.</summary>
+    public List<SubmissionProgressWorkItemRow> WorkItems { get; set; } = new();
+}
+
+/// <summary>One work item's monthly return submission state for the submission progress report.</summary>
+public class SubmissionProgressWorkItemRow
+{
+    public int ProjectId { get; set; }
+    public string Title { get; set; } = "";
+    public string SubmissionStatus { get; set; } = "";
+    public DateTime? SubmittedAt { get; set; }
 }
 
 public class SubmissionTrendMonthColumn

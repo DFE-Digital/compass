@@ -71,6 +71,20 @@
       || 'Section';
   }
 
+  /** Collapse all report sections on load except submission summary. */
+  function applyDefaultSectionExpandedState(reportGroup) {
+    if (!reportGroup) return;
+    var setExpanded = window.DfeFrontend && typeof window.DfeFrontend.setToggleExpanded === 'function'
+      ? window.DfeFrontend.setToggleExpanded
+      : null;
+    reportGroup.querySelectorAll('.dfe-f-toggle-group__items > .dfe-f-toggle[data-mr-section-id]').forEach(function (el) {
+      var expanded = el.getAttribute('data-mr-section-id') === 'submission';
+      if (setExpanded) {
+        setExpanded(el, expanded);
+      }
+    });
+  }
+
   function init() {
     var layout = document.getElementById('mr-report-layout');
     var reportGroup = document.getElementById('mr-report-sections');
@@ -88,6 +102,7 @@
     var knownIds = Object.keys(panels);
     var currentOrder = normalizeOrder(readStoredOrder() || DEFAULT_ORDER, knownIds);
     applyOrderToDom(currentOrder);
+    applyDefaultSectionExpandedState(reportGroup);
 
     var draftOrder = currentOrder.slice();
     var editing = false;
@@ -173,7 +188,7 @@
       orderPanel.hidden = !on;
       if (editBtn) {
         editBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
-        editBtn.textContent = on ? 'Done editing' : 'Edit view';
+        editBtn.textContent = on ? 'Done reordering' : 'Reorder sections';
       }
       if (on) {
         draftOrder = currentOrder.slice();

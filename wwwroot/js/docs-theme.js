@@ -16,11 +16,12 @@
 
   function applyTheme(theme) {
     var isLight = theme === 'light';
+    var resolved = isLight ? 'light' : 'dark';
     root.classList.remove('developers-doc-app--theme-dark', 'developers-doc-app--theme-light');
     root.classList.add(isLight ? 'developers-doc-app--theme-light' : 'developers-doc-app--theme-dark');
-    root.setAttribute('data-developers-doc-theme', isLight ? 'light' : 'dark');
+    root.setAttribute('data-developers-doc-theme', resolved);
     try {
-      localStorage.setItem(STORAGE_KEY, isLight ? 'light' : 'dark');
+      localStorage.setItem(STORAGE_KEY, resolved);
     } catch (e) { /* ignore */ }
 
     var btn = document.querySelector('[data-developers-theme-toggle]');
@@ -32,6 +33,10 @@
         isLight ? 'Switch to dark documentation theme' : 'Switch to light documentation theme'
       );
     }
+
+    try {
+      document.dispatchEvent(new CustomEvent('developers-doc:themechange', { detail: { theme: resolved } }));
+    } catch (e) { /* ignore */ }
   }
 
   applyTheme(getStoredTheme() || 'dark');

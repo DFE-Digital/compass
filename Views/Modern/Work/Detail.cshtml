@@ -35,7 +35,9 @@
         .Cast<string>()
         .ToList() ?? new List<string>();
     var workTags = Model.Tags ?? new List<WorkItemTagRef>();
-    var hasStrategicAlignment = priorityOutcomeNames.Count > 0 || missionPillarNames.Count > 0;
+    var hasMultiDept = Model.GovernmentDepartments?.Any() == true;
+    var hasStrategicAlignment = priorityOutcomeNames.Count > 0 || missionPillarNames.Count > 0
+        || workTags.Count > 0 || hasMultiDept;
     var today = DateTime.UtcNow.Date;
     int WorkOverviewPreviewEnd(string t)
     {
@@ -62,7 +64,6 @@
         return date.ToString("d MMMM yyyy") + part + (pastDue ? " — Past due date" : "");
     }
     var workEditUrl = $"/modern/work/{Model.Id}/edit";
-    var workEditTagsUrl = $"/modern/work/{Model.Id}/tags/edit";
     var workEditStrategicUrl = $"/modern/work/{Model.Id}/strategic-alignment/edit";
     var workEditMultiDeptUrl = $"/modern/work/{Model.Id}/multi-dept/edit";
 }
@@ -176,22 +177,8 @@
             </dd>
           </div>
  <div class="govuk-summary-list__row govuk-summary-list__row--no-actions">
- <dt class="govuk-summary-list__key">Thematic tags</dt>
- <dd class="govuk-summary-list__value">
-              @if (workTags.Count == 0)
-              {
-                <text>—</text>
-              }
-              else
-              {
- <ul class="govuk-list govuk-!-margin-bottom-0">
-                  @foreach (var tg in workTags)
-                  {
- <li>@tg.Name</li>
-                  }
-                </ul>
-              }
-            </dd>
+ <dt class="govuk-summary-list__key">Activity type</dt>
+ <dd class="govuk-summary-list__value">@activityTypeName</dd>
           </div>
  <div class="govuk-summary-list__row govuk-summary-list__row--no-actions">
  <dt class="govuk-summary-list__key">Business area</dt>
@@ -211,10 +198,6 @@
             </dd>
           </div>
  <div class="govuk-summary-list__row govuk-summary-list__row--no-actions">
- <dt class="govuk-summary-list__key">Flagship project</dt>
- <dd class="govuk-summary-list__value">@(Model.FlagshipProject ? "Yes" : "No")</dd>
-          </div>
- <div class="govuk-summary-list__row govuk-summary-list__row--no-actions">
  <dt class="govuk-summary-list__key">Subject to spend control</dt>
  <dd class="govuk-summary-list__value">@(Model.SubjectToSpendControl ? "Yes" : "No")</dd>
           </div>
@@ -230,10 +213,6 @@
                 <text>—</text>
               }
             </dd>
-          </div>
- <div class="govuk-summary-list__row govuk-summary-list__row--no-actions">
- <dt class="govuk-summary-list__key">Multi-dept cooperation</dt>
- <dd class="govuk-summary-list__value">@(Model.GovernmentDepartments?.Any() == true ? string.Join(", ", Model.GovernmentDepartments.Select(g => g.GovernmentDepartment?.Title).Where(n => n != null)) : "—")</dd>
           </div>
  <div class="govuk-summary-list__row govuk-summary-list__row--no-actions">
  <dt class="govuk-summary-list__key">Start date</dt>
@@ -305,6 +284,28 @@
             </ul>
           }
         </dd>
+ </div>
+ <div class="govuk-summary-list__row govuk-summary-list__row--no-actions">
+ <dt class="govuk-summary-list__key">Thematic tags</dt>
+ <dd class="govuk-summary-list__value">
+          @if (workTags.Count == 0)
+          {
+            <text>—</text>
+          }
+          else
+          {
+ <ul class="govuk-list govuk-!-margin-bottom-0">
+              @foreach (var tg in workTags)
+              {
+                <li>@tg.Name</li>
+              }
+            </ul>
+          }
+        </dd>
+ </div>
+ <div class="govuk-summary-list__row govuk-summary-list__row--no-actions">
+ <dt class="govuk-summary-list__key">Multi-dept cooperation</dt>
+ <dd class="govuk-summary-list__value">@(hasMultiDept ? string.Join(", ", Model.GovernmentDepartments!.Select(g => g.GovernmentDepartment?.Title).Where(n => n != null)) : "—")</dd>
  </div>
       </dl>
     </div>
@@ -561,7 +562,7 @@
  <td class="govuk-table__cell">@if (isSubmitted) { <a href="@Url.Action("ViewMonthlyUpdate", "ModernWork", new { id = Model.Id, updateId = submittedUpdate!.Id })" class="govuk-link govuk-link--no-visited-state govuk-!-font-weight-bold">@period.PeriodLabel</a> } else if (canContinueDraft) { <a href="@Url.Action("MonthlyReport", "ModernWork", new { id = Model.Id, year = submittedUpdate!.ReportMonth.Year, month = submittedUpdate.ReportMonth.Month })" class="govuk-link govuk-link--no-visited-state govuk-!-font-weight-bold">@period.PeriodLabel</a> } else if (canSubmit) { <a href="@Url.Action("AddMonthlyUpdate", "ModernWork", new { id = Model.Id, periodKey = period.PeriodKey })" class="govuk-link govuk-link--no-visited-state govuk-!-font-weight-bold">@period.PeriodLabel</a> } else { @period.PeriodLabel }</td>
                 <td class="govuk-table__cell">@(period.SubmissionCloses?.ToString("d MMM yyyy") ?? period.DueDate.ToString("d MMM yyyy"))</td>
  <td class="govuk-table__cell">@if (isSubmitted) { <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--green">Submitted</span> } else if (isDraft && canContinueDraft) { <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--blue">Continue return</span> } else if (isDraft && !canContinueDraft) { <span class="govuk-hint govuk-!-margin-bottom-0">Outside submission window</span> } else if (canSubmit) { <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--red">Not submitted</span> } else { <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--grey">@period.UpdateStatus</span> }</td>
- <td class="govuk-table__cell">@if (isSubmitted) { <span class="@WorkBadgeCss.RagDfeFrontendBadgeClass(uRagCss, uRagName == "—" ? null : uRagName) dfe-f-badge--small">@(string.IsNullOrEmpty(uRagName) || uRagName == "—" ? "—" : uRagName.ToUpperInvariant())</span> } else if (isDraft && !string.IsNullOrWhiteSpace(uRagName) && uRagName != "—") { <span class="@WorkBadgeCss.RagDfeFrontendBadgeClass(uRagCss, uRagName) dfe-f-badge--small">@uRagName.ToUpperInvariant()</span> } else { <text>—</text> }</td>
+ <td class="govuk-table__cell">@if (isSubmitted) { <span class="@WorkBadgeCss.RagCompactBadgeClass(uRagName == "—" ? null : uRagName)">@(string.IsNullOrEmpty(uRagName) || uRagName == "—" ? "—" : uRagName.ToUpperInvariant())</span> } else if (isDraft && !string.IsNullOrWhiteSpace(uRagName) && uRagName != "—") { <span class="@WorkBadgeCss.RagCompactBadgeClass(uRagName)">@uRagName.ToUpperInvariant()</span> } else { <text>—</text> }</td>
                 <td class="govuk-table__cell">@(submittedUpdate?.SubmittedAt?.ToString("d MMM yyyy") ?? "—")</td>
                 <td class="govuk-table__cell">@submittedByDisplay</td>
               </tr>
@@ -607,7 +608,7 @@
               var uRagText2 = effectiveRagId2.HasValue && effectiveRagId2.Value != 0 && ragTextByStatusId.TryGetValue(effectiveRagId2.Value, out var utx2) ? utx2 : null;
               <tr class="govuk-table__row">
  <td class="govuk-table__cell"><a href="@Url.Action("ViewMonthlyUpdate", "ModernWork", new { id = Model.Id, updateId = u.Id })" class="govuk-link govuk-link--no-visited-state govuk-!-font-weight-bold">@u.ReportMonth.ToString("MMMM yyyy")</a></td>
- <td class="govuk-table__cell"><span class="@WorkBadgeCss.RagDfeFrontendBadgeClass(uRagCss2, uRagName == "—" ? null : uRagName) dfe-f-badge--small">@(string.IsNullOrEmpty(uRagName) || uRagName == "—" ? "—" : uRagName.ToUpperInvariant())</span></td>
+ <td class="govuk-table__cell"><span class="@WorkBadgeCss.RagCompactBadgeClass(uRagName == "—" ? null : uRagName)">@(string.IsNullOrEmpty(uRagName) || uRagName == "—" ? "—" : uRagName.ToUpperInvariant())</span></td>
                 <td class="govuk-table__cell">@(u.SubmittedAt?.ToString("d MMM yyyy") ?? "—")</td>
                 <td class="govuk-table__cell">@submittedByDisplay</td>
               </tr>
@@ -705,12 +706,36 @@
         }
  </div>
  <div class="govuk-summary-list__row@(canEdit ? "" : " govuk-summary-list__row--no-actions")">
- <dt class="govuk-summary-list__key">Flagship project</dt>
- <dd class="govuk-summary-list__value">@(Model.FlagshipProject ? "Yes" : "No")</dd>
+ <dt class="govuk-summary-list__key">Thematic tags</dt>
+ <dd class="govuk-summary-list__value">
+              @if (workTags.Count == 0)
+              {
+ <span class="muted">—</span>
+              }
+              else
+              {
+ <ul class="govuk-list govuk-!-margin-bottom-0">
+                  @foreach (var tg in workTags)
+                  {
+                    <li>@tg.Name</li>
+                  }
+                </ul>
+              }
+            </dd>
         @if (canEdit)
         {
           <dd class="govuk-summary-list__actions">
-            <a class="govuk-link govuk-link--no-visited-state" href="@(workEditStrategicUrl)#edit-flagship">Change<span class="govuk-visually-hidden"> flagship project</span></a>
+            <a class="govuk-link govuk-link--no-visited-state" href="@(workEditStrategicUrl)#edit-flagship">Change<span class="govuk-visually-hidden"> thematic tags</span></a>
+          </dd>
+        }
+          </div>
+ <div class="govuk-summary-list__row@(canEdit ? "" : " govuk-summary-list__row--no-actions")">
+ <dt class="govuk-summary-list__key">Multi-dept cooperation</dt>
+ <dd class="govuk-summary-list__value">@(hasMultiDept ? string.Join(", ", Model.GovernmentDepartments!.Select(g => g.GovernmentDepartment?.Title).Where(n => n != null)) : "—")</dd>
+        @if (canEdit)
+        {
+          <dd class="govuk-summary-list__actions">
+            <a class="govuk-link govuk-link--no-visited-state" href="@workEditMultiDeptUrl">Change<span class="govuk-visually-hidden"> multi-dept cooperation</span></a>
           </dd>
         }
           </div>
@@ -740,16 +765,6 @@
         {
           <dd class="govuk-summary-list__actions">
             <a class="govuk-link govuk-link--no-visited-state" href="@(workEditStrategicUrl)#edit-risk-appetite">Change<span class="govuk-visually-hidden"> risk appetite</span></a>
-          </dd>
-        }
-          </div>
- <div class="govuk-summary-list__row@(canEdit ? "" : " govuk-summary-list__row--no-actions")">
- <dt class="govuk-summary-list__key">Multi-dept cooperation</dt>
- <dd class="govuk-summary-list__value">@(Model.GovernmentDepartments?.Any() == true ? string.Join(", ", Model.GovernmentDepartments.Select(g => g.GovernmentDepartment?.Title).Where(n => n != null)) : "—")</dd>
-        @if (canEdit)
-        {
-          <dd class="govuk-summary-list__actions">
-            <a class="govuk-link govuk-link--no-visited-state" href="@workEditMultiDeptUrl">Change<span class="govuk-visually-hidden"> multi-dept cooperation</span></a>
           </dd>
         }
           </div>
