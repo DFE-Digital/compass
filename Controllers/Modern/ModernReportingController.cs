@@ -190,6 +190,44 @@ public partial class ModernReportingController : Controller
         }
     }
 
+    /// <summary>Resourcing report — FTE/MSP totals and configurable resourcing bands.</summary>
+    [HttpGet("resourcing")]
+    public async Task<IActionResult> Resourcing(
+        int? year,
+        int? month,
+        int? businessAreaId,
+        int? directorateId,
+        string? dimension,
+        int? groupId,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var model = await _monthlyReportService.BuildResourcingReportAsync(
+                year,
+                month,
+                businessAreaId,
+                directorateId,
+                dimension,
+                groupId,
+                cancellationToken);
+            SetNav("reporting-resourcing");
+            return View("~/Views/Modern/Reporting/Resourcing.cshtml", model);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading resourcing report");
+            TempData["ErrorMessage"] = "An error occurred while loading the resourcing report. Please try again.";
+            SetNav("reporting-resourcing");
+            return View("~/Views/Modern/Reporting/Resourcing.cshtml", new ModernResourcingReportViewModel
+            {
+                MinReportYear = 2026,
+                MaxReportYear = Math.Max(2026, DateTime.UtcNow.Year),
+                MonthName = DateTime.UtcNow.ToString("MMMM yyyy")
+            });
+        }
+    }
+
     /// <summary>Monthly submission progress — chart and league tables for monthly return completion.</summary>
     [HttpGet("monthly-submission-progress")]
     public async Task<IActionResult> MonthlySubmissionProgress(int? year, int? month, int? businessAreaId, int? directorateId)

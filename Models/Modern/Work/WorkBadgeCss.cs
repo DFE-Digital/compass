@@ -266,6 +266,24 @@ public static class WorkBadgeCss
         return "dfe-f-badge dfe-f-badge--blue";
     }
 
+    /// <summary>Resourcing band as <c>dfe-f-badge</c> using an admin-configured colour modifier.</summary>
+    public static string ResourceBandDfeFrontendBadgeClass(string? cssClassOrModifier)
+    {
+        const string baseClass = "dfe-f-badge dfe-f-badge--small";
+        if (string.IsNullOrWhiteSpace(cssClassOrModifier))
+            return baseClass + " dfe-f-badge--grey";
+
+        var token = cssClassOrModifier.Trim();
+        if (token.StartsWith("dfe-f-badge--", StringComparison.OrdinalIgnoreCase))
+            token = token["dfe-f-badge--".Length..];
+
+        token = token.ToLowerInvariant();
+        if (!DfeFrontendBadgeModifiers.Contains(token))
+            return baseClass + " dfe-f-badge--grey";
+
+        return $"{baseClass} dfe-f-badge--{token}";
+    }
+
     /// <summary>Raid risk/issue status (open = blue, closed = green).</summary>
     public static string RaidOpenClosedDfeFrontendBadgeClass(bool closed)
         => closed ? "dfe-f-badge dfe-f-badge--green" : "dfe-f-badge dfe-f-badge--blue";

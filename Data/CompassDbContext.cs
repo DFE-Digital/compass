@@ -230,6 +230,7 @@ public partial class CompassDbContext : DbContext
     public DbSet<DirectorateLookup> DirectorateLookups { get; set; }
     public DbSet<RiskAppetiteLookup> RiskAppetiteLookups { get; set; }
     public DbSet<RagStatusLookup> RagStatusLookups { get; set; }
+    public DbSet<ResourceBandLookup> ResourceBandLookups { get; set; }
 
     // Project relationships
     public DbSet<ProjectStatusUpdate> ProjectStatusUpdates { get; set; }
@@ -1871,6 +1872,16 @@ public partial class CompassDbContext : DbContext
 
         modelBuilder.Entity<DeliveryPriority>()
             .HasIndex(dp => dp.SortOrder);
+
+        modelBuilder.Entity<ResourceBandLookup>()
+            .HasIndex(rb => rb.Name)
+            .IsUnique();
+
+        modelBuilder.Entity<ResourceBandLookup>()
+            .HasIndex(rb => rb.IsActive);
+
+        modelBuilder.Entity<ResourceBandLookup>()
+            .HasIndex(rb => rb.SortOrder);
 
         // User preferences
         modelBuilder.Entity<UserPreference>()

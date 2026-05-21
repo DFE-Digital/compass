@@ -16,6 +16,7 @@ public class MonthlyReportViewModel
     public string? SubmittedByName { get; set; }
 
     public string? Narrative { get; set; }
+    public string? PeopleNarrative { get; set; }
     public decimal? PermFte { get; set; }
     public decimal? MspFte { get; set; }
 
@@ -59,6 +60,7 @@ public class MonthlyReportPreviousSubmission
     public DateTime? SubmittedAt { get; set; }
     public string? SubmittedByName { get; set; }
     public string? Narrative { get; set; }
+    public string? PeopleNarrative { get; set; }
     public decimal? PermFte { get; set; }
     public decimal? MspFte { get; set; }
     public string? RagName { get; set; }

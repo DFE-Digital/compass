@@ -25,6 +25,7 @@ public class AdminHubViewModel
 
     public List<AdminLookupRow> ActivityTypes { get; set; } = new();
     public List<AdminLookupRow> WorkItemTags { get; set; } = new();
+    public List<AdminResourceBandRow> ResourceBands { get; set; } = new();
     public List<AdminLookupRow> MissionPillars { get; set; } = new();
     public List<AdminPriorityOutcomeRow> PriorityOutcomes { get; set; } = new();
     public List<AdminLookupRow> RiskTiers { get; set; } = new();
@@ -188,6 +189,18 @@ public class AdminRagRow
     public int Id { get; set; }
     public string Name { get; set; } = string.Empty;
     public string? Description { get; set; }
+    public string? CssClass { get; set; }
+    public int SortOrder { get; set; }
+    public bool IsActive { get; set; }
+}
+
+public class AdminResourceBandRow
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public decimal MinFte { get; set; }
+    public decimal? MaxFte { get; set; }
     public string? CssClass { get; set; }
     public int SortOrder { get; set; }
     public bool IsActive { get; set; }

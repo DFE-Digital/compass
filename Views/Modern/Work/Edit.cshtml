@@ -15,6 +15,10 @@
     var riskAppetiteOptions = (List<LookupOption>)ViewBag.RiskAppetiteOptions ?? new List<LookupOption>();
     var workTagOptions = (List<LookupOption>)ViewBag.WorkTagOptions ?? new List<LookupOption>();
     var selectedWorkTagIds = (int[])ViewBag.SelectedWorkTagIds ?? Array.Empty<int>();
+    var canEditPriority = ViewBag.CanEditPriority as bool? ?? false;
+    var statusAndClassificationCardText = canEditPriority
+        ? "Status, business area, directorates, priority, and phase determine how this work is tracked, filtered, and reported across the system."
+        : "Status, business area, directorates, and phase determine how this work is tracked, filtered, and reported across the system.";
 
     var sD0 = Model.StartDate;
     int? sDay = sD0?.Day, sMonth = sD0?.Month, sYear = sD0?.Year;
@@ -185,30 +189,33 @@
           </select>
         </div>
 
- <div id="edit-priority" class="govuk-form-group">
- <label class="govuk-label" for="PriorityId">Priority</label>
- <div class="govuk-hint" id="priority-hint">The agreed priority band for this work.</div>
- <select asp-for="PriorityId" class="govuk-select govuk-!-width-full" aria-describedby="priority-hint">
-            <option value="">— Select —</option>
-            @foreach (var opt in workPriorityOptions)
-            {
-              if (Model.PriorityId == opt.Id)
-              { <option value="@opt.Id" selected>@opt.Name</option> }
-              else
-              { <option value="@opt.Id">@opt.Name</option> }
-            }
-          </select>
-        </div>
+        @if (canEditPriority)
+        {
+<div id="edit-priority" class="govuk-form-group">
+<label class="govuk-label" for="PriorityId">Priority</label>
+<div class="govuk-hint" id="priority-hint">The agreed priority band for this work.</div>
+<select asp-for="PriorityId" class="govuk-select govuk-!-width-full" aria-describedby="priority-hint">
+              <option value="">— Select —</option>
+              @foreach (var opt in workPriorityOptions)
+              {
+                if (Model.PriorityId == opt.Id)
+                { <option value="@opt.Id" selected>@opt.Name</option> }
+                else
+                { <option value="@opt.Id">@opt.Name</option> }
+              }
+            </select>
+          </div>
 
- <div class="govuk-form-group @(HasError(nameof(Model.PriorityChangeReason)) ? "govuk-form-group--error" : "")">
- <label class="govuk-label" for="PriorityChangeReason">Reason for priority change</label>
- <div class="govuk-hint" id="pcr-hint">Required when you change the priority above.</div>
-            @if (HasError(nameof(Model.PriorityChangeReason)))
-            {
- <p id="PriorityChangeReason-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @ErrorMsg(nameof(Model.PriorityChangeReason))</p>
-            }
- <textarea class="govuk-textarea @(HasError(nameof(Model.PriorityChangeReason)) ? "govuk-textarea--error" : "")" id="PriorityChangeReason" name="PriorityChangeReason" rows="3" maxlength="2000" aria-describedby="pcr-hint @(HasError(nameof(Model.PriorityChangeReason)) ? "PriorityChangeReason-error" : "")">@Model.PriorityChangeReason</textarea>
-        </div>
+<div class="govuk-form-group @(HasError(nameof(Model.PriorityChangeReason)) ? "govuk-form-group--error" : "")">
+<label class="govuk-label" for="PriorityChangeReason">Reason for priority change</label>
+<div class="govuk-hint" id="pcr-hint">Required when you change the priority above.</div>
+              @if (HasError(nameof(Model.PriorityChangeReason)))
+              {
+<p id="PriorityChangeReason-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @ErrorMsg(nameof(Model.PriorityChangeReason))</p>
+              }
+<textarea class="govuk-textarea @(HasError(nameof(Model.PriorityChangeReason)) ? "govuk-textarea--error" : "")" id="PriorityChangeReason" name="PriorityChangeReason" rows="3" maxlength="2000" aria-describedby="pcr-hint @(HasError(nameof(Model.PriorityChangeReason)) ? "PriorityChangeReason-error" : "")">@Model.PriorityChangeReason</textarea>
+          </div>
+        }
 
  <div class="govuk-form-group">
  <label class="govuk-label" for="DeliveryPhaseId">Phase</label>
@@ -435,7 +442,7 @@
         </div>
  <div class="dfe-c-scard">
  <h3 class="dfe-c-scard__heading">Status &amp; classification</h3>
- <p class="dfe-c-scard__body">Status, business area, directorates, priority, and phase determine how this work is tracked, filtered, and reported across the system.</p>
+<p class="dfe-c-scard__body">@statusAndClassificationCardText</p>
         </div>
  <div class="dfe-c-scard">
  <h3 class="dfe-c-scard__heading">People</h3>

@@ -36,7 +36,7 @@ public partial class ModernAdminController : Controller
         "scoring-fw", "perf-cycles", "assess-cycles",
         "groups", "api-tokens", "cms-access-products", "business-area-admins", "business-area-leadership", "directorate-leadership",
         "migration", "feature-settings", "universal-barriers",
-        "activity-types", "work-tagging", "mission-pillars", "priority-outcomes",
+        "activity-types", "work-tagging", "resource-bands", "mission-pillars", "priority-outcomes",
         "fips-channels", "fips-types", "fips-business-areas", "fips-user-groups", "fips-contact-roles", "fips-categorisation",
         "std-categories", "std-subcategories", "std-functional",
         "risk-statuses", "risk-priorities", "risk-likelihoods", "risk-impact-levels", "risk-proximities",
@@ -160,6 +160,23 @@ public partial class ModernAdminController : Controller
                 vm.WorkItemTags = await _context.WorkItemTagLookups.AsNoTracking()
                     .OrderBy(x => x.SortOrder).ThenBy(x => x.Name)
                     .Select(x => new AdminLookupRow { Id = x.Id, Name = x.Name, Description = x.Description, SortOrder = x.SortOrder, IsActive = x.IsActive })
+                    .ToListAsync();
+                break;
+
+            case "resource-bands":
+                vm.ResourceBands = await _context.ResourceBandLookups.AsNoTracking()
+                    .OrderBy(x => x.SortOrder).ThenBy(x => x.Name)
+                    .Select(x => new AdminResourceBandRow
+                    {
+                        Id = x.Id,
+                        Name = x.Name,
+                        Description = x.Description,
+                        MinFte = x.MinFte,
+                        MaxFte = x.MaxFte,
+                        CssClass = x.CssClass,
+                        SortOrder = x.SortOrder,
+                        IsActive = x.IsActive
+                    })
                     .ToListAsync();
                 break;
 
