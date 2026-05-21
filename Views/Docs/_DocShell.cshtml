@@ -1,6 +1,22 @@
 @{
     Layout = "~/Views/Docs/_DocsLayout.cshtml";
 }
+@* Forward Scripts and Styles defined by the inner page up to _DocsLayout.
+   Without this, pages that declare @@section Styles { ... } (e.g. /docs/api
+   loading docs-api.css, /docs/api-explorer loading docs-api-explorer.css)
+   throw "section has been defined but has not been rendered" at runtime. *@
+@section Scripts {
+    @if (IsSectionDefined("Scripts"))
+    {
+        @await RenderSectionAsync("Scripts", required: false)
+    }
+}
+@section Styles {
+    @if (IsSectionDefined("Styles"))
+    {
+        @await RenderSectionAsync("Styles", required: false)
+    }
+}
 <div class="developers-doc-app developers-doc-app--theme-dark" id="developers-doc-root" data-developers-doc-theme="dark">
     <div id="developers-doc-live" class="govuk-visually-hidden" aria-live="polite"></div>
     <a href="#developers-doc-main" class="developers-doc-skip">Skip to documentation</a>
@@ -39,24 +55,30 @@
                     </button>
                 </div>
             </header>
-            <div id="developers-doc-main" class="developers-doc-main" role="region" aria-label="Documentation" tabindex="-1">
-                <div class="docs-page-grid">
+            @{
+                // Pages can opt into a full-width layout by setting
+                // ViewData["DocsFullWidth"] = true (e.g. /docs/api-explorer needs
+                // the whole stage for its Postman-style request workspace).
+                var docsFullWidth = ViewData["DocsFullWidth"] as bool? == true;
+            }
+            <div id="developers-doc-main"
+                 class="developers-doc-main @(docsFullWidth ? "developers-doc-main--full" : null)"
+                 role="region" aria-label="Documentation" tabindex="-1">
+                <div class="docs-page-grid @(docsFullWidth ? "docs-page-grid--full" : null)">
                     <div class="docs-page-grid__main">
                         @RenderBody()
                     </div>
-                    <aside class="docs-page-grid__aside" aria-label="Supplementary information">
-                        @if (IsSectionDefined("Aside"))
-                        {
-                            @RenderSection("Aside", required: false)
-                        }
-                    </aside>
+                    @if (!docsFullWidth)
+                    {
+                        <aside class="docs-page-grid__aside" aria-label="Supplementary information">
+                            @if (IsSectionDefined("Aside"))
+                            {
+                                @RenderSection("Aside", required: false)
+                            }
+                        </aside>
+                    }
                 </div>
             </div>
-            <footer class="developers-doc-foot">
-                <p class="developers-doc-foot__text">
-                    Department for Education · internal documentation
-                </p>
-            </footer>
         </div>
     </div>
 </div>

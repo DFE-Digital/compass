@@ -1,0 +1,1782 @@
+@*
+    /docs/data-flows — per-field provenance and consumption flows for the
+    Modern COMPASS UI. Each flow card shows where a piece of data is
+    captured, what it writes (including side effects), every Modern surface
+    that reads it, what notifications / triggers it fires, and downstream
+    consumers (exports, API, PowerBI).
+
+    Each card embeds a Mermaid flow diagram (with a "Mermaid source" tab so
+    the underlying graph can be inspected or copied for use elsewhere).
+*@
+@{
+    // ---- Mermaid source per flow card. Defined once here so the cards
+    // below stay readable. Raw string literals avoid the "@" sigil colliding
+    // with Razor attribute parsing.
+    const string flowPalette = """
+
+  classDef actor fill:#1b3a5b,stroke:#1d70b8,color:#fff;
+  classDef action fill:#2b3a4a,stroke:#7da3c4,color:#fff;
+  classDef store fill:#3a2e57,stroke:#9579c7,color:#fff;
+  classDef surface fill:#1f4f2c,stroke:#52b06d,color:#fff;
+  classDef ext fill:#5a3a18,stroke:#d09a4a,color:#fff;
+  classDef trigger fill:#5a1f1f,stroke:#d4534f,color:#fff;
+""";
+
+    var flowWorkTitle = """
+flowchart LR
+  U(["User edits title"]):::actor --> P{{"POST /modern/work/{id}/overview/title"}}:::action
+  P --> C["UpdateWorkOverviewTitle"]:::action
+  C --> DB[("Project.Title")]:::store
+  C --> AUDIT[("AuditLog")]:::store
+  DB --> REG["Work register & all sub-tabs"]:::surface
+  DB --> RAID["RAID register parent column"]:::surface
+  DB --> REP["Reporting rollups"]:::surface
+  DB --> CSV[/"CSV: /modern/work/export-register"/]:::ext
+  DB --> API[/"GET /api/v1/work-items"/]:::ext
+  API --> PBI[("PowerBI DimWorkItem")]:::ext
+  DB --> NOTIF["GOV.Notify templates<br/>monthly-update, RAID escalation"]:::trigger
+""" + flowPalette;
+
+    var flowWorkRag = """
+flowchart LR
+  U(["Submitter on monthly update"]):::actor --> P{{"POST .../monthly-report/{y}/{m}"}}:::action
+  P --> C["MonthlyReportPost"]:::action
+  C --> H[("ProjectRagHistory<br/>append row")]:::store
+  C --> DEN[("Project.RagStatusLookupId<br/>+ legacy RagStatus<br/>+ RagJustification<br/>+ PathToGreen")]:::store
+  H --> BADGE["_WorkRagBadge partial"]:::surface
+  DEN --> BADGE
+  H --> HIST["RAG history tab"]:::surface
+  H --> VOL["Reporting / RAG volatility"]:::surface
+  DEN --> ROLL["Cross-org rollups<br/>monthly-update · priorities · raid-review"]:::surface
+  H --> API[/"GET /api/v1/work-items/{id}/rag-history"/]:::ext
+  DEN --> API2[/"GET /api/v1/work-items"/]:::ext
+  API --> PBI[("PowerBI FactRagHistory")]:::ext
+  C -. if Red .-> VAL["Next cycle requires PathToGreen"]:::trigger
+""" + flowPalette;
+
+    var flowWorkPeople = """
+flowchart LR
+  ADD(["User picks a person"]):::actor --> P{{"POST /modern/work/{id}/contact/edit"}}:::action
+  P --> C["GovernanceRoleAddUser<br/>GovernanceRoleRemoveUser"]:::action
+  C --> SRO[("ProjectSeniorResponsibleOfficer")]:::store
+  C --> SO[("ProjectServiceOwner")]:::store
+  C --> PMO[("ProjectPmoContact")]:::store
+  P2{{"POST .../primary-contact/set"}} --> PC[("Project.PrimaryContactUserId")]:::store
+  P3{{"POST .../budget-owner/set"}} --> BO[("ProjectBudgetOwner")]:::store
+  P4{{"POST .../add-team-member"}} --> CT[("ProjectContact")]:::store
+  SRO --> CARD["Key Contacts card on detail"]:::surface
+  SO --> CARD
+  PMO --> CARD
+  PC --> CARD
+  BO --> CARD
+  CARD --> PEOPLE[/"/modern/work/{id}/people"/]:::surface
+  SRO --> MY["My work-items filter"]:::surface
+  SRO --> NOTIF["Notification recipient resolution"]:::trigger
+  SO --> NOTIF
+  PC --> NOTIF
+  BO --> NOTIF
+  CARD --> API[/"GET /api/v1/work-items/{id}/contacts"/]:::ext
+""" + flowPalette;
+
+    var flowWorkLookups = """
+flowchart LR
+  E(["User inline-edits chip / saves edit form"]):::actor --> P{{"POST .../overview/* or .../edit"}}:::action
+  P --> C["UpdateWorkOverview*<br/>EditPost"]:::action
+  C --> DB[("Project.PhaseId<br/>DeliveryPriorityId<br/>ActivityTypeId<br/>RiskAppetiteId<br/>IsFlagship<br/>SubjectToSpendControl<br/>Start/Target dates")]:::store
+  DB --> REG["Register filters & columns"]:::surface
+  DB --> CHIPS["Detail header chips"]:::surface
+  DB --> REP["Priorities & thematic reports"]:::surface
+  DB --> RAID["RAID dashboards by Phase"]:::surface
+  DB --> API[/"GET /api/v1/work-items"/]:::ext
+  API --> LOOK[/"GET /api/v1/admin/lookups/{type}<br/>resolve label"/]:::ext
+  C -. priority change w/o reason .-> REJ["ModelState error"]:::trigger
+  C -. phase = Live .-> OPEN["Opens monthly update submission"]:::trigger
+""" + flowPalette;
+
+    var flowMonthly = """
+flowchart LR
+  F(["Submitter on monthly-report form"]):::actor --> WIN{"Window open?"}:::action
+  WIN -- no --> ERR["TempData error + redirect"]:::trigger
+  WIN -- yes --> P{{"POST .../monthly-report/{y}/{m}<br/>command = save or submit"}}:::action
+  P --> C["MonthlyReportPost"]:::action
+  C --> UP[("ProjectMonthlyUpdate<br/>Narrative · PermFte · MspFte<br/>Draft RAG fields")]:::store
+  C --> N[("MonthlyUpdateNarrative*<br/>one per topic")]:::store
+  C -. on submit .-> RH[("ProjectRagHistory append")]:::store
+  RH --> DEN[("Project.Rag* denormalised<br/>UpdatedAt bumped")]:::store
+  UP --> CARD["Last-month card on /modern/work/{id}"]:::surface
+  UP --> VIEW[/"/modern/work/{id}/monthly-update/view"/]:::surface
+  UP --> CHIPS["Reporting cycle chips"]:::surface
+  UP --> PROG[/"/modern/reporting/monthly-submission-progress"/]:::surface
+  UP --> RPT[/"/modern/reporting/monthly-update"/]:::surface
+  UP --> RAIDREV["RAID review meeting export"]:::surface
+  UP --> OPS["Operations FTE rollups"]:::surface
+  DEN --> ROLL["Cross-org RAG rollups"]:::surface
+  UP --> API[/"GET /api/v1/monthly-updates"/]:::ext
+  N --> API2[/"GET .../monthly-updates/{id}/narratives"/]:::ext
+  API --> PBI[("PowerBI FactMonthlyUpdate")]:::ext
+  UP -- submit suppresses --> RMD["Monthly-update reminder"]:::trigger
+  RH -- if Red --> NOTIF["Now Red rule"]:::trigger
+""" + flowPalette;
+
+    var flowRisk = """
+flowchart LR
+  CREATE(["Risk owner creates / edits"]):::actor --> P{{"POST /modern/raid/risks/create<br/>or /risks/{id}/edit"}}:::action
+  P --> C["RiskCreatePost / RiskEditPost"]:::action
+  C --> R[("Risk + RiskScore recompute")]:::store
+  C --> TAG[("RiskRiskType<br/>RiskRiskCategory<br/>RiskKeyRiskIndicator<br/>RiskBusinessArea<br/>RiskDivision")]:::store
+  AS{{"POST .../{id}/association"}} --> ASN[("Risk.ProjectId / ProductDocumentId")]:::store
+  ES{{"POST .../{id}/escalation-request"}} --> ESN[("RaidEscalationTierChangeRequest")]:::store
+  MK{{"POST .../{id}/make-issue"}} --> ISS[("Issue.SourceRiskId set")]:::store
+  R --> REG[/"/modern/raid/risks register"/]:::surface
+  R --> DETAIL[/"/modern/raid/risks/{id}"/]:::surface
+  R --> WORK["Work-item RAID summary"]:::surface
+  R --> DASH["RAID dashboards & heatmap"]:::surface
+  R --> SCOPE["Business area / directorate dashboards"]:::surface
+  R --> REV["RAID review meeting"]:::surface
+  R --> CSV[/"CSV: /modern/raid/export/risks.csv"/]:::ext
+  R --> XLSX[/"Excel: /modern/raid/dashboard/export.xlsx"/]:::ext
+  R --> API[/"GET /api/v1/risks"/]:::ext
+  API --> PBI[("PowerBI FactRisk")]:::ext
+  R -. score over threshold .-> QUEUE["Risks-to-review queue"]:::trigger
+  R -. status = closed .-> ROLLOFF["Removed from open-risks rollups"]:::trigger
+""" + flowPalette;
+
+    var flowMilestone = """
+flowchart LR
+  EDIT(["Owner adds / edits milestone"]):::actor --> P{{"POST .../milestone/{mid}/update"}}:::action
+  P --> C["UpdateMilestone"]:::action
+  C --> M[("Milestone<br/>Name<br/>BaselineDueDate (locked)<br/>DueDate<br/>ActualDate<br/>Status<br/>ProgressPercent")]:::store
+  C --> XR[("MilestoneRisk<br/>MilestoneIssue<br/>MilestoneAction")]:::store
+  M --> TAB[/"/modern/work/{id}/milestones tab"/]:::surface
+  M --> NEXT["Next-milestone chip on detail header"]:::surface
+  M --> RAIDREV["RAID review milestone trail"]:::surface
+  M --> OPS["Operations overdue-milestones tile"]:::surface
+  M --> MR["Auto-listed on monthly report form"]:::surface
+  M --> API[/"GET /api/v1/milestones"/]:::ext
+  API --> PBI[("PowerBI FactMilestone<br/>baseline vs due vs actual")]:::ext
+  C -. ActualDate set .-> COMP["Status flips to complete"]:::trigger
+  C -. DueDate moves .-> SLIP["Slip vs baseline visible in reports"]:::trigger
+""" + flowPalette;
+
+    var flowDemand = """
+flowchart LR
+  SUB(["Submitter logs demand"]):::actor --> P1{{"POST /modern/demand"}}:::action
+  P1 --> R[("DemandTriageRequest")]:::store
+  R --> EXPL{{"POST .../{id}/exploratory"}}:::action
+  EXPL --> EX[("DemandExploratoryReview")]:::store
+  R --> SC{{"POST .../{id}/scorecard"}}:::action
+  SC --> ANS[("DemandScorecard + DemandAnswer*")]:::store
+  R --> OUT{{"POST .../{id}/outcome"}}:::action
+  OUT --> O[("DemandTriageOutcome + DemandTriageAuditEvent")]:::store
+  O -- approve --> BC[("BusinessCase + BusinessCaseProject / Product")]:::store
+  O -- approve --> PL[("DemandPipelineRequest + DemandPipelineStage*")]:::store
+  PL --> WORK[("Project provisioned<br/>DemandRequestId back-linked")]:::store
+  R --> REG[/"/modern/demand register"/]:::surface
+  R --> DET[/"/modern/demand/{id} timeline"/]:::surface
+  PL --> BOARD[/"/modern/demand/pipeline"/]:::surface
+  PL --> MEET[/"/modern/demand/pipeline/triage-meetings"/]:::surface
+  R --> API[/"GET /api/v1/demand"/]:::ext
+  API --> PBI[("PowerBI<br/>FactDemandAnswer")]:::ext
+  R -. status change .-> NSUB["Email submitter"]:::trigger
+  ANS -. fully answered .-> NCHR["Email triage chair"]:::trigger
+""" + flowPalette;
+
+    var flowPerformance = """
+flowchart LR
+  RET(["Service owner fills return"]):::actor --> P{{"POST /modern/performance/{productId}/return/{period}"}}:::action
+  P --> PR[("ProductReturn<br/>SubmittedAt · SubmittedBy")]:::store
+  P --> V[("ProductMetricValue*<br/>one per metric")]:::store
+  CFG[("PerformanceReportingDueDateOverride<br/>ProductExclusion<br/>PeriodExclusion")]:::store -. controls .-> P
+  PR --> TL[/"/modern/performance/{id} timeline"/]:::surface
+  PR --> DASH[/"/modern/performance dashboard"/]:::surface
+  PR --> RPT[/"/modern/reporting/performance"/]:::surface
+  PR --> OPS["Operations completeness tile"]:::surface
+  V --> API1[/"GET /api/v1/performance-metrics"/]:::ext
+  V --> API2[/"GET /api/v1/performance-metrics/returns"/]:::ext
+  API2 --> PBI[("PowerBI FactPerformanceMetric<br/>grain: product × period × metric")]:::ext
+  ADM(["Admin reopens"]):::actor --> AR{{"POST /modern/admin/performance-reporting/{id}/reopen"}}:::action
+  AR -. clears .-> PR
+""" + flowPalette;
+
+    var flowAccessibility = """
+flowchart LR
+  AUD(["Auditor creates issue"]):::actor --> P{{"POST /accessibility/products/{id}/issues"}}:::action
+  P --> ISS[("AccessibilityIssue")]:::store
+  ISS --> WC[("IssueWcagCriterion*")]:::store
+  CMT{{"POST /accessibility/issues/{id}/comments"}} --> COM[("IssueComment*")]:::store
+  ISS --> HIS[("IssueHistory*")]:::store
+  RT{{"POST .../retest-request"}} --> RTR[("AccessibilityRetestRequest")]:::store
+  VER{{"POST /accessibility/statements/{id}/verify"}} --> VRR[("StatementVerificationRequest")]:::store
+  VRR --> STMT[("ProductAccessibility.StatementStatus")]:::store
+  ISS --> PROD["Product detail"]:::surface
+  ISS --> IDET["Issue detail"]:::surface
+  STMT --> SREG[/"/modern/operations/service-register"/]:::surface
+  STMT --> RPT[/"/modern/reporting/accessibility"/]:::surface
+  ISS --> API[/"GET /api/v1/accessibility"/]:::ext
+  API --> PBI[("PowerBI FactAccessibilityIssue")]:::ext
+  ISS -. last open resolved .-> RTE["Retest eligible"]:::trigger
+  VRR -. on verify .-> NOT["Email service owner"]:::trigger
+""" + flowPalette;
+
+    var flowCmdbSync = """
+flowchart LR
+  ADM(["Operator on sync-settings page"]):::actor --> BTN{{"POST /service-register/sync-cmdb-stream (SSE)"}}:::action
+  PROD(["Per-product Sync button"]):::actor --> ONE{{"POST /service-register/product/{id}/sync-cmdb-json"}}:::action
+  XLS(["Operator uploads completion CSV"]):::actor --> IMP{{"POST /service-register/sync-settings/import-completion"}}:::action
+  BTN --> SVC["FipsCmdbProductSyncService<br/>.SyncActiveServiceOfferingsAsync"]:::action
+  ONE --> SVC2["FipsCmdbProductSyncService<br/>.SyncSingleProductAsync"]:::action
+  IMP --> PARSE["FipsCompletionImporter"]:::action
+  SVC --> CMDB[("CMDB Service Offerings<br/>via sn_devops API")]:::store
+  SVC2 --> CMDB
+  RULES[("FipsCmdbSyncRule<br/>name / sys_id patterns &rarr;<br/>status or enterprise flag")]:::store -. applied by .-> SVC
+  RULES -. applied by .-> SVC2
+  SVC --> F[("FipsService<br/>upsert by sys_id")]:::store
+  SVC --> C[("CMDBProduct<br/>last-seen attributes")]:::store
+  SVC --> H[("FipsSyncHistory<br/>created · updated · skipped · errors")]:::store
+  SVC2 --> F
+  SVC2 --> C
+  PARSE --> FC[("FipsService completion fields")]:::store
+  PARSE --> RES[("FipsCompletionImportResult")]:::store
+  BTN --> SSE[/"Server-Sent Events: progress events"/]:::ext
+  F --> REG[/"/modern/operations/service-register"/]:::surface
+  F --> PICK["Product picker on work & RAID forms"]:::surface
+  F --> RAID["RAID rows resolve product name"]:::surface
+  H --> RUN["Sync settings run history"]:::surface
+  F --> API[/"GET /api/v1/service-register"/]:::ext
+  API --> PBI[("PowerBI DimProduct<br/>join key: ProductDocumentId")]:::ext
+  RES --> BAN["Notification banner: rows updated"]:::trigger
+""" + flowPalette;
+
+    var flowNotifications = """
+flowchart LR
+  EVT(["Domain event:<br/>RAG change · missed deadline · ..."]):::actor --> SCAN["NotificationDispatcher scan"]:::action
+  SCAN --> RULES[("NotificationRule<br/>trigger + template + recipient strategy")]:::store
+  RULES --> RESV["Recipient resolution"]:::action
+  CTX[("ProjectSeniorResponsibleOfficer<br/>ProjectServiceOwner<br/>ProjectPmoContact<br/>Project.PrimaryContactUserId<br/>ProjectBudgetOwner")]:::store --> RESV
+  USERS[("User")]:::store --> RESV
+  RESV --> TPL[("NotificationTemplate<br/>GOV.Notify template id + placeholders")]:::store
+  TPL --> SEND["GOV.Notify API"]:::ext
+  SEND --> LOG[("NotificationLog<br/>status · notify id · error")]:::store
+  LOG --> ADMIN[/"/modern/admin/notification-settings/log"/]:::surface
+  SEND --> INBOX(["User inbox"]):::actor
+""" + flowPalette;
+
+    var flowAudit = """
+flowchart LR
+  ANY(["Any controller write"]):::actor --> EF["EF SaveChanges interceptor"]:::action
+  EF --> AUD[("AuditLog<br/>entity · id · action · user · payload")]:::store
+  ANY --> DOM[("Per-domain histories:<br/>ProjectRagHistory<br/>IssueHistory<br/>ProblemStatementHistory<br/>DemandTriageAuditEvent<br/>AuditHistory")]:::store
+  APIC(["Any API call"]):::actor --> APIM["ApiRequestLogger middleware"]:::action
+  APIM --> APL[("ApiRequestLog<br/>token · method · path · status · ms")]:::store
+  AUD --> WT[/"/modern/work/{id}/audit timeline"/]:::surface
+  DOM --> WT
+  DOM --> RT[/"/modern/raid/review/work/item/{kind}/{id}/timeline"/]:::surface
+  APL --> TOK[/"/modern/admin/api-tokens/{id}"/]:::surface
+""" + flowPalette;
+
+    var flowWorkCreate = """
+flowchart LR
+  USR(["User opens Create work item wizard"]):::actor --> WIZ{{"GET /ModernWork/Create"}}:::action
+  WIZ -. save / resume .-> DRAFT[("ProjectDraft<br/>PayloadJson per step")]:::store
+  USR2(["Submits final step"]):::actor --> POST{{"POST /ModernWork/Create"}}:::action
+  POST --> CR["CreateWorkItem (transaction)"]:::action
+  CR --> P[("Project<br/>Title · Aim · Status<br/>Phase · Priority · WorkType<br/>StartDate · TargetDeliveryDate")]:::store
+  CR --> ALI[("ProjectMission* /<br/>ProjectObjective* /<br/>ProjectWorkItemTag*")]:::store
+  CR --> DIR[("ProjectDirectorate* /<br/>ProjectGovernmentDepartment*")]:::store
+  CR --> CON[("ProjectSeniorResponsibleOfficer*<br/>ProjectServiceOwner*<br/>ProjectPmoContact*<br/>ProjectBudgetOwner<br/>Project.PrimaryContactUserId")]:::store
+  CR --> AUD[("AuditLog · created")]:::store
+  CR -. clears .-> DRAFT
+  P --> REG[/"/modern/work register row"/]:::surface
+  P --> DET[/"/modern/work/{Id} detail"/]:::surface
+  P --> RAID["Available as RAID parent in pickers"]:::surface
+  P --> WATCH["Creator added to ProjectWatchlist"]:::surface
+  P --> API[/"GET /api/v1/work-items"/]:::ext
+  P -. first cycle .-> NOT["Monthly-update reminder scheduled<br/>once phase becomes reportable"]:::trigger
+""" + flowPalette;
+
+    var flowIssue = """
+flowchart LR
+  C(["Issue owner creates"]):::actor --> P{{"POST /modern/raid/issues/create"}}:::action
+  E(["Owner edits"]):::actor --> P2{{"POST /modern/raid/issues/{id}/edit"}}:::action
+  FR(["Risk owner: 'Make issue'"]):::actor --> MK{{"POST /modern/raid/risks/{riskId}/make-issue"}}:::action
+  P --> CR["IssueCreatePost"]:::action
+  P2 --> CR2["IssueEditPost"]:::action
+  MK --> CR
+  CR --> I[("Issue<br/>Title · Description<br/>Severity · Priority · Status<br/>DetectedDate · TargetResolutionDate<br/>OwnerUserId · SourceType · SourceReference")]:::store
+  CR2 --> I
+  MK -. sets .-> SRC[("Issue.SourceRiskId<br/>+ Risk.IssueId backlink")]:::store
+  CR --> ASN[("Issue.ProjectId or ProductDocumentId<br/>(via association form)")]:::store
+  CR2 --> ASN
+  CR --> XR[("IssueRisk · IssueAction · IssueDecision")]:::store
+  CR2 --> XR
+  CR --> HIST[("IssueHistory · IssueAssuranceEvent")]:::store
+  CR2 --> HIST
+  I --> REG[/"/modern/raid/issues register"/]:::surface
+  I --> DET[/"/modern/raid/issues/{id}"/]:::surface
+  I --> WORK["Work-item RAID summary"]:::surface
+  I --> RDASH["RAID dashboards & business-area / directorate slices"]:::surface
+  I --> REV["RAID review meeting"]:::surface
+  I --> CSV[/"CSV: /modern/raid/export/issues.csv"/]:::ext
+  I --> API[/"GET /api/v1/issues"/]:::ext
+  API --> PBI[("PowerBI FactIssue")]:::ext
+  CR -. status = resolved .-> NOTIF["Email owner + parent SRO"]:::trigger
+""" + flowPalette;
+
+    var flowAssumption = """
+flowchart LR
+  C(["User on /modern/raid/assumptions/create"]):::actor --> P{{"POST .../assumptions/create"}}:::action
+  E(["User on /assumptions/{id}/edit"]):::actor --> P2{{"POST .../assumptions/{id}/edit"}}:::action
+  P --> CR["AssumptionCreatePost"]:::action
+  P2 --> CR2["AssumptionEditPost"]:::action
+  CR --> A[("Assumption<br/>Description · ReviewDate<br/>ValidationOutcome<br/>AssumptionCriticalityId · AssumptionStatusId")]:::store
+  CR2 --> A
+  CR --> SCOPE[("RaidAssociationKind + one of:<br/>ProjectId / PrimaryProductId / SroUserId<br/>(Work / Product / Organisation)")]:::store
+  CR2 --> SCOPE
+  CR --> JOIN[("AssumptionDivision* /<br/>AssumptionBusinessArea*")]:::store
+  CR2 --> JOIN
+  A --> REG[/"/modern/raid/assumptions register"/]:::surface
+  A --> DET[/"/modern/raid/assumptions/{id}"/]:::surface
+  A --> WORK["Work-item Assumptions tab"]:::surface
+  A --> PROD["Product detail Assumptions card"]:::surface
+  A --> RDASH["RAID dashboards & RAID review"]:::surface
+  A --> API[/"GET /api/v1/raid/assumptions"/]:::ext
+  API --> PBI[("PowerBI FactAssumption")]:::ext
+  A -. status = Invalidated .-> SUG["Suggests creating Risk or Issue"]:::trigger
+  A -. ReviewDate overdue .-> NOTIF["Operations dashboard tile<br/>Owner + SRO reminder"]:::trigger
+""" + flowPalette;
+
+    var flowDependency = """
+flowchart LR
+  C(["User on /modern/raid/dependencies/create"]):::actor --> P{{"POST .../dependencies/create"}}:::action
+  E(["User on /dependencies/{id}/edit"]):::actor --> P2{{"POST .../dependencies/{id}/edit"}}:::action
+  WI(["From work item: 'Add dependency'"]):::actor --> P3{{"POST /modern/work/{id}/dependency/add"}}:::action
+  P --> CR["DependencyCreatePost"]:::action
+  P2 --> CR2["DependencyEditPost"]:::action
+  P3 --> CR
+  CR --> D[("Dependency<br/>SourceEntityType + SourceEntityId<br/>TargetEntityType + TargetEntityId<br/>DependencyLinkTypeId · CriticalityId<br/>OwnerUserId · Organisation<br/>DueDate · Status")]:::store
+  CR2 --> D
+  CR --> RES[("ResolvedDate · ResolvedByEmail · ResolvedByName<br/>set when Status = Resolved")]:::store
+  CR2 --> RES
+  D --> REG[/"/modern/raid/dependencies register"/]:::surface
+  D --> DET[/"/modern/raid/dependencies/{id}"/]:::surface
+  D --> WORK["Work-item Dependencies tab<br/>(both source and target)"]:::surface
+  D --> PROD["Product detail dependency card"]:::surface
+  D --> RDASH["RAID dashboards · Critical dependencies tile"]:::surface
+  D --> API[/"GET /api/v1/raid/dependencies"/]:::ext
+  API --> PBI[("PowerBI FactDependency<br/>edge: source &rarr; target")]:::ext
+  D -. due date overdue .-> NOTIF["Email Owner + parent SRO"]:::trigger
+  D -. resolved .-> ROLLOFF["Removed from open dependencies tile"]:::trigger
+""" + flowPalette;
+
+    var flowRaidAssignment = """
+flowchart LR
+  CRT(["Create form: pick Work item / Product"]):::actor --> CP{{"POST /modern/raid/{kind}/create"}}:::action
+  RE(["Existing record: edit Association"]):::actor --> AP{{"POST /modern/raid/{kind}/{id}/association"}}:::action
+  CP --> SVC["Set parent on record"]:::action
+  AP --> SVC
+  SVC --> PRJ[("{Risk|Issue|Action|Decision|Milestone|<br/>Assumption|NearMiss}.ProjectId")]:::store
+  SVC --> PRD[("Same row.ProductDocumentId<br/>joins to FipsService / CMDBProduct")]:::store
+  SVC --> AUD[("AuditLog: association changed")]:::store
+  PRJ --> WORK["Work item RAID summary card"]:::surface
+  PRJ --> WRT[/"/modern/work/{id} RAID tabs"/]:::surface
+  PRD --> PROD[/"/modern/operations/service-register/product/{id} RAID card"/]:::surface
+  PRJ --> REGF["RAID register filter by parent work item"]:::surface
+  PRD --> REGF2["RAID register filter by parent product"]:::surface
+  PRJ --> REV["RAID review meeting groups by work item"]:::surface
+  PRJ --> NRECIP["Notification recipient resolution<br/>uses parent SRO / Service Owner / PMO"]:::trigger
+  PRD --> NRECIP
+""" + flowPalette;
+
+    var flowCommission = """
+flowchart LR
+  ADM(["Admin defines commission window"]):::actor --> AC{{"POST /modern/admin/performance-reporting/commission/create"}}:::action
+  AC --> CM[("Commission<br/>Name · OpenAt · CloseAt · MetricIds")]:::store
+  USR(["Service owner enters values"]):::actor --> P{{"POST /modern/performance/commission/metric-value"}}:::action
+  P --> S[("CommissionSubmission<br/>per (ProductDocumentId, CommissionId)")]:::store
+  P --> V[("CommissionMetricValue<br/>per (Submission, Metric)")]:::store
+  USR2(["Service owner submits"]):::actor --> SUB{{"POST /modern/performance/commission/{id}/submit/confirm"}}:::action
+  SUB --> SF[("CommissionSubmission.SubmittedAt set")]:::store
+  COM(["User adds comment"]):::actor --> CMT{{"POST /modern/performance/commission/comments"}}:::action
+  CMT --> CC[("CommissionComment*")]:::store
+  ANA(["Analyst bulk verifies"]):::actor --> BV{{"POST /modern/performance/commission/{id}/bulk/verify"}}:::action
+  BV --> VS[("CommissionMetricValue.VerifiedAt /<br/>VerifiedByUserId")]:::store
+  ANA2(["Analyst bulk applies decision"]):::actor --> BA{{"POST /modern/performance/commission/{id}/bulk/apply"}}:::action
+  BA --> AS[("Decision applied to selected values")]:::store
+  ADM2(["Admin reopens a submission"]):::actor --> UN{{"POST /modern/performance/commission/unsubmit"}}:::action
+  UN -. clears .-> SF
+  S --> DASH[/"/modern/performance/commission/{id}"/]:::surface
+  V --> RPT[/"/modern/reporting/performance commission tab"/]:::surface
+  V --> API[/"GET /api/v1/performance-metrics/commissions"/]:::ext
+  API --> PBI[("PowerBI FactCommissionMetric<br/>grain: product × commission × metric")]:::ext
+  CM -. CloseAt passed .-> LOCK["Locks further submissions"]:::trigger
+""" + flowPalette;
+
+    var flowStandardsDdt = """
+flowchart LR
+  AUTH(["Author drafts new standard"]):::actor --> NEW{{"POST /modern/standards/ddt/create"}}:::action
+  NEW --> S[("DdtStandard<br/>Stage = Draft · StandardUuid<br/>Version 0.1.0 · IsModified = true")]:::store
+  EDT(["Author edits a published standard"]):::actor --> ED{{"POST /modern/standards/ddt/{id}/start-edit"}}:::action
+  ED --> SC[("Child DdtStandard<br/>ParentStandardId set · Stage = Draft")]:::store
+  WORK(["Author edits child content"]):::actor --> EP{{"POST /modern/standards/ddt/{id}/edit"}}:::action
+  EP --> CON[("Purpose · Criteria · HowToMeet<br/>Governance · RelatedGuidance<br/>Owners · Contacts · Categories · Phases<br/>ValidationRules · Products · Exceptions")]:::store
+  AUTH2(["Author submits for review"]):::actor --> SUB{{"POST /modern/standards/ddt/{id}/submit-for-review"}}:::action
+  SUB --> ST1[("Stage = Under Review")]:::store
+  REV(["Reviewer approves"]):::actor --> APP{{"POST /modern/standards/ddt/{id}/approve"}}:::action
+  APP --> ST2[("Stage = Approved<br/>GovernanceApproval = true")]:::store
+  REV2(["Reviewer rejects"]):::actor --> REJ{{"POST /modern/standards/ddt/{id}/reject"}}:::action
+  REJ --> ST3[("Stage = Draft (DdtStandardComment captures reason)")]:::store
+  PUB(["Publisher publishes"]):::actor --> PB{{"POST /modern/standards/ddt/{id}/publish"}}:::action
+  PB --> ST4[("Stage = Published<br/>IsPublished = true · PublishedAt<br/>FirstPublished (if first) · Version bumped<br/>Snapshot in DdtStandardVersion")]:::store
+  UNP(["Publisher unpublishes"]):::actor --> UP{{"POST /modern/standards/ddt/{id}/delete or admin unpublish"}}:::action
+  UP --> UA[("DdtStandardUnpublishAudit")]:::store
+  ST1 --> CMT[("DdtStandardComment per transition")]:::store
+  ST2 --> CMT
+  ST3 --> CMT
+  ST4 --> CAT[/"/modern/standards/ddt catalogue"/]:::surface
+  S --> DET[/"/modern/standards/ddt/{id} detail"/]:::surface
+  ST4 --> PROD["Approved/tolerated products tab"]:::surface
+  ST4 --> EXC["Exceptions tab + register"]:::surface
+  ST4 --> API[/"GET /api/DdtStandards"/]:::ext
+  ST4 --> APIE[/"GET /api/DdtStandards/Exceptions"/]:::ext
+  ST4 --> APIP[/"GET /api/DdtStandards/ApprovedProducts"/]:::ext
+  ST2 -. transitions .-> AUDIT[("AuditLog<br/>(every stage change)")]:::store
+""" + flowPalette;
+
+    var flowStandardsAssessment = """
+flowchart LR
+  USR(["Assessor opens conduct page"]):::actor --> G{{"GET /modern/standards/functional/assessment/{id}/conduct"}}:::action
+  USR --> SAVE{{"POST /modern/standards/functional/assessment/save-response"}}:::action
+  SAVE --> R[("AssessmentCriteriaResponse*<br/>per criterion: Attainment + Notes")]:::store
+  USR2(["Assessor submits"]):::actor --> SUB{{"POST /modern/standards/functional/assessment/submit"}}:::action
+  SUB --> A[("FunctionalStandardAssessment.SubmittedAt set")]:::store
+  DEL(["Assessor deletes"]):::actor --> DD{{"POST /modern/standards/functional/assessment/delete"}}:::action
+  DD --> DR[("Soft-delete cascade<br/>AssessmentCriteriaResponse removed")]:::store
+  R --> SCORE["Score roll-up<br/>practice-area avg(Attainment)<br/>theme avg(practice areas)"]:::action
+  SCORE --> SUM[/"/modern/standards/functional/assessment/{id}/summary"/]:::surface
+  A --> CAT[/"/modern/standards/functional catalogue<br/>last assessment per standard"/]:::surface
+  A --> WORK["Work-item / Service standards card"]:::surface
+  A --> WORD[/"Word: /assessment/{id}/export/word"/]:::ext
+  A --> XLSX[/"Excel: /assessment/{id}/export"/]:::ext
+  R --> PBI[("PowerBI FactAssessmentResponse<br/>+ DimCriterion via Criterion.Id")]:::ext
+""" + flowPalette;
+}
+
+<div class="developers-docs__intro govuk-!-margin-bottom-6">
+    <span class="govuk-caption-xl">Reference</span>
+    <h1 class="govuk-heading-xl govuk-!-margin-bottom-2">Data flows</h1>
+    <p class="govuk-body-l govuk-!-margin-bottom-0">
+        For each piece of data the user captures in COMPASS, the cards below
+        show what gets written, every Modern surface that reads it, which
+        notifications it fires, and how it leaves the system through exports
+        and the JSON API.
+    </p>
+</div>
+
+<h2 class="govuk-heading-l" id="how-to-read">How to read a flow card</h2>
+<p class="govuk-body">Each card follows the same shape:</p>
+<ul class="govuk-list govuk-list--bullet">
+    <li><strong>Diagram</strong> &mdash; a Mermaid flowchart of the capture, storage and downstream nodes. The <em>Mermaid source</em> tab exposes the raw graph definition so you can copy it into an architecture doc.</li>
+    <li><strong>Captured at</strong> &mdash; the Modern URL the user fills in, plus the controller action that handles the POST.</li>
+    <li><strong>Stored in</strong> &mdash; the EF entity and database column(s) written by the action.</li>
+    <li><strong>Side effects</strong> &mdash; anything else the action writes: history rows, denormalised copies, audit log entries, recomputed scores.</li>
+    <li><strong>Surfaces in</strong> &mdash; every Modern page or partial that subsequently reads the value.</li>
+    <li><strong>Triggers</strong> &mdash; notifications or workflow rules that fire as a result.</li>
+    <li><strong>Downstream</strong> &mdash; CSV / Excel exports, JSON API endpoints, and the implications for PowerBI consumers.</li>
+</ul>
+
+<div class="govuk-inset-text">
+    Every Modern controller action also writes an <code>AuditLog</code> row
+    (entity, id, action, user, timestamp). Audit is omitted from individual
+    cards unless the action writes something custom on top. See
+    <a class="govuk-link" href="#cross-audit">Cross-cutting: audit &amp; observability</a>
+    below.
+</div>
+
+<hr class="govuk-section-break govuk-section-break--l govuk-section-break--visible">
+
+<h2 class="govuk-heading-l" id="work-item-capture">Work item: capture</h2>
+
+<section class="developers-data-flow" id="flow-work-create">
+    <header class="developers-data-flow__header">
+        <h3 class="developers-data-flow__title">Create a work item</h3>
+        <span class="developers-data-flow__kind">Composite create</span>
+    </header>
+    <partial name="_DataFlowDiagram" model='("work-create", flowWorkCreate)' />
+    <div class="developers-data-flow__stages">
+        <h4 class="developers-data-flow__label">Captured at</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li><code>GET /ModernWork/Create</code> &rarr; multi-step wizard. Each step persists progress into <code>ProjectDraft</code> (one row per user, payload as JSON) so the user can resume later.</li>
+                <li><code>POST /ModernWork/Create</code> &rarr; final submit. Validates, then runs the creation transaction (<code>CreateWorkItem</code>).</li>
+            </ul>
+        </div>
+
+        <h4 class="developers-data-flow__label">Stored in</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li><code>Project</code> &mdash; headline row: <code>Title</code>, <code>Aim</code>, <code>Description</code>, <code>Status</code> = <code>Active</code>, <code>PhaseId</code>, <code>DeliveryPriorityId</code>, <code>WorkType</code> / <code>ActivityTypeId</code>, <code>StartDate</code>, <code>TargetDeliveryDate</code>, <code>PrimaryOrganizationalGroupId</code>, flags (<code>IsFlagship</code>, <code>SubjectToSpendControl</code>, <code>IsCentralRiskBucket</code>, <code>IsAiInitiative</code>).</li>
+                <li>Governance contacts &mdash; <code>ProjectSeniorResponsibleOfficer</code>, <code>ProjectServiceOwner</code>, <code>ProjectPmoContact</code>, <code>ProjectBudgetOwner</code>; plus <code>Project.PrimaryContactUserId</code>.</li>
+                <li>Strategic alignment joins &mdash; <code>ProjectMission</code>, <code>ProjectObjective</code>, <code>ProjectWorkItemTag</code>.</li>
+                <li>Organisational joins &mdash; <code>ProjectDirectorate</code>, <code>ProjectGovernmentDepartment</code>.</li>
+                <li>Optional team members &mdash; <code>ProjectContact</code> rows with role-type 5 (custom).</li>
+            </ul>
+        </div>
+
+        <h4 class="developers-data-flow__label">Side effects</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li>Wraps the writes in a transaction; on any failure, no row persists and the draft is preserved.</li>
+                <li>On success, the user's <code>ProjectDraft</code> is cleared.</li>
+                <li>The creator is added to <code>ProjectWatchlist</code> so the new work item shows on their <code>/modern/dashboard</code>.</li>
+                <li><code>AuditLog</code> row written with action <code>created</code>.</li>
+            </ul>
+        </div>
+
+        <h4 class="developers-data-flow__label">Surfaces in</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li>Work register &mdash; new row appears in <code>/modern/work</code>, <code>/modern/work/all</code>, and any "by theme" or business-area-scoped views.</li>
+                <li>Work detail &mdash; <code>/modern/work/{Id}</code> with every tab (overview, people, RAID, milestones, monthly).</li>
+                <li>Picker dialogs &mdash; available as a RAID parent on risk / issue / action / decision / assumption / dependency create forms.</li>
+                <li>Demand back-link &mdash; if created from approving a <code>DemandTriageRequest</code>, the new <code>Project.Id</code> is set on <code>DemandTriageRequest.ProjectId</code>.</li>
+            </ul>
+        </div>
+
+        <h4 class="developers-data-flow__label">Triggers</h4>
+        <div class="developers-data-flow__body">
+            Once the work item becomes reportable (phase joins the monthly-update window), the first monthly-update reminder is scheduled for the SRO / Service Owner / Primary Contact. No outbound email is sent on creation itself.
+        </div>
+
+        <h4 class="developers-data-flow__label">Downstream</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li>CSV export &mdash; included in the next <code>/modern/work/export-register</code> download.</li>
+                <li>JSON API &mdash; new row exposed via <code>GET /api/v1/work-items</code> (and <code>/{Id}</code>).</li>
+                <li>PowerBI &mdash; appears in <code>DimWorkItem</code>; the absence of <code>ProjectRagHistory</code> rows means RAG-trend visuals will be empty until the first monthly update is submitted.</li>
+            </ul>
+        </div>
+    </div>
+</section>
+
+<section class="developers-data-flow" id="flow-work-title">
+    <header class="developers-data-flow__header">
+        <h3 class="developers-data-flow__title">Work item: <code>Title</code></h3>
+        <span class="developers-data-flow__kind">Scalar field</span>
+    </header>
+    <partial name="_DataFlowDiagram" model='("work-title", flowWorkTitle)' />
+    <div class="developers-data-flow__stages">
+        <h4 class="developers-data-flow__label">Captured at</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li><code>POST /modern/work/create</code> &rarr; <code>ModernWorkController.CreatePost</code> (first capture from the new-work flow).</li>
+                <li><code>POST /modern/work/{id}/overview/title</code> &rarr; <code>ModernWorkController.UpdateWorkOverviewTitle</code> (inline edit on the detail header).</li>
+                <li><code>POST /modern/work/{id}/edit</code> &rarr; <code>ModernWorkController.EditPost</code> (full edit form).</li>
+            </ul>
+        </div>
+
+        <h4 class="developers-data-flow__label">Stored in</h4>
+        <div class="developers-data-flow__body">
+            <code>Project.Title</code> &mdash; <code>nvarchar(200)</code>, required.
+        </div>
+
+        <h4 class="developers-data-flow__label">Side effects</h4>
+        <div class="developers-data-flow__body">
+            <code>Project.UpdatedAt</code> is bumped; an <code>AuditLog</code> row is written with the previous and new value.
+        </div>
+
+        <h4 class="developers-data-flow__label">Surfaces in</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li>Work register row link &mdash; <code>/modern/work</code>, <code>/modern/work/all</code>, <code>/modern/work/by-theme</code>.</li>
+                <li>Work detail header &mdash; <code>/modern/work/{id}</code> and every sub-tab (<code>/people</code>, <code>/milestones</code>, <code>/monthly</code>, <code>/audit</code>).</li>
+                <li>RAID register columns &mdash; <code>/modern/raid/risks</code>, <code>/issues</code>, <code>/actions</code>, <code>/decisions</code> show the parent work-item title.</li>
+                <li>Reporting rollups &mdash; <code>/modern/reporting/monthly-update</code>, <code>/raid-review-progress</code>, <code>/priorities</code>, <code>/thematic</code>.</li>
+                <li>Dashboards &mdash; <code>/modern</code> and <code>/modern/dashboard</code> watchlist / overdue cards.</li>
+                <li>Search results, breadcrumbs and modal pickers.</li>
+            </ul>
+        </div>
+
+        <h4 class="developers-data-flow__label">Triggers</h4>
+        <div class="developers-data-flow__body">
+            None directly. The title is interpolated into outbound emails (monthly-update reminders, RAID escalation, overdue milestone) when those rules fire.
+        </div>
+
+        <h4 class="developers-data-flow__label">Downstream</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li>CSV export &mdash; <code>GET /modern/work/export-register</code>.</li>
+                <li>Excel export &mdash; <code>GET /modern/raid/dashboard/export.xlsx</code> (parent title column).</li>
+                <li>JSON API &mdash; surfaced as <code>title</code> on every work-item-scoped endpoint (<code>/api/v1/risks</code>, <code>/issues</code>, <code>/actions</code>, <code>/milestones</code> via the join).</li>
+                <li>PowerBI &mdash; this is the user-facing label of a work item; use it on every <code>DimWorkItem</code>-joined visual.</li>
+            </ul>
+        </div>
+    </div>
+</section>
+
+<section class="developers-data-flow" id="flow-work-rag">
+    <header class="developers-data-flow__header">
+        <h3 class="developers-data-flow__title">Work item: <code>RagStatusId</code> + justification</h3>
+        <span class="developers-data-flow__kind">Versioned</span>
+    </header>
+    <partial name="_DataFlowDiagram" model='("work-rag", flowWorkRag)' />
+    <div class="developers-data-flow__stages">
+        <h4 class="developers-data-flow__label">Captured at</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li><code>POST /modern/work/{id}/monthly-report/{year}/{month}</code> &rarr; <code>MonthlyReportPost</code> (primary capture path).</li>
+                <li>RAG update modal launched from the work-item header (also routed through the monthly-report action).</li>
+            </ul>
+        </div>
+
+        <h4 class="developers-data-flow__label">Stored in</h4>
+        <div class="developers-data-flow__body">
+            <code>Project.RagStatusLookupId</code> (current) and a new <code>ProjectRagHistory</code> row capturing <code>RagStatusLookupId</code>, <code>Justification</code>, <code>PathToGreen</code>, <code>ChangedAt</code>, <code>ChangedBy*</code>.
+        </div>
+
+        <h4 class="developers-data-flow__label">Side effects</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li>Legacy <code>Project.RagStatus</code> (string), <code>RagJustification</code> and <code>PathToGreen</code> denormalised for older consumers.</li>
+                <li>Submitting also stamps <code>ProjectMonthlyUpdate.SubmittedAt</code>; saving as draft leaves the previous RAG untouched and only writes the <code>Draft*</code> fields.</li>
+                <li><code>Project.UpdatedAt</code> bumped; <code>AuditLog</code> entry written for the work item.</li>
+            </ul>
+        </div>
+
+        <h4 class="developers-data-flow__label">Surfaces in</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li>Modern <code>WorkItemRagHistory</code> &mdash; powers the <code>_WorkRagBadge</code> partial used on the detail header, register rows and watchlist.</li>
+                <li>Work detail RAG history tab &mdash; <code>/modern/work/{id}#rag-history</code>.</li>
+                <li>Monthly update viewer &mdash; <code>/modern/work/{id}/monthly-update/view</code>.</li>
+                <li>Cross-org rollups &mdash; <code>/modern/reporting/monthly-update</code>, <code>/raid-review-progress</code>, <code>/priorities</code>, <code>/thematic</code>.</li>
+                <li>Operations dashboard &mdash; <code>/modern/operations</code> RAG counts.</li>
+            </ul>
+        </div>
+
+        <h4 class="developers-data-flow__label">Triggers</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li>If the new RAG is Red, the next monthly-update cycle requires <code>PathToGreen</code> (server validation in <code>ValidateMonthlyReportForm</code>).</li>
+                <li>RAG change of two or more steps within a cycle is flagged in <code>/modern/reporting/raid</code> "RAG volatility" panel.</li>
+            </ul>
+        </div>
+
+        <h4 class="developers-data-flow__label">Downstream</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li>Monthly update Excel export.</li>
+                <li>JSON API &mdash; <code>/api/v1/work-items</code> exposes current RAG; <code>/api/v1/work-items/{id}/rag-history</code> exposes the time series.</li>
+                <li>PowerBI &mdash; use <code>ProjectRagHistory</code> for trends; <code>Project.RagStatusLookupId</code> alone collapses to "current snapshot".</li>
+            </ul>
+        </div>
+    </div>
+</section>
+
+<section class="developers-data-flow" id="flow-work-people">
+    <header class="developers-data-flow__header">
+        <h3 class="developers-data-flow__title">Work item: People (SRO, Service Owner, PMO, Primary contact, Budget owner)</h3>
+        <span class="developers-data-flow__kind">Multi-row contacts</span>
+    </header>
+    <partial name="_DataFlowDiagram" model='("work-people", flowWorkPeople)' />
+    <div class="developers-data-flow__stages">
+        <h4 class="developers-data-flow__label">Captured at</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li><code>POST /modern/work/{id}/contact/edit?kind=sro|serviceowner|pmo</code> &rarr; <code>GovernanceRoleAddUser</code> / <code>GovernanceRoleRemoveUser</code> (per-user add &amp; remove on the modern contact edit).</li>
+                <li><code>POST /modern/work/{id}/primary-contact/set</code> &rarr; <code>SetPrimaryContact</code>.</li>
+                <li><code>POST /modern/work/{id}/budget-owner/set</code> &rarr; <code>SetBudgetOwner</code>.</li>
+                <li><code>POST /modern/work/{id}/add-team-member</code> &rarr; <code>AddTeamMember</code>.</li>
+            </ul>
+        </div>
+
+        <h4 class="developers-data-flow__label">Stored in</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li>SRO &rarr; <code>ProjectSeniorResponsibleOfficer</code>; Service Owner &rarr; <code>ProjectServiceOwner</code>; PMO &rarr; <code>ProjectPmoContact</code>.</li>
+                <li>Primary contact &rarr; <code>Project.PrimaryContactUserId</code>.</li>
+                <li>Budget owner &rarr; <code>ProjectBudgetOwner</code> (per business area).</li>
+                <li>Custom-role contacts &rarr; <code>ProjectContact</code> with <code>Role</code> string (role-type 5).</li>
+            </ul>
+        </div>
+
+        <h4 class="developers-data-flow__label">Side effects</h4>
+        <div class="developers-data-flow__body">
+            Duplicate add is a no-op (idempotent). Remove deletes the join row but keeps the underlying <code>User</code>. <code>AuditLog</code> row written.
+        </div>
+
+        <h4 class="developers-data-flow__label">Surfaces in</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li>Work item Key Contacts card &mdash; <code>_WorkItemKeyContactsSummaryCard</code> on <code>/modern/work/{id}</code>.</li>
+                <li>People tab &mdash; <code>/modern/work/{id}/people</code>.</li>
+                <li>Register filters &mdash; "My work items" on <code>/modern/work</code> matches on any of these roles.</li>
+                <li>RAID review &mdash; risk / issue rows display the parent work-item SRO.</li>
+                <li>Reporting tables &mdash; SRO / Service Owner columns in priorities, monthly update league table.</li>
+            </ul>
+        </div>
+
+        <h4 class="developers-data-flow__label">Triggers</h4>
+        <div class="developers-data-flow__body">
+            Notification rules resolve recipients via these tables. Monthly-update reminders email the SRO + Service Owner + Primary Contact; RAID escalation emails the SRO; budget-related queries email the Budget Owner.
+        </div>
+
+        <h4 class="developers-data-flow__label">Downstream</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li>Register CSV includes SRO / Service Owner / PMO display names.</li>
+                <li>JSON API &mdash; <code>/api/v1/work-items/{id}/contacts</code>.</li>
+                <li>PowerBI &mdash; useful as a many-to-many bridge between <code>DimUser</code> and <code>FactWorkItem</code>.</li>
+            </ul>
+        </div>
+    </div>
+</section>
+
+<section class="developers-data-flow" id="flow-work-lookups">
+    <header class="developers-data-flow__header">
+        <h3 class="developers-data-flow__title">Work item: lookup fields (Phase, Priority, Activity, Risk appetite, Spend control, Flagship)</h3>
+        <span class="developers-data-flow__kind">Scalar lookups</span>
+    </header>
+    <partial name="_DataFlowDiagram" model='("work-lookups", flowWorkLookups)' />
+    <div class="developers-data-flow__stages">
+        <h4 class="developers-data-flow__label">Captured at</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li><code>POST /modern/work/{id}/overview/flagship</code></li>
+                <li><code>POST /modern/work/{id}/overview/spend-control</code></li>
+                <li><code>POST /modern/work/{id}/overview/risk-appetite</code></li>
+                <li><code>POST /modern/work/{id}/overview/start-date</code> / <code>/target-end-date</code></li>
+                <li><code>POST /modern/work/{id}/edit</code> (Phase, Priority, Activity type, Work type, Portfolio in the full edit form).</li>
+            </ul>
+        </div>
+
+        <h4 class="developers-data-flow__label">Stored in</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li>Phase &rarr; <code>Project.PhaseId</code> (FK <code>PhaseLookup</code>).</li>
+                <li>Priority &rarr; <code>Project.DeliveryPriorityId</code> (FK <code>DeliveryPriority</code>). Priority change reason &rarr; <code>Project.DeliveryPriorityChangeReason</code>.</li>
+                <li>Activity type &rarr; <code>Project.ActivityTypeId</code> (FK <code>ActivityTypeLookup</code>).</li>
+                <li>Risk appetite &rarr; <code>Project.RiskAppetiteId</code> (FK <code>RiskAppetiteLookup</code>).</li>
+                <li>Spend control &rarr; <code>Project.SubjectToSpendControl</code> (bool).</li>
+                <li>Flagship &rarr; <code>Project.IsFlagship</code> (bool).</li>
+                <li>Dates &rarr; <code>Project.StartDate</code> / <code>TargetDeliveryDate</code>.</li>
+            </ul>
+        </div>
+
+        <h4 class="developers-data-flow__label">Surfaces in</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li>Work register columns and filters &mdash; <code>/modern/work</code>.</li>
+                <li>Detail header chips (Phase, Priority badge, Flagship star).</li>
+                <li>Reporting slices &mdash; <code>/modern/reporting/priorities</code> groups by Priority; thematic report groups by Phase / Activity.</li>
+                <li>RAID dashboards &mdash; risk volume by Phase, Risk appetite vs actual risk score.</li>
+            </ul>
+        </div>
+
+        <h4 class="developers-data-flow__label">Triggers</h4>
+        <div class="developers-data-flow__body">
+            Priority change without a reason is rejected by <code>EditPost</code>. Phase change to <code>Live</code> opens monthly-update submission for that work item if currently excluded.
+        </div>
+
+        <h4 class="developers-data-flow__label">Downstream</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li>Register CSV export includes all of these.</li>
+                <li>JSON API &mdash; <code>/api/v1/work-items</code> exposes ids; resolve labels through <code>/api/v1/admin/lookups/{type}</code>.</li>
+                <li>PowerBI &mdash; treat as classic dimension keys; load <code>PhaseLookup</code>, <code>DeliveryPriority</code>, <code>ActivityTypeLookup</code> as small dim tables.</li>
+            </ul>
+        </div>
+    </div>
+</section>
+
+<hr class="govuk-section-break govuk-section-break--l govuk-section-break--visible">
+
+<h2 class="govuk-heading-l" id="monthly-update">Monthly update</h2>
+<p class="developers-data-flow-group__intro">
+    The composite case &mdash; a single monthly submission writes to several
+    tables and propagates the new RAG, FTE figures and narrative across the
+    Modern UI, reports and notifications.
+</p>
+
+<section class="developers-data-flow" id="flow-monthly-submission">
+    <header class="developers-data-flow__header">
+        <h3 class="developers-data-flow__title">Monthly update: submit</h3>
+        <span class="developers-data-flow__kind">Composite</span>
+    </header>
+    <partial name="_DataFlowDiagram" model='("monthly", flowMonthly)' />
+    <div class="developers-data-flow__stages">
+        <h4 class="developers-data-flow__label">Captured at</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li>Form &mdash; <code>GET /modern/work/{id}/monthly-report/{year}/{month}</code> renders the <code>MonthlyReportViewModel</code>.</li>
+                <li>Save draft &mdash; <code>POST /modern/work/{id}/monthly-report/{year}/{month}</code> with <code>command=save</code>.</li>
+                <li>Submit &mdash; same URL with <code>command=submit</code> (handled by <code>MonthlyReportPost</code>).</li>
+                <li>Unsubmit (admin) &mdash; <code>POST /modern/work/{id}/monthly-report/{year}/{month}/unsubmit</code>.</li>
+            </ul>
+            <p class="govuk-body govuk-!-margin-top-2 govuk-!-margin-bottom-0">
+                Server enforces the submission window via <code>MonthlyStatusReportTimescaleConfig</code> + per-area <code>MonthlyUpdateDeadlineConfig</code>; a closed window rejects with a TempData error.
+            </p>
+        </div>
+
+        <h4 class="developers-data-flow__label">Stored in</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li><code>ProjectMonthlyUpdate</code> &mdash; one row per <code>(ProjectId, Year, Month)</code>. Fields: <code>Narrative</code>, <code>MonthlyPermFte</code>, <code>MonthlyMspFte</code>, <code>CreatedByEmail/Name/UserId</code>, <code>UpdatedAt</code>, <code>SubmittedAt</code> (set on submit), draft fields <code>DraftRagStatusLookupId</code>, <code>DraftRagJustification</code>, <code>DraftPathToGreen</code>.</li>
+                <li><code>MonthlyUpdateNarrative</code> &mdash; one child row per topic heading (Highlights, Lowlights, Next 30 days, etc.).</li>
+            </ul>
+        </div>
+
+        <h4 class="developers-data-flow__label">Side effects on submit</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li>New <code>ProjectRagHistory</code> row with the submitted RAG, justification, path-to-green and submitter details.</li>
+                <li>Denormalised current-state copied onto the parent: <code>Project.RagStatusLookupId</code>, <code>Project.RagStatus</code> (legacy string), <code>Project.RagJustification</code>, <code>Project.PathToGreen</code>.</li>
+                <li><code>Project.UpdatedAt</code> bumped.</li>
+                <li>If RAG is Green, <code>PathToGreen</code> is force-cleared on persistence.</li>
+                <li><code>AuditLog</code> row written for both <code>ProjectMonthlyUpdate</code> and <code>Project</code>.</li>
+            </ul>
+        </div>
+
+        <h4 class="developers-data-flow__label">Surfaces in</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li>Work detail last-month card &mdash; <code>_MonthlyReportLastMonth</code> partial on <code>/modern/work/{id}</code>.</li>
+                <li>Per-period viewer &mdash; <code>/modern/work/{id}/monthly-update/view</code>.</li>
+                <li>Cycle navigator on the work item &mdash; <code>ReportingCyclePeriod</code> chips (Upcoming / Due / Late / Submitted).</li>
+                <li>RAG badge &mdash; updates everywhere the parent work item is rendered.</li>
+                <li>Cross-org rollup &mdash; <code>/modern/reporting/monthly-update</code> and <code>/monthly-update-overview</code>.</li>
+                <li>Submission progress &mdash; <code>/modern/reporting/monthly-submission-progress</code> league table.</li>
+                <li>Business-area trend &mdash; <code>_BusinessAreaSubmissionTrendTable</code> partial on the same page.</li>
+                <li>RAID review meeting export &mdash; <code>/modern/reporting/raid</code> uses the latest narrative as the &ldquo;Last update&rdquo; column.</li>
+                <li>Operations dashboard &mdash; FTE rollups consume <code>MonthlyPermFte</code> + <code>MonthlyMspFte</code>.</li>
+            </ul>
+        </div>
+
+        <h4 class="developers-data-flow__label">Triggers</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li>If submitted, suppresses the &ldquo;Monthly update due&rdquo; reminder for that work item / period.</li>
+                <li>If unsubmitted by an admin, the reminder schedule re-opens for the remaining window.</li>
+                <li>If RAG changed to Red, fires the &ldquo;Work item now Red&rdquo; rule (if enabled at <code>/modern/admin/notification-settings</code>).</li>
+            </ul>
+        </div>
+
+        <h4 class="developers-data-flow__label">Downstream</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li>Excel export from <code>/modern/reporting/monthly-update</code>.</li>
+                <li>JSON API &mdash; <code>/api/v1/monthly-updates</code> returns the headline submission and FTE; <code>/api/v1/monthly-updates/{id}/narratives</code> returns the per-topic narrative rows.</li>
+                <li>PowerBI &mdash; the natural <code>FactMonthlyUpdate</code> grain is <code>(WorkItemId, Year, Month)</code>. Join to <code>DimWorkItem</code> on <code>ProjectId</code>, to <code>DimDate</code> via <code>Year + Month</code>, to <code>DimRagStatus</code> via <code>DraftRagStatusLookupId</code>.</li>
+            </ul>
+        </div>
+    </div>
+</section>
+
+<hr class="govuk-section-break govuk-section-break--l govuk-section-break--visible">
+
+<h2 class="govuk-heading-l" id="raid-capture">RAID capture</h2>
+<p class="developers-data-flow-group__intro">
+    Risks, issues, actions, decisions and milestones share a near-identical
+    capture flow; the risk card below is the canonical example. Differences
+    for the other record types are called out at the end of the section.
+</p>
+
+<section class="developers-data-flow" id="flow-risk">
+    <header class="developers-data-flow__header">
+        <h3 class="developers-data-flow__title">RAID: <code>Risk</code></h3>
+        <span class="developers-data-flow__kind">Multi-attachable</span>
+    </header>
+    <partial name="_DataFlowDiagram" model='("risk", flowRisk)' />
+    <div class="developers-data-flow__stages">
+        <h4 class="developers-data-flow__label">Captured at</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li><code>POST /modern/raid/risks/create</code> &rarr; <code>RiskCreatePost</code>.</li>
+                <li><code>POST /modern/raid/risks/{id}/edit</code> &rarr; <code>RiskEditPost</code> (including re-scoring).</li>
+                <li><code>POST /modern/raid/risks/{id}/association</code> &rarr; attach or detach from a work item / product.</li>
+                <li><code>POST /modern/raid/risks/{id}/escalation-request</code> &rarr; tier-change request.</li>
+                <li><code>POST /modern/raid/risks/{id}/make-issue</code> &rarr; materialise to an <code>Issue</code> with <code>SourceRiskId</code> set.</li>
+            </ul>
+        </div>
+
+        <h4 class="developers-data-flow__label">Stored in</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li><code>Risk</code> &mdash; scalar fields including <code>ImpactRating</code>, <code>LikelihoodRating</code>, <code>RiskScore</code> (computed), <code>Status</code>, dates, owner.</li>
+                <li>Tagging joins &mdash; <code>RiskRiskType</code>, <code>RiskRiskCategory</code>, <code>RiskKeyRiskIndicator</code>, <code>RiskDivision</code>, <code>RiskBusinessArea</code>.</li>
+                <li>Attached records &mdash; <code>Risk.ProjectId</code>, <code>Risk.ProductDocumentId</code>, <code>RiskAction</code>, <code>RiskDecision</code>, <code>IssueRisk</code>, <code>MilestoneRisk</code>.</li>
+            </ul>
+        </div>
+
+        <h4 class="developers-data-flow__label">Side effects</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li><code>RiskScore</code> recomputed on every save.</li>
+                <li>Tier-change request writes <code>RaidEscalationTierChangeRequest</code> with status <code>pending</code> until an authoriser approves it.</li>
+                <li>&ldquo;Make issue&rdquo; creates a paired <code>Issue</code> row and back-links via <code>Issue.SourceRiskId</code>.</li>
+            </ul>
+        </div>
+
+        <h4 class="developers-data-flow__label">Surfaces in</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li>Modern register &mdash; <code>/modern/raid/risks</code> (filterable by tier, status, score).</li>
+                <li>Risk detail &mdash; <code>/modern/raid/risks/{id}</code>.</li>
+                <li>Work-item RAID summary &mdash; on <code>/modern/work/{id}</code> via <code>WorkItemRiskOrIssue</code>.</li>
+                <li>RAID dashboard &mdash; <code>/modern/raid</code> heatmap, by-tier table, by-business-area table.</li>
+                <li>Scoped dashboards &mdash; <code>/modern/raid/business-areas/{id}</code>, <code>/directorate/{id}</code>, <code>/tier-reporting</code>.</li>
+                <li>RAID review meeting &mdash; <code>/modern/reporting/raid</code> risk matrix + tab.</li>
+                <li>Operations dashboard top-risks card.</li>
+            </ul>
+        </div>
+
+        <h4 class="developers-data-flow__label">Triggers</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li>Score crossing tier threshold appears in the &ldquo;Risks to review&rdquo; queue.</li>
+                <li>Status change to <code>closed</code> sets <code>ClosedDate</code> and removes from open-risks rollups.</li>
+                <li>Tier-change request approval can change <code>RiskTierId</code> and write a follow-up <code>AuditLog</code> entry.</li>
+            </ul>
+        </div>
+
+        <h4 class="developers-data-flow__label">Downstream</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li>CSV export &mdash; <code>GET /modern/raid/export/risks.csv</code>.</li>
+                <li>Excel export &mdash; <code>GET /modern/raid/dashboard/export.xlsx</code>.</li>
+                <li>JSON API &mdash; <code>GET /api/v1/risks</code>.</li>
+                <li>PowerBI &mdash; this is the <code>FactRisk</code> grain.</li>
+            </ul>
+        </div>
+    </div>
+</section>
+
+<div class="govuk-inset-text">
+    Actions, decisions and near-misses follow the same shape as Risk. They live at
+    <code>/modern/raid/actions/*</code>, <code>/modern/raid/decisions/*</code> and
+    <code>/modern/raid/near-misses/*</code> respectively. The three cards below cover
+    record types whose flow differs meaningfully from Risk.
+</div>
+
+<section class="developers-data-flow" id="flow-issue">
+    <header class="developers-data-flow__header">
+        <h3 class="developers-data-flow__title">RAID: <code>Issue</code></h3>
+        <span class="developers-data-flow__kind">Multi-attachable</span>
+    </header>
+    <partial name="_DataFlowDiagram" model='("issue", flowIssue)' />
+    <div class="developers-data-flow__stages">
+        <h4 class="developers-data-flow__label">Captured at</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li><code>POST /modern/raid/issues/create</code> &rarr; <code>IssueCreatePost</code>.</li>
+                <li><code>POST /modern/raid/issues/{id}/edit</code> &rarr; <code>IssueEditPost</code>.</li>
+                <li><code>POST /modern/raid/risks/{riskId}/make-issue</code> &mdash; materialises a risk into an issue and sets <code>Issue.SourceRiskId</code>.</li>
+            </ul>
+        </div>
+
+        <h4 class="developers-data-flow__label">Stored in</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li><code>Issue</code> &mdash; <code>Title</code>, <code>Description</code>, <code>Severity</code>, <code>Priority</code>, <code>Status</code>, <code>DetectedDate</code>, <code>TargetResolutionDate</code>, <code>OwnerUserId</code>.</li>
+                <li>Provenance &mdash; <code>SourceType</code>, <code>SourceReference</code>, <code>SourceRecordUrl</code>, <code>SourceRiskId</code>.</li>
+                <li>Attached parent &mdash; <code>Issue.ProjectId</code> and/or <code>Issue.ProductDocumentId</code> (see <a class="govuk-link" href="#flow-raid-assignment">RAID assignment</a>).</li>
+                <li>Cross-links &mdash; <code>IssueRisk</code>, <code>IssueAction</code>, <code>IssueDecision</code>.</li>
+                <li>History &mdash; <code>IssueHistory</code> (one row per state change), <code>IssueAssuranceEvent</code>.</li>
+            </ul>
+        </div>
+
+        <h4 class="developers-data-flow__label">Surfaces in</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li>Modern register &mdash; <code>/modern/raid/issues</code>.</li>
+                <li>Issue detail &mdash; <code>/modern/raid/issues/{id}</code>.</li>
+                <li>Work-item RAID summary &mdash; <code>/modern/work/{id}</code> via <code>WorkItemRiskOrIssue</code>.</li>
+                <li>RAID dashboards, by-tier / by-business-area slices, and the RAID review meeting agenda.</li>
+            </ul>
+        </div>
+
+        <h4 class="developers-data-flow__label">Triggers</h4>
+        <div class="developers-data-flow__body">
+            Moving to <code>resolved</code> emails the owner and the parent SRO; reopening flips status back to <code>open</code> and records an <code>IssueHistory</code> row.
+        </div>
+
+        <h4 class="developers-data-flow__label">Downstream</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li>CSV export &mdash; <code>GET /modern/raid/export/issues.csv</code>.</li>
+                <li>JSON API &mdash; <code>GET /api/v1/issues</code>.</li>
+                <li>PowerBI &mdash; <code>FactIssue</code> grain.</li>
+            </ul>
+        </div>
+    </div>
+</section>
+
+<section class="developers-data-flow" id="flow-assumption">
+    <header class="developers-data-flow__header">
+        <h3 class="developers-data-flow__title">RAID: <code>Assumption</code></h3>
+        <span class="developers-data-flow__kind">Cross-scoped</span>
+    </header>
+    <partial name="_DataFlowDiagram" model='("assumption", flowAssumption)' />
+    <div class="developers-data-flow__stages">
+        <h4 class="developers-data-flow__label">Captured at</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li><code>POST /modern/raid/assumptions/create</code> &rarr; <code>AssumptionCreatePost</code>.</li>
+                <li><code>POST /modern/raid/assumptions/{id}/edit</code> &rarr; <code>AssumptionEditPost</code>.</li>
+            </ul>
+        </div>
+
+        <h4 class="developers-data-flow__label">Stored in</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li><code>Assumption</code> &mdash; <code>Description</code>, <code>ReviewDate</code>, <code>ValidationOutcome</code>, <code>AssumptionCriticalityId</code>, <code>AssumptionStatusId</code>.</li>
+                <li>Scope &mdash; <code>RaidAssociationKind</code> (one of <code>WorkItem</code> / <code>Product</code> / <code>Organisation</code>) plus one of <code>ProjectId</code>, <code>PrimaryProductId</code>, <code>SroUserId</code>.</li>
+                <li>Multi-select joins &mdash; <code>AssumptionDivision</code>, <code>AssumptionBusinessArea</code>.</li>
+            </ul>
+        </div>
+
+        <h4 class="developers-data-flow__label">Surfaces in</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li>Modern register &mdash; <code>/modern/raid/assumptions</code>.</li>
+                <li>Detail &mdash; <code>/modern/raid/assumptions/{id}</code>.</li>
+                <li>Work-item Assumptions tab and Product detail Assumptions card.</li>
+                <li>RAID dashboards and the RAID review meeting agenda.</li>
+            </ul>
+        </div>
+
+        <h4 class="developers-data-flow__label">Triggers</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li>Moving status to <code>Invalidated</code> surfaces a UI hint to create a follow-up Risk or Issue.</li>
+                <li>An overdue <code>ReviewDate</code> appears on the Operations dashboard "Assumptions to review" tile and emails the owner + parent SRO.</li>
+            </ul>
+        </div>
+
+        <h4 class="developers-data-flow__label">Downstream</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li>JSON API &mdash; <code>GET /api/v1/raid/assumptions</code>.</li>
+                <li>PowerBI &mdash; <code>FactAssumption</code> with optional <code>DimWorkItem</code> / <code>DimProduct</code> bridges.</li>
+            </ul>
+        </div>
+    </div>
+</section>
+
+<section class="developers-data-flow" id="flow-dependency">
+    <header class="developers-data-flow__header">
+        <h3 class="developers-data-flow__title">RAID: <code>Dependency</code></h3>
+        <span class="developers-data-flow__kind">Edge between records</span>
+    </header>
+    <partial name="_DataFlowDiagram" model='("dependency", flowDependency)' />
+    <div class="developers-data-flow__stages">
+        <h4 class="developers-data-flow__label">Captured at</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li><code>POST /modern/raid/dependencies/create</code> &rarr; <code>DependencyCreatePost</code>.</li>
+                <li><code>POST /modern/raid/dependencies/{id}/edit</code> &rarr; <code>DependencyEditPost</code>.</li>
+                <li><code>POST /modern/work/{id}/dependency/add</code> &mdash; convenience entry point from a work item that pre-fills the source side.</li>
+            </ul>
+        </div>
+
+        <h4 class="developers-data-flow__label">Stored in</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li><code>Dependency</code> &mdash; source pair <code>(SourceEntityType, SourceEntityId)</code> and target pair <code>(TargetEntityType, TargetEntityId)</code> where the type is one of <code>Project</code>, <code>Risk</code>, <code>Issue</code>, <code>Milestone</code>, <code>Action</code>.</li>
+                <li>Classification &mdash; <code>DependencyLinkTypeId</code> (preferred) or legacy free-text <code>DependencyType</code>; <code>DependencyCriticalityId</code>.</li>
+                <li>Ownership &mdash; <code>OwnerUserId</code>, <code>Organisation</code> (free text for external parties), <code>DueDate</code>, <code>Status</code> (<code>Active</code> / <code>Resolved</code> / <code>Cancelled</code>).</li>
+                <li>Resolution &mdash; <code>ResolvedDate</code>, <code>ResolvedByEmail</code>, <code>ResolvedByName</code> populated when <code>Status</code> moves to <code>Resolved</code>.</li>
+            </ul>
+        </div>
+
+        <h4 class="developers-data-flow__label">Surfaces in</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li>Modern register &mdash; <code>/modern/raid/dependencies</code>.</li>
+                <li>Detail &mdash; <code>/modern/raid/dependencies/{id}</code>.</li>
+                <li>Work item Dependencies tab &mdash; appears under both the source and the target work item.</li>
+                <li>Product detail dependency card; RAID dashboards "Critical dependencies" tile.</li>
+            </ul>
+        </div>
+
+        <h4 class="developers-data-flow__label">Triggers</h4>
+        <div class="developers-data-flow__body">
+            Past-due <code>DueDate</code> emails the owner and the parent SRO of either side. Resolution removes the row from the open-dependencies dashboard tile.
+        </div>
+
+        <h4 class="developers-data-flow__label">Downstream</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li>JSON API &mdash; <code>GET /api/v1/raid/dependencies</code>.</li>
+                <li>PowerBI &mdash; <code>FactDependency</code>; the two <code>EntityType + EntityId</code> pairs let you model it as an edge between source and target dim tables.</li>
+            </ul>
+        </div>
+    </div>
+</section>
+
+<section class="developers-data-flow" id="flow-raid-assignment">
+    <header class="developers-data-flow__header">
+        <h3 class="developers-data-flow__title">RAID: assign to a work item or service</h3>
+        <span class="developers-data-flow__kind">Cross-cutting</span>
+    </header>
+    <partial name="_DataFlowDiagram" model='("raid-assignment", flowRaidAssignment)' />
+    <div class="developers-data-flow__stages">
+        <h4 class="developers-data-flow__label">Captured at</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li>On <strong>create</strong> &mdash; every RAID create form (<code>POST /modern/raid/{kind}/create</code> for <code>risks</code>, <code>issues</code>, <code>actions</code>, <code>decisions</code>, <code>milestones</code>, <code>near-misses</code>, <code>assumptions</code>) accepts a work-item picker or a product picker.</li>
+                <li>On an <strong>existing record</strong> &mdash; <code>POST /modern/raid/{kind}/{id}/association</code> changes the parent without re-creating the row.</li>
+                <li>Milestones additionally accept the parent at <code>POST /modern/work/{id}/milestone/{mid}/update</code>.</li>
+            </ul>
+        </div>
+
+        <h4 class="developers-data-flow__label">Stored in</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li><code>{Entity}.ProjectId</code> (FK <code>Project.Id</code>) &mdash; the work-item parent.</li>
+                <li><code>{Entity}.ProductDocumentId</code> (string FK to <code>FipsService.FipsId</code> / <code>CMDBProduct.Id</code>) &mdash; the service / product parent.</li>
+                <li>Both may be set; either may be cleared. The pair is the canonical "who owns this RAID record" for reporting.</li>
+                <li><code>AuditLog</code> entry records the previous and new association.</li>
+            </ul>
+        </div>
+
+        <h4 class="developers-data-flow__label">Surfaces in</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li>Work item &mdash; RAID summary card and per-kind tabs at <code>/modern/work/{id}</code>.</li>
+                <li>Product / service &mdash; the RAID card at <code>/modern/operations/service-register/product/{id}</code>.</li>
+                <li>RAID register filters &mdash; "by parent work item" and "by parent product".</li>
+                <li>RAID review meeting groups all records by parent work item; unassigned rows fall into a separate &ldquo;orphan&rdquo; bucket.</li>
+            </ul>
+        </div>
+
+        <h4 class="developers-data-flow__label">Triggers</h4>
+        <div class="developers-data-flow__body">
+            Notification recipient resolution uses the parent: e.g. an Issue moves to "resolved" emails the parent work-item SRO / Service Owner (via the contacts captured in <a class="govuk-link" href="#flow-work-people">Work item: People</a>). Re-pointing the parent changes who gets future emails for the same record.
+        </div>
+
+        <h4 class="developers-data-flow__label">Downstream</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li>JSON API &mdash; every RAID resource exposes <code>workItemId</code> and <code>productDocumentId</code>; PowerBI joins back to <code>DimWorkItem</code> and <code>DimProduct</code> through these.</li>
+                <li>CSV / Excel exports include the parent title columns; the lookup is satisfied from <code>Project.Title</code> / <code>FipsService.DisplayName</code>.</li>
+            </ul>
+        </div>
+    </div>
+</section>
+
+<section class="developers-data-flow" id="flow-milestone">
+    <header class="developers-data-flow__header">
+        <h3 class="developers-data-flow__title">Milestone</h3>
+        <span class="developers-data-flow__kind">Baseline + actual</span>
+    </header>
+    <partial name="_DataFlowDiagram" model='("milestone", flowMilestone)' />
+    <div class="developers-data-flow__stages">
+        <h4 class="developers-data-flow__label">Captured at</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li><code>POST /modern/work/{id}/milestone/{milestoneId}/update</code> &rarr; <code>UpdateMilestone</code> (covers create &amp; edit).</li>
+                <li><code>POST /modern/work/{id}/milestone/{milestoneId}/delete</code> &rarr; soft-delete.</li>
+            </ul>
+        </div>
+
+        <h4 class="developers-data-flow__label">Stored in</h4>
+        <div class="developers-data-flow__body">
+            <code>Milestone</code> &mdash; <code>Name</code>, <code>BaselineDueDate</code> (locked on first save), <code>DueDate</code>, <code>ActualDate</code>, <code>Status</code>, <code>ProgressPercent</code>, ownership, <code>ProjectId</code> / <code>ProductDocumentId</code>.
+        </div>
+
+        <h4 class="developers-data-flow__label">Side effects</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li>Changing <code>DueDate</code> while keeping the original <code>BaselineDueDate</code> drives the &ldquo;slip&rdquo; calculation across reports.</li>
+                <li>Setting <code>ActualDate</code> auto-flips <code>Status</code> to <code>complete</code>.</li>
+                <li>Optional cross-links to risks / issues / actions are written through <code>MilestoneRisk</code>, <code>MilestoneIssue</code>, <code>MilestoneAction</code>.</li>
+            </ul>
+        </div>
+
+        <h4 class="developers-data-flow__label">Surfaces in</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li>Milestones tab &mdash; <code>/modern/work/{id}/milestones</code>.</li>
+                <li>Detail header &mdash; next-milestone chip on <code>/modern/work/{id}</code>.</li>
+                <li>RAID review meeting &mdash; milestone trail in <code>_RaidMeetingTableRows</code>.</li>
+                <li>Operations dashboard overdue-milestones tile.</li>
+                <li>Monthly report &mdash; auto-listed upcoming &amp; overdue milestones on the form.</li>
+            </ul>
+        </div>
+
+        <h4 class="developers-data-flow__label">Downstream</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li>JSON API &mdash; <code>GET /api/v1/milestones</code>.</li>
+                <li>PowerBI &mdash; <code>FactMilestone</code> grain; pair <code>BaselineDueDate</code> + <code>DueDate</code> + <code>ActualDate</code> for slip / variance visuals.</li>
+            </ul>
+        </div>
+    </div>
+</section>
+
+<hr class="govuk-section-break govuk-section-break--l govuk-section-break--visible">
+
+<h2 class="govuk-heading-l" id="demand">Demand triage</h2>
+
+<section class="developers-data-flow" id="flow-demand">
+    <header class="developers-data-flow__header">
+        <h3 class="developers-data-flow__title">Demand triage: submit &amp; score</h3>
+        <span class="developers-data-flow__kind">Workflow</span>
+    </header>
+    <partial name="_DataFlowDiagram" model='("demand", flowDemand)' />
+    <div class="developers-data-flow__stages">
+        <h4 class="developers-data-flow__label">Captured at</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li><code>POST /modern/demand</code> (initial submission).</li>
+                <li><code>POST /modern/demand/{id}/exploratory</code> (analyst review notes).</li>
+                <li><code>POST /modern/demand/{id}/scorecard</code> (per-question answers).</li>
+                <li><code>POST /modern/demand/{id}/outcome</code> (approve / reject / defer).</li>
+            </ul>
+        </div>
+
+        <h4 class="developers-data-flow__label">Stored in</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li><code>DemandTriageRequest</code> for the headline.</li>
+                <li><code>DemandExploratoryReview</code> for analyst notes.</li>
+                <li><code>DemandScorecard</code> + <code>DemandAnswer</code> (one row per question, score + free text).</li>
+                <li><code>DemandTriageOutcome</code> with <code>OutcomeStage</code>, decision date, decision-maker.</li>
+                <li><code>DemandTriageAuditEvent</code> (one per state change &mdash; this is the request's timeline).</li>
+            </ul>
+        </div>
+
+        <h4 class="developers-data-flow__label">Side effects on approval</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li>A <code>BusinessCase</code> can be created and linked via <code>BusinessCaseProject</code> / <code>BusinessCaseProduct</code>.</li>
+                <li>A <code>DemandPipelineRequest</code> is created and steps through <code>DemandPipelineStage</code> rows.</li>
+                <li>On final acceptance, a <code>Project</code> (work item) is provisioned and the demand request gets the new <code>ProjectId</code>.</li>
+            </ul>
+        </div>
+
+        <h4 class="developers-data-flow__label">Surfaces in</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li>Demand register &mdash; <code>/modern/demand</code>.</li>
+                <li>Request detail &mdash; <code>/modern/demand/{id}</code> (shows full audit timeline).</li>
+                <li>Pipeline board &mdash; <code>/modern/demand/pipeline</code>.</li>
+                <li>Triage-meeting agenda &mdash; <code>/modern/demand/pipeline/triage-meetings</code>.</li>
+                <li>Once provisioned, the resulting work item carries <code>DemandRequestId</code> + <code>BusinessCaseId</code> on the Modern <code>WorkItem</code>.</li>
+            </ul>
+        </div>
+
+        <h4 class="developers-data-flow__label">Triggers</h4>
+        <div class="developers-data-flow__body">
+            Notification rule emails the submitter on each <code>Status</code> change; the triage board chair is emailed when a scorecard is fully answered.
+        </div>
+
+        <h4 class="developers-data-flow__label">Downstream</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li>JSON API &mdash; <code>/api/v1/demand</code> (requests, scorecards, outcomes).</li>
+                <li>PowerBI &mdash; treat <code>DemandAnswer</code> as the fact (one row per (request, question)), <code>DemandTriageRequest</code> as the parent dim.</li>
+            </ul>
+        </div>
+    </div>
+</section>
+
+<hr class="govuk-section-break govuk-section-break--l govuk-section-break--visible">
+
+<h2 class="govuk-heading-l" id="performance">Performance reporting</h2>
+
+<section class="developers-data-flow" id="flow-performance">
+    <header class="developers-data-flow__header">
+        <h3 class="developers-data-flow__title">Product return: a metric value</h3>
+        <span class="developers-data-flow__kind">Timeseries</span>
+    </header>
+    <partial name="_DataFlowDiagram" model='("performance", flowPerformance)' />
+    <div class="developers-data-flow__stages">
+        <h4 class="developers-data-flow__label">Captured at</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li><code>POST /modern/performance/{productDocumentId}/return/{period}</code> (Save draft / Submit).</li>
+                <li>Admins reopen a closed period at <code>POST /modern/admin/performance-reporting/{productDocumentId}/reopen</code>.</li>
+            </ul>
+        </div>
+
+        <h4 class="developers-data-flow__label">Stored in</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li><code>ProductReturn</code> &mdash; one per <code>(ProductDocumentId, ReturnPeriod)</code>; carries <code>SubmittedAt</code>, <code>SubmittedBy</code>.</li>
+                <li><code>ProductMetricValue</code> &mdash; one per <code>(ProductReturnId, MetricId)</code>.</li>
+                <li>Commissions (one-off captures) use <code>Commission</code> / <code>CommissionSubmission</code> / <code>CommissionMetricValue</code> instead.</li>
+            </ul>
+        </div>
+
+        <h4 class="developers-data-flow__label">Side effects</h4>
+        <div class="developers-data-flow__body">
+            Per-product / per-period overrides in <code>PerformanceReportingDueDateOverride</code>, <code>PerformanceReportingProductExclusion</code>, <code>PerformanceReportingPeriodExclusion</code> control whether a return is expected; submission removes the product from the &ldquo;outstanding&rdquo; list.
+        </div>
+
+        <h4 class="developers-data-flow__label">Surfaces in</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li>Per-product timeline &mdash; <code>/modern/performance/{productDocumentId}</code>.</li>
+                <li>Cross-product dashboard &mdash; <code>/modern/performance</code>.</li>
+                <li>Reporting hub &mdash; <code>/modern/reporting/performance</code>.</li>
+                <li>Operations dashboard &mdash; submission completeness tile.</li>
+            </ul>
+        </div>
+
+        <h4 class="developers-data-flow__label">Downstream</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li>JSON API &mdash; <code>/api/v1/performance-metrics</code> (catalogue) and <code>/api/v1/performance-metrics/returns</code> (values).</li>
+                <li>PowerBI &mdash; <code>FactPerformanceMetric</code> grain is <code>(ProductDocumentId, ReturnPeriod, MetricId)</code>.</li>
+            </ul>
+        </div>
+    </div>
+</section>
+
+<section class="developers-data-flow" id="flow-performance-commission">
+    <header class="developers-data-flow__header">
+        <h3 class="developers-data-flow__title">Performance commission: ad-hoc data collection</h3>
+        <span class="developers-data-flow__kind">One-off campaign</span>
+    </header>
+    <partial name="_DataFlowDiagram" model='("performance-commission", flowCommission)' />
+    <div class="developers-data-flow__stages">
+        <h4 class="developers-data-flow__label">Captured at</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li>Admin defines a commission &mdash; <code>POST /modern/admin/performance-reporting/commission/create</code> (name, open / close window, which metrics participate).</li>
+                <li>Service owner enters values &mdash; <code>POST /modern/performance/commission/metric-value</code> (incremental save, one metric value at a time).</li>
+                <li>Service owner submits &mdash; <code>POST /modern/performance/commission/{commissionId}/submit/confirm</code> seals the submission.</li>
+                <li>Admin reopens &mdash; <code>POST /modern/performance/commission/unsubmit</code> clears <code>SubmittedAt</code>.</li>
+                <li>Comments &mdash; <code>POST /modern/performance/commission/comments</code>.</li>
+                <li>Verification / bulk approve &mdash; <code>POST /modern/performance/commission/{id}/bulk/verify</code> and <code>.../bulk/apply</code>.</li>
+            </ul>
+        </div>
+
+        <h4 class="developers-data-flow__label">Stored in</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li><code>Commission</code> &mdash; the commission definition; FK joins to <code>PerformanceMetric</code> select which metrics are in scope.</li>
+                <li><code>CommissionSubmission</code> &mdash; one row per <code>(ProductDocumentId, CommissionId)</code>; carries <code>SubmittedAt</code>, <code>SubmittedByUserId</code>.</li>
+                <li><code>CommissionMetricValue</code> &mdash; one row per <code>(CommissionSubmissionId, MetricId)</code>; carries <code>VerifiedAt</code>, <code>VerifiedByUserId</code>.</li>
+                <li><code>CommissionComment</code> &mdash; threaded discussion against a submission or a value.</li>
+            </ul>
+        </div>
+
+        <h4 class="developers-data-flow__label">Side effects</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li>Submitting locks the submission against further save calls until an admin unsubmits.</li>
+                <li>Bulk verify stamps <code>VerifiedAt</code> / <code>VerifiedByUserId</code> on every value selected; bulk apply persists any analyst decision (e.g. accept / re-baseline).</li>
+                <li>Commission close (<code>CloseAt</code> in the past) prevents further submissions even if the user has not pressed Submit.</li>
+            </ul>
+        </div>
+
+        <h4 class="developers-data-flow__label">Surfaces in</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li>Commission dashboard &mdash; <code>/modern/performance/commission/{id}</code> (per-product progress and verification grid).</li>
+                <li>Reporting hub &mdash; <code>/modern/reporting/performance</code> commission tab; <code>/modern/operations</code> commission tile.</li>
+                <li>Per-product timeline &mdash; <code>/modern/performance/{productDocumentId}</code> shows commission entries alongside regular returns.</li>
+            </ul>
+        </div>
+
+        <h4 class="developers-data-flow__label">Triggers</h4>
+        <div class="developers-data-flow__body">
+            Commission open / close windows drive the reminder schedule for participating products (via the standard performance notification rule set).
+        </div>
+
+        <h4 class="developers-data-flow__label">Downstream</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li>JSON API &mdash; <code>GET /api/v1/performance-metrics/commissions</code> returns commissions, submissions and values.</li>
+                <li>PowerBI &mdash; treat <code>CommissionMetricValue</code> as a fact at grain <code>(ProductDocumentId, CommissionId, MetricId)</code>; join to <code>DimProduct</code> via <code>ProductDocumentId</code> and to <code>DimMetric</code> via <code>MetricId</code>.</li>
+            </ul>
+        </div>
+    </div>
+</section>
+
+<hr class="govuk-section-break govuk-section-break--l govuk-section-break--visible">
+
+<h2 class="govuk-heading-l" id="standards">Standards management</h2>
+<p class="developers-data-flow-group__intro">
+    Standards run a staged lifecycle &mdash; <strong>Draft &rarr; Under Review &rarr;
+    Approved &rarr; Published</strong> &mdash; with stage transitions kept on the
+    standard itself plus a comment trail. Functional standards are assessed
+    against published criteria; assessment responses are the fact data for
+    PowerBI.
+</p>
+
+<section class="developers-data-flow" id="flow-standards-ddt">
+    <header class="developers-data-flow__header">
+        <h3 class="developers-data-flow__title">DDT standard: draft &rarr; approve &rarr; publish</h3>
+        <span class="developers-data-flow__kind">Lifecycle</span>
+    </header>
+    <partial name="_DataFlowDiagram" model='("standards-ddt", flowStandardsDdt)' />
+    <div class="developers-data-flow__stages">
+        <h4 class="developers-data-flow__label">Captured at</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li>Create draft &mdash; <code>POST /modern/standards/ddt/create</code> &rarr; <code>DdtCreatePost</code>. New <code>DdtStandard</code> row at <code>Stage = Draft</code>, version <code>0.1.0</code>, <code>StandardUuid</code> stable across the lifecycle.</li>
+                <li>Edit existing &mdash; <code>POST /modern/standards/ddt/{id}/start-edit</code> spawns a <strong>child draft</strong> with <code>ParentStandardId</code> set, leaving the published version intact. Subsequent edits hit <code>POST /modern/standards/ddt/{id}/edit</code>.</li>
+                <li>Submit for review &mdash; <code>POST /modern/standards/ddt/{id}/submit-for-review</code> moves <code>Stage</code> to <code>Under Review</code>.</li>
+                <li>Approve / reject &mdash; <code>POST .../approve</code> and <code>POST .../reject</code> respectively; both write a <code>DdtStandardComment</code> with the reviewer and reason.</li>
+                <li>Publish &mdash; <code>POST /modern/standards/ddt/{id}/publish</code>.</li>
+                <li>Delete / unpublish &mdash; <code>POST /modern/standards/ddt/{id}/delete</code>.</li>
+            </ul>
+        </div>
+
+        <h4 class="developers-data-flow__label">Stored in</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li><code>DdtStandard</code> &mdash; <code>StandardUuid</code>, <code>Stage</code>, <code>IsPublished</code>, <code>PublishedAt</code>, <code>FirstPublished</code>, <code>Version</code>, <code>GovernanceApproval</code>, <code>ParentStandardId</code>.</li>
+                <li>Content joins &mdash; <code>DdtStandardOwner</code>, <code>DdtStandardContact</code>, <code>DdtStandardCategory</code>, <code>DdtStandardSubCategory</code>, <code>DdtStandardPhase</code>, <code>DdtStandardValidationRule</code>, <code>DdtStandardProduct</code>, <code>DdtStandardException</code>.</li>
+                <li>Audit &mdash; <code>DdtStandardComment</code> (one row per transition with author + comment), <code>DdtStandardUnpublishAudit</code>, <code>DdtStandardVersion</code> (snapshot of published content).</li>
+            </ul>
+        </div>
+
+        <h4 class="developers-data-flow__label">Side effects</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li><strong>Approve</strong> sets <code>GovernanceApproval = true</code> and clears any prior rejection state.</li>
+                <li><strong>Publish</strong> stamps <code>PublishedAt</code>, increments <code>Version</code>, sets <code>FirstPublished</code> if not previously set, and snapshots the current content into <code>DdtStandardVersion</code>. If the row is a child draft, the parent <code>DdtStandard</code> is updated in-place and the child is consumed (parent retains <code>StandardUuid</code>).</li>
+                <li>Standard <code>AuditLog</code> entry written for every stage change.</li>
+            </ul>
+        </div>
+
+        <h4 class="developers-data-flow__label">Surfaces in</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li>Catalogue &mdash; <code>/modern/standards/ddt</code> (filters by stage, owner, category).</li>
+                <li>Detail &mdash; <code>/modern/standards/ddt/{id}</code> with tabs for purpose, criteria, how-to-meet, related guidance, approved products and exceptions.</li>
+                <li>Management hub &mdash; <code>/modern/standards/management</code>; <code>POST /modern/standards/management/products/{id}/approve</code> approves the product against current published standards.</li>
+                <li>Per-product compliance card &mdash; surfaced on service-register product detail.</li>
+            </ul>
+        </div>
+
+        <h4 class="developers-data-flow__label">Triggers</h4>
+        <div class="developers-data-flow__body">
+            Stage transitions append to <code>DdtStandardComment</code> and write <code>AuditLog</code>; reviewers / publishers are notified via the standard notification ruleset when configured. Unpublishing creates a <code>DdtStandardUnpublishAudit</code> row that captures the reason.
+        </div>
+
+        <h4 class="developers-data-flow__label">Downstream</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li>JSON API &mdash; <code>GET /api/DdtStandards</code>, <code>/api/DdtStandards/Exceptions</code>, <code>/api/DdtStandards/ApprovedProducts</code>.</li>
+                <li>PowerBI &mdash; <code>DimStandard</code> keyed by <code>StandardUuid</code> (stable across versions); join <code>DdtStandardVersion</code> as a slowly-changing history table for trend analysis.</li>
+            </ul>
+        </div>
+    </div>
+</section>
+
+<section class="developers-data-flow" id="flow-standards-functional">
+    <header class="developers-data-flow__header">
+        <h3 class="developers-data-flow__title">Functional standard: conduct an assessment</h3>
+        <span class="developers-data-flow__kind">Per-criterion responses</span>
+    </header>
+    <partial name="_DataFlowDiagram" model='("standards-functional", flowStandardsAssessment)' />
+    <div class="developers-data-flow__stages">
+        <h4 class="developers-data-flow__label">Captured at</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li>Conduct &mdash; <code>GET /modern/standards/functional/assessment/{id}/conduct</code> renders the response form.</li>
+                <li>Save (autosave per criterion) &mdash; <code>POST /modern/standards/functional/assessment/save-response</code> writes one <code>AssessmentCriteriaResponse</code> row.</li>
+                <li>Submit &mdash; <code>POST /modern/standards/functional/assessment/submit</code> stamps <code>SubmittedAt</code> on <code>FunctionalStandardAssessment</code>.</li>
+                <li>Delete &mdash; <code>POST /modern/standards/functional/assessment/delete</code> soft-deletes the assessment and its responses.</li>
+            </ul>
+        </div>
+
+        <h4 class="developers-data-flow__label">Stored in</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li><code>FunctionalStandardAssessment</code> &mdash; one row per (standard, assessed work-item or service); carries <code>SubmittedAt</code>, <code>AssessmentLeadUserId</code>.</li>
+                <li><code>AssessmentCriteriaResponse</code> &mdash; one row per <code>CriterionId</code>, with <code>Attainment</code> (a numeric level) and <code>Notes</code>.</li>
+                <li>Catalogue &mdash; <code>FunctionalStandard</code>, <code>FunctionalStandardTheme</code>, <code>FunctionalStandardPracticeArea</code>, <code>AssessmentCriterion</code>.</li>
+            </ul>
+        </div>
+
+        <h4 class="developers-data-flow__label">Side effects</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li>Scores are derived on read: practice-area = average of criterion <code>Attainment</code>; theme = average of practice-area scores. Nothing is denormalised &mdash; the responses are the source of truth.</li>
+                <li>Submission opens the Word / Excel exports (drafts are export-restricted).</li>
+            </ul>
+        </div>
+
+        <h4 class="developers-data-flow__label">Surfaces in</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li>Summary &mdash; <code>/modern/standards/functional/assessment/{id}/summary</code>.</li>
+                <li>Catalogue &mdash; <code>/modern/standards/functional</code> shows the latest assessment status per standard / subject.</li>
+                <li>Work-item / Service standards card surfaces the most recent assessment overall.</li>
+            </ul>
+        </div>
+
+        <h4 class="developers-data-flow__label">Downstream</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li>Word export &mdash; <code>GET /modern/standards/functional/assessment/{id}/export/word</code>.</li>
+                <li>Excel export &mdash; <code>GET /modern/standards/functional/assessment/{id}/export</code>.</li>
+                <li>PowerBI &mdash; <code>FactAssessmentResponse</code> grain is <code>(AssessmentId, CriterionId)</code>; join to <code>DimCriterion</code> on <code>CriterionId</code>, then up to <code>DimStandard</code> / <code>DimSubject</code> through the catalogue tables.</li>
+            </ul>
+        </div>
+    </div>
+</section>
+
+<hr class="govuk-section-break govuk-section-break--l govuk-section-break--visible">
+
+<h2 class="govuk-heading-l" id="accessibility">Accessibility</h2>
+
+<section class="developers-data-flow" id="flow-accessibility-issue">
+    <header class="developers-data-flow__header">
+        <h3 class="developers-data-flow__title">Accessibility issue</h3>
+        <span class="developers-data-flow__kind">Workflow</span>
+    </header>
+    <partial name="_DataFlowDiagram" model='("a11y", flowAccessibility)' />
+    <div class="developers-data-flow__stages">
+        <h4 class="developers-data-flow__label">Captured at</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li><code>POST /accessibility/products/{productDocumentId}/issues</code> &mdash; create issue (legacy AdminLTE; will migrate to Modern admin).</li>
+                <li><code>POST /accessibility/issues/{id}/comments</code> &mdash; threaded discussion.</li>
+                <li><code>POST /accessibility/products/{productDocumentId}/retest-request</code> &mdash; auditor retest request.</li>
+                <li><code>POST /accessibility/statements/{id}/verify</code> &mdash; verification request.</li>
+            </ul>
+        </div>
+
+        <h4 class="developers-data-flow__label">Stored in</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li><code>AccessibilityIssue</code> for the headline.</li>
+                <li><code>IssueWcagCriterion</code> (one row per WCAG ref).</li>
+                <li><code>IssueComment</code> (per-comment) + <code>IssueHistory</code> (per state change).</li>
+                <li><code>AccessibilityRetestRequest</code> / <code>StatementVerificationRequest</code> for workflow events.</li>
+                <li><code>AuditHistory</code> for the broader audit trail on the product.</li>
+            </ul>
+        </div>
+
+        <h4 class="developers-data-flow__label">Surfaces in</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li>Product detail &mdash; <code>/accessibility/products/{productDocumentId}</code>.</li>
+                <li>Issue detail &mdash; <code>/accessibility/issues/{id}</code>.</li>
+                <li>Modern operations hub &mdash; <code>/modern/operations/service-register</code> shows the accessibility statement status per product.</li>
+                <li>Reporting hub &mdash; <code>/modern/reporting/accessibility</code>.</li>
+            </ul>
+        </div>
+
+        <h4 class="developers-data-flow__label">Triggers</h4>
+        <div class="developers-data-flow__body">
+            Resolving the last open issue marks the retest request as eligible; verification updates <code>ProductAccessibility.StatementStatus</code> and emails the service owner via <code>AccessibilityEmailConfiguration</code>.
+        </div>
+
+        <h4 class="developers-data-flow__label">Downstream</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li>JSON API &mdash; <code>/api/v1/accessibility</code>.</li>
+                <li>Published statement page (rendered on the front-end product page).</li>
+                <li>PowerBI &mdash; useful as a <code>FactAccessibilityIssue</code> with <code>DimProduct</code> + <code>DimWcag</code>.</li>
+            </ul>
+        </div>
+    </div>
+</section>
+
+<hr class="govuk-section-break govuk-section-break--l govuk-section-break--visible">
+
+<h2 class="govuk-heading-l" id="cross-cutting">Cross-cutting flows</h2>
+
+<section class="developers-data-flow" id="cross-cms-sync">
+    <header class="developers-data-flow__header">
+        <h3 class="developers-data-flow__title">Upstream: CMDB sync (Sync settings)</h3>
+        <span class="developers-data-flow__kind">Operator-driven sync</span>
+    </header>
+    <p class="developers-data-flow-group__intro govuk-!-margin-bottom-3 govuk-!-padding-left-4 govuk-!-padding-right-4 govuk-!-padding-top-3">
+        Service-register data is brought in from the on-prem CMDB by an
+        operator on
+        <code>/modern/operations/service-register/sync-settings</code>. The
+        page exposes three flows: a <strong>bulk sync</strong> (Sync from CMDB
+        button, with live SSE progress), a <strong>per-product sync</strong>
+        from the product detail page, and a <strong>completion-template
+        import</strong> for fields the CMDB does not own. All three apply
+        configurable sync rules (<code>FipsCmdbSyncRule</code>) and write a
+        run record to <code>FipsSyncHistory</code>.
+    </p>
+    <partial name="_DataFlowDiagram" model='("cmdb-sync", flowCmdbSync)' />
+    <div class="developers-data-flow__stages">
+        <h4 class="developers-data-flow__label">Captured at</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li>Sync settings hub &mdash; <code>GET /modern/operations/service-register/sync-settings</code> (controller: <code>ServiceRegisterSyncSettings</code>). Houses all three actions below.</li>
+                <li>Bulk sync &mdash; <code>POST /modern/operations/service-register/sync-cmdb-stream</code> streams Server-Sent Events while running (used by the in-page modal). The non-streaming variant is <code>POST .../sync-cmdb</code>.</li>
+                <li>Per-product sync &mdash; <code>POST /modern/operations/service-register/product/{id}/sync-cmdb-json</code> from the product detail page.</li>
+                <li>Completion import &mdash; <code>POST .../sync-settings/import-completion</code> (CSV template from <code>GET .../sync-settings/export-completion</code>).</li>
+                <li>Sync rules CRUD &mdash; <code>.../sync-settings/add</code>, <code>.../sync-settings/{id}/toggle</code>, <code>.../sync-settings/{id}/delete</code>, <code>.../sync-settings/reset-products-for-cmdb</code>.</li>
+            </ul>
+        </div>
+
+        <h4 class="developers-data-flow__label">Stored in</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li><code>FipsService</code> &mdash; canonical product / service row, upserted by CMDB <code>sys_id</code>.</li>
+                <li><code>CMDBProduct</code> &mdash; last-known CMDB attributes for the row.</li>
+                <li><code>FipsCmdbSyncRule</code> &mdash; operator-defined rules (pattern + match kind + target status / &ldquo;enterprise service&rdquo; flag).</li>
+                <li><code>FipsSyncHistory</code> &mdash; one row per bulk run with counts and error samples.</li>
+                <li><code>FipsCompletionImportResult</code> &mdash; per-upload summary returned to the banner.</li>
+            </ul>
+        </div>
+
+        <h4 class="developers-data-flow__label">Side effects</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li>Rules are evaluated per row: matching rows can have their status set (Rejected, Inactive, etc.) or be flagged as enterprise services.</li>
+                <li>Rows already retired in COMPASS are left alone; CMDB rows without a <code>sys_id</code> are skipped (counted in the result).</li>
+                <li>Default rules are seeded on first run via <code>EnsureDefaultCmdbSyncRulesAsync</code>.</li>
+                <li>Product categories are not synced &mdash; they are managed manually inside COMPASS.</li>
+            </ul>
+        </div>
+
+        <h4 class="developers-data-flow__label">Surfaces in</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li>Service register &mdash; <code>/modern/operations/service-register</code> (active tab redirected to after bulk sync).</li>
+                <li>Product detail &mdash; <code>/modern/operations/service-register/product/{id}</code> (the per-product sync button lives here).</li>
+                <li>Sync settings page itself &mdash; rules list, completion import results, run history.</li>
+                <li>Product picker &mdash; on work-item create / edit and on RAID risk / issue / action create forms.</li>
+                <li>RAID records that carry <code>ProductDocumentId</code> render the product name via this table.</li>
+            </ul>
+        </div>
+
+        <h4 class="developers-data-flow__label">Triggers</h4>
+        <div class="developers-data-flow__body">
+            Completion import shows a notification banner with row counts; sync errors are surfaced as a TempData error with up to a handful of error samples. No outbound email.
+        </div>
+
+        <h4 class="developers-data-flow__label">Downstream</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li>JSON API &mdash; <code>/api/v1/service-register</code>.</li>
+                <li>PowerBI &mdash; use as <code>DimProduct</code>. Join key on every fact table is <code>ProductDocumentId</code> (string), not <code>FipsService.Id</code>.</li>
+            </ul>
+        </div>
+    </div>
+</section>
+
+<section class="developers-data-flow" id="cross-notifications">
+    <header class="developers-data-flow__header">
+        <h3 class="developers-data-flow__title">Outbound: a notification email</h3>
+        <span class="developers-data-flow__kind">Outbound</span>
+    </header>
+    <partial name="_DataFlowDiagram" model='("notifications", flowNotifications)' />
+    <div class="developers-data-flow__stages">
+        <h4 class="developers-data-flow__label">Captured at</h4>
+        <div class="developers-data-flow__body">
+            Rules are configured at <code>/modern/admin/notification-settings</code> &mdash; one <code>NotificationRule</code> per (trigger, template, recipient strategy).
+        </div>
+
+        <h4 class="developers-data-flow__label">Stored in</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li><code>NotificationRule</code> &mdash; trigger + template ref + recipient strategy.</li>
+                <li><code>NotificationTemplate</code> &mdash; GOV.Notify template id and placeholders.</li>
+                <li><code>NotificationLog</code> &mdash; one row per send attempt (status, GOV.Notify id, error).</li>
+            </ul>
+        </div>
+
+        <h4 class="developers-data-flow__label">Side effects</h4>
+        <div class="developers-data-flow__body">
+            Recipient resolution consults the work-item contact tables (<code>ProjectSeniorResponsibleOfficer</code>, <code>ProjectServiceOwner</code>, <code>ProjectPmoContact</code>, <code>Project.PrimaryContactUserId</code>, <code>ProjectBudgetOwner</code>) and the underlying <code>User</code> records.
+        </div>
+
+        <h4 class="developers-data-flow__label">Surfaces in</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li>Notification log &mdash; <code>/modern/admin/notification-settings/log</code>.</li>
+                <li>Per-user inbox (out of band).</li>
+            </ul>
+        </div>
+
+        <h4 class="developers-data-flow__label">Downstream</h4>
+        <div class="developers-data-flow__body">
+            None internal; the log is the source of truth for "did we send this".
+        </div>
+    </div>
+</section>
+
+<section class="developers-data-flow" id="cross-audit">
+    <header class="developers-data-flow__header">
+        <h3 class="developers-data-flow__title">Cross-cutting: audit &amp; observability</h3>
+        <span class="developers-data-flow__kind">Background</span>
+    </header>
+    <partial name="_DataFlowDiagram" model='("audit", flowAudit)' />
+    <div class="developers-data-flow__stages">
+        <h4 class="developers-data-flow__label">Stored in</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li><code>AuditLog</code> &mdash; one row per write (entity type, id, action, user, payload JSON).</li>
+                <li>Per-domain history tables &mdash; <code>ProjectRagHistory</code>, <code>IssueHistory</code>, <code>ProjectProblemStatementHistory</code>, <code>DemandTriageAuditEvent</code>, <code>BusinessCaseDdtFeedback</code>, <code>AuditHistory</code> (accessibility).</li>
+                <li><code>ApiRequestLog</code> &mdash; every API call (token, method, path, status, duration).</li>
+            </ul>
+        </div>
+
+        <h4 class="developers-data-flow__label">Surfaces in</h4>
+        <div class="developers-data-flow__body">
+            <ul>
+                <li>Per-work-item audit tab &mdash; <code>/modern/work/{id}/audit</code> (renders <code>LifecycleAuditEntry</code> rows).</li>
+                <li>Per-RAID-item timeline &mdash; <code>/modern/raid/review/work/item/{kind}/{id}/timeline</code>.</li>
+                <li>API token usage &mdash; <code>/modern/admin/api-tokens/{id}</code>.</li>
+            </ul>
+        </div>
+    </div>
+</section>
+
+@section Aside {
+    <h2 class="docs-page-aside-heading">On this page</h2>
+    <ul class="docs-page-aside-nav">
+        <li><a class="govuk-link govuk-link--no-visited-state" href="#how-to-read">How to read a flow card</a></li>
+        <li><a class="govuk-link govuk-link--no-visited-state" href="#work-item-capture">Work item: capture</a>
+            <ul>
+                <li><a class="govuk-link govuk-link--no-visited-state" href="#flow-work-create">Create work item</a></li>
+                <li><a class="govuk-link govuk-link--no-visited-state" href="#flow-work-title">Title</a></li>
+                <li><a class="govuk-link govuk-link--no-visited-state" href="#flow-work-rag">RAG status</a></li>
+                <li><a class="govuk-link govuk-link--no-visited-state" href="#flow-work-people">People</a></li>
+                <li><a class="govuk-link govuk-link--no-visited-state" href="#flow-work-lookups">Lookup fields</a></li>
+            </ul>
+        </li>
+        <li><a class="govuk-link govuk-link--no-visited-state" href="#monthly-update">Monthly update</a></li>
+        <li><a class="govuk-link govuk-link--no-visited-state" href="#raid-capture">RAID capture</a>
+            <ul>
+                <li><a class="govuk-link govuk-link--no-visited-state" href="#flow-risk">Risk</a></li>
+                <li><a class="govuk-link govuk-link--no-visited-state" href="#flow-issue">Issue</a></li>
+                <li><a class="govuk-link govuk-link--no-visited-state" href="#flow-assumption">Assumption</a></li>
+                <li><a class="govuk-link govuk-link--no-visited-state" href="#flow-dependency">Dependency</a></li>
+                <li><a class="govuk-link govuk-link--no-visited-state" href="#flow-raid-assignment">Assign to work / service</a></li>
+                <li><a class="govuk-link govuk-link--no-visited-state" href="#flow-milestone">Milestone</a></li>
+            </ul>
+        </li>
+        <li><a class="govuk-link govuk-link--no-visited-state" href="#demand">Demand triage</a></li>
+        <li><a class="govuk-link govuk-link--no-visited-state" href="#performance">Performance reporting</a>
+            <ul>
+                <li><a class="govuk-link govuk-link--no-visited-state" href="#flow-performance">Product return</a></li>
+                <li><a class="govuk-link govuk-link--no-visited-state" href="#flow-performance-commission">Commission</a></li>
+            </ul>
+        </li>
+        <li><a class="govuk-link govuk-link--no-visited-state" href="#standards">Standards</a>
+            <ul>
+                <li><a class="govuk-link govuk-link--no-visited-state" href="#flow-standards-ddt">DDT lifecycle</a></li>
+                <li><a class="govuk-link govuk-link--no-visited-state" href="#flow-standards-functional">Functional assessment</a></li>
+            </ul>
+        </li>
+        <li><a class="govuk-link govuk-link--no-visited-state" href="#accessibility">Accessibility</a></li>
+        <li><a class="govuk-link govuk-link--no-visited-state" href="#cross-cutting">Cross-cutting</a>
+            <ul>
+                <li><a class="govuk-link govuk-link--no-visited-state" href="#cross-cms-sync">CMDB sync (Sync settings)</a></li>
+                <li><a class="govuk-link govuk-link--no-visited-state" href="#cross-notifications">Notifications</a></li>
+                <li><a class="govuk-link govuk-link--no-visited-state" href="#cross-audit">Audit</a></li>
+            </ul>
+        </li>
+    </ul>
+}
+
+@section Scripts {
+    <script src="~/js/docs-mermaid.js" asp-append-version="true" nonce="@(Context.Items["Nonce"]?.ToString() ?? "")"></script>
+}

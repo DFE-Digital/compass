@@ -1,0 +1,270 @@
+@model Compass.ViewModels.Modern.AuditExplorerListVm
+@using Compass.ViewModels.Modern
+@using Microsoft.AspNetCore.Html
+@{
+  ViewData["Title"] = "Audit explorer";
+  var f = Model.Filter;
+  string FromValue() => f.From.HasValue ? f.From.Value.ToString("yyyy-MM-dd") : string.Empty;
+  string ToValue() => f.To.HasValue ? f.To.Value.ToString("yyyy-MM-dd") : string.Empty;
+
+  string PageUrl(int p)
+  {
+    var rv = new Dictionary<string, object?>
+    {
+      ["q"] = f.Q,
+      ["feature"] = f.Feature,
+      ["entity"] = f.Entity,
+      ["action"] = f.Action,
+      ["user"] = f.User,
+      ["from"] = FromValue(),
+      ["to"] = ToValue(),
+      ["pageSize"] = f.PageSize,
+      ["page"] = p,
+    };
+    return Url.Action("AuditExplorer", "ModernAdmin", rv) ?? "#";
+  }
+
+  string DetailUrl(Guid id)
+  {
+    var rv = new Dictionary<string, object?>
+    {
+      ["auditLogId"] = id,
+      ["q"] = f.Q,
+      ["feature"] = f.Feature,
+      ["entity"] = f.Entity,
+      ["action"] = f.Action,
+      ["user"] = f.User,
+      ["from"] = FromValue(),
+      ["to"] = ToValue(),
+      ["pageSize"] = f.PageSize,
+      ["page"] = f.Page,
+    };
+    return Url.Action("AuditExplorerDetail", "ModernAdmin", rv) ?? "#";
+  }
+
+  var hasAnyFilter =
+    !string.IsNullOrWhiteSpace(f.Q) ||
+    !string.IsNullOrWhiteSpace(f.Feature) ||
+    !string.IsNullOrWhiteSpace(f.Entity) ||
+    !string.IsNullOrWhiteSpace(f.Action) ||
+    !string.IsNullOrWhiteSpace(f.User) ||
+    f.From.HasValue || f.To.HasValue;
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernAdmin")">Admin</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">Audit explorer</li>
+}
+
+<div class="audit-explorer">
+  @await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel
+  {
+    Caption = "Administration",
+    Title = "Audit explorer",
+    BackLinkHref = Url.Action("Index", "ModernAdmin"),
+    BackLinkText = "Back to admin",
+    Lede = new HtmlString("<p class=\"govuk-body govuk-!-margin-bottom-0\">Browse every recorded change across Compass. Filter by feature, entity, action, user or date, then open a record to see exactly what changed.</p>")
+  })
+
+  <form method="get" action="@Url.Action("AuditExplorer", "ModernAdmin")" class="dfe-c-mb-3" novalidate>
+    <div class="filter-toolbar">
+      <div class="filter-toolbar__search-wrap">
+        <label for="audit-q" class="govuk-visually-hidden">Search by entity, id, reference or action</label>
+        <input type="search" name="q" id="audit-q" value="@f.Q" placeholder="Search entity, id, reference or action…" class="filter-search" autocomplete="off" />
+        <button type="submit" class="govuk-button govuk-button--secondary filter-toolbar__search-submit">Search</button>
+      </div>
+      <button type="button" class="filter-toggle-btn" id="audit-filter-btn" aria-expanded="@(hasAnyFilter ? "true" : "false")" aria-controls="audit-filter-panel">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M1 3h14v1.5l-5 5V14l-4-2V9.5L1 4.5V3z"></path></svg>
+        <span class="filter-toggle-label">Filter</span>
+      </button>
+    </div>
+
+    <div class="filter-panel filter-panel--allwork" id="audit-filter-panel" @(hasAnyFilter ? null : "hidden")>
+      <div class="filter-panel__grid">
+        <div>
+          <label for="audit-feature" class="govuk-label govuk-label--s">Feature</label>
+          <select name="feature" id="audit-feature" class="govuk-select">
+            <option value="">All features</option>
+            @foreach (var feature in Model.Features)
+            {
+              if (string.Equals(feature.Key, f.Feature, StringComparison.OrdinalIgnoreCase))
+              { <option value="@feature.Key" selected>@feature.Name</option> }
+              else
+              { <option value="@feature.Key">@feature.Name</option> }
+            }
+          </select>
+        </div>
+        <div>
+          <label for="audit-entity" class="govuk-label govuk-label--s">Entity</label>
+          <select name="entity" id="audit-entity" class="govuk-select">
+            <option value="">All entities</option>
+            @foreach (var entity in Model.Entities)
+            {
+              if (string.Equals(entity.Key, f.Entity, StringComparison.OrdinalIgnoreCase))
+              { <option value="@entity.Key" selected>@entity.Name</option> }
+              else
+              { <option value="@entity.Key">@entity.Name</option> }
+            }
+          </select>
+        </div>
+        <div>
+          <label for="audit-action" class="govuk-label govuk-label--s">Action</label>
+          <select name="action" id="audit-action" class="govuk-select">
+            <option value="">Any action</option>
+            @foreach (var action in Model.Actions)
+            {
+              if (string.Equals(action, f.Action, StringComparison.OrdinalIgnoreCase))
+              { <option value="@action" selected>@action</option> }
+              else
+              { <option value="@action">@action</option> }
+            }
+          </select>
+        </div>
+        <div>
+          <label for="audit-user" class="govuk-label govuk-label--s">User (name, email or id)</label>
+          <input type="text" name="user" id="audit-user" class="govuk-input" value="@f.User" autocomplete="off" placeholder="e.g. alex.smith@@education.gov.uk" />
+        </div>
+        <div>
+          <label for="audit-from" class="govuk-label govuk-label--s">From (UTC)</label>
+          <input type="date" name="from" id="audit-from" class="govuk-input govuk-input--width-10" value="@FromValue()" />
+        </div>
+        <div>
+          <label for="audit-to" class="govuk-label govuk-label--s">To (UTC)</label>
+          <input type="date" name="to" id="audit-to" class="govuk-input govuk-input--width-10" value="@ToValue()" />
+        </div>
+        <div>
+          <label for="audit-page-size" class="govuk-label govuk-label--s">Rows per page</label>
+          <select name="pageSize" id="audit-page-size" class="govuk-select">
+            @foreach (var size in new[] { 25, 50, 100, 200 })
+            {
+              if (size == f.PageSize)
+              { <option value="@size" selected>@size</option> }
+              else
+              { <option value="@size">@size</option> }
+            }
+          </select>
+        </div>
+      </div>
+      <div class="filter-panel__actions">
+        <button type="submit" class="govuk-button" data-module="govuk-button">Apply filters</button>
+        <a href="@Url.Action("AuditExplorer", "ModernAdmin")" class="govuk-link govuk-link--no-visited-state filter-panel__clear-link">Clear filters</a>
+      </div>
+    </div>
+  </form>
+
+  <p class="govuk-body-s dfe-c-text-muted dfe-c-mb-2">
+    @if (Model.TotalRows == 0)
+    {
+      <span>No audit entries match the current filters.</span>
+    }
+    else
+    {
+      var first = ((f.Page - 1) * f.PageSize) + 1;
+      var last = Math.Min(f.Page * f.PageSize, Model.TotalRows);
+      <span>Showing <strong>@first–@last</strong> of <strong>@Model.TotalRows.ToString("N0")</strong> entries.</span>
+      if (Model.MostRecentTimestampUtc.HasValue)
+      {
+        <span class="govuk-!-margin-left-2">Newest on this page: <strong>@Compass.Services.AuditFeatureMap.FormatTimestamp(Model.MostRecentTimestampUtc.Value)</strong></span>
+      }
+    }
+  </p>
+
+  <div class="dfe-f-table-wrapper audit-explorer__table" data-module="dfe-f-table">
+    <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed audit-explorer-table">
+      <caption class="govuk-visually-hidden">Audit log entries matching the current filters, most recent first.</caption>
+      <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+          <th scope="col" class="govuk-table__header">When (UTC)</th>
+          <th scope="col" class="govuk-table__header">User</th>
+          <th scope="col" class="govuk-table__header">Feature</th>
+          <th scope="col" class="govuk-table__header">Entity</th>
+          <th scope="col" class="govuk-table__header">Action</th>
+          <th scope="col" class="govuk-table__header"><span class="govuk-visually-hidden">Open</span></th>
+        </tr>
+      </thead>
+      <tbody class="govuk-table__body">
+        @if (Model.Rows.Count == 0)
+        {
+          <tr class="govuk-table__row">
+            <td class="govuk-table__cell dfe-c-text-muted" colspan="6">
+              No audit entries match the current filters.
+              @if (hasAnyFilter)
+              {
+                <a class="govuk-link govuk-!-margin-left-2" href="@Url.Action("AuditExplorer", "ModernAdmin")">Clear all filters</a>
+              }
+            </td>
+          </tr>
+        }
+        else
+        {
+          foreach (var row in Model.Rows)
+          {
+            var detail = DetailUrl(row.AuditLogId);
+            <tr class="govuk-table__row">
+              <td class="govuk-table__cell audit-explorer-table__when">
+                <span title="@row.ChangedUtc.ToString("O")">@Compass.Services.AuditFeatureMap.FormatTimestamp(row.ChangedUtc, "d MMM yyyy")</span>
+                <span class="govuk-body-s dfe-c-text-muted">@row.ChangedUtc.ToString("HH:mm:ss") UTC</span>
+              </td>
+              <td class="govuk-table__cell">
+                @if (!string.IsNullOrWhiteSpace(row.ChangedBy))
+                {
+                  <span class="govuk-!-font-weight-bold">@row.ChangedBy</span>
+                }
+                else
+                {
+                  <span class="dfe-c-text-muted">Unknown</span>
+                }
+                @if (!string.IsNullOrWhiteSpace(row.ChangedByEmail) && !string.Equals(row.ChangedByEmail, row.ChangedBy, StringComparison.OrdinalIgnoreCase))
+                {
+                  <span class="govuk-body-s dfe-c-text-muted">@row.ChangedByEmail</span>
+                }
+              </td>
+              <td class="govuk-table__cell">@row.FeatureName</td>
+              <td class="govuk-table__cell">
+                <span class="govuk-!-font-weight-bold">@row.EntityFriendly</span>
+                @if (!string.IsNullOrWhiteSpace(row.EntityReference))
+                {
+                  <span class="govuk-body-s dfe-c-text-muted">@row.EntityReference</span>
+                }
+              </td>
+              <td class="govuk-table__cell">
+                <strong class="govuk-tag @row.ActionTagColour">@row.ActionFriendly</strong>
+              </td>
+              <td class="govuk-table__cell govuk-!-text-align-right">
+                <a class="govuk-link govuk-link--no-visited-state" href="@detail">View<span class="govuk-visually-hidden"> details for @row.EntityFriendly @row.ActionFriendly on @Compass.Services.AuditFeatureMap.FormatTimestamp(row.ChangedUtc)</span></a>
+              </td>
+            </tr>
+          }
+        }
+      </tbody>
+    </table>
+  </div>
+
+  @await Html.PartialAsync("~/Views/Modern/Shared/_GovUkPagination.cshtml", new GovUkPaginationViewModel
+  {
+    CurrentPage = f.Page,
+    TotalPages = Model.TotalPages,
+    PageUrl = PageUrl,
+    NavigationAriaLabel = "Audit explorer pagination",
+  })
+</div>
+
+@section Scripts {
+  <script nonce="@(Context.Items["Nonce"] as string)">
+    (function () {
+      var btn = document.getElementById('audit-filter-btn');
+      var panel = document.getElementById('audit-filter-panel');
+      if (!btn || !panel) return;
+      btn.addEventListener('click', function () {
+        var expanded = btn.getAttribute('aria-expanded') === 'true';
+        btn.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+        if (expanded) {
+          panel.setAttribute('hidden', '');
+        } else {
+          panel.removeAttribute('hidden');
+        }
+      });
+    })();
+  </script>
+}

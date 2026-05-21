@@ -92,6 +92,7 @@ public class ModernMonthlyReportService
             .Include(p => p.MonthlyUpdates)
                 .ThenInclude(mu => mu.MonthlyUpdateNarratives)
             .Include(p => p.RagStatusLookup)
+            .Include(p => p.RagHistory)
             .Include(p => p.Directorates)
             .Where(p => !p.IsDeleted && p.Status != "Cancelled" && p.Status != "Completed");
 
@@ -344,6 +345,13 @@ public class ModernMonthlyReportService
         var ragChanges = BuildRagChangeDetails(allProjects, ragHistoryDuringMonth, historyByProject, monthStart, reportYear, reportMonth);
         var priorityChanges = BuildPriorityChangeDetails(allProjects, prevMonthProjects, monthStart, monthEnd, reportYear, reportMonth);
 
+        var ragSixMonthTrendRows = MonthlyReportRagTrendAnalyzer.Build(
+            allProjects,
+            historyByProject,
+            reportYear,
+            reportMonth,
+            ResolveRagAtCutoff);
+
         var nextMonthDate = monthStart.AddMonths(1);
         var nextMonthAllowed =
             (nextMonthDate.Year < defaultReportYear ||
@@ -507,7 +515,8 @@ public class ModernMonthlyReportService
             ScopeProjectItems = allProjects
                 .Select(p => ToBusinessAreaProjectItem(p, reportYear, reportMonth, monthStart, monthEnd, upcomingWindowEnd, todayUtc))
                 .OrderBy(x => x.Title)
-                .ToList()
+                .ToList(),
+            RagSixMonthTrendRows = ragSixMonthTrendRows
         };
     }
 
@@ -770,18 +779,31 @@ public class ModernMonthlyReportService
         DateTime monthStart,
         DateTime monthEnd,
         DateTime upcomingWindowEnd,
-        DateTime todayUtc) =>
-        new()
+        DateTime todayUtc)
+    {
+        var periodUpdate = p.MonthlyUpdates?.FirstOrDefault(u => u.Year == reportYear && u.Month == reportMonth);
+        var latestSubmitted = p.MonthlyUpdates?
+            .Where(u => u.SubmittedAt.HasValue)
+            .OrderByDescending(u => u.Year)
+            .ThenByDescending(u => u.Month)
+            .FirstOrDefault();
+
+        return new BusinessAreaProjectItem
         {
             Id = p.Id,
             Title = p.Title,
+            Status = p.Status,
+            BusinessArea = p.BusinessAreaLookup?.Name ?? "Not set",
             Summary = string.IsNullOrWhiteSpace(p.Aim) ? null : p.Aim.Trim(),
             PathToGreen = string.IsNullOrWhiteSpace(p.PathToGreen) ? null : p.PathToGreen.Trim(),
             RagJustification = string.IsNullOrWhiteSpace(p.RagJustification) ? null : p.RagJustification.Trim(),
             LatestMonthlyUpdateNarrative = ProjectMonthlyUpdateNarrative.LatestSubmittedText(p),
             Rag = RagBucket(p),
             Priority = PriorityBucket(p),
-            SubmittedUpdate = p.MonthlyUpdates.Any(u => u.Year == reportYear && u.Month == reportMonth && u.SubmittedAt.HasValue),
+            PermFte = periodUpdate?.MonthlyPermFte ?? latestSubmitted?.MonthlyPermFte,
+            MspFte = periodUpdate?.MonthlyMspFte ?? latestSubmitted?.MonthlyMspFte,
+            MilestonesSummary = BuildMilestonesSummary(p, monthStart, monthEnd, upcomingWindowEnd, todayUtc),
+            SubmittedUpdate = periodUpdate?.SubmittedAt.HasValue == true,
             IsNew = p.CreatedAt >= monthStart && p.CreatedAt <= monthEnd,
             HasMilestoneCompletedInPeriod = p.Milestones.Any(m =>
                 !m.IsDeleted &&
@@ -801,6 +823,91 @@ public class ModernMonthlyReportService
                 m.Status != "cancelled" &&
                 m.DueDate.Date < todayUtc)
         };
+    }
+
+    internal static List<BusinessAreaProjectItem> FilterDrilldownItems(
+        IEnumerable<BusinessAreaProjectItem> items,
+        string filter)
+    {
+        var list = items.ToList();
+        if (filter.StartsWith("mx-", StringComparison.Ordinal))
+        {
+            var parts = filter.AsSpan(3).ToString().Split('|');
+            if (parts.Length == 2)
+                return list.Where(p => p.Rag == parts[0] && p.Priority == parts[1]).ToList();
+        }
+
+        return filter switch
+        {
+            "total" => list,
+            "submitted" => list.Where(p => p.SubmittedUpdate).ToList(),
+            "new" => list.Where(p => p.IsNew).ToList(),
+            "ms-done" => list.Where(p => p.HasMilestoneCompletedInPeriod).ToList(),
+            "ms-soon" => list.Where(p => p.HasMilestoneUpcomingInWindow).ToList(),
+            "ms-late" => list.Where(p => p.HasLateMilestone).ToList(),
+            _ when filter.StartsWith("rag-", StringComparison.Ordinal) =>
+                list.Where(p => p.Rag == filter[4..]).ToList(),
+            _ when filter.StartsWith("pri-", StringComparison.Ordinal) =>
+                list.Where(p => p.Priority == filter[4..]).ToList(),
+            _ => list
+        };
+    }
+
+    internal static IReadOnlyList<BusinessAreaProjectItem> SortDrilldownItems(IEnumerable<BusinessAreaProjectItem> items) =>
+        items
+            .OrderBy(p => PrioritySortKey(p.Priority))
+            .ThenBy(p => RagSortKey(p.Rag))
+            .ThenBy(p => p.Title, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+    private static int PrioritySortKey(string priority) => priority switch
+    {
+        "Critical" => 0,
+        "High" => 1,
+        "Medium" => 2,
+        "Low" => 3,
+        _ => 4
+    };
+
+    private static int RagSortKey(string rag) => rag switch
+    {
+        "Red" => 0,
+        "Amber-Red" => 1,
+        "Amber-Green" => 2,
+        "Green" => 3,
+        _ => 4
+    };
+
+    private static string? BuildMilestonesSummary(
+        Project p,
+        DateTime monthStart,
+        DateTime monthEnd,
+        DateTime upcomingWindowEnd,
+        DateTime todayUtc)
+    {
+        var lines = new List<string>();
+        foreach (var m in p.Milestones.Where(x => !x.IsDeleted).OrderBy(x => x.DueDate))
+        {
+            if (m.Status == "complete" &&
+                m.ActualDate.HasValue &&
+                m.ActualDate.Value >= monthStart &&
+                m.ActualDate.Value <= monthEnd)
+            {
+                lines.Add($"Completed in period: {m.Name} ({m.ActualDate:dd MMM yyyy})");
+                continue;
+            }
+
+            if (m.Status is "complete" or "cancelled")
+                continue;
+
+            if (m.DueDate.Date < todayUtc)
+                lines.Add($"Late: {m.Name} (due {m.DueDate:dd MMM yyyy})");
+            else if (m.DueDate >= monthStart && m.DueDate < upcomingWindowEnd)
+                lines.Add($"Due soon: {m.Name} ({m.DueDate:dd MMM yyyy})");
+        }
+
+        return lines.Count == 0 ? null : string.Join(Environment.NewLine, lines);
+    }
 
     private async Task<MonthlyReportRaidSummary> BuildRaidSummaryAsync(
         int? businessAreaId,
@@ -2032,7 +2139,139 @@ public class ModernMonthlyReportService
             Late = late,
             NotStarted = notStarted,
             ActualProgressPercent = actual,
-            ExpectedProgressPercent = expectedProgressPercent
+            ExpectedProgressPercent = expectedProgressPercent,
+            WorkItems = BuildSubmissionProgressWorkItems(projects, reportYear, reportMonth, monthlyUpdateService)
+        };
+    }
+
+    private static List<SubmissionProgressWorkItemRow> BuildSubmissionProgressWorkItems(
+        List<Project> projects,
+        int reportYear,
+        int reportMonth,
+        IMonthlyUpdateService monthlyUpdateService)
+    {
+        var dueDate = monthlyUpdateService.GetMonthlyUpdateDueDate(reportYear, reportMonth);
+        var nowUtc = DateTime.UtcNow;
+
+        return projects
+            .OrderBy(p => p.Title, StringComparer.OrdinalIgnoreCase)
+            .Select(p =>
+            {
+                var update = p.MonthlyUpdates?.FirstOrDefault(u => u.Year == reportYear && u.Month == reportMonth);
+                string status;
+                DateTime? submittedAt = null;
+
+                if (update != null && update.SubmittedAt.HasValue)
+                {
+                    status = "Submitted";
+                    submittedAt = update.SubmittedAt;
+                }
+                else if (nowUtc > dueDate)
+                    status = "Late";
+                else if (update != null && !update.SubmittedAt.HasValue)
+                    status = "In progress";
+                else
+                    status = "Not started";
+
+                return new SubmissionProgressWorkItemRow
+                {
+                    ProjectId = p.Id,
+                    Title = p.Title,
+                    SubmissionStatus = status,
+                    SubmittedAt = submittedAt
+                };
+            })
+            .ToList();
+    }
+
+    /// <summary>Dashboard rows per thematic tag for the thematic report (current reporting period).</summary>
+    public async Task<ModernThematicReportDashboard> BuildThematicReportDashboardAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var nowUtc = DateTime.UtcNow;
+        var calendarYearUtc = nowUtc.Year;
+        var currentMonth = nowUtc.Month;
+        var minReportYear = 2026;
+        var currentPeriodDueDate = _monthlyUpdateService.GetMonthlyUpdateDueDate(calendarYearUtc, currentMonth);
+        var daysUntilCurrentPeriodDueDate = (currentPeriodDueDate.Date - nowUtc.Date).Days;
+        var defaultReportYear = daysUntilCurrentPeriodDueDate <= 10 ? calendarYearUtc : (currentMonth == 1 ? calendarYearUtc - 1 : calendarYearUtc);
+        var defaultReportMonth = daysUntilCurrentPeriodDueDate <= 10 ? currentMonth : (currentMonth == 1 ? 12 : currentMonth - 1);
+        defaultReportYear = Math.Max(minReportYear, defaultReportYear);
+
+        var reportYear = defaultReportYear;
+        var reportMonth = defaultReportMonth;
+        var monthStart = new DateTime(reportYear, reportMonth, 1);
+        var monthEnd = monthStart.AddMonths(1).AddDays(-1).AddHours(23).AddMinutes(59).AddSeconds(59);
+        var todayUtc = nowUtc.Date;
+        var upcomingWindowEnd = monthStart.AddDays(30);
+        var dueDateForSubmission = _monthlyUpdateService.GetMonthlyUpdateDueDate(reportYear, reportMonth);
+        var nowUtcForSubmission = nowUtc;
+
+        var tags = await _db.WorkItemTagLookups.AsNoTracking()
+            .Where(t => t.IsActive)
+            .OrderBy(t => t.SortOrder)
+            .ThenBy(t => t.Name)
+            .ToListAsync(cancellationToken);
+
+        var projects = await _db.Projects
+            .AsNoTracking()
+            .Include(p => p.BusinessAreaLookup)
+            .Include(p => p.DeliveryPriority)
+            .Include(p => p.Milestones)
+            .Include(p => p.MonthlyUpdates)
+                .ThenInclude(mu => mu.MonthlyUpdateNarratives)
+            .Include(p => p.RagStatusLookup)
+            .Include(p => p.ProjectWorkItemTags)
+            .Where(p => !p.IsDeleted && p.Status != "Cancelled")
+            .ToListAsync(cancellationToken);
+
+        var rows = new List<ModernBusinessAreaDashboardRow>();
+        foreach (var tag in tags)
+        {
+            var tagged = projects
+                .Where(p => p.ProjectWorkItemTags.Any(l => l.WorkItemTagLookupId == tag.Id))
+                .Where(p => p.Status is "Active" or "Paused")
+                .ToList();
+            if (tagged.Count == 0)
+            {
+                rows.Add(new ModernBusinessAreaDashboardRow
+                {
+                    BusinessArea = tag.Name,
+                    BusinessAreaId = tag.Id,
+                    Projects = new List<BusinessAreaProjectItem>()
+                });
+                continue;
+            }
+
+            rows.Add(BuildDashboardRowFromProjects(
+                tagged,
+                tag.Name,
+                tag.Id,
+                reportYear,
+                reportMonth,
+                monthStart,
+                monthEnd,
+                upcomingWindowEnd,
+                todayUtc,
+                nowUtcForSubmission,
+                dueDateForSubmission));
+        }
+
+        var activeTagIds = tags.Select(t => t.Id).ToHashSet();
+        var scope = projects
+            .Where(p => p.Status is "Active" or "Paused" or "Completed")
+            .Where(p => p.ProjectWorkItemTags.Any(l => activeTagIds.Contains(l.WorkItemTagLookupId)))
+            .Select(p => ToBusinessAreaProjectItem(p, reportYear, reportMonth, monthStart, monthEnd, upcomingWindowEnd, todayUtc))
+            .OrderBy(x => x.Title)
+            .ToList();
+
+        return new ModernThematicReportDashboard
+        {
+            ReportYear = reportYear,
+            ReportMonth = reportMonth,
+            MonthName = monthStart.ToString("MMMM yyyy"),
+            Rows = rows,
+            ScopeProjectItems = scope
         };
     }
 

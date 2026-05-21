@@ -80,6 +80,7 @@ public class ModernWorkController : Controller
 
     private readonly CompassDbContext _context;
     private readonly IModernWorkService _modernWork;
+    private readonly IWorkScopedExcelExportService _workScopedExcelExport;
     private readonly INotificationRuleService _notificationRuleService;
     private readonly IMonthlyUpdateService _monthlyUpdateService;
     private readonly ILogger<ModernWorkController> _logger;
@@ -89,6 +90,7 @@ public class ModernWorkController : Controller
     public ModernWorkController(
         CompassDbContext context,
         IModernWorkService modernWork,
+        IWorkScopedExcelExportService workScopedExcelExport,
         INotificationRuleService notificationRuleService,
         IMonthlyUpdateService monthlyUpdateService,
         ILogger<ModernWorkController> logger,
@@ -97,6 +99,7 @@ public class ModernWorkController : Controller
     {
         _context = context;
         _modernWork = modernWork;
+        _workScopedExcelExport = workScopedExcelExport;
         _notificationRuleService = notificationRuleService;
         _monthlyUpdateService = monthlyUpdateService;
         _logger = logger;
@@ -331,68 +334,24 @@ public class ModernWorkController : Controller
             businessAreaId: businessAreaId,
             primaryContactUserId: primaryContactUserId,
             tagIds: mergedTags,
+            projectIds: null,
             registerSort: sort,
             registerSortDesc: sd,
             cancellationToken);
 
-        using var workbook = new XLWorkbook();
-        var worksheet = workbook.Worksheets.Add("Work");
-        WriteWorkRegisterWorksheet(worksheet, rows);
+        var projectIds = rows.Select(r => r.Id).ToList();
+        var bytes = await _workScopedExcelExport.BuildWorkbookAsync(
+            projectIds,
+            currentUser,
+            userEmail,
+            Url,
+            cancellationToken);
 
-        using var stream = new MemoryStream();
-        workbook.SaveAs(stream);
         var fileName = $"work-{scopeLabel}-{exportTab}-{DateTime.UtcNow:yyyyMMdd-HHmm}.xlsx";
         return File(
-            stream.ToArray(),
+            bytes,
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             fileName);
-    }
-
-    private static void WriteWorkRegisterWorksheet(IXLWorksheet worksheet, IEnumerable<WorkRegisterRow> rows)
-    {
-        worksheet.Cell(1, 1).Value = "Work item";
-        worksheet.Cell(1, 2).Value = "Reference";
-        worksheet.Cell(1, 3).Value = "Status";
-        worksheet.Cell(1, 4).Value = "Business area";
-        worksheet.Cell(1, 5).Value = "SRO";
-        worksheet.Cell(1, 6).Value = "Primary contact";
-        worksheet.Cell(1, 7).Value = "Portfolio";
-        worksheet.Cell(1, 8).Value = "Phase";
-        worksheet.Cell(1, 9).Value = "Priority";
-        worksheet.Cell(1, 10).Value = "RAG";
-        worksheet.Cell(1, 11).Value = "Milestones";
-        worksheet.Cell(1, 12).Value = "Monthly update";
-        worksheet.Cell(1, 13).Value = "Risk ref";
-        worksheet.Cell(1, 14).Value = "Completed";
-        worksheet.Cell(1, 15).Value = "Cancelled reason";
-        worksheet.Cell(1, 16).Value = "Tags";
-
-        var rowNumber = 2;
-        foreach (var row in rows)
-        {
-            worksheet.Cell(rowNumber, 1).Value = row.Title ?? "";
-            worksheet.Cell(rowNumber, 2).Value = "WI-" + row.Id.ToString("D8", CultureInfo.InvariantCulture);
-            worksheet.Cell(rowNumber, 3).Value = row.Status ?? "";
-            worksheet.Cell(rowNumber, 4).Value = row.BusinessAreaName ?? row.DirectorateSummary ?? "";
-            worksheet.Cell(rowNumber, 5).Value = row.SroDisplayName ?? "";
-            worksheet.Cell(rowNumber, 6).Value = row.PrimaryContactName ?? "";
-            worksheet.Cell(rowNumber, 7).Value = row.PortfolioName ?? "";
-            worksheet.Cell(rowNumber, 8).Value = row.PhaseName ?? "";
-            worksheet.Cell(rowNumber, 9).Value = row.PriorityName ?? "";
-            worksheet.Cell(rowNumber, 10).Value = row.RagName ?? "";
-            worksheet.Cell(rowNumber, 11).Value = row.MilestoneCount;
-            worksheet.Cell(rowNumber, 12).Value = row.MonthlyUpdateStatus ?? "";
-            worksheet.Cell(rowNumber, 13).Value = row.FirstRiskReference ?? "";
-            worksheet.Cell(rowNumber, 14).Value = row.CompletedAt ?? "";
-            worksheet.Cell(rowNumber, 15).Value = row.CancelledReason ?? "";
-            worksheet.Cell(rowNumber, 16).Value = row.TagNamesSummary ?? "";
-            rowNumber++;
-        }
-
-        var headerRange = worksheet.Range(1, 1, 1, 16);
-        headerRange.Style.Font.Bold = true;
-        worksheet.SheetView.FreezeRows(1);
-        worksheet.Columns(1, 16).AdjustToContents();
     }
 
     [HttpGet("create")]
@@ -1541,7 +1500,7 @@ public class ModernWorkController : Controller
         ViewBag.WorkChromeSubPage = true;
         ViewBag.WorkChromeSection = "strategicalignment";
         ViewBag.RiskAppetiteOptions = await _context.RiskAppetiteLookups.AsNoTracking().Where(r => r.IsActive).OrderBy(r => r.SortOrder)
-            .Select(r => new LookupOption { Id = r.Id, Name = r.Name ?? "", Value = r.Name ?? "" }).ToListAsync(cancellationToken);
+            .Select(r => new LookupOption { Id = r.Id, Name = r.Name ?? "", Value = r.Description ?? "" }).ToListAsync(cancellationToken);
         ViewBag.PriorityOutcomes = await _context.Objectives.AsNoTracking()
             .Where(o => !o.IsDeleted && o.Status == "active")
             .OrderBy(o => o.Title)
@@ -1554,6 +1513,12 @@ public class ModernWorkController : Controller
             .ToListAsync(cancellationToken);
         ViewBag.Directorates = await _context.Divisions.AsNoTracking().Where(d => d.IsActive).OrderBy(d => d.Name)
             .Select(d => new Directorate { Id = d.Id, Name = d.Name, IsActive = true }).ToListAsync(cancellationToken);
+        ViewBag.WorkTagOptions = await _context.WorkItemTagLookups.AsNoTracking()
+            .Where(t => t.IsActive)
+            .OrderBy(t => t.SortOrder).ThenBy(t => t.Name)
+            .Select(t => new LookupOption { Id = t.Id, Name = t.Name ?? "", Value = t.Description ?? "" })
+            .ToListAsync(cancellationToken);
+        ViewBag.SelectedWorkTagIds = work.Tags?.Select(t => t.Id).ToArray() ?? Array.Empty<int>();
 
         return View("~/Views/Modern/Work/EditStrategicAlignment.cshtml", work);
     }
@@ -1563,12 +1528,12 @@ public class ModernWorkController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> EditStrategicAlignment(
         int id,
-        bool? flagshipProject,
         bool? subjectToSpendControl,
         int? riskAppetiteId,
         int[]? priorityOutcomeIds,
         int[]? missionPillarIds,
         int[]? directorateIds,
+        int[]? workTagIds,
         CancellationToken cancellationToken = default)
     {
         var deny = await EnsureUserCanEditWorkAsync(id, cancellationToken);
@@ -1578,17 +1543,18 @@ public class ModernWorkController : Controller
         priorityOutcomeIds ??= Array.Empty<int>();
         missionPillarIds ??= Array.Empty<int>();
         directorateIds ??= Array.Empty<int>();
+        workTagIds ??= Array.Empty<int>();
 
         var project = await _context.Projects
             .Include(p => p.ProjectObjectives)
             .Include(p => p.ProjectMissions)
             .Include(p => p.Directorates)
+            .Include(p => p.ProjectWorkItemTags)
             .FirstOrDefaultAsync(p => p.Id == id && !p.IsDeleted, cancellationToken);
         if (project == null)
             return NotFound();
 
         var now = DateTime.UtcNow;
-        project.IsFlagship = flagshipProject == true;
         project.IsSubjectToSpendControl = subjectToSpendControl == true;
         project.RiskAppetiteLookupId = riskAppetiteId > 0 ? riskAppetiteId : null;
         project.UpdatedAt = now;
@@ -1623,6 +1589,21 @@ public class ModernWorkController : Controller
                 ProjectId = id,
                 DivisionId = divId,
                 CreatedAt = now
+            });
+        }
+
+        var validTagIds = await _context.WorkItemTagLookups.AsNoTracking()
+            .Where(t => t.IsActive && workTagIds.Contains(t.Id))
+            .Select(t => t.Id)
+            .ToListAsync(cancellationToken);
+
+        _context.ProjectWorkItemTags.RemoveRange(project.ProjectWorkItemTags);
+        foreach (var tagId in validTagIds.Distinct())
+        {
+            _context.ProjectWorkItemTags.Add(new ProjectWorkItemTag
+            {
+                ProjectId = id,
+                WorkItemTagLookupId = tagId
             });
         }
 

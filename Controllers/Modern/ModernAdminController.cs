@@ -35,7 +35,7 @@ public partial class ModernAdminController : Controller
         "product-types", "rag-defns", "departments", "compliance",
         "scoring-fw", "perf-cycles", "assess-cycles",
         "groups", "api-tokens", "cms-access-products", "business-area-admins", "business-area-leadership", "directorate-leadership",
-        "audit", "migration", "feature-settings", "universal-barriers",
+        "migration", "feature-settings", "universal-barriers",
         "activity-types", "work-tagging", "mission-pillars", "priority-outcomes",
         "fips-channels", "fips-types", "fips-business-areas", "fips-user-groups", "fips-contact-roles", "fips-categorisation",
         "std-categories", "std-subcategories", "std-functional",
@@ -82,6 +82,8 @@ public partial class ModernAdminController : Controller
         var normalized = string.IsNullOrWhiteSpace(panel) ? "hub" : panel.Trim().ToLowerInvariant();
         if (string.Equals(normalized, "reporting-cycles", StringComparison.OrdinalIgnoreCase))
             return RedirectToAction(nameof(WorkReporting));
+        if (string.Equals(normalized, "audit", StringComparison.OrdinalIgnoreCase))
+            return RedirectToAction(nameof(AuditExplorer));
         if (string.Equals(normalized, "risk-cats", StringComparison.OrdinalIgnoreCase))
             return RedirectToAction(nameof(Index), new { panel = "risk-categories" });
         if (string.Equals(normalized, "risk-origins", StringComparison.OrdinalIgnoreCase))
@@ -392,9 +394,6 @@ public partial class ModernAdminController : Controller
                     ViewBag.AdminMessage = cmsMsg;
                 if (TempData["AdminError"] is string cmsErr)
                     ViewBag.AdminError = cmsErr;
-                break;
-
-            case "audit":
                 break;
 
             case "feature-settings":

@@ -97,11 +97,13 @@ namespace Compass.Controllers
         }
 
         /// <summary>
-        /// API documentation
+        /// API documentation. Permanently redirects to the new docs shell at
+        /// /docs/api which renders the same content inside a themed,
+        /// dark-mode-capable layout.
         /// </summary>
         public IActionResult Api()
         {
-            return View();
+            return RedirectToActionPermanent("Api", "Docs");
         }
 
         /// <summary>

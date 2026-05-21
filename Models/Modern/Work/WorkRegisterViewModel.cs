@@ -113,7 +113,12 @@ public class WorkRegisterRow
     public string? SroDisplayName { get; set; }
     public string? RagBackgroundColourKey { get; set; }
     public string? RagTextColourKey { get; set; }
+    /// <summary>Open (non-complete) milestones — shown on the work register UI.</summary>
     public int MilestoneCount { get; set; }
+
+    /// <summary>All non-deleted milestones — used in Excel work list exports.</summary>
+    public int TotalMilestoneCount { get; set; }
+
     public string? MonthlyUpdateStatus { get; set; }
     public string? MonthlyUpdateStatusLink { get; set; }
     public string? MonthlyUpdateFilterKey { get; set; }

@@ -11,8 +11,13 @@
       ViewContext.RouteData.Values["Controller"]?.ToString(),
       "ModernAdminNotificationSettings",
       StringComparison.OrdinalIgnoreCase);
-  var showAdminCog = ViewBag.CanAccessModernAdmin == true;
-  var showHeaderProfile = User?.Identity?.IsAuthenticated == true;
+  var isAuthenticated = User?.Identity?.IsAuthenticated == true;
+  var showAdminCog = ViewBag.CanAccessModernAdmin == true && isAuthenticated;
+  var showHeaderProfile = isAuthenticated;
+  var showSignIn = !isAuthenticated;
+  var inverseServiceNav = ViewBag.InverseServiceNav as bool? == true;
+  var returnUrl = ViewContext.HttpContext.Request.Path + ViewContext.HttpContext.Request.QueryString;
+  var signInUrl = "/MicrosoftIdentity/Account/SignIn?redirectUri=" + Uri.EscapeDataString(returnUrl);
   var dfeLogoWhite = Url.Content("~/_content/DfEDigital.Frontend.AspNetCore/dfe/dfe-logo-white.png");
   var dfeLogoBlack = Url.Content("~/_content/DfEDigital.Frontend.AspNetCore/dfe/dfe-logo-black.png");
 }
@@ -24,7 +29,7 @@
         <img class="govuk-header__logotype dfe-f-header__logo-img dfe-f-header__logo-img--black" src="@dfeLogoBlack" alt="" decoding="async" asp-append-version="true" aria-hidden="true" />
       </a>
     </div>
-    @if (showAdminCog || showHeaderProfile)
+    @if (showAdminCog || showHeaderProfile || showSignIn)
     {
       <div class="govuk-header__content">
         <div class="dfe-c-header-util">
@@ -46,13 +51,37 @@
               <svg class="dfe-c-header-util__icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
             </a>
           }
+          @if (showSignIn)
+          {
+            <a href="@signInUrl" class="dfe-c-header-util__link dfe-c-header-util__link--text">Sign in</a>
+          }
         </div>
       </div>
     }
   </div>
 </header>
-<div class="dfe-f-header__service-nav">
-    <section aria-label="Service information" class="govuk-service-navigation" data-module="govuk-service-navigation">
+@{
+  var serviceNavSectionClasses = inverseServiceNav
+    ? "govuk-service-navigation govuk-service-navigation--inverse"
+    : "govuk-service-navigation";
+}
+@if (inverseServiceNav)
+{
+  <section aria-label="Service information" class="@serviceNavSectionClasses" data-module="govuk-service-navigation">
+    <div class="govuk-width-container">
+      <div class="govuk-service-navigation__container">
+        <span class="govuk-service-navigation__service-name">
+          <a class="govuk-service-navigation__link" href="@Url.Action("Index", "ModernDashboard")">COMPASS</a>
+        </span>
+        @await Html.PartialAsync("~/Views/Modern/Shared/_Navigation.cshtml")
+      </div>
+    </div>
+  </section>
+}
+else
+{
+  <div class="dfe-f-header__service-nav">
+    <section aria-label="Service information" class="@serviceNavSectionClasses" data-module="govuk-service-navigation">
       <div class="govuk-width-container">
         <div class="govuk-service-navigation__container">
           <span class="govuk-service-navigation__service-name">
@@ -63,6 +92,7 @@
       </div>
     </section>
   </div>
+}
  
 @await Html.PartialAsync("~/Views/Modern/Shared/_SubNavigation.cshtml")
 @if (ViewBag.ShowReportingScope == true)

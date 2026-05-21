@@ -1,6 +1,9 @@
 @using System.Text.Json
 @using System.Text.Json.Serialization
+@using Compass.Models
+@using Compass.Models.Modern.Work
 @using Compass.Services
+@using Compass.ViewModels
 @using Compass.ViewModels.Modern
 @model Compass.ViewModels.ModernMonthlyReportDashboardViewModel
 @{
@@ -11,21 +14,9 @@
     var priTrendJson = JsonSerializer.Serialize(m.PriorityTrend, jsonOpts);
     var ragDistJson = JsonSerializer.Serialize(m.RagDistribution, jsonOpts);
     var priDistJson = JsonSerializer.Serialize(m.PriorityDistribution, jsonOpts);
-    var baProjectsJson = JsonSerializer.Serialize(
-        m.BusinessAreaRows.ToDictionary(r => r.BusinessArea, r => r.Projects),
-        jsonOpts);
-    var ptgNarrativeJson = JsonSerializer.Serialize(
-        m.ProjectsWithPathToGreen.ToDictionary(p => p.Id.ToString(), p => ProjectMonthlyUpdateNarrative.LatestSubmittedText(p) ?? ""),
-        jsonOpts);
-    var ptgPathJson = JsonSerializer.Serialize(
-        m.ProjectsWithPathToGreen.ToDictionary(p => p.Id.ToString(), p => p.PathToGreen ?? ""),
-        jsonOpts);
-    var drillModalDetailsJson = JsonSerializer.Serialize(
-        m.BusinessAreaRows
-            .SelectMany(r => r.Projects)
-            .GroupBy(p => p.Id)
-            .ToDictionary(g => g.Key.ToString(), g => g.First()),
-        jsonOpts);
+    var scopeByProjectId = m.ScopeProjectItems.ToDictionary(x => x.Id);
+    var baProjectsDict = m.BusinessAreaRows.ToDictionary(r => r.BusinessArea, r => r.Projects);
+    baProjectsDict["Total"] = m.ScopeProjectItems;
 
     // Int route is /modern/work/detail/{id}; non-integer ids in Url.Action fall back to /ModernWork/Detail/…
     string MwDetailHref(int id, string? tab = null)
@@ -36,42 +27,80 @@
 
     var mwDetailPrefix = Url.Content("~/modern/work/detail/") ?? "/modern/work/detail/";
     var mwDetailPrefixJson = JsonSerializer.Serialize(mwDetailPrefix);
+    var drillExportUrl = Url.Action("ExportDrilldown", "ModernReporting", new { source = "monthly" }) ?? "";
 
-    string RagBadgeClass(string rag) => rag switch
+    string ReportWorkExportUrl(IEnumerable<int> projectIds, string label)
     {
-        "Red" => "rag-badge rag-red",
-        "Amber-Red" => "rag-badge rag-amber-red",
-        "Amber-Green" => "rag-badge rag-amber",
-        "Green" => "rag-badge rag-green",
-        _ => "rag-badge rag-none"
-    };
+        var ids = projectIds.Distinct().Where(id => id > 0).ToArray();
+        if (ids.Length == 0) return "";
+        return Url.Action("ExportWorkScope", "ModernReporting", new { ids, label }) ?? "";
+    }
 
-    string PriBadgeClass(string pri) => pri switch
-    {
-        "Critical" => "dfe-c-tag dfe-c-tag--red",
-        "High" => "dfe-c-tag dfe-c-tag--red",
-        "Medium" => "dfe-c-tag dfe-c-tag--amber",
-        "Low" => "dfe-c-tag dfe-c-tag--green",
-        _ => "dfe-c-tag dfe-c-tag--grey"
-    };
+    ReportingTableExportBarModel ReportExportBar(string caption, IEnumerable<int> projectIds, string label) =>
+        new()
+        {
+            Caption = caption,
+            Count = projectIds.Distinct().Count(id => id > 0),
+            ExportUrl = ReportWorkExportUrl(projectIds, label),
+            ShowExport = projectIds.Any(id => id > 0)
+        };
 
-    string RagDfeBadge(string rag) => rag switch
-    {
-        "Red" => "dfe-f-badge dfe-f-badge--small dfe-f-badge--red",
-        "Amber-Red" => "dfe-f-badge dfe-f-badge--small dfe-f-badge--orange",
-        "Amber-Green" => "dfe-f-badge dfe-f-badge--small dfe-f-badge--orange",
-        "Green" => "dfe-f-badge dfe-f-badge--small dfe-f-badge--green",
-        _ => "dfe-f-badge dfe-f-badge--small dfe-f-badge--grey"
-    };
+    var scopeProjectIds = m.ScopeProjectItems.Select(p => p.Id);
+    var ptgProjectIds = m.ProjectsWithPathToGreen.Select(p => p.Id);
+    var ragChangeProjectIds = m.RagChanges.Select(r => r.ProjectId);
+    var priChangeProjectIds = m.PriorityChanges.Select(r => r.ProjectId);
+    var newWorkProjectIds = m.NewProjectsThisMonth.Select(p => p.Id);
+    var msAchievedProjectIds = m.MilestonesAchieved.Select(x => x.Project.Id);
+    var msUpcomingProjectIds = m.UpcomingMilestonesNext30Days.Select(x => x.Project.Id);
+    var msLateProjectIds = m.LateMilestones.Select(x => x.Project.Id);
+    var drillScriptModel = ReportingDrilldownConfig.Build(
+        baProjectsDict,
+        m.ScopeProjectItems,
+        drillExportUrl,
+        new Dictionary<string, string?>
+        {
+            ["source"] = "monthly",
+            ["year"] = m.ReportYear.ToString(),
+            ["month"] = m.ReportMonth.ToString(),
+            ["businessAreaId"] = m.FilterBusinessAreaId?.ToString(),
+            ["directorateId"] = m.FilterDirectorateId?.ToString()
+        },
+        mwDetailPrefix);
 
-    string PriDfeBadge(string pri) => pri switch
+    string RagBadgeClass(string rag) => WorkBadgeCss.RagBadgeClass(rag);
+
+    string RagDfeBadge(string rag) => WorkBadgeCss.RagCompactBadgeClass(rag);
+
+    string PriDfeBadge(string pri) => WorkBadgeCss.PriorityDfeFrontendBadgeClass(pri) + " dfe-f-badge--small";
+
+    string FormatFteMsc(BusinessAreaProjectItem? item)
     {
-        "Critical" => "dfe-f-badge dfe-f-badge--small dfe-f-badge--red",
-        "High" => "dfe-f-badge dfe-f-badge--small dfe-f-badge--red",
-        "Medium" => "dfe-f-badge dfe-f-badge--small dfe-f-badge--orange",
-        "Low" => "dfe-f-badge dfe-f-badge--small dfe-f-badge--green",
-        _ => "dfe-f-badge dfe-f-badge--small dfe-f-badge--grey"
-    };
+        if (item == null) return "—";
+        var parts = new List<string>();
+        if (item.PermFte.HasValue) parts.Add($"FTE {item.PermFte.Value:0.##}");
+        if (item.MspFte.HasValue) parts.Add($"MSC {item.MspFte.Value:0.##}");
+        return parts.Count > 0 ? string.Join(" · ", parts) : "—";
+    }
+
+    string PathToGreenFromLastUpdate(Project p)
+    {
+        var latestSubmitted = p.MonthlyUpdates?
+            .Where(u => u.SubmittedAt.HasValue)
+            .OrderByDescending(u => u.Year)
+            .ThenByDescending(u => u.Month)
+            .FirstOrDefault();
+        if (latestSubmitted?.SubmittedAt is DateTime submittedAt)
+        {
+            var fromHistory = p.RagHistory?
+                .Where(h => h.ChangedAt <= submittedAt.AddDays(1))
+                .OrderByDescending(h => h.ChangedAt)
+                .Select(h => h.PathToGreen)
+                .FirstOrDefault(s => !string.IsNullOrWhiteSpace(s));
+            if (!string.IsNullOrWhiteSpace(fromHistory))
+                return fromHistory.Trim();
+        }
+        return string.IsNullOrWhiteSpace(p.PathToGreen) ? "—" : p.PathToGreen.Trim();
+    }
 
     int RagDelta(string key) =>
         (m.RagDistribution.TryGetValue(key, out var cur) ? cur : 0) -
@@ -215,31 +244,34 @@
     </aside>
     <div class="mr-report-layout__main">
   <div class="dfe-f-toggle-group mr-report-toggle-group govuk-!-margin-bottom-3" data-module="dfe-f-toggle-group" id="mr-report-sections">
-    <div class="dfe-f-toggle-group__controls govuk-body-s govuk-!-margin-bottom-2 mr-report-toggle-group__controls">
-      <button type="button" class="dfe-f-toggle-group__action" data-dfe-toggle-expand-all>Expand all</button>
-      <span class="dfe-f-toggle-group__separator" aria-hidden="true"> · </span>
-      <button type="button" class="dfe-f-toggle-group__action" data-dfe-toggle-collapse-all>Collapse all</button>
-      <span class="dfe-f-toggle-group__separator" aria-hidden="true"> · </span>
-      <button type="button" class="dfe-f-toggle-group__action" id="mr-report-edit-view" aria-pressed="false">Edit view</button>
+    <div class="mr-report-view-controls govuk-!-margin-bottom-3" role="toolbar" aria-label="Report section controls">
+      <span class="mr-report-view-controls__label govuk-body-s govuk-!-font-weight-bold">Sections</span>
+      <div class="mr-report-view-controls__actions">
+        <button type="button" class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0" data-dfe-toggle-expand-all>Expand all sections</button>
+        <button type="button" class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0" data-dfe-toggle-collapse-all>Collapse all sections</button>
+        <button type="button" class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0" id="mr-report-edit-view" aria-pressed="false">Reorder sections</button>
+      </div>
     </div>
     <div class="dfe-f-toggle-group__items">
  <div class="mr-report-section-panel dfe-f-toggle govuk-!-margin-bottom-3" data-module="dfe-f-toggle" data-mr-section-id="business-area" data-mr-section-title="Business area summary">
  <div class="dfe-f-toggle__title-wrapper">
  <h2 class="dfe-f-toggle__heading">
- <button type="button" class="dfe-f-toggle__button" aria-expanded="true" aria-controls="mr-toggle-ba-content" id="mr-toggle-ba-button">
+ <button type="button" class="dfe-f-toggle__button" aria-expanded="false" aria-controls="mr-toggle-ba-content" id="mr-toggle-ba-button">
  <span class="dfe-f-toggle__icon" aria-hidden="true"></span>
  <span class="dfe-f-toggle__title" id="mr-h-ba">Business area summary</span>
- <span class="mr-toggle-panel__meta"><span class="govuk-tag govuk-tag--grey">@mrReportPanelBaCount</span></span>
+ <span class="mr-toggle-panel__meta"><span class="@WorkBadgeCss.ToggleCountBadgeClass(mrReportPanelBaCount)">@mrReportPanelBaCount</span></span>
  </button>
  </h2>
  </div>
- <div id="mr-toggle-ba-content" class="dfe-f-toggle__content">
+ <div id="mr-toggle-ba-content" class="dfe-f-toggle__content" hidden>
  <div class="dfe-f-toggle__body govuk-body">
 <div id="d-mr-areas" class="mr-single-page-block" role="region" aria-labelledby="mr-h-ba">
 
   @* ══════════════════ Business area summary ══════════════════ *@
- <section class="mr-section" id="mr-s-ba" aria-labelledby="mr-h-ba">
+ <section class="mr-section" id="mr-s-ba" aria-labelledby="mr-h-ba" data-mr-drill-host="mr-ba-drilldown-host">
       <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
+ <div class="mr-table-stack">
+  <partial name="~/Views/Modern/Reporting/_ReportingTableExportBar.cshtml" model="@(ReportExportBar("Report scope", scopeProjectIds, "monthly-report-scope"))" />
  <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
   <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
  <table class="govuk-table mr-ba-table js-sortable-ba" id="mr-business-area-table">
@@ -309,198 +341,36 @@
           }
           </tbody>
           <tfoot>
+            @{
+              string totalDrillAttrs(string filter) => $"data-ba=\"Total\" data-filter=\"{filter}\" role=\"button\" tabindex=\"0\"";
+            }
  <tr class="mr-ba-table__total-row">
  <th scope="row" class="mr-ba-table__fixed mr-ba-table__area-col">Total</th>
- <td class="mr-ba-table__num"><span class="mr-ba-num mr-ba-num--strong">@totalRow.TotalProjects</span></td>
- <td class="mr-ba-table__num"><span class="mr-ba-num mr-ba-num--strong">@totalRow.SubmittedCount</span></td>
- <td class="mr-ba-table__num"><span class="mr-ba-num mr-ba-num--strong">@totalRow.NewThisMonth</span></td>
- <td class="mr-ba-table__cell--ms mr-ba-table__num"><span class="mr-ba-num mr-ba-num--strong">@totalRow.MilestonesCompleted</span></td>
- <td class="mr-ba-table__cell--ms mr-ba-table__num"><span class="mr-ba-num mr-ba-num--strong">@totalRow.MilestonesUpcoming30Days</span></td>
- <td class="mr-ba-table__cell--ms mr-ba-table__num"><span class="mr-ba-num mr-ba-num--strong">@totalRow.MilestonesLate</span></td>
- <td class="mr-ba-table__cell--rag mr-ba-table__num"><span class="mr-ba-num mr-ba-num--rag mr-ba-num--rag-red">@totalRow.RagRed</span></td>
- <td class="mr-ba-table__cell--rag mr-ba-table__num"><span class="mr-ba-num mr-ba-num--rag mr-ba-num--rag-amber-red">@totalRow.RagAmberRed</span></td>
- <td class="mr-ba-table__cell--rag mr-ba-table__num"><span class="mr-ba-num mr-ba-num--rag mr-ba-num--rag-amber-grn">@totalRow.RagAmberGreen</span></td>
- <td class="mr-ba-table__cell--rag mr-ba-table__num"><span class="mr-ba-num mr-ba-num--rag mr-ba-num--rag-green">@totalRow.RagGreen</span></td>
- <td class="mr-ba-table__cell--rag mr-ba-table__num"><span class="mr-ba-num mr-ba-num--rag mr-ba-num--rag-ns">@totalRow.RagNotSet</span></td>
- <td class="mr-ba-table__cell--pri mr-ba-table__num"><span class="mr-ba-num mr-ba-num--pri mr-ba-num--pri-crit">@totalRow.PriCritical</span></td>
- <td class="mr-ba-table__cell--pri mr-ba-table__num"><span class="mr-ba-num mr-ba-num--pri mr-ba-num--pri-high">@totalRow.PriHigh</span></td>
- <td class="mr-ba-table__cell--pri mr-ba-table__num"><span class="mr-ba-num mr-ba-num--pri mr-ba-num--pri-med">@totalRow.PriMedium</span></td>
- <td class="mr-ba-table__cell--pri mr-ba-table__num"><span class="mr-ba-num mr-ba-num--pri mr-ba-num--pri-low">@totalRow.PriLow</span></td>
- <td class="mr-ba-table__cell--pri mr-ba-table__num"><span class="mr-ba-num mr-ba-num--pri mr-ba-num--pri-ns">@totalRow.PriNotSet</span></td>
+ <td class="mr-ba-table__num"><span class="mr-ba-num mr-ba-num--strong mr-ba-drill" @Html.Raw(totalDrillAttrs("total"))>@totalRow.TotalProjects</span></td>
+ <td class="mr-ba-table__num"><span class="mr-ba-num mr-ba-num--strong @(totalRow.SubmittedCount > 0 ? "mr-ba-drill" : "")" @(totalRow.SubmittedCount > 0 ? Html.Raw(totalDrillAttrs("submitted")) : Html.Raw(""))>@totalRow.SubmittedCount</span></td>
+ <td class="mr-ba-table__num"><span class="mr-ba-num mr-ba-num--strong @(totalRow.NewThisMonth > 0 ? "mr-ba-drill" : "")" @(totalRow.NewThisMonth > 0 ? Html.Raw(totalDrillAttrs("new")) : Html.Raw(""))>@totalRow.NewThisMonth</span></td>
+ <td class="mr-ba-table__cell--ms mr-ba-table__num"><span class="mr-ba-num mr-ba-num--strong @(totalRow.MilestonesCompleted > 0 ? "mr-ba-drill" : "")" @(totalRow.MilestonesCompleted > 0 ? Html.Raw(totalDrillAttrs("ms-done")) : Html.Raw(""))>@totalRow.MilestonesCompleted</span></td>
+ <td class="mr-ba-table__cell--ms mr-ba-table__num"><span class="mr-ba-num mr-ba-num--strong @(totalRow.MilestonesUpcoming30Days > 0 ? "mr-ba-drill" : "")" @(totalRow.MilestonesUpcoming30Days > 0 ? Html.Raw(totalDrillAttrs("ms-soon")) : Html.Raw(""))>@totalRow.MilestonesUpcoming30Days</span></td>
+ <td class="mr-ba-table__cell--ms mr-ba-table__num"><span class="mr-ba-num mr-ba-num--strong @(totalRow.MilestonesLate > 0 ? "mr-ba-drill" : "")" @(totalRow.MilestonesLate > 0 ? Html.Raw(totalDrillAttrs("ms-late")) : Html.Raw(""))>@totalRow.MilestonesLate</span></td>
+ <td class="mr-ba-table__cell--rag mr-ba-table__num"><span class="mr-ba-num mr-ba-num--rag mr-ba-num--rag-red @(totalRow.RagRed > 0 ? "mr-ba-drill" : "")" @(totalRow.RagRed > 0 ? Html.Raw(totalDrillAttrs("rag-Red")) : Html.Raw(""))>@totalRow.RagRed</span></td>
+ <td class="mr-ba-table__cell--rag mr-ba-table__num"><span class="mr-ba-num mr-ba-num--rag mr-ba-num--rag-amber-red @(totalRow.RagAmberRed > 0 ? "mr-ba-drill" : "")" @(totalRow.RagAmberRed > 0 ? Html.Raw(totalDrillAttrs("rag-Amber-Red")) : Html.Raw(""))>@totalRow.RagAmberRed</span></td>
+ <td class="mr-ba-table__cell--rag mr-ba-table__num"><span class="mr-ba-num mr-ba-num--rag mr-ba-num--rag-amber-grn @(totalRow.RagAmberGreen > 0 ? "mr-ba-drill" : "")" @(totalRow.RagAmberGreen > 0 ? Html.Raw(totalDrillAttrs("rag-Amber-Green")) : Html.Raw(""))>@totalRow.RagAmberGreen</span></td>
+ <td class="mr-ba-table__cell--rag mr-ba-table__num"><span class="mr-ba-num mr-ba-num--rag mr-ba-num--rag-green @(totalRow.RagGreen > 0 ? "mr-ba-drill" : "")" @(totalRow.RagGreen > 0 ? Html.Raw(totalDrillAttrs("rag-Green")) : Html.Raw(""))>@totalRow.RagGreen</span></td>
+ <td class="mr-ba-table__cell--rag mr-ba-table__num"><span class="mr-ba-num mr-ba-num--rag mr-ba-num--rag-ns @(totalRow.RagNotSet > 0 ? "mr-ba-drill" : "")" @(totalRow.RagNotSet > 0 ? Html.Raw(totalDrillAttrs("rag-Not Set")) : Html.Raw(""))>@totalRow.RagNotSet</span></td>
+ <td class="mr-ba-table__cell--pri mr-ba-table__num"><span class="mr-ba-num mr-ba-num--pri mr-ba-num--pri-crit @(totalRow.PriCritical > 0 ? "mr-ba-drill" : "")" @(totalRow.PriCritical > 0 ? Html.Raw(totalDrillAttrs("pri-Critical")) : Html.Raw(""))>@totalRow.PriCritical</span></td>
+ <td class="mr-ba-table__cell--pri mr-ba-table__num"><span class="mr-ba-num mr-ba-num--pri mr-ba-num--pri-high @(totalRow.PriHigh > 0 ? "mr-ba-drill" : "")" @(totalRow.PriHigh > 0 ? Html.Raw(totalDrillAttrs("pri-High")) : Html.Raw(""))>@totalRow.PriHigh</span></td>
+ <td class="mr-ba-table__cell--pri mr-ba-table__num"><span class="mr-ba-num mr-ba-num--pri mr-ba-num--pri-med @(totalRow.PriMedium > 0 ? "mr-ba-drill" : "")" @(totalRow.PriMedium > 0 ? Html.Raw(totalDrillAttrs("pri-Medium")) : Html.Raw(""))>@totalRow.PriMedium</span></td>
+ <td class="mr-ba-table__cell--pri mr-ba-table__num"><span class="mr-ba-num mr-ba-num--pri mr-ba-num--pri-low @(totalRow.PriLow > 0 ? "mr-ba-drill" : "")" @(totalRow.PriLow > 0 ? Html.Raw(totalDrillAttrs("pri-Low")) : Html.Raw(""))>@totalRow.PriLow</span></td>
+ <td class="mr-ba-table__cell--pri mr-ba-table__num"><span class="mr-ba-num mr-ba-num--pri mr-ba-num--pri-ns @(totalRow.PriNotSet > 0 ? "mr-ba-drill" : "")" @(totalRow.PriNotSet > 0 ? Html.Raw(totalDrillAttrs("pri-Not Set")) : Html.Raw(""))>@totalRow.PriNotSet</span></td>
             </tr>
           </tfoot>
         </table>
  </div>
+ </div>
       </div>
-
-      @* ── Drill-down panel ── *@
-      <div id="mr-ba-drilldown" class="mr-ba-drilldown" style="display:none;">
-        <div class="mr-ba-drilldown__header">
-          <h3 class="mr-ba-drilldown__title" id="mr-ba-drilldown-title"></h3>
-          <button type="button" class="mr-ba-drilldown__close" aria-label="Close drill-down">&times;</button>
-        </div>
-        <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
-  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
-          <table class="govuk-table mr-ba-drilldown-table">
-            <thead class="govuk-table__head">
-              <tr class="govuk-table__row">
-                <th scope="col" class="govuk-table__header mr-ba-drilldown-table__col--work" aria-sort="none">
-          <button type="button" class="dfe-f-table-sort-button">Work item</button>
-        </th>
-                <th scope="col" class="govuk-table__header mr-ba-drilldown-table__col--rag" aria-sort="none">
-          <button type="button" class="dfe-f-table-sort-button">RAG</button>
-        </th>
-                <th scope="col" class="govuk-table__header mr-ba-drilldown-table__col--pri" aria-sort="none">
-          <button type="button" class="dfe-f-table-sort-button">Priority</button>
-        </th>
-              </tr>
-            </thead>
-            <tbody id="mr-ba-drilldown-body"></tbody>
-          </table>
-        </div>
+      <div id="mr-ba-drilldown-host" class="mr-drilldown-host">
+        @await Html.PartialAsync("_ReportingDrilldownPanel")
       </div>
-
-      <style>
-        .mr-ba-drill { cursor: pointer; text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 2px; }
-        .mr-ba-drill:hover, .mr-ba-drill:focus { text-decoration-style: solid; outline: 2px solid #fd0; outline-offset: 1px; }
-        .mr-ba-drilldown-table { width: 100%; border-collapse: collapse; font-size: 0.8125rem; table-layout: fixed; }
-        .mr-ba-drilldown-table__col--work,
-        .mr-ba-drilldown-table__cell--work { width: 50%; }
-        .mr-ba-drilldown-table__col--rag,
-        .mr-ba-drilldown-table__cell--rag,
-        .mr-ba-drilldown-table__col--pri,
-        .mr-ba-drilldown-table__cell--pri { width: 25%; }
-        .mr-ba-drilldown-table th,
-        .mr-ba-drilldown-table td { padding: 0.5rem 0.6rem; border: 1px solid #b1b4b6; text-align: left; vertical-align: top; }
-        .mr-ba-drilldown-table thead th { background: #f3f2f1; font-weight: 700; }
-        .mr-ba-drilldown { margin-top: 1rem; border: 1px solid #b1b4b6; padding: 1rem 1.25rem; background: #fff; }
-        .mr-ba-drilldown__header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; }
-        .mr-ba-drilldown__title { margin: 0; font-size: 1.05rem; }
-        .mr-ba-drilldown__close { background: none; border: none; font-size: 1.5rem; cursor: pointer; padding: 0 0.25rem; line-height: 1; color: #505a5f; }
-        .mr-ba-drilldown__close:hover { color: #0b0c0c; }
-      </style>
-
-      <script nonce="@Context.Items["Nonce"]">
-      (function () {
-        var baProjects = @Html.Raw(baProjectsJson);
-
-        var filterLabels = {
-          'total': 'All work items',
-          'submitted': 'Submitted update',
-          'new': 'New this month',
-          'ms-done': 'Milestones completed',
-          'ms-soon': 'Milestones due soon',
-          'ms-late': 'Milestones late',
-          'rag-Red': 'RAG: Red',
-          'rag-Amber-Red': 'RAG: Amber-Red',
-          'rag-Amber-Green': 'RAG: Amber-Green',
-          'rag-Green': 'RAG: Green',
-          'rag-Not Set': 'RAG: Not set',
-          'pri-Critical': 'Priority: Critical',
-          'pri-High': 'Priority: High',
-          'pri-Medium': 'Priority: Medium',
-          'pri-Low': 'Priority: Low',
-          'pri-Not Set': 'Priority: Not set'
-        };
-
-        /* Align with WorkBadgeCss.RagDfeFrontendBadgeClass / PriorityDfeFrontendBadgeClass */
-        var ragDfeBadge = {
-          'Red': 'dfe-f-badge dfe-f-badge--small dfe-f-badge--red',
-          'Amber-Red': 'dfe-f-badge dfe-f-badge--small dfe-f-badge--orange',
-          'Amber-Green': 'dfe-f-badge dfe-f-badge--small dfe-f-badge--orange',
-          'Green': 'dfe-f-badge dfe-f-badge--small dfe-f-badge--green',
-          'Not Set': 'dfe-f-badge dfe-f-badge--small dfe-f-badge--grey'
-        };
-        var priDfeBadge = {
-          'Critical': 'dfe-f-badge dfe-f-badge--small dfe-f-badge--red',
-          'High': 'dfe-f-badge dfe-f-badge--small dfe-f-badge--red',
-          'Medium': 'dfe-f-badge dfe-f-badge--small dfe-f-badge--orange',
-          'Low': 'dfe-f-badge dfe-f-badge--small dfe-f-badge--green',
-          'Not Set': 'dfe-f-badge dfe-f-badge--small dfe-f-badge--grey'
-        };
-
-        var panel = document.getElementById('mr-ba-drilldown');
-        var title = document.getElementById('mr-ba-drilldown-title');
-        var body = document.getElementById('mr-ba-drilldown-body');
-        var activeCell = null;
-
-        function filterItems(items, filter) {
-          if (filter === 'total') return items;
-          if (filter === 'submitted') return items.filter(function (p) { return p.submittedUpdate; });
-          if (filter === 'new') return items.filter(function (p) { return p.isNew; });
-          if (filter === 'ms-done') return items.filter(function (p) { return p.hasMilestoneCompletedInPeriod; });
-          if (filter === 'ms-soon') return items.filter(function (p) { return p.hasMilestoneUpcomingInWindow; });
-          if (filter === 'ms-late') return items.filter(function (p) { return p.hasLateMilestone; });
-          if (filter.indexOf('rag-') === 0) { var v = filter.substring(4); return items.filter(function (p) { return p.rag === v; }); }
-          if (filter.indexOf('pri-') === 0) { var v = filter.substring(4); return items.filter(function (p) { return p.priority === v; }); }
-          return items;
-        }
-
-        function escAttr(s) {
-          return String(s || '')
-            .replace(/&/g, '&amp;')
-            .replace(/"/g, '&quot;')
-            .replace(/</g, '&lt;');
-        }
-
-        function renderRows(items) {
-          body.innerHTML = '';
-          items.forEach(function (p) {
-            var tr = document.createElement('tr');
-            tr.className = 'mr-ba-drilldown-table__row';
-            var pid = String(p.id);
-            tr.innerHTML =
-              '<td class="mr-ba-drilldown-table__cell mr-ba-drilldown-table__cell--work">' +
-              '<button type="button" class="govuk-link mr-info-btn mr-ba-drill-title-btn" data-mr-project-id="' + escAttr(pid) + '" data-mr-title="' + escAttr(p.title) + '" aria-label="Open summary for ' + escAttr(p.title) + '">' + escHtml(p.title) + '</button>' +
-              '</td>' +
-              '<td class="mr-ba-drilldown-table__cell mr-ba-drilldown-table__cell--rag"><span class="' + (ragDfeBadge[p.rag] || ragDfeBadge['Not Set']) + '">' + escHtml(p.rag) + '</span></td>' +
-              '<td class="mr-ba-drilldown-table__cell mr-ba-drilldown-table__cell--pri"><span class="' + (priDfeBadge[p.priority] || priDfeBadge['Not Set']) + '">' + escHtml(p.priority) + '</span></td>';
-            body.appendChild(tr);
-          });
-        }
-
-        function escHtml(s) {
-          var d = document.createElement('div');
-          d.appendChild(document.createTextNode(s || ''));
-          return d.innerHTML;
-        }
-
-        function show(ba, filter) {
-          var items = filterItems(baProjects[ba] || [], filter);
-          title.textContent = ba + ' \u2014 ' + (filterLabels[filter] || filter) + ' (' + items.length + ')';
-          renderRows(items);
-          panel.style.display = '';
-          panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        }
-
-        function hide() {
-          panel.style.display = 'none';
-          if (activeCell) { activeCell.classList.remove('mr-ba-drill--active'); activeCell = null; }
-        }
-
-        document.getElementById('mr-business-area-table').addEventListener('click', function (e) {
-          var cell = e.target.closest('.mr-ba-drill');
-          if (!cell) return;
-          var ba = cell.getAttribute('data-ba');
-          var filter = cell.getAttribute('data-filter');
-          if (!ba || !filter) return;
-          if (activeCell === cell) { hide(); return; }
-          if (activeCell) activeCell.classList.remove('mr-ba-drill--active');
-          activeCell = cell;
-          cell.classList.add('mr-ba-drill--active');
-          show(ba, filter);
-        });
-
-        document.getElementById('mr-business-area-table').addEventListener('keydown', function (e) {
-          if (e.key === 'Enter' || e.key === ' ') {
-            var cell = e.target.closest('.mr-ba-drill');
-            if (cell) { e.preventDefault(); cell.click(); }
-          }
-        });
-
-        panel.querySelector('.mr-ba-drilldown__close').addEventListener('click', hide);
-      })();
-      </script>
 
   </section>
   </div>
@@ -518,7 +388,7 @@
  <button type="button" class="dfe-f-toggle__button" aria-expanded="true" aria-controls="mr-toggle-submission-content" id="mr-toggle-submission-button">
  <span class="dfe-f-toggle__icon" aria-hidden="true"></span>
  <span class="dfe-f-toggle__title" id="mr-h-submission">Submission summary</span>
- <span class="mr-toggle-panel__meta"><span class="govuk-tag govuk-tag--grey">@mrReportPanelSubmissionTotal</span></span>
+ <span class="mr-toggle-panel__meta"><span class="@WorkBadgeCss.ToggleCountBadgeClass(mrReportPanelSubmissionTotal)">@mrReportPanelSubmissionTotal</span></span>
  </button>
  </h2>
  </div>
@@ -535,36 +405,36 @@
 <div class="mr-report-section-panel dfe-f-toggle govuk-!-margin-bottom-3" data-module="dfe-f-toggle" data-mr-section-id="changes" data-mr-section-title="Path to green and priority changes">
 <div class="dfe-f-toggle__title-wrapper">
 <h2 class="dfe-f-toggle__heading">
-<button type="button" class="dfe-f-toggle__button" aria-expanded="true" aria-controls="mr-toggle-changes-content" id="mr-toggle-changes-button">
+<button type="button" class="dfe-f-toggle__button" aria-expanded="false" aria-controls="mr-toggle-changes-content" id="mr-toggle-changes-button">
 <span class="dfe-f-toggle__icon" aria-hidden="true"></span>
 <span class="dfe-f-toggle__title">Path to green and priority changes</span>
-<span class="mr-toggle-panel__meta"><span class="govuk-tag govuk-tag--grey">@mrReportPanelChangesItems</span></span>
+<span class="mr-toggle-panel__meta"><span class="@WorkBadgeCss.ToggleCountBadgeClass(mrReportPanelChangesItems)">@mrReportPanelChangesItems</span></span>
 </button>
 </h2>
 </div>
-<div id="mr-toggle-changes-content" class="dfe-f-toggle__content">
+<div id="mr-toggle-changes-content" class="dfe-f-toggle__content" hidden>
 <div class="dfe-f-toggle__body govuk-body">
 <div id="d-mr-narratives" class="mr-single-page-block" role="region" aria-labelledby="mr-h-ptg">
   @* ══════════════════ Path to green (sortable table) ══════════════════ *@
  <section class="mr-section" id="mr-s-ptg" aria-labelledby="mr-h-ptg">
  <h3 id="mr-h-ptg" class="govuk-heading-m govuk-!-margin-bottom-2">Path to green</h3>
+ <p class="govuk-body govuk-!-margin-bottom-4">Non-green work with a path-to-green statement. Select the work item title for path to green, RAG justification, and last submission narrative.</p>
     @if (m.ProjectsWithPathToGreen.Count == 0)
     {
  <p class="dfe-c-body-s dfe-c-text-muted">No non-green work items have a path-to-green narrative.</p>
     }
     else
     {
+ <div class="mr-table-stack">
+  <partial name="~/Views/Modern/Reporting/_ReportingTableExportBar.cshtml" model="@(ReportExportBar("Path to green", ptgProjectIds, "path-to-green"))" />
  <div class="dfe-f-table-wrapper mr-ptg-table-wrap" data-module="dfe-f-table">
   <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
  <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed mr-ptg-table">
- <caption class="govuk-table__caption govuk-table__caption--m">Non-green work with a path-to-green statement. Select the work item title for path to green, RAG justification, and last submission narrative.</caption>
+ <caption class="govuk-table__caption govuk-visually-hidden">Path to green work items</caption>
  <thead class="govuk-table__head">
  <tr class="govuk-table__row">
- <th scope="col" class="govuk-table__header" aria-sort="none">
+ <th scope="col" class="govuk-table__header mr-col-work-item" aria-sort="none">
           <button type="button" class="dfe-f-table-sort-button">Work item</button>
-        </th>
- <th scope="col" class="govuk-table__header" aria-sort="none">
-          <button type="button" class="dfe-f-table-sort-button">Business area</button>
         </th>
  <th scope="col" class="govuk-table__header" aria-sort="none">
           <button type="button" class="dfe-f-table-sort-button">RAG</button>
@@ -572,8 +442,11 @@
  <th scope="col" class="govuk-table__header" aria-sort="none">
           <button type="button" class="dfe-f-table-sort-button">Priority</button>
         </th>
+ <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">FTE / MSC</button>
+        </th>
  <th scope="col" class="govuk-table__header mr-ptg-table__path-col" aria-sort="none">
-          <button type="button" class="dfe-f-table-sort-button">Path to green</button>
+          <button type="button" class="dfe-f-table-sort-button">Path to green (last update)</button>
         </th>
               </tr>
             </thead>
@@ -582,20 +455,24 @@
           {
             var ragName = p.RagStatusLookup?.Name ?? "Not Set";
             var priName = p.DeliveryPriority?.Name ?? "Not Set";
-            var pathText = string.IsNullOrWhiteSpace(p.PathToGreen) ? "—" : p.PathToGreen;
+            var pathText = PathToGreenFromLastUpdate(p);
+            scopeByProjectId.TryGetValue(p.Id, out var ptgScope);
+            var baName = p.BusinessAreaLookup?.Name ?? "—";
  <tr class="govuk-table__row">
- <th scope="row" class="govuk-table__header">
- <button type="button" class="govuk-link mr-info-btn mr-ba-drill-title-btn mr-ptg-title-btn" data-mr-project-id="@p.Id" data-mr-ptg-id="@p.Id" data-mr-rag-just="@(p.RagJustification ?? "")" data-mr-title="@p.Title" aria-label="Path to green and last submission for @p.Title">@p.Title</button>
-                </th>
- <td class="govuk-table__cell">@(p.BusinessAreaLookup?.Name ?? "—")</td>
+ <td class="govuk-table__cell mr-col-work-item">
+ <button type="button" class="govuk-link mr-info-btn mr-ba-drill-title-btn mr-ptg-title-btn" data-mr-project-id="@p.Id" data-mr-title="@p.Title" data-mr-summary="@(ptgScope?.Summary ?? p.Aim ?? "")" data-mr-rag-just="@(p.RagJustification ?? "")" data-mr-narrative="@(ptgScope?.LatestMonthlyUpdateNarrative ?? "")" data-mr-ptg="@(p.PathToGreen ?? "")" data-mr-milestones="@(ptgScope?.MilestonesSummary ?? "")" data-mr-ba-label="@baName" data-mr-rag="@ragName" data-mr-priority="@priName" aria-label="Path to green and last submission for @p.Title">@p.Title</button>
+ <div class="mr-work-item-meta dfe-c-body-s dfe-c-text-muted">@baName</div>
+                </td>
  <td class="govuk-table__cell"><span class="@RagDfeBadge(ragName)">@ragName</span></td>
  <td class="govuk-table__cell"><span class="@PriDfeBadge(priName)">@priName</span></td>
+ <td class="govuk-table__cell govuk-table__cell--numeric">@FormatFteMsc(ptgScope)</td>
  <td class="govuk-table__cell mr-ptg-table__path-col mr-ptg-table__path">@pathText</td>
               </tr>
           }
             </tbody>
           </table>
         </div>
+ </div>
     }
   </section>
 
@@ -622,7 +499,7 @@
  <button type="button" class="dfe-f-toggle__button" aria-expanded="@(ragOpen ? "true" : "false")" aria-controls="mr-rag-ch-@ragSlug-content" id="mr-rag-ch-@ragSlug-btn">
  <span class="dfe-f-toggle__icon" aria-hidden="true"></span>
  <span class="dfe-f-toggle__title">@bucket.Title</span>
- <span class="mr-toggle-panel__meta"><span class="govuk-tag @(bucket.Title == "Worsening" && bucket.Rows.Count > 0 ? "govuk-tag--red" : "govuk-tag--grey")">@bucket.Rows.Count</span></span>
+ <span class="mr-toggle-panel__meta"><span class="@WorkBadgeCss.RagChangeBucketToggleBadgeClass(bucket.Title, bucket.Rows.Count)">@bucket.Rows.Count</span></span>
  </button>
  </h4>
  </div>
@@ -635,12 +512,16 @@
           }
           else
           {
+ var ragBucketIds = bucket.Rows.Select(r => r.ProjectId);
+ var ragBucketLabel = $"rag-changes-{ragSlug}";
+ <div class="mr-table-stack">
+  <partial name="~/Views/Modern/Reporting/_ReportingTableExportBar.cshtml" model="@(ReportExportBar(bucket.Title, ragBucketIds, ragBucketLabel))" />
  <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
   <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
  <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed mr-change-tbl mr-change-tbl--narrative-first">
  <thead class="govuk-table__head">
  <tr class="govuk-table__row">
- <th scope="col" class="govuk-table__header" aria-sort="none">
+ <th scope="col" class="govuk-table__header mr-col-work-item" aria-sort="none">
           <button type="button" class="dfe-f-table-sort-button">Work item</button>
         </th>
  <th scope="col" class="govuk-table__header" aria-sort="none">
@@ -650,30 +531,35 @@
           <button type="button" class="dfe-f-table-sort-button">Date</button>
         </th>
  <th scope="col" class="govuk-table__header" aria-sort="none">
-          <button type="button" class="dfe-f-table-sort-button">Justification</button>
+          <button type="button" class="dfe-f-table-sort-button">RAG justification</button>
         </th>
               </tr>
             </thead>
  <tbody class="govuk-table__body">
             @foreach (var row in bucket.Rows)
             {
+              scopeByProjectId.TryGetValue(row.ProjectId, out var changeScope);
+              var ragJustText = !string.IsNullOrWhiteSpace(row.Justification)
+                ? row.Justification
+                : row.RagJustification ?? changeScope?.RagJustification;
  <tr class="govuk-table__row">
- <td class="govuk-table__cell">
- <button type="button" class="govuk-link govuk-!-font-weight-bold mr-info-btn mr-ba-drill-title-btn" data-mr-project-id="@row.ProjectId" data-mr-rag-just="@(row.RagJustification ?? "")" data-mr-narrative="@(row.LatestNarrative ?? "")" data-mr-title="@row.Title" aria-label="Open summary for @row.Title">@row.Title</button>
- <div class="dfe-c-body-s dfe-c-text-muted" style="margin-top:0.15rem;">@(row.BusinessArea ?? "—")</div>
+ <td class="govuk-table__cell mr-col-work-item">
+ <button type="button" class="govuk-link govuk-!-font-weight-bold mr-info-btn mr-ba-drill-title-btn" data-mr-project-id="@row.ProjectId" data-mr-title="@row.Title" data-mr-summary="@(changeScope?.Summary ?? "")" data-mr-rag-just="@(row.RagJustification ?? changeScope?.RagJustification ?? "")" data-mr-narrative="@(row.LatestNarrative ?? changeScope?.LatestMonthlyUpdateNarrative ?? "")" data-mr-ptg="@(changeScope?.PathToGreen ?? "")" data-mr-milestones="@(changeScope?.MilestonesSummary ?? "")" data-mr-ba-label="@(row.BusinessArea ?? "")" data-mr-rag="@(changeScope?.Rag ?? row.To)" data-mr-priority="@(changeScope?.Priority ?? "")" aria-label="Open summary for @row.Title">@row.Title</button>
+ <div class="mr-work-item-meta dfe-c-body-s dfe-c-text-muted">@(row.BusinessArea ?? "—")</div>
                 </td>
- <td class="mr-change-shift">
+ <td class="govuk-table__cell mr-change-shift">
  <span class="@RagDfeBadge(row.From)">@row.From</span>
  <span class="mr-change-arrow" aria-hidden="true">→</span>
  <span class="@RagDfeBadge(row.To)">@row.To</span>
                 </td>
  <td class="govuk-table__cell govuk-table__cell--numeric" style="white-space:nowrap;">@row.ChangedAt.ToString("d MMM yyyy")</td>
- <td class="mr-change-justification mr-change-justification--lead">@(string.IsNullOrWhiteSpace(row.Justification) ? "—" : row.Justification)</td>
+ <td class="mr-change-justification mr-change-justification--lead">@(string.IsNullOrWhiteSpace(ragJustText) ? "—" : ragJustText)</td>
               </tr>
             }
             </tbody>
           </table>
         </div>
+ </div>
           }
       </div>
     </div>
@@ -701,7 +587,7 @@
  <button type="button" class="dfe-f-toggle__button" aria-expanded="@(priOpen ? "true" : "false")" aria-controls="mr-pri-ch-@priSlug-content" id="mr-pri-ch-@priSlug-btn">
  <span class="dfe-f-toggle__icon" aria-hidden="true"></span>
  <span class="dfe-f-toggle__title">@bucket.Title</span>
- <span class="mr-toggle-panel__meta"><span class="govuk-tag @(bucket.Title == "Worsening" && bucket.Rows.Count > 0 ? "govuk-tag--red" : "govuk-tag--grey")">@bucket.Rows.Count</span></span>
+ <span class="mr-toggle-panel__meta"><span class="@WorkBadgeCss.PriorityChangeBucketToggleBadgeClass(bucket.Title, bucket.Rows.Count)">@bucket.Rows.Count</span></span>
  </button>
  </h4>
  </div>
@@ -714,12 +600,16 @@
           }
           else
           {
+ var priBucketIds = bucket.Rows.Select(r => r.ProjectId);
+ var priBucketLabel = $"priority-changes-{priSlug}";
+ <div class="mr-table-stack">
+  <partial name="~/Views/Modern/Reporting/_ReportingTableExportBar.cshtml" model="@(ReportExportBar(bucket.Title, priBucketIds, priBucketLabel))" />
  <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
   <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
  <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed mr-change-tbl mr-change-tbl--narrative-first">
  <thead class="govuk-table__head">
  <tr class="govuk-table__row">
- <th scope="col" class="govuk-table__header" aria-sort="none">
+ <th scope="col" class="govuk-table__header mr-col-work-item" aria-sort="none">
           <button type="button" class="dfe-f-table-sort-button">Work item</button>
         </th>
  <th scope="col" class="govuk-table__header" aria-sort="none">
@@ -731,28 +621,35 @@
  <th scope="col" class="govuk-table__header" aria-sort="none">
           <button type="button" class="dfe-f-table-sort-button">Reason</button>
         </th>
+ <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">RAG justification</button>
+        </th>
               </tr>
             </thead>
  <tbody class="govuk-table__body">
             @foreach (var row in bucket.Rows)
             {
+              scopeByProjectId.TryGetValue(row.ProjectId, out var changeScope);
+              var priRagJust = row.RagJustification ?? changeScope?.RagJustification;
  <tr class="govuk-table__row">
- <td class="govuk-table__cell">
- <button type="button" class="govuk-link govuk-!-font-weight-bold mr-info-btn mr-ba-drill-title-btn" data-mr-project-id="@row.ProjectId" data-mr-rag-just="@(row.RagJustification ?? "")" data-mr-narrative="@(row.LatestNarrative ?? "")" data-mr-title="@row.Title" aria-label="Open summary for @row.Title">@row.Title</button>
- <div class="dfe-c-body-s dfe-c-text-muted" style="margin-top:0.15rem;">@(row.BusinessArea ?? "—")</div>
+ <td class="govuk-table__cell mr-col-work-item">
+ <button type="button" class="govuk-link govuk-!-font-weight-bold mr-info-btn mr-ba-drill-title-btn" data-mr-project-id="@row.ProjectId" data-mr-title="@row.Title" data-mr-summary="@(changeScope?.Summary ?? "")" data-mr-rag-just="@(row.RagJustification ?? changeScope?.RagJustification ?? "")" data-mr-narrative="@(row.LatestNarrative ?? changeScope?.LatestMonthlyUpdateNarrative ?? "")" data-mr-ptg="@(changeScope?.PathToGreen ?? "")" data-mr-milestones="@(changeScope?.MilestonesSummary ?? "")" data-mr-ba-label="@(row.BusinessArea ?? "")" data-mr-rag="@(changeScope?.Rag ?? "")" data-mr-priority="@(changeScope?.Priority ?? row.To)" aria-label="Open summary for @row.Title">@row.Title</button>
+ <div class="mr-work-item-meta dfe-c-body-s dfe-c-text-muted">@(row.BusinessArea ?? "—")</div>
                 </td>
- <td class="mr-change-shift">
+ <td class="govuk-table__cell mr-change-shift">
  <span class="@PriDfeBadge(row.From)">@row.From</span>
  <span class="mr-change-arrow" aria-hidden="true">→</span>
  <span class="@PriDfeBadge(row.To)">@row.To</span>
                 </td>
  <td class="govuk-table__cell govuk-table__cell--numeric" style="white-space:nowrap;">@row.ChangedAt.ToString("d MMM yyyy")</td>
- <td class="mr-change-justification mr-change-justification--lead">@(string.IsNullOrWhiteSpace(row.Justification) ? "—" : row.Justification)</td>
+ <td class="mr-change-justification">@(string.IsNullOrWhiteSpace(row.Justification) ? "—" : row.Justification)</td>
+ <td class="mr-change-justification mr-change-justification--lead">@(string.IsNullOrWhiteSpace(priRagJust) ? "—" : priRagJust)</td>
               </tr>
             }
             </tbody>
           </table>
         </div>
+ </div>
           }
       </div>
     </div>
@@ -761,158 +658,6 @@
  </div>
       }
   </section>
-
-  <script type="application/json" id="mr-ptg-narratives-json">@Html.Raw(ptgNarrativeJson)</script>
-  <script type="application/json" id="mr-ptg-paths-json">@Html.Raw(ptgPathJson)</script>
-  <script type="application/json" id="mr-ba-drill-details-json">@Html.Raw(drillModalDetailsJson)</script>
-
-  @* ══════════════════ Info modal ══════════════════ *@
-  <div id="mr-info-modal" class="mr-info-modal" role="dialog" aria-modal="true" aria-labelledby="mr-info-modal-title" style="display:none;">
-    <div class="mr-info-modal__backdrop"></div>
-    <div class="mr-info-modal__panel">
-      <div class="mr-info-modal__header">
-        <h3 id="mr-info-modal-title" class="govuk-heading-s govuk-!-margin-bottom-0"></h3>
-        <button type="button" class="mr-info-modal__close" aria-label="Close">&times;</button>
-      </div>
-      <div class="mr-info-modal__body">
-        <div id="mr-info-modal-ptg-section" class="mr-info-modal__block" hidden>
-          <h4 class="govuk-heading-xs govuk-!-margin-bottom-1">Path to green</h4>
-          <p id="mr-info-modal-ptg" class="dfe-c-body-s" style="white-space:pre-line;"></p>
-        </div>
-        <div id="mr-info-modal-narrative-section" class="mr-info-modal__block">
-          <h4 class="govuk-heading-xs govuk-!-margin-bottom-1">Last submission</h4>
-          <p id="mr-info-modal-narrative" class="dfe-c-body-s" style="white-space:pre-line;"></p>
-        </div>
-        <div id="mr-info-modal-summary-section" class="mr-info-modal__block" hidden>
-          <h4 class="govuk-heading-xs govuk-!-margin-bottom-1">Summary</h4>
-          <p id="mr-info-modal-summary" class="dfe-c-body-s" style="white-space:pre-line;"></p>
-        </div>
-        <div id="mr-info-modal-rag-section" class="mr-info-modal__block">
-          <h4 class="govuk-heading-xs govuk-!-margin-bottom-1">RAG justification</h4>
-          <p id="mr-info-modal-rag" class="dfe-c-body-s" style="white-space:pre-line;"></p>
-        </div>
-      </div>
-      <div id="mr-info-modal-footer" class="mr-info-modal__footer" hidden>
-        <a id="mr-info-modal-view-link" class="govuk-link govuk-link--no-visited-state" href="#">View full work item</a>
-      </div>
-    </div>
-  </div>
-
-  <style>
-    .mr-info-btn { background:none; border:1px solid #b1b4b6; border-radius:4px; cursor:pointer; padding:0.2rem 0.5rem; font-size:0.95rem; line-height:1; color:#1d70b8; }
-    .mr-info-btn:hover { background:#f3f2f1; }
-    .mr-ba-drill-title-btn.mr-info-btn,
-    .mr-ptg-title-btn.mr-info-btn { border:none; padding:0; text-decoration:underline; font-weight:700; text-align:left; }
-    .mr-info-modal__backdrop { position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:9998; }
-    .mr-info-modal__panel { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:#fff; border-radius:8px; width:90%; max-width:56rem; max-height:80vh; overflow-y:auto; z-index:9999; box-shadow:0 4px 24px rgba(0,0,0,.25); }
-    .mr-info-modal__header { display:flex; justify-content:space-between; align-items:flex-start; padding:1rem 1.25rem 0.5rem; border-bottom:1px solid #b1b4b6; }
-    .mr-info-modal__close { background:none; border:none; font-size:1.5rem; cursor:pointer; color:#505a5f; padding:0 0.25rem; }
-    .mr-info-modal__close:hover { color:#0b0c0c; }
-    .mr-info-modal__body { padding:1rem 1.25rem 0.5rem; display:flex; flex-direction:column; gap:1rem; }
-    .mr-info-modal__footer { padding:0 1.25rem 1.25rem; border-top:1px solid #f3f2f1; margin-top:0.5rem; padding-top:1rem; }
-  </style>
-
-  <script nonce="@Context.Items["Nonce"]">
-  (function(){
-    var modal = document.getElementById('mr-info-modal');
-    var titleEl = document.getElementById('mr-info-modal-title');
-    var summarySection = document.getElementById('mr-info-modal-summary-section');
-    var summaryEl = document.getElementById('mr-info-modal-summary');
-    var ptgSection = document.getElementById('mr-info-modal-ptg-section');
-    var ptgEl = document.getElementById('mr-info-modal-ptg');
-    var ragEl = document.getElementById('mr-info-modal-rag');
-    var narrativeEl = document.getElementById('mr-info-modal-narrative');
-    var footerEl = document.getElementById('mr-info-modal-footer');
-    var viewLink = document.getElementById('mr-info-modal-view-link');
-    var closeBtn = modal.querySelector('.mr-info-modal__close');
-    var backdrop = modal.querySelector('.mr-info-modal__backdrop');
-    var detailUrlPrefix = @Html.Raw(mwDetailPrefixJson);
-
-    var ptgNarratives = {};
-    try {
-      var ptgNarrativesJsonEl = document.getElementById('mr-ptg-narratives-json');
-      if (ptgNarrativesJsonEl && ptgNarrativesJsonEl.textContent) ptgNarratives = JSON.parse(ptgNarrativesJsonEl.textContent);
-    } catch (e) { ptgNarratives = {}; }
-
-    var ptgPaths = {};
-    try {
-      var ptgPathsJsonEl = document.getElementById('mr-ptg-paths-json');
-      if (ptgPathsJsonEl && ptgPathsJsonEl.textContent) ptgPaths = JSON.parse(ptgPathsJsonEl.textContent);
-    } catch (e) { ptgPaths = {}; }
-
-    var drillDetailsById = {};
-    try {
-      var drillEl = document.getElementById('mr-ba-drill-details-json');
-      if (drillEl && drillEl.textContent) drillDetailsById = JSON.parse(drillEl.textContent);
-    } catch (e) { drillDetailsById = {}; }
-
-    function openModal(btn) {
-      var pid = btn.getAttribute('data-mr-project-id');
-      var detail = pid && Object.prototype.hasOwnProperty.call(drillDetailsById, pid) ? drillDetailsById[pid] : null;
-
-      titleEl.textContent = btn.getAttribute('data-mr-title') || (detail && detail.title) || '';
-
-      var summaryText = detail && detail.summary ? detail.summary : '';
-      if (!String(summaryText).trim()) summaryText = btn.getAttribute('data-mr-summary') || '';
-      var showSummary = !!String(summaryText).trim();
-      if (summarySection) {
-        summarySection.hidden = !showSummary;
-        summaryEl.textContent = showSummary ? String(summaryText).trim() : '';
-      }
-
-      var ptgText = detail && detail.pathToGreen ? String(detail.pathToGreen) : '';
-      if (!String(ptgText).trim() && pid && Object.prototype.hasOwnProperty.call(ptgPaths, pid))
-        ptgText = ptgPaths[pid] || '';
-      var showPtg = !!String(ptgText).trim();
-      if (ptgSection) {
-        ptgSection.hidden = !showPtg;
-        ptgEl.textContent = showPtg ? String(ptgText).trim() : '';
-      }
-
-      var ragText = btn.getAttribute('data-mr-rag-just');
-      if (ragText === null || ragText === '')
-        ragText = detail && detail.ragJustification ? detail.ragJustification : '';
-      ragEl.textContent = ragText || '—';
-
-      var narrative = '';
-      var ptgId = btn.getAttribute('data-mr-ptg-id');
-      if (ptgId && Object.prototype.hasOwnProperty.call(ptgNarratives, ptgId))
-        narrative = ptgNarratives[ptgId] || '';
-      else if (detail && detail.latestMonthlyUpdateNarrative)
-        narrative = detail.latestMonthlyUpdateNarrative;
-      else
-        narrative = btn.getAttribute('data-mr-narrative') || '';
-      narrativeEl.textContent = narrative || '—';
-
-      if (!ragEl.textContent.trim()) ragEl.textContent = '—';
-      if (!narrativeEl.textContent.trim()) narrativeEl.textContent = '—';
-
-      if (pid && viewLink && detailUrlPrefix) {
-        viewLink.href = detailUrlPrefix + pid;
-        footerEl.hidden = false;
-      } else {
-        footerEl.hidden = true;
-      }
-
-      modal.style.display = '';
-      closeBtn.focus();
-    }
-
-    function closeModal() {
-      modal.style.display = 'none';
-    }
-
-    document.addEventListener('click', function(e) {
-      var btn = e.target.closest('.mr-info-btn');
-      if (btn) { openModal(btn); return; }
-    });
-    closeBtn.addEventListener('click', closeModal);
-    backdrop.addEventListener('click', closeModal);
-    document.addEventListener('keydown', function(e) {
-      if (e.key === 'Escape' && modal.style.display !== 'none') closeModal();
-    });
-  })();
-  </script>
 
   </div>
 
@@ -924,14 +669,14 @@
 <div class="mr-report-section-panel dfe-f-toggle govuk-!-margin-bottom-3" data-module="dfe-f-toggle" data-mr-section-id="trends" data-mr-section-title="RAG, priority, and trends">
 <div class="dfe-f-toggle__title-wrapper">
 <h2 class="dfe-f-toggle__heading">
-<button type="button" class="dfe-f-toggle__button" aria-expanded="true" aria-controls="mr-toggle-trends-content" id="mr-toggle-trends-button">
+<button type="button" class="dfe-f-toggle__button" aria-expanded="false" aria-controls="mr-toggle-trends-content" id="mr-toggle-trends-button">
 <span class="dfe-f-toggle__icon" aria-hidden="true"></span>
 <span class="dfe-f-toggle__title">RAG, priority, and trends</span>
-<span class="mr-toggle-panel__meta"><span class="govuk-tag govuk-tag--grey">@mrReportPanelTrendsTotal</span></span>
+<span class="mr-toggle-panel__meta"><span class="@WorkBadgeCss.ToggleCountBadgeClass(mrReportPanelTrendsTotal)">@mrReportPanelTrendsTotal</span></span>
 </button>
 </h2>
 </div>
-<div id="mr-toggle-trends-content" class="dfe-f-toggle__content">
+<div id="mr-toggle-trends-content" class="dfe-f-toggle__content" hidden>
 <div class="dfe-f-toggle__body govuk-body">
 <div id="d-mr-rag-priority" class="mr-single-page-block" role="region" aria-labelledby="mr-h-dist">
 
@@ -1000,7 +745,7 @@
           {
             var val = m.PriorityDistribution.TryGetValue(key, out var v) ? v : 0;
  <tr class="govuk-table__row">
- <td class="govuk-table__cell"><span class="@PriBadgeClass(key)">@key</span></td>
+ <td class="govuk-table__cell"><span class="@PriDfeBadge(key)">@key</span></td>
  <td class="govuk-table__cell"><strong>@val</strong></td>
  <td class="govuk-table__cell">@Html.Raw(DeltaHtml(PriDelta(key)))</td>
             </tr>
@@ -1010,12 +755,15 @@
  </div>
       </div>
     </div>
+
+ @{ ViewData["ScopeByProjectId"] = scopeByProjectId; ViewData["MwDetailPrefix"] = mwDetailPrefix; }
+ @await Html.PartialAsync("_MonthlyReportRagSixMonthSection", m)
   </section>
 
   @* ══════════════════ RAG × Priority matrix ══════════════════ *@
- <section class="mr-section govuk-!-margin-top-8" id="mr-s-matrix" aria-labelledby="mr-h-matrix">
+ <section class="mr-section govuk-!-margin-top-8" id="mr-s-matrix" aria-labelledby="mr-h-matrix" data-mr-drill-host="mr-matrix-drilldown-host">
  <h2 id="mr-h-matrix" class="mr-section__heading">RAG × Priority matrix</h2>
- <p class="dfe-c-body-s dfe-c-text-muted" style="margin-bottom:1rem;">Heat map showing concentration of work items by RAG status and delivery priority. Darker shading indicates higher-risk combinations.</p>
+ <p class="dfe-c-body-s dfe-c-text-muted" style="margin-bottom:1rem;">Heat map showing concentration of work items by RAG status and delivery priority. Darker shading indicates higher-risk combinations. Click a count to see matching work items below.</p>
  <div class="mr-card mr-matrix-card">
       @{
         var ragKeys = new[] { "Red", "Amber-Red", "Amber-Green", "Green", "Not Set" };
@@ -1032,7 +780,7 @@
  <span class="mr-mx__corner-label mr-mx__corner-label--col">Priority →</span>
  <span class="mr-mx__corner-label mr-mx__corner-label--row">RAG ↓</span>
             </th>
- @foreach (var pk in priKeys) { <th scope="col" class="mr-mx__col-hdr"><span class="@PriBadgeClass(pk)">@pk</span></th> }
+ @foreach (var pk in priKeys) { <th scope="col" class="mr-mx__col-hdr"><span class="@PriDfeBadge(pk)">@pk</span></th> }
  <th scope="col" class="govuk-table__header mr-mx__col-hdr mr-mx__col-hdr--total">Total</th>
           </tr>
         </thead>
@@ -1045,10 +793,11 @@
             @foreach (var pk in priKeys)
             {
               var c = matrixLookup.TryGetValue(rk + "|" + pk, out var cv) ? cv : 0;
+              var mxFilter = $"mx-{rk}|{pk}";
  <td class="@MatrixCellClass(rk, pk, c)">
                 @if (c > 0)
                 {
- <span class="mr-mx__count">@c</span>
+ <span class="mr-mx__count mr-ba-drill" data-ba="__scope__" data-filter="@mxFilter" role="button" tabindex="0">@c</span>
                 }
                 else
                 {
@@ -1056,7 +805,16 @@
                 }
               </td>
             }
- <td class="mr-mx__cell mr-mx__cell--total"><strong>@rowTotal</strong></td>
+ <td class="mr-mx__cell mr-mx__cell--total">
+              @if (rowTotal > 0)
+              {
+ <strong><span class="mr-mx__count mr-ba-drill" data-ba="__scope__" data-filter="rag-@rk" role="button" tabindex="0">@rowTotal</span></strong>
+              }
+              else
+              {
+ <strong>@rowTotal</strong>
+              }
+            </td>
           </tr>
         }
         </tbody>
@@ -1066,14 +824,33 @@
             @foreach (var pk in priKeys)
             {
               var colTotal = ragKeys.Sum(rk => matrixLookup.TryGetValue(rk + "|" + pk, out var cv) ? cv : 0);
- <td class="mr-mx__cell mr-mx__cell--total"><strong>@colTotal</strong></td>
+ <td class="mr-mx__cell mr-mx__cell--total">
+              @if (colTotal > 0)
+              {
+ <strong><span class="mr-mx__count mr-ba-drill" data-ba="__scope__" data-filter="pri-@pk" role="button" tabindex="0">@colTotal</span></strong>
+              }
+              else
+              {
+ <strong>@colTotal</strong>
+              }
+            </td>
             }
- <td class="mr-mx__cell mr-mx__cell--grand"><strong>@m.TotalActiveProjects</strong></td>
+ <td class="mr-mx__cell mr-mx__cell--grand">
+            @if (m.TotalActiveProjects > 0)
+            {
+ <strong><span class="mr-mx__count mr-ba-drill" data-ba="__scope__" data-filter="total" role="button" tabindex="0">@m.TotalActiveProjects</span></strong>
+            }
+            else
+            {
+ <strong>@m.TotalActiveProjects</strong>
+            }
+          </td>
           </tr>
         </tfoot>
       </table>
  </div>
     </div>
+    <div id="mr-matrix-drilldown-host" class="mr-drilldown-host"></div>
   </section>
 
   @* ══════════════════ Trend charts ══════════════════ *@
@@ -1184,14 +961,14 @@
 <div class="mr-report-section-panel dfe-f-toggle govuk-!-margin-bottom-3" data-module="dfe-f-toggle" data-mr-section-id="milestones" data-mr-section-title="Milestones and new work">
 <div class="dfe-f-toggle__title-wrapper">
 <h2 class="dfe-f-toggle__heading">
-<button type="button" class="dfe-f-toggle__button" aria-expanded="true" aria-controls="mr-toggle-milestones-content" id="mr-toggle-milestones-button">
+<button type="button" class="dfe-f-toggle__button" aria-expanded="false" aria-controls="mr-toggle-milestones-content" id="mr-toggle-milestones-button">
 <span class="dfe-f-toggle__icon" aria-hidden="true"></span>
 <span class="dfe-f-toggle__title" id="mr-h-lists">Milestones and new work</span>
-<span class="mr-toggle-panel__meta"><span class="govuk-tag govuk-tag--grey">@mrReportPanelMilestonesTotal</span></span>
+<span class="mr-toggle-panel__meta"><span class="@WorkBadgeCss.ToggleCountBadgeClass(mrReportPanelMilestonesTotal)">@mrReportPanelMilestonesTotal</span></span>
 </button>
 </h2>
 </div>
-<div id="mr-toggle-milestones-content" class="dfe-f-toggle__content">
+<div id="mr-toggle-milestones-content" class="dfe-f-toggle__content" hidden>
 <div class="dfe-f-toggle__body govuk-body">
 <div id="d-mr-milestones" class="mr-single-page-block" role="region" aria-labelledby="mr-h-lists">
 
@@ -1209,7 +986,7 @@
  <button type="button" class="dfe-f-toggle__button" aria-expanded="@(openNewThisMonth ? "true" : "false")" aria-controls="mr-ms-new-content" id="mr-ms-new-btn">
  <span class="dfe-f-toggle__icon" aria-hidden="true"></span>
  <span class="dfe-f-toggle__title">New this month</span>
- <span class="mr-toggle-panel__meta"><span class="govuk-tag govuk-tag--grey">@m.NewProjectsThisMonth.Count</span></span>
+ <span class="mr-toggle-panel__meta"><span class="@WorkBadgeCss.ToggleCountBadgeClass(m.NewProjectsThisMonth.Count)">@m.NewProjectsThisMonth.Count</span></span>
  </button>
  </h3>
  </div>
@@ -1221,28 +998,27 @@
         }
         else
         {
+ <div class="mr-table-stack">
+  <partial name="~/Views/Modern/Reporting/_ReportingTableExportBar.cshtml" model="@(ReportExportBar("New work this month", newWorkProjectIds, "new-work"))" />
  <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
   <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
  <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed mr-change-tbl mr-ms-tbl">
  <thead class="govuk-table__head">
  <tr class="govuk-table__row">
- <th scope="col" class="govuk-table__header" aria-sort="none">
+ <th scope="col" class="govuk-table__header mr-col-work-item" aria-sort="none">
           <button type="button" class="dfe-f-table-sort-button">Work item</button>
         </th>
  <th scope="col" class="govuk-table__header" aria-sort="none">
-          <button type="button" class="dfe-f-table-sort-button">Milestone</button>
-        </th>
- <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none">
-          <button type="button" class="dfe-f-table-sort-button">Due</button>
-        </th>
- <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none">
-          <button type="button" class="dfe-f-table-sort-button">Completed</button>
-        </th>
- <th scope="col" class="govuk-table__header" aria-sort="none">
-          <button type="button" class="dfe-f-table-sort-button">Work RAG</button>
+          <button type="button" class="dfe-f-table-sort-button">RAG</button>
         </th>
  <th scope="col" class="govuk-table__header" aria-sort="none">
           <button type="button" class="dfe-f-table-sort-button">Priority</button>
+        </th>
+ <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">FTE / MSC</button>
+        </th>
+ <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Created</button>
         </th>
               </tr>
             </thead>
@@ -1251,20 +1027,22 @@
             {
               var ragName = p.RagStatusLookup?.Name ?? "Not Set";
               var priName = p.DeliveryPriority?.Name ?? "Not Set";
+              scopeByProjectId.TryGetValue(p.Id, out var newScope);
+              var baName = p.BusinessAreaLookup?.Name ?? "—";
               <tr class="govuk-table__row">
- <td class="govuk-table__cell">
+ <td class="govuk-table__cell mr-col-work-item">
  <a class="govuk-link govuk-!-font-weight-bold govuk-link--no-visited-state" href="@MwDetailHref(p.Id)">@p.Title</a>
- <div class="dfe-c-body-s dfe-c-text-muted">@(p.BusinessAreaLookup?.Name ?? "—")</div>
+ <div class="mr-work-item-meta dfe-c-body-s dfe-c-text-muted">@baName</div>
                 </td>
- <td class="govuk-table__cell">—</td>
- <td class="govuk-table__cell govuk-table__cell--numeric">@p.CreatedAt.ToString("d MMM yyyy")</td>
- <td class="govuk-table__cell govuk-table__cell--numeric">—</td>
  <td class="govuk-table__cell"><span class="@RagDfeBadge(ragName)">@ragName</span></td>
  <td class="govuk-table__cell"><span class="@PriDfeBadge(priName)">@priName</span></td>
+ <td class="govuk-table__cell govuk-table__cell--numeric">@FormatFteMsc(newScope)</td>
+ <td class="govuk-table__cell govuk-table__cell--numeric">@p.CreatedAt.ToString("d MMM yyyy")</td>
               </tr>
             }
             </tbody>
           </table>
+ </div>
  </div>
         }
       </div>
@@ -1280,7 +1058,7 @@
  <button type="button" class="dfe-f-toggle__button" aria-expanded="@(openMsAchieved ? "true" : "false")" aria-controls="mr-ms-done-content" id="mr-ms-done-btn">
  <span class="dfe-f-toggle__icon" aria-hidden="true"></span>
  <span class="dfe-f-toggle__title">Milestones completed</span>
- <span class="mr-toggle-panel__meta"><span class="govuk-tag govuk-tag--grey">@m.MilestonesAchieved.Count</span></span>
+ <span class="mr-toggle-panel__meta"><span class="@WorkBadgeCss.ToggleCountBadgeClass(m.MilestonesAchieved.Count)">@m.MilestonesAchieved.Count</span></span>
  </button>
  </h3>
  </div>
@@ -1292,13 +1070,24 @@
         }
         else
         {
+ <div class="mr-table-stack">
+  <partial name="~/Views/Modern/Reporting/_ReportingTableExportBar.cshtml" model="@(ReportExportBar("Milestones completed", msAchievedProjectIds, "milestones-completed"))" />
  <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
   <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
  <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed mr-change-tbl mr-ms-tbl">
  <thead class="govuk-table__head">
  <tr class="govuk-table__row">
- <th scope="col" class="govuk-table__header" aria-sort="none">
+ <th scope="col" class="govuk-table__header mr-col-work-item" aria-sort="none">
           <button type="button" class="dfe-f-table-sort-button">Work item</button>
+        </th>
+ <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">RAG</button>
+        </th>
+ <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Priority</button>
+        </th>
+ <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">FTE / MSC</button>
         </th>
  <th scope="col" class="govuk-table__header" aria-sort="none">
           <button type="button" class="dfe-f-table-sort-button">Milestone</button>
@@ -1309,12 +1098,6 @@
  <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none">
           <button type="button" class="dfe-f-table-sort-button">Completed</button>
         </th>
- <th scope="col" class="govuk-table__header" aria-sort="none">
-          <button type="button" class="dfe-f-table-sort-button">Work RAG</button>
-        </th>
- <th scope="col" class="govuk-table__header" aria-sort="none">
-          <button type="button" class="dfe-f-table-sort-button">Priority</button>
-        </th>
               </tr>
             </thead>
  <tbody class="govuk-table__body">
@@ -1322,20 +1105,24 @@
             {
               var ragName = x.Project.RagStatusLookup?.Name ?? "Not Set";
               var priName = x.Project.DeliveryPriority?.Name ?? "Not Set";
+              scopeByProjectId.TryGetValue(x.Project.Id, out var msScope);
+              var baName = x.Project.BusinessAreaLookup?.Name ?? "—";
               <tr class="govuk-table__row">
- <td class="govuk-table__cell">
+ <td class="govuk-table__cell mr-col-work-item">
  <a class="govuk-link govuk-!-font-weight-bold govuk-link--no-visited-state" href="@MwDetailHref(x.Project.Id, "milestones")">@x.Project.Title</a>
- <div class="dfe-c-body-s dfe-c-text-muted">@(x.Project.BusinessAreaLookup?.Name ?? "—")</div>
+ <div class="mr-work-item-meta dfe-c-body-s dfe-c-text-muted">@baName</div>
                 </td>
+ <td class="govuk-table__cell"><span class="@RagDfeBadge(ragName)">@ragName</span></td>
+ <td class="govuk-table__cell"><span class="@PriDfeBadge(priName)">@priName</span></td>
+ <td class="govuk-table__cell govuk-table__cell--numeric">@FormatFteMsc(msScope)</td>
  <td class="govuk-table__cell">@x.Milestone.Name</td>
  <td class="govuk-table__cell govuk-table__cell--numeric">@x.Milestone.DueDate.ToString("d MMM yyyy")</td>
  <td class="govuk-table__cell govuk-table__cell--numeric">@(x.Milestone.ActualDate.HasValue ? x.Milestone.ActualDate.Value.ToString("d MMM yyyy") : "—")</td>
- <td class="govuk-table__cell"><span class="@RagDfeBadge(ragName)">@ragName</span></td>
- <td class="govuk-table__cell"><span class="@PriDfeBadge(priName)">@priName</span></td>
               </tr>
             }
             </tbody>
           </table>
+ </div>
  </div>
         }
       </div>
@@ -1351,7 +1138,7 @@
  <button type="button" class="dfe-f-toggle__button" aria-expanded="@(openMsUpcoming ? "true" : "false")" aria-controls="mr-ms-upcoming-content" id="mr-ms-upcoming-btn">
  <span class="dfe-f-toggle__icon" aria-hidden="true"></span>
  <span class="dfe-f-toggle__title">Upcoming milestones — 30 days</span>
- <span class="mr-toggle-panel__meta"><span class="govuk-tag govuk-tag--grey">@m.UpcomingMilestonesNext30Days.Count</span></span>
+ <span class="mr-toggle-panel__meta"><span class="@WorkBadgeCss.ToggleCountBadgeClass(m.UpcomingMilestonesNext30Days.Count)">@m.UpcomingMilestonesNext30Days.Count</span></span>
  </button>
  </h3>
  </div>
@@ -1363,13 +1150,24 @@
         }
         else
         {
+ <div class="mr-table-stack">
+  <partial name="~/Views/Modern/Reporting/_ReportingTableExportBar.cshtml" model="@(ReportExportBar("Upcoming milestones — 30 days", msUpcomingProjectIds, "milestones-upcoming"))" />
  <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
   <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
  <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed mr-change-tbl mr-ms-tbl">
  <thead class="govuk-table__head">
  <tr class="govuk-table__row">
- <th scope="col" class="govuk-table__header" aria-sort="none">
+ <th scope="col" class="govuk-table__header mr-col-work-item" aria-sort="none">
           <button type="button" class="dfe-f-table-sort-button">Work item</button>
+        </th>
+ <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">RAG</button>
+        </th>
+ <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Priority</button>
+        </th>
+ <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">FTE / MSC</button>
         </th>
  <th scope="col" class="govuk-table__header" aria-sort="none">
           <button type="button" class="dfe-f-table-sort-button">Milestone</button>
@@ -1380,12 +1178,6 @@
  <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none">
           <button type="button" class="dfe-f-table-sort-button">Completed</button>
         </th>
- <th scope="col" class="govuk-table__header" aria-sort="none">
-          <button type="button" class="dfe-f-table-sort-button">Work RAG</button>
-        </th>
- <th scope="col" class="govuk-table__header" aria-sort="none">
-          <button type="button" class="dfe-f-table-sort-button">Priority</button>
-        </th>
               </tr>
             </thead>
  <tbody class="govuk-table__body">
@@ -1393,20 +1185,24 @@
             {
               var ragName = x.Project.RagStatusLookup?.Name ?? "Not Set";
               var priName = x.Project.DeliveryPriority?.Name ?? "Not Set";
+              scopeByProjectId.TryGetValue(x.Project.Id, out var msScope);
+              var baName = x.Project.BusinessAreaLookup?.Name ?? "—";
               <tr class="govuk-table__row">
- <td class="govuk-table__cell">
+ <td class="govuk-table__cell mr-col-work-item">
  <a class="govuk-link govuk-!-font-weight-bold govuk-link--no-visited-state" href="@MwDetailHref(x.Project.Id, "milestones")">@x.Project.Title</a>
- <div class="dfe-c-body-s dfe-c-text-muted">@(x.Project.BusinessAreaLookup?.Name ?? "—")</div>
+ <div class="mr-work-item-meta dfe-c-body-s dfe-c-text-muted">@baName</div>
                 </td>
+ <td class="govuk-table__cell"><span class="@RagDfeBadge(ragName)">@ragName</span></td>
+ <td class="govuk-table__cell"><span class="@PriDfeBadge(priName)">@priName</span></td>
+ <td class="govuk-table__cell govuk-table__cell--numeric">@FormatFteMsc(msScope)</td>
  <td class="govuk-table__cell">@x.Milestone.Name</td>
  <td class="govuk-table__cell govuk-table__cell--numeric">@x.Milestone.DueDate.ToString("d MMM yyyy")</td>
  <td class="govuk-table__cell govuk-table__cell--numeric">@(x.Milestone.ActualDate.HasValue ? x.Milestone.ActualDate.Value.ToString("d MMM yyyy") : "—")</td>
- <td class="govuk-table__cell"><span class="@RagDfeBadge(ragName)">@ragName</span></td>
- <td class="govuk-table__cell"><span class="@PriDfeBadge(priName)">@priName</span></td>
               </tr>
             }
             </tbody>
           </table>
+ </div>
  </div>
         }
       </div>
@@ -1422,7 +1218,7 @@
  <button type="button" class="dfe-f-toggle__button" aria-expanded="@(openMsLate ? "true" : "false")" aria-controls="mr-ms-late-content" id="mr-ms-late-btn">
  <span class="dfe-f-toggle__icon" aria-hidden="true"></span>
  <span class="dfe-f-toggle__title">Late milestones</span>
- <span class="mr-toggle-panel__meta"><span class="govuk-tag @(m.LateMilestones.Count > 0 ? "govuk-tag--red" : "govuk-tag--grey")">@m.LateMilestones.Count</span></span>
+ <span class="mr-toggle-panel__meta"><span class="@WorkBadgeCss.ToggleCountBadgeClass(m.LateMilestones.Count, warnWhenPositive: true)">@m.LateMilestones.Count</span></span>
  </button>
  </h3>
  </div>
@@ -1434,13 +1230,24 @@
         }
         else
         {
+ <div class="mr-table-stack">
+  <partial name="~/Views/Modern/Reporting/_ReportingTableExportBar.cshtml" model="@(ReportExportBar("Late milestones", msLateProjectIds, "milestones-late"))" />
  <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
   <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
  <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed mr-change-tbl mr-ms-tbl">
  <thead class="govuk-table__head">
  <tr class="govuk-table__row">
- <th scope="col" class="govuk-table__header" aria-sort="none">
+ <th scope="col" class="govuk-table__header mr-col-work-item" aria-sort="none">
           <button type="button" class="dfe-f-table-sort-button">Work item</button>
+        </th>
+ <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">RAG</button>
+        </th>
+ <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Priority</button>
+        </th>
+ <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">FTE / MSC</button>
         </th>
  <th scope="col" class="govuk-table__header" aria-sort="none">
           <button type="button" class="dfe-f-table-sort-button">Milestone</button>
@@ -1451,12 +1258,6 @@
  <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none">
           <button type="button" class="dfe-f-table-sort-button">Completed</button>
         </th>
- <th scope="col" class="govuk-table__header" aria-sort="none">
-          <button type="button" class="dfe-f-table-sort-button">Work RAG</button>
-        </th>
- <th scope="col" class="govuk-table__header" aria-sort="none">
-          <button type="button" class="dfe-f-table-sort-button">Priority</button>
-        </th>
               </tr>
             </thead>
  <tbody class="govuk-table__body">
@@ -1464,20 +1265,24 @@
             {
               var ragName = x.Project.RagStatusLookup?.Name ?? "Not Set";
               var priName = x.Project.DeliveryPriority?.Name ?? "Not Set";
+              scopeByProjectId.TryGetValue(x.Project.Id, out var msScope);
+              var baName = x.Project.BusinessAreaLookup?.Name ?? "—";
               <tr class="govuk-table__row">
- <td class="govuk-table__cell">
+ <td class="govuk-table__cell mr-col-work-item">
  <a class="govuk-link govuk-!-font-weight-bold govuk-link--no-visited-state" href="@MwDetailHref(x.Project.Id, "milestones")">@x.Project.Title</a>
- <div class="dfe-c-body-s dfe-c-text-muted">@(x.Project.BusinessAreaLookup?.Name ?? "—")</div>
+ <div class="mr-work-item-meta dfe-c-body-s dfe-c-text-muted">@baName</div>
                 </td>
+ <td class="govuk-table__cell"><span class="@RagDfeBadge(ragName)">@ragName</span></td>
+ <td class="govuk-table__cell"><span class="@PriDfeBadge(priName)">@priName</span></td>
+ <td class="govuk-table__cell govuk-table__cell--numeric">@FormatFteMsc(msScope)</td>
  <td class="govuk-table__cell">@x.Milestone.Name</td>
  <td class="govuk-table__cell govuk-table__cell--numeric mr-text-danger">@x.Milestone.DueDate.ToString("d MMM yyyy")</td>
  <td class="govuk-table__cell govuk-table__cell--numeric">@(x.Milestone.ActualDate.HasValue ? x.Milestone.ActualDate.Value.ToString("d MMM yyyy") : "—")</td>
- <td class="govuk-table__cell"><span class="@RagDfeBadge(ragName)">@ragName</span></td>
- <td class="govuk-table__cell"><span class="@PriDfeBadge(priName)">@priName</span></td>
               </tr>
             }
             </tbody>
           </table>
+ </div>
  </div>
         }
       </div>
@@ -1498,9 +1303,13 @@
 
 </div>
 
+@await Html.PartialAsync("_ReportingWorkItemModal")
 
 @section Styles {
+  <link rel="stylesheet" href="@Url.Content("~/modern/css/reporting-drilldown.css")" asp-append-version="true" />
+  <link rel="stylesheet" href="@Url.Content("~/modern/css/reporting-table-export.css")" asp-append-version="true" />
 <style>
+  .mr-ptg-title-btn.mr-info-btn { border: none; padding: 0; text-decoration: underline; font-weight: 700; text-align: left; background: none; cursor: pointer; color: #1d70b8; }
   /* Square corners across this report (overrides nested GOV.UK / Compass2 radius tokens). */
   .mr-dash,
   .mr-dash * {
@@ -1508,6 +1317,44 @@
   }
 
   .mr-dash { margin-bottom: 3rem; }
+
+  .mr-report-view-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem 1rem;
+    padding: 0.85rem 1rem;
+    background: var(--govuk-surface-background-colour, var(--surface-bg, #f4f8fb));
+    border: 1px solid var(--govuk-surface-border-colour, #8eb8dc);
+    border-left: 4px solid #1d70b8;
+  }
+  .mr-report-view-controls__label {
+    margin: 0;
+    color: #0b0c0c;
+  }
+  .mr-report-view-controls__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 0.75rem;
+  }
+  .mr-report-view-controls .govuk-button {
+    margin-bottom: 0;
+  }
+  @@media (max-width: 40.0625em) {
+    .mr-report-view-controls__actions {
+      width: 100%;
+    }
+    .mr-report-view-controls__actions .govuk-button {
+      flex: 1 1 auto;
+      text-align: center;
+    }
+  }
+
+  .mr-work-item-meta {
+    margin-top: 0.15rem;
+  }
 
   /* Charts and wide tables stay inside DfE toggle panels (grid/flex default min-width:auto otherwise overflows). */
   .mr-dash .mr-report-section-panel > .dfe-f-toggle__content {
@@ -1586,16 +1433,15 @@
   #mr-filter-directorate { width: 18rem; min-width: 16rem; max-width: 24rem; }
   #mr-filter-apply { min-width: 5.5rem; }
 
-  /* ── Path to green (sortable table) ── */
+  /* ── Path to green (sortable table) — layout only; borders/badges in reporting-drilldown.css ── */
   .mr-ptg-table-wrap { overflow-x: auto; }
   .mr-ptg-table {
     margin-bottom: 0;
     min-width: 36rem;
-    table-layout: fixed;
+    table-layout: auto;
     width: 100%;
+    font-size: 0.8125rem;
   }
-  .mr-ptg-table th,
-  .mr-ptg-table td { font-size: 0.8125rem; vertical-align: top; }
   .mr-ptg-table__path-col {
     width: 33%;
   }
@@ -1641,6 +1487,18 @@
 
   .mr-report-section-panel.dfe-f-toggle {
     margin-bottom: 0;
+    background-color: var(--govuk-surface-background-colour, var(--surface-bg, #f4f8fb));
+    border-color: var(--govuk-surface-border-colour, #8eb8dc);
+  }
+  .mr-dash .mr-report-section-panel.dfe-f-toggle .dfe-f-toggle__title-wrapper {
+    background-color: var(--govuk-surface-background-colour, var(--surface-bg, #f4f8fb));
+  }
+  .mr-dash .mr-milestone-groups > .dfe-f-toggle {
+    background-color: var(--govuk-surface-background-colour, var(--surface-bg, #f4f8fb));
+    border-color: var(--govuk-surface-border-colour, #8eb8dc);
+  }
+  .mr-dash .mr-milestone-groups > .dfe-f-toggle .dfe-f-toggle__title-wrapper {
+    background-color: var(--govuk-surface-background-colour, var(--surface-bg, #f4f8fb));
   }
 
   .mr-report-layout {
@@ -1806,6 +1664,46 @@
     max-width: 100% !important;
   }
 
+  .mr-rag-trend-table__month {
+    white-space: nowrap;
+    text-align: center !important;
+  }
+  .mr-rag-trend-table .dfe-f-badge--small {
+    font-size: 0.6875rem;
+  }
+  .mr-rag-ba-summary-table.mr-ba-table {
+    min-width: 36rem;
+  }
+  .mr-rag-ba-summary-table .mr-ba-table__num-hdr .dfe-f-badge {
+    display: inline-block;
+    min-width: 5.5rem;
+    text-align: center;
+  }
+  button.mr-rag-ba-drill.mr-ba-num {
+    min-width: 2.25rem;
+    padding: 0.2rem 0.5rem;
+    border-radius: 2px;
+    font-weight: 700;
+    line-height: 1.2;
+  }
+  button.mr-rag-ba-drill.mr-ba-num--strong {
+    font-size: 1.05rem;
+  }
+  button.mr-rag-ba-drill--active,
+  button.mr-rag-ba-link--active {
+    outline: 3px solid #ffdd00;
+    outline-offset: 2px;
+    box-shadow: 0 0 0 1px #0b0c0c;
+  }
+  button.mr-rag-ba-link {
+    font-weight: 700;
+    text-align: left;
+    border: none;
+    background: none;
+    padding: 0;
+    cursor: pointer;
+  }
+
   /* ── Distribution tables ── */
   .mr-dist-table { margin-top: 0.5rem; }
   .mr-dist-table th,
@@ -1854,6 +1752,7 @@
   .mr-mx__cell--grand { background: #ddd; font-weight: 700; font-size: 1rem; border-radius: 4px; }
 
   .mr-mx__count { font-size: 1.125rem; font-weight: 700; }
+  .mr-mx__count.mr-ba-drill { display: inline-block; }
   .mr-mx__empty { color: #ccc; font-size: 0.875rem; }
 
   .mr-mx tfoot th, .mr-mx tfoot td { font-weight: 700; }
@@ -1870,13 +1769,19 @@
     line-height: 1.45;
   }
   .mr-change-shift { white-space: nowrap; }
-  .mr-change-shift .rag-badge,
-  .mr-change-shift .dfe-c-tag,
-  .mr-change-shift .dfe-f-badge { vertical-align: middle; }
+  .mr-change-shift .dfe-f-badge,
+  .mr-change-shift .dfe-c-tag { vertical-align: middle; }
 
-  /* ── BA summary table ── */
-  .mr-ba-table { border-collapse: collapse; font-size: 0.8125rem; width: 100%; min-width: 52rem; }
-  .mr-ba-table th, .mr-ba-table td { padding: 0.4rem 0.35rem; border: 1px solid var(--rpt-border, #e5e7eb); vertical-align: middle; }
+  /* ── BA summary table (horizontal rules only — no vertical grid) ── */
+  .mr-ba-table { border-collapse: collapse; font-size: 0.8125rem; width: 100%; min-width: 52rem; border: 0 !important; }
+  .mr-ba-table th,
+  .mr-ba-table td {
+    padding: 0.4rem 0.5rem;
+    border: 0;
+    border-bottom: 1px solid var(--rpt-border, #e5e7eb);
+    vertical-align: middle;
+  }
+  .mr-ba-table thead th { border-bottom: 2px solid #0b0c0c; }
   .mr-ba-table thead th { background: #f3f2f1; font-weight: 700; position: sticky; top: 0; z-index: 1; text-align: center; }
   .mr-ba-table thead th[data-sort-type="num"] { cursor: pointer; }
   .mr-ba-table thead th[data-sort-type="num"]:hover { background: #e8eaed; }
@@ -1908,10 +1813,6 @@
   .mr-ba-num--muted { opacity: 0.45; font-weight: 500; }
   .mr-ba-num--highlight { background: #e8f5e9; color: #005a30; }
   .mr-ba-num--warn { background: #fff3cd; color: #6e4900; }
-  .mr-ba-num--rag-red { background: #fde8e5; color: #942514; }
-  .mr-ba-num--rag-amber-red { background: #ffeee5; color: #80340a; }
-  .mr-ba-num--rag-amber-grn { background: #fff8e6; color: #6e4900; }
-  .mr-ba-num--rag-green { background: #e3f5eb; color: #005a30; }
   .mr-ba-num--rag-ns { background: #ececec; color: #454a4d; }
   .mr-ba-num--pri-crit { background: #fde8e5; color: #942514; }
   .mr-ba-num--pri-high { background: #ffeee5; color: #80340a; }
@@ -1993,43 +1894,22 @@
 }
 
 @section Scripts {
+  @await Html.PartialAsync("_ReportingDrilldownScripts", drillScriptModel)
   <script src="~/modern/js/monthly-update-report.js" asp-append-version="true" nonce="@Context.Items["Nonce"]"></script>
-  <script nonce="@Context.Items["Nonce"]">
-    document.addEventListener('DOMContentLoaded', function () {
-      function milestoneTogglesSetExpanded(expanded) {
-        document.querySelectorAll('.mr-milestone-groups .dfe-f-toggle').forEach(function (el) {
-          if (window.DfeFrontend && typeof window.DfeFrontend.setToggleExpanded === 'function') {
-            window.DfeFrontend.setToggleExpanded(el, expanded);
-          }
-        });
-      }
-      var reportGroup = document.getElementById('mr-report-sections');
-      if (reportGroup) {
-        var expandAll = reportGroup.querySelector('[data-dfe-toggle-expand-all]');
-        var collapseAll = reportGroup.querySelector('[data-dfe-toggle-collapse-all]');
-        if (expandAll) {
-          expandAll.addEventListener('click', function () { milestoneTogglesSetExpanded(true); });
-        }
-        if (collapseAll) {
-          collapseAll.addEventListener('click', function () { milestoneTogglesSetExpanded(false); });
-        }
-      }
-    });
-  </script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" nonce="@Context.Items["Nonce"]"></script>
+  <script src="~/modern/js/monthly-report-rag-trends.js" asp-append-version="true" nonce="@Context.Items["Nonce"]"></script>
   <script nonce="@Context.Items["Nonce"]">
     (function () {
       var ragDist = @Html.Raw(ragDistJson);
       var priDist = @Html.Raw(priDistJson);
       var ragTrend = @Html.Raw(ragTrendJson);
       var priTrend = @Html.Raw(priTrendJson);
-
       var ragOrder = ['Red', 'Amber-Red', 'Amber-Green', 'Green', 'Not Set'];
       var ragColors = {
-        'Red':         '#d4351c',
-        'Amber-Red':   '#f47738',
-        'Amber-Green': '#f8a100',
-        'Green':       '#00703c',
+        'Red':         '#ca3535',
+        'Amber-Red':   '#d76868',
+        'Amber-Green': '#f47738',
+        'Green':       '#0f7a52',
         'Not Set':     '#b1b4b6'
       };
 
@@ -2145,10 +2025,10 @@
       }
 
       stackedArea('chart-rag-trend', ragTrend, [
-        { label: 'Red',         accessor: function(t) { return t.red; },        color: '#d4351c', bg: 'rgba(212,53,28,0.18)' },
-        { label: 'Amber-Red',   accessor: function(t) { return t.amberRed; },   color: '#f47738', bg: 'rgba(244,119,56,0.18)' },
-        { label: 'Amber-Green', accessor: function(t) { return t.amberGreen; }, color: '#f8a100', bg: 'rgba(248,161,0,0.18)' },
-        { label: 'Green',       accessor: function(t) { return t.green; },      color: '#00703c', bg: 'rgba(0,112,60,0.18)' },
+        { label: 'Red',         accessor: function(t) { return t.red; },        color: '#ca3535', bg: 'rgba(202,53,53,0.18)' },
+        { label: 'Amber-Red',   accessor: function(t) { return t.amberRed; },   color: '#d76868', bg: 'rgba(215,104,104,0.18)' },
+        { label: 'Amber-Green', accessor: function(t) { return t.amberGreen; }, color: '#f47738', bg: 'rgba(244,119,56,0.18)' },
+        { label: 'Green',       accessor: function(t) { return t.green; },      color: '#0f7a52', bg: 'rgba(15,122,82,0.18)' },
         { label: 'Not set',     accessor: function(t) { return t.notSet; },     color: '#b1b4b6', bg: 'rgba(177,180,182,0.12)' }
       ]);
 
@@ -2159,6 +2039,10 @@
         { label: 'Low',      accessor: function(t) { return t.low; },      color: '#00703c', bg: 'rgba(0,112,60,0.18)' },
         { label: 'Not set',  accessor: function(t) { return t.notSet; },   color: '#b1b4b6', bg: 'rgba(177,180,182,0.12)' }
       ]);
+
+      if (window.MonthlyReportRagTrends) {
+        window.MonthlyReportRagTrends.init();
+      }
     })();
   </script>
 }

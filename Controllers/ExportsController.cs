@@ -4,6 +4,7 @@ using Compass.Data;
 using Compass.Models;
 using Compass.Models.DemandTriage;
 using Compass.Services;
+using Compass.Services.Modern;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -247,8 +248,9 @@ public class ExportsController : Controller
             .Where(m => m.ProjectId != null && !m.IsDeleted && projectIds.Contains(m.ProjectId.Value))
             .OrderBy(m => m.ProjectId).ThenBy(m => m.DueDate)
             .ToListAsync(cancellationToken);
+        var workItemTitles = projects.ToDictionary(p => p.Id, p => p.Title);
         var wsMilestones = wb.AddWorksheet("Milestones");
-        WriteProjectMilestones(wsMilestones, milestones);
+        WorkRegisterExcelExport.WriteMilestonesSheet(wsMilestones, milestones, workItemTitles);
 
         var monthlyDetailed = await _db.ProjectMonthlyUpdates.AsNoTracking()
             .Include(m => m.DraftRagStatusLookup)
@@ -615,28 +617,6 @@ public class ExportsController : Controller
 
         ws.SheetView.FreezeRows(1);
         ws.Columns(1, headers.Length).AdjustToContents();
-    }
-
-    private static void WriteProjectMilestones(IXLWorksheet ws, List<Milestone> list)
-    {
-        var headers = new[] { "Id", "ProjectId", "Name", "DueDate", "ActualDate", "Status", "CreatedAt" };
-        for (var c = 0; c < headers.Length; c++)
-            ws.Cell(1, c + 1).Value = headers[c];
-        ws.Row(1).Style.Font.Bold = true;
-        var row = 2;
-        foreach (var m in list)
-        {
-            ws.Cell(row, 1).Value = m.Id;
-            ws.Cell(row, 2).Value = m.ProjectId;
-            ws.Cell(row, 3).Value = m.Name;
-            ws.Cell(row, 4).Value = m.DueDate;
-            ws.Cell(row, 5).Value = m.ActualDate;
-            ws.Cell(row, 6).Value = m.Status;
-            ws.Cell(row, 7).Value = m.CreatedAt;
-            row++;
-        }
-        ws.SheetView.FreezeRows(1);
-        ws.Columns(1, 7).AdjustToContents();
     }
 
     private static void WriteBusinessCasesSheet(IXLWorksheet ws, List<BusinessCase> list)

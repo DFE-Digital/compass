@@ -1,0 +1,398 @@
+@using Compass.Models.Docs
+@{
+    ViewData["Title"] = "API explorer";
+    ViewData["DocsSection"] = "api-explorer";
+    ViewData["DocsFullWidth"] = true;
+
+    // Build the catalogue payload that drives the left collections panel
+    // and the request/response workspace. We expose every endpoint that
+    // is marked ExplorerExposed (defaults to true) plus its example body
+    // so users can hit "Send" without typing.
+    var catalogue = ApiCatalogue.Sections
+        .Select(section => new
+        {
+            id = section.Id,
+            title = section.Title,
+            description = section.Description,
+            endpoints = section.Endpoints
+                .Where(e => e.ExplorerExposed)
+                .Select(e => new
+                {
+                    id = e.Id,
+                    method = e.Method,
+                    path = e.Path,
+                    scope = e.Scope,
+                    description = e.Description,
+                    responseShape = e.ResponseShape,
+                    routeParams = (e.RouteParams ?? Array.Empty<(string, string, string)>())
+                        .Select(p => new { name = p.Name, type = p.Type, description = p.Description }),
+                    queryParams = (e.QueryParams ?? Array.Empty<(string, string, string)>())
+                        .Select(p => new { name = p.Name, type = p.Type, description = p.Description }),
+                    bodyExample = e.BodyExample,
+                    responseExample = e.ResponseExample
+                })
+                .ToArray()
+        })
+        .Where(s => s.endpoints.Length > 0)
+        .ToArray();
+
+    var jsonOpts = new System.Text.Json.JsonSerializerOptions { WriteIndented = false };
+    var catalogueJson = System.Text.Json.JsonSerializer.Serialize(catalogue, jsonOpts);
+
+    var totalEndpoints = catalogue.Sum(s => s.endpoints.Length);
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/docs-api-explorer.css" asp-append-version="true" />
+}
+
+<div class="api-explorer" data-api-explorer>
+    @* ============ HEADER STRIP — title, env, token =========================== *@
+    <header class="api-explorer__topbar">
+        <div class="api-explorer__title">
+            <span class="govuk-caption-l">Tools</span>
+            <h1 class="govuk-heading-l govuk-!-margin-bottom-1">API explorer</h1>
+            <p class="govuk-body govuk-!-margin-bottom-0">
+                @totalEndpoints endpoints &middot; pick one, fill in the parameters and send a real
+                request. Responses can be copied or exported as CSV / Excel.
+            </p>
+        </div>
+        <div class="api-explorer__env">
+            <label class="api-explorer__env-label" for="api-explorer-env">Environment</label>
+            <select class="api-explorer__env-select" id="api-explorer-env" data-explorer-env>
+                <option value="https://compass.education.gov.uk">Production &mdash; compass.education.gov.uk</option>
+                <option value="https://s186d01-compass-g8g3bvheb2dsctey.westeurope-01.azurewebsites.net">Test &mdash; s186d01-compass</option>
+                <option value="">Current host (uses your session cookie)</option>
+            </select>
+
+            <label class="api-explorer__env-label" for="api-explorer-token">Bearer token</label>
+            <div class="api-explorer__token">
+                <input type="password"
+                       class="api-explorer__token-input"
+                       id="api-explorer-token"
+                       data-explorer-token
+                       placeholder="cps_..."
+                       autocomplete="off"
+                       spellcheck="false" />
+                <button type="button"
+                        class="api-explorer__token-reveal"
+                        data-explorer-token-reveal
+                        aria-pressed="false"
+                        aria-label="Show token">Show</button>
+            </div>
+            <label class="api-explorer__remember">
+                <input type="checkbox" id="api-explorer-token-remember" data-explorer-token-remember />
+                <span>Remember on this device</span>
+                &middot;
+                <a class="govuk-link" href="/Admin/ApiTokens" target="_blank" rel="noopener">Manage tokens</a>
+            </label>
+        </div>
+    </header>
+
+    @* ============ WORKSPACE: collections | request + response ================ *@
+    <div class="api-explorer__workspace">
+
+        @* ---------------- Collections sidebar ---------------- *@
+        <aside class="api-explorer__collections" aria-label="API collections">
+            <div class="api-explorer__collections-search">
+                <label class="govuk-visually-hidden" for="api-explorer-search">Filter endpoints</label>
+                <input type="search"
+                       class="api-explorer__search-input"
+                       id="api-explorer-search"
+                       data-explorer-search
+                       placeholder="Filter endpoints"
+                       autocomplete="off" />
+            </div>
+            <nav class="api-explorer__tree" data-explorer-tree aria-label="Endpoints">
+                @* Tree is rendered client-side from the catalogue JSON below
+                   to keep the markup small and to allow filter-as-you-type. *@
+            </nav>
+            <p class="api-explorer__empty" data-explorer-empty hidden>
+                No endpoints match.
+            </p>
+        </aside>
+
+        @* ---------------- Request / response stage ---------------- *@
+        <section class="api-explorer__stage" aria-label="Request workspace">
+
+            @* Empty state shown until an endpoint is selected. *@
+            <div class="api-explorer__empty-stage" data-explorer-empty-stage>
+                <h2 class="govuk-heading-m">Pick an endpoint to start</h2>
+                <p class="govuk-body">
+                    Select any endpoint from the list on the left to load it into the
+                    request builder. Bearer authentication is added automatically from the
+                    token above.
+                </p>
+                <ul class="govuk-list govuk-list--bullet govuk-!-margin-bottom-0">
+                    <li>Fill in any required path / query parameters.</li>
+                    <li>Edit the request body for write methods.</li>
+                    <li>Hit <strong>Send</strong>; the response renders in the lower panel.</li>
+                    <li>Use the export menu to download JSON, CSV or Excel.</li>
+                </ul>
+            </div>
+
+            @* Request builder + response panel, shown once an endpoint is picked. *@
+            <div class="api-explorer__builder" data-explorer-builder hidden>
+
+                @* URL bar: method pill + URL + Send. *@
+                <div class="api-explorer__urlbar">
+                    <span class="api-explorer__method"
+                          data-explorer-method
+                          data-method="GET">GET</span>
+                    <div class="api-explorer__url" data-explorer-url-preview>
+                        <span class="api-explorer__url-host" data-explorer-url-host></span><span class="api-explorer__url-path" data-explorer-url-path>(choose an endpoint)</span>
+                    </div>
+                    <button type="button"
+                            class="api-explorer__send"
+                            data-explorer-send
+                            aria-keyshortcuts="Control+Enter">
+                        Send
+                    </button>
+                </div>
+
+                @* Collapse toggle — lets users hide the request meta + tabs
+                   so the response panel rises into view without scrolling. *@
+                <div class="api-explorer__section-toggle">
+                    <button type="button"
+                            class="api-explorer__section-toggle-button"
+                            data-explorer-request-toggle
+                            aria-expanded="true"
+                            aria-controls="api-explorer-request-section">
+                        <span data-explorer-request-toggle-label>Hide request</span>
+                    </button>
+                    <span class="api-explorer__section-toggle-hint"
+                          data-explorer-request-toggle-hint>Scope, parameters and body</span>
+                </div>
+
+                <div id="api-explorer-request-section">
+                    <div class="api-explorer__meta">
+                        <div class="api-explorer__meta-row">
+                            <span class="api-explorer__meta-label">Scope</span>
+                            <code class="api-explorer__meta-value" data-explorer-scope>—</code>
+                        </div>
+                        <p class="api-explorer__meta-desc govuk-body govuk-!-margin-bottom-0" data-explorer-desc></p>
+                    </div>
+
+                @* Request tabs: Params / Headers / Body *@
+                <div class="api-explorer__request">
+                    <div class="api-explorer__tablist" role="tablist" aria-label="Request tabs">
+                        <button type="button" role="tab"
+                                class="api-explorer__tab"
+                                id="api-explorer-tab-params"
+                                aria-controls="api-explorer-pane-params"
+                                aria-selected="true"
+                                data-explorer-request-tab="params">
+                            Params <span class="api-explorer__count" data-explorer-params-count></span>
+                        </button>
+                        <button type="button" role="tab"
+                                class="api-explorer__tab"
+                                id="api-explorer-tab-headers"
+                                aria-controls="api-explorer-pane-headers"
+                                aria-selected="false"
+                                data-explorer-request-tab="headers">
+                            Headers <span class="api-explorer__count" data-explorer-headers-count></span>
+                        </button>
+                        <button type="button" role="tab"
+                                class="api-explorer__tab"
+                                id="api-explorer-tab-body"
+                                aria-controls="api-explorer-pane-body"
+                                aria-selected="false"
+                                data-explorer-request-tab="body"
+                                hidden>
+                            Body
+                        </button>
+                    </div>
+
+                    @* Params pane *@
+                    <div role="tabpanel"
+                         class="api-explorer__pane"
+                         id="api-explorer-pane-params"
+                         aria-labelledby="api-explorer-tab-params"
+                         data-explorer-request-pane="params">
+                        <p class="api-explorer__pane-empty" data-explorer-params-empty hidden>
+                            This endpoint takes no path or query parameters.
+                        </p>
+                        <table class="api-explorer__kvtable"
+                               data-explorer-params-table
+                               hidden>
+                            <caption class="govuk-visually-hidden">Path and query parameters</caption>
+                            <thead>
+                                <tr>
+                                    <th scope="col">Key</th>
+                                    <th scope="col">Value</th>
+                                    <th scope="col">Type</th>
+                                    <th scope="col">Description</th>
+                                </tr>
+                            </thead>
+                            <tbody data-explorer-params-body></tbody>
+                        </table>
+                    </div>
+
+                    @* Headers pane (read-only computed) *@
+                    <div role="tabpanel"
+                         class="api-explorer__pane"
+                         id="api-explorer-pane-headers"
+                         aria-labelledby="api-explorer-tab-headers"
+                         data-explorer-request-pane="headers"
+                         hidden>
+                        <table class="api-explorer__kvtable" data-explorer-headers-table>
+                            <caption class="govuk-visually-hidden">Request headers</caption>
+                            <thead>
+                                <tr>
+                                    <th scope="col">Key</th>
+                                    <th scope="col">Value</th>
+                                </tr>
+                            </thead>
+                            <tbody data-explorer-headers-body></tbody>
+                        </table>
+                        <p class="api-explorer__pane-help govuk-body">
+                            Headers are computed from your bearer token and request body. There
+                            is nothing to edit here.
+                        </p>
+                    </div>
+
+                    @* Body pane (only for write methods) *@
+                    <div role="tabpanel"
+                         class="api-explorer__pane api-explorer__pane--body"
+                         id="api-explorer-pane-body"
+                         aria-labelledby="api-explorer-tab-body"
+                         data-explorer-request-pane="body"
+                         hidden>
+                        <div class="api-explorer__body-toolbar">
+                            <button type="button"
+                                    class="api-explorer__body-action"
+                                    data-explorer-body-format>Format JSON</button>
+                            <button type="button"
+                                    class="api-explorer__body-action"
+                                    data-explorer-body-reset>Reset to example</button>
+                        </div>
+                        <textarea class="api-explorer__body-editor"
+                                  data-explorer-body
+                                  spellcheck="false"
+                                  rows="14"
+                                  aria-label="Request body (JSON)"></textarea>
+                        <p class="api-explorer__body-error" data-explorer-body-error hidden></p>
+                    </div>
+                </div>
+
+                </div>
+                @* /#api-explorer-request-section *@
+
+                @* ============ RESPONSE PANEL ============ *@
+                <div class="api-explorer__response" data-explorer-response-wrapper>
+                    <div class="api-explorer__response-bar">
+                        <div class="api-explorer__response-status" data-explorer-status>
+                            <span class="api-explorer__status-pill api-explorer__status-pill--idle"
+                                  data-explorer-status-pill>Ready</span>
+                            <span class="api-explorer__status-meta" data-explorer-status-meta></span>
+                        </div>
+                        <div class="api-explorer__response-actions">
+                            <button type="button"
+                                    class="api-explorer__response-action"
+                                    data-explorer-copy
+                                    disabled>Copy</button>
+                            <button type="button"
+                                    class="api-explorer__response-action"
+                                    data-explorer-download-json
+                                    disabled>JSON</button>
+                            <button type="button"
+                                    class="api-explorer__response-action"
+                                    data-explorer-download-csv
+                                    disabled>CSV</button>
+                            <button type="button"
+                                    class="api-explorer__response-action"
+                                    data-explorer-download-xlsx
+                                    disabled>Excel</button>
+                        </div>
+                    </div>
+
+                    <div class="api-explorer__tablist api-explorer__tablist--response"
+                         role="tablist"
+                         aria-label="Response tabs">
+                        <button type="button" role="tab"
+                                class="api-explorer__tab"
+                                id="api-explorer-resp-tab-body"
+                                aria-controls="api-explorer-resp-pane-body"
+                                aria-selected="true"
+                                data-explorer-response-tab="body">Body</button>
+                        <button type="button" role="tab"
+                                class="api-explorer__tab"
+                                id="api-explorer-resp-tab-headers"
+                                aria-controls="api-explorer-resp-pane-headers"
+                                aria-selected="false"
+                                data-explorer-response-tab="headers">
+                            Headers <span class="api-explorer__count" data-explorer-resp-headers-count></span>
+                        </button>
+                        <button type="button" role="tab"
+                                class="api-explorer__tab"
+                                id="api-explorer-resp-tab-preview"
+                                aria-controls="api-explorer-resp-pane-preview"
+                                aria-selected="false"
+                                data-explorer-response-tab="preview">
+                            Table preview
+                        </button>
+                    </div>
+
+                    <div role="tabpanel"
+                         class="api-explorer__pane api-explorer__pane--response"
+                         id="api-explorer-resp-pane-body"
+                         aria-labelledby="api-explorer-resp-tab-body"
+                         data-explorer-response-pane="body">
+                        <pre class="api-explorer__response-body"
+                             data-explorer-response-body><code class="api-explorer__response-code"
+                                  data-explorer-response-code><span class="api-explorer__response-placeholder">Send a request to see the response here.</span></code></pre>
+                    </div>
+
+                    <div role="tabpanel"
+                         class="api-explorer__pane api-explorer__pane--response"
+                         id="api-explorer-resp-pane-headers"
+                         aria-labelledby="api-explorer-resp-tab-headers"
+                         data-explorer-response-pane="headers"
+                         hidden>
+                        <table class="api-explorer__kvtable" data-explorer-resp-headers-table>
+                            <caption class="govuk-visually-hidden">Response headers</caption>
+                            <thead>
+                                <tr>
+                                    <th scope="col">Header</th>
+                                    <th scope="col">Value</th>
+                                </tr>
+                            </thead>
+                            <tbody data-explorer-resp-headers-body></tbody>
+                        </table>
+                        <p class="api-explorer__pane-help govuk-body" data-explorer-resp-headers-empty>
+                            Headers will appear here after the first request.
+                        </p>
+                    </div>
+
+                    <div role="tabpanel"
+                         class="api-explorer__pane api-explorer__pane--response"
+                         id="api-explorer-resp-pane-preview"
+                         aria-labelledby="api-explorer-resp-tab-preview"
+                         data-explorer-response-pane="preview"
+                         hidden>
+                        <p class="api-explorer__pane-help govuk-body" data-explorer-preview-empty>
+                            When the response contains an array of objects, a table preview
+                            appears here. Run a request to populate it.
+                        </p>
+                        <div class="api-explorer__preview" data-explorer-preview-wrapper hidden>
+                            <p class="govuk-body govuk-!-margin-bottom-2" data-explorer-preview-summary></p>
+                            <div class="api-explorer__preview-scroll">
+                                <table class="govuk-table api-explorer__preview-table"
+                                       data-explorer-preview-table></table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+</div>
+
+@section Scripts {
+    <script id="api-explorer-catalogue"
+            type="application/json"
+            nonce="@(Context.Items["Nonce"]?.ToString() ?? "")">@Html.Raw(catalogueJson)</script>
+    <script src="~/js/docs-api-explorer.js"
+            asp-append-version="true"
+            nonce="@(Context.Items["Nonce"]?.ToString() ?? "")"></script>
+}

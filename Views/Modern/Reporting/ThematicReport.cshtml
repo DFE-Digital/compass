@@ -1,64 +1,24 @@
 @model Compass.ViewModels.Modern.ModernThematicReportViewModel
-@using Compass.Models.Modern.Work
 @using Compass.ViewModels.Modern
-@using System.Linq
-@using Microsoft.AspNetCore.Html
-@using Microsoft.AspNetCore.Routing
-@using Microsoft.AspNetCore.WebUtilities
 @{
   ViewData["Title"] = "Thematic report";
   var m = Model;
-  var activeTab = m.ActiveTab;
-  var selectedSummary = m.SelectedThemeId.HasValue
-    ? m.SummaryRows.FirstOrDefault(r => r.TagId == m.SelectedThemeId.Value)
-    : null;
-
-  object ThemeQuery(string tab, int? page = 1) => new
-  {
-    themeId = m.SelectedThemeId,
-    tab,
-    page
-  };
-
-  IEnumerable<WorkRegisterRow> RegisterRows()
-  {
-    var reg = m.WorkRegister;
-    if (reg == null) return Enumerable.Empty<WorkRegisterRow>();
-    if (reg.RegisterIsPaginated)
-      return reg.RegisterPageRows;
-    return activeTab == "completed" ? reg.Completed : reg.ActivePaused;
-  }
-
-  var rows = RegisterRows().ToList();
-  var emptyMessage = activeTab == "completed"
-    ? "No completed work items for this theme."
-    : "No active or paused work items for this theme.";
-
-  var thematicBase = Url.Content("~/modern/reporting/thematic") ?? "/modern/reporting/thematic";
-
-  string ThematicUrl(object routeValues)
-  {
-    var dict = new RouteValueDictionary(routeValues);
-    var query = dict
-      .Where(kv => kv.Value != null)
-      .ToDictionary(kv => kv.Key, kv => kv.Value!.ToString()!);
-    return QueryHelpers.AddQueryString(thematicBase, query);
-  }
-
-  string CountHref(int tagId, string tab) =>
-    ThematicUrl(new { themeId = tagId, tab, page = 1 }) + "#thematic-work-items";
-
-  IHtmlContent RenderCount(int tagId, int count, string tab, string ariaLabel)
-  {
-    if (count <= 0)
-      return new HtmlString($"<span class=\"thematic-report__count thematic-report__count--zero dfe-c-text-muted\">{count}</span>");
-
-    var isCurrent = m.SelectedThemeId == tagId && string.Equals(activeTab, tab, StringComparison.OrdinalIgnoreCase);
-    var currentClass = isCurrent ? " thematic-report__count--current" : "";
-    return new HtmlString(
-      $"<a class=\"govuk-link govuk-link--no-visited-state thematic-report__count{currentClass}\" " +
-      $"href=\"{Html.Encode(CountHref(tagId, tab))}\" aria-label=\"{Html.Encode(ariaLabel)}\">{count}</a>");
-  }
+  var baProjectsDict = m.DashboardRows.ToDictionary(r => r.BusinessArea, r => r.Projects);
+  baProjectsDict["theme|Total"] = m.DashboardRows
+    .SelectMany(r => r.Projects)
+    .GroupBy(p => p.Id)
+    .Select(g => g.First())
+    .ToList();
+  var mwDetailPrefix = Url.Content("~/modern/work/detail/") ?? "/modern/work/detail/";
+  var drillExportUrl = Url.Action("ExportDrilldown", "ModernReporting", new { source = "thematic" }) ?? "";
+  var drillScriptModel = ReportingDrilldownConfig.Build(
+    baProjectsDict,
+    m.ScopeProjectItems,
+    drillExportUrl,
+    new Dictionary<string, string?> { ["source"] = "thematic", ["dimension"] = "theme" },
+    mwDetailPrefix,
+    new Dictionary<string, string> { ["theme"] = "Theme" },
+    ".thematic-report");
 }
 
 @section Breadcrumbs {
@@ -69,7 +29,7 @@
 
 <div class="mr-dash thematic-report">
   @{
-    var lede = await Html.PartialAsync("_GovukBodyParagraph", "Summarise delivery work by thematic tag. Click a count in the table to view matching work items.");
+    var lede = await Html.PartialAsync("_GovukBodyParagraph", $"Summarise delivery work by thematic tag for {m.MonthName}. Click a number to view matching work items.");
   }
   @await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
     Caption = "Reporting",
@@ -79,170 +39,29 @@
 
   <section class="govuk-!-margin-bottom-6" aria-labelledby="thematic-summary-heading">
     <h2 id="thematic-summary-heading" class="govuk-heading-m">Delivery work by theme</h2>
-    @if (!m.SummaryRows.Any())
+    @if (!m.DashboardRows.Any())
     {
-      <p class="govuk-body">No thematic tags defined. Add tags in Admin → Work → Tagging.</p>
+      <p class="govuk-body">No thematic tags defined. Add tags in Admin → Work → Thematic tags.</p>
     }
     else
     {
-      <p class="govuk-body-s dfe-c-text-muted govuk-!-margin-bottom-2">Click a number to view work items for that theme and status.</p>
-      <div class="dfe-f-table-wrapper govuk-!-margin-bottom-4" data-module="dfe-f-table">
-        <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed thematic-report__summary-table" id="thematic-summary-table">
-          <caption class="govuk-table__caption govuk-visually-hidden">Work item counts by thematic tag</caption>
-          <thead class="govuk-table__head">
-            <tr class="govuk-table__row">
-              <th scope="col" class="govuk-table__header" aria-sort="none">
-                <button type="button" class="dfe-f-table-sort-button">Theme</button>
-              </th>
-              <th scope="col" class="govuk-table__header govuk-table__header--numeric thematic-report__count-col" aria-sort="none">
-                <button type="button" class="dfe-f-table-sort-button">Active</button>
-              </th>
-              <th scope="col" class="govuk-table__header govuk-table__header--numeric thematic-report__count-col" aria-sort="none">
-                <button type="button" class="dfe-f-table-sort-button">Completed</button>
-              </th>
-              <th scope="col" class="govuk-table__header govuk-table__header--numeric thematic-report__count-col" aria-sort="none">
-                <button type="button" class="dfe-f-table-sort-button">Total</button>
-              </th>
-            </tr>
-          </thead>
-          <tbody class="govuk-table__body">
-            @foreach (var row in m.SummaryRows)
-            {
-              var isSelected = m.SelectedThemeId == row.TagId;
-              var themeLabel = row.Name;
-              <tr class="govuk-table__row@(isSelected ? " thematic-report__row--selected" : "")">
-                <th scope="row" class="govuk-table__cell@(isSelected ? " govuk-!-font-weight-bold" : "")">
-                  @row.Name
-                  @if (!string.IsNullOrWhiteSpace(row.Description))
-                  {
-                    <div class="govuk-body-s dfe-c-text-muted">@row.Description</div>
-                  }
-                </th>
-                <td class="govuk-table__cell govuk-table__cell--numeric thematic-report__count-col">
-                  @RenderCount(row.TagId, row.ActiveCount, "active", $"View active and paused work items for {themeLabel}")
-                </td>
-                <td class="govuk-table__cell govuk-table__cell--numeric thematic-report__count-col">
-                  @RenderCount(row.TagId, row.CompletedCount, "completed", $"View completed work items for {themeLabel}")
-                </td>
-                <td class="govuk-table__cell govuk-table__cell--numeric thematic-report__count-col">
-                  @if (row.TotalCount > 0)
-                  {
-                    @RenderCount(row.TagId, row.TotalCount, row.ActiveCount > 0 ? "active" : "completed",
-                      $"View work items for {themeLabel}")
-                  }
-                  else
-                  {
-                    <span class="thematic-report__count thematic-report__count--zero dfe-c-text-muted">0</span>
-                  }
-                </td>
-              </tr>
-            }
-          </tbody>
-        </table>
-      </div>
+      @await Html.PartialAsync("_PrioritiesReportGroupSummaryTable", new PrioritiesReportGroupSummaryViewModel {
+        Dimension = "theme",
+        GroupColumnLabel = "Theme",
+        Rows = m.DashboardRows.ToList(),
+        TableId = "thematic-dashboard-table"
+      })
+      @await Html.PartialAsync("_ReportingDrilldownPanel")
+      @await Html.PartialAsync("_ReportingWorkItemModal")
     }
   </section>
-
-  @if (m.SelectedThemeId.HasValue && selectedSummary != null && m.WorkRegister != null)
-  {
-    var reg = m.WorkRegister;
-    var activeTabCount = selectedSummary.ActiveCount;
-    var completedTabCount = selectedSummary.CompletedCount;
-
-    <section class="govuk-!-margin-top-6" aria-labelledby="thematic-work-heading" id="thematic-work-items">
-      <h2 id="thematic-work-heading" class="govuk-heading-m">@m.SelectedThemeName</h2>
-      @if (!string.IsNullOrWhiteSpace(m.SelectedThemeDescription))
-      {
-        <p class="govuk-body dfe-c-text-muted">@m.SelectedThemeDescription</p>
-      }
-
-      <nav class="dfe-f-sub-navigation dfe-c-sub-nav dfe-c-sub-nav--visible govuk-!-margin-bottom-4" aria-label="Work status">
-        <ul class="dfe-f-sub-navigation__list no-border-bottom">
-          <li class="dfe-f-sub-navigation__item">
-            <a class="dfe-f-sub-navigation__link govuk-link"
-               href="@(ThematicUrl(ThemeQuery("active")))#thematic-work-items"
-               @if (activeTab == "active") { <text>aria-current="page"</text> }>
-              Active (@activeTabCount)
-            </a>
-          </li>
-          <li class="dfe-f-sub-navigation__item">
-            <a class="dfe-f-sub-navigation__link govuk-link"
-               href="@(ThematicUrl(ThemeQuery("completed")))#thematic-work-items"
-               @if (activeTab == "completed") { <text>aria-current="page"</text> }>
-              Completed (@completedTabCount)
-            </a>
-          </li>
-        </ul>
-      </nav>
-
-      @if (!rows.Any())
-      {
-        <p class="govuk-body dfe-c-text-muted">@emptyMessage</p>
-      }
-      else
-      {
-        @await Html.PartialAsync("~/Views/Modern/Work/_WorkRegisterStandardTable.cshtml", new WorkRegisterStandardTableViewModel {
-          TableId = activeTab == "completed" ? "thematic-work-completed" : "thematic-work-active",
-          Caption = activeTab == "completed" ? "Completed work items" : "Active and paused work items",
-          MonthlyColumnHeader = reg.RegisterMonthlyColumnHeader,
-          Rows = rows
-        })
-
-        @await Html.PartialAsync("~/Views/Modern/Work/_WorkRegisterPaginationFooter.cshtml", new WorkRegisterPaginationFooterViewModel {
-          IsPaginated = reg.RegisterIsPaginated,
-          DisplayRowStart = reg.RegisterDisplayRowStart,
-          DisplayRowEnd = reg.RegisterDisplayRowEnd,
-          TotalCount = reg.RegisterTotalCount,
-          CurrentPage = reg.RegisterPage,
-          TotalPages = reg.RegisterPageCount,
-          PageUrl = p => ThematicUrl(ThemeQuery(activeTab, p)) + "#thematic-work-items",
-          NavigationAriaLabel = "Thematic report work items",
-          ItemNoun = "work items"
-        })
-      }
-    </section>
-  }
-  else if (m.SelectedThemeId.HasValue)
-  {
-    <p class="govuk-body dfe-c-text-muted">The selected theme is not available.</p>
-  }
 </div>
 
 @section Styles {
-<style>
-  .thematic-report__row--selected {
-    background-color: var(--dfe-f-colour-grey-5, #f3f2f1);
-  }
+  @await Html.PartialAsync("_MrReportCoreStyles")
+  <link rel="stylesheet" href="@Url.Content("~/modern/css/reporting-drilldown.css")" asp-append-version="true" />
+}
 
-  .thematic-report__summary-table .thematic-report__count-col,
-  .thematic-report__summary-table thead th.thematic-report__count-col {
-    text-align: center;
-  }
-
-  .thematic-report__summary-table thead th.thematic-report__count-col .dfe-f-table-sort-button {
-    justify-content: center;
-    width: 100%;
-  }
-
-  .thematic-report__summary-table tbody td.thematic-report__count-col {
-    vertical-align: middle;
-  }
-
-  .thematic-report__count {
-    display: inline-block;
-    min-width: 1.75rem;
-    font-variant-numeric: tabular-nums;
-    font-weight: 700;
-    text-align: center;
-  }
-
-  .thematic-report__count--current {
-    text-decoration-thickness: max(3px, 0.1875rem);
-    text-decoration-skip-ink: none;
-  }
-
-  .thematic-report__count--zero {
-    font-weight: 400;
-  }
-</style>
+@section Scripts {
+  @await Html.PartialAsync("_ReportingDrilldownScripts", drillScriptModel)
 }
