@@ -3,7 +3,15 @@
 @using Compass.ViewModels
 @model IReadOnlyList<WorkItemRagSixMonthTrendRow>
 @{
-  var rows = Model ?? Array.Empty<WorkItemRagSixMonthTrendRow>();
+  var trendSort = MonthlyReportRagTrendAnalyzer.TrendDrilldownSortOrder;
+  var rows = (Model ?? Array.Empty<WorkItemRagSixMonthTrendRow>())
+    .OrderBy(r =>
+    {
+      var idx = Array.IndexOf(trendSort, r.TrendCategory);
+      return idx < 0 ? trendSort.Length : idx;
+    })
+    .ThenBy(r => r.Title, StringComparer.OrdinalIgnoreCase)
+    .ToList();
   var monthHeaders = rows.FirstOrDefault()?.Months ?? new List<RagSixMonthSnapshot>();
   var scopeByProjectId = ViewData["ScopeByProjectId"] as Dictionary<int, BusinessAreaProjectItem> ?? new Dictionary<int, BusinessAreaProjectItem>();
   string RagDfeBadge(string rag) => WorkBadgeCss.RagCompactBadgeClass(rag);

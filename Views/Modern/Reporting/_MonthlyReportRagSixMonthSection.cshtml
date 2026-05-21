@@ -69,7 +69,7 @@
   </p>
 
   <h4 class="govuk-heading-s govuk-!-margin-bottom-2">By business area</h4>
-  <p class="govuk-body-s govuk-hint govuk-!-margin-bottom-3">Select a count to list matching work items below. Colours match the trend category.</p>
+  <p class="govuk-body-s govuk-hint govuk-!-margin-bottom-3">Select a business area to list all work items for that area below, or select a count to filter by trend. Work items are sorted worsening, stale, improving, then stable.</p>
   @if (baSummaries.Count == 0)
   {
     <p class="govuk-body dfe-c-text-muted">No work items in scope.</p>
@@ -94,8 +94,18 @@
           <tbody class="govuk-table__body">
             @foreach (var ba in baSummaries)
             {
+              var baTotal = ba.Counts.Values.Sum();
               <tr class="govuk-table__row">
-                <th scope="row" class="mr-ba-table__fixed mr-ba-table__area-col">@ba.Name</th>
+                <th scope="row" class="mr-ba-table__fixed mr-ba-table__area-col">
+                  @if (baTotal > 0)
+                  {
+                    <button type="button" class="govuk-link govuk-link--no-visited-state mr-rag-ba-link" data-mr-ba="@ba.Name" aria-label="View all @ba.Name work items and RAG history">@ba.Name</button>
+                  }
+                  else
+                  {
+                    @ba.Name
+                  }
+                </th>
                 @foreach (var cat in trendCategories)
                 {
                   var count = ba.Counts[cat];
@@ -115,7 +125,19 @@
           </tbody>
           <tfoot>
             <tr class="mr-ba-table__total-row">
-              <th scope="row" class="mr-ba-table__fixed mr-ba-table__area-col">Total</th>
+              <th scope="row" class="mr-ba-table__fixed mr-ba-table__area-col">
+                @{
+                  var allTotal = trendTotals.Values.Sum();
+                }
+                @if (allTotal > 0)
+                {
+                  <button type="button" class="govuk-link govuk-link--no-visited-state mr-rag-ba-link" data-mr-ba="__total__" aria-label="View all work items and RAG history">Total</button>
+                }
+                else
+                {
+                  @:Total
+                }
+              </th>
               @foreach (var cat in trendCategories)
               {
                 var total = trendTotals[cat];

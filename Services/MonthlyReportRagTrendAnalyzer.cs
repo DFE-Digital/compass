@@ -13,6 +13,9 @@ public static class MonthlyReportRagTrendAnalyzer
 
     public static readonly string[] TrendCategories = [TrendStable, TrendImproving, TrendWorsening, TrendStale];
 
+    /// <summary>Drill-down row order: worsening first, then stale, improving, stable.</summary>
+    public static readonly string[] TrendDrilldownSortOrder = [TrendWorsening, TrendStale, TrendImproving, TrendStable];
+
     public static List<WorkItemRagSixMonthTrendRow> Build(
         IReadOnlyList<Project> projects,
         Dictionary<int, List<ProjectRagHistory>> historyByProject,

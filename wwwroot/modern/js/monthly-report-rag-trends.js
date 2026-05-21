@@ -19,6 +19,13 @@
     Stale: 'dfe-f-badge dfe-f-badge--small dfe-f-badge--grey'
   };
 
+  /** Display order for drill-down rows (worsening first). */
+  var trendSortOrder = ['Worsening', 'Stale', 'Improving', 'Stable'];
+  var trendSortRank = {};
+  trendSortOrder.forEach(function (cat, idx) {
+    trendSortRank[cat] = idx;
+  });
+
   var ragAbbr = {
     Red: 'R',
     'Amber-Red': 'A-R',
@@ -71,16 +78,35 @@
 
   function filterRows(rows, businessArea, trend) {
     return rows.filter(function (r) {
+      if (businessArea !== '__total__') {
+        var ba = r.businessArea || 'Not set';
+        if (ba !== businessArea) return false;
+      }
       if (trend && r.trendCategory !== trend) return false;
-      if (businessArea === '__total__') return true;
-      var ba = r.businessArea || 'Not set';
-      return ba === businessArea;
+      return true;
+    });
+  }
+
+  function sortRowsByTrend(rows) {
+    return rows.slice().sort(function (a, b) {
+      var ra = Object.prototype.hasOwnProperty.call(trendSortRank, a.trendCategory)
+        ? trendSortRank[a.trendCategory]
+        : trendSortOrder.length;
+      var rb = Object.prototype.hasOwnProperty.call(trendSortRank, b.trendCategory)
+        ? trendSortRank[b.trendCategory]
+        : trendSortOrder.length;
+      if (ra !== rb) return ra - rb;
+      return String(a.title || '').localeCompare(String(b.title || ''), undefined, { sensitivity: 'base' });
     });
   }
 
   function buildTitle(businessArea, trend, count) {
     var baLabel = businessArea === '__total__' ? 'All business areas' : businessArea;
-    return baLabel + ' — ' + trend + ' (' + count + ' work item' + (count === 1 ? '' : 's') + ')';
+    var countLabel = count + ' work item' + (count === 1 ? '' : 's');
+    if (trend) {
+      return baLabel + ' — ' + trend + ' (' + countLabel + ')';
+    }
+    return baLabel + ' — all work items (' + countLabel + ')';
   }
 
   function renderTable(rows, scopeById) {
@@ -144,22 +170,32 @@
     var panel = null;
     var activeBtn = null;
 
+    function clearActiveControl() {
+      if (!activeBtn) return;
+      activeBtn.classList.remove('mr-rag-ba-drill--active');
+      activeBtn.classList.remove('mr-rag-ba-link--active');
+      activeBtn = null;
+    }
+
     function hideDrill() {
       if (panel) {
         panel.hidden = true;
         panel = null;
       }
-      if (activeBtn) {
-        activeBtn.classList.remove('mr-rag-ba-drill--active');
-        activeBtn = null;
-      }
+      clearActiveControl();
     }
 
     function showDrill(businessArea, trend, btn) {
-      var items = filterRows(config.rows, businessArea, trend);
-      if (activeBtn && activeBtn !== btn) activeBtn.classList.remove('mr-rag-ba-drill--active');
+      var items = sortRowsByTrend(filterRows(config.rows, businessArea, trend || null));
+      if (activeBtn && activeBtn !== btn) clearActiveControl();
       activeBtn = btn;
-      if (btn) btn.classList.add('mr-rag-ba-drill--active');
+      if (btn) {
+        if (btn.classList.contains('mr-rag-ba-link')) {
+          btn.classList.add('mr-rag-ba-link--active');
+        } else {
+          btn.classList.add('mr-rag-ba-drill--active');
+        }
+      }
 
       if (!panel) {
         panel = document.createElement('div');
@@ -184,18 +220,25 @@
       panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
 
-    document.querySelectorAll('.mr-rag-ba-drill').forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        var ba = btn.getAttribute('data-mr-ba') || '';
-        var trend = btn.getAttribute('data-mr-trend') || '';
-        if (!trend) return;
-        if (activeBtn === btn && panel && !panel.hidden) {
-          hideDrill();
-          return;
-        }
-        showDrill(ba, trend, btn);
+    function onDrillControlClick(btn) {
+      var ba = btn.getAttribute('data-mr-ba') || '';
+      var trend = btn.getAttribute('data-mr-trend') || '';
+      if (!ba) return;
+      if (activeBtn === btn && panel && !panel.hidden) {
+        hideDrill();
+        return;
+      }
+      showDrill(ba, trend || null, btn);
+    }
+
+    var summaryTable = document.getElementById('mr-rag-ba-summary-table');
+    if (summaryTable) {
+      summaryTable.querySelectorAll('.mr-rag-ba-drill, .mr-rag-ba-link').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          onDrillControlClick(btn);
+        });
       });
-    });
+    }
   }
 
   global.MonthlyReportRagTrends = { init: init };
