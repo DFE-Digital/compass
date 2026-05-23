@@ -65,26 +65,51 @@
                 <option value="">Current host (uses your session cookie)</option>
             </select>
 
-            <label class="api-explorer__env-label" for="api-explorer-token">Bearer token</label>
-            <div class="api-explorer__token">
-                <input type="password"
-                       class="api-explorer__token-input"
-                       id="api-explorer-token"
-                       data-explorer-token
-                       placeholder="cps_..."
-                       autocomplete="off"
-                       spellcheck="false" />
-                <button type="button"
-                        class="api-explorer__token-reveal"
-                        data-explorer-token-reveal
-                        aria-pressed="false"
-                        aria-label="Show token">Show</button>
+            <fieldset class="api-explorer__auth govuk-fieldset govuk-!-margin-bottom-2" data-explorer-auth>
+                <legend class="govuk-fieldset__legend govuk-fieldset__legend--s api-explorer__env-label">Authentication</legend>
+                <div class="api-explorer__auth-managed govuk-!-margin-bottom-2" data-explorer-auth-managed @(ViewBag.ExplorerUserTokenCount as int? > 0 ? null : "hidden")>
+                    <div class="govuk-radios govuk-radios--small" data-module="govuk-radios">
+                        <div class="govuk-radios__item">
+                            <input class="govuk-radios__input" id="api-explorer-auth-managed" name="api-explorer-auth-mode" type="radio" value="managed" data-explorer-auth-mode="managed" />
+                            <label class="govuk-label govuk-radios__label" for="api-explorer-auth-managed">Use my API key</label>
+                        </div>
+                    </div>
+                    <select class="api-explorer__env-select govuk-!-margin-top-2" id="api-explorer-my-token" data-explorer-my-token-select aria-label="Select your API key"></select>
+                    <p class="govuk-body-s govuk-hint govuk-!-margin-top-2 govuk-!-margin-bottom-0" data-explorer-managed-status hidden></p>
+                </div>
+                <div class="govuk-radios govuk-radios--small govuk-!-margin-bottom-2">
+                    <div class="govuk-radios__item">
+                        <input class="govuk-radios__input" id="api-explorer-auth-paste" name="api-explorer-auth-mode" type="radio" value="paste" data-explorer-auth-mode="paste" checked />
+                        <label class="govuk-label govuk-radios__label" for="api-explorer-auth-paste">Paste a bearer token</label>
+                    </div>
+                    <div class="govuk-radios__item">
+                        <input class="govuk-radios__input" id="api-explorer-auth-session" name="api-explorer-auth-mode" type="radio" value="session" data-explorer-auth-mode="session" />
+                        <label class="govuk-label govuk-radios__label" for="api-explorer-auth-session">Use session cookie only</label>
+                    </div>
+                </div>
+            </fieldset>
+            <div class="api-explorer__token" data-explorer-paste-wrap>
+                <label class="api-explorer__env-label" for="api-explorer-token">Bearer token</label>
+                <div class="api-explorer__token-row">
+                    <input type="password"
+                           class="api-explorer__token-input"
+                           id="api-explorer-token"
+                           data-explorer-token
+                           placeholder="cps_..."
+                           autocomplete="off"
+                           spellcheck="false" />
+                    <button type="button"
+                            class="api-explorer__token-reveal"
+                            data-explorer-token-reveal
+                            aria-pressed="false"
+                            aria-label="Show token">Show</button>
+                </div>
             </div>
-            <label class="api-explorer__remember">
+            <label class="api-explorer__remember" data-explorer-remember-wrap>
                 <input type="checkbox" id="api-explorer-token-remember" data-explorer-token-remember />
-                <span>Remember on this device</span>
+                <span>Remember pasted token on this device</span>
                 &middot;
-                <a class="govuk-link" href="/Admin/ApiTokens" target="_blank" rel="noopener">Manage tokens</a>
+                <a class="govuk-link" href="@Url.Action("Index", "DocsDeveloperApi")">Manage API keys</a>
             </label>
         </div>
     </header>
@@ -389,6 +414,9 @@
 </div>
 
 @section Scripts {
+    <script id="api-explorer-user-tokens"
+            type="application/json"
+            nonce="@(Context.Items["Nonce"]?.ToString() ?? "")">@Html.Raw(ViewBag.ExplorerUserTokensJson as string ?? "[]")</script>
     <script id="api-explorer-catalogue"
             type="application/json"
             nonce="@(Context.Items["Nonce"]?.ToString() ?? "")">@Html.Raw(catalogueJson)</script>

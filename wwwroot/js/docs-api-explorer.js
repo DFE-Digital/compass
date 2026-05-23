@@ -360,15 +360,10 @@
         var ep = endpointsById[state.currentEndpointId];
         if (!body || !ep) return;
         body.innerHTML = '';
-        var token = readToken();
         var rows = [
-            ['Accept', 'application/json']
+            ['Accept', 'application/json'],
+            ['Authorization', authHeaderPreview()]
         ];
-        if (token) {
-            rows.push(['Authorization', 'Bearer ' + maskToken(token)]);
-        } else {
-            rows.push(['Authorization', '(no token set — request will use your session cookie)']);
-        }
         if (ep.method !== 'GET' && ep.method !== 'HEAD' && ep.method !== 'DELETE') {
             rows.push(['Content-Type', 'application/json']);
         }
@@ -425,25 +420,201 @@
         });
     }
 
-    /* ----------------------------- token persistence ----------------------------- */
+    /* ----------------------------- authentication ----------------------------- */
     var TOKEN_KEY = 'compass-docs-api-token';
+    var userTokens = (function () {
+        var node = document.getElementById('api-explorer-user-tokens');
+        if (!node) return [];
+        try {
+            var raw = JSON.parse(node.textContent || '[]');
+            if (!Array.isArray(raw)) return [];
+            return raw.map(function (t) {
+                return {
+                    id: t.id != null ? t.id : t.Id,
+                    name: t.name || t.Name || 'API key',
+                    accessTier: t.accessTier || t.AccessTier || ''
+                };
+            }).filter(function (t) { return t.id != null; });
+        }
+        catch (_) { return []; }
+    })();
+
+    var authState = {
+        mode: 'session',
+        managedTokenId: null,
+        managedBearer: null,
+        managedTokenName: null
+    };
+
     function readToken() {
-        var input = $('[data-explorer-token]');
-        return input ? input.value.trim() : '';
+        if (authState.mode === 'managed' && authState.managedBearer) {
+            return authState.managedBearer;
+        }
+        if (authState.mode === 'paste') {
+            var input = $('[data-explorer-token]');
+            return input ? input.value.trim() : '';
+        }
+        return '';
     }
+
+    function authHeaderPreview() {
+        if (authState.mode === 'managed' && authState.managedBearer) {
+            var label = authState.managedTokenName || 'your API key';
+            return 'Bearer ' + maskToken(authState.managedBearer) + ' (using ' + label + ' — not shown)';
+        }
+        var token = readToken();
+        if (token) return 'Bearer ' + maskToken(token);
+        return '(no token set — request will use your session cookie)';
+    }
+
+    function updateAuthUi() {
+        var managedWrap = $('[data-explorer-auth-managed]');
+        var pasteWrap = $('[data-explorer-paste-wrap]');
+        var rememberWrap = $('[data-explorer-remember-wrap]');
+        var statusEl = $('[data-explorer-managed-status]');
+        var reveal = $('[data-explorer-token-reveal]');
+        var tokenInput = $('[data-explorer-token]');
+
+        if (managedWrap) {
+            managedWrap.hidden = userTokens.length === 0;
+        }
+
+        var isManaged = authState.mode === 'managed';
+        var isPaste = authState.mode === 'paste';
+
+        if (pasteWrap) pasteWrap.hidden = !isPaste;
+        if (rememberWrap) rememberWrap.hidden = !isPaste;
+        if (reveal) reveal.hidden = !isPaste;
+
+        if (statusEl) {
+            if (isManaged && authState.managedTokenName) {
+                statusEl.hidden = false;
+                statusEl.textContent = 'Using ' + authState.managedTokenName + '. The bearer token is not shown.';
+            } else {
+                statusEl.hidden = true;
+                statusEl.textContent = '';
+            }
+        }
+
+        if (tokenInput && !isPaste) {
+            tokenInput.value = '';
+            tokenInput.type = 'password';
+        }
+
+        $$('[data-explorer-auth-mode]').forEach(function (radio) {
+            radio.checked = radio.value === authState.mode;
+        });
+    }
+
+    function clearManagedBearer() {
+        authState.managedBearer = null;
+        authState.managedTokenId = null;
+        authState.managedTokenName = null;
+    }
+
+    function loadManagedBearer(tokenId) {
+        return fetch('/docs/api-explorer/bearer/' + encodeURIComponent(tokenId), {
+            credentials: 'same-origin',
+            headers: { Accept: 'application/json' }
+        }).then(function (res) {
+            if (!res.ok) throw new Error('Could not load API key');
+            return res.json();
+        }).then(function (data) {
+            authState.managedBearer = data.bearer || null;
+            authState.managedTokenId = tokenId;
+            var summary = null;
+            for (var i = 0; i < userTokens.length; i++) {
+                if (userTokens[i].id === tokenId) { summary = userTokens[i]; break; }
+            }
+            authState.managedTokenName = summary ? summary.name : null;
+            rebuildHeadersTable();
+            updateAuthUi();
+        });
+    }
+
+    function wireAuthUi() {
+        var select = $('[data-explorer-my-token-select]');
+        var tokenInput = $('[data-explorer-token]');
+
+        if (select && userTokens.length > 0) {
+            select.innerHTML = '';
+            userTokens.forEach(function (t) {
+                var label = t.name;
+                if (t.accessTier) label += ' (' + t.accessTier + ')';
+                select.appendChild(el('option', { value: String(t.id) }, label));
+            });
+            select.addEventListener('change', function () {
+                var id = parseInt(select.value, 10);
+                if (!id) return;
+                loadManagedBearer(id).catch(function () {
+                    clearManagedBearer();
+                    updateAuthUi();
+                });
+            });
+        }
+
+        $$('[data-explorer-auth-mode]').forEach(function (radio) {
+            radio.addEventListener('change', function () {
+                authState.mode = radio.value;
+                if (authState.mode === 'managed') {
+                    if (select && select.value) {
+                        loadManagedBearer(parseInt(select.value, 10));
+                    } else if (userTokens.length > 0) {
+                        select.value = String(userTokens[0].id);
+                        loadManagedBearer(userTokens[0].id);
+                    }
+                } else {
+                    clearManagedBearer();
+                    rebuildHeadersTable();
+                    updateAuthUi();
+                }
+            });
+        });
+
+        if (tokenInput) {
+            tokenInput.addEventListener('input', function () {
+                if (authState.mode === 'paste') {
+                    persistToken();
+                    rebuildHeadersTable();
+                }
+            });
+        }
+
+        updateAuthUi();
+    }
+
     function restoreToken() {
         var input = $('[data-explorer-token]');
         var remember = $('[data-explorer-token-remember]');
-        if (!input) return;
         var stored = '';
         try { stored = localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY) || ''; }
         catch (_) { /* ignore */ }
-        if (stored) input.value = stored;
-        if (remember) {
-            try { remember.checked = !!localStorage.getItem(TOKEN_KEY); } catch (_) { /* ignore */ }
+
+        if (stored && input) {
+            authState.mode = 'paste';
+            input.value = stored;
+            if (remember) {
+                try { remember.checked = !!localStorage.getItem(TOKEN_KEY); } catch (_) { /* ignore */ }
+            }
+        } else if (userTokens.length > 0) {
+            authState.mode = 'managed';
+            var select = $('[data-explorer-my-token-select]');
+            var managedRadio = document.getElementById('api-explorer-auth-managed');
+            if (managedRadio) managedRadio.checked = true;
+            if (select) select.value = String(userTokens[0].id);
+            loadManagedBearer(userTokens[0].id).catch(function () {
+                clearManagedBearer();
+                updateAuthUi();
+            });
+        } else {
+            authState.mode = stored ? 'paste' : 'session';
         }
+
+        updateAuthUi();
     }
+
     function persistToken() {
+        if (authState.mode !== 'paste') return;
         var input = $('[data-explorer-token]');
         var remember = $('[data-explorer-token-remember]');
         if (!input) return;
@@ -944,6 +1115,7 @@
 
     function init() {
         wire();
+        wireAuthUi();
         restoreToken();
         renderTree('');
 

@@ -1,0 +1,112 @@
+@using Compass.Models
+@{
+    var token = ViewBag.Token as ApiToken;
+    var resources = ViewBag.Resources as string[] ?? Array.Empty<string>();
+}
+
+@if (token == null)
+{
+    <p class="govuk-body">Token not found.</p>
+    return;
+}
+
+<div class="developers-docs__intro govuk-!-margin-bottom-6">
+    <span class="govuk-caption-xl">@token.Name</span>
+    <h1 class="govuk-heading-xl govuk-!-margin-bottom-2">Manage API key</h1>
+</div>
+
+@if (ViewBag.PortalMessage != null)
+{
+    <div class="govuk-notification-banner govuk-notification-banner--success govuk-!-margin-bottom-4" role="region">
+        <div class="govuk-notification-banner__content"><p>@ViewBag.PortalMessage</p></div>
+    </div>
+}
+@if (ViewBag.PortalError != null)
+{
+    <div class="govuk-error-summary govuk-!-margin-bottom-4" role="alert">
+        <div class="govuk-error-summary__body"><p>@ViewBag.PortalError</p></div>
+    </div>
+}
+
+<dl class="govuk-summary-list govuk-!-margin-bottom-6">
+    <div class="govuk-summary-list__row">
+        <dt class="govuk-summary-list__key">Environment</dt>
+        <dd class="govuk-summary-list__value">@(token.Environment ?? "—")</dd>
+    </div>
+    <div class="govuk-summary-list__row">
+        <dt class="govuk-summary-list__key">Access level</dt>
+        <dd class="govuk-summary-list__value">@(token.AccessTier ?? "—")</dd>
+    </div>
+    <div class="govuk-summary-list__row">
+        <dt class="govuk-summary-list__key">Status</dt>
+        <dd class="govuk-summary-list__value">@(token.IsActive ? "Active" : "Suspended")</dd>
+    </div>
+    <div class="govuk-summary-list__row">
+        <dt class="govuk-summary-list__key">Owner</dt>
+        <dd class="govuk-summary-list__value">@(token.OwnerEmail ?? token.CreatedByEmail)</dd>
+    </div>
+</dl>
+
+<h2 class="govuk-heading-m">Permissions</h2>
+<table class="govuk-table govuk-!-margin-bottom-6">
+    <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+            <th class="govuk-table__header">Resource</th>
+            <th class="govuk-table__header">Read</th>
+            <th class="govuk-table__header">Create</th>
+            <th class="govuk-table__header">Update</th>
+            <th class="govuk-table__header">Delete</th>
+        </tr>
+    </thead>
+    <tbody class="govuk-table__body">
+        @foreach (var resource in resources)
+        {
+            var p = token.Permissions.FirstOrDefault(x => x.Resource == resource);
+            <tr class="govuk-table__row">
+                <td class="govuk-table__cell">@resource</td>
+                <td class="govuk-table__cell">@(p?.CanRead == true ? "Yes" : "—")</td>
+                <td class="govuk-table__cell">@(p?.CanCreate == true ? "Yes" : "—")</td>
+                <td class="govuk-table__cell">@(p?.CanUpdate == true ? "Yes" : "—")</td>
+                <td class="govuk-table__cell">@(p?.CanDelete == true ? "Yes" : "—")</td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+<h2 class="govuk-heading-m">People who can manage this key</h2>
+<ul class="govuk-list govuk-!-margin-bottom-4">
+    <li>@token.OwnerEmail (owner)</li>
+    @foreach (var m in token.Members)
+    {
+        <li>
+            @m.UserEmail
+            <form method="post" action="@Url.Action("TokenRemoveMember", "DocsDeveloperApi", new { id = token.Id })" class="govuk-!-display-inline">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="memberEmail" value="@m.UserEmail" />
+                <button type="submit" class="govuk-link govuk-body govuk-!-margin-0" style="border:none;background:none;cursor:pointer;text-decoration:underline;">Remove</button>
+            </form>
+        </li>
+    }
+</ul>
+
+<form method="post" action="@Url.Action("TokenAddMember", "DocsDeveloperApi", new { id = token.Id })" class="govuk-!-margin-bottom-6">
+    @Html.AntiForgeryToken()
+    <div class="govuk-form-group">
+        <label class="govuk-label" for="memberEmail">Add another user (email)</label>
+        <input class="govuk-input govuk-input--width-20" id="memberEmail" name="memberEmail" type="email" required />
+    </div>
+    <button type="submit" class="govuk-button govuk-button--secondary">Add user</button>
+</form>
+
+<h2 class="govuk-heading-m">Recycle key</h2>
+<p class="govuk-body">Generates a new bearer token and invalidates the old one. The new value is shown once and emailed to the owner.</p>
+<form method="post" action="@Url.Action("TokenRecycle", "DocsDeveloperApi", new { id = token.Id })">
+    @Html.AntiForgeryToken()
+    <button type="submit" class="govuk-button govuk-button--warning" data-module="govuk-button">Recycle API key</button>
+</form>
+
+<p class="govuk-body govuk-!-margin-top-6">
+    <a class="govuk-link" href="@Url.Action("Logs", "DocsDeveloperApi", new { tokenId = token.Id })">View request logs</a>
+    ·
+    <a class="govuk-link" href="@Url.Action("Index", "DocsDeveloperApi")">Back to API keys</a>
+</p>

@@ -108,6 +108,10 @@ public class AdminApiTokenRow
     public DateTime CreatedAt { get; set; }
     public DateTime? ExpiresAt { get; set; }
     public bool IsActive { get; set; }
+    public string? Environment { get; set; }
+    public string? AccessTier { get; set; }
+    public string? OwnerEmail { get; set; }
+    public bool IsSelfService { get; set; }
 }
 
 public sealed class AdminCmsAccessProductRow

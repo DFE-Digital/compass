@@ -2,6 +2,7 @@ using Compass.Attributes;
 using Compass.Controllers;
 using Compass.Data;
 using Compass.Models;
+using Compass.Models.Fips;
 using Compass.Models.Modern.Work;
 using Compass.Services;
 using Compass.Services.Aiss;
@@ -225,6 +226,25 @@ public partial class ModernReportingController : Controller
                 MaxReportYear = Math.Max(2026, DateTime.UtcNow.Year),
                 MonthName = DateTime.UtcNow.ToString("MMMM yyyy")
             });
+        }
+    }
+
+    /// <summary>Service register report — status, completion, and data-quality summaries for CMDB products.</summary>
+    [HttpGet("service-register")]
+    public async Task<IActionResult> ServiceRegister(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var model = await _monthlyReportService.BuildServiceRegisterReportAsync(cancellationToken);
+            SetNav("reporting-service-register");
+            return View("~/Views/Modern/Reporting/ServiceRegister.cshtml", model);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading service register report");
+            TempData["ErrorMessage"] = "An error occurred while loading the service register report. Please try again.";
+            SetNav("reporting-service-register");
+            return View("~/Views/Modern/Reporting/ServiceRegister.cshtml", new ModernServiceRegisterReportViewModel());
         }
     }
 
@@ -579,12 +599,14 @@ public partial class ModernReportingController : Controller
         await Task.WhenAll(summaryTask, trendsTask);
         var (summary, error) = await summaryTask;
         var (trends, trendsError) = await trendsTask;
+        var aissCfg = _configuration.GetSection("FipsSync:Aiss").Get<AissConfiguration>() ?? new AissConfiguration();
         var vm = new ModernOperationsAccessibilityViewModel
         {
             Summary = summary,
             Trends = trends,
             ErrorMessage = error,
-            TrendsError = trendsError
+            TrendsError = trendsError,
+            AissWebBaseUrl = aissCfg.ResolveWebBaseUrl()
         };
         return View("~/Views/Modern/Reporting/Accessibility.cshtml", vm);
     }

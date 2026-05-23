@@ -63,6 +63,8 @@ public partial class CompassDbContext : DbContext
     // API Management
     public DbSet<ApiToken> ApiTokens { get; set; }
     public DbSet<ApiTokenPermission> ApiTokenPermissions { get; set; }
+    public DbSet<ApiTokenRequest> ApiTokenRequests { get; set; }
+    public DbSet<ApiTokenMember> ApiTokenMembers { get; set; }
     public DbSet<ApiRequestLog> ApiRequestLogs { get; set; }
 
     // Operational reports
@@ -1913,6 +1915,35 @@ public partial class CompassDbContext : DbContext
 
         modelBuilder.Entity<ApiToken>()
             .HasIndex(at => at.ExpiresAt);
+
+        modelBuilder.Entity<ApiToken>()
+            .HasIndex(at => at.Name)
+            .IsUnique();
+
+        modelBuilder.Entity<ApiToken>()
+            .HasIndex(at => at.OwnerEmail);
+
+        modelBuilder.Entity<ApiTokenRequest>()
+            .HasOne(r => r.IssuedApiToken)
+            .WithMany()
+            .HasForeignKey(r => r.IssuedApiTokenId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        modelBuilder.Entity<ApiTokenRequest>()
+            .HasIndex(r => r.Status);
+
+        modelBuilder.Entity<ApiTokenRequest>()
+            .HasIndex(r => r.RequestorEmail);
+
+        modelBuilder.Entity<ApiTokenMember>()
+            .HasOne(m => m.ApiToken)
+            .WithMany(t => t.Members)
+            .HasForeignKey(m => m.ApiTokenId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<ApiTokenMember>()
+            .HasIndex(m => new { m.ApiTokenId, m.UserEmail })
+            .IsUnique();
 
         modelBuilder.Entity<ApiTokenPermission>()
             .HasOne(atp => atp.ApiToken)

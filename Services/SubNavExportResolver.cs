@@ -41,7 +41,7 @@ public sealed class SubNavExportResolver
             "ModernPerformance" => ResolvePerformance(controller, actionName, httpContext),
             "ModernDesignDecisionRecords" => ResolveDdr(controller, actionName),
             "ModernReporting" => ResolveReporting(controller, actionName, httpContext),
-            "ModernManage" => ResolveManage(controller, actionName),
+            "ModernManage" => ResolveManage(controller, actionName, httpContext),
             "Exports" => null,
             "ModernAdmin" => null,
             _ => null
@@ -223,13 +223,25 @@ public sealed class SubNavExportResolver
         };
     }
 
-    private static SubNavExportOptions? ResolveManage(Controller c, string action)
+    private static SubNavExportOptions? ResolveManage(Controller c, string action, HttpContext ctx)
     {
         if (!string.Equals(action, "Fips", StringComparison.OrdinalIgnoreCase)
-            && !string.Equals(action, "ServiceLines", StringComparison.OrdinalIgnoreCase))
+            && !string.Equals(action, "FipsDashboard", StringComparison.OrdinalIgnoreCase))
             return null;
 
-        return null;
+        var allData = c.Url.Action("ExportFipsProducts", "ModernManage", new { allData = true });
+        var filterKeys = new[]
+        {
+            "tab", "search", "businessAreaId", "channelId", "userGroupId", "typeId", "phaseId",
+            "categorisationItemId", "categorisationGroupId"
+        };
+
+        object? routeValues = string.Equals(action, "FipsDashboard", StringComparison.OrdinalIgnoreCase)
+            ? new { tab = "active" }
+            : null;
+
+        var current = ActionWithQuery(c, "ExportFipsProducts", "ModernManage", filterKeys, ctx, routeValues);
+        return Options(current, allData);
     }
 
     private static string? ActionWithQuery(

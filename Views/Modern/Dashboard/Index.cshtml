@@ -99,34 +99,50 @@
     _ => "dfe-f-badge dfe-f-badge--small dfe-f-badge--orange"
   };
 
+  string ServiceRegisterProductHref(Guid productId) =>
+    Url.Action("FipsProduct", "ModernManage", new { id = productId }) ?? "#";
+
   var workDashboardHref = Url.Action("Dashboard", "ModernWork") ?? "/modern/work/dashboard";
   var today = DateTime.Today;
 
-  var rows = new List<(string Title, string Hint, DateTime? SortDate, string Href, string StatusTag)>();
+  var milestoneTasks = new List<(string Title, string Hint, string Href, string StatusTag, int? CompletionPercent)>();
 
   foreach (var m in Model.OverdueMilestones)
   {
     var proj = Model.MyProjects.FirstOrDefault(p => p.Id == m.ProjectId);
     var milestoneHint = proj != null ? $"Milestone · {proj.Title}" : "Milestone";
     milestoneHint = $"Due {m.DueDate.ToString("d MMM yyyy", CultureInfo.GetCultureInfo("en-GB"))} · {milestoneHint}";
-    rows.Add((
+    milestoneTasks.Add((
       m.Name,
       milestoneHint,
-      m.DueDate,
       $"{Url.Action("Detail", "ModernWork", new { id = m.ProjectId, tab = "milestones" })}#wd-milestones",
-      "Late"));
+      "Late",
+      null));
   }
 
   foreach (var m in Model.MilestonesDueThisWeek)
   {
     var proj = Model.MyProjects.FirstOrDefault(p => p.Id == m.ProjectId);
-    rows.Add((
+    milestoneTasks.Add((
       m.Name,
       proj != null ? $"Milestone · {proj.Title}" : "Milestone",
-      m.DueDate,
       $"{Url.Action("Detail", "ModernWork", new { id = m.ProjectId, tab = "milestones" })}#wd-milestones",
-      "Due"));
+      "Due",
+      null));
   }
+
+  var serviceRegisterTasks = fipsServiceRegisterEnabled
+    ? Model.IncompleteServiceRegisterProducts
+        .Select(sr => (
+          Title: sr.Title,
+          Hint: $"Service register · {sr.MissingFieldsHint}",
+          Href: ServiceRegisterProductHref(sr.ProductId),
+          StatusTag: $"{sr.CompletionPercent}% complete",
+          CompletionPercent: (int?)sr.CompletionPercent))
+        .ToList()
+    : new List<(string Title, string Hint, string Href, string StatusTag, int? CompletionPercent)>();
+
+  var otherTasks = new List<(string Title, string Hint, string Href, string StatusTag, int? CompletionPercent)>();
 
   if (ViewBag.ShowRaidNavigation == true)
   {
@@ -134,56 +150,60 @@
     {
       var proj = Model.MyProjects.FirstOrDefault(p => p.Id == i.ProjectId);
       var issueLate = i.TargetResolutionDate.HasValue && i.TargetResolutionDate.Value.Date < today;
-      rows.Add((
+      otherTasks.Add((
         i.Title,
         proj != null ? $"Issue · {proj.Title}" : "Issue",
-        i.TargetResolutionDate ?? DateTime.MaxValue.AddDays(-365),
         Url.Action("Details", "Issue", new { id = i.Id }) ?? "#",
-        issueLate ? "Late" : "Due"));
+        issueLate ? "Late" : "Due",
+        null));
     }
   }
 
   foreach (var (product, retStatus, due) in Model.ProductsNeedingReturns.Take(8))
   {
-    rows.Add((
+    otherTasks.Add((
       product.Title,
       "Performance return",
-      due,
-      Url.Action("PerformanceMetrics", "ProductReporting", new { documentId = product.DocumentId ?? product.FipsId }) ?? "#",
-      retStatus == ReturnStatus.Late ? "Late" : "Due"));
+      ProductRegisterOrPerformanceHref(product),
+      retStatus == ReturnStatus.Late ? "Late" : "Due",
+      null));
   }
 
   foreach (var (product, commission, subStatus, due) in Model.ProductsNeedingCommissionReporting.Take(8))
   {
     var commissionLate = due.Date < today;
-    rows.Add((
+    otherTasks.Add((
       product.Title,
       $"{commission.Name} · {subStatus}",
-      due,
       Url.Action("Commission", "ModernPerformance", new { commissionId = commission.Id }) ?? "#",
-      commissionLate ? "Late" : "Due"));
+      commissionLate ? "Late" : "Due",
+      null));
   }
 
   foreach (var a in Model.AssignedActions.Take(15))
   {
     var actionLate = a.DueDate.HasValue && a.DueDate.Value.Date < today;
-    rows.Add((
+    otherTasks.Add((
       a.Title,
       a.Project?.Title ?? "Action",
-      a.DueDate ?? DateTime.MaxValue.AddDays(-365),
       Url.Action("Details", "Action", new { id = a.Id }) ?? "#",
-      actionLate ? "Late" : "Due"));
+      actionLate ? "Late" : "Due",
+      null));
   }
 
-  var orderedTasks = rows
-    .OrderBy(r => r.SortDate ?? DateTime.MaxValue)
-    .ThenBy(r => r.Title, StringComparer.OrdinalIgnoreCase)
-    .Take(40)
+  var orderedHomeTasks = milestoneTasks
+    .Concat(serviceRegisterTasks)
+    .Concat(otherTasks)
     .ToList();
 
+  const int visibleTaskLimit = 8;
   var showMonthlyReportingTask = Model.MonthlyReportingWindowOpen;
   var monthlyReportingComplete = Model.MonthlyReportingRemainingCount == 0;
-  var hasAnyTasks = showMonthlyReportingTask || orderedTasks.Any();
+  var monthlyTaskSlots = showMonthlyReportingTask ? 1 : 0;
+  var visibleHomeTaskSlots = Math.Max(0, visibleTaskLimit - monthlyTaskSlots);
+  var visibleHomeTasks = orderedHomeTasks.Take(visibleHomeTaskSlots).ToList();
+  var hiddenHomeTasks = orderedHomeTasks.Skip(visibleHomeTaskSlots).ToList();
+  var hasAnyTasks = showMonthlyReportingTask || orderedHomeTasks.Any();
 
   var dateCaption = DateTime.Today.ToString("dddd d MMMM yyyy", CultureInfo.GetCultureInfo("en-GB"));
   var pageTitle = $"{Greeting()}, {Model.FirstName}";
@@ -261,19 +281,54 @@
           </div>
         </li>
       }
-      @for (var ti = 0; ti < orderedTasks.Count; ti++)
+      @for (var ti = 0; ti < visibleHomeTasks.Count; ti++)
       {
-        var t = orderedTasks[ti];
+        var t = visibleHomeTasks[ti];
         var statusId = $"dashboard-task-status-{ti + 1}";
         var hintId = $"dashboard-task-hint-{ti + 1}";
+        var statusBadgeClass = t.CompletionPercent is int pct
+          ? WorkBadgeCss.ServiceRegisterCompletionBadgeClass(pct)
+          : TaskStatusBadgeClass(t.StatusTag);
         <li class="govuk-task-list__item govuk-task-list__item--with-link">
           <div class="govuk-task-list__name-and-hint">
             <a class="govuk-link govuk-task-list__link govuk-!-font-weight-bold govuk-link--no-visited-state" href="@t.Href" aria-describedby="@hintId @statusId">@Trunc(t.Title, 120)</a>
             <div id="@hintId" class="govuk-task-list__hint">@Trunc(t.Hint, 120)</div>
           </div>
           <div class="govuk-task-list__status" id="@statusId">
-            <span class="@TaskStatusBadgeClass(t.StatusTag)">@t.StatusTag</span>
+            <span class="@statusBadgeClass">@t.StatusTag</span>
           </div>
+        </li>
+      }
+      @if (hiddenHomeTasks.Count > 0)
+      {
+        <li class="govuk-task-list__item govuk-task-list__item--with-link">
+          <details class="govuk-details govuk-!-margin-bottom-0" data-module="govuk-details">
+            <summary class="govuk-details__summary">
+              <span class="govuk-details__summary-text">@hiddenHomeTasks.Count more task@(hiddenHomeTasks.Count == 1 ? "" : "s")</span>
+            </summary>
+            <div class="govuk-details__text govuk-!-margin-top-2 govuk-!-margin-bottom-0">
+              <ul class="govuk-task-list govuk-!-margin-bottom-0">
+                @for (var hi = 0; hi < hiddenHomeTasks.Count; hi++)
+                {
+                  var t = hiddenHomeTasks[hi];
+                  var statusId = $"dashboard-task-hidden-status-{hi + 1}";
+                  var hintId = $"dashboard-task-hidden-hint-{hi + 1}";
+                  var statusBadgeClass = t.CompletionPercent is int pct
+                    ? WorkBadgeCss.ServiceRegisterCompletionBadgeClass(pct)
+                    : TaskStatusBadgeClass(t.StatusTag);
+                  <li class="govuk-task-list__item govuk-task-list__item--with-link">
+                    <div class="govuk-task-list__name-and-hint">
+                      <a class="govuk-link govuk-task-list__link govuk-!-font-weight-bold govuk-link--no-visited-state" href="@t.Href" aria-describedby="@hintId @statusId">@Trunc(t.Title, 120)</a>
+                      <div id="@hintId" class="govuk-task-list__hint">@Trunc(t.Hint, 120)</div>
+                    </div>
+                    <div class="govuk-task-list__status" id="@statusId">
+                      <span class="@statusBadgeClass">@t.StatusTag</span>
+                    </div>
+                  </li>
+                }
+              </ul>
+            </div>
+          </details>
         </li>
       }
     </ul>

@@ -1,5 +1,8 @@
 using Compass.Models;
 using Compass.Models.Modern.Work;
+using Compass.ViewModels.Modern;
+
+using Compass.Services.Aiss;
 
 namespace Compass.Models.Fips;
 
@@ -9,7 +12,7 @@ public class FipsProductsViewModel
 
     public List<FipsProductRow> Products { get; set; } = new();
 
-    /// <summary>Count for the Active tab: all products with status Active (includes enterprise).</summary>
+    /// <summary>Count for the Active tab: status Active, excluding enterprise services.</summary>
     public int AllProductsCount { get; set; }
 
     /// <summary>Count for the All tab: every product regardless of status.</summary>
@@ -98,10 +101,61 @@ public sealed record FipsProductServiceAssessmentRow(
     DateTime? AssessmentDate,
     string ReportUrl);
 
+/// <summary>AISS accessibility snapshot for a single service register product.</summary>
+public sealed class FipsProductAissAccessibility
+{
+    public string AissWebBaseUrl { get; init; } = "";
+    public string? ErrorMessage { get; init; }
+    public bool NotFound { get; init; }
+    public AissServiceDto? Service { get; init; }
+    public AissServiceSummaryDto? Summary { get; init; }
+    public List<AissServiceIssueDto> OpenIssues { get; init; } = new();
+
+    public int OpenIssueCount
+    {
+        get
+        {
+            var fromSummary = (Summary?.OpenCount ?? 0) + (Summary?.InProgressCount ?? 0);
+            return fromSummary > 0 ? fromSummary : OpenIssues.Count;
+        }
+    }
+
+    public bool IsOnboarded => Service != null && !NotFound;
+
+    public string AccessibilityBadgeLabel =>
+        !IsOnboarded ? "No data"
+        : OpenIssueCount > 0 ? "Non-Compliant"
+        : "No issues";
+
+    public string AccessibilityBadgeColor =>
+        !IsOnboarded ? "grey"
+        : OpenIssueCount > 0 ? "red"
+        : "green";
+
+    public string ServicePageUrl =>
+        Service is { Id: > 0 } ? $"{AissWebBaseUrl}/services/{Service.Id}" : "";
+
+    public string OpenIssuesPageUrl =>
+        Service is { Id: > 0 } ? $"{AissWebBaseUrl}/services/{Service.Id}/issues?view=open" : "";
+
+    public string IssuePageUrl(int issueId) =>
+        Service is { Id: > 0 } && issueId > 0
+            ? $"{AissWebBaseUrl}/services/{Service.Id}/issues/{issueId}"
+            : "";
+
+    public string? PublicStatementUrl =>
+        Service is { NumericId: > 0, StatementInstalled: true }
+            ? $"{AissWebBaseUrl}/statement/{Service.NumericId}"
+            : null;
+}
+
 public class FipsProductDetailViewModel
 {
     public CMDBProduct Product { get; set; } = null!;
     public bool CanManage { get; set; }
+
+    /// <summary>User is listed as a contact on this service register product (any role).</summary>
+    public bool CanEditInformation { get; set; }
     public string? CurrentUserEmail { get; set; }
 
     /// <summary>Same completion logic as the FIPS product list &quot;Data completion&quot; column.</summary>
@@ -117,11 +171,14 @@ public class FipsProductDetailViewModel
     /// <summary>Pretty-printed <see cref="CMDBProduct.LastCmdbSnapshotJson"/> for display; raw text if parsing fails.</summary>
     public string? CmdbSnapshotJsonFormatted { get; set; }
 
-    /// <summary>True when the user is opening the edit form (otherwise read-only overview for managers).</summary>
+    /// <summary>True when the information tab shows the editable form (named contacts on manage pages).</summary>
     public bool EditMode { get; set; }
 
-    /// <summary><c>information</c>, <c>history</c>, <c>risks</c>, <c>issues</c>, <c>assumptions</c>, <c>dependencies</c>, <c>accessibility</c>, <c>assurance</c>, or <c>performance</c>.</summary>
+    /// <summary><c>information</c>, <c>history</c>, <c>risks</c>, <c>issues</c>, <c>assumptions</c>, <c>dependencies</c>, <c>accessibility</c>, <c>assurance</c>, <c>work</c>, or <c>performance</c>.</summary>
     public string ActiveDetailTab { get; set; } = "information";
+
+    /// <summary>Linked delivery work items (from <see cref="ProjectProduct"/>).</summary>
+    public FipsProductWorkItemsPanelViewModel? WorkItemsPanel { get; set; }
 
     /// <summary>CMS product document id when resolved from the catalogue API (fallback: CMDB product GUID string).</summary>
     public string? ResolvedCmsDocumentId { get; set; }
@@ -129,8 +186,11 @@ public class FipsProductDetailViewModel
     /// <summary>Commission submissions for this product (when CMS document id or FIPS id matches).</summary>
     public List<FipsProductPerformanceRow> PerformanceCommissionRows { get; set; } = new();
 
-    /// <summary>Accessibility enrolment for this product, when matched by CMS document id or FIPS id.</summary>
+    /// <summary>Legacy Compass DB accessibility enrolment (superseded by <see cref="AissAccessibility"/> when AISS is configured).</summary>
     public Compass.Models.ProductAccessibility? LinkedProductAccessibility { get; set; }
+
+    /// <summary>Live accessibility data from AISS for this product.</summary>
+    public FipsProductAissAccessibility? AissAccessibility { get; set; }
 
     /// <summary>Service assessments from SAS for this product (<c>GET /product/{fipsId}</c>).</summary>
     public List<FipsProductServiceAssessmentRow> ServiceAssessments { get; set; } = new();

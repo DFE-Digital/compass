@@ -68,6 +68,19 @@ public static class WorkBadgeCss
     public static string RagCompactBadgeClass(string? ragDisplayName)
         => RagBadgeClass(ragDisplayName);
 
+    /// <summary>Colour-coded completion % badge for service register reporting tables.</summary>
+    public static string ServiceRegisterCompletionBadgeClass(int completionPercent)
+    {
+        var baseClass = "dfe-f-badge dfe-f-badge--small";
+        return completionPercent switch
+        {
+            >= 100 => baseClass + " dfe-f-badge--green",
+            >= 67 => baseClass + " dfe-f-badge--blue",
+            >= 34 => baseClass + " dfe-f-badge--orange",
+            _ => baseClass + " dfe-f-badge--red"
+        };
+    }
+
     /// <summary>Count badge on monthly report toggle headers.</summary>
     public static string ToggleCountBadgeClass(int count, bool highlightWhenPositive = false, bool warnWhenPositive = false)
     {

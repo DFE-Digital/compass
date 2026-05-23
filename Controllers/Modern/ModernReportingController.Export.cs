@@ -266,6 +266,30 @@ public partial class ModernReportingController
         return ReturnExcelFile(excel, $"thematic-report-all-{Timestamp()}.xlsx");
     }
 
+    [HttpGet("resourcing/export")]
+    public async Task<IActionResult> ExportResourcingReport(
+        int? year,
+        int? month,
+        int? businessAreaId,
+        int? directorateId,
+        string? dimension,
+        int? groupId,
+        CancellationToken cancellationToken = default)
+    {
+        var model = await _monthlyReportService.BuildResourcingReportAsync(
+            year,
+            month,
+            businessAreaId,
+            directorateId,
+            dimension,
+            groupId,
+            cancellationToken);
+
+        var bytes = ResourcingReportExcelExport.BuildWorkbook(model);
+        var period = SanitizeFilePart(model.MonthName.Replace(" ", "-"));
+        return ReturnExcelFile(bytes, $"resourcing-report-{period}-{Timestamp()}.xlsx");
+    }
+
     [HttpGet("raid/export")]
     public async Task<IActionResult> ExportRaidReport(
         string? tab,

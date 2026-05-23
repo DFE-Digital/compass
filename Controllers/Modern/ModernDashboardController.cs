@@ -136,6 +136,9 @@ public class ModernDashboardController : Controller
                     _context, effectiveUserEmail);
                 viewModel.MyProducts = myRegisterProducts;
                 viewModel.Metrics.ProductCount = myRegisterProducts.Count;
+                viewModel.IncompleteServiceRegisterProducts =
+                    await FipsProductListingHelper.BuildIncompleteMyProductsForDashboardAsync(
+                        _context, effectiveUserEmail);
             }
 
             ViewBag.DashboardServiceRegisterProductIdByCmdbKey = null;

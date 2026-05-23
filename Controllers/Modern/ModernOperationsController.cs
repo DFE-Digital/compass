@@ -43,6 +43,7 @@ public class ModernOperationsController : Controller
     private readonly IProductsApiService _productsApi;
     private readonly IFipsBusinessAreaLookupSyncService _fipsBusinessAreaLookupSync;
     private readonly IFipsCompletionBulkImportService _fipsCompletionBulkImport;
+    private readonly IFipsStrapiLegacyImportService _fipsStrapiLegacyImport;
     private readonly IOperationsRiskEditService _operationsRiskEdit;
     private readonly INotificationService _notificationService;
     private readonly IConfiguration _configuration;
@@ -58,6 +59,7 @@ public class ModernOperationsController : Controller
         IProductsApiService productsApi,
         IFipsBusinessAreaLookupSyncService fipsBusinessAreaLookupSync,
         IFipsCompletionBulkImportService fipsCompletionBulkImport,
+        IFipsStrapiLegacyImportService fipsStrapiLegacyImport,
         IOperationsRiskEditService operationsRiskEdit,
         INotificationService notificationService,
         IConfiguration configuration,
@@ -72,6 +74,7 @@ public class ModernOperationsController : Controller
         _productsApi = productsApi;
         _fipsBusinessAreaLookupSync = fipsBusinessAreaLookupSync;
         _fipsCompletionBulkImport = fipsCompletionBulkImport;
+        _fipsStrapiLegacyImport = fipsStrapiLegacyImport;
         _operationsRiskEdit = operationsRiskEdit;
         _notificationService = notificationService;
         _configuration = configuration;
@@ -215,7 +218,7 @@ public class ModernOperationsController : Controller
         if (fipsEnabled)
         {
             serviceRegisterActive = await _db.CMDBProducts.AsNoTracking()
-                .CountAsync(p => p.Status == CMDBProductStatus.Active, ct);
+                .CountAsync(p => p.Status == CMDBProductStatus.Active && !p.IsEnterpriseService, ct);
         }
 
         var activeCommissions = await _db.Commissions.AsNoTracking()
@@ -1810,6 +1813,80 @@ public class ModernOperationsController : Controller
         return View("~/Views/Modern/Operations/ServiceRegisterSyncSettings.cshtml", vm);
     }
 
+    [HttpPost("service-register/sync-settings/import-strapi-json")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ServiceRegisterImportStrapiJson(IFormFile? file, bool dryRun, CancellationToken ct)
+    {
+        var blocked = await FipsDatabaseDisabledRedirectAsync();
+        if (blocked != null)
+            return blocked;
+
+        SetNav("operations-service-register");
+        await EnsureDefaultCmdbSyncRulesAsync(ct);
+
+        FipsCompletionImportResult? importResult = null;
+
+        if (file == null || file.Length == 0)
+        {
+            TempData["Error"] = "Choose a JSON file to upload (legacy Strapi/CMS export with a data array).";
+        }
+        else
+        {
+            var ext = Path.GetExtension(file.FileName ?? "").ToLowerInvariant();
+            if (ext is not ".json")
+            {
+                TempData["Error"] = "Upload a JSON file (.json) exported from the legacy FIPS CMS.";
+            }
+            else
+            {
+                try
+                {
+                    await using var stream = file.OpenReadStream();
+                    var email = CurrentUserEmail;
+                    var auditName = User.Identity?.Name ?? email;
+                    importResult = await _fipsStrapiLegacyImport.ImportAsync(stream, email, auditName, dryRun, ct);
+                    if (importResult.UpdatedCount > 0)
+                    {
+                        TempData["Success"] = dryRun
+                            ? $"Dry run: {importResult.UpdatedCount} row(s) would update. Skipped {importResult.SkippedCount}, failed {importResult.FailedCount}."
+                            : $"Imported {importResult.UpdatedCount} row(s). Skipped {importResult.SkippedCount}, failed {importResult.FailedCount}.";
+                    }
+                    else if (importResult.FailedCount > 0)
+                        TempData["Error"] = $"Import failed for all {importResult.FailedCount} row(s). See details below.";
+                    else
+                        TempData["Success"] = dryRun
+                            ? "Dry run: no changes would be applied."
+                            : "No changes were needed — values already match.";
+                }
+                catch (JsonException ex)
+                {
+                    _logger.LogWarning(ex, "Strapi legacy JSON import parse failed");
+                    TempData["Error"] = "Could not read the JSON file. Ensure it is a valid Strapi export with a top-level data array.";
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Strapi legacy JSON import failed");
+                    TempData["Error"] = "Import failed. Check the file format and try again.";
+                }
+            }
+        }
+
+        var rules = await _db.FipsCmdbSyncRules.AsNoTracking()
+            .OrderBy(r => r.SortOrder)
+            .ThenBy(r => r.Id)
+            .ToListAsync(ct);
+        var subNav = await FipsProductListingHelper.BuildSubNavModelAsync(
+            _db, "sync", CurrentUserEmail, ct);
+        var vm = new ServiceRegisterSyncSettingsViewModel
+        {
+            Rules = rules,
+            SubNav = subNav,
+            CanSyncFromCmdb = true,
+            LastStrapiImportResult = importResult
+        };
+        return View("~/Views/Modern/Operations/ServiceRegisterSyncSettings.cshtml", vm);
+    }
+
     [HttpPost("service-register/sync-settings/add")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> ServiceRegisterSyncSettingsAdd(
@@ -1857,10 +1934,11 @@ public class ModernOperationsController : Controller
             return RedirectToAction(nameof(ServiceRegisterSyncSettings));
         }
         if (string.Equals(ruleAction, FipsCmdbSyncRuleActions.SetStatus, StringComparison.OrdinalIgnoreCase)
+            && targetStatus != CMDBProductStatus.Active
             && targetStatus != CMDBProductStatus.Rejected
             && targetStatus != CMDBProductStatus.Inactive)
         {
-            TempData["Error"] = "Status rules may only set status to Rejected or Retired (inactive).";
+            TempData["Error"] = "Status rules may only set status to Active, Rejected, or Retired (inactive).";
             return RedirectToAction(nameof(ServiceRegisterSyncSettings));
         }
 

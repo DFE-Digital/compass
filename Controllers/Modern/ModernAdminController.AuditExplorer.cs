@@ -4,6 +4,7 @@ using Compass.Models;
 using Compass.Services;
 using Compass.ViewModels.Modern;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.EntityFrameworkCore;
 
 namespace Compass.Controllers.Modern;
@@ -190,6 +191,21 @@ public partial class ModernAdminController
         return View("~/Views/Modern/Admin/AuditExplorer.cshtml", vm);
     }
 
+    /// <summary>Legacy conventional URL used by older links and bookmarks.</summary>
+    [HttpGet("/ModernAdmin/AuditExplorerDetail")]
+    public IActionResult AuditExplorerDetailLegacy([FromQuery] Guid auditLogId)
+    {
+        if (auditLogId == Guid.Empty)
+            return NotFound();
+
+        var query = Request.Query
+            .Where(kv => !string.Equals(kv.Key, "auditLogId", StringComparison.OrdinalIgnoreCase))
+            .ToDictionary(kv => kv.Key, kv => kv.Value.ToString());
+        var path = $"/modern/admin/audit-explorer/{auditLogId:D}";
+        var target = query.Count == 0 ? path : QueryHelpers.AddQueryString(path, query);
+        return Redirect(target);
+    }
+
     [HttpGet("audit-explorer/{auditLogId:guid}")]
     public async Task<IActionResult> AuditExplorerDetail(Guid auditLogId, CancellationToken cancellationToken)
     {
@@ -204,10 +220,12 @@ public partial class ModernAdminController
         var diffFields = BuildDiff(entity.BeforeJson, entity.AfterJson);
         var summary = BuildPlainEnglishSummary(entity, diffFields);
 
-        var listFilter = HttpContext.Request.Query
+        var listQuery = HttpContext.Request.Query
             .Where(kv => !string.Equals(kv.Key, "auditLogId", StringComparison.OrdinalIgnoreCase))
-            .ToDictionary(kv => kv.Key, kv => (object?)kv.Value.ToString());
-        var backUrl = Url.Action(nameof(AuditExplorer), "ModernAdmin", listFilter);
+            .ToDictionary(kv => kv.Key, kv => kv.Value.ToString());
+        var backUrl = listQuery.Count == 0
+            ? "/modern/admin/audit-explorer"
+            : QueryHelpers.AddQueryString("/modern/admin/audit-explorer", listQuery);
 
         var vm = new AuditExplorerDetailVm
         {

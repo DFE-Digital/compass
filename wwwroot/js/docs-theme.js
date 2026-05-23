@@ -2,49 +2,12 @@
   var root = document.getElementById('developers-doc-root');
   if (!root) return;
 
-  var STORAGE_KEY = 'compass-docs-theme';
   var layout = document.getElementById('developers-doc-layout');
   var scrim = document.querySelector('[data-developers-nav-close]');
 
-  function getStoredTheme() {
-    try {
-      var s = localStorage.getItem(STORAGE_KEY);
-      if (s === 'light' || s === 'dark') return s;
-    } catch (e) { /* ignore */ }
-    return null;
-  }
-
-  function applyTheme(theme) {
-    var isLight = theme === 'light';
-    var resolved = isLight ? 'light' : 'dark';
-    root.classList.remove('developers-doc-app--theme-dark', 'developers-doc-app--theme-light');
-    root.classList.add(isLight ? 'developers-doc-app--theme-light' : 'developers-doc-app--theme-dark');
-    root.setAttribute('data-developers-doc-theme', resolved);
-    try {
-      localStorage.setItem(STORAGE_KEY, resolved);
-    } catch (e) { /* ignore */ }
-
-    var btn = document.querySelector('[data-developers-theme-toggle]');
-    if (btn) {
-      btn.textContent = isLight ? 'Dark' : 'Light';
-      btn.setAttribute('aria-pressed', isLight ? 'false' : 'true');
-      btn.setAttribute(
-        'aria-label',
-        isLight ? 'Switch to dark documentation theme' : 'Switch to light documentation theme'
-      );
-    }
-
-    try {
-      document.dispatchEvent(new CustomEvent('developers-doc:themechange', { detail: { theme: resolved } }));
-    } catch (e) { /* ignore */ }
-  }
-
-  applyTheme(getStoredTheme() || 'dark');
-
-  document.querySelector('[data-developers-theme-toggle]')?.addEventListener('click', function () {
-    var cur = root.getAttribute('data-developers-doc-theme') === 'light' ? 'light' : 'dark';
-    applyTheme(cur === 'dark' ? 'light' : 'dark');
-  });
+  root.classList.remove('developers-doc-app--theme-dark');
+  root.classList.add('developers-doc-app--theme-light');
+  root.setAttribute('data-developers-doc-theme', 'light');
 
   function setNavOpen(open) {
     if (!layout) return;

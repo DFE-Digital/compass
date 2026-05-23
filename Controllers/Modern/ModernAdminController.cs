@@ -4,6 +4,7 @@ using Compass.Models;
 using Compass.Models.DemandPipeline;
 using Compass.Models.Fips;
 using Compass.Services;
+using Compass.Services.Api;
 using Compass.Services.DemandPipeline;
 using Compass.Services.Fips;
 using Compass.ViewModels.Modern;
@@ -34,7 +35,7 @@ public partial class ModernAdminController : Controller
         "risk-categories", "issue-categories",
         "product-types", "rag-defns", "departments", "compliance",
         "scoring-fw", "perf-cycles", "assess-cycles",
-        "groups", "api-tokens", "cms-access-products", "business-area-admins", "business-area-leadership", "directorate-leadership",
+        "groups", "api-tokens", "api-token-requests", "cms-access-products", "business-area-admins", "business-area-leadership", "directorate-leadership",
         "migration", "feature-settings", "universal-barriers",
         "activity-types", "work-tagging", "resource-bands", "mission-pillars", "priority-outcomes",
         "fips-channels", "fips-types", "fips-business-areas", "fips-user-groups", "fips-contact-roles", "fips-categorisation",
@@ -390,8 +391,20 @@ public partial class ModernAdminController : Controller
                         Description = t.Description,
                         CreatedAt = t.CreatedAt,
                         ExpiresAt = t.ExpiresAt,
-                        IsActive = t.IsActive
+                        IsActive = t.IsActive,
+                        Environment = t.Environment,
+                        AccessTier = t.AccessTier,
+                        OwnerEmail = t.OwnerEmail,
+                        IsSelfService = t.IsSelfService
                     })
+                    .ToListAsync();
+                break;
+
+            case "api-token-requests":
+                ViewBag.PendingApiTokenRequests = await _context.ApiTokenRequests
+                    .AsNoTracking()
+                    .Where(r => r.Status == ApiTokenRequestStatus.Pending)
+                    .OrderBy(r => r.CreatedAt)
                     .ToListAsync();
                 break;
 
@@ -3346,15 +3359,7 @@ public partial class ModernAdminController : Controller
 
     // ── API Token Permissions (modern) ─────────────────────────────
 
-    private static readonly string[] ApiTokenResources = new[]
-    {
-        "Risks", "Issues", "Actions", "Milestones", "PerformanceMetrics",
-        "EnterpriseMetrics", "FunctionalStandards", "AccessibilityIssues",
-        "SurveysAdmin", "UserSatisfactionQuestions", "UserSatisfactionResponses", "DdtStandards",
-        "ServiceRegister",
-        "CmsAccessRequests",
-        "AdminLookups"
-    };
+    private static readonly string[] ApiTokenResources = ApiTokenResourceCatalog.Resources;
 
     [HttpGet("api-tokens/new")]
     [RequireSuperAdmin]
@@ -3457,7 +3462,7 @@ public partial class ModernAdminController : Controller
     [HttpPost("api-tokens/{id:int}/recycle")]
     [ValidateAntiForgeryToken]
     [RequireSuperAdmin]
-    public async Task<IActionResult> ApiTokenRecycle(int id)
+    public async Task<IActionResult> ApiTokenRecycle(int id, [FromServices] IApiTokenPortalService portal)
     {
         try
         {
@@ -3469,7 +3474,8 @@ public partial class ModernAdminController : Controller
             }
 
             var newToken = await _apiTokenService.RecycleTokenAsync(id);
-            TempData["AdminMessage"] = "API token recycled successfully. Copy the new token now — you won't be able to see it again.";
+            await portal.NotifyTokenRecycledAsync(id, newToken);
+            TempData["AdminMessage"] = "API token recycled successfully. Copy the new token now — you won't be able to see it again. The owner has been emailed.";
             TempData["NewToken"] = newToken;
         }
         catch (Exception)
@@ -3501,6 +3507,25 @@ public partial class ModernAdminController : Controller
         }
 
         return RedirectToAction(nameof(ApiTokenDetail), new { id });
+    }
+
+    [HttpGet("api-logs")]
+    [RequireSuperAdmin]
+    public async Task<IActionResult> ApiLogs(int? tokenId = null)
+    {
+        var query = _context.ApiRequestLogs
+            .Include(l => l.ApiToken)
+            .OrderByDescending(l => l.RequestTimestamp)
+            .AsQueryable();
+
+        if (tokenId.HasValue)
+            query = query.Where(l => l.ApiTokenId == tokenId.Value);
+
+        var logs = await query.Take(1000).ToListAsync();
+        ViewBag.Tokens = await _apiTokenService.GetAllTokensAsync();
+        ViewBag.SelectedTokenId = tokenId;
+        SetAdminChrome("admin-index");
+        return View("~/Views/Modern/Admin/ApiLogs.cshtml", logs);
     }
 
     [HttpPost("api-tokens/{id:int}/delete")]

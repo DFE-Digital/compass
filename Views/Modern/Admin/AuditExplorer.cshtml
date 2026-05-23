@@ -1,46 +1,66 @@
 @model Compass.ViewModels.Modern.AuditExplorerListVm
 @using Compass.ViewModels.Modern
 @using Microsoft.AspNetCore.Html
+@using Microsoft.AspNetCore.WebUtilities
 @{
   ViewData["Title"] = "Audit explorer";
   var f = Model.Filter;
   string FromValue() => f.From.HasValue ? f.From.Value.ToString("yyyy-MM-dd") : string.Empty;
   string ToValue() => f.To.HasValue ? f.To.Value.ToString("yyyy-MM-dd") : string.Empty;
 
+  string AppendFilterQuery(string path)
+  {
+    var query = new Dictionary<string, string?>();
+    if (!string.IsNullOrWhiteSpace(f.Q)) query["q"] = f.Q;
+    if (!string.IsNullOrWhiteSpace(f.Feature)) query["feature"] = f.Feature;
+    if (!string.IsNullOrWhiteSpace(f.Entity)) query["entity"] = f.Entity;
+    if (!string.IsNullOrWhiteSpace(f.Action)) query["action"] = f.Action;
+    if (!string.IsNullOrWhiteSpace(f.User)) query["user"] = f.User;
+    var from = FromValue();
+    if (!string.IsNullOrEmpty(from)) query["from"] = from;
+    var to = ToValue();
+    if (!string.IsNullOrEmpty(to)) query["to"] = to;
+    if (f.PageSize > 0) query["pageSize"] = f.PageSize.ToString();
+    return query.Count == 0 ? path : QueryHelpers.AddQueryString(path, query);
+  }
+
   string PageUrl(int p)
   {
-    var rv = new Dictionary<string, object?>
-    {
-      ["q"] = f.Q,
-      ["feature"] = f.Feature,
-      ["entity"] = f.Entity,
-      ["action"] = f.Action,
-      ["user"] = f.User,
-      ["from"] = FromValue(),
-      ["to"] = ToValue(),
-      ["pageSize"] = f.PageSize,
-      ["page"] = p,
-    };
-    return Url.Action("AuditExplorer", "ModernAdmin", rv) ?? "#";
+    var path = "/modern/admin/audit-explorer";
+    var query = new Dictionary<string, string?>();
+    if (!string.IsNullOrWhiteSpace(f.Q)) query["q"] = f.Q;
+    if (!string.IsNullOrWhiteSpace(f.Feature)) query["feature"] = f.Feature;
+    if (!string.IsNullOrWhiteSpace(f.Entity)) query["entity"] = f.Entity;
+    if (!string.IsNullOrWhiteSpace(f.Action)) query["action"] = f.Action;
+    if (!string.IsNullOrWhiteSpace(f.User)) query["user"] = f.User;
+    var from = FromValue();
+    if (!string.IsNullOrEmpty(from)) query["from"] = from;
+    var to = ToValue();
+    if (!string.IsNullOrEmpty(to)) query["to"] = to;
+    if (f.PageSize > 0) query["pageSize"] = f.PageSize.ToString();
+    query["page"] = p.ToString();
+    return QueryHelpers.AddQueryString(path, query);
   }
 
   string DetailUrl(Guid id)
   {
-    var rv = new Dictionary<string, object?>
-    {
-      ["auditLogId"] = id,
-      ["q"] = f.Q,
-      ["feature"] = f.Feature,
-      ["entity"] = f.Entity,
-      ["action"] = f.Action,
-      ["user"] = f.User,
-      ["from"] = FromValue(),
-      ["to"] = ToValue(),
-      ["pageSize"] = f.PageSize,
-      ["page"] = f.Page,
-    };
-    return Url.Action("AuditExplorerDetail", "ModernAdmin", rv) ?? "#";
+    var path = $"/modern/admin/audit-explorer/{id:D}";
+    var query = new Dictionary<string, string?>();
+    if (!string.IsNullOrWhiteSpace(f.Q)) query["q"] = f.Q;
+    if (!string.IsNullOrWhiteSpace(f.Feature)) query["feature"] = f.Feature;
+    if (!string.IsNullOrWhiteSpace(f.Entity)) query["entity"] = f.Entity;
+    if (!string.IsNullOrWhiteSpace(f.Action)) query["action"] = f.Action;
+    if (!string.IsNullOrWhiteSpace(f.User)) query["user"] = f.User;
+    var from = FromValue();
+    if (!string.IsNullOrEmpty(from)) query["from"] = from;
+    var to = ToValue();
+    if (!string.IsNullOrEmpty(to)) query["to"] = to;
+    if (f.PageSize > 0) query["pageSize"] = f.PageSize.ToString();
+    if (f.Page > 0) query["page"] = f.Page.ToString();
+    return query.Count == 0 ? path : QueryHelpers.AddQueryString(path, query);
   }
+
+  var auditExplorerPath = AppendFilterQuery("/modern/admin/audit-explorer");
 
   var hasAnyFilter =
     !string.IsNullOrWhiteSpace(f.Q) ||
@@ -67,7 +87,7 @@
     Lede = new HtmlString("<p class=\"govuk-body govuk-!-margin-bottom-0\">Browse every recorded change across Compass. Filter by feature, entity, action, user or date, then open a record to see exactly what changed.</p>")
   })
 
-  <form method="get" action="@Url.Action("AuditExplorer", "ModernAdmin")" class="dfe-c-mb-3" novalidate>
+  <form method="get" action="/modern/admin/audit-explorer" class="dfe-c-mb-3" novalidate>
     <div class="filter-toolbar">
       <div class="filter-toolbar__search-wrap">
         <label for="audit-q" class="govuk-visually-hidden">Search by entity, id, reference or action</label>
@@ -148,7 +168,7 @@
       </div>
       <div class="filter-panel__actions">
         <button type="submit" class="govuk-button" data-module="govuk-button">Apply filters</button>
-        <a href="@Url.Action("AuditExplorer", "ModernAdmin")" class="govuk-link govuk-link--no-visited-state filter-panel__clear-link">Clear filters</a>
+        <a href="/modern/admin/audit-explorer" class="govuk-link govuk-link--no-visited-state filter-panel__clear-link">Clear filters</a>
       </div>
     </div>
   </form>
@@ -191,7 +211,7 @@
               No audit entries match the current filters.
               @if (hasAnyFilter)
               {
-                <a class="govuk-link govuk-!-margin-left-2" href="@Url.Action("AuditExplorer", "ModernAdmin")">Clear all filters</a>
+                <a class="govuk-link govuk-!-margin-left-2" href="/modern/admin/audit-explorer">Clear all filters</a>
               }
             </td>
           </tr>

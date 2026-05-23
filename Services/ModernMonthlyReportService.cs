@@ -1,6 +1,7 @@
 using Compass.Controllers;
 using Compass.Data;
 using Compass.Models;
+using Compass.Models.Fips;
 using Compass.Services.Aiss;
 using Compass.ViewModels;
 using Compass.ViewModels.Modern;
@@ -266,6 +267,77 @@ public class ModernMonthlyReportService
             BusinessAreaRows = businessAreaRows,
             WorkItemRows = workItemRows,
             TrendPoints = trendPoints
+        };
+    }
+
+    public async Task<ModernServiceRegisterReportViewModel> BuildServiceRegisterReportAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var products = await _db.CMDBProducts
+            .AsNoTracking()
+            .Include(p => p.Phase)
+            .Include(p => p.BusinessAreas)
+                .ThenInclude(ba => ba.FipsBusinessArea)
+                    .ThenInclude(fba => fba.BusinessAreaLookup)
+                        .ThenInclude(bal => bal.DivisionBusinessAreas)
+                            .ThenInclude(dba => dba.Division)
+            .Include(p => p.Channels)
+                .ThenInclude(c => c.FipsChannel)
+            .Include(p => p.UserGroups)
+            .Include(p => p.Types)
+                .ThenInclude(t => t.FipsType)
+            .Include(p => p.Contacts)
+                .ThenInclude(c => c.FipsContactRole)
+            .OrderBy(p => p.Title)
+            .ThenBy(p => p.UniqueID)
+            .ToListAsync(cancellationToken);
+
+        var completionRows = products
+            .Select(BuildServiceRegisterProductCompletionRow)
+            .OrderBy(r => r.Title, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(r => r.UniqueId)
+            .ToList();
+
+        var directorateRows = BuildServiceRegisterAreaSummaryRows(
+            completionRows,
+            r => r.DirectorateNames);
+        var businessAreaRows = BuildServiceRegisterAreaSummaryRows(
+            completionRows,
+            r => r.BusinessAreaNames);
+
+        var activeRows = completionRows.Where(IsServiceRegisterActive).ToList();
+        var activeTotal = activeRows.Count;
+        const decimal criteriaMaxPerProduct = 6m;
+        var activeCriteriaMet = activeRows.Sum(CompletionCriteriaMetCount);
+        var activeOverallCompletionPercent = activeTotal == 0
+            ? 0m
+            : Math.Round((activeCriteriaMet / (activeTotal * criteriaMaxPerProduct)) * 100m, 1, MidpointRounding.AwayFromZero);
+
+        static List<ServiceRegisterProductCompletionRow> OrderCompletionRows(IEnumerable<ServiceRegisterProductCompletionRow> rows) =>
+            rows.OrderBy(r => r.Title, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(r => r.UniqueId)
+                .ToList();
+
+        return new ModernServiceRegisterReportViewModel
+        {
+            ActiveTotalProducts = activeTotal,
+            ActiveOverallCompletionPercent = activeOverallCompletionPercent,
+            ActiveFullyCompleteCount = activeRows.Count(r => r.CompletionPercent >= 100),
+            ActiveProductsWithoutUrlCount = activeRows.Count(r => !r.HasProductUrl),
+            ActiveProductsWithoutServiceOwnerOrSroCount = activeRows.Count(r =>
+                !r.HasServiceOwner || !r.HasSeniorResponsibleOfficer),
+            ActiveCount = completionRows.Count(IsServiceRegisterActive),
+            RejectedCount = completionRows.Count(IsServiceRegisterRejected),
+            RetiredCount = completionRows.Count(IsServiceRegisterRetired),
+            NewCount = completionRows.Count(IsServiceRegisterNew),
+            EnterpriseCount = completionRows.Count(r => r.IsEnterprise),
+            DirectorateRows = directorateRows,
+            BusinessAreaRows = businessAreaRows,
+            ActiveCompletionRows = OrderCompletionRows(activeRows),
+            EnterpriseCompletionRows = OrderCompletionRows(completionRows.Where(r => r.IsEnterprise)),
+            RetiredCompletionRows = OrderCompletionRows(completionRows.Where(IsServiceRegisterRetired)),
+            NewCompletionRows = OrderCompletionRows(completionRows.Where(IsServiceRegisterNew)),
+            RejectedCompletionRows = OrderCompletionRows(completionRows.Where(IsServiceRegisterRejected))
         };
     }
 
@@ -753,6 +825,184 @@ public class ModernMonthlyReportService
         var d = (dimension ?? "all").Trim().ToLowerInvariant();
         return d is "mission" or "outcomes" or "priority" ? d : "all";
     }
+
+    private static ServiceRegisterProductCompletionRow BuildServiceRegisterProductCompletionRow(CMDBProduct product)
+    {
+        var hasPhase = product.PhaseId.HasValue;
+        var hasBusinessArea = product.BusinessAreas.Any();
+        var hasChannel = product.Channels.Any();
+        var hasUserGroup = product.UserGroups.Any();
+        var hasType = product.Types.Any();
+        var contactCount = product.Contacts.Count;
+        var hasAnyContact = contactCount > 0;
+        var hasServiceOwner = product.Contacts.Any(c =>
+            string.Equals(c.FipsContactRole?.Name, "Service Owner", StringComparison.OrdinalIgnoreCase));
+        var hasSro = product.Contacts.Any(c =>
+            string.Equals(c.FipsContactRole?.Name, "Senior Responsible Officer", StringComparison.OrdinalIgnoreCase));
+        var hasProductUrl = !string.IsNullOrWhiteSpace(product.ProductURL);
+
+        var businessAreaNames = product.BusinessAreas
+            .Select(ba => ba.FipsBusinessArea?.Name)
+            .Where(n => !string.IsNullOrWhiteSpace(n))
+            .Cast<string>()
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var directorateNames = product.BusinessAreas
+            .SelectMany(ba => ba.FipsBusinessArea?.BusinessAreaLookup?.DivisionBusinessAreas ?? Array.Empty<DivisionBusinessArea>())
+            .Select(dba => dba.Division?.Name)
+            .Where(n => !string.IsNullOrWhiteSpace(n))
+            .Cast<string>()
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (businessAreaNames.Count == 0)
+            businessAreaNames.Add("Not set");
+        if (directorateNames.Count == 0)
+            directorateNames.Add("Not set");
+
+        var missingFields = new List<string>();
+        if (!hasAnyContact) missingFields.Add("At least 1 contact");
+        if (!hasPhase) missingFields.Add("Phase");
+        if (!hasBusinessArea) missingFields.Add("Business area");
+        if (!hasChannel) missingFields.Add("At least 1 channel");
+        if (!hasUserGroup) missingFields.Add("At least 1 user group");
+        if (!hasType) missingFields.Add("At least 1 type");
+
+        var criteriaMet = 0;
+        if (hasAnyContact) criteriaMet++;
+        if (hasPhase) criteriaMet++;
+        if (hasBusinessArea) criteriaMet++;
+        if (hasChannel) criteriaMet++;
+        if (hasUserGroup) criteriaMet++;
+        if (hasType) criteriaMet++;
+        var completionPercent = (int)Math.Round((criteriaMet / 6m) * 100m, 0, MidpointRounding.AwayFromZero);
+
+        var missingOwnerOrSro = new List<string>();
+        if (!hasServiceOwner) missingOwnerOrSro.Add("Service owner");
+        if (!hasSro) missingOwnerOrSro.Add("Senior Responsible Officer");
+
+        var channelNames = product.Channels
+            .Select(c => c.FipsChannel?.Name)
+            .Where(n => !string.IsNullOrWhiteSpace(n))
+            .Cast<string>()
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var typeNames = product.Types
+            .Select(t => t.FipsType?.Name)
+            .Where(n => !string.IsNullOrWhiteSpace(n))
+            .Cast<string>()
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var phaseDisplay = string.IsNullOrWhiteSpace(product.Phase?.Name) ? "Not set" : product.Phase.Name.Trim();
+
+        return new ServiceRegisterProductCompletionRow
+        {
+            ProductId = product.Id,
+            UniqueId = product.UniqueID,
+            Title = product.Title,
+            StatusLabel = ServiceRegisterStatusLabel(product.Status),
+            IsEnterprise = product.IsEnterpriseService && product.Status == CMDBProductStatus.Active,
+            CompletionPercent = completionPercent,
+            MissingFields = missingFields.Count == 0 ? "None" : string.Join(", ", missingFields),
+            HasProductUrl = hasProductUrl,
+            ProductUrl = product.ProductURL,
+            ContactCount = contactCount,
+            HasPhase = hasPhase,
+            HasBusinessArea = hasBusinessArea,
+            HasChannel = hasChannel,
+            HasUserGroup = hasUserGroup,
+            HasType = hasType,
+            HasServiceOwner = hasServiceOwner,
+            HasSeniorResponsibleOfficer = hasSro,
+            MissingOwnerOrSro = missingOwnerOrSro.Count == 0 ? "None" : string.Join(", ", missingOwnerOrSro),
+            PhaseDisplay = phaseDisplay,
+            ChannelsDisplay = channelNames.Count == 0 ? "Not set" : string.Join(", ", channelNames),
+            TypesDisplay = typeNames.Count == 0 ? "Not set" : string.Join(", ", typeNames),
+            BusinessAreasDisplay = string.Join(", ", businessAreaNames),
+            DirectoratesDisplay = string.Join(", ", directorateNames),
+            BusinessAreaNames = businessAreaNames,
+            DirectorateNames = directorateNames
+        };
+    }
+
+    private static List<ServiceRegisterAreaSummaryRow> BuildServiceRegisterAreaSummaryRows(
+        List<ServiceRegisterProductCompletionRow> rows,
+        Func<ServiceRegisterProductCompletionRow, IEnumerable<string>> namesSelector)
+    {
+        var linked = new List<(string Name, ServiceRegisterProductCompletionRow Row)>();
+        foreach (var row in rows)
+        {
+            var names = namesSelector(row)
+                .Where(n => !string.IsNullOrWhiteSpace(n))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (names.Count == 0)
+                names.Add("Not set");
+            foreach (var name in names)
+                linked.Add((name.Trim(), row));
+        }
+
+        return linked
+            .GroupBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(g =>
+            {
+                var products = g.Select(x => x.Row).DistinctBy(r => r.ProductId).ToList();
+                return new ServiceRegisterAreaSummaryRow
+                {
+                    Name = g.Key,
+                    ProductCount = products.Count,
+                    ActiveCount = products.Count(IsServiceRegisterActive),
+                    RejectedCount = products.Count(IsServiceRegisterRejected),
+                    RetiredCount = products.Count(IsServiceRegisterRetired),
+                    NewCount = products.Count(IsServiceRegisterNew),
+                    EnterpriseCount = products.Count(r => r.IsEnterprise),
+                    AverageCompletionPercent = products.Count == 0
+                        ? 0m
+                        : Math.Round(products.Average(r => (decimal)r.CompletionPercent), 1, MidpointRounding.AwayFromZero)
+                };
+            })
+            .OrderByDescending(r => r.ProductCount)
+            .ThenBy(r => string.Equals(r.Name, "Not set", StringComparison.OrdinalIgnoreCase) ? "zzzzzz" : r.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private static int CompletionCriteriaMetCount(ServiceRegisterProductCompletionRow row)
+    {
+        var met = 0;
+        if (row.ContactCount > 0) met++;
+        if (row.HasPhase) met++;
+        if (row.HasBusinessArea) met++;
+        if (row.HasChannel) met++;
+        if (row.HasUserGroup) met++;
+        if (row.HasType) met++;
+        return met;
+    }
+
+    private static string ServiceRegisterStatusLabel(CMDBProductStatus status) => status switch
+    {
+        CMDBProductStatus.Active => "Active",
+        CMDBProductStatus.Rejected => "Rejected",
+        CMDBProductStatus.Inactive => "Retired",
+        CMDBProductStatus.New => "New",
+        _ => "New"
+    };
+
+    private static bool IsServiceRegisterActive(ServiceRegisterProductCompletionRow row) =>
+        string.Equals(row.StatusLabel, "Active", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsServiceRegisterRejected(ServiceRegisterProductCompletionRow row) =>
+        string.Equals(row.StatusLabel, "Rejected", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsServiceRegisterRetired(ServiceRegisterProductCompletionRow row) =>
+        string.Equals(row.StatusLabel, "Retired", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsServiceRegisterNew(ServiceRegisterProductCompletionRow row) =>
+        string.Equals(row.StatusLabel, "New", StringComparison.OrdinalIgnoreCase);
 
     private static (string Name, string? CssClass) ResolveResourceBand(decimal value, List<ResourcingBandViewModel> bands)
     {

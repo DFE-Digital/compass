@@ -13,4 +13,6 @@ public sealed class ServiceRegisterSyncSettingsViewModel
     public bool CanSyncFromCmdb { get; init; }
 
     public FipsCompletionImportResult? LastImportResult { get; init; }
+
+    public FipsCompletionImportResult? LastStrapiImportResult { get; init; }
 }

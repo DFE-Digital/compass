@@ -1,0 +1,52 @@
+@using Compass.Models.Modern.Work
+@using Compass.ViewModels.Modern
+@model ModernServiceRegisterReportViewModel
+@{
+  var m = Model ?? new ModernServiceRegisterReportViewModel();
+  var toggleIdPrefix = ViewData["ToggleIdPrefix"] as string ?? "sr-completion";
+  var sections = new[]
+  {
+    ("Active", "Active products", m.ActiveCompletionRows, "dfe-f-badge--green"),
+    ("Enterprise", "Enterprise services", m.EnterpriseCompletionRows, "dfe-f-badge--blue"),
+    ("Retired", "Retired products", m.RetiredCompletionRows, "dfe-f-badge--grey"),
+    ("New", "New products", m.NewCompletionRows, "dfe-f-badge--grey"),
+    ("Rejected", "Rejected products", m.RejectedCompletionRows, "dfe-f-badge--red")
+  };
+}
+<div class="dfe-f-toggle-group govuk-!-margin-bottom-2" data-module="dfe-f-toggle-group">
+  <div class="dfe-f-toggle-group__controls govuk-body-s govuk-!-margin-bottom-2">
+    <button type="button" class="dfe-f-toggle-group__action" data-dfe-toggle-expand-all>Expand all</button>
+    <span class="dfe-f-toggle-group__separator" aria-hidden="true"> · </span>
+    <button type="button" class="dfe-f-toggle-group__action" data-dfe-toggle-collapse-all>Collapse all</button>
+  </div>
+  <div class="dfe-f-toggle-group__items">
+    @for (var i = 0; i < sections.Length; i++)
+    {
+      var (key, title, rows, badgeModifier) = sections[i];
+      var toggleId = $"{toggleIdPrefix}-{key.ToLowerInvariant()}";
+      var contentId = $"{toggleId}-content";
+      var expanded = key == "Active";
+      <div class="dfe-f-toggle govuk-!-margin-bottom-2" data-module="dfe-f-toggle">
+        <div class="dfe-f-toggle__title-wrapper">
+          <h3 class="dfe-f-toggle__heading">
+            <button type="button" class="dfe-f-toggle__button" aria-expanded="@(expanded ? "true" : "false")" aria-controls="@contentId" id="@($"{toggleId}-button")">
+              <span class="dfe-f-toggle__icon" aria-hidden="true"></span>
+              <span class="dfe-f-toggle__title">@title</span>
+              <span class="mr-toggle-panel__meta">
+                <span class="dfe-f-badge dfe-f-badge--small @badgeModifier">@rows.Count</span>
+              </span>
+            </button>
+          </h3>
+        </div>
+        <div id="@contentId" class="dfe-f-toggle__content"@if (!expanded) { <text> hidden</text> }>
+          <div class="dfe-f-toggle__body govuk-body">
+            <p class="govuk-body-s dfe-c-text-muted govuk-!-margin-bottom-3">
+              Completion from: at least 1 contact, phase, business area, at least 1 channel, at least 1 user group, at least 1 type.
+            </p>
+            @await Html.PartialAsync("_ServiceRegisterCompletionTable", rows)
+          </div>
+        </div>
+      </div>
+    }
+  </div>
+</div>

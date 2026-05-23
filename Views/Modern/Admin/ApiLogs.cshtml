@@ -1,0 +1,145 @@
+@model List<Compass.Models.ApiRequestLog>
+@using Compass.Models
+@{
+    ViewData["Title"] = "API request logs";
+    var tokens = ViewBag.Tokens as List<ApiToken>;
+    var selectedTokenId = ViewBag.SelectedTokenId as int?;
+}
+
+@section Breadcrumbs {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernAdmin")">Admin</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernAdmin", new { panel = "api-tokens" })">API tokens</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">Request logs</li>
+}
+
+@await Html.PartialAsync("_ModernPageHeader", new Compass.ViewModels.Modern.ModernPageHeaderViewModel {
+  Caption = "API",
+  Title = "Request logs",
+  Lede = new Microsoft.AspNetCore.Html.HtmlString("<p class=\"govuk-body govuk-!-margin-bottom-0\">Recent authenticated API calls (last 1,000). Expand a row to view request and response bodies.</p>")
+})
+
+<div class="govuk-grid-row govuk-!-margin-bottom-4">
+ <div class="govuk-grid-column-one-third">
+  <div class="dfe-c-card dfe-c-card--plain">
+   <h2 class="govuk-heading-s">Filter</h2>
+   <form method="get" action="@Url.Action("ApiLogs", "ModernAdmin")">
+    <div class="govuk-form-group">
+     <label class="govuk-label" for="tokenId">API token</label>
+     <select class="govuk-select" id="tokenId" name="tokenId">
+      <option value="">All tokens</option>
+      @foreach (var token in tokens ?? new List<ApiToken>())
+      {
+        <option value="@token.Id" selected="@(token.Id == selectedTokenId)">@token.Name</option>
+      }
+     </select>
+    </div>
+    <button type="submit" class="govuk-button govuk-!-margin-bottom-0">Apply</button>
+   </form>
+  </div>
+ </div>
+ <div class="govuk-grid-column-two-thirds">
+  <dl class="govuk-summary-list">
+   <div class="govuk-summary-list__row">
+    <dt class="govuk-summary-list__key">Total shown</dt>
+    <dd class="govuk-summary-list__value">@Model.Count</dd>
+   </div>
+   <div class="govuk-summary-list__row">
+    <dt class="govuk-summary-list__key">Successful</dt>
+    <dd class="govuk-summary-list__value">@Model.Count(l => l.IsSuccess)</dd>
+   </div>
+   <div class="govuk-summary-list__row">
+    <dt class="govuk-summary-list__key">Failed</dt>
+    <dd class="govuk-summary-list__value">@Model.Count(l => !l.IsSuccess)</dd>
+   </div>
+  </dl>
+ </div>
+</div>
+
+@if (!Model.Any())
+{
+ <div class="govuk-inset-text">No API requests have been logged yet.</div>
+}
+else
+{
+ <div class="api-logs-list">
+  @foreach (var log in Model)
+  {
+    var summaryId = $"api-log-summary-{log.Id}";
+    var pathDisplay = log.RequestPath + (log.QueryString ?? "");
+    <details class="govuk-details api-logs-list__item">
+     <summary class="govuk-details__summary api-logs-list__summary">
+      <span class="govuk-details__summary-text api-logs-list__summary-text">
+        <span class="api-logs-list__when">@log.RequestTimestamp.ToString("d MMM yyyy HH:mm:ss")</span>
+        <span class="api-logs-list__token">@(log.ApiToken?.Name ?? "—")</span>
+        <code class="api-logs-list__method">@log.HttpMethod</code>
+        <code class="api-logs-list__path">@pathDisplay</code>
+        @if (log.IsSuccess)
+        {
+          <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--green">@log.ResponseStatusCode</span>
+        }
+        else
+        {
+          <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--red">@log.ResponseStatusCode</span>
+        }
+        <span class="api-logs-list__ms">@log.ResponseTimeMs ms</span>
+      </span>
+     </summary>
+     <div class="govuk-details__text api-logs-list__body" id="@summaryId">
+      <dl class="govuk-summary-list govuk-summary-list--no-border govuk-!-margin-bottom-4">
+       <div class="govuk-summary-list__row">
+        <dt class="govuk-summary-list__key">Token</dt>
+        <dd class="govuk-summary-list__value">@(log.ApiToken?.Name ?? "—")</dd>
+       </div>
+       <div class="govuk-summary-list__row">
+        <dt class="govuk-summary-list__key">IP address</dt>
+        <dd class="govuk-summary-list__value">@(log.IpAddress ?? "—")</dd>
+       </div>
+       <div class="govuk-summary-list__row">
+        <dt class="govuk-summary-list__key">User agent</dt>
+        <dd class="govuk-summary-list__value api-logs-list__wrap">@(log.UserAgent ?? "—")</dd>
+       </div>
+       <div class="govuk-summary-list__row">
+        <dt class="govuk-summary-list__key">Response time</dt>
+        <dd class="govuk-summary-list__value">@log.ResponseTimeMs ms</dd>
+       </div>
+      </dl>
+
+      @if (!string.IsNullOrWhiteSpace(log.ErrorMessage))
+      {
+        <div class="govuk-error-summary govuk-!-margin-bottom-4" role="alert">
+         <h2 class="govuk-error-summary__title">Error</h2>
+         <div class="govuk-error-summary__body">@log.ErrorMessage</div>
+        </div>
+      }
+
+      <h3 class="govuk-heading-s">Request</h3>
+      <p class="govuk-body-s govuk-hint"><code>@log.HttpMethod</code> <code>@pathDisplay</code></p>
+      @if (!string.IsNullOrWhiteSpace(log.RequestBody))
+      {
+        <pre class="api-logs-list__payload">@log.RequestBody</pre>
+      }
+      else
+      {
+        <p class="govuk-body-s dfe-c-text-muted">No request body recorded.</p>
+      }
+
+      <h3 class="govuk-heading-s govuk-!-margin-top-4">Response</h3>
+      <p class="govuk-body-s govuk-hint">Status @log.ResponseStatusCode · @(log.IsSuccess ? "Success" : "Failed")</p>
+      @if (!string.IsNullOrWhiteSpace(log.ResponseBody))
+      {
+        <pre class="api-logs-list__payload">@log.ResponseBody</pre>
+      }
+      else
+      {
+        <p class="govuk-body-s dfe-c-text-muted">No response body recorded.</p>
+      }
+     </div>
+    </details>
+  }
+ </div>
+}
+
+<p class="govuk-body govuk-!-margin-top-4">
+ <a class="govuk-link" href="@Url.Action("Index", "ModernAdmin", new { panel = "api-tokens" })">Back to API tokens</a>
+</p>

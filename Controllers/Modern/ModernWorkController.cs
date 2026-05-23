@@ -25,7 +25,7 @@ namespace Compass.Controllers.Modern;
 /// <summary>Modern work UI at <c>/modern/work/*</c>, backed by Compass <see cref="Project"/> data.</summary>
 [Authorize]
 [Route("modern/work")]
-public class ModernWorkController : Controller
+public partial class ModernWorkController : Controller
 {
     private const int WorkGroupingRegisterPageSize = 25;
     private const string DefaultBusinessAreaCookieName = "compass_work_default_ba";
@@ -88,6 +88,7 @@ public class ModernWorkController : Controller
     private readonly IRaidRiskEditorFormService _raidRiskEditorForm;
     private readonly IRaidIssueEditorFormService _raidIssueEditorForm;
     private readonly IPermissionService _permissions;
+    private readonly IWorkServiceRegisterLinkService _workServiceRegisterLinks;
 
     public ModernWorkController(
         CompassDbContext context,
@@ -98,7 +99,8 @@ public class ModernWorkController : Controller
         ILogger<ModernWorkController> logger,
         IRaidRiskEditorFormService raidRiskEditorForm,
         IRaidIssueEditorFormService raidIssueEditorForm,
-        IPermissionService permissions)
+        IPermissionService permissions,
+        IWorkServiceRegisterLinkService workServiceRegisterLinks)
     {
         _context = context;
         _modernWork = modernWork;
@@ -109,6 +111,7 @@ public class ModernWorkController : Controller
         _raidRiskEditorForm = raidRiskEditorForm;
         _raidIssueEditorForm = raidIssueEditorForm;
         _permissions = permissions;
+        _workServiceRegisterLinks = workServiceRegisterLinks;
     }
 
     private static readonly HashSet<string> ValidMilestoneStatuses = new(StringComparer.OrdinalIgnoreCase)
@@ -1474,6 +1477,26 @@ public class ModernWorkController : Controller
 
         if (work == null)
             return NotFound();
+
+        if (ViewBag.ShowFipsDatabaseServiceRegister as bool? == true)
+        {
+            ViewBag.WorkServiceRegisterLinkCount =
+                await _workServiceRegisterLinks.CountLinksForWorkItemAsync(id, cancellationToken);
+            ViewBag.CanLinkWorkServiceRegister =
+                await _workServiceRegisterLinks.CanLinkFromWorkItemAsync(id, userEmail, cancellationToken);
+            var srLinks = await _workServiceRegisterLinks.GetLinksForWorkItemAsync(
+                id,
+                productId => Url.Action("FipsProduct", "ModernManage", new { id = productId }) ?? "#",
+                cancellationToken);
+            ViewBag.WorkServiceRegisterLinksPanel = new Compass.ViewModels.Modern.WorkServiceRegisterLinksPanelViewModel
+            {
+                WorkItemId = id,
+                CanLink = ViewBag.CanLinkWorkServiceRegister as bool? == true,
+                Links = srLinks,
+                PickProductsUrl = Url.Action(nameof(PickServiceRegisterProducts), new { id }) ?? "",
+                LinkUrl = Url.Action(nameof(LinkServiceRegisterProduct), new { id }) ?? "",
+            };
+        }
 
         return View("~/Views/Modern/Work/Detail.cshtml", work);
     }
