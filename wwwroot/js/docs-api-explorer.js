@@ -738,6 +738,8 @@
         setStatus('Sending', '', 'busy');
 
         var t0 = performance.now();
+        // Cross-origin targets must use the server proxy (browser CSP connect-src). Same-origin
+        // session-cookie auth uses a direct fetch so cookies are sent by the browser.
         var useProxy = isCrossOrigin(base);
 
         function finish() {

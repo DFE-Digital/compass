@@ -623,8 +623,6 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
-app.UseStatusCodePagesWithReExecute("/Home/NotFound");
-
 // Configure HTTPS redirection
 // Skip in development since we're running on HTTP only (localhost:5500)
 if (!app.Environment.IsDevelopment())
@@ -632,6 +630,8 @@ if (!app.Environment.IsDevelopment())
     app.UseHttpsRedirection();
 }
 app.UseStaticFiles();
+// After static files so missing /css|/js assets return 404, not an HTML error page (breaks MIME types + CSP).
+app.UseStatusCodePagesWithReExecute("/Home/NotFound");
 
 // Add security headers
 app.Use(async (context, next) =>
@@ -679,6 +679,9 @@ app.Use(async (context, next) =>
             connectSrc += " " + host;
     }
     connectSrc += " https://*.education.gov.uk https://*.azurewebsites.net";
+    var requestOrigin = $"{req.Scheme}://{req.Host.Value}";
+    if (!connectSrc.Contains(requestOrigin, StringComparison.OrdinalIgnoreCase))
+        connectSrc += " " + requestOrigin;
 
     if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Test"))
     {
@@ -693,7 +696,7 @@ app.Use(async (context, next) =>
         "https://www.clarity.ms https://*.clarity.ms https://c.bing.com";
     var csp =
         $"default-src {defaultSrc}; " +
-        $"script-src 'self' 'nonce-{nonce}' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://cdn.datatables.net https://www.clarity.ms https://*.clarity.ms https://www.googletagmanager.com; " +
+        $"script-src 'self' 'nonce-{nonce}' 'strict-dynamic' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://cdn.datatables.net https://www.clarity.ms https://*.clarity.ms https://www.googletagmanager.com; " +
         "style-src 'self' 'unsafe-inline' https://rsms.me https://fonts.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://cdn.datatables.net; " +
         "img-src 'self' data: https:; " +
         "font-src 'self' data: https://rsms.me https://fonts.gstatic.com https://cdnjs.cloudflare.com; " +
