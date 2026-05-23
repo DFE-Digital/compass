@@ -37,6 +37,13 @@ if (args.Length > 0 && args[0] == "--update-retired-products")
     return;
 }
 
+// Bulk-import legacy Strapi export JSON into service register (CMDB products)
+if (args.Length > 0 && args[0] == "--strapi-legacy-import")
+{
+    await Compass.Scripts.RunStrapiLegacyImport.Main(args);
+    return;
+}
+
 // Check for database cleanup command
 if (args.Length > 0 && args[0] == "--clean-database")
 {
@@ -147,6 +154,29 @@ if (args.Length > 0 && args[0] == "--seed-risk-tiers")
     }
 
     await Compass.SeedRiskTiers.RunAsync(environment);
+    return;
+}
+
+if (args.Length > 0 && args[0] == "--seed-fips-user-groups")
+{
+    var environment = "Development";
+    string? jsonFilePath = null;
+    var fromCms = false;
+    var deactivateMissing = false;
+
+    for (var i = 1; i < args.Length; i++)
+    {
+        if (args[i] == "--environment" && i + 1 < args.Length)
+            environment = args[++i];
+        else if (args[i] == "--json-file" && i + 1 < args.Length)
+            jsonFilePath = args[++i];
+        else if (args[i] == "--from-cms")
+            fromCms = true;
+        else if (args[i] == "--deactivate-missing")
+            deactivateMissing = true;
+    }
+
+    await Compass.SeedFipsUserGroups.RunAsync(environment, jsonFilePath, fromCms, deactivateMissing);
     return;
 }
 
@@ -372,6 +402,11 @@ builder.Services.AddDbContext<CompassDbContext>((sp, options) =>
         .AddInterceptors(sp.GetRequiredService<Compass.Infrastructure.WorkRegisterSqlDiagnosticsInterceptor>()));
 
 // Register HTTP clients for API services
+builder.Services.Configure<Compass.Configuration.DocsApiExplorerOptions>(
+    builder.Configuration.GetSection(Compass.Configuration.DocsApiExplorerOptions.SectionName));
+builder.Services.AddHttpClient(nameof(Compass.Services.Docs.ApiExplorerRequestProxyService));
+builder.Services.AddScoped<Compass.Services.Docs.IApiExplorerRequestProxyService, Compass.Services.Docs.ApiExplorerRequestProxyService>();
+
 builder.Services.AddHttpClient<ICmsApiService, CmsApiService>();
 builder.Services.AddHttpClient<IStandardsCmsApiService, StandardsCmsApiService>();
 builder.Services.AddHttpClient<IProductsApiService, ProductsApiService>(client =>
@@ -417,11 +452,13 @@ builder.Services.AddHttpClient<IServiceAssessmentApiService, ServiceAssessmentAp
 
 // Register services
 builder.Services.AddSingleton<SubNavExportResolver>();
+builder.Services.AddSingleton<SubNavDataAccessResolver>();
 builder.Services.AddScoped<IReturnStatusService, ReturnStatusService>();
 builder.Services.AddScoped<IMonthlyUpdateService, MonthlyUpdateService>();
 builder.Services.AddScoped<IPerformanceReportingEligibilityService, PerformanceReportingEligibilityService>();
 builder.Services.AddScoped<IGraphService, GraphService>();
 builder.Services.AddScoped<IApiTokenService, ApiTokenService>();
+builder.Services.AddScoped<Compass.Services.Api.IApiTokenPortalService, Compass.Services.Api.ApiTokenPortalService>();
 builder.Services.AddScoped<IAuditLogger, AuditLogger>();
 builder.Services.AddScoped<IPermissionService, PermissionService>();
 builder.Services.AddScoped<IBusinessAreaAdminService, BusinessAreaAdminService>();
@@ -447,6 +484,7 @@ builder.Services.Configure<Compass.Configuration.WorkRegisterDiagnosticsOptions>
     builder.Configuration.GetSection(Compass.Configuration.WorkRegisterDiagnosticsOptions.SectionName));
 builder.Services.AddSingleton<Compass.Services.WorkRegisterPerfFileLog>();
 builder.Services.AddScoped<Compass.Services.Modern.IModernWorkService, Compass.Services.Modern.ModernWorkService>();
+builder.Services.AddScoped<Compass.Services.Modern.IWorkServiceRegisterLinkService, Compass.Services.Modern.WorkServiceRegisterLinkService>();
 builder.Services.AddScoped<Compass.Services.Modern.IWorkScopedExcelExportService, Compass.Services.Modern.WorkScopedExcelExportService>();
 builder.Services.AddScoped<ModernMonthlyReportService>();
 builder.Services.AddScoped<ModernRaidReviewProgressService>();
@@ -475,8 +513,11 @@ builder.Services.AddScoped<Compass.Services.Fips.IFipsSyncOrchestrator, Compass.
 builder.Services.AddScoped<Compass.Services.Fips.IFipsCmdbProductSyncService, Compass.Services.Fips.FipsCmdbProductSyncService>();
 builder.Services.AddScoped<Compass.Services.Fips.IFipsProductWriteService, Compass.Services.Fips.FipsProductWriteService>();
 builder.Services.AddScoped<Compass.Services.Fips.IFipsCompletionBulkImportService, Compass.Services.Fips.FipsCompletionBulkImportService>();
+builder.Services.AddScoped<Compass.Services.Fips.IFipsStrapiLegacyImportService, Compass.Services.Fips.FipsStrapiLegacyImportService>();
 builder.Services.AddScoped<Compass.Services.Fips.IFipsBusinessAreaLookupSyncService, Compass.Services.Fips.FipsBusinessAreaLookupSyncService>();
 builder.Services.AddHttpClient<Compass.Services.Aiss.IAissSummaryService, Compass.Services.Aiss.AissSummaryService>()
+    .SetHandlerLifetime(TimeSpan.FromMinutes(5));
+builder.Services.AddHttpClient<Compass.Services.Aiss.IAissProductAccessibilityService, Compass.Services.Aiss.AissProductAccessibilityService>()
     .SetHandlerLifetime(TimeSpan.FromMinutes(5));
 
 builder.Services.AddHttpContextAccessor();
@@ -582,8 +623,6 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
-app.UseStatusCodePagesWithReExecute("/Home/NotFound");
-
 // Configure HTTPS redirection
 // Skip in development since we're running on HTTP only (localhost:5500)
 if (!app.Environment.IsDevelopment())
@@ -591,6 +630,8 @@ if (!app.Environment.IsDevelopment())
     app.UseHttpsRedirection();
 }
 app.UseStaticFiles();
+// After static files so missing /css|/js assets return 404, not an HTML error page (breaks MIME types + CSP).
+app.UseStatusCodePagesWithReExecute("/Home/NotFound");
 
 // Add security headers
 app.Use(async (context, next) =>
@@ -629,6 +670,19 @@ app.Use(async (context, next) =>
         "https://web.vortex.data.microsoft.com " +
         "https://*.livediagnostics.monitor.azure.com wss://*.livediagnostics.monitor.azure.com";
     // Local / non-prod: same as Development launch profile and Properties/launchSettings "Test" profile.
+    var apiExplorerHosts = app.Configuration
+        .GetSection(Compass.Configuration.DocsApiExplorerOptions.SectionName)
+        .Get<Compass.Configuration.DocsApiExplorerOptions>();
+    if (apiExplorerHosts != null)
+    {
+        foreach (var host in apiExplorerHosts.AllConnectHosts())
+            connectSrc += " " + host;
+    }
+    connectSrc += " https://*.education.gov.uk https://*.azurewebsites.net";
+    var requestOrigin = $"{req.Scheme}://{req.Host.Value}";
+    if (!connectSrc.Contains(requestOrigin, StringComparison.OrdinalIgnoreCase))
+        connectSrc += " " + requestOrigin;
+
     if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Test"))
     {
         connectSrc += " ws://localhost:* ws://127.0.0.1:* wss://localhost:* wss://127.0.0.1:*";
@@ -642,7 +696,7 @@ app.Use(async (context, next) =>
         "https://www.clarity.ms https://*.clarity.ms https://c.bing.com";
     var csp =
         $"default-src {defaultSrc}; " +
-        $"script-src 'self' 'nonce-{nonce}' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://cdn.datatables.net https://www.clarity.ms https://*.clarity.ms https://www.googletagmanager.com; " +
+        $"script-src 'self' 'nonce-{nonce}' 'strict-dynamic' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://cdn.datatables.net https://www.clarity.ms https://*.clarity.ms https://www.googletagmanager.com; " +
         "style-src 'self' 'unsafe-inline' https://rsms.me https://fonts.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://cdn.datatables.net; " +
         "img-src 'self' data: https:; " +
         "font-src 'self' data: https://rsms.me https://fonts.gstatic.com https://cdnjs.cloudflare.com; " +
@@ -750,6 +804,9 @@ using (var scope = app.Services.CreateScope())
         // Repair: Feature.AccessMode + FeatureUserAllows when history says applied but objects are missing (restored DB, etc.)
         await EnsureFeatureAccessModeAndUserAllowAsync(context, logger);
 
+        // Repair: API token self-service tables when AddApiTokenSelfService was recorded but empty (generated with --no-build).
+        await EnsureApiTokenSelfServiceTablesAsync(context, logger);
+
         // Seed statement templates if they don't exist
         await SeedStatementTemplatesAsync(context);
 
@@ -794,6 +851,89 @@ app.Run();
 /// Ensures Compass notification settings / email log tables exist when <see cref="Compass.Migrations.AddCompassNotificationManagement"/>
 /// did not run (missing from migration history, restored DB, etc.).
 /// </summary>
+/// <summary>
+/// Ensures API token self-service schema exists when <see cref="Compass.Migrations.AddApiTokenSelfService"/>
+/// was applied as an empty migration (e.g. generated with --no-build before models compiled).
+/// </summary>
+static async Task EnsureApiTokenSelfServiceTablesAsync(CompassDbContext context, ILogger logger)
+{
+    try
+    {
+        await context.Database.ExecuteSqlRawAsync("""
+            IF COL_LENGTH(N'dbo.ApiTokens', N'OwnerEmail') IS NULL
+                ALTER TABLE [dbo].[ApiTokens] ADD [OwnerEmail] nvarchar(256) NULL;
+            IF COL_LENGTH(N'dbo.ApiTokens', N'Environment') IS NULL
+                ALTER TABLE [dbo].[ApiTokens] ADD [Environment] nvarchar(10) NULL;
+            IF COL_LENGTH(N'dbo.ApiTokens', N'ProjectSlug') IS NULL
+                ALTER TABLE [dbo].[ApiTokens] ADD [ProjectSlug] nvarchar(50) NULL;
+            IF COL_LENGTH(N'dbo.ApiTokens', N'AccessTier') IS NULL
+                ALTER TABLE [dbo].[ApiTokens] ADD [AccessTier] nvarchar(20) NULL;
+            IF COL_LENGTH(N'dbo.ApiTokens', N'IsSelfService') IS NULL
+                ALTER TABLE [dbo].[ApiTokens] ADD [IsSelfService] bit NOT NULL CONSTRAINT [DF_ApiTokens_IsSelfService] DEFAULT 0;
+
+            IF OBJECT_ID(N'dbo.ApiTokenRequests', N'U') IS NULL
+            BEGIN
+                CREATE TABLE [dbo].[ApiTokenRequests] (
+                    [Id] int NOT NULL IDENTITY(1,1),
+                    [RequestorEmail] nvarchar(256) NOT NULL,
+                    [Environment] nvarchar(10) NOT NULL,
+                    [ProjectSlug] nvarchar(50) NOT NULL,
+                    [Justification] nvarchar(2000) NULL,
+                    [Status] int NOT NULL,
+                    [PermissionsJson] nvarchar(max) NOT NULL,
+                    [IsReadOnlyAllData] bit NOT NULL,
+                    [ReviewedByEmail] nvarchar(256) NULL,
+                    [ReviewedAt] datetime2 NULL,
+                    [ReviewNotes] nvarchar(2000) NULL,
+                    [IssuedApiTokenId] int NULL,
+                    [CreatedAt] datetime2 NOT NULL,
+                    CONSTRAINT [PK_ApiTokenRequests] PRIMARY KEY CLUSTERED ([Id]),
+                    CONSTRAINT [FK_ApiTokenRequests_ApiTokens_IssuedApiTokenId] FOREIGN KEY ([IssuedApiTokenId])
+                        REFERENCES [dbo].[ApiTokens]([Id]) ON DELETE SET NULL
+                );
+            END
+
+            IF OBJECT_ID(N'dbo.ApiTokenMembers', N'U') IS NULL
+            BEGIN
+                CREATE TABLE [dbo].[ApiTokenMembers] (
+                    [Id] int NOT NULL IDENTITY(1,1),
+                    [ApiTokenId] int NOT NULL,
+                    [UserEmail] nvarchar(256) NOT NULL,
+                    [AddedByEmail] nvarchar(256) NOT NULL,
+                    [AddedAt] datetime2 NOT NULL,
+                    CONSTRAINT [PK_ApiTokenMembers] PRIMARY KEY CLUSTERED ([Id]),
+                    CONSTRAINT [FK_ApiTokenMembers_ApiTokens_ApiTokenId] FOREIGN KEY ([ApiTokenId])
+                        REFERENCES [dbo].[ApiTokens]([Id]) ON DELETE CASCADE
+                );
+            END
+
+            IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_ApiTokens_Name' AND object_id = OBJECT_ID(N'dbo.ApiTokens'))
+                CREATE UNIQUE INDEX [IX_ApiTokens_Name] ON [dbo].[ApiTokens]([Name]);
+            IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_ApiTokens_OwnerEmail' AND object_id = OBJECT_ID(N'dbo.ApiTokens'))
+                CREATE NONCLUSTERED INDEX [IX_ApiTokens_OwnerEmail] ON [dbo].[ApiTokens]([OwnerEmail]);
+            IF OBJECT_ID(N'dbo.ApiTokenMembers', N'U') IS NOT NULL
+               AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_ApiTokenMembers_ApiTokenId_UserEmail' AND object_id = OBJECT_ID(N'dbo.ApiTokenMembers'))
+                CREATE UNIQUE INDEX [IX_ApiTokenMembers_ApiTokenId_UserEmail] ON [dbo].[ApiTokenMembers]([ApiTokenId], [UserEmail]);
+            IF OBJECT_ID(N'dbo.ApiTokenRequests', N'U') IS NOT NULL
+               AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_ApiTokenRequests_Status' AND object_id = OBJECT_ID(N'dbo.ApiTokenRequests'))
+                CREATE NONCLUSTERED INDEX [IX_ApiTokenRequests_Status] ON [dbo].[ApiTokenRequests]([Status]);
+            IF OBJECT_ID(N'dbo.ApiTokenRequests', N'U') IS NOT NULL
+               AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_ApiTokenRequests_RequestorEmail' AND object_id = OBJECT_ID(N'dbo.ApiTokenRequests'))
+                CREATE NONCLUSTERED INDEX [IX_ApiTokenRequests_RequestorEmail] ON [dbo].[ApiTokenRequests]([RequestorEmail]);
+            IF OBJECT_ID(N'dbo.ApiTokenRequests', N'U') IS NOT NULL
+               AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_ApiTokenRequests_IssuedApiTokenId' AND object_id = OBJECT_ID(N'dbo.ApiTokenRequests'))
+                CREATE NONCLUSTERED INDEX [IX_ApiTokenRequests_IssuedApiTokenId] ON [dbo].[ApiTokenRequests]([IssuedApiTokenId]);
+            """);
+        logger.LogInformation("Ensured API token self-service tables and columns (if missing).");
+    }
+    catch (Microsoft.Data.SqlClient.SqlException ex)
+    {
+        logger.LogWarning(ex,
+            "Could not ensure API token self-service schema (non-fatal if already exists): {Message}",
+            ex.Message);
+    }
+}
+
 static async Task EnsureCompassNotificationTablesAsync(
     CompassDbContext context,
     ILogger logger)

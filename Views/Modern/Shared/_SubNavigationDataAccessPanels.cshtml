@@ -1,0 +1,112 @@
+@using Compass.ViewModels.Modern
+@{
+    var access = ViewBag.SubNavDataAccess as SubNavDataAccessOptions;
+    if (access is not { ShowToolbar: true })
+    {
+        return;
+    }
+
+    var exportPanelId = ViewData["SubNavDataAccessExportPanelId"] as string
+        ?? $"subnav-data-export-{Guid.NewGuid():N}";
+    var apiPanelId = ViewData["SubNavDataAccessApiPanelId"] as string
+        ?? $"subnav-data-api-{Guid.NewGuid():N}";
+    var export = access.Export;
+    var api = access.Api;
+}
+<div class="subnav-data-access-panels">
+  @if (access.ShowExport && export != null)
+  {
+    <div id="@exportPanelId"
+         class="subnav-data-access-panel subnav-data-access-panel--export"
+         data-subnav-panel="export"
+         role="region"
+         aria-labelledby="@($"{exportPanelId}-title")"
+         hidden>
+      <h2 class="govuk-heading-s govuk-!-margin-bottom-2" id="@($"{exportPanelId}-title")">@export.Title</h2>
+      @if (!string.IsNullOrWhiteSpace(export.Intro))
+      {
+        <p class="govuk-body govuk-!-margin-bottom-3">@export.Intro</p>
+      }
+      <ul class="govuk-list subnav-data-access-panel__links">
+        @foreach (var link in export.Links)
+        {
+          <li class="subnav-data-access-panel__link-item">
+            <a class="govuk-link govuk-link--no-visited-state subnav-data-access-panel__link"
+               href="@link.Href"
+               @if (link.UseDownloadModal)
+               {
+                 <text>data-report-download data-generating-modal-title="@(link.DownloadModalTitle ?? "Generating export")" data-generating-modal-hint="Please wait — your download will start when the file is ready."</text>
+               }>
+              @link.Label
+            </a>
+            @if (!string.IsNullOrWhiteSpace(link.Description))
+            {
+              <p class="govuk-body-s govuk-!-margin-top-1 govuk-!-margin-bottom-0 govuk-hint">@link.Description</p>
+            }
+          </li>
+        }
+      </ul>
+    </div>
+  }
+  @if (access.ShowApi && api != null)
+  {
+    <div id="@apiPanelId"
+         class="subnav-data-access-panel subnav-data-access-panel--api"
+         data-subnav-panel="api"
+         role="region"
+         aria-labelledby="@($"{apiPanelId}-title")"
+         hidden>
+      <h2 class="govuk-heading-s govuk-!-margin-bottom-2" id="@($"{apiPanelId}-title")">@api.Title</h2>
+      @if (!string.IsNullOrWhiteSpace(api.Intro))
+      {
+        <p class="govuk-body govuk-!-margin-bottom-3">@api.Intro</p>
+      }
+      @if (api.HasEndpoints)
+      {
+        <p class="govuk-body-s govuk-!-margin-bottom-2">Use these endpoints with a Bearer token. Base URL: <code class="subnav-data-access-panel__code">@(api.BaseUrl ?? "")</code></p>
+        <ul class="govuk-list subnav-data-access-panel__endpoints">
+          @foreach (var ep in api.Endpoints)
+          {
+            var fullPath = (api.BaseUrl ?? "").TrimEnd('/') + ep.Path;
+            <li class="subnav-data-access-panel__endpoint">
+              <div class="subnav-data-access-panel__endpoint-header">
+                <span class="govuk-tag govuk-tag--grey subnav-data-access-panel__method">@ep.Method</span>
+                <span class="govuk-!-font-weight-bold">@ep.Label</span>
+              </div>
+              <code class="subnav-data-access-panel__code subnav-data-access-panel__path">@fullPath</code>
+              @if (!string.IsNullOrWhiteSpace(ep.Scope))
+              {
+                <p class="govuk-body-s govuk-!-margin-top-1 govuk-!-margin-bottom-0">Scope: <code>@ep.Scope</code></p>
+              }
+              @if (!string.IsNullOrWhiteSpace(ep.Note))
+              {
+                <p class="govuk-body-s govuk-hint govuk-!-margin-top-1 govuk-!-margin-bottom-0">@ep.Note</p>
+              }
+            </li>
+          }
+        </ul>
+      }
+      <h3 class="govuk-heading-s govuk-!-margin-top-4 govuk-!-margin-bottom-2">Get an API key</h3>
+      <p class="govuk-body govuk-!-margin-bottom-2">
+        Create a personal access token and send it as <code>Authorization: Bearer &lt;token&gt;</code> on each request.
+      </p>
+      <ul class="govuk-list">
+        @if (!string.IsNullOrWhiteSpace(api.ApiTokensUrl))
+        {
+          <li><a class="govuk-link" href="@api.ApiTokensUrl">Request or manage API tokens</a></li>
+        }
+        @if (!string.IsNullOrWhiteSpace(api.DocsUrl))
+        {
+          <li><a class="govuk-link" href="@api.DocsUrl">API documentation</a></li>
+        }
+        @if (!string.IsNullOrWhiteSpace(api.ApiExplorerUrl))
+        {
+          <li><a class="govuk-link" href="@api.ApiExplorerUrl">API explorer</a></li>
+        }
+      </ul>
+      <p class="govuk-body-s govuk-hint govuk-!-margin-top-3 govuk-!-margin-bottom-0">
+        JSON responses use standard HTTP status codes. Filter and paginate using query parameters documented in the API reference.
+      </p>
+    </div>
+  }
+</div>

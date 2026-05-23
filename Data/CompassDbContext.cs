@@ -63,6 +63,8 @@ public partial class CompassDbContext : DbContext
     // API Management
     public DbSet<ApiToken> ApiTokens { get; set; }
     public DbSet<ApiTokenPermission> ApiTokenPermissions { get; set; }
+    public DbSet<ApiTokenRequest> ApiTokenRequests { get; set; }
+    public DbSet<ApiTokenMember> ApiTokenMembers { get; set; }
     public DbSet<ApiRequestLog> ApiRequestLogs { get; set; }
 
     // Operational reports
@@ -230,6 +232,7 @@ public partial class CompassDbContext : DbContext
     public DbSet<DirectorateLookup> DirectorateLookups { get; set; }
     public DbSet<RiskAppetiteLookup> RiskAppetiteLookups { get; set; }
     public DbSet<RagStatusLookup> RagStatusLookups { get; set; }
+    public DbSet<ResourceBandLookup> ResourceBandLookups { get; set; }
 
     // Project relationships
     public DbSet<ProjectStatusUpdate> ProjectStatusUpdates { get; set; }
@@ -1872,6 +1875,16 @@ public partial class CompassDbContext : DbContext
         modelBuilder.Entity<DeliveryPriority>()
             .HasIndex(dp => dp.SortOrder);
 
+        modelBuilder.Entity<ResourceBandLookup>()
+            .HasIndex(rb => rb.Name)
+            .IsUnique();
+
+        modelBuilder.Entity<ResourceBandLookup>()
+            .HasIndex(rb => rb.IsActive);
+
+        modelBuilder.Entity<ResourceBandLookup>()
+            .HasIndex(rb => rb.SortOrder);
+
         // User preferences
         modelBuilder.Entity<UserPreference>()
             .HasOne(up => up.User)
@@ -1902,6 +1915,35 @@ public partial class CompassDbContext : DbContext
 
         modelBuilder.Entity<ApiToken>()
             .HasIndex(at => at.ExpiresAt);
+
+        modelBuilder.Entity<ApiToken>()
+            .HasIndex(at => at.Name)
+            .IsUnique();
+
+        modelBuilder.Entity<ApiToken>()
+            .HasIndex(at => at.OwnerEmail);
+
+        modelBuilder.Entity<ApiTokenRequest>()
+            .HasOne(r => r.IssuedApiToken)
+            .WithMany()
+            .HasForeignKey(r => r.IssuedApiTokenId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        modelBuilder.Entity<ApiTokenRequest>()
+            .HasIndex(r => r.Status);
+
+        modelBuilder.Entity<ApiTokenRequest>()
+            .HasIndex(r => r.RequestorEmail);
+
+        modelBuilder.Entity<ApiTokenMember>()
+            .HasOne(m => m.ApiToken)
+            .WithMany(t => t.Members)
+            .HasForeignKey(m => m.ApiTokenId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<ApiTokenMember>()
+            .HasIndex(m => new { m.ApiTokenId, m.UserEmail })
+            .IsUnique();
 
         modelBuilder.Entity<ApiTokenPermission>()
             .HasOne(atp => atp.ApiToken)

@@ -5,8 +5,8 @@ namespace Compass.Models.Docs;
 /// on the <c>/docs/api</c> reference page and driven into the interactive
 /// <c>/docs/api-explorer</c> page. Every endpoint listed here is implemented
 /// in the codebase and verified to return data; outdated resources
-/// (Accessibility, Surveys, Statement Templates, Actions) are intentionally
-/// omitted.
+/// (Accessibility — managed in AISS; Surveys; Statement Templates; Actions) are intentionally
+/// omitted. Assumptions, dependencies, and near misses are planned REST resources.
 /// </summary>
 public static class ApiCatalogue
 {

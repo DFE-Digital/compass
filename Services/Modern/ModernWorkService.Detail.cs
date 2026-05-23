@@ -529,6 +529,8 @@ public partial class ModernWorkService
             "risks" => "risks",
             "issues" => "issues",
             "contacts" => "contacts",
+            "serviceregister" => "serviceregister",
+            "service-register" => "serviceregister",
             "governance" => "strategicalignment", // legacy tab param
             "strategicalignment" => "strategicalignment",
             "dependencies" => "dependencies",

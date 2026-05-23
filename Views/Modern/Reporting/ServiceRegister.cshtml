@@ -1,0 +1,111 @@
+@using Compass.Models.Modern.Work
+@using Compass.ViewModels.Modern
+@model ModernServiceRegisterReportViewModel
+@{
+    ViewData["Title"] = "Service register report";
+    var m = Model ?? new ModernServiceRegisterReportViewModel();
+    string StatusBadgeClass(string statusLabel) => statusLabel switch
+    {
+        "Active" => "dfe-f-badge dfe-f-badge--small dfe-f-badge--green",
+        "Rejected" => "dfe-f-badge dfe-f-badge--small dfe-f-badge--red",
+        "Retired" => "dfe-f-badge dfe-f-badge--small dfe-f-badge--grey",
+        _ => "dfe-f-badge dfe-f-badge--small dfe-f-badge--grey"
+    };
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernReporting")">Reporting</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">Service register report</li>
+}
+
+<div class="mr-dash">
+  @{
+    var lede = await Html.PartialAsync("_ReportingMutedBodyLede", "Service register summary and completion across active, enterprise, retired, new, and rejected products.");
+  }
+  @await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel
+  {
+    Caption = "Reporting",
+    Title = "Service register report",
+    Lede = lede
+  })
+
+  @if (TempData["ErrorMessage"] != null)
+  {
+    <div class="dfe-c-error-summary" role="alert" style="margin-bottom:1.5rem;">
+      <p class="dfe-c-body" style="margin:0;">@TempData["ErrorMessage"]</p>
+    </div>
+  }
+
+  <section class="mr-section govuk-!-margin-bottom-4" aria-labelledby="sr-summary-heading">
+    <h2 id="sr-summary-heading" class="govuk-heading-m govuk-!-margin-bottom-2">Summary</h2>
+    <p class="govuk-body-s govuk-hint govuk-!-margin-bottom-3">Figures below are for <strong>active</strong> products only.</p>
+    <dl class="govuk-summary-list govuk-!-margin-bottom-4">
+      <div class="govuk-summary-list__row">
+        <dt class="govuk-summary-list__key">Total products</dt>
+        <dd class="govuk-summary-list__value"><strong>@m.ActiveTotalProducts</strong></dd>
+      </div>
+      <div class="govuk-summary-list__row">
+        <dt class="govuk-summary-list__key">Completion (overall)</dt>
+        <dd class="govuk-summary-list__value">
+          <strong>@m.ActiveOverallCompletionPercent.ToString("0.#")%</strong>
+          · @m.ActiveFullyCompleteCount fully complete
+        </dd>
+      </div>
+      <div class="govuk-summary-list__row">
+        <dt class="govuk-summary-list__key">Missing product URL</dt>
+        <dd class="govuk-summary-list__value">@m.ActiveProductsWithoutUrlCount</dd>
+      </div>
+      <div class="govuk-summary-list__row">
+        <dt class="govuk-summary-list__key">Missing service owner or SRO</dt>
+        <dd class="govuk-summary-list__value">@m.ActiveProductsWithoutServiceOwnerOrSroCount</dd>
+      </div>
+    </dl>
+
+    <div class="sr-status-grid" role="list" aria-label="Product counts by status">
+      <div class="sr-status-card" role="listitem"><span class="@StatusBadgeClass("Active")">Active</span><span class="@WorkBadgeCss.ToggleCountBadgeClass(m.ActiveCount, highlightWhenPositive: true)">@m.ActiveCount</span></div>
+      <div class="sr-status-card" role="listitem"><span class="@StatusBadgeClass("Rejected")">Rejected</span><span class="@WorkBadgeCss.ToggleCountBadgeClass(m.RejectedCount)">@m.RejectedCount</span></div>
+      <div class="sr-status-card" role="listitem"><span class="@StatusBadgeClass("Retired")">Retired</span><span class="@WorkBadgeCss.ToggleCountBadgeClass(m.RetiredCount)">@m.RetiredCount</span></div>
+      <div class="sr-status-card" role="listitem"><span class="@StatusBadgeClass("New")">New</span><span class="@WorkBadgeCss.ToggleCountBadgeClass(m.NewCount)">@m.NewCount</span></div>
+      <div class="sr-status-card" role="listitem"><span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--blue">Enterprise</span><span class="@WorkBadgeCss.ToggleCountBadgeClass(m.EnterpriseCount, highlightWhenPositive: true)">@m.EnterpriseCount</span></div>
+    </div>
+  </section>
+
+  <section class="mr-section govuk-!-margin-bottom-4" aria-labelledby="sr-completion-heading">
+    <h2 id="sr-completion-heading" class="govuk-heading-m govuk-!-margin-bottom-2">Completion reports</h2>
+    <p class="govuk-body-s govuk-hint govuk-!-margin-bottom-3">Expand a group to see product-level completion. Completion % is colour-coded at the end of each row.</p>
+    @await Html.PartialAsync("_ServiceRegisterCompletionReportToggles", m)
+  </section>
+
+  <section class="mr-section govuk-!-margin-bottom-4" aria-labelledby="sr-directorate-heading">
+    <h2 id="sr-directorate-heading" class="govuk-heading-m govuk-!-margin-bottom-2">Products by directorate</h2>
+    @{ ViewData["ToggleIdPrefix"] = "sr-dir"; ViewData["AreaLabel"] = "Directorate"; }
+    @await Html.PartialAsync("_ServiceRegisterAreaSummaryToggles", m.DirectorateRows)
+  </section>
+
+  <section class="mr-section govuk-!-margin-bottom-4" aria-labelledby="sr-business-area-heading">
+    <h2 id="sr-business-area-heading" class="govuk-heading-m govuk-!-margin-bottom-2">Products by business area</h2>
+    @{ ViewData["ToggleIdPrefix"] = "sr-ba"; ViewData["AreaLabel"] = "Business area"; }
+    @await Html.PartialAsync("_ServiceRegisterAreaSummaryToggles", m.BusinessAreaRows)
+  </section>
+</div>
+
+@section Styles {
+  @await Html.PartialAsync("_MrReportCoreStyles")
+  <style>
+    .sr-status-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+      gap: 0.75rem;
+    }
+    .sr-status-card {
+      border: 1px solid #d2d5d8;
+      padding: 0.75rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+      background: #fff;
+    }
+  </style>
+}

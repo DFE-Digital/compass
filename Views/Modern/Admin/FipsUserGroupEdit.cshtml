@@ -1,0 +1,138 @@
+@model Compass.ViewModels.Modern.AdminFipsUserGroupEditViewModel
+@{
+  ViewData["Title"] = Model.PageHeading;
+  var listUrl = Url.Action("Index", "ModernAdmin", new { panel = "fips-user-groups" }) ?? "#";
+  var id = Model.Id ?? 0;
+}
+
+@section Breadcrumbs {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernAdmin")">Admin</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@listUrl">User groups</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">@(Model.IsCreate ? "Add" : "Edit")</li>
+}
+
+<div class="admin-hub">
+ @await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+   Caption = "Administration",
+   Title = Model.PageHeading,
+   Lede = new Microsoft.AspNetCore.Html.HtmlString($"<p class=\"govuk-body govuk-!-margin-bottom-0\"><a class=\"govuk-link\" href=\"{listUrl}\">Back to user groups</a></p>")
+ })
+
+  @if (TempData["AdminMessage"] != null)
+  {
+ <div class="govuk-notification-banner govuk-notification-banner--success govuk-!-margin-bottom-3" role="region">
+ <div class="govuk-notification-banner__content"><p class="govuk-notification-banner__heading">@TempData["AdminMessage"]</p></div>
+    </div>
+  }
+
+  @if (Model.IsCreate && Model.ParentId.HasValue && !string.IsNullOrWhiteSpace(Model.ParentPath))
+  {
+ <p class="govuk-body-s dfe-c-text-muted">Adding under: <strong>@Model.ParentPath</strong></p>
+  }
+
+  @if (!Model.IsCreate && !string.IsNullOrWhiteSpace(Model.ParentPath))
+  {
+ <p class="govuk-body-s dfe-c-text-muted">Current parent: @Model.ParentPath</p>
+  }
+
+  @if (!Model.IsCreate && Model.ChildCount > 0)
+  {
+ <p class="govuk-body-s dfe-c-text-muted">This group has @Model.ChildCount direct @(Model.ChildCount == 1 ? "child" : "children").</p>
+  }
+
+ <div class="dfe-c-card dfe-c-mb-4" style="border:1px solid var(--grey-2);border-left:4px solid var(--blue);padding:1.25rem 1.5rem;background:var(--white);">
+    <form method="post" action="@(Model.IsCreate ? Url.Action("FipsAddUserGroup", "ModernAdmin") : Url.Action("FipsUpdateUserGroup", "ModernAdmin", new { id }))" novalidate>
+      @Html.AntiForgeryToken()
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="ug-name">Name</label>
+ <input class="govuk-input govuk-!-width-two-thirds" id="ug-name" name="name" value="@Model.Name" required maxlength="200" />
+      </div>
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="ug-desc">Description</label>
+ <textarea class="govuk-textarea" id="ug-desc" name="description" rows="3">@Model.Description</textarea>
+      </div>
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="ug-parent">Parent</label>
+ <div class="govuk-hint" id="ug-parent-hint">Leave blank for a top-level group. You can nest groups up to three levels deep.</div>
+ <select class="govuk-select govuk-!-width-two-thirds" id="ug-parent" name="parentId" aria-describedby="ug-parent-hint">
+        <option value="">— None (top level) —</option>
+        @foreach (var option in Model.ParentOptions)
+        {
+          if (Model.ParentId == option.Id)
+          {
+            <option value="@option.Id" selected="selected">@option.Label</option>
+          }
+          else
+          {
+            <option value="@option.Id">@option.Label</option>
+          }
+        }
+      </select>
+      </div>
+ <div class="govuk-form-group">
+ <label class="govuk-label" for="ug-order">Display order</label>
+ <input class="govuk-input govuk-input--width-5" id="ug-order" name="displayOrder" type="number" value="@Model.DisplayOrder" />
+      </div>
+ <button type="submit" class="govuk-button">Save</button>
+    </form>
+  </div>
+
+  @if (!Model.IsCreate)
+  {
+    <div class="dfe-c-card dfe-c-mb-4" style="border:1px solid var(--grey-2);padding:1.25rem 1.5rem;background:var(--white);">
+ <h2 class="govuk-heading-s">Status</h2>
+ <p class="govuk-body govuk-!-margin-bottom-2">
+        @if (Model.IsActive)
+        {
+          <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--green">Active</span>
+        }
+        else
+        {
+          <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--grey">Inactive</span>
+        }
+      </p>
+      <form method="post" action="@Url.Action("FipsToggleUserGroup", "ModernAdmin", new { id })" style="display:inline;">
+        @Html.AntiForgeryToken()
+ <button type="submit" class="govuk-button govuk-button--secondary">@(Model.IsActive ? "Deactivate" : "Activate")</button>
+      </form>
+      <p class="govuk-body-s dfe-c-text-muted govuk-!-margin-top-2 govuk-!-margin-bottom-0">Deactivating a parent does not automatically deactivate its children.</p>
+    </div>
+
+    <div class="dfe-c-card dfe-c-mb-4" style="border:1px solid var(--grey-2);padding:1.25rem 1.5rem;background:var(--white);">
+ <h2 class="govuk-heading-s">Synonyms</h2>
+      @if (Model.Synonyms.Count == 0)
+      {
+ <p class="govuk-body-s dfe-c-text-muted">No synonyms yet.</p>
+      }
+      else
+      {
+        <ul class="govuk-list">
+          @foreach (var synonym in Model.Synonyms)
+          {
+            <li class="govuk-!-margin-bottom-2">
+              @synonym.Synonym
+              <form method="post" action="@Url.Action("FipsRemoveUserGroupSynonym", "ModernAdmin", new { id, synonymId = synonym.Id })" style="display:inline;margin-left:0.75rem;">
+                @Html.AntiForgeryToken()
+ <button type="submit" class="govuk-link govuk-link--no-visited-state" style="border:0;background:none;padding:0;cursor:pointer;">Remove</button>
+              </form>
+            </li>
+          }
+        </ul>
+      }
+
+      <form method="post" action="@Url.Action("FipsAddUserGroupSynonym", "ModernAdmin", new { id })" class="govuk-!-margin-top-4">
+        @Html.AntiForgeryToken()
+ <div class="govuk-form-group govuk-!-margin-bottom-2">
+ <label class="govuk-label" for="syn-value">Add synonym</label>
+ <input class="govuk-input govuk-input--width-20" id="syn-value" name="synonym" required maxlength="200" />
+        </div>
+ <button type="submit" class="govuk-button govuk-button--secondary">Add synonym</button>
+      </form>
+    </div>
+
+    <p class="govuk-body">
+      <a class="govuk-link" href="@Url.Action("FipsUserGroupCreate", "ModernAdmin", new { parentId = id })">Add child group under @Model.Name</a>
+    </p>
+  }
+</div>

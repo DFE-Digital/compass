@@ -1,0 +1,117 @@
+@model FipsProductsViewModel
+@using Compass.Models.Fips
+@{
+    var products = Model.Products;
+    var detailAction = ViewData["ServiceRegisterProductDetailAction"] as string ?? "FipsProduct";
+    var detailController = ViewData["ServiceRegisterProductDetailController"] as string ?? "ModernManage";
+    var showBulkCheckbox = ViewData["ServiceRegisterTableBulkMode"] as bool? == true;
+    var showStatusColumn = ViewData["ServiceRegisterTableShowStatus"] as bool? == true;
+    var tableCaption = ViewData["ServiceRegisterTableCaption"] as string ?? "Products";
+    var tableWrapperClass = ViewData["ServiceRegisterTableWrapperClass"] as string ?? "fips-manage-products-table";
+}
+
+@functions {
+    string StatusLabel(CMDBProductStatus status) => status switch
+    {
+        CMDBProductStatus.Active => "Active",
+        CMDBProductStatus.New => "New",
+        CMDBProductStatus.Inactive => "Retired",
+        CMDBProductStatus.Rejected => "Rejected",
+        _ => status.ToString()
+    };
+
+    string StatusTagClass(CMDBProductStatus status) => status switch
+    {
+        CMDBProductStatus.Active => "dfe-c-tag--green",
+        CMDBProductStatus.New => "dfe-c-tag--blue",
+        CMDBProductStatus.Inactive => "dfe-c-tag--grey",
+        CMDBProductStatus.Rejected => "dfe-c-tag--red",
+        _ => "dfe-c-tag--grey"
+    };
+}
+
+@if (products.Count == 0)
+{
+    <div class="govuk-inset-text">
+        <p class="govuk-body govuk-!-margin-bottom-0">No products in this list.</p>
+    </div>
+}
+else
+{
+    <div class="dfe-f-table-wrapper service-register-products-table @tableWrapperClass" data-module="dfe-f-table">
+        <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+        <table class="govuk-table govuk-table--small dfe-f-table--condensed">
+            <caption class="govuk-visually-hidden">@tableCaption</caption>
+            <thead class="govuk-table__head">
+                <tr class="govuk-table__row">
+                    @if (showBulkCheckbox)
+                    {
+                        <th scope="col" class="govuk-table__header modern-service-register-table__select-head">
+                            <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes">
+                                <div class="govuk-checkboxes__item">
+                                    <input class="govuk-checkboxes__input" type="checkbox" id="sr-bulk-select-all" title="Select all" />
+                                    <label class="govuk-label govuk-checkboxes__label" for="sr-bulk-select-all"><span class="govuk-visually-hidden">Select all</span></label>
+                                </div>
+                            </div>
+                        </th>
+                    }
+                    <th scope="col" class="govuk-table__header service-register-products-table__product-col" aria-sort="none">
+                        <button type="button" class="dfe-f-table-sort-button">Product</button>
+                    </th>
+                    @if (showStatusColumn)
+                    {
+                        <th scope="col" class="govuk-table__header service-register-products-table__status-col" aria-sort="none">
+                            <button type="button" class="dfe-f-table-sort-button">Status</button>
+                        </th>
+                    }
+                    <th scope="col" class="govuk-table__header service-register-products-table__phase-col" aria-sort="none">
+                        <button type="button" class="dfe-f-table-sort-button">Phase</button>
+                    </th>
+                    <th scope="col" class="govuk-table__header service-register-products-table__type-col" aria-sort="none">
+                        <button type="button" class="dfe-f-table-sort-button">Type</button>
+                    </th>
+                    <th scope="col" class="govuk-table__header service-register-products-table__channel-col" aria-sort="none">
+                        <button type="button" class="dfe-f-table-sort-button">Channel</button>
+                    </th>
+                    <th scope="col" class="govuk-table__header service-register-products-table__owner-col" aria-sort="none">
+                        <button type="button" class="dfe-f-table-sort-button">Service owner</button>
+                    </th>
+                </tr>
+            </thead>
+            <tbody class="govuk-table__body">
+            @foreach (var p in products)
+            {
+                <tr class="govuk-table__row">
+                    @if (showBulkCheckbox)
+                    {
+                        <td class="govuk-table__cell">
+                            <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes">
+                                <div class="govuk-checkboxes__item">
+                                    <input class="govuk-checkboxes__input sr-bulk-row-cb" type="checkbox" name="ProductIds" value="@p.Id" id="sr-bulk-p-@p.Id" />
+                                    <label class="govuk-label govuk-checkboxes__label" for="sr-bulk-p-@p.Id"><span class="govuk-visually-hidden">@p.Title</span></label>
+                                </div>
+                            </div>
+                        </td>
+                    }
+                    <td class="govuk-table__cell service-register-products-table__product-col">
+                        <a href="@Url.Action(detailAction, detailController, new { id = p.Id })" class="govuk-link govuk-link--no-visited-state govuk-!-font-weight-bold">@p.Title</a>
+                        <div class="dfe-c-body-s dfe-c-text-muted service-register-products-table__product-meta">
+                            @(string.IsNullOrWhiteSpace(p.BusinessAreaDisplay) ? "—" : p.BusinessAreaDisplay)
+                        </div>
+                    </td>
+                    @if (showStatusColumn)
+                    {
+                        <td class="govuk-table__cell service-register-products-table__status-col">
+                            <span class="dfe-c-tag @StatusTagClass(p.Status)">@StatusLabel(p.Status)</span>
+                        </td>
+                    }
+                    <td class="govuk-table__cell service-register-products-table__phase-col">@(p.PhaseName ?? "—")</td>
+                    <td class="govuk-table__cell service-register-products-table__type-col">@(string.IsNullOrWhiteSpace(p.TypesDisplay) ? "—" : p.TypesDisplay)</td>
+                    <td class="govuk-table__cell service-register-products-table__channel-col">@(string.IsNullOrWhiteSpace(p.ChannelsDisplay) ? "—" : p.ChannelsDisplay)</td>
+                    <td class="govuk-table__cell service-register-products-table__owner-col">@(p.ServiceOwner ?? "—")</td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+}

@@ -4,7 +4,10 @@ using Compass.Helpers;
 using Compass.Models;
 using Compass.Models.Fips;
 using Compass.Services;
+using Compass.Services.Aiss;
 using Compass.Services.Fips;
+using Compass.Services.Modern;
+using Compass.ViewModels.Modern;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -22,7 +25,9 @@ public partial class ModernManageController : Controller
     private readonly IGlobalFeatureToggleService _globalFeatureToggle;
     private readonly IProductsApiService _productsApi;
     private readonly IServiceAssessmentApiService _serviceAssessmentApi;
+    private readonly IAissProductAccessibilityService _aissProductAccessibility;
     private readonly IConfiguration _configuration;
+    private readonly IWorkServiceRegisterLinkService _workServiceRegisterLinks;
 
     public ModernManageController(
         CompassDbContext context,
@@ -32,7 +37,9 @@ public partial class ModernManageController : Controller
         IGlobalFeatureToggleService globalFeatureToggle,
         IProductsApiService productsApi,
         IServiceAssessmentApiService serviceAssessmentApi,
-        IConfiguration configuration)
+        IAissProductAccessibilityService aissProductAccessibility,
+        IConfiguration configuration,
+        IWorkServiceRegisterLinkService workServiceRegisterLinks)
     {
         _context = context;
         _fipsProductWrite = fipsProductWrite;
@@ -41,7 +48,9 @@ public partial class ModernManageController : Controller
         _globalFeatureToggle = globalFeatureToggle;
         _productsApi = productsApi;
         _serviceAssessmentApi = serviceAssessmentApi;
+        _aissProductAccessibility = aissProductAccessibility;
         _configuration = configuration;
+        _workServiceRegisterLinks = workServiceRegisterLinks;
     }
 
     private async Task<IActionResult?> RequireFipsDatabaseAsync()
@@ -62,6 +71,15 @@ public partial class ModernManageController : Controller
         if (string.IsNullOrWhiteSpace(email)) return false;
         if (await _permission.IsSuperAdminAsync(email)) return true;
         return await _permission.IsInGroupAsync(email, "Central Operations Admin");
+    }
+
+    private async Task<bool> CanEditFipsProductInformationAsync(CancellationToken ct)
+    {
+        var email = CurrentUserEmail;
+        if (string.IsNullOrWhiteSpace(email))
+            return false;
+
+        return await _permission.IsOperationConsoleUserAsync(email);
     }
 
     private string CurrentUserEmail =>
@@ -91,6 +109,8 @@ public partial class ModernManageController : Controller
             _ when string.Equals(tab, "accessibility", StringComparison.OrdinalIgnoreCase) => "accessibility",
             _ when string.Equals(tab, "performance", StringComparison.OrdinalIgnoreCase) => "performance",
             _ when string.Equals(tab, "assurance", StringComparison.OrdinalIgnoreCase) => "assurance",
+            _ when string.Equals(tab, "work", StringComparison.OrdinalIgnoreCase) => "work",
+            _ when string.Equals(tab, "workitems", StringComparison.OrdinalIgnoreCase) => "work",
             _ when string.Equals(tab, "details", StringComparison.OrdinalIgnoreCase) => "information",
             _ => "information"
         };
@@ -116,35 +136,54 @@ public partial class ModernManageController : Controller
         if (disabled != null)
             return disabled;
 
-        if (!string.IsNullOrWhiteSpace(tab)
-            || !string.IsNullOrWhiteSpace(search)
-            || businessAreaId is > 0
-            || channelId is > 0
-            || userGroupId is > 0
-            || typeId is > 0
-            || phaseId is > 0
-            || categorisationItemId is > 0
-            || categorisationGroupId is > 0)
+        if (!string.IsNullOrWhiteSpace(tab))
         {
-            return RedirectToAction(nameof(Fips), new
+            var normalizedTab = tab.Trim().ToLowerInvariant();
+            if (!string.Equals(normalizedTab, "active", StringComparison.OrdinalIgnoreCase))
             {
-                tab,
-                search,
-                businessAreaId,
-                channelId,
-                userGroupId,
-                typeId,
-                phaseId,
-                categorisationItemId,
-                categorisationGroupId
-            });
+                return RedirectToAction(nameof(Fips), new
+                {
+                    tab,
+                    search,
+                    businessAreaId,
+                    channelId,
+                    userGroupId,
+                    typeId,
+                    phaseId,
+                    categorisationItemId,
+                    categorisationGroupId
+                });
+            }
         }
 
         SetNav("manage-fips-dashboard");
 
         var fipsBaseUrl = _configuration["fipsProduct:baseUrl"] ?? "https://fips.education.gov.uk";
-        var vm = await FipsManageDashboardBuilder.BuildAsync(
-            _context, CurrentUserEmail, fipsBaseUrl, ct);
+        var email = CurrentUserEmail;
+        var dashboardVm = await FipsManageDashboardBuilder.BuildAsync(
+            _context, email, fipsBaseUrl, ct);
+
+        var activeProducts = await FipsProductListingHelper.BuildProductsViewModelAsync(
+            _context, "active", email, search, businessAreaId, channelId, userGroupId, typeId, phaseId,
+            categorisationItemId, categorisationGroupId, ct);
+
+        var baseUrl = Url.Action(nameof(FipsDashboard), "ModernManage")
+                      ?? "/modern/manage/fips/dashboard";
+        var sf = FipsProductListingHelper.BuildSearchAndFilter(activeProducts, "active", baseUrl);
+        sf.ActiveChips = SearchAndFilterActiveChipsBuilder.FromViewModel(
+            sf, Url, nameof(FipsDashboard), "ModernManage",
+            new { tab = "active", categorisationItemId, categorisationGroupId });
+        ViewBag.SearchAndFilter = sf;
+
+        var vm = new FipsManageDashboardViewModel
+        {
+            MyProductsCount = dashboardVm.MyProductsCount,
+            ActiveProductsCount = dashboardVm.ActiveProductsCount,
+            EnterpriseProductsCount = dashboardVm.EnterpriseProductsCount,
+            ServiceLinesCount = dashboardVm.ServiceLinesCount,
+            FipsPublicBaseUrl = dashboardVm.FipsPublicBaseUrl,
+            ActiveProducts = activeProducts
+        };
 
         return View("Dashboard", vm);
     }
@@ -170,11 +209,26 @@ public partial class ModernManageController : Controller
 
         SetNav("manage-fips-products");
 
-        // Default to your products; tab "active" = all Status Active products (see FipsProductListingHelper).
+        // Default to your products; tab "active" = dashboard (see FipsDashboard).
         var activeTab = string.IsNullOrWhiteSpace(tab) ? "my" : tab.Trim().ToLowerInvariant();
         if (string.Equals(activeTab, "all", StringComparison.OrdinalIgnoreCase)
             && string.IsNullOrWhiteSpace(search))
             activeTab = "active";
+        if (string.Equals(activeTab, "active", StringComparison.OrdinalIgnoreCase))
+        {
+            return RedirectToAction(nameof(FipsDashboard), new
+            {
+                tab = "active",
+                search,
+                businessAreaId,
+                channelId,
+                userGroupId,
+                typeId,
+                phaseId,
+                categorisationItemId,
+                categorisationGroupId
+            });
+        }
         var email = CurrentUserEmail;
 
         var vm = await FipsProductListingHelper.BuildProductsViewModelAsync(
@@ -228,9 +282,13 @@ public partial class ModernManageController : Controller
             return NotFound();
 
         var email = CurrentUserEmail;
+        var isNamedContact = product.Contacts.Any(c =>
+            !string.IsNullOrWhiteSpace(c.UserEmail) &&
+            string.Equals(c.UserEmail.Trim(), email, StringComparison.OrdinalIgnoreCase));
         var canManage = product.Contacts.Any(c =>
             c.CanManage &&
             string.Equals(c.UserEmail, email, StringComparison.OrdinalIgnoreCase));
+        var canEditInformation = isNamedContact || await CanEditFipsProductInformationAsync(ct);
 
         var productIdStr = product.Id.ToString();
         var auditHistory = await _context.AuditLogs
@@ -248,12 +306,13 @@ public partial class ModernManageController : Controller
             .ToListAsync(ct);
 
         var detailTab = NormalizeFipsDetailTab(tab);
-        var editMode = canManage && edit;
+        var editMode = canEditInformation && detailTab == "information" && edit;
 
         var vm = new FipsProductDetailViewModel
         {
             Product = product,
             CanManage = canManage,
+            CanEditInformation = canEditInformation,
             CurrentUserEmail = email,
             AuditHistory = auditHistory,
             NavContext = null,
@@ -261,7 +320,7 @@ public partial class ModernManageController : Controller
             ActiveDetailTab = detailTab,
         };
 
-        if (canManage && editMode)
+        if (editMode)
         {
             await _fipsBusinessAreaLookupSync.SyncFromBusinessAreaLookupsAsync(ct);
             vm.PhaseOptions = await _context.PhaseLookups
@@ -272,8 +331,7 @@ public partial class ModernManageController : Controller
                 FipsBusinessAreaLookupUiHelper.GetSelectedBusinessAreaLookupIds(product, vm.BusinessAreaLookupOptions);
             vm.ChannelOptions = await _context.FipsChannels
                 .Where(x => x.Active).OrderBy(x => x.DisplayOrder).ToListAsync(ct);
-            vm.UserGroupOptions = await _context.FipsUserGroups
-                .Where(x => x.Active && x.ParentId == null).OrderBy(x => x.DisplayOrder).ToListAsync(ct);
+            vm.UserGroupTreeOptions = await FipsUserGroupUiHelper.LoadActiveTreeAsync(_context, ct);
             vm.TypeOptions = await _context.FipsTypes
                 .Where(x => x.Active).OrderBy(x => x.DisplayOrder).ToListAsync(ct);
         }
@@ -281,7 +339,7 @@ public partial class ModernManageController : Controller
         await FipsProductCategorisationPresentation.PopulateAsync(
             _context,
             vm,
-            canManage && editMode && detailTab == "information",
+            editMode,
             ct);
 
         await FipsProductRaidQuery.PopulateRaidListsAsync(_context, vm, product, ct);
@@ -289,6 +347,24 @@ public partial class ModernManageController : Controller
         vm.DataCompletion = FipsProductListingHelper.GetDataCompletionSummary(product);
 
         await PopulateFipsProductExtendedContextAsync(vm, product, ct);
+
+        vm.AissAccessibility = await _aissProductAccessibility.LoadForProductAsync(
+            product.UniqueID,
+            product.Id,
+            ct);
+
+        var workLinks = await _workServiceRegisterLinks.GetLinksForServiceRegisterProductAsync(
+            id,
+            workId => Url.Action("Detail", "ModernWork", new { id = workId }) ?? "#",
+            ct);
+        vm.WorkItemsPanel = new FipsProductWorkItemsPanelViewModel
+        {
+            ProductId = id,
+            CanLink = await _workServiceRegisterLinks.CanLinkFromServiceRegisterProductAsync(id, email, ct),
+            Links = workLinks,
+            PickWorkUrl = Url.Action(nameof(FipsProductPickWork), new { id }) ?? "",
+            LinkUrl = Url.Action(nameof(FipsProductLinkWork), new { id }) ?? "",
+        };
 
         return View("Detail", vm);
     }
@@ -367,7 +443,7 @@ public partial class ModernManageController : Controller
             .ToList();
     }
 
-    // ── Update product (managers only) ──────────────────────────────────────
+    // ── Update product (named contacts or operations admin) ─────────────────
 
     [HttpPost("fips/{id:guid}/update")]
     [ValidateAntiForgeryToken]
@@ -384,6 +460,7 @@ public partial class ModernManageController : Controller
 
         var requireMgr = true;
         IActionResult? opsRedirect = null;
+        var email = CurrentUserEmail;
         if (IsOperationsNav(nc))
         {
             if (!await IsCentralOperationsAdminAsync(ct))
@@ -394,11 +471,22 @@ public partial class ModernManageController : Controller
                 "ModernOperations",
                 new { id, tab = "information" });
         }
+        else
+        {
+            var isNamedContact = await _context.CMDBProductContacts.AsNoTracking()
+                .AnyAsync(c =>
+                    c.CMDBProductId == id &&
+                    c.UserEmail != null &&
+                    c.UserEmail.Trim().ToLower() == email.Trim().ToLower(), ct);
+            var canEditInformation = isNamedContact || await CanEditFipsProductInformationAsync(ct);
+            if (!canEditInformation)
+                return Forbid();
+            requireMgr = false;
+        }
 
         var resolvedBusinessAreaIds =
             await _fipsBusinessAreaLookupSync.ResolveToFipsBusinessAreaIdsAsync(businessAreaLookupIds ?? Array.Empty<int>(), ct);
 
-        var email = CurrentUserEmail;
         var auditName = User.Identity?.Name ?? email;
         var outcome = await _fipsProductWrite.TryUpdateAsync(
             id,
@@ -428,7 +516,7 @@ public partial class ModernManageController : Controller
         if (opsRedirect != null)
             return opsRedirect;
 
-        return RedirectToAction(nameof(FipsProduct), new { id, tab = "information", edit = false });
+        return RedirectToAction(nameof(FipsProduct), new { id, tab = "information" });
     }
 
     // ── Change status ───────────────────────────────────────────────────────

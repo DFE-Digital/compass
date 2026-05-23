@@ -4,16 +4,18 @@
     ViewData["Title"] = Model.Product.Title + " — FIPS";
     var p = Model.Product;
     var detailTab = Model.ActiveDetailTab;
+    var editInfoUrl = Url.Action("FipsProduct", "ModernManage", new { id = p.Id, tab = "information", edit = true }) ?? "#";
 }
 
 @section Breadcrumbs {
  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("FipsDashboard", "ModernManage")">Service register</a></li>
- <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Fips", "ModernManage", new { tab = "active" })">Products</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("FipsDashboard", "ModernManage")">Active products</a></li>
  <li class="govuk-breadcrumbs__list-item" aria-current="page">@p.Title</li>
 }
 
 @await Html.PartialAsync("~/Views/Modern/Manage/_FipsProductMasthead.cshtml", Model)
+@await Html.PartialAsync("_PageDataAccessHint")
 
 <div class="fips-product-detail">
 <div class="govuk-grid-row fips-product-detail-layout govuk-!-margin-top-2">
@@ -24,12 +26,12 @@
 </div>
 <div class="govuk-grid-column-three-quarters-from-desktop">
 @{
-  var showEditSidebar = Model.EditMode && Model.CanManage && detailTab == "information";
+  var showEditSidebar = Model.EditMode && detailTab == "information";
 }
 <div class="govuk-grid-row">
 <div class="@(showEditSidebar ? "govuk-grid-column-two-thirds" : "govuk-grid-column-full")">
 
-    @if (Model.EditMode && Model.CanManage && detailTab == "information")
+    @if (Model.EditMode && Model.CanEditInformation && detailTab == "information")
     {
  <div id="d-fips-information" class="tab-pane on" role="tabpanel">
  <div class="dfe-c-card dfe-c-card--plain fips-product-detail__main-form">
@@ -103,12 +105,12 @@
  <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">User group</legend>
  <div class="govuk-hint" id="ug-hint">Select all that apply.</div>
  <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes" aria-describedby="ug-hint">
-                                            @foreach (var ug in Model.UserGroupOptions)
+                                            @foreach (var ug in Model.UserGroupTreeOptions)
                                             {
                                                 var isChecked = p.UserGroups.Any(x => x.FipsUserGroupId == ug.Id);
  <div class="govuk-checkboxes__item">
  <input class="govuk-checkboxes__input" id="ug-@ug.Id" name="userGroupIds" type="checkbox" value="@ug.Id" @(isChecked ? "checked" : "")>
- <label class="govuk-label govuk-checkboxes__label" for="ug-@ug.Id">@ug.Name</label>
+ <label class="govuk-label govuk-checkboxes__label" for="ug-@ug.Id">@AdminFipsUserGroupTreeHelper.FormatIndentedLabel(ug.Name, ug.Depth)</label>
                                                 </div>
                                             }
                                         </div>
@@ -155,8 +157,7 @@
 
  <div class="govuk-button-group govuk-!-margin-top-6 govuk-!-margin-bottom-0">
  <button type="submit" class="govuk-button" data-module="govuk-button">Save changes</button>
-                                <a href="@Url.Action("FipsProduct", "ModernManage", new { id = p.Id, tab = "information", edit = false })"
- class="govuk-button govuk-button--secondary">Cancel editing</a>
+ <a href="@Url.Action("FipsProduct", "ModernManage", new { id = p.Id, tab = "information", edit = false })" class="govuk-button govuk-button--secondary">Cancel</a>
                             </div>
                         </form>
                     </div>
@@ -209,26 +210,24 @@
  </div>
  </div>
     }
-    else
+    else if (detailTab == "information")
     {
- <div id="d-fips-information" class="tab-pane @(detailTab =="information" ? "on" : "")" role="tabpanel">
-                @if (!Model.CanManage || !Model.EditMode)
-                {
+ <div id="d-fips-information" class="tab-pane on" role="tabpanel">
  <div class="govuk-summary-card fips-product-detail__card govuk-!-margin-bottom-6">
  <div class="govuk-summary-card__title-wrapper">
  <h2 class="govuk-summary-card__title">Product details</h2>
  </div>
  <div class="govuk-summary-card__content">
  <dl class="govuk-summary-list govuk-!-margin-bottom-0">
-                        @{ var readOnlyFields = new (string Label, string? Value, bool IsUrl)[] {
-                            ("Description", p.UserDescription, false),
-                            ("Phase", p.Phase?.Name, false),
-                            ("Business area", Model.BusinessAreasDisplay, false),
-                            ("Channel", Model.ChannelsDisplay, false),
-                            ("User group", Model.UserGroupsDisplay, false),
-                            ("Type", Model.TypesDisplay, false),
-                            ("Enterprise service", p.IsEnterpriseService ? "Yes" : "No", false),
-                            ("Product URL", p.ProductURL, true)
+                        @{ var readOnlyFields = new (string Label, string? Value, bool IsUrl, string ChangeVisuallyHidden)[] {
+                            ("Description", p.UserDescription, false, "description"),
+                            ("Phase", p.Phase?.Name, false, "phase"),
+                            ("Business area", Model.BusinessAreasDisplay, false, "business area"),
+                            ("Channel", Model.ChannelsDisplay, false, "channel"),
+                            ("User group", Model.UserGroupsDisplay, false, "user group"),
+                            ("Type", Model.TypesDisplay, false, "type"),
+                            ("Enterprise service", p.IsEnterpriseService ? "Yes" : "No", false, "enterprise service"),
+                            ("Product URL", p.ProductURL, true, "product URL")
                         }; }
                         @foreach (var f in readOnlyFields)
                         {
@@ -244,6 +243,12 @@
                                         @(string.IsNullOrWhiteSpace(f.Value) ? "—" : f.Value)
                                     }
                                 </dd>
+ @if (Model.CanEditInformation)
+ {
+ <dd class="govuk-summary-list__actions">
+   <a class="govuk-link" href="@editInfoUrl">Change<span class="govuk-visually-hidden"> @f.ChangeVisuallyHidden</span></a>
+ </dd>
+ }
                             </div>
                         }
                         @foreach (var cat in Model.CategorisationSummaryLines)
@@ -251,12 +256,17 @@
  <div class="govuk-summary-list__row">
  <dt class="govuk-summary-list__key">@cat.GroupName</dt>
  <dd class="govuk-summary-list__value">@cat.ItemsDisplay</dd>
+ @if (Model.CanEditInformation)
+ {
+ <dd class="govuk-summary-list__actions">
+   <a class="govuk-link" href="@editInfoUrl">Change<span class="govuk-visually-hidden"> @cat.GroupName</span></a>
+ </dd>
+ }
                             </div>
                         }
                     </dl>
  </div>
  </div>
-                }
 
  <div class="govuk-summary-card fips-product-detail__card">
  <div class="govuk-summary-card__title-wrapper">
@@ -349,6 +359,7 @@
 
     }
 
+@await Html.PartialAsync("~/Views/Modern/Manage/_FipsProductWorkItemsTab.cshtml", Model)
 <partial name="~/Views/Modern/Shared/_FipsProductRaidPanes.cshtml" model="Model" />
 @await Html.PartialAsync("~/Views/Modern/Manage/_FipsProductDetailAssumptionsTab.cshtml", Model)
 @await Html.PartialAsync("~/Views/Modern/Manage/_FipsProductDetailDependenciesTab.cshtml", Model)
@@ -370,42 +381,27 @@
 </div>
 </div>
 
-<dialog id="fips-product-cannot-edit-modal"
-        class="dfe-f-modal govuk-!-margin-0"
-        data-module="dfe-f-modal"
-        aria-labelledby="fips-product-cannot-edit-title"
-        aria-describedby="fips-product-cannot-edit-desc"
-        aria-modal="true"
-        role="alertdialog">
-  <div class="dfe-f-modal__panel">
-    <header class="dfe-f-modal__header">
-      <h2 id="fips-product-cannot-edit-title" class="govuk-heading-m dfe-f-modal__title">Cannot edit this product</h2>
-      <button type="button" class="dfe-f-modal__close" data-dfe-modal-close aria-label="Close">
-        <span class="dfe-f-modal__close-x" aria-hidden="true">×</span>
-      </button>
-    </header>
-    <div class="dfe-f-modal__body" id="fips-product-cannot-edit-desc">
-      <p class="govuk-body govuk-!-margin-bottom-0">You are not a named contact on the product so cannot make changes.</p>
-    </div>
-    <footer class="dfe-f-modal__footer">
-      <button type="button" class="govuk-button govuk-button--secondary" data-dfe-modal-close>Close</button>
-    </footer>
-  </div>
-</dialog>
+@section Styles {
+<style nonce="@(Context.Items["Nonce"]?.ToString() ?? "")">
+  .service-line-pick { position: relative; }
+  .service-line-pick__combo { position: relative; }
+  .service-line-pick__results[hidden] { display: none !important; }
+  .service-line-pick__results {
+    position: absolute; left: 0; right: 0; top: 100%; z-index: 20;
+    margin: 0.25rem 0 0; padding: 0.5rem; max-height: 16rem; overflow: auto;
+    background: #fff; border: 2px solid #0b0c0c; box-shadow: 0 4px 8px rgba(0,0,0,.12);
+  }
+  .service-line-pick__results-list { margin: 0; padding: 0; list-style: none; }
+  .service-line-pick__results-list li { margin: 0; border-bottom: 1px solid #b1b4b6; }
+  .service-line-pick__results-list li:last-child { border-bottom: 0; }
+  .service-line-pick__result-btn {
+    display: block; width: 100%; text-align: left; padding: 0.5rem 0.25rem;
+    background: transparent; border: 0; font: inherit; cursor: pointer;
+  }
+  .service-line-pick__result-btn:hover, .service-line-pick__result-btn:focus { background: #f3f2f1; outline: 3px solid #fd0; outline-offset: 0; }
+</style>
+}
 
 @section Scripts {
-  <script nonce="@Context.Items["Nonce"]">
-    (function () {
-      var openBtn = document.getElementById('fips-product-edit-denied-open');
-      var dlg = document.getElementById('fips-product-cannot-edit-modal');
-      if (openBtn && dlg instanceof HTMLDialogElement && typeof dlg.showModal === 'function') {
-        openBtn.addEventListener('click', function () {
-          dlg.showModal();
-          if (window.DfeFrontend && typeof window.DfeFrontend.initAll === 'function') {
-            window.DfeFrontend.initAll();
-          }
-        });
-      }
-    })();
-  </script>
+  <script src="~/modern/js/service-line-pickers.js" asp-append-version="true" nonce="@(Context.Items["Nonce"]?.ToString() ?? "")"></script>
 }

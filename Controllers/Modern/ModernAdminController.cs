@@ -4,6 +4,7 @@ using Compass.Models;
 using Compass.Models.DemandPipeline;
 using Compass.Models.Fips;
 using Compass.Services;
+using Compass.Services.Api;
 using Compass.Services.DemandPipeline;
 using Compass.Services.Fips;
 using Compass.ViewModels.Modern;
@@ -34,9 +35,9 @@ public partial class ModernAdminController : Controller
         "risk-categories", "issue-categories",
         "product-types", "rag-defns", "departments", "compliance",
         "scoring-fw", "perf-cycles", "assess-cycles",
-        "groups", "api-tokens", "cms-access-products", "business-area-admins", "business-area-leadership", "directorate-leadership",
+        "groups", "api-tokens", "api-token-requests", "cms-access-products", "business-area-admins", "business-area-leadership", "directorate-leadership",
         "migration", "feature-settings", "universal-barriers",
-        "activity-types", "work-tagging", "mission-pillars", "priority-outcomes",
+        "activity-types", "work-tagging", "resource-bands", "mission-pillars", "priority-outcomes",
         "fips-channels", "fips-types", "fips-business-areas", "fips-user-groups", "fips-contact-roles", "fips-categorisation",
         "std-categories", "std-subcategories", "std-functional",
         "risk-statuses", "risk-priorities", "risk-likelihoods", "risk-impact-levels", "risk-proximities",
@@ -160,6 +161,23 @@ public partial class ModernAdminController : Controller
                 vm.WorkItemTags = await _context.WorkItemTagLookups.AsNoTracking()
                     .OrderBy(x => x.SortOrder).ThenBy(x => x.Name)
                     .Select(x => new AdminLookupRow { Id = x.Id, Name = x.Name, Description = x.Description, SortOrder = x.SortOrder, IsActive = x.IsActive })
+                    .ToListAsync();
+                break;
+
+            case "resource-bands":
+                vm.ResourceBands = await _context.ResourceBandLookups.AsNoTracking()
+                    .OrderBy(x => x.SortOrder).ThenBy(x => x.Name)
+                    .Select(x => new AdminResourceBandRow
+                    {
+                        Id = x.Id,
+                        Name = x.Name,
+                        Description = x.Description,
+                        MinFte = x.MinFte,
+                        MaxFte = x.MaxFte,
+                        CssClass = x.CssClass,
+                        SortOrder = x.SortOrder,
+                        IsActive = x.IsActive
+                    })
                     .ToListAsync();
                 break;
 
@@ -373,8 +391,20 @@ public partial class ModernAdminController : Controller
                         Description = t.Description,
                         CreatedAt = t.CreatedAt,
                         ExpiresAt = t.ExpiresAt,
-                        IsActive = t.IsActive
+                        IsActive = t.IsActive,
+                        Environment = t.Environment,
+                        AccessTier = t.AccessTier,
+                        OwnerEmail = t.OwnerEmail,
+                        IsSelfService = t.IsSelfService
                     })
+                    .ToListAsync();
+                break;
+
+            case "api-token-requests":
+                ViewBag.PendingApiTokenRequests = await _context.ApiTokenRequests
+                    .AsNoTracking()
+                    .Where(r => r.Status == ApiTokenRequestStatus.Pending)
+                    .OrderBy(r => r.CreatedAt)
                     .ToListAsync();
                 break;
 
@@ -423,22 +453,14 @@ public partial class ModernAdminController : Controller
                 break;
 
             case "fips-user-groups":
-                vm.FipsUserGroups = await _context.FipsUserGroups.AsNoTracking()
-                    .Include(g => g.Children).Include(g => g.Synonyms)
-                    .Where(g => g.ParentId == null)
-                    .OrderBy(g => g.DisplayOrder)
-                    .Select(g => new AdminFipsUserGroupRow
-                    {
-                        Id = g.Id,
-                        Name = g.Name,
-                        Description = g.Description,
-                        DisplayOrder = g.DisplayOrder,
-                        Active = g.Active,
-                        ChildNames = g.Children.Select(c => c.Name).ToList(),
-                        SynonymNames = g.Synonyms.Select(s => s.Synonym).ToList()
-                    })
+            {
+                var allUserGroups = await _context.FipsUserGroups.AsNoTracking()
+                    .Include(g => g.Synonyms)
                     .ToListAsync();
+                vm.FipsUserGroups = AdminFipsUserGroupTreeHelper.BuildFlatTree(allUserGroups);
+                vm.FipsUserGroupParentOptions = AdminFipsUserGroupTreeHelper.BuildParentOptions(vm.FipsUserGroups);
                 break;
+            }
 
             case "fips-contact-roles":
                 vm.FipsContactRoles = await _context.FipsContactRoles.AsNoTracking()
@@ -2822,47 +2844,6 @@ public partial class ModernAdminController : Controller
         return RedirectToAction("Index", new { panel = "business-areas" });
     }
 
-    [HttpPost("fips/user-group/add")]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> FipsAddUserGroup(string name, string? description, int displayOrder, int? parentId)
-    {
-        var guard = await RequireFipsDatabaseAdminAsync();
-        if (guard != null)
-            return guard;
-
-        _context.FipsUserGroups.Add(new FipsUserGroup { Name = name.Trim(), Description = description?.Trim(), DisplayOrder = displayOrder, ParentId = parentId });
-        await _context.SaveChangesAsync();
-        TempData["AdminMessage"] = "User group added.";
-        return RedirectToAction("Index", new { panel = "fips-user-groups" });
-    }
-
-    [HttpPost("fips/user-group/{id:int}/synonym")]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> FipsAddUserGroupSynonym(int id, string synonym)
-    {
-        var guard = await RequireFipsDatabaseAdminAsync();
-        if (guard != null)
-            return guard;
-
-        _context.FipsUserGroupSynonyms.Add(new FipsUserGroupSynonym { FipsUserGroupId = id, Synonym = synonym.Trim() });
-        await _context.SaveChangesAsync();
-        TempData["AdminMessage"] = "Synonym added.";
-        return RedirectToAction("Index", new { panel = "fips-user-groups" });
-    }
-
-    [HttpPost("fips/user-group/{id:int}/toggle")]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> FipsToggleUserGroup(int id)
-    {
-        var guard = await RequireFipsDatabaseAdminAsync();
-        if (guard != null)
-            return guard;
-
-        var e = await _context.FipsUserGroups.FindAsync(id);
-        if (e != null) { e.Active = !e.Active; await _context.SaveChangesAsync(); }
-        return RedirectToAction("Index", new { panel = "fips-user-groups" });
-    }
-
     [HttpPost("fips/contact-role/add")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> FipsAddContactRole(string name, string? description, bool allowMultiple, int displayOrder)
@@ -3329,15 +3310,7 @@ public partial class ModernAdminController : Controller
 
     // ── API Token Permissions (modern) ─────────────────────────────
 
-    private static readonly string[] ApiTokenResources = new[]
-    {
-        "Risks", "Issues", "Actions", "Milestones", "PerformanceMetrics",
-        "EnterpriseMetrics", "FunctionalStandards", "AccessibilityIssues",
-        "SurveysAdmin", "UserSatisfactionQuestions", "UserSatisfactionResponses", "DdtStandards",
-        "ServiceRegister",
-        "CmsAccessRequests",
-        "AdminLookups"
-    };
+    private static readonly string[] ApiTokenResources = ApiTokenResourceCatalog.Resources;
 
     [HttpGet("api-tokens/new")]
     [RequireSuperAdmin]
@@ -3440,7 +3413,7 @@ public partial class ModernAdminController : Controller
     [HttpPost("api-tokens/{id:int}/recycle")]
     [ValidateAntiForgeryToken]
     [RequireSuperAdmin]
-    public async Task<IActionResult> ApiTokenRecycle(int id)
+    public async Task<IActionResult> ApiTokenRecycle(int id, [FromServices] IApiTokenPortalService portal)
     {
         try
         {
@@ -3452,7 +3425,8 @@ public partial class ModernAdminController : Controller
             }
 
             var newToken = await _apiTokenService.RecycleTokenAsync(id);
-            TempData["AdminMessage"] = "API token recycled successfully. Copy the new token now — you won't be able to see it again.";
+            await portal.NotifyTokenRecycledAsync(id, newToken);
+            TempData["AdminMessage"] = "API token recycled successfully. Copy the new token now — you won't be able to see it again. The owner has been emailed.";
             TempData["NewToken"] = newToken;
         }
         catch (Exception)
@@ -3484,6 +3458,25 @@ public partial class ModernAdminController : Controller
         }
 
         return RedirectToAction(nameof(ApiTokenDetail), new { id });
+    }
+
+    [HttpGet("api-logs")]
+    [RequireSuperAdmin]
+    public async Task<IActionResult> ApiLogs(int? tokenId = null)
+    {
+        var query = _context.ApiRequestLogs
+            .Include(l => l.ApiToken)
+            .OrderByDescending(l => l.RequestTimestamp)
+            .AsQueryable();
+
+        if (tokenId.HasValue)
+            query = query.Where(l => l.ApiTokenId == tokenId.Value);
+
+        var logs = await query.Take(1000).ToListAsync();
+        ViewBag.Tokens = await _apiTokenService.GetAllTokensAsync();
+        ViewBag.SelectedTokenId = tokenId;
+        SetAdminChrome("admin-index");
+        return View("~/Views/Modern/Admin/ApiLogs.cshtml", logs);
     }
 
     [HttpPost("api-tokens/{id:int}/delete")]

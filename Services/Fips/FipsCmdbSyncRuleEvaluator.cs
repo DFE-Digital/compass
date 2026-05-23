@@ -83,6 +83,7 @@ public static class FipsCmdbSyncRuleEvaluator
             }.Where(s => !string.IsNullOrWhiteSpace(s))),
             FipsCmdbSyncRuleScopes.RawJson => entryJson,
             FipsCmdbSyncRuleScopes.ServiceClassification => ExtractServiceClassification(entryJson) ?? "",
+            FipsCmdbSyncRuleScopes.OperationalStatus => ExtractOperationalStatus(entryJson) ?? "",
             _ => null
         };
     }
@@ -108,6 +109,41 @@ public static class FipsCmdbSyncRuleEvaluator
                     return v.GetString();
             }
             return el.GetRawText();
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Reads <c>operational_status</c> from CMDB row JSON.</summary>
+    private static string? ExtractOperationalStatus(string? entryJson)
+    {
+        if (string.IsNullOrWhiteSpace(entryJson))
+            return null;
+        try
+        {
+            using var doc = JsonDocument.Parse(entryJson);
+            var root = doc.RootElement;
+            if (!root.TryGetProperty("operational_status", out var el))
+                return null;
+            if (el.ValueKind == JsonValueKind.String)
+                return el.GetString();
+            if (el.ValueKind == JsonValueKind.Number)
+                return el.ToString();
+            if (el.ValueKind == JsonValueKind.Object)
+            {
+                if (el.TryGetProperty("value", out var v))
+                {
+                    if (v.ValueKind == JsonValueKind.String)
+                        return v.GetString();
+                    if (v.ValueKind == JsonValueKind.Number)
+                        return v.ToString();
+                }
+                if (el.TryGetProperty("display_value", out var dv) && dv.ValueKind == JsonValueKind.String)
+                    return dv.GetString();
+            }
+            return null;
         }
         catch
         {

@@ -2,6 +2,7 @@ using Compass.Attributes;
 using Compass.Controllers;
 using Compass.Data;
 using Compass.Models;
+using Compass.Models.Fips;
 using Compass.Models.Modern.Work;
 using Compass.Services;
 using Compass.Services.Aiss;
@@ -187,6 +188,63 @@ public partial class ModernReportingController : Controller
                     MaxReportYear = Math.Max(2026, DateTime.UtcNow.Year)
                 }
             });
+        }
+    }
+
+    /// <summary>Resourcing report — FTE/MSP totals and configurable resourcing bands.</summary>
+    [HttpGet("resourcing")]
+    public async Task<IActionResult> Resourcing(
+        int? year,
+        int? month,
+        int? businessAreaId,
+        int? directorateId,
+        string? dimension,
+        int? groupId,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var model = await _monthlyReportService.BuildResourcingReportAsync(
+                year,
+                month,
+                businessAreaId,
+                directorateId,
+                dimension,
+                groupId,
+                cancellationToken);
+            SetNav("reporting-resourcing");
+            return View("~/Views/Modern/Reporting/Resourcing.cshtml", model);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading resourcing report");
+            TempData["ErrorMessage"] = "An error occurred while loading the resourcing report. Please try again.";
+            SetNav("reporting-resourcing");
+            return View("~/Views/Modern/Reporting/Resourcing.cshtml", new ModernResourcingReportViewModel
+            {
+                MinReportYear = 2026,
+                MaxReportYear = Math.Max(2026, DateTime.UtcNow.Year),
+                MonthName = DateTime.UtcNow.ToString("MMMM yyyy")
+            });
+        }
+    }
+
+    /// <summary>Service register report — status, completion, and data-quality summaries for CMDB products.</summary>
+    [HttpGet("service-register")]
+    public async Task<IActionResult> ServiceRegister(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var model = await _monthlyReportService.BuildServiceRegisterReportAsync(cancellationToken);
+            SetNav("reporting-service-register");
+            return View("~/Views/Modern/Reporting/ServiceRegister.cshtml", model);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading service register report");
+            TempData["ErrorMessage"] = "An error occurred while loading the service register report. Please try again.";
+            SetNav("reporting-service-register");
+            return View("~/Views/Modern/Reporting/ServiceRegister.cshtml", new ModernServiceRegisterReportViewModel());
         }
     }
 
@@ -541,12 +599,14 @@ public partial class ModernReportingController : Controller
         await Task.WhenAll(summaryTask, trendsTask);
         var (summary, error) = await summaryTask;
         var (trends, trendsError) = await trendsTask;
+        var aissCfg = _configuration.GetSection("FipsSync:Aiss").Get<AissConfiguration>() ?? new AissConfiguration();
         var vm = new ModernOperationsAccessibilityViewModel
         {
             Summary = summary,
             Trends = trends,
             ErrorMessage = error,
-            TrendsError = trendsError
+            TrendsError = trendsError,
+            AissWebBaseUrl = aissCfg.ResolveWebBaseUrl()
         };
         return View("~/Views/Modern/Reporting/Accessibility.cshtml", vm);
     }

@@ -25,6 +25,7 @@ public class AdminHubViewModel
 
     public List<AdminLookupRow> ActivityTypes { get; set; } = new();
     public List<AdminLookupRow> WorkItemTags { get; set; } = new();
+    public List<AdminResourceBandRow> ResourceBands { get; set; } = new();
     public List<AdminLookupRow> MissionPillars { get; set; } = new();
     public List<AdminPriorityOutcomeRow> PriorityOutcomes { get; set; } = new();
     public List<AdminLookupRow> RiskTiers { get; set; } = new();
@@ -68,6 +69,7 @@ public class AdminHubViewModel
     public List<AdminLookupRow> FipsTypes { get; set; } = new();
     public List<AdminLookupRow> FipsBusinessAreas { get; set; } = new();
     public List<AdminFipsUserGroupRow> FipsUserGroups { get; set; } = new();
+    public List<AdminFipsUserGroupParentOption> FipsUserGroupParentOptions { get; set; } = new();
     public List<AdminFipsContactRoleRow> FipsContactRoles { get; set; } = new();
     public List<AdminFipsCategorisationGroupRow> FipsCategorisationGroups { get; set; } = new();
 
@@ -107,6 +109,10 @@ public class AdminApiTokenRow
     public DateTime CreatedAt { get; set; }
     public DateTime? ExpiresAt { get; set; }
     public bool IsActive { get; set; }
+    public string? Environment { get; set; }
+    public string? AccessTier { get; set; }
+    public string? OwnerEmail { get; set; }
+    public bool IsSelfService { get; set; }
 }
 
 public sealed class AdminCmsAccessProductRow
@@ -134,8 +140,16 @@ public class AdminFipsUserGroupRow
     public string? Description { get; set; }
     public int DisplayOrder { get; set; }
     public bool Active { get; set; }
-    public List<string> ChildNames { get; set; } = new();
+    public int Depth { get; set; }
+    public string? ParentPath { get; set; }
+    public bool HasChildren { get; set; }
     public List<string> SynonymNames { get; set; } = new();
+}
+
+public class AdminFipsUserGroupParentOption
+{
+    public int Id { get; set; }
+    public string Label { get; set; } = string.Empty;
 }
 
 public class AdminFipsContactRoleRow
@@ -188,6 +202,18 @@ public class AdminRagRow
     public int Id { get; set; }
     public string Name { get; set; } = string.Empty;
     public string? Description { get; set; }
+    public string? CssClass { get; set; }
+    public int SortOrder { get; set; }
+    public bool IsActive { get; set; }
+}
+
+public class AdminResourceBandRow
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public decimal MinFte { get; set; }
+    public decimal? MaxFte { get; set; }
     public string? CssClass { get; set; }
     public int SortOrder { get; set; }
     public bool IsActive { get; set; }

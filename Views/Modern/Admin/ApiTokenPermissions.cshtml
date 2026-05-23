@@ -90,10 +90,25 @@
   <div class="govuk-grid-column-two-thirds">
 
    <!-- Permissions card -->
-   <div class="dfe-c-card dfe-c-card--plain" style="margin-bottom:1.5rem;">
+   <div class="dfe-c-card dfe-c-card--plain admin-api-token-permissions" style="margin-bottom:1.5rem;">
     <h2 class="govuk-heading-m">Permissions</h2>
 
-    <div class="govuk-inset-text">Follow the principle of least privilege — only grant the minimum permissions the token needs. <strong>Cms access requests</strong> uses <strong>Create</strong> only (submit new requests via POST). <strong>Admin lookups</strong> uses <strong>Read</strong> only (the catalog of admin config values is read-only via the API).</div>
+    <div class="govuk-inset-text">
+     Follow the principle of least privilege. Tokens use per-resource <strong>Read</strong>, <strong>Create</strong>, <strong>Update</strong>, and <strong>Delete</strong> flags — the API checks these on every request.
+     <strong>Cms access requests</strong> uses Create only. <strong>Admin lookups</strong> uses Read only.
+     Accessibility issues are managed in <strong>AISS</strong>, not this API.
+    </div>
+
+    <div class="admin-api-token-presets govuk-!-margin-bottom-4">
+     <h3 class="govuk-heading-s">Quick presets</h3>
+     <div class="dfe-c-flex" style="gap:0.5rem;flex-wrap:wrap;">
+      <button type="button" class="govuk-button govuk-button--secondary" data-permission-preset="read">Read only</button>
+      <button type="button" class="govuk-button govuk-button--secondary" data-permission-preset="cru">Create and update (CRU)</button>
+      <button type="button" class="govuk-button govuk-button--secondary" data-permission-preset="crud">Full access (CRUD)</button>
+      <button type="button" class="govuk-link govuk-body" data-permission-preset="clear" style="background:none;border:0;cursor:pointer;text-decoration:underline;margin:0.5rem 0 0;">Clear all</button>
+     </div>
+     <p class="govuk-body-s govuk-hint govuk-!-margin-top-2 govuk-!-margin-bottom-0">Presets apply to all resources in the table. Adjust individual rows before saving.</p>
+    </div>
 
     <form method="post" action="@Url.Action("ApiTokenSavePermissions", "ModernAdmin", new { id = token?.Id })" id="permissionsForm">
      @Html.AntiForgeryToken()
@@ -106,10 +121,10 @@
          <th scope="col" class="govuk-table__header" aria-sort="none">
           <button type="button" class="dfe-f-table-sort-button">Resource</button>
         </th>
-         <th class="dfe-c-text-centre">Read</th>
-         <th class="dfe-c-text-centre">Create</th>
-         <th class="dfe-c-text-centre">Update</th>
-         <th class="dfe-c-text-centre">Delete</th>
+         <th scope="col" class="govuk-table__header admin-api-token-permissions__check-col">Read</th>
+         <th scope="col" class="govuk-table__header admin-api-token-permissions__check-col">Create</th>
+         <th scope="col" class="govuk-table__header admin-api-token-permissions__check-col">Update</th>
+         <th scope="col" class="govuk-table__header admin-api-token-permissions__check-col">Delete</th>
         </tr>
        </thead>
        <tbody class="govuk-table__body">
@@ -125,9 +140,9 @@
            <div class="dfe-c-body-s dfe-c-text-muted govuk-!-margin-top-1 govuk-!-margin-bottom-0">Only the Create permission is used (POST <code class="govuk-body-s">/api/v1/cms-access-requests</code>).</div>
           </td>
           <td class="dfe-c-text-centre" title="Not used"><span class="dfe-c-text-muted" aria-hidden="true">—</span><span class="govuk-visually-hidden">Read not used</span></td>
-          <td class="dfe-c-text-centre">
-           <div class="govuk-checkboxes govuk-checkboxes--small" style="display:inline-block;">
-            <div class="govuk-checkboxes__item" style="min-height:auto;padding-left:24px;">
+          <td class="admin-api-token-permissions__check-col">
+           <div class="govuk-checkboxes govuk-checkboxes--small admin-api-token-permissions__checkbox">
+            <div class="govuk-checkboxes__item">
              <input class="govuk-checkboxes__input" type="checkbox" name="@(resource)_create" id="@(resource)_create" @(perm.create ? "checked" : "") />
              <label class="govuk-label govuk-checkboxes__label" for="@(resource)_create"><span class="govuk-visually-hidden">Create @FormatResource(resource)</span></label>
             </div>
@@ -144,9 +159,9 @@
            <strong>@FormatResource(resource)</strong>
            <div class="dfe-c-body-s dfe-c-text-muted govuk-!-margin-top-1 govuk-!-margin-bottom-0">Read-only catalog of admin config values (GET <code class="govuk-body-s">/api/v1/admin/lookups</code> and <code class="govuk-body-s">/api/v1/admin/lookups/{key}</code>).</div>
           </td>
-          <td class="dfe-c-text-centre">
-           <div class="govuk-checkboxes govuk-checkboxes--small" style="display:inline-block;">
-            <div class="govuk-checkboxes__item" style="min-height:auto;padding-left:24px;">
+          <td class="admin-api-token-permissions__check-col">
+           <div class="govuk-checkboxes govuk-checkboxes--small admin-api-token-permissions__checkbox">
+            <div class="govuk-checkboxes__item">
              <input class="govuk-checkboxes__input" type="checkbox" name="@(resource)_read" id="@(resource)_read" @(perm.read ? "checked" : "") />
              <label class="govuk-label govuk-checkboxes__label" for="@(resource)_read"><span class="govuk-visually-hidden">Read @FormatResource(resource)</span></label>
             </div>
@@ -161,33 +176,33 @@
          {
          <tr class="govuk-table__row">
           <td class="govuk-table__cell"><strong>@FormatResource(resource)</strong></td>
-          <td class="dfe-c-text-centre">
-           <div class="govuk-checkboxes govuk-checkboxes--small" style="display:inline-block;">
-            <div class="govuk-checkboxes__item" style="min-height:auto;padding-left:24px;">
+          <td class="admin-api-token-permissions__check-col">
+           <div class="govuk-checkboxes govuk-checkboxes--small admin-api-token-permissions__checkbox">
+            <div class="govuk-checkboxes__item">
              <input class="govuk-checkboxes__input" type="checkbox" name="@(resource)_read" id="@(resource)_read" @(perm.read ? "checked" : "") />
              <label class="govuk-label govuk-checkboxes__label" for="@(resource)_read"><span class="govuk-visually-hidden">Read @FormatResource(resource)</span></label>
             </div>
            </div>
           </td>
-          <td class="dfe-c-text-centre">
-           <div class="govuk-checkboxes govuk-checkboxes--small" style="display:inline-block;">
-            <div class="govuk-checkboxes__item" style="min-height:auto;padding-left:24px;">
+          <td class="admin-api-token-permissions__check-col">
+           <div class="govuk-checkboxes govuk-checkboxes--small admin-api-token-permissions__checkbox">
+            <div class="govuk-checkboxes__item">
              <input class="govuk-checkboxes__input" type="checkbox" name="@(resource)_create" id="@(resource)_create" @(perm.create ? "checked" : "") />
              <label class="govuk-label govuk-checkboxes__label" for="@(resource)_create"><span class="govuk-visually-hidden">Create @FormatResource(resource)</span></label>
             </div>
            </div>
           </td>
-          <td class="dfe-c-text-centre">
-           <div class="govuk-checkboxes govuk-checkboxes--small" style="display:inline-block;">
-            <div class="govuk-checkboxes__item" style="min-height:auto;padding-left:24px;">
+          <td class="admin-api-token-permissions__check-col">
+           <div class="govuk-checkboxes govuk-checkboxes--small admin-api-token-permissions__checkbox">
+            <div class="govuk-checkboxes__item">
              <input class="govuk-checkboxes__input" type="checkbox" name="@(resource)_update" id="@(resource)_update" @(perm.update ? "checked" : "") />
              <label class="govuk-label govuk-checkboxes__label" for="@(resource)_update"><span class="govuk-visually-hidden">Update @FormatResource(resource)</span></label>
             </div>
            </div>
           </td>
-          <td class="dfe-c-text-centre">
-           <div class="govuk-checkboxes govuk-checkboxes--small" style="display:inline-block;">
-            <div class="govuk-checkboxes__item" style="min-height:auto;padding-left:24px;">
+          <td class="admin-api-token-permissions__check-col">
+           <div class="govuk-checkboxes govuk-checkboxes--small admin-api-token-permissions__checkbox">
+            <div class="govuk-checkboxes__item">
              <input class="govuk-checkboxes__input" type="checkbox" name="@(resource)_delete" id="@(resource)_delete" @(perm.delete ? "checked" : "") />
              <label class="govuk-label govuk-checkboxes__label" for="@(resource)_delete"><span class="govuk-visually-hidden">Delete @FormatResource(resource)</span></label>
             </div>
@@ -208,10 +223,10 @@
    </div>
 
    <!-- Danger zone card -->
-   <div class="dfe-c-card dfe-c-card--plain" style="margin-bottom:1.5rem;border-left:4px solid #d4351c;">
-    <h2 class="govuk-heading-m" style="color:#d4351c;">Danger zone</h2>
+   <div class="dfe-c-card dfe-c-card--plain admin-api-token-danger">
+    <h2 class="govuk-heading-m admin-api-token-danger__title">Danger zone</h2>
 
-    <div style="margin-bottom:1.25rem;">
+    <div class="admin-api-token-danger__block">
      <h3 class="govuk-heading-s">Recycle token</h3>
      <p class="govuk-body">Generate a new token value. The old token will be invalidated immediately.</p>
      <form method="post" action="@Url.Action("ApiTokenRecycle", "ModernAdmin", new { id = token?.Id })">
@@ -220,9 +235,9 @@
      </form>
     </div>
 
-    <hr class="govuk-section-break govuk-section-break--visible" />
+    <hr class="govuk-section-break govuk-section-break--visible admin-api-token-danger__divider" />
 
-    <div style="margin-top:1.25rem;margin-bottom:1.25rem;">
+    <div class="admin-api-token-danger__block">
      <h3 class="govuk-heading-s">@(token?.IsActive == true ? "Suspend" : "Activate") token</h3>
      <p class="govuk-body">
       @if (token?.IsActive == true)
@@ -242,7 +257,7 @@
 
     <hr class="govuk-section-break govuk-section-break--visible" />
 
-    <div style="margin-top:1.25rem;">
+    <div class="admin-api-token-danger__block">
      <h3 class="govuk-heading-s">Delete token</h3>
      <p class="govuk-body">Permanently delete this token. This action cannot be undone.</p>
      <form method="post" action="@Url.Action("ApiTokenDelete", "ModernAdmin", new { id = token?.Id })" id="deleteTokenForm">
@@ -262,6 +277,10 @@
 
    <!-- Token details sidebar -->
    <div class="dfe-c-card dfe-c-card--plain" style="margin-bottom:1.5rem;">
+    <p class="govuk-body-s govuk-!-margin-bottom-3">
+     <a class="govuk-link" href="@Url.Action("ApiLogs", "ModernAdmin", new { tokenId = token?.Id })">View API logs for this token</a>
+     · <a class="govuk-link" href="@Url.Action("ApiLogs", "ModernAdmin")">All API logs</a>
+    </p>
     <h2 class="govuk-heading-s">Token details</h2>
     <dl class="govuk-summary-list govuk-summary-list--no-border">
      <div class="govuk-summary-list__row">
@@ -357,6 +376,34 @@ document.addEventListener('DOMContentLoaded', function() {
             confirmBtn.disabled = this.value !== 'DELETE';
         });
     }
+
+    var resources = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(resources ?? Array.Empty<string>()));
+
+    function setPreset(mode) {
+        resources.forEach(function(resource) {
+            var read = document.getElementById(resource + '_read');
+            var create = document.getElementById(resource + '_create');
+            var update = document.getElementById(resource + '_update');
+            var del = document.getElementById(resource + '_delete');
+            if (!read && !create && !update && !del) return;
+            var isCms = resource === 'CmsAccessRequests';
+            var isLookups = resource === 'AdminLookups';
+            if (mode === 'clear') {
+                [read, create, update, del].forEach(function(el) { if (el) el.checked = false; });
+                return;
+            }
+            if (read) read.checked = mode === 'read' || mode === 'cru' || mode === 'crud';
+            if (create) create.checked = !isLookups && (mode === 'cru' || mode === 'crud' || (isCms && (mode === 'cru' || mode === 'crud')));
+            if (update) update.checked = !isCms && !isLookups && (mode === 'cru' || mode === 'crud');
+            if (del) del.checked = !isCms && !isLookups && mode === 'crud';
+        });
+    }
+
+    document.querySelectorAll('[data-permission-preset]').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            setPreset(btn.getAttribute('data-permission-preset'));
+        });
+    });
 
     // Confirm buttons via data-confirm attribute
     document.querySelectorAll('[data-confirm]').forEach(function(btn) {

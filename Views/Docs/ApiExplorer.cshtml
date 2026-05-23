@@ -1,52 +1,26 @@
-@using Compass.Models.Docs
 @{
     ViewData["Title"] = "API explorer";
     ViewData["DocsSection"] = "api-explorer";
     ViewData["DocsFullWidth"] = true;
-
-    // Build the catalogue payload that drives the left collections panel
-    // and the request/response workspace. We expose every endpoint that
-    // is marked ExplorerExposed (defaults to true) plus its example body
-    // so users can hit "Send" without typing.
-    var catalogue = ApiCatalogue.Sections
-        .Select(section => new
-        {
-            id = section.Id,
-            title = section.Title,
-            description = section.Description,
-            endpoints = section.Endpoints
-                .Where(e => e.ExplorerExposed)
-                .Select(e => new
-                {
-                    id = e.Id,
-                    method = e.Method,
-                    path = e.Path,
-                    scope = e.Scope,
-                    description = e.Description,
-                    responseShape = e.ResponseShape,
-                    routeParams = (e.RouteParams ?? Array.Empty<(string, string, string)>())
-                        .Select(p => new { name = p.Name, type = p.Type, description = p.Description }),
-                    queryParams = (e.QueryParams ?? Array.Empty<(string, string, string)>())
-                        .Select(p => new { name = p.Name, type = p.Type, description = p.Description }),
-                    bodyExample = e.BodyExample,
-                    responseExample = e.ResponseExample
-                })
-                .ToArray()
-        })
-        .Where(s => s.endpoints.Length > 0)
-        .ToArray();
-
-    var jsonOpts = new System.Text.Json.JsonSerializerOptions { WriteIndented = false };
-    var catalogueJson = System.Text.Json.JsonSerializer.Serialize(catalogue, jsonOpts);
-
-    var totalEndpoints = catalogue.Sum(s => s.endpoints.Length);
+    var totalEndpoints = ViewBag.ExplorerTotalEndpoints as int? ?? 0;
+    var productionUrl = ViewBag.ExplorerProductionUrl as string ?? "https://compass.education.gov.uk";
+    var testUrl = ViewBag.ExplorerTestUrl as string;
+    var productionHost = new Uri(productionUrl).Host;
+    var testHost = string.IsNullOrWhiteSpace(testUrl) ? null : new Uri(testUrl).Host;
+    var catalogueUrl = Url.Action("ApiExplorerCatalogue", "Docs") ?? "/docs/api-explorer/catalogue";
+    var userTokensUrl = Url.Action("ApiExplorerUserTokens", "Docs") ?? "/docs/api-explorer/user-tokens";
+    var proxyUrl = Url.Action("ApiExplorerProxy", "Docs") ?? "/docs/api-explorer/proxy";
 }
 
 @section Styles {
-    <link rel="stylesheet" href="~/css/docs-api-explorer.css" asp-append-version="true" />
+    <link rel="stylesheet" href="@Url.Content("~/css/docs-api-explorer.css")" asp-append-version="true" />
 }
 
-<div class="api-explorer" data-api-explorer>
+<div class="api-explorer"
+     data-api-explorer
+     data-catalogue-url="@catalogueUrl"
+     data-user-tokens-url="@userTokensUrl"
+     data-proxy-url="@proxyUrl">
     @* ============ HEADER STRIP — title, env, token =========================== *@
     <header class="api-explorer__topbar">
         <div class="api-explorer__title">
@@ -60,31 +34,59 @@
         <div class="api-explorer__env">
             <label class="api-explorer__env-label" for="api-explorer-env">Environment</label>
             <select class="api-explorer__env-select" id="api-explorer-env" data-explorer-env>
-                <option value="https://compass.education.gov.uk">Production &mdash; compass.education.gov.uk</option>
-                <option value="https://s186d01-compass-g8g3bvheb2dsctey.westeurope-01.azurewebsites.net">Test &mdash; s186d01-compass</option>
+                <option value="@productionUrl">Production &mdash; @productionHost</option>
+                @if (!string.IsNullOrWhiteSpace(testUrl))
+                {
+                    <option value="@testUrl">Test &mdash; @testHost</option>
+                }
                 <option value="">Current host (uses your session cookie)</option>
             </select>
 
-            <label class="api-explorer__env-label" for="api-explorer-token">Bearer token</label>
-            <div class="api-explorer__token">
-                <input type="password"
-                       class="api-explorer__token-input"
-                       id="api-explorer-token"
-                       data-explorer-token
-                       placeholder="cps_..."
-                       autocomplete="off"
-                       spellcheck="false" />
-                <button type="button"
-                        class="api-explorer__token-reveal"
-                        data-explorer-token-reveal
-                        aria-pressed="false"
-                        aria-label="Show token">Show</button>
+            <fieldset class="api-explorer__auth govuk-fieldset govuk-!-margin-bottom-2" data-explorer-auth>
+                <legend class="govuk-fieldset__legend govuk-fieldset__legend--s api-explorer__env-label">Authentication</legend>
+                <div class="api-explorer__auth-managed govuk-!-margin-bottom-2" data-explorer-auth-managed hidden>
+                    <div class="govuk-radios govuk-radios--small" data-module="govuk-radios">
+                        <div class="govuk-radios__item">
+                            <input class="govuk-radios__input" id="api-explorer-auth-managed" name="api-explorer-auth-mode" type="radio" value="managed" data-explorer-auth-mode="managed" />
+                            <label class="govuk-label govuk-radios__label" for="api-explorer-auth-managed">Use my API key</label>
+                        </div>
+                    </div>
+                    <select class="api-explorer__env-select govuk-!-margin-top-2" id="api-explorer-my-token" data-explorer-my-token-select aria-label="Select your API key"></select>
+                    <p class="govuk-body-s govuk-hint govuk-!-margin-top-2 govuk-!-margin-bottom-0" data-explorer-managed-status hidden></p>
+                </div>
+                <div class="govuk-radios govuk-radios--small govuk-!-margin-bottom-2">
+                    <div class="govuk-radios__item">
+                        <input class="govuk-radios__input" id="api-explorer-auth-paste" name="api-explorer-auth-mode" type="radio" value="paste" data-explorer-auth-mode="paste" checked />
+                        <label class="govuk-label govuk-radios__label" for="api-explorer-auth-paste">Paste a bearer token</label>
+                    </div>
+                    <div class="govuk-radios__item">
+                        <input class="govuk-radios__input" id="api-explorer-auth-session" name="api-explorer-auth-mode" type="radio" value="session" data-explorer-auth-mode="session" />
+                        <label class="govuk-label govuk-radios__label" for="api-explorer-auth-session">Use session cookie only</label>
+                    </div>
+                </div>
+            </fieldset>
+            <div class="api-explorer__token" data-explorer-paste-wrap>
+                <label class="api-explorer__env-label" for="api-explorer-token">Bearer token</label>
+                <div class="api-explorer__token-row">
+                    <input type="password"
+                           class="api-explorer__token-input"
+                           id="api-explorer-token"
+                           data-explorer-token
+                           placeholder="cps_..."
+                           autocomplete="off"
+                           spellcheck="false" />
+                    <button type="button"
+                            class="api-explorer__token-reveal"
+                            data-explorer-token-reveal
+                            aria-pressed="false"
+                            aria-label="Show token">Show</button>
+                </div>
             </div>
-            <label class="api-explorer__remember">
+            <label class="api-explorer__remember" data-explorer-remember-wrap>
                 <input type="checkbox" id="api-explorer-token-remember" data-explorer-token-remember />
-                <span>Remember on this device</span>
+                <span>Remember pasted token on this device</span>
                 &middot;
-                <a class="govuk-link" href="/Admin/ApiTokens" target="_blank" rel="noopener">Manage tokens</a>
+                <a class="govuk-link" href="@Url.Action("Index", "DocsDeveloperApi")">Manage API keys</a>
             </label>
         </div>
     </header>
@@ -389,10 +391,7 @@
 </div>
 
 @section Scripts {
-    <script id="api-explorer-catalogue"
-            type="application/json"
-            nonce="@(Context.Items["Nonce"]?.ToString() ?? "")">@Html.Raw(catalogueJson)</script>
-    <script src="~/js/docs-api-explorer.js"
+    <script src="@Url.Content("~/js/docs-api-explorer.js")"
             asp-append-version="true"
             nonce="@(Context.Items["Nonce"]?.ToString() ?? "")"></script>
 }

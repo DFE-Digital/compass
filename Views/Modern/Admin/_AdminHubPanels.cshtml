@@ -115,6 +115,24 @@
     })
     break;
 
+  case "resource-bands":
+    @await Html.PartialAsync("~/Views/Modern/Admin/_AdminLookupTable5Col.cshtml", new AdminLookupTable5ColModel
+    {
+      Panel = "resource-bands",
+      Heading = "Resource bands",
+      IntroHtml = "Bands used by resourcing reports to classify FTE totals. Configure range thresholds and a GOV.UK badge colour for each band.",
+      AddButtonLabel = "Add new resource band",
+      Rows = Model.ResourceBands.Select(b => new AdminLookupRow
+      {
+        Id = b.Id,
+        Name = b.Name,
+        Description = $"{(string.IsNullOrWhiteSpace(b.Description) ? "No description" : b.Description)} · Range: {b.MinFte:0.##} to {(b.MaxFte.HasValue ? b.MaxFte.Value.ToString("0.##") : "no upper limit")} · Colour: {(string.IsNullOrWhiteSpace(b.CssClass) ? "default" : b.CssClass)}",
+        SortOrder = b.SortOrder,
+        IsActive = b.IsActive
+      }).ToList()
+    })
+    break;
+
   case "mission-pillars":
     @await Html.PartialAsync("~/Views/Modern/Admin/_AdminLookupTable5Col.cshtml", new AdminLookupTable5ColModel
     {
@@ -638,20 +656,72 @@
     </div>
     break;
 
+  case "api-token-requests":
+ {
+   var pendingRequests = ViewBag.PendingApiTokenRequests as List<Compass.Models.ApiTokenRequest> ?? new();
+ <div id="panel-api-token-requests" class="admin-panel">
+ <div class="dfe-c-flex--between dfe-c-mb-2">
+ <h2 class="govuk-heading-m" style="margin:0;">API key requests</h2>
+ <a class="govuk-button govuk-button--secondary" href="@Url.Action("Index", "ModernAdmin", new { panel = "api-tokens" })">All tokens</a>
+ </div>
+ <p class="govuk-body dfe-c-text-muted dfe-c-mb-2">Review self-service API key requests. Read-only keys for @@education.gov.uk accounts are auto-approved.</p>
+ <table class="govuk-table govuk-table--small dfe-f-table--condensed">
+  <thead class="govuk-table__head">
+   <tr class="govuk-table__row">
+    <th class="govuk-table__header">Requestor</th>
+    <th class="govuk-table__header">Environment</th>
+    <th class="govuk-table__header">Project</th>
+    <th class="govuk-table__header">Read-only all</th>
+    <th class="govuk-table__header">Submitted</th>
+    <th class="govuk-table__header"><span class="govuk-visually-hidden">Actions</span></th>
+   </tr>
+  </thead>
+  <tbody class="govuk-table__body">
+   @if (pendingRequests.Count == 0)
+   {
+    <tr class="govuk-table__row"><td colspan="6" class="dfe-c-text-muted">No pending requests.</td></tr>
+   }
+   else
+   {
+    foreach (var r in pendingRequests)
+    {
+     <tr class="govuk-table__row">
+      <td class="govuk-table__cell">@r.RequestorEmail</td>
+      <td class="govuk-table__cell">@r.Environment</td>
+      <td class="govuk-table__cell">@r.ProjectSlug</td>
+      <td class="govuk-table__cell">@(r.IsReadOnlyAllData ? "Yes" : "No")</td>
+      <td class="govuk-table__cell">@r.CreatedAt.ToString("d MMM yyyy HH:mm")</td>
+      <td class="govuk-table__cell" style="text-align:right;">
+       <a class="govuk-link" href="@Url.Action("ApiTokenRequestDetail", "ModernAdmin", new { id = r.Id })">Review</a>
+      </td>
+     </tr>
+    }
+   }
+  </tbody>
+ </table>
+ </div>
+ }
+ break;
+
   case "api-tokens":
  <div id="panel-api-tokens" class="admin-panel">
  <div class="dfe-c-flex--between dfe-c-mb-2">
  <h2 class="govuk-heading-m" style="margin:0;">API tokens</h2>
- <a class="govuk-button" href="@Url.Action("ApiTokenCreate", "ModernAdmin")" id="btn-add-token">Add token</a>
+ <div class="dfe-c-flex" style="gap:0.5rem;flex-wrap:wrap;">
+  <a class="govuk-button govuk-button--secondary" href="@Url.Action("Index", "ModernAdmin", new { panel = "api-token-requests" })">Pending requests</a>
+  <a class="govuk-button govuk-button--secondary" href="@Url.Action("ApiLogs", "ModernAdmin")">API logs</a>
+  <a class="govuk-button" href="@Url.Action("ApiTokenCreate", "ModernAdmin")" id="btn-add-token">Add token</a>
+ </div>
       </div>
- <p class="govuk-body dfe-c-text-muted dfe-c-mb-2">Manage API tokens for external integrations and service-to-service authentication.</p>
+ <p class="govuk-body dfe-c-text-muted dfe-c-mb-2">Manage API tokens for external integrations and service-to-service authentication. Users can also request keys from the <a class="govuk-link" href="/docs/developer/api">developer portal</a>.</p>
  <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
   <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
         <table class="govuk-table govuk-table--small dfe-f-table--condensed">
           <thead class="govuk-table__head">
             <tr class="govuk-table__row">
  <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Name</button></th>
- <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Description</button></th>
+ <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Owner</button></th>
+ <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Env</button></th>
  <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Created</button></th>
  <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Expires</button></th>
  <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Status</button></th>
@@ -661,15 +731,16 @@
           <tbody class="govuk-table__body">
             @if (Model.ApiTokenRows.Count == 0)
             {
- <tr class="govuk-table__row"><td colspan="6" class="dfe-c-text-muted">No API tokens yet. Use <strong>Add token</strong> to create one.</td></tr>
+ <tr class="govuk-table__row"><td colspan="6" class="dfe-c-text-muted">No API tokens yet. Use <strong>Add token</strong> or the developer portal to create one.</td></tr>
             }
             else
             {
               foreach (var t in Model.ApiTokenRows)
               {
                 <tr class="govuk-table__row">
-                  <td class="govuk-table__cell"><strong>@t.Name</strong></td>
-                  <td class="govuk-table__cell">@(string.IsNullOrEmpty(t.Description) ? "—" : t.Description)</td>
+                  <td class="govuk-table__cell"><strong>@t.Name</strong>@if (t.IsSelfService) { <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--grey">Self-service</span> }</td>
+                  <td class="govuk-table__cell">@(t.OwnerEmail ?? "—")</td>
+                  <td class="govuk-table__cell">@(t.Environment ?? "—")</td>
                   <td class="govuk-table__cell">@t.CreatedAt.ToString("d MMM yyyy")</td>
                   <td class="govuk-table__cell">@(t.ExpiresAt?.ToString("d MMM yyyy") ?? "Never")</td>
                   <td class="govuk-table__cell">

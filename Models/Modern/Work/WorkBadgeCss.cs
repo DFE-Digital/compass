@@ -68,6 +68,19 @@ public static class WorkBadgeCss
     public static string RagCompactBadgeClass(string? ragDisplayName)
         => RagBadgeClass(ragDisplayName);
 
+    /// <summary>Colour-coded completion % badge for service register reporting tables.</summary>
+    public static string ServiceRegisterCompletionBadgeClass(int completionPercent)
+    {
+        var baseClass = "dfe-f-badge dfe-f-badge--small";
+        return completionPercent switch
+        {
+            >= 100 => baseClass + " dfe-f-badge--green",
+            >= 67 => baseClass + " dfe-f-badge--blue",
+            >= 34 => baseClass + " dfe-f-badge--orange",
+            _ => baseClass + " dfe-f-badge--red"
+        };
+    }
+
     /// <summary>Count badge on monthly report toggle headers.</summary>
     public static string ToggleCountBadgeClass(int count, bool highlightWhenPositive = false, bool warnWhenPositive = false)
     {
@@ -264,6 +277,24 @@ public static class WorkBadgeCss
         if (n.Contains("discovery")) return "dfe-f-badge dfe-f-badge--teal";
         if (n.Contains("explore")) return "dfe-f-badge dfe-f-badge--purple";
         return "dfe-f-badge dfe-f-badge--blue";
+    }
+
+    /// <summary>Resourcing band as <c>dfe-f-badge</c> using an admin-configured colour modifier.</summary>
+    public static string ResourceBandDfeFrontendBadgeClass(string? cssClassOrModifier)
+    {
+        const string baseClass = "dfe-f-badge dfe-f-badge--small";
+        if (string.IsNullOrWhiteSpace(cssClassOrModifier))
+            return baseClass + " dfe-f-badge--grey";
+
+        var token = cssClassOrModifier.Trim();
+        if (token.StartsWith("dfe-f-badge--", StringComparison.OrdinalIgnoreCase))
+            token = token["dfe-f-badge--".Length..];
+
+        token = token.ToLowerInvariant();
+        if (!DfeFrontendBadgeModifiers.Contains(token))
+            return baseClass + " dfe-f-badge--grey";
+
+        return $"{baseClass} dfe-f-badge--{token}";
     }
 
     /// <summary>Raid risk/issue status (open = blue, closed = green).</summary>

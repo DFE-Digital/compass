@@ -25,11 +25,12 @@ namespace Compass.Controllers.Modern;
 /// <summary>Modern work UI at <c>/modern/work/*</c>, backed by Compass <see cref="Project"/> data.</summary>
 [Authorize]
 [Route("modern/work")]
-public class ModernWorkController : Controller
+public partial class ModernWorkController : Controller
 {
     private const int WorkGroupingRegisterPageSize = 25;
     private const string DefaultBusinessAreaCookieName = "compass_work_default_ba";
     private const string DefaultDirectorateCookieName = "compass_work_default_dir";
+    private const string CentralOperationsAdminGroupName = "Central Operations Admin";
 
     private static readonly HashSet<string> WorkRegisterStatusFilterValues = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -86,6 +87,8 @@ public class ModernWorkController : Controller
     private readonly ILogger<ModernWorkController> _logger;
     private readonly IRaidRiskEditorFormService _raidRiskEditorForm;
     private readonly IRaidIssueEditorFormService _raidIssueEditorForm;
+    private readonly IPermissionService _permissions;
+    private readonly IWorkServiceRegisterLinkService _workServiceRegisterLinks;
 
     public ModernWorkController(
         CompassDbContext context,
@@ -95,7 +98,9 @@ public class ModernWorkController : Controller
         IMonthlyUpdateService monthlyUpdateService,
         ILogger<ModernWorkController> logger,
         IRaidRiskEditorFormService raidRiskEditorForm,
-        IRaidIssueEditorFormService raidIssueEditorForm)
+        IRaidIssueEditorFormService raidIssueEditorForm,
+        IPermissionService permissions,
+        IWorkServiceRegisterLinkService workServiceRegisterLinks)
     {
         _context = context;
         _modernWork = modernWork;
@@ -105,6 +110,8 @@ public class ModernWorkController : Controller
         _logger = logger;
         _raidRiskEditorForm = raidRiskEditorForm;
         _raidIssueEditorForm = raidIssueEditorForm;
+        _permissions = permissions;
+        _workServiceRegisterLinks = workServiceRegisterLinks;
     }
 
     private static readonly HashSet<string> ValidMilestoneStatuses = new(StringComparer.OrdinalIgnoreCase)
@@ -773,7 +780,8 @@ public class ModernWorkController : Controller
             SubmittedByUserId = mu.CreatedByUserId,
             SubmittedBy = mu.CreatedByName ?? (mu.SubmittedAt.HasValue ? mu.CreatedByEmail : null),
             PermFte = mu.MonthlyPermFte,
-            MspFte = mu.MonthlyMspFte
+            MspFte = mu.MonthlyMspFte,
+            PeopleNarrative = mu.PeopleNarrative
         };
 
         if (mu.CreatedByUserId.HasValue)
@@ -914,7 +922,7 @@ public class ModernWorkController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> MonthlyReportPost(
         int id, int year, int month,
-        string? narrative, decimal? permFte, decimal? mspFte,
+        string? narrative, string? peopleNarrative, decimal? permFte, decimal? mspFte,
         int? ragStatusId, string? ragJustification, string? pathToGreen,
         string? command,
         CancellationToken cancellationToken = default)
@@ -967,6 +975,7 @@ public class ModernWorkController : Controller
             ModelState,
             isSubmit,
             narrative,
+            peopleNarrative,
             permFte,
             mspFte,
             ragStatusId,
@@ -978,6 +987,7 @@ public class ModernWorkController : Controller
         {
             var posted = new MonthlyReportPostedForm(
                 narrative,
+                peopleNarrative,
                 permFte,
                 mspFte,
                 ragStatusId,
@@ -1012,6 +1022,7 @@ public class ModernWorkController : Controller
         }
 
         update.Narrative = narrative ?? string.Empty;
+        update.PeopleNarrative = peopleNarrative;
         update.MonthlyPermFte = permFte;
         update.MonthlyMspFte = mspFte;
         update.UpdatedAt = DateTime.UtcNow;
@@ -1098,6 +1109,7 @@ public class ModernWorkController : Controller
 
     private sealed record MonthlyReportPostedForm(
         string? Narrative,
+        string? PeopleNarrative,
         decimal? PermFte,
         decimal? MspFte,
         int? RagStatusId,
@@ -1119,6 +1131,7 @@ public class ModernWorkController : Controller
         ModelStateDictionary modelState,
         bool isSubmit,
         string? narrative,
+        string? peopleNarrative,
         decimal? permFte,
         decimal? mspFte,
         int? ragStatusId,
@@ -1136,6 +1149,7 @@ public class ModernWorkController : Controller
         }
 
         MaxLen(nameof(narrative), narrative, "Monthly update narrative");
+        MaxLen(nameof(peopleNarrative), peopleNarrative, "Narrative on people this month");
         MaxLen(nameof(ragJustification), ragJustification, "Justification for RAG");
         if (resolvedRag != null && !MonthlyReportIsGreenRagName(resolvedRag.Name))
             MaxLen(nameof(pathToGreen), pathToGreen, "Path to green");
@@ -1291,6 +1305,7 @@ public class ModernWorkController : Controller
             SubmittedAt = update?.SubmittedAt,
             SubmittedByName = submittedByName,
             Narrative = ComposeMonthlyUpdateNarrativeForDisplay(update),
+            PeopleNarrative = update?.PeopleNarrative,
             PermFte = update?.MonthlyPermFte,
             MspFte = update?.MonthlyMspFte,
             RagStatusId = currentRagId,
@@ -1311,6 +1326,7 @@ public class ModernWorkController : Controller
         if (posted != null)
         {
             vm.Narrative = posted.Narrative;
+            vm.PeopleNarrative = posted.PeopleNarrative;
             vm.PermFte = posted.PermFte;
             vm.MspFte = posted.MspFte;
             vm.RagStatusId = posted.RagStatusId;
@@ -1392,6 +1408,7 @@ public class ModernWorkController : Controller
             SubmittedAt = prevUpdate.SubmittedAt,
             SubmittedByName = prevSubmittedByName,
             Narrative = ComposeMonthlyUpdateNarrativeForDisplay(prevUpdate),
+            PeopleNarrative = prevUpdate.PeopleNarrative,
             PermFte = prevUpdate.MonthlyPermFte,
             MspFte = prevUpdate.MonthlyMspFte,
             RagName = prevRagName,
@@ -1461,6 +1478,26 @@ public class ModernWorkController : Controller
         if (work == null)
             return NotFound();
 
+        if (ViewBag.ShowFipsDatabaseServiceRegister as bool? == true)
+        {
+            ViewBag.WorkServiceRegisterLinkCount =
+                await _workServiceRegisterLinks.CountLinksForWorkItemAsync(id, cancellationToken);
+            ViewBag.CanLinkWorkServiceRegister =
+                await _workServiceRegisterLinks.CanLinkFromWorkItemAsync(id, userEmail, cancellationToken);
+            var srLinks = await _workServiceRegisterLinks.GetLinksForWorkItemAsync(
+                id,
+                productId => Url.Action("FipsProduct", "ModernManage", new { id = productId }) ?? "#",
+                cancellationToken);
+            ViewBag.WorkServiceRegisterLinksPanel = new Compass.ViewModels.Modern.WorkServiceRegisterLinksPanelViewModel
+            {
+                WorkItemId = id,
+                CanLink = ViewBag.CanLinkWorkServiceRegister as bool? == true,
+                Links = srLinks,
+                PickProductsUrl = Url.Action(nameof(PickServiceRegisterProducts), new { id }) ?? "",
+                LinkUrl = Url.Action(nameof(LinkServiceRegisterProduct), new { id }) ?? "",
+            };
+        }
+
         return View("~/Views/Modern/Work/Detail.cshtml", work);
     }
 
@@ -1473,6 +1510,9 @@ public class ModernWorkController : Controller
             return Forbid();
         return null;
     }
+
+    private Task<bool> CanEditWorkPriorityAsync(string userEmail) =>
+        _permissions.IsInGroupAsync(userEmail, CentralOperationsAdminGroupName);
 
     [HttpGet("{id:int}/strategic-alignment/edit")]
     [HttpGet("/ModernWork/EditStrategicAlignment/{id:int}")]
@@ -2621,6 +2661,7 @@ public class ModernWorkController : Controller
 
         await PopulateWorkCreateViewBagAsync(null, cancellationToken);
         ViewBag.WorkChromeSubPage = true;
+        ViewBag.CanEditPriority = await CanEditWorkPriorityAsync(userEmail);
         ViewBag.SelectedDirectorateIds = work.Directorates?.Select(d => d.DirectorateId).Distinct().ToArray() ?? Array.Empty<int>();
         ViewBag.SelectedWorkTagIds = work.Tags?.Select(t => t.Id).ToArray() ?? Array.Empty<int>();
 
@@ -2656,6 +2697,8 @@ public class ModernWorkController : Controller
         if (deny != null)
             return deny;
 
+        var canEditPriority = await CanEditWorkPriorityAsync(userEmail);
+
         directorateIds ??= Array.Empty<int>();
         workTagIds ??= Array.Empty<int>();
 
@@ -2675,6 +2718,7 @@ public class ModernWorkController : Controller
             model.Id = id;
             await PopulateWorkCreateViewBagAsync(null, cancellationToken);
             ViewBag.WorkChromeSubPage = true;
+            ViewBag.CanEditPriority = canEditPriority;
             ViewBag.SelectedDirectorateIds = directorateIds;
             ViewBag.SelectedWorkTagIds = workTagIds;
 
@@ -2708,6 +2752,7 @@ public class ModernWorkController : Controller
             model.Id = id;
             await PopulateWorkCreateViewBagAsync(null, cancellationToken);
             ViewBag.WorkChromeSubPage = true;
+            ViewBag.CanEditPriority = canEditPriority;
             ViewBag.SelectedDirectorateIds = directorateIds;
             ViewBag.SelectedWorkTagIds = workTagIds;
             var chrome = await _modernWork.PopulateWorkDetailAsync(
@@ -2717,7 +2762,8 @@ public class ModernWorkController : Controller
         }
 
         project.PhaseId = model.DeliveryPhaseId;
-        project.DeliveryPriorityId = model.PriorityId;
+        if (canEditPriority)
+            project.DeliveryPriorityId = model.PriorityId;
         project.ActivityTypeLookupId = model.ActivityTypeId;
         project.RiskAppetiteLookupId = model.RiskAppetiteId;
         project.IsFlagship = model.FlagshipProject;
@@ -2727,7 +2773,7 @@ public class ModernWorkController : Controller
         project.PrimaryContactUserId = model.PrimaryContactUserId;
         project.UpdatedAt = now;
 
-        if (model.PriorityId != oldPriorityId && !string.IsNullOrWhiteSpace(model.PriorityChangeReason))
+        if (canEditPriority && model.PriorityId != oldPriorityId && !string.IsNullOrWhiteSpace(model.PriorityChangeReason))
             project.DeliveryPriorityChangeReason = model.PriorityChangeReason.Trim();
 
         if (!string.IsNullOrWhiteSpace(model.ProblemStatement))

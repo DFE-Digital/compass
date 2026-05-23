@@ -124,6 +124,18 @@ public partial class ModernReportingController
                 .ToList() ?? new List<ModernBusinessAreaDashboardRow>();
             sourceItems = ResolveDrillSourceItems(rows, pr.Report.ScopeProjectItems, dimension, ba);
         }
+        else if (src == "resourcing")
+        {
+            var rr = await _monthlyReportService.BuildResourcingReportAsync(
+                year,
+                month,
+                businessAreaId,
+                directorateId,
+                dimension,
+                groupId,
+                cancellationToken);
+            sourceItems = ResolveResourcingDrillSourceItems(rr, dimension, ba);
+        }
         else
         {
             var model = await _monthlyReportService.BuildDashboardAsync(
@@ -164,6 +176,59 @@ public partial class ModernReportingController
         return baMatch?.Projects ?? new List<BusinessAreaProjectItem>();
     }
 
+    private static List<BusinessAreaProjectItem> ResolveResourcingDrillSourceItems(
+        ModernResourcingReportViewModel report,
+        string? dimension,
+        string? groupKey)
+    {
+        var key = (groupKey ?? "").Trim();
+        var allItems = report.WorkItemRows
+            .Select(ToResourcingDrillItem)
+            .ToList();
+        var byId = allItems.ToDictionary(i => i.Id);
+        if (key is "__scope__" or "Total")
+            return allItems;
+
+        IEnumerable<int> ids = Array.Empty<int>();
+        var dim = (dimension ?? "").Trim().ToLowerInvariant();
+        if (dim == "directorate")
+        {
+            ids = report.DirectorateRows
+                .FirstOrDefault(r => string.Equals(r.Name, key, StringComparison.OrdinalIgnoreCase))
+                ?.ProjectIds ?? Enumerable.Empty<int>();
+        }
+        else if (dim == "business-area")
+        {
+            ids = report.BusinessAreaRows
+                .FirstOrDefault(r => string.Equals(r.Name, key, StringComparison.OrdinalIgnoreCase))
+                ?.ProjectIds ?? Enumerable.Empty<int>();
+        }
+        else if (dim == "month")
+        {
+            ids = report.TrendPoints
+                .FirstOrDefault(t => string.Equals(t.Label, key, StringComparison.OrdinalIgnoreCase))
+                ?.WorkItemIds ?? Enumerable.Empty<int>();
+        }
+
+        return ids
+            .Distinct()
+            .Where(id => byId.ContainsKey(id))
+            .Select(id => byId[id])
+            .ToList();
+    }
+
+    private static BusinessAreaProjectItem ToResourcingDrillItem(ResourcingWorkItemRow row) => new()
+    {
+        Id = row.WorkItemId,
+        Title = row.Title,
+        BusinessArea = row.BusinessArea,
+        Rag = string.IsNullOrWhiteSpace(row.Rag) ? "Not Set" : row.Rag,
+        Priority = string.IsNullOrWhiteSpace(row.Priority) ? "Not Set" : row.Priority!,
+        PermFte = row.PermFte,
+        MspFte = row.MspFte,
+        SubmittedUpdate = true
+    };
+
     [HttpGet("thematic/export")]
     public async Task<IActionResult> ExportThematicReport(
         int? themeId,
@@ -199,6 +264,30 @@ public partial class ModernReportingController
             return Unauthorized();
 
         return ReturnExcelFile(excel, $"thematic-report-all-{Timestamp()}.xlsx");
+    }
+
+    [HttpGet("resourcing/export")]
+    public async Task<IActionResult> ExportResourcingReport(
+        int? year,
+        int? month,
+        int? businessAreaId,
+        int? directorateId,
+        string? dimension,
+        int? groupId,
+        CancellationToken cancellationToken = default)
+    {
+        var model = await _monthlyReportService.BuildResourcingReportAsync(
+            year,
+            month,
+            businessAreaId,
+            directorateId,
+            dimension,
+            groupId,
+            cancellationToken);
+
+        var bytes = ResourcingReportExcelExport.BuildWorkbook(model);
+        var period = SanitizeFilePart(model.MonthName.Replace(" ", "-"));
+        return ReturnExcelFile(bytes, $"resourcing-report-{period}-{Timestamp()}.xlsx");
     }
 
     [HttpGet("raid/export")]

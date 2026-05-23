@@ -61,6 +61,10 @@ public class ProjectMonthlyUpdate
     [Column(TypeName = "decimal(18,2)")]
     public decimal? MonthlyMspFte { get; set; }
 
+    /// <summary>Narrative on people changes for this reporting month (moves, onboarding, offboarding).</summary>
+    [MaxLength(4000)]
+    public string? PeopleNarrative { get; set; }
+
     /// <summary>Draft RAG selection for an in-progress monthly return (before submit). Persisted on save draft; cleared on submit.</summary>
     public int? DraftRagStatusLookupId { get; set; }
 
