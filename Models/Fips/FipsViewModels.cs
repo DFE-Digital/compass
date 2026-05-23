@@ -1,8 +1,7 @@
 using Compass.Models;
 using Compass.Models.Modern.Work;
-using Compass.ViewModels.Modern;
-
 using Compass.Services.Aiss;
+using Compass.ViewModels.Modern;
 
 namespace Compass.Models.Fips;
 
@@ -154,7 +153,7 @@ public class FipsProductDetailViewModel
     public CMDBProduct Product { get; set; } = null!;
     public bool CanManage { get; set; }
 
-    /// <summary>User is listed as a contact on this service register product (any role).</summary>
+    /// <summary>User is listed as a contact on this service register product (any role), or is an operations console editor.</summary>
     public bool CanEditInformation { get; set; }
     public string? CurrentUserEmail { get; set; }
 
@@ -171,7 +170,7 @@ public class FipsProductDetailViewModel
     /// <summary>Pretty-printed <see cref="CMDBProduct.LastCmdbSnapshotJson"/> for display; raw text if parsing fails.</summary>
     public string? CmdbSnapshotJsonFormatted { get; set; }
 
-    /// <summary>True when the information tab shows the editable form (named contacts on manage pages).</summary>
+    /// <summary>True when the information tab shows the editable form (named contacts or operations console users on manage pages).</summary>
     public bool EditMode { get; set; }
 
     /// <summary><c>information</c>, <c>history</c>, <c>risks</c>, <c>issues</c>, <c>assumptions</c>, <c>dependencies</c>, <c>accessibility</c>, <c>assurance</c>, <c>work</c>, or <c>performance</c>.</summary>
@@ -223,6 +222,8 @@ public class FipsProductDetailViewModel
     public HashSet<int> SelectedBusinessAreaLookupIds { get; set; } = new();
     public List<FipsChannel> ChannelOptions { get; set; } = new();
     public List<FipsUserGroup> UserGroupOptions { get; set; } = new();
+    /// <summary>Active user groups in hierarchy order for edit checkboxes.</summary>
+    public List<AdminFipsUserGroupRow> UserGroupTreeOptions { get; set; } = new();
     public List<FipsType> TypeOptions { get; set; } = new();
 
     // Audit history

@@ -1,7 +1,7 @@
 /* ===========================================================================
  * /docs/api-explorer — interactive Postman/Thunder-Client-style request UI.
  *
- *  - Reads the endpoint catalogue from <script id="api-explorer-catalogue">.
+ *  - Loads the endpoint catalogue and user tokens from same-origin JSON endpoints (CSP-safe).
  *  - Builds a searchable collections sidebar grouped by section.
  *  - On endpoint click: hydrates the request builder (method pill, URL,
  *    params table, body editor, headers preview).
@@ -46,17 +46,53 @@
     }
 
     /* ----------------------------- catalogue ----------------------------- */
-    var catalogue = (function () {
-        var node = document.getElementById('api-explorer-catalogue');
-        if (!node) return [];
-        try { return JSON.parse(node.textContent || '[]'); }
-        catch (_) { return []; }
-    })();
+    var catalogueUrl = root.getAttribute('data-catalogue-url') || '/docs/api-explorer/catalogue';
+    var userTokensUrl = root.getAttribute('data-user-tokens-url') || '/docs/api-explorer/user-tokens';
+    var proxyUrl = root.getAttribute('data-proxy-url') || '/docs/api-explorer/proxy';
 
+    var catalogue = [];
     var endpointsById = {};
-    catalogue.forEach(function (section) {
-        section.endpoints.forEach(function (ep) { endpointsById[ep.id] = ep; });
-    });
+
+    function indexCatalogue() {
+        endpointsById = {};
+        catalogue.forEach(function (section) {
+            section.endpoints.forEach(function (ep) { endpointsById[ep.id] = ep; });
+        });
+    }
+
+    function normalizeUserTokens(raw) {
+        if (!Array.isArray(raw)) return [];
+        return raw.map(function (t) {
+            return {
+                id: t.id != null ? t.id : t.Id,
+                name: t.name || t.Name || 'API key',
+                accessTier: t.accessTier || t.AccessTier || ''
+            };
+        }).filter(function (t) { return t.id != null; });
+    }
+
+    function loadExplorerData() {
+        return Promise.all([
+            fetch(catalogueUrl, { credentials: 'same-origin', headers: { Accept: 'application/json' } })
+                .then(function (r) { return r.ok ? r.json() : []; })
+                .catch(function () { return []; }),
+            fetch(userTokensUrl, { credentials: 'same-origin', headers: { Accept: 'application/json' } })
+                .then(function (r) { return r.ok ? r.json() : []; })
+                .catch(function () { return []; })
+        ]).then(function (parts) {
+            catalogue = Array.isArray(parts[0]) ? parts[0] : [];
+            userTokens = normalizeUserTokens(parts[1]);
+            indexCatalogue();
+        });
+    }
+
+    function isCrossOrigin(base) {
+        try {
+            return new URL(base).origin !== window.location.origin;
+        } catch (_) {
+            return true;
+        }
+    }
 
     /* ----------------------------- state ----------------------------- */
     var state = {
@@ -422,22 +458,7 @@
 
     /* ----------------------------- authentication ----------------------------- */
     var TOKEN_KEY = 'compass-docs-api-token';
-    var userTokens = (function () {
-        var node = document.getElementById('api-explorer-user-tokens');
-        if (!node) return [];
-        try {
-            var raw = JSON.parse(node.textContent || '[]');
-            if (!Array.isArray(raw)) return [];
-            return raw.map(function (t) {
-                return {
-                    id: t.id != null ? t.id : t.Id,
-                    name: t.name || t.Name || 'API key',
-                    accessTier: t.accessTier || t.AccessTier || ''
-                };
-            }).filter(function (t) { return t.id != null; });
-        }
-        catch (_) { return []; }
-    })();
+    var userTokens = [];
 
     var authState = {
         mode: 'session',
@@ -663,14 +684,35 @@
         return 'err';
     }
 
+    function applyResponsePayload(status, statusText, text, hdrs, elapsed) {
+        var size = new Blob([text]).size;
+        var sizeLabel = size < 1024
+            ? size + ' B'
+            : size < 1024 * 1024
+                ? (size / 1024).toFixed(1) + ' KB'
+                : (size / 1024 / 1024).toFixed(2) + ' MB';
+        var meta = status + ' ' + (statusText || '') + ' · ' + elapsed + ' ms · ' + sizeLabel;
+        setStatus(String(status), meta, statusKindFor(status));
+        state.lastResponseText = text;
+        state.lastResponseHeaders = hdrs || {};
+        try { state.lastResponse = JSON.parse(text); }
+        catch (_) { state.lastResponse = text; }
+        state.lastResponseRows = extractRows(state.lastResponse);
+        renderResponseBody(state.lastResponse, text);
+        renderResponseHeaders(state.lastResponseHeaders);
+        renderResponsePreview(state.lastResponseRows);
+        setExportEnabled(true, state.lastResponseRows.length > 0);
+    }
+
     function send() {
         var ep = endpointsById[state.currentEndpointId];
         if (!ep) return;
-        var url = getBaseUrl() + buildPath();
+        var base = getBaseUrl();
+        var path = buildPath();
         var headers = { 'Accept': 'application/json' };
         var token = readToken();
         if (token) headers['Authorization'] = 'Bearer ' + token;
-        var init = { method: ep.method, headers: headers, credentials: 'include' };
+        var requestBody = null;
 
         if (ep.method !== 'GET' && ep.method !== 'HEAD' && ep.method !== 'DELETE') {
             var bodyEditor = $('[data-explorer-body]');
@@ -687,7 +729,7 @@
                     return;
                 }
                 headers['Content-Type'] = 'application/json';
-                init.body = raw;
+                requestBody = raw;
             }
         }
 
@@ -696,7 +738,55 @@
         setStatus('Sending', '', 'busy');
 
         var t0 = performance.now();
-        fetch(url, init)
+        var useProxy = isCrossOrigin(base);
+
+        function finish() {
+            if (sendBtn) {
+                sendBtn.disabled = false;
+                sendBtn.classList.remove('api-explorer__send--busy');
+                sendBtn.textContent = 'Send';
+            }
+        }
+
+        if (useProxy) {
+            fetch(proxyUrl, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    baseUrl: base,
+                    method: ep.method,
+                    path: path,
+                    body: requestBody,
+                    authorization: token ? 'Bearer ' + token : null
+                })
+            })
+                .then(function (res) {
+                    return res.json().then(function (payload) {
+                        if (!res.ok) {
+                            throw new Error(payload && payload.error ? payload.error : 'Proxy request failed');
+                        }
+                        applyResponsePayload(
+                            payload.status,
+                            payload.statusText || '',
+                            payload.body || '',
+                            payload.headers || {},
+                            Math.round(performance.now() - t0));
+                    });
+                })
+                .catch(function (err) {
+                    setStatus('Network error', err.message || String(err), 'err');
+                    setExportEnabled(false, false);
+                    renderResponseBody('Network error: ' + (err.message || String(err)), '');
+                })
+                .finally(finish);
+            return;
+        }
+
+        var init = { method: ep.method, headers: headers, credentials: 'include' };
+        if (requestBody) init.body = requestBody;
+
+        fetch(path, init)
             .then(function (res) {
                 var elapsed = Math.round(performance.now() - t0);
                 var hdrs = {};
@@ -704,23 +794,7 @@
                     res.headers.forEach(function (v, k) { hdrs[k] = v; });
                 } catch (_) { /* ignore */ }
                 return res.text().then(function (text) {
-                    var size = new Blob([text]).size;
-                    var sizeLabel = size < 1024
-                        ? size + ' B'
-                        : size < 1024 * 1024
-                            ? (size / 1024).toFixed(1) + ' KB'
-                            : (size / 1024 / 1024).toFixed(2) + ' MB';
-                    var meta = res.status + ' ' + (res.statusText || '') + ' · ' + elapsed + ' ms · ' + sizeLabel;
-                    setStatus(String(res.status), meta, statusKindFor(res.status));
-                    state.lastResponseText = text;
-                    state.lastResponseHeaders = hdrs;
-                    try { state.lastResponse = JSON.parse(text); }
-                    catch (_) { state.lastResponse = text; }
-                    state.lastResponseRows = extractRows(state.lastResponse);
-                    renderResponseBody(state.lastResponse, text);
-                    renderResponseHeaders(hdrs);
-                    renderResponsePreview(state.lastResponseRows);
-                    setExportEnabled(true, state.lastResponseRows.length > 0);
+                    applyResponsePayload(res.status, res.statusText || '', text, hdrs, elapsed);
                 });
             })
             .catch(function (err) {
@@ -728,13 +802,7 @@
                 setExportEnabled(false, false);
                 renderResponseBody('Network error: ' + (err.message || String(err)), '');
             })
-            .finally(function () {
-                if (sendBtn) {
-                    sendBtn.disabled = false;
-                    sendBtn.classList.remove('api-explorer__send--busy');
-                    sendBtn.textContent = 'Send';
-                }
-            });
+            .finally(finish);
     }
 
     function resetResponse() {
@@ -1119,8 +1187,6 @@
         restoreToken();
         renderTree('');
 
-        // Honour #endpoint-id in the URL so collection bookmarks work; fall
-        // back to the first endpoint so the empty-stage doesn't linger.
         var hash = (window.location.hash || '').slice(1);
         if (hash && endpointsById[hash]) {
             selectEndpoint(hash);
@@ -1135,9 +1201,13 @@
         });
     }
 
+    function bootstrap() {
+        loadExplorerData().then(init).catch(function () { init(); });
+    }
+
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
+        document.addEventListener('DOMContentLoaded', bootstrap);
     } else {
-        init();
+        bootstrap();
     }
 })();

@@ -453,22 +453,14 @@ public partial class ModernAdminController : Controller
                 break;
 
             case "fips-user-groups":
-                vm.FipsUserGroups = await _context.FipsUserGroups.AsNoTracking()
-                    .Include(g => g.Children).Include(g => g.Synonyms)
-                    .Where(g => g.ParentId == null)
-                    .OrderBy(g => g.DisplayOrder)
-                    .Select(g => new AdminFipsUserGroupRow
-                    {
-                        Id = g.Id,
-                        Name = g.Name,
-                        Description = g.Description,
-                        DisplayOrder = g.DisplayOrder,
-                        Active = g.Active,
-                        ChildNames = g.Children.Select(c => c.Name).ToList(),
-                        SynonymNames = g.Synonyms.Select(s => s.Synonym).ToList()
-                    })
+            {
+                var allUserGroups = await _context.FipsUserGroups.AsNoTracking()
+                    .Include(g => g.Synonyms)
                     .ToListAsync();
+                vm.FipsUserGroups = AdminFipsUserGroupTreeHelper.BuildFlatTree(allUserGroups);
+                vm.FipsUserGroupParentOptions = AdminFipsUserGroupTreeHelper.BuildParentOptions(vm.FipsUserGroups);
                 break;
+            }
 
             case "fips-contact-roles":
                 vm.FipsContactRoles = await _context.FipsContactRoles.AsNoTracking()
@@ -2850,47 +2842,6 @@ public partial class ModernAdminController : Controller
         TempData["AdminMessage"] =
             "Activate or deactivate business areas under Admin → Business areas. The FIPS list mirrors that data automatically.";
         return RedirectToAction("Index", new { panel = "business-areas" });
-    }
-
-    [HttpPost("fips/user-group/add")]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> FipsAddUserGroup(string name, string? description, int displayOrder, int? parentId)
-    {
-        var guard = await RequireFipsDatabaseAdminAsync();
-        if (guard != null)
-            return guard;
-
-        _context.FipsUserGroups.Add(new FipsUserGroup { Name = name.Trim(), Description = description?.Trim(), DisplayOrder = displayOrder, ParentId = parentId });
-        await _context.SaveChangesAsync();
-        TempData["AdminMessage"] = "User group added.";
-        return RedirectToAction("Index", new { panel = "fips-user-groups" });
-    }
-
-    [HttpPost("fips/user-group/{id:int}/synonym")]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> FipsAddUserGroupSynonym(int id, string synonym)
-    {
-        var guard = await RequireFipsDatabaseAdminAsync();
-        if (guard != null)
-            return guard;
-
-        _context.FipsUserGroupSynonyms.Add(new FipsUserGroupSynonym { FipsUserGroupId = id, Synonym = synonym.Trim() });
-        await _context.SaveChangesAsync();
-        TempData["AdminMessage"] = "Synonym added.";
-        return RedirectToAction("Index", new { panel = "fips-user-groups" });
-    }
-
-    [HttpPost("fips/user-group/{id:int}/toggle")]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> FipsToggleUserGroup(int id)
-    {
-        var guard = await RequireFipsDatabaseAdminAsync();
-        if (guard != null)
-            return guard;
-
-        var e = await _context.FipsUserGroups.FindAsync(id);
-        if (e != null) { e.Active = !e.Active; await _context.SaveChangesAsync(); }
-        return RedirectToAction("Index", new { panel = "fips-user-groups" });
     }
 
     [HttpPost("fips/contact-role/add")]

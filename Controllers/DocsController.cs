@@ -1,6 +1,9 @@
+using Compass.Configuration;
 using Compass.Services.Api;
+using Compass.Services.Docs;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -13,13 +16,26 @@ namespace Compass.Controllers;
 [Route("docs")]
 public class DocsController : Controller
 {
+    private static readonly JsonSerializerOptions JsonCamelCase = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+    };
+
     private readonly ILogger<DocsController> _logger;
     private readonly IApiTokenPortalService _apiTokenPortal;
+    private readonly IApiExplorerRequestProxyService _apiExplorerProxy;
+    private readonly DocsApiExplorerOptions _apiExplorerOptions;
 
-    public DocsController(ILogger<DocsController> logger, IApiTokenPortalService apiTokenPortal)
+    public DocsController(
+        ILogger<DocsController> logger,
+        IApiTokenPortalService apiTokenPortal,
+        IApiExplorerRequestProxyService apiExplorerProxy,
+        IOptions<DocsApiExplorerOptions> apiExplorerOptions)
     {
         _logger = logger;
         _apiTokenPortal = apiTokenPortal;
+        _apiExplorerProxy = apiExplorerProxy;
+        _apiExplorerOptions = apiExplorerOptions.Value;
     }
 
     [HttpGet]
@@ -49,20 +65,47 @@ public class DocsController : Controller
     }
 
     [HttpGet("api-explorer")]
-    public async Task<IActionResult> ApiExplorer(CancellationToken cancellationToken)
+    public IActionResult ApiExplorer()
     {
         ViewData["Title"] = "API explorer";
         ViewData["DocsSection"] = "api-explorer";
         ViewData["DocsFullWidth"] = true;
-        var email = User.Identity?.Name?.Trim().ToLowerInvariant() ?? "";
-        var summaries = string.IsNullOrEmpty(email)
-            ? []
-            : await _apiTokenPortal.GetExplorerTokenSummariesAsync(email, cancellationToken);
-        ViewBag.ExplorerUserTokensJson = JsonSerializer.Serialize(
-            summaries,
-            new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
-        ViewBag.ExplorerUserTokenCount = summaries.Count;
+        ViewBag.ExplorerTotalEndpoints = ApiExplorerCatalogueBuilder.CountEndpoints();
+        ViewBag.ExplorerProductionUrl = _apiExplorerOptions.ProductionBaseUrl.TrimEnd('/');
+        ViewBag.ExplorerTestUrl = _apiExplorerOptions.TestBaseUrl?.TrimEnd('/');
         return View();
+    }
+
+    [HttpGet("api-explorer/catalogue")]
+    public IActionResult ApiExplorerCatalogue() =>
+        Json(ApiExplorerCatalogueBuilder.BuildSections(), JsonCamelCase);
+
+    [HttpGet("api-explorer/user-tokens")]
+    public async Task<IActionResult> ApiExplorerUserTokens(CancellationToken cancellationToken)
+    {
+        var email = User.Identity?.Name?.Trim().ToLowerInvariant() ?? "";
+        if (string.IsNullOrEmpty(email))
+            return Json(Array.Empty<object>());
+
+        var summaries = await _apiTokenPortal.GetExplorerTokenSummariesAsync(email, cancellationToken);
+        return Json(summaries, JsonCamelCase);
+    }
+
+    [HttpPost("api-explorer/proxy")]
+    public async Task<IActionResult> ApiExplorerProxy(
+        [FromBody] ApiExplorerProxyRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var authority = Request.Host.Value ?? "";
+            var result = await _apiExplorerProxy.ForwardAsync(request, authority, cancellationToken);
+            return Json(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
     }
 
     [HttpGet("api-explorer/bearer/{id:int}")]

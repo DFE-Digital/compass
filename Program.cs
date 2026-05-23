@@ -157,6 +157,29 @@ if (args.Length > 0 && args[0] == "--seed-risk-tiers")
     return;
 }
 
+if (args.Length > 0 && args[0] == "--seed-fips-user-groups")
+{
+    var environment = "Development";
+    string? jsonFilePath = null;
+    var fromCms = false;
+    var deactivateMissing = false;
+
+    for (var i = 1; i < args.Length; i++)
+    {
+        if (args[i] == "--environment" && i + 1 < args.Length)
+            environment = args[++i];
+        else if (args[i] == "--json-file" && i + 1 < args.Length)
+            jsonFilePath = args[++i];
+        else if (args[i] == "--from-cms")
+            fromCms = true;
+        else if (args[i] == "--deactivate-missing")
+            deactivateMissing = true;
+    }
+
+    await Compass.SeedFipsUserGroups.RunAsync(environment, jsonFilePath, fromCms, deactivateMissing);
+    return;
+}
+
 // Check for migration workbook export command
 if (args.Length > 0 && args[0] == "--export-migration-workbook")
 {
@@ -379,6 +402,11 @@ builder.Services.AddDbContext<CompassDbContext>((sp, options) =>
         .AddInterceptors(sp.GetRequiredService<Compass.Infrastructure.WorkRegisterSqlDiagnosticsInterceptor>()));
 
 // Register HTTP clients for API services
+builder.Services.Configure<Compass.Configuration.DocsApiExplorerOptions>(
+    builder.Configuration.GetSection(Compass.Configuration.DocsApiExplorerOptions.SectionName));
+builder.Services.AddHttpClient(nameof(Compass.Services.Docs.ApiExplorerRequestProxyService));
+builder.Services.AddScoped<Compass.Services.Docs.IApiExplorerRequestProxyService, Compass.Services.Docs.ApiExplorerRequestProxyService>();
+
 builder.Services.AddHttpClient<ICmsApiService, CmsApiService>();
 builder.Services.AddHttpClient<IStandardsCmsApiService, StandardsCmsApiService>();
 builder.Services.AddHttpClient<IProductsApiService, ProductsApiService>(client =>
@@ -642,6 +670,16 @@ app.Use(async (context, next) =>
         "https://web.vortex.data.microsoft.com " +
         "https://*.livediagnostics.monitor.azure.com wss://*.livediagnostics.monitor.azure.com";
     // Local / non-prod: same as Development launch profile and Properties/launchSettings "Test" profile.
+    var apiExplorerHosts = app.Configuration
+        .GetSection(Compass.Configuration.DocsApiExplorerOptions.SectionName)
+        .Get<Compass.Configuration.DocsApiExplorerOptions>();
+    if (apiExplorerHosts != null)
+    {
+        foreach (var host in apiExplorerHosts.AllConnectHosts())
+            connectSrc += " " + host;
+    }
+    connectSrc += " https://*.education.gov.uk https://*.azurewebsites.net";
+
     if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Test"))
     {
         connectSrc += " ws://localhost:* ws://127.0.0.1:* wss://localhost:* wss://127.0.0.1:*";

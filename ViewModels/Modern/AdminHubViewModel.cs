@@ -69,6 +69,7 @@ public class AdminHubViewModel
     public List<AdminLookupRow> FipsTypes { get; set; } = new();
     public List<AdminLookupRow> FipsBusinessAreas { get; set; } = new();
     public List<AdminFipsUserGroupRow> FipsUserGroups { get; set; } = new();
+    public List<AdminFipsUserGroupParentOption> FipsUserGroupParentOptions { get; set; } = new();
     public List<AdminFipsContactRoleRow> FipsContactRoles { get; set; } = new();
     public List<AdminFipsCategorisationGroupRow> FipsCategorisationGroups { get; set; } = new();
 
@@ -139,8 +140,16 @@ public class AdminFipsUserGroupRow
     public string? Description { get; set; }
     public int DisplayOrder { get; set; }
     public bool Active { get; set; }
-    public List<string> ChildNames { get; set; } = new();
+    public int Depth { get; set; }
+    public string? ParentPath { get; set; }
+    public bool HasChildren { get; set; }
     public List<string> SynonymNames { get; set; } = new();
+}
+
+public class AdminFipsUserGroupParentOption
+{
+    public int Id { get; set; }
+    public string Label { get; set; } = string.Empty;
 }
 
 public class AdminFipsContactRoleRow

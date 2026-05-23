@@ -73,6 +73,15 @@ public partial class ModernManageController : Controller
         return await _permission.IsInGroupAsync(email, "Central Operations Admin");
     }
 
+    private async Task<bool> CanEditFipsProductInformationAsync(CancellationToken ct)
+    {
+        var email = CurrentUserEmail;
+        if (string.IsNullOrWhiteSpace(email))
+            return false;
+
+        return await _permission.IsOperationConsoleUserAsync(email);
+    }
+
     private string CurrentUserEmail =>
         User.Identity?.Name
         ?? User.FindFirst(ClaimTypes.Email)?.Value
@@ -279,6 +288,7 @@ public partial class ModernManageController : Controller
         var canManage = product.Contacts.Any(c =>
             c.CanManage &&
             string.Equals(c.UserEmail, email, StringComparison.OrdinalIgnoreCase));
+        var canEditInformation = isNamedContact || await CanEditFipsProductInformationAsync(ct);
 
         var productIdStr = product.Id.ToString();
         var auditHistory = await _context.AuditLogs
@@ -296,13 +306,13 @@ public partial class ModernManageController : Controller
             .ToListAsync(ct);
 
         var detailTab = NormalizeFipsDetailTab(tab);
-        var editMode = isNamedContact && detailTab == "information" && edit;
+        var editMode = canEditInformation && detailTab == "information" && edit;
 
         var vm = new FipsProductDetailViewModel
         {
             Product = product,
             CanManage = canManage,
-            CanEditInformation = isNamedContact,
+            CanEditInformation = canEditInformation,
             CurrentUserEmail = email,
             AuditHistory = auditHistory,
             NavContext = null,
@@ -321,8 +331,7 @@ public partial class ModernManageController : Controller
                 FipsBusinessAreaLookupUiHelper.GetSelectedBusinessAreaLookupIds(product, vm.BusinessAreaLookupOptions);
             vm.ChannelOptions = await _context.FipsChannels
                 .Where(x => x.Active).OrderBy(x => x.DisplayOrder).ToListAsync(ct);
-            vm.UserGroupOptions = await _context.FipsUserGroups
-                .Where(x => x.Active && x.ParentId == null).OrderBy(x => x.DisplayOrder).ToListAsync(ct);
+            vm.UserGroupTreeOptions = await FipsUserGroupUiHelper.LoadActiveTreeAsync(_context, ct);
             vm.TypeOptions = await _context.FipsTypes
                 .Where(x => x.Active).OrderBy(x => x.DisplayOrder).ToListAsync(ct);
         }
@@ -469,7 +478,8 @@ public partial class ModernManageController : Controller
                     c.CMDBProductId == id &&
                     c.UserEmail != null &&
                     c.UserEmail.Trim().ToLower() == email.Trim().ToLower(), ct);
-            if (!isNamedContact)
+            var canEditInformation = isNamedContact || await CanEditFipsProductInformationAsync(ct);
+            if (!canEditInformation)
                 return Forbid();
             requireMgr = false;
         }

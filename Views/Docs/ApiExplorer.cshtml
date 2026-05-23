@@ -1,52 +1,26 @@
-@using Compass.Models.Docs
 @{
     ViewData["Title"] = "API explorer";
     ViewData["DocsSection"] = "api-explorer";
     ViewData["DocsFullWidth"] = true;
-
-    // Build the catalogue payload that drives the left collections panel
-    // and the request/response workspace. We expose every endpoint that
-    // is marked ExplorerExposed (defaults to true) plus its example body
-    // so users can hit "Send" without typing.
-    var catalogue = ApiCatalogue.Sections
-        .Select(section => new
-        {
-            id = section.Id,
-            title = section.Title,
-            description = section.Description,
-            endpoints = section.Endpoints
-                .Where(e => e.ExplorerExposed)
-                .Select(e => new
-                {
-                    id = e.Id,
-                    method = e.Method,
-                    path = e.Path,
-                    scope = e.Scope,
-                    description = e.Description,
-                    responseShape = e.ResponseShape,
-                    routeParams = (e.RouteParams ?? Array.Empty<(string, string, string)>())
-                        .Select(p => new { name = p.Name, type = p.Type, description = p.Description }),
-                    queryParams = (e.QueryParams ?? Array.Empty<(string, string, string)>())
-                        .Select(p => new { name = p.Name, type = p.Type, description = p.Description }),
-                    bodyExample = e.BodyExample,
-                    responseExample = e.ResponseExample
-                })
-                .ToArray()
-        })
-        .Where(s => s.endpoints.Length > 0)
-        .ToArray();
-
-    var jsonOpts = new System.Text.Json.JsonSerializerOptions { WriteIndented = false };
-    var catalogueJson = System.Text.Json.JsonSerializer.Serialize(catalogue, jsonOpts);
-
-    var totalEndpoints = catalogue.Sum(s => s.endpoints.Length);
+    var totalEndpoints = ViewBag.ExplorerTotalEndpoints as int? ?? 0;
+    var productionUrl = ViewBag.ExplorerProductionUrl as string ?? "https://compass.education.gov.uk";
+    var testUrl = ViewBag.ExplorerTestUrl as string;
+    var productionHost = new Uri(productionUrl).Host;
+    var testHost = string.IsNullOrWhiteSpace(testUrl) ? null : new Uri(testUrl).Host;
+    var catalogueUrl = Url.Action("ApiExplorerCatalogue", "Docs") ?? "/docs/api-explorer/catalogue";
+    var userTokensUrl = Url.Action("ApiExplorerUserTokens", "Docs") ?? "/docs/api-explorer/user-tokens";
+    var proxyUrl = Url.Action("ApiExplorerProxy", "Docs") ?? "/docs/api-explorer/proxy";
 }
 
 @section Styles {
-    <link rel="stylesheet" href="~/css/docs-api-explorer.css" asp-append-version="true" />
+    <link rel="stylesheet" href="@Url.Content("~/css/docs-api-explorer.css")" asp-append-version="true" />
 }
 
-<div class="api-explorer" data-api-explorer>
+<div class="api-explorer"
+     data-api-explorer
+     data-catalogue-url="@catalogueUrl"
+     data-user-tokens-url="@userTokensUrl"
+     data-proxy-url="@proxyUrl">
     @* ============ HEADER STRIP — title, env, token =========================== *@
     <header class="api-explorer__topbar">
         <div class="api-explorer__title">
@@ -60,14 +34,17 @@
         <div class="api-explorer__env">
             <label class="api-explorer__env-label" for="api-explorer-env">Environment</label>
             <select class="api-explorer__env-select" id="api-explorer-env" data-explorer-env>
-                <option value="https://compass.education.gov.uk">Production &mdash; compass.education.gov.uk</option>
-                <option value="https://s186d01-compass-g8g3bvheb2dsctey.westeurope-01.azurewebsites.net">Test &mdash; s186d01-compass</option>
+                <option value="@productionUrl">Production &mdash; @productionHost</option>
+                @if (!string.IsNullOrWhiteSpace(testUrl))
+                {
+                    <option value="@testUrl">Test &mdash; @testHost</option>
+                }
                 <option value="">Current host (uses your session cookie)</option>
             </select>
 
             <fieldset class="api-explorer__auth govuk-fieldset govuk-!-margin-bottom-2" data-explorer-auth>
                 <legend class="govuk-fieldset__legend govuk-fieldset__legend--s api-explorer__env-label">Authentication</legend>
-                <div class="api-explorer__auth-managed govuk-!-margin-bottom-2" data-explorer-auth-managed @(ViewBag.ExplorerUserTokenCount as int? > 0 ? null : "hidden")>
+                <div class="api-explorer__auth-managed govuk-!-margin-bottom-2" data-explorer-auth-managed hidden>
                     <div class="govuk-radios govuk-radios--small" data-module="govuk-radios">
                         <div class="govuk-radios__item">
                             <input class="govuk-radios__input" id="api-explorer-auth-managed" name="api-explorer-auth-mode" type="radio" value="managed" data-explorer-auth-mode="managed" />
@@ -414,13 +391,7 @@
 </div>
 
 @section Scripts {
-    <script id="api-explorer-user-tokens"
-            type="application/json"
-            nonce="@(Context.Items["Nonce"]?.ToString() ?? "")">@Html.Raw(ViewBag.ExplorerUserTokensJson as string ?? "[]")</script>
-    <script id="api-explorer-catalogue"
-            type="application/json"
-            nonce="@(Context.Items["Nonce"]?.ToString() ?? "")">@Html.Raw(catalogueJson)</script>
-    <script src="~/js/docs-api-explorer.js"
+    <script src="@Url.Content("~/js/docs-api-explorer.js")"
             asp-append-version="true"
             nonce="@(Context.Items["Nonce"]?.ToString() ?? "")"></script>
 }

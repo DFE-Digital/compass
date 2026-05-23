@@ -1600,8 +1600,7 @@ public class ModernOperationsController : Controller
                 FipsBusinessAreaLookupUiHelper.GetSelectedBusinessAreaLookupIds(product, vm.BusinessAreaLookupOptions);
             vm.ChannelOptions = await _db.FipsChannels
                 .Where(x => x.Active).OrderBy(x => x.DisplayOrder).ToListAsync(ct);
-            vm.UserGroupOptions = await _db.FipsUserGroups
-                .Where(x => x.Active && x.ParentId == null).OrderBy(x => x.DisplayOrder).ToListAsync(ct);
+            vm.UserGroupTreeOptions = await FipsUserGroupUiHelper.LoadActiveTreeAsync(_db, ct);
             vm.TypeOptions = await _db.FipsTypes
                 .Where(x => x.Active).OrderBy(x => x.DisplayOrder).ToListAsync(ct);
         }
