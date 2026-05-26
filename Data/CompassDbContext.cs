@@ -274,6 +274,17 @@ public partial class CompassDbContext : DbContext
     public DbSet<RaidEscalationTierChangeRequest> RaidEscalationTierChangeRequests { get; set; }
     public DbSet<Compass.Models.Raid.RaidMonthlyReview> RaidMonthlyReviews { get; set; }
 
+    // RAID Registers
+    public DbSet<RaidRegister> RaidRegisters { get; set; }
+    public DbSet<RaidRegisterUser> RaidRegisterUsers { get; set; }
+    public DbSet<RaidRegisterWorkItem> RaidRegisterWorkItems { get; set; }
+    public DbSet<RaidRegisterService> RaidRegisterServices { get; set; }
+    public DbSet<RaidRegisterRisk> RaidRegisterRisks { get; set; }
+    public DbSet<RaidRegisterIssue> RaidRegisterIssues { get; set; }
+    public DbSet<RaidRegisterAssumption> RaidRegisterAssumptions { get; set; }
+    public DbSet<RaidRegisterDependency> RaidRegisterDependencies { get; set; }
+    public DbSet<RaidRegisterNearMiss> RaidRegisterNearMisses { get; set; }
+
     /// <summary>CMS access requests (Design histories, DDT manual, etc.) for Operations.</summary>
     public DbSet<CmsAccessRequest> CmsAccessRequests { get; set; }
 
@@ -1318,6 +1329,79 @@ public partial class CompassDbContext : DbContext
                 .WithMany(n => n.NearMissMitigations)
                 .HasForeignKey(x => x.NearMissId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ── RAID Registers ──────────────────────────────────────────
+
+        modelBuilder.Entity<RaidRegister>(e =>
+        {
+            e.HasIndex(x => x.CreatedByUserId);
+            e.HasIndex(x => x.DirectorateLookupId);
+            e.HasIndex(x => x.BusinessAreaLookupId);
+            e.HasOne(x => x.CreatedByUser).WithMany().HasForeignKey(x => x.CreatedByUserId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.DirectorateLookup).WithMany().HasForeignKey(x => x.DirectorateLookupId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.BusinessAreaLookup).WithMany().HasForeignKey(x => x.BusinessAreaLookupId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<RaidRegisterUser>(e =>
+        {
+            e.HasKey(x => new { x.RaidRegisterId, x.UserId });
+            e.HasOne(x => x.RaidRegister).WithMany(r => r.Users).HasForeignKey(x => x.RaidRegisterId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<RaidRegisterWorkItem>(e =>
+        {
+            e.HasKey(x => new { x.RaidRegisterId, x.ProjectId });
+            e.HasOne(x => x.RaidRegister).WithMany(r => r.WorkItems).HasForeignKey(x => x.RaidRegisterId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Project).WithMany().HasForeignKey(x => x.ProjectId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<RaidRegisterService>(e =>
+        {
+            e.HasKey(x => new { x.RaidRegisterId, x.FipsServiceId });
+            e.HasOne(x => x.RaidRegister).WithMany(r => r.Services).HasForeignKey(x => x.RaidRegisterId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.FipsService).WithMany().HasForeignKey(x => x.FipsServiceId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<RaidRegisterRisk>(e =>
+        {
+            e.HasKey(x => new { x.RaidRegisterId, x.RiskId });
+            e.HasOne(x => x.RaidRegister).WithMany(r => r.Risks).HasForeignKey(x => x.RaidRegisterId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Risk).WithMany().HasForeignKey(x => x.RiskId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.AddedByUser).WithMany().HasForeignKey(x => x.AddedByUserId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<RaidRegisterIssue>(e =>
+        {
+            e.HasKey(x => new { x.RaidRegisterId, x.IssueId });
+            e.HasOne(x => x.RaidRegister).WithMany(r => r.Issues).HasForeignKey(x => x.RaidRegisterId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Issue).WithMany().HasForeignKey(x => x.IssueId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.AddedByUser).WithMany().HasForeignKey(x => x.AddedByUserId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<RaidRegisterAssumption>(e =>
+        {
+            e.HasKey(x => new { x.RaidRegisterId, x.AssumptionId });
+            e.HasOne(x => x.RaidRegister).WithMany(r => r.Assumptions).HasForeignKey(x => x.RaidRegisterId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Assumption).WithMany().HasForeignKey(x => x.AssumptionId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.AddedByUser).WithMany().HasForeignKey(x => x.AddedByUserId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<RaidRegisterDependency>(e =>
+        {
+            e.HasKey(x => new { x.RaidRegisterId, x.DependencyId });
+            e.HasOne(x => x.RaidRegister).WithMany(r => r.Dependencies).HasForeignKey(x => x.RaidRegisterId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Dependency).WithMany().HasForeignKey(x => x.DependencyId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.AddedByUser).WithMany().HasForeignKey(x => x.AddedByUserId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<RaidRegisterNearMiss>(e =>
+        {
+            e.HasKey(x => new { x.RaidRegisterId, x.NearMissId });
+            e.HasOne(x => x.RaidRegister).WithMany(r => r.NearMisses).HasForeignKey(x => x.RaidRegisterId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.NearMiss).WithMany().HasForeignKey(x => x.NearMissId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.AddedByUser).WithMany().HasForeignKey(x => x.AddedByUserId).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<Issue>()

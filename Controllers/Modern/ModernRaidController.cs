@@ -122,15 +122,10 @@ public partial class ModernRaidController : Controller
         };
     }
 
-    [HttpGet("")]
-    [HttpGet("index")]
-    [HttpGet("dashboard")]
-    [HttpGet("/ModernRaid")]
-    [HttpGet("/ModernRaid/Index")]
-    [HttpGet("/ModernRaid/Dashboard")]
+    [HttpGet("intelligence")]
     public async Task<IActionResult> Dashboard(CancellationToken cancellationToken = default)
     {
-        SetRaidChrome("raid-dashboard");
+        SetRaidChrome("raid-intelligence");
         var userEmail = User.Identity?.Name;
         if (string.IsNullOrWhiteSpace(userEmail))
             return Challenge();
