@@ -28,7 +28,7 @@ public interface IApiTokenPortalService
         string? reviewNotes,
         CancellationToken cancellationToken = default);
 
-    Task<bool> RejectRequestAsync(
+    Task<ApiTokenRequestResult> RejectRequestAsync(
         string reviewerEmail,
         int requestId,
         string reviewNotes,

@@ -85,6 +85,7 @@ public class ModernMonthlyReportService
             .AsNoTracking()
             .Include(p => p.BusinessAreaLookup)
             .Include(p => p.DeliveryPriority)
+            .Include(p => p.RagStatusLookup)
             .Include(p => p.MonthlyUpdates)
             .Include(p => p.Directorates)
                 .ThenInclude(d => d.Division)
@@ -169,7 +170,8 @@ public class ModernMonthlyReportService
         }
 
         var workItemRows = itemRows
-            .OrderByDescending(r => r.ResourcingFte)
+            .OrderBy(r => PrioritySortKey(r.Priority ?? "Not set"))
+            .ThenByDescending(r => r.ResourcingFte)
             .ThenBy(r => r.Title, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
@@ -219,6 +221,8 @@ public class ModernMonthlyReportService
             .ToList();
 
         var trendPoints = BuildResourcingTrendPoints(scopedProjects, reportYear, reportMonth, minReportYear);
+        var directorateTrendSeries = BuildResourcingGroupTrendSeries(scopedProjects, reportYear, reportMonth, minReportYear, "directorate");
+        var businessAreaTrendSeries = BuildResourcingGroupTrendSeries(scopedProjects, reportYear, reportMonth, minReportYear, "businessArea");
 
         var nextMonthDate = new DateTime(reportYear, reportMonth, 1).AddMonths(1);
         var nextMonthAllowed =
@@ -266,7 +270,9 @@ public class ModernMonthlyReportService
             DirectorateRows = directorateRows,
             BusinessAreaRows = businessAreaRows,
             WorkItemRows = workItemRows,
-            TrendPoints = trendPoints
+            TrendPoints = trendPoints,
+            DirectorateTrendSeries = directorateTrendSeries,
+            BusinessAreaTrendSeries = businessAreaTrendSeries
         };
     }
 
@@ -1083,6 +1089,43 @@ public class ModernMonthlyReportService
         }
 
         return points;
+    }
+
+    private static List<ResourcingGroupTrendSeries> BuildResourcingGroupTrendSeries(
+        List<Project> scopedProjects,
+        int reportYear,
+        int reportMonth,
+        int startYear,
+        string groupBy)
+    {
+        var grouped = groupBy == "directorate"
+            ? scopedProjects
+                .SelectMany(p =>
+                {
+                    var dirs = p.Directorates
+                        .Where(d => d.Division != null && !string.IsNullOrWhiteSpace(d.Division!.Name))
+                        .Select(d => d.Division!.Name.Trim())
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .ToList();
+                    if (dirs.Count == 0)
+                        dirs = new List<string> { "Not set" };
+                    return dirs.Select(name => (GroupName: name, Project: p));
+                })
+                .GroupBy(x => x.GroupName, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.Select(x => x.Project).ToList(), StringComparer.OrdinalIgnoreCase)
+            : scopedProjects
+                .GroupBy(p => p.BusinessAreaLookup?.Name ?? "Not set", StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.OrdinalIgnoreCase);
+
+        return grouped
+            .Select(kvp => new ResourcingGroupTrendSeries
+            {
+                GroupName = kvp.Key,
+                Points = BuildResourcingTrendPoints(kvp.Value, reportYear, reportMonth, startYear)
+            })
+            .OrderByDescending(s => s.Points.LastOrDefault()?.ResourcingFteTotal ?? 0m)
+            .ThenBy(s => s.GroupName == "Not set" ? "zzzzzz" : s.GroupName)
+            .ToList();
     }
 
     private static string GetPrioritiesDimensionLabel(string dimension) => dimension switch

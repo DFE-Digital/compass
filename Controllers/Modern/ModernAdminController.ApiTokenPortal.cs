@@ -9,7 +9,7 @@ namespace Compass.Controllers.Modern;
 public partial class ModernAdminController
 {
     [HttpGet("api-token-requests/{id:int}")]
-    [RequireSuperAdmin]
+    [RequireApiTokenReviewer]
     public async Task<IActionResult> ApiTokenRequestDetail(
         int id,
         [FromServices] IApiTokenPortalService portal,
@@ -35,7 +35,7 @@ public partial class ModernAdminController
 
     [HttpPost("api-token-requests/{id:int}/approve")]
     [ValidateAntiForgeryToken]
-    [RequireSuperAdmin]
+    [RequireApiTokenReviewer]
     public async Task<IActionResult> ApiTokenRequestApprove(
         int id,
         string? reviewNotes,
@@ -61,7 +61,7 @@ public partial class ModernAdminController
 
     [HttpPost("api-token-requests/{id:int}/reject")]
     [ValidateAntiForgeryToken]
-    [RequireSuperAdmin]
+    [RequireApiTokenReviewer]
     public async Task<IActionResult> ApiTokenRequestReject(
         int id,
         string reviewNotes,
@@ -75,8 +75,9 @@ public partial class ModernAdminController
         }
 
         var email = User.Identity?.Name ?? "unknown";
-        if (!await portal.RejectRequestAsync(email, id, reviewNotes, cancellationToken))
-            TempData["AdminError"] = "Could not reject request.";
+        var result = await portal.RejectRequestAsync(email, id, reviewNotes, cancellationToken);
+        if (!result.Success)
+            TempData["AdminError"] = result.ErrorMessage ?? "Could not reject request.";
         else
             TempData["AdminMessage"] = "Request rejected. The requestor has been notified.";
 

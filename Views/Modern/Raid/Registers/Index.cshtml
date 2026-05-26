@@ -1,0 +1,196 @@
+@model Compass.ViewModels.Modern.RaidRegisterDashboardViewModel
+@{
+  ViewData["Title"] = "RAID registers";
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">RAID registers</li>
+}
+
+<div class="modern-work-page govuk-!-padding-bottom-6">
+  @await Html.PartialAsync("~/Views/Modern/Shared/_ModernPageHeader.cshtml", new Compass.ViewModels.Modern.ModernPageHeaderViewModel
+  {
+    Title = "RAID registers",
+    Lede = new Microsoft.AspNetCore.Html.HtmlString("<p class=\"govuk-body-s govuk-!-margin-bottom-0\">Manage your RAID registers and view summary information across risks, issues, assumptions, dependencies and near misses.</p>"),
+    Actions = new Microsoft.AspNetCore.Html.HtmlString($"<a href=\"{Url.Action("RegisterCreate", "ModernRaid")}\" class=\"govuk-button\" data-module=\"govuk-button\">Create register</a>")
+  })
+
+  @if (TempData["SuccessMessage"] is string successMsg)
+  {
+    <div class="govuk-notification-banner govuk-notification-banner--success" role="alert" data-module="govuk-notification-banner">
+      <div class="govuk-notification-banner__header">
+        <h2 class="govuk-notification-banner__title">Success</h2>
+      </div>
+      <div class="govuk-notification-banner__content">
+        <p class="govuk-body">@successMsg</p>
+      </div>
+    </div>
+  }
+
+  @if (!Model.Registers.Any())
+  {
+    <div class="govuk-!-margin-top-6">
+      <p class="govuk-body">You do not have any RAID registers yet.</p>
+      <p class="govuk-body">
+        <a href="@Url.Action("RegisterCreate", "ModernRaid")" class="govuk-link">Create your first RAID register</a>
+        to start managing risks, issues, assumptions, dependencies and near misses.
+      </p>
+    </div>
+  }
+  else
+  {
+    <div class="govuk-!-margin-top-4">
+      <table class="govuk-table govuk-table--small-text-until-tablet">
+        <caption class="govuk-table__caption govuk-table__caption--m govuk-visually-hidden">RAID registers</caption>
+        <thead class="govuk-table__head">
+          <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header">Register</th>
+            <th scope="col" class="govuk-table__header">Owner</th>
+            <th scope="col" class="govuk-table__header govuk-table__header--numeric">Risks</th>
+            <th scope="col" class="govuk-table__header govuk-table__header--numeric">Issues</th>
+            <th scope="col" class="govuk-table__header govuk-table__header--numeric">Assumptions</th>
+            <th scope="col" class="govuk-table__header govuk-table__header--numeric">Dependencies</th>
+            <th scope="col" class="govuk-table__header govuk-table__header--numeric">Near misses</th>
+            <th scope="col" class="govuk-table__header">Scope</th>
+          </tr>
+        </thead>
+        <tbody class="govuk-table__body">
+          @foreach (var reg in Model.Registers)
+          {
+            <tr class="govuk-table__row">
+              <td class="govuk-table__cell">
+                <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("RegisterDetail", "ModernRaid", new { id = reg.Id })">
+                  <strong>@reg.Name</strong>
+                </a>
+                @if (!string.IsNullOrWhiteSpace(reg.DirectorateName) || !string.IsNullOrWhiteSpace(reg.BusinessAreaName))
+                {
+                  <br />
+                  <span class="govuk-body-s" style="color:#505a5f;">
+                    @if (!string.IsNullOrWhiteSpace(reg.DirectorateName))
+                    {
+                      @reg.DirectorateName
+                    }
+                    @if (!string.IsNullOrWhiteSpace(reg.DirectorateName) && !string.IsNullOrWhiteSpace(reg.BusinessAreaName))
+                    {
+                      <text> &middot; </text>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(reg.BusinessAreaName))
+                    {
+                      @reg.BusinessAreaName
+                    }
+                  </span>
+                }
+              </td>
+              <td class="govuk-table__cell">
+                @(reg.OwnerName ?? "—")
+              </td>
+              <td class="govuk-table__cell govuk-table__cell--numeric">
+                @if (reg.OpenRiskCount > 0)
+                {
+                  <strong>@reg.OpenRiskCount</strong>
+                }
+                else
+                {
+                  <span style="color:#505a5f;">0</span>
+                }
+              </td>
+              <td class="govuk-table__cell govuk-table__cell--numeric">
+                @if (reg.OpenIssueCount > 0)
+                {
+                  <strong>@reg.OpenIssueCount</strong>
+                }
+                else
+                {
+                  <span style="color:#505a5f;">0</span>
+                }
+              </td>
+              <td class="govuk-table__cell govuk-table__cell--numeric">
+                @if (reg.OpenAssumptionCount > 0)
+                {
+                  <strong>@reg.OpenAssumptionCount</strong>
+                }
+                else
+                {
+                  <span style="color:#505a5f;">0</span>
+                }
+              </td>
+              <td class="govuk-table__cell govuk-table__cell--numeric">
+                @if (reg.OpenDependencyCount > 0)
+                {
+                  <strong>@reg.OpenDependencyCount</strong>
+                }
+                else
+                {
+                  <span style="color:#505a5f;">0</span>
+                }
+              </td>
+              <td class="govuk-table__cell govuk-table__cell--numeric">
+                @if (reg.OpenNearMissCount > 0)
+                {
+                  <strong>@reg.OpenNearMissCount</strong>
+                }
+                else
+                {
+                  <span style="color:#505a5f;">0</span>
+                }
+              </td>
+              <td class="govuk-table__cell">
+                @{
+                  var scopeParts = new List<string>();
+                  if (reg.WorkItemNames.Any())
+                  {
+                    scopeParts.Add(reg.WorkItemNames.Count == 1
+                      ? "1 work item"
+                      : $"{reg.WorkItemNames.Count} work items");
+                  }
+                  if (reg.ServiceNames.Any())
+                  {
+                    scopeParts.Add(reg.ServiceNames.Count == 1
+                      ? "1 service"
+                      : $"{reg.ServiceNames.Count} services");
+                  }
+                }
+                @if (scopeParts.Any())
+                {
+                  <span class="govuk-body-s govuk-!-margin-bottom-0">@string.Join(", ", scopeParts)</span>
+                  <details class="govuk-details govuk-details--small govuk-!-margin-bottom-0 govuk-!-margin-top-1" style="font-size: 14px;">
+                    <summary class="govuk-details__summary" style="font-size: 14px;">
+                      <span class="govuk-details__summary-text">View items</span>
+                    </summary>
+                    <div class="govuk-details__text" style="font-size: 14px;">
+                      @if (reg.WorkItemNames.Any())
+                      {
+                        <p class="govuk-body-s govuk-!-margin-bottom-1"><strong>Work items</strong></p>
+                        <ul class="govuk-list govuk-list--bullet govuk-!-margin-bottom-2" style="font-size: 14px;">
+                          @foreach (var name in reg.WorkItemNames)
+                          {
+                            <li>@name</li>
+                          }
+                        </ul>
+                      }
+                      @if (reg.ServiceNames.Any())
+                      {
+                        <p class="govuk-body-s govuk-!-margin-bottom-1"><strong>Services</strong></p>
+                        <ul class="govuk-list govuk-list--bullet govuk-!-margin-bottom-0" style="font-size: 14px;">
+                          @foreach (var name in reg.ServiceNames)
+                          {
+                            <li>@name</li>
+                          }
+                        </ul>
+                      }
+                    </div>
+                  </details>
+                }
+                else
+                {
+                  <span style="color:#505a5f;">—</span>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</div>

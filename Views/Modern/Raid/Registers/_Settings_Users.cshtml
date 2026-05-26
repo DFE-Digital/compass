@@ -1,0 +1,196 @@
+@model Compass.ViewModels.Modern.RaidRegisterOnboardingViewModel
+@using Compass.Models
+
+<p class="govuk-body">You are the owner of this register. Add other users who should be able to manage or view it.</p>
+<p class="govuk-body-s">Users in your directorate or portfolio will also have visibility through the organisation structure.</p>
+
+<div class="govuk-form-group">
+  <label class="govuk-label govuk-label--s" for="sru-picker-input">Search for a user to add</label>
+  <div class="govuk-hint">Search by name or email address.</div>
+  <div class="user-picker" data-user-picker data-search-url="/api/users/search" data-select-url="/api/users/select" id="sru-picker-root">
+    <div style="position:relative;">
+      <input type="text" class="govuk-input govuk-!-width-one-half js-user-picker-input" id="sru-picker-input" autocomplete="off" placeholder="e.g. Alex Smith or alex.smith@@education.gov.uk" />
+      <span class="user-picker__spinner js-user-picker-spinner" aria-hidden="true">Searching&hellip;</span>
+      <div class="user-picker__results js-user-picker-results" role="listbox" aria-live="polite"></div>
+    </div>
+    <p class="govuk-body-s js-user-picker-message" style="margin-top:0.25rem;display:none;"></p>
+    <input type="hidden" class="js-user-picker-value" id="sru-selected-id" value="" />
+    <input type="hidden" class="js-user-picker-objectid" id="sru-selected-objectid" value="" />
+    <input type="hidden" class="js-user-picker-name" id="sru-selected-name" value="" />
+    <input type="hidden" class="js-user-picker-email" id="sru-selected-email" value="" />
+    <div class="js-user-picker-summary" style="display:none;" data-default-text=""></div>
+  </div>
+</div>
+
+<div class="govuk-grid-row govuk-!-margin-bottom-4" id="sru-add-controls" style="display:none;">
+  <div class="govuk-grid-column-one-half">
+    <p class="govuk-body-s govuk-!-margin-bottom-1" id="sru-selected-label"></p>
+  </div>
+  <div class="govuk-grid-column-one-quarter">
+    <select class="govuk-select govuk-!-width-full" id="sru-role-select">
+      <option value="1">Manager</option>
+      <option value="2">Viewer</option>
+    </select>
+  </div>
+  <div class="govuk-grid-column-one-quarter">
+    <button type="button" class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0" id="sru-add-btn" data-module="govuk-button">Add user</button>
+  </div>
+</div>
+
+<table class="govuk-table govuk-table--small-text-until-tablet" id="sru-table" style="@(Model.RegisterUsers.Any() ? "" : "display:none;")">
+  <caption class="govuk-table__caption govuk-table__caption--s">Register users</caption>
+  <thead class="govuk-table__head">
+    <tr class="govuk-table__row">
+      <th scope="col" class="govuk-table__header">User</th>
+      <th scope="col" class="govuk-table__header">Role</th>
+      <th scope="col" class="govuk-table__header" style="width:100px; text-align:right;">Action</th>
+    </tr>
+  </thead>
+  <tbody class="govuk-table__body" id="sru-tbody">
+    @for (var i = 0; i < Model.RegisterUsers.Count; i++)
+    {
+      var user = Model.RegisterUsers[i];
+      <tr class="govuk-table__row" data-uid="@user.UserId">
+        <td class="govuk-table__cell">@(user.DisplayName ?? user.Email)</td>
+        <td class="govuk-table__cell"><span class="dfe-f-badge dfe-f-badge--small">@user.Role</span></td>
+        <td class="govuk-table__cell" style="text-align:right;">
+          @if (user.Role != RaidRegisterRole.Owner)
+          {
+            <a href="#" class="govuk-link govuk-link--no-visited-state sru-remove" data-uid="@user.UserId">Remove</a>
+          }
+        </td>
+      </tr>
+    }
+  </tbody>
+</table>
+
+<div id="sru-hidden-inputs">
+  @for (var i = 0; i < Model.RegisterUsers.Count; i++)
+  {
+    var user = Model.RegisterUsers[i];
+    <input type="hidden" name="RegisterUsers[@i].UserId" value="@user.UserId" />
+    <input type="hidden" name="RegisterUsers[@i].Email" value="@user.Email" />
+    <input type="hidden" name="RegisterUsers[@i].DisplayName" value="@user.DisplayName" />
+    <input type="hidden" name="RegisterUsers[@i].Role" value="@((int)user.Role)" />
+  }
+</div>
+
+<details class="govuk-details govuk-!-margin-top-4">
+  <summary class="govuk-details__summary">
+    <span class="govuk-details__summary-text">About register roles</span>
+  </summary>
+  <div class="govuk-details__text">
+    <ul class="govuk-list govuk-list--bullet">
+      <li><strong>Owner</strong> &mdash; Full control including deleting the register and managing all users</li>
+      <li><strong>Manager</strong> &mdash; Can add, edit and remove RAID items and manage register scope</li>
+      <li><strong>Viewer</strong> &mdash; Can view the register and its items but cannot make changes</li>
+    </ul>
+  </div>
+</details>
+
+<script nonce="@Context.Items["Nonce"]">
+(function() {
+  var roleLabels = { '0': 'Owner', '1': 'Manager', '2': 'Viewer' };
+  var idInput = document.getElementById('sru-selected-id');
+  var nameInput = document.getElementById('sru-selected-name');
+  var emailInput = document.getElementById('sru-selected-email');
+  var addControls = document.getElementById('sru-add-controls');
+  var selectedLabel = document.getElementById('sru-selected-label');
+  var roleSelect = document.getElementById('sru-role-select');
+  var addBtn = document.getElementById('sru-add-btn');
+  var tbody = document.getElementById('sru-tbody');
+  var table = document.getElementById('sru-table');
+  var hiddenContainer = document.getElementById('sru-hidden-inputs');
+  var pickerInput = document.getElementById('sru-picker-input');
+
+  function getRowCount() { return tbody.querySelectorAll('tr').length; }
+  function getIndex() { return hiddenContainer.querySelectorAll('input[name$=".UserId"]').length; }
+
+  function getExistingUserIds() {
+    return Array.from(hiddenContainer.querySelectorAll('input[name$=".UserId"]')).map(function(i) { return i.value; });
+  }
+
+  var observer = new MutationObserver(function() {
+    var uid = idInput.value;
+    var name = nameInput.value;
+    var email = emailInput.value;
+    if (uid && name) {
+      if (getExistingUserIds().indexOf(uid) !== -1) {
+        addControls.style.display = 'none';
+        return;
+      }
+      selectedLabel.textContent = name + (email ? ' (' + email + ')' : '');
+      addControls.style.display = '';
+    } else {
+      addControls.style.display = 'none';
+    }
+  });
+  observer.observe(idInput, { attributes: true, attributeFilter: ['value'] });
+
+  setInterval(function() {
+    var uid = idInput.value;
+    var name = nameInput.value;
+    if (uid && name && addControls.style.display === 'none') {
+      if (getExistingUserIds().indexOf(uid) === -1) {
+        selectedLabel.textContent = name + (emailInput.value ? ' (' + emailInput.value + ')' : '');
+        addControls.style.display = '';
+      }
+    }
+  }, 300);
+
+  addBtn.addEventListener('click', function() {
+    var uid = idInput.value;
+    var name = nameInput.value;
+    var email = emailInput.value;
+    var roleVal = roleSelect.value;
+    if (!uid || !name) return;
+    if (getExistingUserIds().indexOf(uid) !== -1) return;
+
+    var idx = getIndex();
+    var frag = document.createDocumentFragment();
+    var fields = [
+      { suffix: 'UserId', val: uid },
+      { suffix: 'Email', val: email },
+      { suffix: 'DisplayName', val: name },
+      { suffix: 'Role', val: roleVal }
+    ];
+    fields.forEach(function(f) {
+      var inp = document.createElement('input');
+      inp.type = 'hidden';
+      inp.name = 'RegisterUsers[' + idx + '].' + f.suffix;
+      inp.value = f.val;
+      inp.setAttribute('data-uid', uid);
+      frag.appendChild(inp);
+    });
+    hiddenContainer.appendChild(frag);
+
+    var tr = document.createElement('tr');
+    tr.className = 'govuk-table__row';
+    tr.setAttribute('data-uid', uid);
+    tr.innerHTML = '<td class="govuk-table__cell">' + escHtml(name) + (email ? ' <span style="color:#505a5f;">(' + escHtml(email) + ')</span>' : '') + '</td>'
+      + '<td class="govuk-table__cell"><span class="dfe-f-badge dfe-f-badge--small">' + escHtml(roleLabels[roleVal] || 'Manager') + '</span></td>'
+      + '<td class="govuk-table__cell" style="text-align:right;"><a href="#" class="govuk-link govuk-link--no-visited-state sru-remove" data-uid="' + uid + '">Remove</a></td>';
+    tbody.appendChild(tr);
+    table.style.display = '';
+
+    idInput.value = '';
+    nameInput.value = '';
+    emailInput.value = '';
+    pickerInput.value = '';
+    addControls.style.display = 'none';
+    pickerInput.focus();
+  });
+
+  document.addEventListener('click', function(e) {
+    if (!e.target.classList.contains('sru-remove')) return;
+    e.preventDefault();
+    var uid = e.target.getAttribute('data-uid');
+    var row = tbody.querySelector('tr[data-uid="' + uid + '"]');
+    if (row) row.remove();
+    hiddenContainer.querySelectorAll('input[data-uid="' + uid + '"]').forEach(function(i) { i.remove(); });
+    if (getRowCount() === 0) table.style.display = 'none';
+  });
+
+  function escHtml(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+})();
+</script>

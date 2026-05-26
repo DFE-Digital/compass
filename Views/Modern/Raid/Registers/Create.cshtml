@@ -1,0 +1,93 @@
+@model Compass.ViewModels.Modern.RaidRegisterOnboardingViewModel
+@using Compass.Models
+@{
+  ViewData["Title"] = Model.RegisterId.HasValue ? "Edit RAID register" : "Create a RAID register";
+  var isEditing = Model.RegisterId.HasValue;
+  var actionUrl = isEditing
+    ? Url.Action("RegisterCreatePost", "ModernRaid")
+    : Url.Action("RegisterCreatePost", "ModernRaid");
+
+  bool HasError(string field) => ViewData.ModelState[field]?.Errors?.Any() == true;
+  string? ErrorMsg(string field) => ViewData.ModelState[field]?.Errors?.FirstOrDefault()?.ErrorMessage;
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Registers", "ModernRaid")">RAID registers</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">@ViewData["Title"]</li>
+}
+
+<div class="modern-work-page govuk-!-padding-bottom-6">
+  @await Html.PartialAsync("~/Views/Modern/Shared/_ModernPageHeader.cshtml", new Compass.ViewModels.Modern.ModernPageHeaderViewModel
+  {
+    Caption = "RAID registers",
+    Title = (string)ViewData["Title"]!
+  })
+
+  @* Step indicator *@
+  <div class="govuk-!-margin-top-4 govuk-!-margin-bottom-6">
+    <p class="govuk-body-s govuk-!-margin-bottom-2">Step @Model.Step of @Model.TotalSteps</p>
+    <div style="background: #f3f2f1; height: 8px; border-radius: 4px;">
+      <div style="background: #1d70b8; height: 8px; border-radius: 4px; width: @(Math.Round((double)Model.Step / Model.TotalSteps * 100))%;"></div>
+    </div>
+  </div>
+
+  @if (!ViewData.ModelState.IsValid)
+  {
+    <div class="govuk-error-summary" data-module="govuk-error-summary" role="alert">
+      <h2 class="govuk-error-summary__title">There is a problem</h2>
+      <div class="govuk-error-summary__body">
+        <ul class="govuk-list govuk-error-summary__list">
+          @foreach (var key in ViewData.ModelState.Keys)
+          {
+            @foreach (var error in ViewData.ModelState[key]!.Errors)
+            {
+              <li><a href="#@key">@error.ErrorMessage</a></li>
+            }
+          }
+        </ul>
+      </div>
+    </div>
+  }
+
+  <form method="post" action="@actionUrl" novalidate>
+    @Html.AntiForgeryToken()
+    <input type="hidden" name="Step" value="@Model.Step" />
+    @if (Model.RegisterId.HasValue)
+    {
+      <input type="hidden" name="RegisterId" value="@Model.RegisterId" />
+    }
+
+    @switch (Model.Step)
+    {
+      case 1:
+        @await Html.PartialAsync("~/Views/Modern/Raid/Registers/_Step1_Name.cshtml", Model)
+        break;
+      case 2:
+        @await Html.PartialAsync("~/Views/Modern/Raid/Registers/_Step2_Scope.cshtml", Model)
+        break;
+      case 3:
+        @await Html.PartialAsync("~/Views/Modern/Raid/Registers/_Step3_WorkItems.cshtml", Model)
+        break;
+      case 4:
+        @await Html.PartialAsync("~/Views/Modern/Raid/Registers/_Step4_Services.cshtml", Model)
+        break;
+      case 5:
+        @await Html.PartialAsync("~/Views/Modern/Raid/Registers/_Step5_Users.cshtml", Model)
+        break;
+      case 6:
+        @await Html.PartialAsync("~/Views/Modern/Raid/Registers/_Step6_Review.cshtml", Model)
+        break;
+    }
+
+    <div class="govuk-button-group govuk-!-margin-top-6">
+      <button type="submit" class="govuk-button" data-module="govuk-button">
+        @(Model.Step == Model.TotalSteps ? (isEditing ? "Save changes" : "Create register") : "Save and continue")
+      </button>
+      @if (Model.Step > 1)
+      {
+        <a class="govuk-link" href="@Url.Action("RegisterCreate", "ModernRaid", new { step = Model.Step - 1, id = Model.RegisterId })">Back</a>
+      }
+    </div>
+  </form>
+</div>
