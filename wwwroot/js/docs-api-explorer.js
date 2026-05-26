@@ -132,13 +132,14 @@
             var btn = el('button', {
                 type: 'button',
                 'class': 'api-explorer__section-button',
-                'aria-expanded': 'true'
+                'aria-expanded': 'false'
             });
             btn.appendChild(document.createTextNode(section.title));
             btn.appendChild(el('span', {
                 'class': 'api-explorer__section-count',
                 text: String(matchedEndpoints.length)
             }));
+            sectionEl.classList.add('api-explorer__section--collapsed');
             btn.addEventListener('click', function () {
                 sectionEl.classList.toggle('api-explorer__section--collapsed');
                 btn.setAttribute('aria-expanded',
@@ -195,6 +196,17 @@
         $$('[data-endpoint-id]').forEach(function (li) {
             li.classList.toggle('api-explorer__endpoint--active', li.getAttribute('data-endpoint-id') === id);
         });
+
+        // Expand the parent section so the selected endpoint is visible
+        var activeItem = document.querySelector('[data-endpoint-id="' + id + '"]');
+        if (activeItem) {
+            var parentSection = activeItem.closest('.api-explorer__section');
+            if (parentSection && parentSection.classList.contains('api-explorer__section--collapsed')) {
+                parentSection.classList.remove('api-explorer__section--collapsed');
+                var sBtn = parentSection.querySelector('.api-explorer__section-button');
+                if (sBtn) sBtn.setAttribute('aria-expanded', 'true');
+            }
+        }
 
         // Toggle the empty stage / builder
         var empty = $('[data-explorer-empty-stage]');
@@ -489,23 +501,24 @@
     }
 
     function updateAuthUi() {
-        var managedWrap = $('[data-explorer-auth-managed]');
+        var managedPill = $('[data-explorer-auth-managed]');
+        var managedSelectRow = $('[data-explorer-auth-managed-select]');
         var pasteWrap = $('[data-explorer-paste-wrap]');
         var rememberWrap = $('[data-explorer-remember-wrap]');
         var statusEl = $('[data-explorer-managed-status]');
         var reveal = $('[data-explorer-token-reveal]');
         var tokenInput = $('[data-explorer-token]');
 
-        if (managedWrap) {
-            managedWrap.hidden = userTokens.length === 0;
+        if (managedPill) {
+            managedPill.hidden = userTokens.length === 0;
         }
 
         var isManaged = authState.mode === 'managed';
         var isPaste = authState.mode === 'paste';
 
+        if (managedSelectRow) managedSelectRow.hidden = !isManaged || userTokens.length === 0;
         if (pasteWrap) pasteWrap.hidden = !isPaste;
         if (rememberWrap) rememberWrap.hidden = !isPaste;
-        if (reveal) reveal.hidden = !isPaste;
 
         if (statusEl) {
             if (isManaged && authState.managedTokenName) {
@@ -524,6 +537,8 @@
 
         $$('[data-explorer-auth-mode]').forEach(function (radio) {
             radio.checked = radio.value === authState.mode;
+            var pill = radio.closest('.api-explorer__auth-pill');
+            if (pill) pill.classList.toggle('api-explorer__auth-pill--active', radio.checked);
         });
     }
 
@@ -737,6 +752,13 @@
         if (sendBtn) { sendBtn.disabled = true; sendBtn.classList.add('api-explorer__send--busy'); sendBtn.textContent = 'Sending…'; }
         setStatus('Sending', '', 'busy');
 
+        var callingModal = document.querySelector('[data-explorer-calling-modal]');
+        var callingEndpoint = document.querySelector('[data-explorer-calling-endpoint]');
+        if (callingModal) {
+            if (callingEndpoint) callingEndpoint.textContent = ep.method + ' ' + path;
+            callingModal.hidden = false;
+        }
+
         var t0 = performance.now();
         // Cross-origin targets must use the server proxy (browser CSP connect-src). Same-origin
         // session-cookie auth uses a direct fetch so cookies are sent by the browser.
@@ -748,6 +770,7 @@
                 sendBtn.classList.remove('api-explorer__send--busy');
                 sendBtn.textContent = 'Send';
             }
+            if (callingModal) callingModal.hidden = true;
         }
 
         if (useProxy) {
@@ -1143,10 +1166,10 @@
                 var collapsed = builder.classList.toggle('api-explorer__builder--request-collapsed');
                 requestToggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
                 var label = $('[data-explorer-request-toggle-label]');
-                if (label) label.textContent = collapsed ? 'Show request' : 'Hide request';
+                if (label) label.textContent = 'Request details';
                 var hint = $('[data-explorer-request-toggle-hint]');
                 if (hint) hint.textContent = collapsed
-                    ? 'Scope, parameters and body hidden'
+                    ? 'Click to expand'
                     : 'Scope, parameters and body';
             });
         }

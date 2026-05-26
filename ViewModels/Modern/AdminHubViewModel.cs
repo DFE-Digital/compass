@@ -11,6 +11,9 @@ public class AdminHubViewModel
     /// <summary>Global product toggles (<c>feature-settings</c> panel).</summary>
     public List<AdminFeatureToggleRow> FeatureSettingsRows { get; set; } = new();
 
+    /// <summary>Environment sync panel (development instance only).</summary>
+    public EnvironmentSyncPanelViewModel? EnvironmentSync { get; set; }
+
     /// <summary>Active groups for the feature-settings &quot;on for some&quot; group dropdowns (same as <c>panel=groups</c> list).</summary>
     public List<AdminFeatureSettingsGroupOption> FeatureSettingsGroupOptions { get; set; } = new();
 

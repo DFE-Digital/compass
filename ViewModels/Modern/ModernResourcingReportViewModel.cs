@@ -42,6 +42,8 @@ public sealed class ModernResourcingReportViewModel
     public List<ResourcingAggregateRow> BusinessAreaRows { get; set; } = new();
     public List<ResourcingWorkItemRow> WorkItemRows { get; set; } = new();
     public List<ResourcingTrendMonthPoint> TrendPoints { get; set; } = new();
+    public List<ResourcingGroupTrendSeries> DirectorateTrendSeries { get; set; } = new();
+    public List<ResourcingGroupTrendSeries> BusinessAreaTrendSeries { get; set; } = new();
 }
 
 public sealed class ResourcingBandViewModel
@@ -93,4 +95,10 @@ public sealed class ResourcingTrendMonthPoint
     public decimal ResourcingFteTotal { get; set; }
     public int SubmittedWorkItemCount { get; set; }
     public List<int> WorkItemIds { get; set; } = new();
+}
+
+public sealed class ResourcingGroupTrendSeries
+{
+    public string GroupName { get; set; } = "";
+    public List<ResourcingTrendMonthPoint> Points { get; set; } = new();
 }

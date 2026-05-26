@@ -15,7 +15,7 @@ public class RequireSuperAdminAttribute : Attribute, IAsyncAuthorizationFilter
             var userEmail = GetUserEmail(context.HttpContext);
             if (string.IsNullOrEmpty(userEmail))
             {
-                context.Result = new RedirectToActionResult("Index", "Admin", null);
+                context.Result = new RedirectToActionResult("Index", "ModernAdmin", null);
                 return;
             }
 
@@ -26,14 +26,14 @@ public class RequireSuperAdminAttribute : Attribute, IAsyncAuthorizationFilter
             
             if (!isSuperAdmin)
             {
-                context.Result = new RedirectToActionResult("Index", "Admin", null);
+                context.Result = new RedirectToActionResult("Index", "ModernAdmin", null);
                 return;
             }
         }
         catch (Exception)
         {
             // If there's any error checking permissions, deny access
-            context.Result = new RedirectToActionResult("Index", "Admin", null);
+            context.Result = new RedirectToActionResult("Index", "ModernAdmin", null);
         }
     }
 

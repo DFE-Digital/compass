@@ -36,7 +36,7 @@ public partial class ModernAdminController : Controller
         "product-types", "rag-defns", "departments", "compliance",
         "scoring-fw", "perf-cycles", "assess-cycles",
         "groups", "api-tokens", "api-token-requests", "cms-access-products", "business-area-admins", "business-area-leadership", "directorate-leadership",
-        "migration", "feature-settings", "universal-barriers",
+        "migration", "environment-sync", "feature-settings", "universal-barriers",
         "activity-types", "work-tagging", "resource-bands", "mission-pillars", "priority-outcomes",
         "fips-channels", "fips-types", "fips-business-areas", "fips-user-groups", "fips-contact-roles", "fips-categorisation",
         "std-categories", "std-subcategories", "std-functional",
@@ -428,6 +428,14 @@ public partial class ModernAdminController : Controller
 
             case "feature-settings":
                 await PopulateFeatureSettingsRowsAsync(vm);
+                break;
+
+            case "environment-sync":
+                vm.EnvironmentSync = await BuildEnvironmentSyncPanelAsync(HttpContext.RequestAborted);
+                if (TempData["AdminMessage"] is string syncMsg)
+                    ViewBag.AdminMessage = syncMsg;
+                if (TempData["AdminError"] is string syncErr)
+                    ViewBag.AdminError = syncErr;
                 break;
 
             case "fips-channels":
@@ -3495,6 +3503,35 @@ public partial class ModernAdminController : Controller
             TempData["AdminError"] = "An error occurred while deleting the token.";
             return RedirectToAction(nameof(ApiTokenDetail), new { id });
         }
+    }
+
+    [HttpPost("api-tokens/{id:int}/update-owner")]
+    [ValidateAntiForgeryToken]
+    [RequireSuperAdmin]
+    public async Task<IActionResult> ApiTokenUpdateOwner(int id, string? ownerEmail)
+    {
+        var token = await _context.ApiTokens.FindAsync(id);
+        if (token == null)
+        {
+            TempData["AdminError"] = "API token not found.";
+            return RedirectToAction(nameof(Index), new { panel = "api-tokens" });
+        }
+
+        var trimmed = ownerEmail?.Trim();
+        if (!string.IsNullOrEmpty(trimmed) &&
+            !trimmed.Contains('@', StringComparison.Ordinal))
+        {
+            TempData["AdminError"] = "Enter a valid email address for the token owner.";
+            return RedirectToAction(nameof(ApiTokenDetail), new { id });
+        }
+
+        token.OwnerEmail = string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
+        await _context.SaveChangesAsync();
+
+        TempData["AdminMessage"] = string.IsNullOrWhiteSpace(trimmed)
+            ? "Token owner removed."
+            : $"Token owner set to {trimmed}.";
+        return RedirectToAction(nameof(ApiTokenDetail), new { id });
     }
 
     [HttpPost("cms-access-products/add")]

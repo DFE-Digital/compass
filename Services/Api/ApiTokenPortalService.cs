@@ -2,6 +2,7 @@ using System.Text.Json;
 using Compass.Data;
 using Compass.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Data.SqlClient;
 
 namespace Compass.Services.Api;
 
@@ -160,24 +161,31 @@ public class ApiTokenPortalService : IApiTokenPortalService
         if (await _context.ApiTokens.AnyAsync(t => t.Name == tokenName, cancellationToken))
             return Fail($"A token named \"{tokenName}\" already exists.");
 
-        var issued = await IssueTokenFromRequestAsync(request, permissions, reviewerEmail, autoApproved: false, cancellationToken);
-        if (!issued.Success || issued.IssuedToken == null)
+        try
+        {
+            var issued = await IssueTokenFromRequestAsync(request, permissions, reviewerEmail, autoApproved: false, cancellationToken);
+            if (!issued.Success || issued.IssuedToken == null)
+                return issued;
+
+            request.Status = ApiTokenRequestStatus.Approved;
+            request.ReviewedByEmail = NormalizeEmail(reviewerEmail);
+            request.ReviewedAt = DateTime.UtcNow;
+            request.ReviewNotes = reviewNotes?.Trim();
+            request.IssuedApiTokenId = issued.IssuedToken.Id;
+            await _context.SaveChangesAsync(cancellationToken);
+
+            await SendTokenIssuedEmailAsync(request.RequestorEmail, issued.IssuedToken, issued.IssuedTokenValue!, cancellationToken);
+            await SendRequestApprovedEmailAsync(request, cancellationToken);
+
             return issued;
-
-        request.Status = ApiTokenRequestStatus.Approved;
-        request.ReviewedByEmail = NormalizeEmail(reviewerEmail);
-        request.ReviewedAt = DateTime.UtcNow;
-        request.ReviewNotes = reviewNotes?.Trim();
-        request.IssuedApiTokenId = issued.IssuedToken.Id;
-        await _context.SaveChangesAsync(cancellationToken);
-
-        await SendTokenIssuedEmailAsync(request.RequestorEmail, issued.IssuedToken, issued.IssuedTokenValue!, cancellationToken);
-        await SendRequestApprovedEmailAsync(request, cancellationToken);
-
-        return issued;
+        }
+        catch (DbUpdateException ex) when (IsDuplicateTokenName(ex))
+        {
+            return Fail($"A token named \"{tokenName}\" already exists. Remove or rename the existing token before approving this request.");
+        }
     }
 
-    public async Task<bool> RejectRequestAsync(
+    public async Task<ApiTokenRequestResult> RejectRequestAsync(
         string reviewerEmail,
         int requestId,
         string reviewNotes,
@@ -185,9 +193,11 @@ public class ApiTokenPortalService : IApiTokenPortalService
     {
         var request = await _context.ApiTokenRequests.FirstOrDefaultAsync(r => r.Id == requestId, cancellationToken);
         if (request == null)
-            return false;
+            return Fail("Request not found.");
         if (request.Status is ApiTokenRequestStatus.Approved or ApiTokenRequestStatus.AutoApproved)
-            return false;
+            return Fail("This request has already been approved.");
+        if (request.Status == ApiTokenRequestStatus.Rejected)
+            return Fail("This request was already rejected.");
 
         request.Status = ApiTokenRequestStatus.Rejected;
         request.ReviewedByEmail = NormalizeEmail(reviewerEmail);
@@ -195,7 +205,7 @@ public class ApiTokenPortalService : IApiTokenPortalService
         request.ReviewNotes = reviewNotes.Trim();
         await _context.SaveChangesAsync(cancellationToken);
         await SendRequestRejectedEmailAsync(request, cancellationToken);
-        return true;
+        return new ApiTokenRequestResult { Success = true, Request = request };
     }
 
     public async Task<RecycleTokenResult?> RecycleTokenAsync(
@@ -409,8 +419,12 @@ public class ApiTokenPortalService : IApiTokenPortalService
     {
         var via = autoApproved ? "auto-approved read-only request" : "approved API key request";
         var justification = string.IsNullOrWhiteSpace(request.Justification) ? "" : $" — {request.Justification}";
-        return $"{request.Environment} self-service token ({via}){justification}";
+        var description = $"{request.Environment} self-service token ({via}){justification}";
+        return description.Length <= 1000 ? description : description[..1000];
     }
+
+    private static bool IsDuplicateTokenName(DbUpdateException ex) =>
+        ex.InnerException is SqlException { Number: 2601 or 2627 };
 
     private async Task SendTokenIssuedEmailAsync(
         string recipientEmail,
