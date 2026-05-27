@@ -24,6 +24,7 @@ public partial class ModernReportingController : Controller
     private readonly IMonthlyUpdateService _monthlyUpdateService;
     private readonly ModernMonthlyReportService _monthlyReportService;
     private readonly ModernRaidReviewProgressService _raidReviewProgressService;
+    private readonly ModernRaidRegisterCoverageReportService _raidRegisterCoverageReportService;
     private readonly ModernRaidReportingService _raidReportingService;
     private readonly ModernRaidReportService _raidReportService;
     private readonly CommissionReportingAnalyticsService _commissionReportingAnalytics;
@@ -39,6 +40,7 @@ public partial class ModernReportingController : Controller
         IMonthlyUpdateService monthlyUpdateService,
         ModernMonthlyReportService monthlyReportService,
         ModernRaidReviewProgressService raidReviewProgressService,
+        ModernRaidRegisterCoverageReportService raidRegisterCoverageReportService,
         ModernRaidReportingService raidReportingService,
         ModernRaidReportService raidReportService,
         CommissionReportingAnalyticsService commissionReportingAnalytics,
@@ -53,6 +55,7 @@ public partial class ModernReportingController : Controller
         _monthlyUpdateService = monthlyUpdateService;
         _monthlyReportService = monthlyReportService;
         _raidReviewProgressService = raidReviewProgressService;
+        _raidRegisterCoverageReportService = raidRegisterCoverageReportService;
         _raidReportingService = raidReportingService;
         _raidReportService = raidReportService;
         _commissionReportingAnalytics = commissionReportingAnalytics;
@@ -226,6 +229,25 @@ public partial class ModernReportingController : Controller
                 MaxReportYear = Math.Max(2026, DateTime.UtcNow.Year),
                 MonthName = DateTime.UtcNow.ToString("MMMM yyyy")
             });
+        }
+    }
+
+    /// <summary>RAID register coverage — work items and services not in any register scope.</summary>
+    [HttpGet("raid-registers")]
+    public async Task<IActionResult> RaidRegisters(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var model = await _raidRegisterCoverageReportService.BuildAsync(cancellationToken);
+            SetNav("reporting-raid-registers");
+            return View("~/Views/Modern/Reporting/RaidRegisters.cshtml", model);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading RAID registers coverage report");
+            TempData["ErrorMessage"] = "An error occurred while loading the RAID registers report. Please try again.";
+            SetNav("reporting-raid-registers");
+            return View("~/Views/Modern/Reporting/RaidRegisters.cshtml", new ModernRaidRegisterCoverageReportViewModel());
         }
     }
 

@@ -16,6 +16,7 @@ public static class FipsProductExcelExport
         var headers = new[]
         {
             "Product title",
+            "User description",
             "CMDB ID",
             "Register ID",
             "Status",
@@ -47,23 +48,28 @@ public static class FipsProductExcelExport
                 : 0;
 
             sheet.Cell(row, 1).Value = p.Title;
-            sheet.Cell(row, 2).Value = cmdbId ?? "";
-            sheet.Cell(row, 3).Value = p.UniqueID;
-            sheet.Cell(row, 4).Value = StatusLabel(p.Status);
-            sheet.Cell(row, 5).Value = p.PhaseName ?? "";
-            sheet.Cell(row, 6).Value = p.TypesDisplay ?? "";
-            sheet.Cell(row, 7).Value = p.ChannelsDisplay ?? "";
-            sheet.Cell(row, 8).Value = p.BusinessAreaDisplay ?? "";
-            sheet.Cell(row, 9).Value = p.ServiceOwner ?? "";
-            sheet.Cell(row, 10).Value = p.ReportingContact ?? "";
-            sheet.Cell(row, 11).Value = p.ContactCount;
-            sheet.Cell(row, 12).Value = p.UserGroupCount;
-            sheet.Cell(row, 13).Value = completionPct / 100.0;
-            sheet.Cell(row, 13).Style.NumberFormat.Format = "0%";
+            sheet.Cell(row, 2).Value = p.UserDescription ?? "";
+            sheet.Cell(row, 3).Value = cmdbId ?? "";
+            sheet.Cell(row, 4).Value = p.UniqueID;
+            sheet.Cell(row, 5).Value = StatusLabel(p.Status);
+            sheet.Cell(row, 6).Value = p.PhaseName ?? "";
+            sheet.Cell(row, 7).Value = p.TypesDisplay ?? "";
+            sheet.Cell(row, 8).Value = p.ChannelsDisplay ?? "";
+            sheet.Cell(row, 9).Value = p.BusinessAreaDisplay ?? "";
+            sheet.Cell(row, 10).Value = p.ServiceOwner ?? "";
+            sheet.Cell(row, 11).Value = p.ReportingContact ?? "";
+            sheet.Cell(row, 12).Value = p.ContactCount;
+            sheet.Cell(row, 13).Value = p.UserGroupCount;
+            sheet.Cell(row, 14).Value = completionPct / 100.0;
+            sheet.Cell(row, 14).Style.NumberFormat.Format = "0%";
             row++;
         }
 
         sheet.Columns().AdjustToContents();
+        var userDescCol = sheet.Column(2);
+        if (userDescCol.Width > 80)
+            userDescCol.Width = 80;
+        userDescCol.Style.Alignment.WrapText = true;
         sheet.SheetView.FreezeRows(1);
 
         using var stream = new MemoryStream();

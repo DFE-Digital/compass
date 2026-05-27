@@ -13,7 +13,13 @@
 }
 
 <h1 class="govuk-heading-l govuk-!-margin-bottom-2">@Model.Name</h1>
-<p class="govuk-body-l govuk-!-margin-bottom-6">Manage register settings, scope and users.</p>
+<p class="govuk-body-l govuk-!-margin-bottom-6">
+  Manage register settings, scope and users.
+  @if (Model.IsRegisterOwner)
+  {
+    <text> As the owner, you can transfer ownership or delete this register.</text>
+  }
+</p>
 
 @if (TempData["SuccessMessage"] is string successMsg && !string.IsNullOrWhiteSpace(successMsg))
 {
@@ -24,6 +30,8 @@
     <div class="govuk-notification-banner__content"><p class="govuk-notification-banner__heading">@successMsg</p></div>
   </div>
 }
+
+@await Html.PartialAsync("~/Views/Modern/Raid/Registers/_RaidScopeConflictPanel.cshtml")
 
 @if (TempData["ErrorMessage"] is string errorMsg && !string.IsNullOrWhiteSpace(errorMsg))
 {
@@ -63,6 +71,17 @@
             <a class="dfe-f-side-navigation__link govuk-link govuk-link--no-visited-state"
                href="#rs-users" id="rs-tab-users">Users</a>
           </li>
+          @if (Model.IsRegisterOwner)
+          {
+            <li class="dfe-f-side-navigation__item">
+              <a class="dfe-f-side-navigation__link govuk-link govuk-link--no-visited-state"
+                 href="#rs-owner" id="rs-tab-owner">Owner</a>
+            </li>
+            <li class="dfe-f-side-navigation__item">
+              <a class="dfe-f-side-navigation__link govuk-link govuk-link--no-visited-state"
+                 href="#rs-delete" id="rs-tab-delete">Delete register</a>
+            </li>
+          }
         </ul>
       </nav>
     </div>
@@ -155,5 +174,87 @@
       </div>
     </div>
 
+    @if (Model.IsRegisterOwner)
+    {
+      <!-- OWNER (owner only) -->
+      <div id="rs-owner" class="tab-pane">
+        <div class="govuk-summary-card govuk-!-margin-top-0">
+          <div class="govuk-summary-card__title-wrapper">
+            <h2 class="govuk-summary-card__title">Transfer ownership</h2>
+          </div>
+          <div class="govuk-summary-card__content">
+            <form method="post" action="@settingsUrl">
+              @Html.AntiForgeryToken()
+              <input type="hidden" name="section" value="owner" />
+              @await Html.PartialAsync("~/Views/Modern/Raid/Registers/_Settings_Owner.cshtml", Model)
+              <button type="submit" class="govuk-button govuk-!-margin-top-4" data-module="govuk-button">Save owner</button>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <!-- DELETE (owner only) -->
+      <div id="rs-delete" class="tab-pane">
+        <div class="govuk-summary-card govuk-!-margin-top-0">
+          <div class="govuk-summary-card__title-wrapper">
+            <h2 class="govuk-summary-card__title">Delete register</h2>
+          </div>
+          <div class="govuk-summary-card__content">
+            @await Html.PartialAsync("~/Views/Modern/Raid/Registers/_Settings_Delete.cshtml", Model)
+            <form method="post" action="@settingsUrl" class="govuk-!-margin-top-4"
+                  data-confirm-title="Delete RAID register"
+                  data-confirm-message="Delete &quot;@Model.Name&quot;? Risks, issues and other RAID records will not be deleted — only this register.">
+              @Html.AntiForgeryToken()
+              <input type="hidden" name="section" value="delete" />
+              <button type="submit" class="govuk-button govuk-button--warning" data-module="govuk-button">Delete register</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    }
+
   </div>
 </div>
+
+<script src="~/js/raid-register-scope.js" asp-append-version="true" nonce="@Context.Items["Nonce"]"></script>
+
+<script nonce="@Context.Items["Nonce"]">
+(function () {
+  var panes = document.querySelectorAll('.modern-work-detail-main > .tab-pane');
+  var navItems = document.querySelectorAll('#rs-side-nav-list .dfe-f-side-navigation__item');
+
+  function activate(hash) {
+    var target = hash ? document.getElementById(hash.replace('#', '')) : null;
+    var found = false;
+    panes.forEach(function (p) {
+      if (p === target) { p.classList.add('on'); found = true; }
+      else { p.classList.remove('on'); }
+    });
+    if (!found && panes.length) panes[0].classList.add('on');
+
+    navItems.forEach(function (li) {
+      var link = li.querySelector('a');
+      if (link && link.getAttribute('href') === '#' + (target ? target.id : (panes[0] ? panes[0].id : ''))) {
+        li.classList.add('dfe-f-side-navigation__item--current');
+      } else {
+        li.classList.remove('dfe-f-side-navigation__item--current');
+      }
+    });
+  }
+
+  activate(window.location.hash);
+  window.addEventListener('hashchange', function () { activate(window.location.hash); });
+
+  navItems.forEach(function (li) {
+    var link = li.querySelector('a');
+    if (link) {
+      link.addEventListener('click', function (e) {
+        e.preventDefault();
+        var href = link.getAttribute('href');
+        history.pushState(null, '', href);
+        activate(href);
+      });
+    }
+  });
+})();
+</script>

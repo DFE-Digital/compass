@@ -110,6 +110,7 @@ public class UsersController : ControllerBase
                     email = string.IsNullOrWhiteSpace(u.Mail) ? u.UserPrincipalName : u.Mail,
                     jobTitle = u.JobTitle
                 })
+                .OrderBy(u => u.name, StringComparer.OrdinalIgnoreCase)
                 .ToArray() ?? Array.Empty<object>();
 
             if (payload.Length > 0)
@@ -128,6 +129,48 @@ public class UsersController : ControllerBase
                 error = "graph_rate_limited",
                 retryAfter = retryAfter?.TotalSeconds
             });
+        }
+        catch (ApiException apiException) when (apiException.ResponseStatusCode == (int)HttpStatusCode.BadRequest
+            && tokenisedTerms.Length > 0)
+        {
+            _logger.LogWarning(
+                apiException,
+                "Graph user search returned 400 for query {Query}; retrying with filter-only fallback",
+                trimmedQuery);
+
+            try
+            {
+                var fallbackFilter = BuildStartsWithFilter(tokenisedTerms[0], BuildDomainFilter());
+                var fallbackResults = await ExecuteGraphSearchAsync(
+                    searchExpression: null,
+                    additionalFilter: fallbackFilter,
+                    topLimit: boundedTop);
+
+                var fallbackPayload = fallbackResults?.Value?
+                    .Where(u => !string.IsNullOrWhiteSpace(u?.Id))
+                    .Select(u => new
+                    {
+                        id = u!.Id,
+                        name = GraphUserNameFormatter.FormatFriendlyName(u),
+                        email = string.IsNullOrWhiteSpace(u.Mail) ? u.UserPrincipalName : u.Mail,
+                        jobTitle = u.JobTitle
+                    })
+                    .OrderBy(u => u.name, StringComparer.OrdinalIgnoreCase)
+                    .ToArray() ?? Array.Empty<object>();
+
+                if (fallbackPayload.Length > 0)
+                {
+                    _cache.Set(cacheKey, fallbackPayload, CacheOptions);
+                }
+
+                return Ok(fallbackPayload);
+            }
+            catch (Exception retryException)
+            {
+                _logger.LogError(retryException, "Graph filter-only fallback failed after 400 for query {Query}", trimmedQuery);
+            }
+
+            return StatusCode(StatusCodes.Status502BadGateway, new { error = "graph_bad_request" });
         }
         catch (ApiException apiException)
         {
@@ -271,6 +314,9 @@ public class UsersController : ControllerBase
         string additionalFilter,
         int? topLimit)
     {
+        var usesSearch = !string.IsNullOrEmpty(searchExpression);
+        var usesFilter = !string.IsNullOrWhiteSpace(additionalFilter);
+
         return await _graph.Users.GetAsync(requestConfiguration =>
         {
             if (topLimit.HasValue)
@@ -278,14 +324,19 @@ public class UsersController : ControllerBase
                 requestConfiguration.QueryParameters.Top = topLimit.Value;
             }
 
-            if (!string.IsNullOrEmpty(searchExpression))
+            // endswith, $search, and $orderby on directory objects require advanced query parameters.
+            if (usesSearch || usesFilter)
             {
                 requestConfiguration.Headers.Add("ConsistencyLevel", "eventual");
-                requestConfiguration.QueryParameters.Search = searchExpression;
                 requestConfiguration.QueryParameters.Count = true;
             }
 
-            if (!string.IsNullOrWhiteSpace(additionalFilter))
+            if (usesSearch)
+            {
+                requestConfiguration.QueryParameters.Search = searchExpression;
+            }
+
+            if (usesFilter)
             {
                 requestConfiguration.QueryParameters.Filter = additionalFilter;
             }
@@ -294,7 +345,6 @@ public class UsersController : ControllerBase
             {
                 "id", "displayName", "givenName", "surname", "userPrincipalName", "mail", "jobTitle"
             };
-            requestConfiguration.QueryParameters.Orderby = new[] { "displayName" };
         });
     }
 

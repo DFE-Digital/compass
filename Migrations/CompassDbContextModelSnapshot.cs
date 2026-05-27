@@ -11971,6 +11971,21 @@ namespace Compass.Migrations
                     b.ToTable("RaidRegisterAssumptions");
                 });
 
+            modelBuilder.Entity("Compass.Models.RaidRegisterBusinessArea", b =>
+                {
+                    b.Property<int>("RaidRegisterId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("BusinessAreaLookupId")
+                        .HasColumnType("int");
+
+                    b.HasKey("RaidRegisterId", "BusinessAreaLookupId");
+
+                    b.HasIndex("BusinessAreaLookupId");
+
+                    b.ToTable("RaidRegisterBusinessAreas");
+                });
+
             modelBuilder.Entity("Compass.Models.RaidRegisterDependency", b =>
                 {
                     b.Property<int>("RaidRegisterId")
@@ -11992,6 +12007,21 @@ namespace Compass.Migrations
                     b.HasIndex("DependencyId");
 
                     b.ToTable("RaidRegisterDependencies");
+                });
+
+            modelBuilder.Entity("Compass.Models.RaidRegisterDirectorate", b =>
+                {
+                    b.Property<int>("RaidRegisterId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("DirectorateLookupId")
+                        .HasColumnType("int");
+
+                    b.HasKey("RaidRegisterId", "DirectorateLookupId");
+
+                    b.HasIndex("DirectorateLookupId");
+
+                    b.ToTable("RaidRegisterDirectorates");
                 });
 
             modelBuilder.Entity("Compass.Models.RaidRegisterIssue", b =>
@@ -12076,6 +12106,40 @@ namespace Compass.Migrations
                     b.HasIndex("FipsServiceId");
 
                     b.ToTable("RaidRegisterServices");
+                });
+
+            modelBuilder.Entity("Compass.Models.RaidRegisterSpreadsheetLayout", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ColumnOrderJson")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("EntityType")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("UpdatedByUserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EntityType")
+                        .IsUnique();
+
+                    b.HasIndex("UpdatedByUserId");
+
+                    b.ToTable("RaidRegisterSpreadsheetLayouts");
                 });
 
             modelBuilder.Entity("Compass.Models.RaidRegisterUser", b =>
@@ -12269,6 +12333,10 @@ namespace Compass.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("Assurance")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
                     b.Property<string>("BusinessArea")
                         .HasMaxLength(450)
                         .HasColumnType("nvarchar(450)");
@@ -12287,13 +12355,30 @@ namespace Compass.Migrations
                     b.Property<DateTime?>("ClosedDate")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("Contingency")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
                     b.Property<int?>("CreatedByUserId")
                         .HasColumnType("int");
 
+                    b.Property<int?>("CurrentImpactLevelId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("CurrentLikelihoodId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("CurrentScore")
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<string>("Description")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("FinancialImpact")
                         .HasMaxLength(450)
                         .HasColumnType("nvarchar(450)");
 
@@ -12367,7 +12452,13 @@ namespace Compass.Migrations
                     b.Property<int?>("ResidualImpact")
                         .HasColumnType("int");
 
+                    b.Property<int?>("ResidualImpactLevelId")
+                        .HasColumnType("int");
+
                     b.Property<int?>("ResidualLikelihood")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("ResidualLikelihoodId")
                         .HasColumnType("int");
 
                     b.Property<decimal?>("ResidualScore")
@@ -12429,6 +12520,15 @@ namespace Compass.Migrations
                         .HasMaxLength(450)
                         .HasColumnType("nvarchar(450)");
 
+                    b.Property<int?>("ToleranceImpactLevelId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("ToleranceLikelihoodId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("ToleranceScore")
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("datetime2");
 
@@ -12440,6 +12540,10 @@ namespace Compass.Migrations
                     b.HasIndex("ClosedByUserId");
 
                     b.HasIndex("CreatedByUserId");
+
+                    b.HasIndex("CurrentImpactLevelId");
+
+                    b.HasIndex("CurrentLikelihoodId");
 
                     b.HasIndex("FipsId");
 
@@ -12456,6 +12560,10 @@ namespace Compass.Migrations
                     b.HasIndex("ProjectId");
 
                     b.HasIndex("ProximityDate");
+
+                    b.HasIndex("ResidualImpactLevelId");
+
+                    b.HasIndex("ResidualLikelihoodId");
 
                     b.HasIndex("RiskCategoryId");
 
@@ -12477,6 +12585,10 @@ namespace Compass.Migrations
                     b.HasIndex("SroUserId");
 
                     b.HasIndex("Status");
+
+                    b.HasIndex("ToleranceImpactLevelId");
+
+                    b.HasIndex("ToleranceLikelihoodId");
 
                     b.HasIndex("UpdatedByUserId");
 
@@ -12688,6 +12800,10 @@ namespace Compass.Migrations
                     b.Property<int>("SortOrder")
                         .HasColumnType("int");
 
+                    b.Property<string>("Threshold")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
                     b.Property<string>("Title")
                         .IsRequired()
                         .HasMaxLength(450)
@@ -12823,6 +12939,58 @@ namespace Compass.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("RiskProximities");
+                });
+
+            modelBuilder.Entity("Compass.Models.RiskRatingHistory", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("ChangedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("ChangedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("ImpactLevelId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("LikelihoodId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("RatingType")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int>("RiskId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("Score")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ChangedAt");
+
+                    b.HasIndex("ChangedByUserId");
+
+                    b.HasIndex("ImpactLevelId");
+
+                    b.HasIndex("LikelihoodId");
+
+                    b.HasIndex("RiskId");
+
+                    b.HasIndex("RiskId", "RatingType");
+
+                    b.ToTable("RiskRatingHistory");
                 });
 
             modelBuilder.Entity("Compass.Models.RiskRiskCategory", b =>
@@ -17817,6 +17985,25 @@ namespace Compass.Migrations
                     b.Navigation("RaidRegister");
                 });
 
+            modelBuilder.Entity("Compass.Models.RaidRegisterBusinessArea", b =>
+                {
+                    b.HasOne("Compass.Models.BusinessAreaLookup", "BusinessAreaLookup")
+                        .WithMany()
+                        .HasForeignKey("BusinessAreaLookupId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Compass.Models.RaidRegister", "RaidRegister")
+                        .WithMany("BusinessAreas")
+                        .HasForeignKey("RaidRegisterId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("BusinessAreaLookup");
+
+                    b.Navigation("RaidRegister");
+                });
+
             modelBuilder.Entity("Compass.Models.RaidRegisterDependency", b =>
                 {
                     b.HasOne("Compass.Models.User", "AddedByUser")
@@ -17839,6 +18026,25 @@ namespace Compass.Migrations
                     b.Navigation("AddedByUser");
 
                     b.Navigation("Dependency");
+
+                    b.Navigation("RaidRegister");
+                });
+
+            modelBuilder.Entity("Compass.Models.RaidRegisterDirectorate", b =>
+                {
+                    b.HasOne("Compass.Models.DirectorateLookup", "DirectorateLookup")
+                        .WithMany()
+                        .HasForeignKey("DirectorateLookupId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Compass.Models.RaidRegister", "RaidRegister")
+                        .WithMany("Directorates")
+                        .HasForeignKey("RaidRegisterId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("DirectorateLookup");
 
                     b.Navigation("RaidRegister");
                 });
@@ -17940,6 +18146,16 @@ namespace Compass.Migrations
                     b.Navigation("RaidRegister");
                 });
 
+            modelBuilder.Entity("Compass.Models.RaidRegisterSpreadsheetLayout", b =>
+                {
+                    b.HasOne("Compass.Models.User", "UpdatedByUser")
+                        .WithMany()
+                        .HasForeignKey("UpdatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("UpdatedByUser");
+                });
+
             modelBuilder.Entity("Compass.Models.RaidRegisterUser", b =>
                 {
                     b.HasOne("Compass.Models.RaidRegister", "RaidRegister")
@@ -18018,6 +18234,16 @@ namespace Compass.Migrations
                         .WithMany()
                         .HasForeignKey("CreatedByUserId");
 
+                    b.HasOne("Compass.Models.RiskImpactLevel", "CurrentImpactLevel")
+                        .WithMany()
+                        .HasForeignKey("CurrentImpactLevelId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("Compass.Models.RiskLikelihood", "CurrentLikelihood")
+                        .WithMany()
+                        .HasForeignKey("CurrentLikelihoodId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
                     b.HasOne("Compass.Models.GovernanceBoard", "GovernanceBoard")
                         .WithMany()
                         .HasForeignKey("GovernanceBoardId");
@@ -18039,6 +18265,16 @@ namespace Compass.Migrations
                         .WithMany("Risks")
                         .HasForeignKey("ProjectId")
                         .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Compass.Models.RiskImpactLevel", "ResidualImpactLevel")
+                        .WithMany()
+                        .HasForeignKey("ResidualImpactLevelId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("Compass.Models.RiskLikelihood", "ResidualLikelihoodLevel")
+                        .WithMany()
+                        .HasForeignKey("ResidualLikelihoodId")
+                        .OnDelete(DeleteBehavior.NoAction);
 
                     b.HasOne("Compass.Models.RiskCategory", "RiskCategory")
                         .WithMany()
@@ -18073,6 +18309,16 @@ namespace Compass.Migrations
                         .WithMany()
                         .HasForeignKey("SroUserId");
 
+                    b.HasOne("Compass.Models.RiskImpactLevel", "ToleranceImpactLevel")
+                        .WithMany()
+                        .HasForeignKey("ToleranceImpactLevelId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("Compass.Models.RiskLikelihood", "ToleranceLikelihood")
+                        .WithMany()
+                        .HasForeignKey("ToleranceLikelihoodId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
                     b.HasOne("Compass.Models.User", "UpdatedByUser")
                         .WithMany()
                         .HasForeignKey("UpdatedByUserId");
@@ -18080,6 +18326,10 @@ namespace Compass.Migrations
                     b.Navigation("ClosedByUser");
 
                     b.Navigation("CreatedByUser");
+
+                    b.Navigation("CurrentImpactLevel");
+
+                    b.Navigation("CurrentLikelihood");
 
                     b.Navigation("GovernanceBoard");
 
@@ -18097,6 +18347,10 @@ namespace Compass.Migrations
 
                     b.Navigation("Proximity");
 
+                    b.Navigation("ResidualImpactLevel");
+
+                    b.Navigation("ResidualLikelihoodLevel");
+
                     b.Navigation("RiskCategory");
 
                     b.Navigation("RiskPriority");
@@ -18106,6 +18360,10 @@ namespace Compass.Migrations
                     b.Navigation("RiskTier");
 
                     b.Navigation("SroUser");
+
+                    b.Navigation("ToleranceImpactLevel");
+
+                    b.Navigation("ToleranceLikelihood");
 
                     b.Navigation("UpdatedByUser");
                 });
@@ -18193,6 +18451,38 @@ namespace Compass.Migrations
                         .HasForeignKey("RiskId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("Risk");
+                });
+
+            modelBuilder.Entity("Compass.Models.RiskRatingHistory", b =>
+                {
+                    b.HasOne("Compass.Models.User", "ChangedByUser")
+                        .WithMany()
+                        .HasForeignKey("ChangedByUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("Compass.Models.RiskImpactLevel", "ImpactLevel")
+                        .WithMany()
+                        .HasForeignKey("ImpactLevelId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("Compass.Models.RiskLikelihood", "Likelihood")
+                        .WithMany()
+                        .HasForeignKey("LikelihoodId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("Compass.Models.Risk", "Risk")
+                        .WithMany("RatingHistory")
+                        .HasForeignKey("RiskId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ChangedByUser");
+
+                    b.Navigation("ImpactLevel");
+
+                    b.Navigation("Likelihood");
 
                     b.Navigation("Risk");
                 });
@@ -19243,7 +19533,11 @@ namespace Compass.Migrations
                 {
                     b.Navigation("Assumptions");
 
+                    b.Navigation("BusinessAreas");
+
                     b.Navigation("Dependencies");
+
+                    b.Navigation("Directorates");
 
                     b.Navigation("Issues");
 
@@ -19270,6 +19564,8 @@ namespace Compass.Migrations
                     b.Navigation("KeyRiskIndicators");
 
                     b.Navigation("MilestoneRisks");
+
+                    b.Navigation("RatingHistory");
 
                     b.Navigation("RiskActions");
 

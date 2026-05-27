@@ -1,0 +1,168 @@
+@model Compass.ViewModels.Modern.RaidRegisterDetailViewModel
+@using Compass.Models.Modern.Work
+
+<div class="raid-spreadsheet-toolbar govuk-!-margin-bottom-3">
+  <div class="raid-ss-toolbar-actions">
+    <button type="button" class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0" data-module="govuk-button" id="btn-add-risk-top" data-entity-type="risk">+ Add risk</button>
+  </div>
+  <div class="raid-ss-toolbar-actions">
+    @await Html.PartialAsync("~/Views/Modern/Raid/Registers/_Spreadsheet_ToolbarIcons.cshtml", Model.Id)
+    <button type="button" class="govuk-button govuk-!-margin-bottom-0 raid-ss-fullscreen-btn" data-module="govuk-button">
+      <span class="btn-fs-expand">Expand table</span>
+      <span class="btn-fs-collapse" style="display:none">Exit full width</span>
+    </button>
+  </div>
+</div>
+
+<div class="raid-spreadsheet-wrap" id="risks-spreadsheet">
+  <div class="raid-spreadsheet-scroll">
+    <table class="govuk-table govuk-table--small-text-until-tablet raid-spreadsheet-table" id="tbl-risks" data-entity-type="risk">
+      <thead class="govuk-table__head">
+        <tr class="govuk-table__row raid-ss-header-row">
+          <th class="govuk-table__header raid-ss-sticky-col raid-ss-sortable raid-ss-filter-text" data-col="ref">Ref</th>
+          <th class="govuk-table__header raid-ss-sortable raid-ss-filter-text" data-col="title">Title</th>
+          <th class="govuk-table__header raid-ss-sortable raid-ss-filterable" data-col="status">Status</th>
+          <th class="govuk-table__header raid-ss-sortable raid-ss-filterable" data-col="tier">Tier</th>
+          <th class="govuk-table__header raid-ss-sortable raid-ss-filterable" data-col="relation">Relation</th>
+          <th class="govuk-table__header raid-ss-sortable raid-ss-filterable" data-col="category">Category</th>
+          <th class="govuk-table__header raid-ss-sortable raid-ss-filterable" data-col="owner">Owner</th>
+          <th class="govuk-table__header raid-ss-sortable raid-ss-filter-text" data-col="description">Description</th>
+          <th class="govuk-table__header raid-ss-sortable raid-ss-filter-text" data-col="cause">Cause</th>
+          <th class="govuk-table__header raid-ss-sortable raid-ss-filter-text" data-col="impact">Impact</th>
+          <th class="govuk-table__header raid-ss-sortable raid-ss-filter-text" data-col="contingency">Contingency</th>
+          <th class="govuk-table__header raid-ss-sortable raid-ss-filter-text" data-col="assurance">Assurance</th>
+          <th class="govuk-table__header raid-ss-sortable raid-ss-filter-text" data-col="financialImpact">Financial impact</th>
+          <th class="govuk-table__header raid-ss-sortable raid-ss-filter-text" data-col="kris">KRIs</th>
+          <th class="govuk-table__header raid-ss-sortable raid-ss-filter-text" data-col="response">Response strategy</th>
+          <th class="govuk-table__header raid-ss-sortable" data-col="mitigations">Mitigations</th>
+          <th class="govuk-table__header raid-ss-group-start raid-ss-sortable raid-ss-filterable" data-col="origImpact" title="Inherent risk rating">Inherent impact</th>
+          <th class="govuk-table__header raid-ss-sortable raid-ss-filterable" data-col="origLikelihood" title="Inherent risk rating">Inherent likelihood</th>
+          <th class="govuk-table__header raid-ss-sortable raid-ss-filterable" data-col="origScore" title="Inherent score (impact × likelihood)">Inherent score</th>
+          <th class="govuk-table__header raid-ss-group-start raid-ss-sortable raid-ss-filterable" data-col="currImpact" title="Current risk rating">Curr. Impact</th>
+          <th class="govuk-table__header raid-ss-sortable raid-ss-filterable" data-col="currLikelihood" title="Current risk rating">Curr. Likelihood</th>
+          <th class="govuk-table__header raid-ss-sortable raid-ss-filterable" data-col="currScore" title="Current score">Curr. Score</th>
+          <th class="govuk-table__header raid-ss-group-start raid-ss-sortable raid-ss-filterable" data-col="residImpact" title="Residual risk rating">Resid. Impact</th>
+          <th class="govuk-table__header raid-ss-sortable raid-ss-filterable" data-col="residLikelihood" title="Residual risk rating">Resid. Likelihood</th>
+          <th class="govuk-table__header raid-ss-sortable raid-ss-filterable" data-col="residScore" title="Residual score">Resid. Score</th>
+          <th class="govuk-table__header raid-ss-group-start raid-ss-sortable raid-ss-filterable" data-col="tolImpact" title="Tolerance risk rating">Tol. Impact</th>
+          <th class="govuk-table__header raid-ss-sortable raid-ss-filterable" data-col="tolLikelihood" title="Tolerance risk rating">Tol. Likelihood</th>
+          <th class="govuk-table__header raid-ss-sortable raid-ss-filterable" data-col="tolScore" title="Tolerance score">Tol. Score</th>
+          <th class="govuk-table__header raid-ss-sortable raid-ss-filterable" data-col="proximity">Proximity</th>
+          <th class="govuk-table__header raid-ss-sortable raid-ss-filterable" data-col="createdDate">Created date</th>
+          <th class="govuk-table__header raid-ss-sortable raid-ss-filterable" data-col="lastEdited">Last edited</th>
+        </tr>
+        <tr class="govuk-table__row raid-ss-filter-row" style="display:none"></tr>
+      </thead>
+      <tbody class="govuk-table__body">
+        @foreach (var risk in Model.Risks)
+        {
+          <tr class="govuk-table__row raid-ss-row" data-entity="risk" data-id="@risk.Id">
+            <td class="govuk-table__cell raid-ss-sticky-col @RaidRegisterTableFormatting.RiskRefScoreIndicatorClass(risk.CurrentScore)">
+              <div class="raid-ss-ref-cell">
+                <a class="govuk-link govuk-link--no-visited-state raid-ss-ref-link" data-href="@Url.Action("RiskDetail", "ModernRaid", new { id = risk.Id })">@risk.Reference</a>
+                @await Html.PartialAsync("~/Views/Modern/Raid/Registers/_Spreadsheet_CommentToggle.cshtml", ("risk", risk.Id, risk.CommentCount))
+              </div>
+            </td>
+            <td class="govuk-table__cell raid-ss-editable" data-field="title" data-type="modal" data-label="Title">
+              <span class="raid-ss-val">@risk.Title</span>
+            </td>
+            <td class="govuk-table__cell raid-ss-editable raid-ss-badge-cell" data-field="statusId" data-type="select" data-lookup="riskStatuses" data-badge-kind="riskStatus" data-current="@risk.StatusId">
+              @await Html.PartialAsync("~/Views/Modern/Raid/Registers/_Spreadsheet_LookupBadge.cshtml", (WorkBadgeCss.RaidRiskStatusDfeFrontendBadgeClass(risk.Status), RaidRegisterTableFormatting.SpreadsheetBadgeLabel(risk.Status, uppercase: true)))
+            </td>
+            @{
+              var tierSpreadsheetEditable = RaidRegisterTableFormatting.IsSpreadsheetRiskTierEditable(risk.TierId, Model.RiskTiers);
+            }
+            <td class="govuk-table__cell @(tierSpreadsheetEditable ? "raid-ss-editable" : "") raid-ss-badge-cell" data-field="tierId" data-type="select" data-lookup="riskTiers" data-badge-kind="tier" data-current="@risk.TierId">
+              @await Html.PartialAsync("~/Views/Modern/Raid/Registers/_Spreadsheet_LookupBadge.cshtml", (WorkBadgeCss.RaidTierDfeFrontendBadgeClass(risk.Tier), RaidRegisterTableFormatting.SpreadsheetBadgeLabel(risk.Tier)))
+            </td>
+            @await Html.PartialAsync("~/Views/Modern/Raid/_RaidRegisterRelationCell.cshtml", risk.ToRelationParts("risks"))
+            <td class="govuk-table__cell raid-ss-editable" data-field="categoryId" data-type="select" data-lookup="riskCategories" data-current="@risk.CategoryId">
+              <span class="raid-ss-val">@(risk.Category ?? "—")</span>
+            </td>
+            <td class="govuk-table__cell raid-ss-editable" data-field="ownerUserId" data-type="userlookup" data-current="@risk.OwnerUserId" data-label="Owner">
+              <span class="raid-ss-val">@(risk.Owner ?? "—")</span>
+            </td>
+            <td class="govuk-table__cell raid-ss-editable" data-field="description" data-type="modal" data-label="Description">
+              <span class="raid-ss-val">@(risk.Description ?? "—")</span>
+            </td>
+            <td class="govuk-table__cell raid-ss-editable" data-field="cause" data-type="modal" data-label="Cause">
+              <span class="raid-ss-val">@(risk.Cause ?? "—")</span>
+            </td>
+            <td class="govuk-table__cell raid-ss-editable" data-field="impactIfRealised" data-type="modal" data-label="Impact if realised">
+              <span class="raid-ss-val">@(risk.ImpactIfRealised ?? "—")</span>
+            </td>
+            <td class="govuk-table__cell raid-ss-editable" data-field="contingency" data-type="modal" data-label="Contingency">
+              <span class="raid-ss-val">@(risk.Contingency ?? "—")</span>
+            </td>
+            <td class="govuk-table__cell raid-ss-editable" data-field="assurance" data-type="modal" data-label="Assurance">
+              <span class="raid-ss-val">@(risk.Assurance ?? "—")</span>
+            </td>
+            <td class="govuk-table__cell raid-ss-editable" data-field="financialImpact" data-type="modal" data-label="Financial impact">
+              <span class="raid-ss-val">@(risk.FinancialImpact ?? "—")</span>
+            </td>
+            @await Html.PartialAsync("~/Views/Modern/Raid/Registers/_Spreadsheet_KriCell.cshtml", (risk.Id, risk.KriCount, risk.Reference))
+            <td class="govuk-table__cell raid-ss-editable" data-field="response" data-type="modal" data-label="Response strategy">
+              <span class="raid-ss-val">@(risk.Response ?? "—")</span>
+            </td>
+            @await Html.PartialAsync("~/Views/Modern/Raid/Registers/_Spreadsheet_MitigationCell.cshtml", (risk.Id, risk.MitigationCount, risk.Reference))
+
+            @* ── Inherent rating ── *@
+            <td class="govuk-table__cell raid-ss-editable raid-ss-group-start" data-field="originalImpactId" data-type="select" data-lookup="riskImpactLevels" data-current="@risk.OriginalImpactId">
+              <span class="raid-ss-val">@(risk.OriginalImpact ?? "—")</span>
+            </td>
+            <td class="govuk-table__cell raid-ss-editable" data-field="originalLikelihoodId" data-type="select" data-lookup="riskLikelihoods" data-current="@risk.OriginalLikelihoodId">
+              <span class="raid-ss-val">@(risk.OriginalLikelihood ?? "—")</span>
+            </td>
+            <td class="govuk-table__cell govuk-table__cell--numeric raid-ss-score" data-score-field="inherentScore">
+              @await Html.PartialAsync("~/Views/Modern/Raid/Registers/_SpreadsheetRiskScoreBadge.cshtml", risk.InherentScore)
+            </td>
+
+            @* ── Current rating ── *@
+            <td class="govuk-table__cell raid-ss-editable raid-ss-group-start" data-field="currentImpactId" data-type="select" data-lookup="riskImpactLevels" data-current="@risk.CurrentImpactId">
+              <span class="raid-ss-val">@(risk.CurrentImpact ?? "—")</span>
+            </td>
+            <td class="govuk-table__cell raid-ss-editable" data-field="currentLikelihoodId" data-type="select" data-lookup="riskLikelihoods" data-current="@risk.CurrentLikelihoodId">
+              <span class="raid-ss-val">@(risk.CurrentLikelihood ?? "—")</span>
+            </td>
+            <td class="govuk-table__cell govuk-table__cell--numeric raid-ss-score" data-score-field="currentScore">
+              @await Html.PartialAsync("~/Views/Modern/Raid/Registers/_SpreadsheetRiskScoreBadge.cshtml", risk.CurrentScore)
+            </td>
+
+            @* ── Residual rating ── *@
+            <td class="govuk-table__cell raid-ss-editable raid-ss-group-start" data-field="residualImpactId" data-type="select" data-lookup="riskImpactLevels" data-current="@risk.ResidualImpactId">
+              <span class="raid-ss-val">@(risk.ResidualImpact ?? "—")</span>
+            </td>
+            <td class="govuk-table__cell raid-ss-editable" data-field="residualLikelihoodId" data-type="select" data-lookup="riskLikelihoods" data-current="@risk.ResidualLikelihoodId">
+              <span class="raid-ss-val">@(risk.ResidualLikelihood ?? "—")</span>
+            </td>
+            <td class="govuk-table__cell govuk-table__cell--numeric raid-ss-score" data-score-field="residualScore">
+              @await Html.PartialAsync("~/Views/Modern/Raid/Registers/_SpreadsheetRiskScoreBadge.cshtml", risk.ResidualScore)
+            </td>
+
+            @* ── Tolerance rating ── *@
+            <td class="govuk-table__cell raid-ss-editable raid-ss-group-start" data-field="toleranceImpactId" data-type="select" data-lookup="riskImpactLevels" data-current="@risk.ToleranceImpactId">
+              <span class="raid-ss-val">@(risk.ToleranceImpact ?? "—")</span>
+            </td>
+            <td class="govuk-table__cell raid-ss-editable" data-field="toleranceLikelihoodId" data-type="select" data-lookup="riskLikelihoods" data-current="@risk.ToleranceLikelihoodId">
+              <span class="raid-ss-val">@(risk.ToleranceLikelihood ?? "—")</span>
+            </td>
+            <td class="govuk-table__cell govuk-table__cell--numeric raid-ss-score" data-score-field="toleranceScore">
+              @await Html.PartialAsync("~/Views/Modern/Raid/Registers/_SpreadsheetRiskScoreBadge.cshtml", risk.ToleranceScore)
+            </td>
+
+            <td class="govuk-table__cell raid-ss-editable" data-field="proximityId" data-type="select" data-lookup="riskProximities" data-current="@risk.ProximityId">
+              <span class="raid-ss-val">@(risk.Proximity ?? "—")</span>
+            </td>
+            <td class="govuk-table__cell">
+              @risk.CreatedAt.ToString("dd MMM yy")
+            </td>
+            <td class="govuk-table__cell raid-ss-last-edited" data-updated="@risk.UpdatedAt.ToString("o")">
+              <span class="raid-ss-val">@risk.UpdatedAt.ToString("dd MMM yy HH:mm")</span>
+            </td>
+          </tr>
+        }
+      </tbody>
+      <tfoot></tfoot>
+    </table>
+  </div>
+</div>

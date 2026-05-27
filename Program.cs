@@ -157,6 +157,19 @@ if (args.Length > 0 && args[0] == "--seed-risk-tiers")
     return;
 }
 
+if (args.Length > 0 && args[0] == "--seed-dev-risk-register")
+{
+    var environment = "Development";
+    for (var i = 1; i < args.Length - 1; i++)
+    {
+        if (args[i] == "--environment")
+            environment = args[i + 1];
+    }
+
+    await Compass.SeedDevRiskRegister.RunAsync(environment);
+    return;
+}
+
 if (args.Length > 0 && args[0] == "--seed-fips-user-groups")
 {
     var environment = "Development";
@@ -471,6 +484,7 @@ builder.Services.AddScoped<Compass.Filters.DemandFeatureGateFilter>();
 builder.Services.AddScoped<Compass.Filters.StandardsFeatureGateFilter>();
 builder.Services.AddScoped<Compass.Filters.RaidFeatureGateFilter>();
 builder.Services.AddScoped<Compass.Filters.DdrFeatureGateFilter>();
+builder.Services.AddScoped<Compass.Filters.ProjectLegacyRedirectFilter>();
 builder.Services.AddScoped<IUserDirectoryService, UserDirectoryService>();
 builder.Services.AddScoped<IProjectImportService, ProjectImportService>();
 builder.Services.AddScoped<IAuditContextProvider, HttpAuditContextProvider>();
@@ -488,11 +502,13 @@ builder.Services.AddScoped<Compass.Services.Modern.IWorkServiceRegisterLinkServi
 builder.Services.AddScoped<Compass.Services.Modern.IWorkScopedExcelExportService, Compass.Services.Modern.WorkScopedExcelExportService>();
 builder.Services.AddScoped<ModernMonthlyReportService>();
 builder.Services.AddScoped<ModernRaidReviewProgressService>();
+builder.Services.AddScoped<ModernRaidRegisterCoverageReportService>();
 builder.Services.AddScoped<ModernRaidReportingService>();
 builder.Services.AddScoped<ModernRaidReportService>();
 builder.Services.AddScoped<Compass.Services.Raid.IOperationsRiskEditService, Compass.Services.Raid.OperationsRiskEditService>();
 builder.Services.AddScoped<Compass.Services.Raid.IRaidRiskEditorFormService, Compass.Services.Raid.RaidRiskEditorFormService>();
 builder.Services.AddScoped<Compass.Services.Raid.IRaidIssueEditorFormService, Compass.Services.Raid.RaidIssueEditorFormService>();
+builder.Services.AddScoped<Compass.Services.Raid.IRaidRegisterSpreadsheetLayoutService, Compass.Services.Raid.RaidRegisterSpreadsheetLayoutService>();
 builder.Services.AddScoped<CommissionReportingAnalyticsService>();
 builder.Services.AddScoped<Compass.Services.DemandPipeline.IDemandScoringFrameworkService, Compass.Services.DemandPipeline.DemandScoringFrameworkService>();
 builder.Services.AddScoped<Compass.Services.DdtStandards.IDdtStandardsWorkflowService, Compass.Services.DdtStandards.DdtStandardsWorkflowService>();
@@ -663,6 +679,7 @@ app.Use(async (context, next) =>
         "'self' " +
         "https://cdnjs.cloudflare.com https://cdn.jsdelivr.net " +
         "https://www.clarity.ms https://*.clarity.ms https://c.bing.com https://*.bing.com " +
+        "https://www.google-analytics.com https://*.google-analytics.com https://region1.google-analytics.com " +
         "https://login.microsoftonline.com https://login.live.com " +
         "https://fonts.googleapis.com https://fonts.gstatic.com " +
         "https://dc.services.visualstudio.com https://rt.services.visualstudio.com " +

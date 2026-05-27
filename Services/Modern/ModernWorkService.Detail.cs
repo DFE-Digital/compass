@@ -649,6 +649,83 @@ public partial class ModernWorkService
         controller.ViewBag.CurrentRagCssClass = currentRag.CssClass;
         controller.ViewBag.WorkIdShort = work.Id.ToString("D8", CultureInfo.InvariantCulture);
 
+        var riskCount = work.RiskOrIssues.Count(r =>
+            string.Equals(r.Type, "Risk", StringComparison.OrdinalIgnoreCase));
+        var issueCount = work.RiskOrIssues.Count(r =>
+            string.Equals(r.Type, "Issue", StringComparison.OrdinalIgnoreCase));
+        var strategicAlignmentCount =
+            work.PriorityOutcomes.Count +
+            work.MissionPillars.Count +
+            work.Tags.Count +
+            work.GovernmentDepartments.Count;
+        var contactsCount =
+            work.Contacts.Count +
+            (p.PrimaryContactUserId.HasValue ? 1 : 0) +
+            budgetOwnerNames.Count +
+            work.Directorates.Count;
+
+        controller.ViewBag.WorkSideNavMilestoneCount = work.Milestones.Count(m => !m.IsDeleted);
+        controller.ViewBag.WorkSideNavMonthlyUpdatesCount =
+            (work.Status == "Active" || work.Status == "Paused")
+                ? reportingPeriods.Count(p =>
+                    string.Equals(p.UpdateStatus, nameof(UpdateSubmissionStatus.Due), StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(p.UpdateStatus, nameof(UpdateSubmissionStatus.Late), StringComparison.OrdinalIgnoreCase))
+                : 0;
+        controller.ViewBag.WorkSideNavRisksCount = riskCount;
+        controller.ViewBag.WorkSideNavIssuesCount = issueCount;
+        controller.ViewBag.WorkSideNavAssumptionsCount = work.Assumptions.Count;
+        controller.ViewBag.WorkSideNavDependenciesCount = work.Dependencies.Count;
+        controller.ViewBag.WorkSideNavContactsCount = contactsCount;
+        controller.ViewBag.WorkSideNavStrategicAlignmentCount = strategicAlignmentCount;
+
+        var trackingRegisters = await LoadRaidRegistersTrackingWorkItemAsync(
+            projectId,
+            controller,
+            cancellationToken);
+        controller.ViewBag.WorkRaidTrackingRegisters = trackingRegisters;
+
         return work;
+    }
+
+    private async Task<List<WorkRaidRegisterTrackingVm>> LoadRaidRegistersTrackingWorkItemAsync(
+        int projectId,
+        Controller controller,
+        CancellationToken cancellationToken)
+    {
+        var registerIds = await _db.RaidRegisterWorkItems.AsNoTracking()
+            .Where(w => w.ProjectId == projectId && !w.RaidRegister.IsDeleted)
+            .Select(w => w.RaidRegisterId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+        if (registerIds.Count == 0)
+            return new List<WorkRaidRegisterTrackingVm>();
+
+        var registers = await _db.RaidRegisters.AsNoTracking()
+            .Where(r => registerIds.Contains(r.Id))
+            .Include(r => r.Users).ThenInclude(u => u.User)
+            .Include(r => r.CreatedByUser)
+            .OrderBy(r => r.Name)
+            .ToListAsync(cancellationToken);
+
+        return registers.Select(r => new WorkRaidRegisterTrackingVm
+        {
+            RegisterId = r.Id,
+            Name = r.Name,
+            OwnerName = ResolveRaidRegisterOwnerName(r),
+            DetailUrl = controller.Url.Action("RegisterDetail", "ModernRaid", new { id = r.Id }) ?? "#"
+        }).ToList();
+    }
+
+    private static string ResolveRaidRegisterOwnerName(RaidRegister register)
+    {
+        var ownerUser = register.Users
+            .FirstOrDefault(u => u.Role == RaidRegisterRole.Owner)?.User;
+        if (ownerUser != null)
+            return ownerUser.Name ?? ownerUser.Email ?? "Unknown";
+
+        return register.CreatedByUser?.Name
+            ?? register.CreatedByUser?.Email
+            ?? "Unknown";
     }
 }

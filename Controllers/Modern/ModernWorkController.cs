@@ -1484,6 +1484,8 @@ public partial class ModernWorkController : Controller
                 await _workServiceRegisterLinks.CountLinksForWorkItemAsync(id, cancellationToken);
             ViewBag.CanLinkWorkServiceRegister =
                 await _workServiceRegisterLinks.CanLinkFromWorkItemAsync(id, userEmail, cancellationToken);
+            var canCreateServiceOffering =
+                await _workServiceRegisterLinks.CanCreateServiceOfferingFromWorkItemAsync(id, userEmail, cancellationToken);
             var srLinks = await _workServiceRegisterLinks.GetLinksForWorkItemAsync(
                 id,
                 productId => Url.Action("FipsProduct", "ModernManage", new { id = productId }) ?? "#",
@@ -1492,6 +1494,7 @@ public partial class ModernWorkController : Controller
             {
                 WorkItemId = id,
                 CanLink = ViewBag.CanLinkWorkServiceRegister as bool? == true,
+                CanCreateServiceOffering = canCreateServiceOffering,
                 Links = srLinks,
                 PickProductsUrl = Url.Action(nameof(PickServiceRegisterProducts), new { id }) ?? "",
                 LinkUrl = Url.Action(nameof(LinkServiceRegisterProduct), new { id }) ?? "",
@@ -1931,27 +1934,9 @@ public partial class ModernWorkController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Watch(int id, string? tab = null, string? milestonestab = null, CancellationToken cancellationToken = default)
     {
-        var currentUser = await GetCurrentUserAsync(cancellationToken);
-        if (currentUser == null)
-            return Unauthorized();
-
-        var projectExists = await _context.Projects.AsNoTracking()
-            .AnyAsync(p => p.Id == id && !p.IsDeleted, cancellationToken);
-        if (!projectExists)
-            return NotFound();
-
-        var existing = await _context.ProjectWatchlists
-            .FirstOrDefaultAsync(w => w.UserId == currentUser.Id && w.ProjectId == id, cancellationToken);
-        if (existing == null)
-        {
-            _context.ProjectWatchlists.Add(new ProjectWatchlist
-            {
-                UserId = currentUser.Id,
-                ProjectId = id,
-                CreatedAt = DateTime.UtcNow
-            });
-            await _context.SaveChangesAsync(cancellationToken);
-        }
+        var result = await SetWorkItemWatchingAsync(id, watching: true, cancellationToken);
+        if (result.ErrorStatus != null)
+            return result.ErrorStatus;
 
         return RedirectToAction(nameof(Detail), new { id, tab, milestonestab });
     }
@@ -1960,19 +1945,97 @@ public partial class ModernWorkController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Unwatch(int id, string? tab = null, string? milestonestab = null, CancellationToken cancellationToken = default)
     {
+        var result = await SetWorkItemWatchingAsync(id, watching: false, cancellationToken);
+        if (result.ErrorStatus != null)
+            return result.ErrorStatus;
+
+        return RedirectToAction(nameof(Detail), new { id, tab, milestonestab });
+    }
+
+    [HttpPost("{id:int}/watch/toggle")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ToggleWatch(int id, CancellationToken cancellationToken = default)
+    {
+        var result = await ToggleWorkItemWatchingAsync(id, cancellationToken);
+        if (result.ErrorStatus != null)
+            return result.ErrorStatus;
+
+        return Json(new { watching = result.Watching });
+    }
+
+    private async Task<(bool Watching, IActionResult? ErrorStatus)> ToggleWorkItemWatchingAsync(
+        int projectId,
+        CancellationToken cancellationToken)
+    {
         var currentUser = await GetCurrentUserAsync(cancellationToken);
         if (currentUser == null)
-            return Unauthorized();
+            return (false, Unauthorized());
 
-        var watchlist = await _context.ProjectWatchlists
-            .FirstOrDefaultAsync(w => w.UserId == currentUser.Id && w.ProjectId == id, cancellationToken);
-        if (watchlist != null)
+        var projectExists = await _context.Projects.AsNoTracking()
+            .AnyAsync(p => p.Id == projectId && !p.IsDeleted, cancellationToken);
+        if (!projectExists)
+            return (false, NotFound());
+
+        var existing = await _context.ProjectWatchlists
+            .FirstOrDefaultAsync(w => w.UserId == currentUser.Id && w.ProjectId == projectId, cancellationToken);
+
+        if (existing != null)
         {
-            _context.ProjectWatchlists.Remove(watchlist);
+            _context.ProjectWatchlists.Remove(existing);
+            await _context.SaveChangesAsync(cancellationToken);
+            return (false, null);
+        }
+
+        _context.ProjectWatchlists.Add(new ProjectWatchlist
+        {
+            UserId = currentUser.Id,
+            ProjectId = projectId,
+            CreatedAt = DateTime.UtcNow
+        });
+        await _context.SaveChangesAsync(cancellationToken);
+        return (true, null);
+    }
+
+    private async Task<(bool Watching, IActionResult? ErrorStatus)> SetWorkItemWatchingAsync(
+        int projectId,
+        bool watching,
+        CancellationToken cancellationToken)
+    {
+        var currentUser = await GetCurrentUserAsync(cancellationToken);
+        if (currentUser == null)
+            return (false, Unauthorized());
+
+        var projectExists = await _context.Projects.AsNoTracking()
+            .AnyAsync(p => p.Id == projectId && !p.IsDeleted, cancellationToken);
+        if (!projectExists)
+            return (false, NotFound());
+
+        var existing = await _context.ProjectWatchlists
+            .FirstOrDefaultAsync(w => w.UserId == currentUser.Id && w.ProjectId == projectId, cancellationToken);
+
+        if (watching)
+        {
+            if (existing == null)
+            {
+                _context.ProjectWatchlists.Add(new ProjectWatchlist
+                {
+                    UserId = currentUser.Id,
+                    ProjectId = projectId,
+                    CreatedAt = DateTime.UtcNow
+                });
+                await _context.SaveChangesAsync(cancellationToken);
+            }
+
+            return (true, null);
+        }
+
+        if (existing != null)
+        {
+            _context.ProjectWatchlists.Remove(existing);
             await _context.SaveChangesAsync(cancellationToken);
         }
 
-        return RedirectToAction(nameof(Detail), new { id, tab, milestonestab });
+        return (false, null);
     }
 
     private async Task<User?> GetCurrentUserAsync(CancellationToken cancellationToken = default)
@@ -3688,7 +3751,8 @@ public partial class ModernWorkController : Controller
             ProjectId = id,
             IdentifiedDay = idd,
             IdentifiedMonth = idm,
-            IdentifiedYear = idy
+            IdentifiedYear = idy,
+            KriItems = new List<RiskKriItemForm> { new() }
         };
         ViewBag.RiskTierOptions = (await _raidRiskEditorForm.BuildRiskCreateTierOptionsAsync(cancellationToken)).ToList();
         ViewBag.EditorTitle = "Add risk";

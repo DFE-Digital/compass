@@ -123,44 +123,7 @@ public partial class ModernRaidController : Controller
     }
 
     [HttpGet("intelligence")]
-    public async Task<IActionResult> Dashboard(CancellationToken cancellationToken = default)
-    {
-        SetRaidChrome("raid-intelligence");
-        var userEmail = User.Identity?.Name;
-        if (string.IsNullOrWhiteSpace(userEmail))
-            return Challenge();
-
-        var emailLower = userEmail.Trim().ToLowerInvariant();
-        var viewer = await _db.Users.AsNoTracking()
-            .Where(u => u.Email.ToLower() == emailLower)
-            .Select(u => new { u.Id, u.Name, u.Email })
-            .FirstOrDefaultAsync(cancellationToken);
-
-        int? userId = viewer?.Id;
-        var displayName = !string.IsNullOrWhiteSpace(viewer?.Name)
-            ? viewer!.Name!.Trim()
-            : viewer?.Email ?? userEmail;
-
-        var projectIds = await RaidProjectsForUserEmail(emailLower)
-            .Select(p => p.Id)
-            .ToListAsync(cancellationToken);
-        var productServiceIds = await RaidProductServiceIdsForProjectsAsync(projectIds, cancellationToken);
-
-        var adminBusinessAreaIds = new List<int>();
-        if (userId is int uid2)
-        {
-            var adminIds = await _businessAreaAdmins.GetAdministeredBusinessAreaLookupIdsAsync(uid2, cancellationToken);
-            var leadershipIds = await _businessAreaLeadership.GetLeadershipBusinessAreaLookupIdsAsync(
-                uid2, cancellationToken);
-            adminBusinessAreaIds = adminIds.Union(leadershipIds).Distinct().ToList();
-        }
-
-        var vm = await BuildRaidDashboardViewModelAsync(
-            userId, emailLower, displayName, projectIds, productServiceIds, adminBusinessAreaIds,
-            cancellationToken: cancellationToken);
-
-        return View("~/Views/Modern/Raid/Dashboard.cshtml", vm);
-    }
+    public IActionResult Dashboard() => RedirectToAction(nameof(Registers));
     /// <summary>Same association rules as <see cref="Services.Modern.ModernWorkService"/> work dashboard.</summary>
     private IQueryable<Project> RaidProjectsForUserEmail(string emailLower) =>
         _db.Projects.AsNoTracking()

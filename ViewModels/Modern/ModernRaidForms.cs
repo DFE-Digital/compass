@@ -63,6 +63,15 @@ public sealed class ModernRaidRiskEditorForm
     /// <summary>Impact if the risk materialises.</summary>
     public string? ImpactIfRealised { get; set; }
 
+    public string? Contingency { get; set; }
+
+    public string? Assurance { get; set; }
+
+    public string? FinancialImpact { get; set; }
+
+    /// <summary>Key risk indicators (metric and threshold pairs).</summary>
+    public List<RiskKriItemForm> KriItems { get; set; } = new();
+
     public int? RiskTierId { get; set; }
     public int? RiskStatusId { get; set; }
     public int? RiskPriorityId { get; set; }
@@ -70,6 +79,14 @@ public sealed class ModernRaidRiskEditorForm
     public int? RiskImpactLevelId { get; set; }
     public int? RiskProximityId { get; set; }
     public int? RiskTreatmentId { get; set; }
+
+    // Residual risk rating
+    public int? ResidualLikelihoodId { get; set; }
+    public int? ResidualImpactLevelId { get; set; }
+
+    // Tolerance risk rating
+    public int? ToleranceLikelihoodId { get; set; }
+    public int? ToleranceImpactLevelId { get; set; }
 
     /// <summary>Primary category (single selection).</summary>
     public int? PrimaryRiskCategoryId { get; set; }
@@ -99,6 +116,13 @@ public sealed class ModernRaidRiskEditorForm
     public int? NextReviewYear { get; set; }
 
     public string? ResponseStrategy { get; set; }
+}
+
+public sealed class RiskKriItemForm
+{
+    public string? Metric { get; set; }
+
+    public string? Threshold { get; set; }
 }
 
 public sealed class IssueAssuranceItemForm

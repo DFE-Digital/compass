@@ -279,11 +279,14 @@ public partial class CompassDbContext : DbContext
     public DbSet<RaidRegisterUser> RaidRegisterUsers { get; set; }
     public DbSet<RaidRegisterWorkItem> RaidRegisterWorkItems { get; set; }
     public DbSet<RaidRegisterService> RaidRegisterServices { get; set; }
+    public DbSet<RaidRegisterDirectorate> RaidRegisterDirectorates { get; set; }
+    public DbSet<RaidRegisterBusinessArea> RaidRegisterBusinessAreas { get; set; }
     public DbSet<RaidRegisterRisk> RaidRegisterRisks { get; set; }
     public DbSet<RaidRegisterIssue> RaidRegisterIssues { get; set; }
     public DbSet<RaidRegisterAssumption> RaidRegisterAssumptions { get; set; }
     public DbSet<RaidRegisterDependency> RaidRegisterDependencies { get; set; }
     public DbSet<RaidRegisterNearMiss> RaidRegisterNearMisses { get; set; }
+    public DbSet<RaidRegisterSpreadsheetLayout> RaidRegisterSpreadsheetLayouts { get; set; }
 
     /// <summary>CMS access requests (Design histories, DDT manual, etc.) for Operations.</summary>
     public DbSet<CmsAccessRequest> CmsAccessRequests { get; set; }
@@ -1134,6 +1137,66 @@ public partial class CompassDbContext : DbContext
         modelBuilder.Entity<Risk>()
             .HasIndex(r => r.ProximityDate);
 
+        // Risk: multiple FK columns pointing at the same lookup tables need explicit config
+        modelBuilder.Entity<Risk>()
+            .HasOne(r => r.CurrentLikelihood)
+            .WithMany()
+            .HasForeignKey(r => r.CurrentLikelihoodId)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<Risk>()
+            .HasOne(r => r.CurrentImpactLevel)
+            .WithMany()
+            .HasForeignKey(r => r.CurrentImpactLevelId)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<Risk>()
+            .HasOne(r => r.ResidualLikelihoodLevel)
+            .WithMany()
+            .HasForeignKey(r => r.ResidualLikelihoodId)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<Risk>()
+            .HasOne(r => r.ResidualImpactLevel)
+            .WithMany()
+            .HasForeignKey(r => r.ResidualImpactLevelId)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<Risk>()
+            .HasOne(r => r.ToleranceLikelihood)
+            .WithMany()
+            .HasForeignKey(r => r.ToleranceLikelihoodId)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<Risk>()
+            .HasOne(r => r.ToleranceImpactLevel)
+            .WithMany()
+            .HasForeignKey(r => r.ToleranceImpactLevelId)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<RiskRatingHistory>(e =>
+        {
+            e.HasOne(h => h.Risk)
+                .WithMany(r => r.RatingHistory)
+                .HasForeignKey(h => h.RiskId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(h => h.Likelihood)
+                .WithMany()
+                .HasForeignKey(h => h.LikelihoodId)
+                .OnDelete(DeleteBehavior.NoAction);
+            e.HasOne(h => h.ImpactLevel)
+                .WithMany()
+                .HasForeignKey(h => h.ImpactLevelId)
+                .OnDelete(DeleteBehavior.NoAction);
+            e.HasOne(h => h.ChangedByUser)
+                .WithMany()
+                .HasForeignKey(h => h.ChangedByUserId)
+                .OnDelete(DeleteBehavior.NoAction);
+            e.HasIndex(h => h.RiskId);
+            e.HasIndex(h => new { h.RiskId, h.RatingType });
+            e.HasIndex(h => h.ChangedAt);
+        });
+
         modelBuilder.Entity<RiskKeyRiskIndicator>(e =>
         {
             e.HasOne(x => x.Risk)
@@ -1364,6 +1427,20 @@ public partial class CompassDbContext : DbContext
             e.HasOne(x => x.FipsService).WithMany().HasForeignKey(x => x.FipsServiceId).OnDelete(DeleteBehavior.Restrict);
         });
 
+        modelBuilder.Entity<RaidRegisterDirectorate>(e =>
+        {
+            e.HasKey(x => new { x.RaidRegisterId, x.DirectorateLookupId });
+            e.HasOne(x => x.RaidRegister).WithMany(r => r.Directorates).HasForeignKey(x => x.RaidRegisterId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.DirectorateLookup).WithMany().HasForeignKey(x => x.DirectorateLookupId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<RaidRegisterBusinessArea>(e =>
+        {
+            e.HasKey(x => new { x.RaidRegisterId, x.BusinessAreaLookupId });
+            e.HasOne(x => x.RaidRegister).WithMany(r => r.BusinessAreas).HasForeignKey(x => x.RaidRegisterId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.BusinessAreaLookup).WithMany().HasForeignKey(x => x.BusinessAreaLookupId).OnDelete(DeleteBehavior.Restrict);
+        });
+
         modelBuilder.Entity<RaidRegisterRisk>(e =>
         {
             e.HasKey(x => new { x.RaidRegisterId, x.RiskId });
@@ -1402,6 +1479,14 @@ public partial class CompassDbContext : DbContext
             e.HasOne(x => x.RaidRegister).WithMany(r => r.NearMisses).HasForeignKey(x => x.RaidRegisterId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(x => x.NearMiss).WithMany().HasForeignKey(x => x.NearMissId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(x => x.AddedByUser).WithMany().HasForeignKey(x => x.AddedByUserId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<RaidRegisterSpreadsheetLayout>(e =>
+        {
+            e.HasIndex(x => x.EntityType).IsUnique();
+            e.Property(x => x.EntityType).HasMaxLength(32);
+            e.Property(x => x.ColumnOrderJson).HasColumnType("nvarchar(max)");
+            e.HasOne(x => x.UpdatedByUser).WithMany().HasForeignKey(x => x.UpdatedByUserId).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<Issue>()

@@ -73,13 +73,21 @@ namespace Compass.Controllers
                 await _context.SaveChangesAsync();
 
                 TempData["SuccessMessage"] = "Milestone updated successfully.";
-                return RedirectToAction("MilestoneDetails", "Project", new { id = id });
+                if (milestone.ProjectId.HasValue)
+                    return RedirectToAction("Detail", "ModernWork", new { id = milestone.ProjectId.Value, tab = "milestones" });
+                return RedirectToAction("AllWork", "ModernWork");
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error updating milestone {MilestoneId}", id);
                 TempData["ErrorMessage"] = "Error updating milestone. Please try again.";
-                return RedirectToAction("MilestoneDetails", "Project", new { id = id });
+                var failedMilestone = await _context.Milestones.AsNoTracking()
+                    .Where(m => m.Id == id)
+                    .Select(m => m.ProjectId)
+                    .FirstOrDefaultAsync();
+                if (failedMilestone.HasValue)
+                    return RedirectToAction("Detail", "ModernWork", new { id = failedMilestone.Value, tab = "milestones" });
+                return RedirectToAction("AllWork", "ModernWork");
             }
         }
 
@@ -167,13 +175,21 @@ namespace Compass.Controllers
                 await _context.SaveChangesAsync();
 
                 TempData["SuccessMessage"] = $"{field} updated successfully.";
-                return RedirectToAction("MilestoneDetails", "Project", new { id = id });
+                if (milestone.ProjectId.HasValue)
+                    return RedirectToAction("Detail", "ModernWork", new { id = milestone.ProjectId.Value, tab = "milestones" });
+                return RedirectToAction("AllWork", "ModernWork");
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error updating milestone field {Field} for milestone {MilestoneId}", field, id);
                 TempData["ErrorMessage"] = "Error updating milestone. Please try again.";
-                return RedirectToAction("MilestoneDetails", "Project", new { id = id });
+                var failedMilestone = await _context.Milestones.AsNoTracking()
+                    .Where(m => m.Id == id)
+                    .Select(m => m.ProjectId)
+                    .FirstOrDefaultAsync();
+                if (failedMilestone.HasValue)
+                    return RedirectToAction("Detail", "ModernWork", new { id = failedMilestone.Value, tab = "milestones" });
+                return RedirectToAction("AllWork", "ModernWork");
             }
         }
 
@@ -192,7 +208,7 @@ namespace Compass.Controllers
                     return NotFound();
                 }
 
-                // Get current user email from User.Identity or session
+                var projectId = milestone.ProjectId;
                 var userEmail = User.Identity?.Name ?? "system@example.com";
                 var userName = User.Claims.FirstOrDefault(c => c.Type == "name")?.Value;
 
@@ -227,13 +243,21 @@ namespace Compass.Controllers
                 await _context.SaveChangesAsync();
 
                 TempData["SuccessMessage"] = "Milestone update added successfully.";
-                return RedirectToAction("MilestoneDetails", "Project", new { id = milestoneId });
+                if (projectId.HasValue)
+                    return RedirectToAction("Detail", "ModernWork", new { id = projectId.Value, tab = "milestones" });
+                return RedirectToAction("AllWork", "ModernWork");
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error adding milestone update for milestone {MilestoneId}", milestoneId);
                 TempData["ErrorMessage"] = "Error adding milestone update. Please try again.";
-                return RedirectToAction("MilestoneDetails", "Project", new { id = milestoneId });
+                var failedProjectId = await _context.Milestones.AsNoTracking()
+                    .Where(m => m.Id == milestoneId)
+                    .Select(m => m.ProjectId)
+                    .FirstOrDefaultAsync();
+                if (failedProjectId.HasValue)
+                    return RedirectToAction("Detail", "ModernWork", new { id = failedProjectId.Value, tab = "milestones" });
+                return RedirectToAction("AllWork", "ModernWork");
             }
         }
 
@@ -263,10 +287,10 @@ namespace Compass.Controllers
                 
                 if (projectId.HasValue)
                 {
-                    return RedirectToAction("Details", "Project", new { id = projectId.Value, tab = "milestones" });
+                    return RedirectToAction("Detail", "ModernWork", new { id = projectId.Value, tab = "milestones" });
                 }
                 
-                return RedirectToAction("Index", "Project");
+                return RedirectToAction("AllWork", "ModernWork");
             }
             catch (Exception ex)
             {

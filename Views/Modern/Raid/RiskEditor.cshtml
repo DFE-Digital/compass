@@ -249,9 +249,22 @@
           <textarea class="govuk-textarea" id="ImpactIfRealised" name="ImpactIfRealised" rows="4">@Model.ImpactIfRealised</textarea>
         </div>
 
-        <div class="govuk-form-group" id="raid-risk-edit-mitigation" data-raid-field="mitigation">
-          <label class="govuk-label" for="ResponseStrategy">How do you intend to mitigate this risk?</label>
-          <textarea class="govuk-textarea" id="ResponseStrategy" name="ResponseStrategy" rows="4">@Model.ResponseStrategy</textarea>
+        <div class="govuk-form-group" id="raid-risk-edit-contingency" data-raid-field="contingency">
+          <label class="govuk-label" for="Contingency">Contingency</label>
+          <div class="govuk-hint">Contingency arrangements if the risk materialises.</div>
+          <textarea class="govuk-textarea" id="Contingency" name="Contingency" rows="4">@Model.Contingency</textarea>
+        </div>
+
+        <div class="govuk-form-group" id="raid-risk-edit-assurance" data-raid-field="assurance">
+          <label class="govuk-label" for="Assurance">Assurance</label>
+          <div class="govuk-hint">Assurance arrangements for this risk (boards, reviews, checkpoints).</div>
+          <textarea class="govuk-textarea" id="Assurance" name="Assurance" rows="4">@Model.Assurance</textarea>
+        </div>
+
+        <div class="govuk-form-group" id="raid-risk-edit-financial-impact" data-raid-field="financialImpact">
+          <label class="govuk-label" for="FinancialImpact">Financial impact</label>
+          <div class="govuk-hint">Estimated or known financial impact if the risk materialises.</div>
+          <textarea class="govuk-textarea" id="FinancialImpact" name="FinancialImpact" rows="3">@Model.FinancialImpact</textarea>
         </div>
 
         <fieldset class="govuk-fieldset govuk-!-margin-bottom-4" data-raid-field="tier">
@@ -294,7 +307,7 @@
         </fieldset>
         }
 
-        <fieldset class="govuk-fieldset govuk-!-margin-bottom-4" data-raid-field="priority">
+        <fieldset class="govuk-fieldset govuk-!-margin-bottom-4" data-raid-field="priority" id="raid-risk-edit-priority">
           <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Priority</legend>
           <div class="govuk-radios govuk-radios--small">
             @foreach (var o in pr)
@@ -312,127 +325,224 @@
           </div>
         </fieldset>
 
-        <fieldset class="govuk-fieldset govuk-!-margin-bottom-4" data-raid-field="likelihood">
-          <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Likelihood</legend>
-          <div class="govuk-radios govuk-radios--small">
-            @foreach (var o in lh)
-            {
-              var lhMs = o.MatrixScore;
-              var lhMsAttr = lhMs.HasValue ? $" data-raid-matrix=\"{lhMs.Value}\"" : "";
-              <div class="govuk-radios__item">
-                @if (Model.RiskLikelihoodId == o.Id)
-                {<input class="govuk-radios__input" id="raid-risk-lh-@o.Id" name="RiskLikelihoodId" type="radio" value="@o.Id"@Html.Raw(lhMsAttr) checked />}
-                else
-                {<input class="govuk-radios__input" id="raid-risk-lh-@o.Id" name="RiskLikelihoodId" type="radio" value="@o.Id"@Html.Raw(lhMsAttr) />}
-                <label class="govuk-label govuk-radios__label" for="raid-risk-lh-@o.Id">@o.Name</label>
-                @if (!string.IsNullOrEmpty(o.Description))
-                {<div class="govuk-hint govuk-radios__hint" id="raid-risk-lh-h-@o.Id">@o.Description</div>}
+        <fieldset class="govuk-fieldset govuk-!-margin-bottom-6" data-raid-field="inherent-rating">
+          <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Inherent risk rating</legend>
+          <div class="govuk-hint">The unmitigated risk level before any controls are applied.</div>
+          <div class="govuk-grid-row">
+            <div class="govuk-grid-column-one-half">
+              <div class="govuk-form-group">
+                <label class="govuk-label" for="RiskLikelihoodId">Likelihood</label>
+                <select class="govuk-select govuk-!-width-full" id="RiskLikelihoodId" name="RiskLikelihoodId">
+                  <option value="">— Select —</option>
+                  @foreach (var o in lh)
+                  {
+                    var lhSel = Model.RiskLikelihoodId == o.Id ? " selected" : "";
+                    var lhMs = o.MatrixScore.HasValue ? $" data-raid-matrix=\"{o.MatrixScore.Value}\"" : "";
+                    @Html.Raw($"<option value=\"{o.Id}\"{lhSel}{lhMs}>{Html.Encode(o.Name)}</option>")
+                  }
+                </select>
               </div>
-            }
+            </div>
+            <div class="govuk-grid-column-one-half">
+              <div class="govuk-form-group">
+                <label class="govuk-label" for="RiskImpactLevelId">Impact</label>
+                <select class="govuk-select govuk-!-width-full" id="RiskImpactLevelId" name="RiskImpactLevelId">
+                  <option value="">— Select —</option>
+                  @foreach (var o in imp)
+                  {
+                    var impSel = Model.RiskImpactLevelId == o.Id ? " selected" : "";
+                    var impMs = o.MatrixScore.HasValue ? $" data-raid-matrix=\"{o.MatrixScore.Value}\"" : "";
+                    @Html.Raw($"<option value=\"{o.Id}\"{impSel}{impMs}>{Html.Encode(o.Name)}</option>")
+                  }
+                </select>
+              </div>
+            </div>
           </div>
         </fieldset>
 
-        <fieldset class="govuk-fieldset govuk-!-margin-bottom-4" data-raid-field="impact">
-          <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Impact level</legend>
-          <div class="govuk-radios govuk-radios--small">
-            @foreach (var o in imp)
-            {
-              var impMs = o.MatrixScore;
-              var impMsAttr = impMs.HasValue ? $" data-raid-matrix=\"{impMs.Value}\"" : "";
-              <div class="govuk-radios__item">
-                @if (Model.RiskImpactLevelId == o.Id)
-                {<input class="govuk-radios__input" id="raid-risk-imp-@o.Id" name="RiskImpactLevelId" type="radio" value="@o.Id"@Html.Raw(impMsAttr) checked />}
-                else
-                {<input class="govuk-radios__input" id="raid-risk-imp-@o.Id" name="RiskImpactLevelId" type="radio" value="@o.Id"@Html.Raw(impMsAttr) />}
-                <label class="govuk-label govuk-radios__label" for="raid-risk-imp-@o.Id">@o.Name</label>
-                @if (!string.IsNullOrEmpty(o.Description))
-                {<div class="govuk-hint govuk-radios__hint" id="raid-risk-imp-h-@o.Id">@o.Description</div>}
+        <div class="govuk-form-group" id="raid-risk-edit-mitigation" data-raid-field="mitigation">
+          <label class="govuk-label" for="ResponseStrategy">How do you intend to mitigate this risk?</label>
+          <textarea class="govuk-textarea" id="ResponseStrategy" name="ResponseStrategy" rows="4">@Model.ResponseStrategy</textarea>
+        </div>
+
+        <h2 class="govuk-heading-m govuk-!-margin-bottom-3" id="raid-risk-edit-kris">Key risk indicators</h2>
+        <p class="govuk-body govuk-hint govuk-!-margin-bottom-3">What you measure and the threshold at which the risk escalates or is reviewed.</p>
+        @{
+          var kriRows = Model.KriItems ?? new List<RiskKriItemForm>();
+          if (kriRows.Count == 0) { kriRows.Add(new RiskKriItemForm()); }
+        }
+        <div id="risk-kri-rows" data-next-index="@kriRows.Count" data-raid-field="kris">
+          @for (var ki = 0; ki < kriRows.Count; ki++)
+          {
+            var kri = kriRows[ki];
+            <div class="risk-kri-row govuk-!-margin-bottom-4 govuk-!-padding-left-4" data-risk-kri-row style="border-left:4px solid #b1b4b6;">
+              <fieldset class="govuk-fieldset">
+                <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">KRI @(ki + 1)</legend>
+                <div class="govuk-grid-row">
+                  <div class="govuk-grid-column-one-half">
+                    <div class="govuk-form-group govuk-!-margin-bottom-3">
+                      <label class="govuk-label" for="risk-kri-metric-@ki">Metric</label>
+                      <input class="govuk-input" id="risk-kri-metric-@ki" name="KriItems[@ki].Metric" type="text" maxlength="2000" value="@kri.Metric" />
+                    </div>
+                  </div>
+                  <div class="govuk-grid-column-one-half">
+                    <div class="govuk-form-group govuk-!-margin-bottom-0">
+                      <label class="govuk-label" for="risk-kri-threshold-@ki">Threshold</label>
+                      <input class="govuk-input" id="risk-kri-threshold-@ki" name="KriItems[@ki].Threshold" type="text" maxlength="2000" value="@kri.Threshold" />
+                    </div>
+                  </div>
+                </div>
+              </fieldset>
+            </div>
+          }
+        </div>
+        <button type="button" class="govuk-button govuk-button--secondary govuk-!-margin-bottom-6" id="risk-kri-add">Add another KRI</button>
+
+        <template id="risk-kri-row-template">
+          <div class="risk-kri-row govuk-!-margin-bottom-4 govuk-!-padding-left-4" data-risk-kri-row style="border-left:4px solid #b1b4b6;">
+            <fieldset class="govuk-fieldset">
+              <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">KRI</legend>
+              <div class="govuk-grid-row">
+                <div class="govuk-grid-column-one-half">
+                  <div class="govuk-form-group govuk-!-margin-bottom-3">
+                    <label class="govuk-label" for="risk-kri-metric-__IX__">Metric</label>
+                    <input class="govuk-input" id="risk-kri-metric-__IX__" name="KriItems[__IX__].Metric" type="text" maxlength="2000" value="" />
+                  </div>
+                </div>
+                <div class="govuk-grid-column-one-half">
+                  <div class="govuk-form-group govuk-!-margin-bottom-0">
+                    <label class="govuk-label" for="risk-kri-threshold-__IX__">Threshold</label>
+                    <input class="govuk-input" id="risk-kri-threshold-__IX__" name="KriItems[__IX__].Threshold" type="text" maxlength="2000" value="" />
+                  </div>
+                </div>
               </div>
-            }
+            </fieldset>
+          </div>
+        </template>
+
+        <fieldset class="govuk-fieldset govuk-!-margin-bottom-6" data-raid-field="residual-rating">
+          <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Residual risk rating</legend>
+          <div class="govuk-hint">The risk level after existing controls and mitigations are applied.</div>
+          <div class="govuk-grid-row">
+            <div class="govuk-grid-column-one-half">
+              <div class="govuk-form-group">
+                <label class="govuk-label" for="ResidualLikelihoodId">Likelihood</label>
+                <select class="govuk-select govuk-!-width-full" id="ResidualLikelihoodId" name="ResidualLikelihoodId">
+                  <option value="">— Select —</option>
+                  @foreach (var o in lh)
+                  {
+                    if (Model.ResidualLikelihoodId == o.Id) { <option value="@o.Id" selected>@o.Name</option> }
+                    else { <option value="@o.Id">@o.Name</option> }
+                  }
+                </select>
+              </div>
+            </div>
+            <div class="govuk-grid-column-one-half">
+              <div class="govuk-form-group">
+                <label class="govuk-label" for="ResidualImpactLevelId">Impact</label>
+                <select class="govuk-select govuk-!-width-full" id="ResidualImpactLevelId" name="ResidualImpactLevelId">
+                  <option value="">— Select —</option>
+                  @foreach (var o in imp)
+                  {
+                    if (Model.ResidualImpactLevelId == o.Id) { <option value="@o.Id" selected>@o.Name</option> }
+                    else { <option value="@o.Id">@o.Name</option> }
+                  }
+                </select>
+              </div>
+            </div>
           </div>
         </fieldset>
 
-        <fieldset class="govuk-fieldset govuk-!-margin-bottom-4" data-raid-field="proximity">
-          <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Proximity</legend>
-          <div class="govuk-radios govuk-radios--small">
+        <fieldset class="govuk-fieldset govuk-!-margin-bottom-6" data-raid-field="tolerance-rating">
+          <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Tolerance risk rating</legend>
+          <div class="govuk-hint">The maximum acceptable risk level the organisation is willing to tolerate.</div>
+          <div class="govuk-grid-row">
+            <div class="govuk-grid-column-one-half">
+              <div class="govuk-form-group">
+                <label class="govuk-label" for="ToleranceLikelihoodId">Likelihood</label>
+                <select class="govuk-select govuk-!-width-full" id="ToleranceLikelihoodId" name="ToleranceLikelihoodId">
+                  <option value="">— Select —</option>
+                  @foreach (var o in lh)
+                  {
+                    if (Model.ToleranceLikelihoodId == o.Id) { <option value="@o.Id" selected>@o.Name</option> }
+                    else { <option value="@o.Id">@o.Name</option> }
+                  }
+                </select>
+              </div>
+            </div>
+            <div class="govuk-grid-column-one-half">
+              <div class="govuk-form-group">
+                <label class="govuk-label" for="ToleranceImpactLevelId">Impact</label>
+                <select class="govuk-select govuk-!-width-full" id="ToleranceImpactLevelId" name="ToleranceImpactLevelId">
+                  <option value="">— Select —</option>
+                  @foreach (var o in imp)
+                  {
+                    if (Model.ToleranceImpactLevelId == o.Id) { <option value="@o.Id" selected>@o.Name</option> }
+                    else { <option value="@o.Id">@o.Name</option> }
+                  }
+                </select>
+              </div>
+            </div>
+          </div>
+        </fieldset>
+
+        <div class="govuk-form-group govuk-!-margin-bottom-4" data-raid-field="proximity">
+          <label class="govuk-label govuk-label--s" for="RiskProximityId">Proximity</label>
+          <div class="govuk-hint">When is the risk most likely to occur?</div>
+          <select class="govuk-select govuk-!-width-one-half" id="RiskProximityId" name="RiskProximityId">
+            <option value="">— Select —</option>
             @foreach (var o in px)
             {
-              <div class="govuk-radios__item">
-                @if (Model.RiskProximityId == o.Id)
-                {<input class="govuk-radios__input" id="raid-risk-px-@o.Id" name="RiskProximityId" type="radio" value="@o.Id" checked />}
-                else
-                {<input class="govuk-radios__input" id="raid-risk-px-@o.Id" name="RiskProximityId" type="radio" value="@o.Id" />}
-                <label class="govuk-label govuk-radios__label" for="raid-risk-px-@o.Id">@o.Name</label>
-                @if (!string.IsNullOrEmpty(o.Description))
-                {<div class="govuk-hint govuk-radios__hint" id="raid-risk-px-h-@o.Id">@o.Description</div>}
-              </div>
+              if (Model.RiskProximityId == o.Id) { <option value="@o.Id" selected>@o.Name</option> }
+              else { <option value="@o.Id">@o.Name</option> }
             }
-          </div>
-        </fieldset>
+          </select>
+        </div>
 
-        <fieldset class="govuk-fieldset govuk-!-margin-bottom-4" data-raid-field="treatment">
-          <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Treatment</legend>
-          <div class="govuk-hint">Select the primary treatment approach for this risk.</div>
-          <div class="govuk-radios govuk-radios--small">
+        <div class="govuk-form-group govuk-!-margin-bottom-4" data-raid-field="treatment" id="raid-risk-edit-treatment">
+          <label class="govuk-label govuk-label--s" for="RiskTreatmentId">Treatment</label>
+          <div class="govuk-hint">The primary treatment approach for this risk.</div>
+          <select class="govuk-select govuk-!-width-one-half" id="RiskTreatmentId" name="RiskTreatmentId">
+            <option value="">— Select —</option>
             @foreach (var o in rt)
             {
-              <div class="govuk-radios__item">
-                @if (Model.RiskTreatmentId == o.Id)
-                {<input class="govuk-radios__input" id="raid-risk-treat-@o.Id" name="RiskTreatmentId" type="radio" value="@o.Id" checked />}
-                else
-                {<input class="govuk-radios__input" id="raid-risk-treat-@o.Id" name="RiskTreatmentId" type="radio" value="@o.Id" />}
-                <label class="govuk-label govuk-radios__label" for="raid-risk-treat-@o.Id">@o.Name</label>
-                @if (!string.IsNullOrEmpty(o.Description))
-                {<div class="govuk-hint govuk-radios__hint" id="raid-risk-treat-h-@o.Id">@o.Description</div>}
-              </div>
+              if (Model.RiskTreatmentId == o.Id) { <option value="@o.Id" selected>@o.Name</option> }
+              else { <option value="@o.Id">@o.Name</option> }
             }
-          </div>
-        </fieldset>
+          </select>
+        </div>
 
-        <fieldset class="govuk-fieldset govuk-!-margin-bottom-4 @(RaidErr("PrimaryRiskCategoryId") != null || RaidErr("SecondaryRiskCategoryId") != null ? "govuk-form-group--error" : null)" data-raid-field="categories" id="PrimaryRiskCategoryId">
-          <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Primary category</legend>
-          <div class="govuk-hint">Select one. Add an optional different secondary category below.</div>
-          <div class="govuk-radios govuk-radios--small" data-module="govuk-radios">
-            <div class="govuk-radios__item">
-              <input class="govuk-radios__input" id="raid-risk-pri-cat-none" name="PrimaryRiskCategoryId" type="radio" value="" @(!Model.PrimaryRiskCategoryId.HasValue || Model.PrimaryRiskCategoryId == 0 ? "checked" : null) />
-              <label class="govuk-label govuk-radios__label" for="raid-risk-pri-cat-none">Not selected</label>
-            </div>
-            @foreach (var o in cat)
-            {
-              <div class="govuk-radios__item">
-                @if (Model.PrimaryRiskCategoryId == o.Id)
-                {<input class="govuk-radios__input" id="raid-risk-pri-cat-@o.Id" name="PrimaryRiskCategoryId" type="radio" value="@o.Id" checked />}
-                else
-                {<input class="govuk-radios__input" id="raid-risk-pri-cat-@o.Id" name="PrimaryRiskCategoryId" type="radio" value="@o.Id" />}
-                <label class="govuk-label govuk-radios__label" for="raid-risk-pri-cat-@o.Id">@o.Name</label>
-              </div>
-            }
-          </div>
+        <div class="govuk-form-group govuk-!-margin-bottom-4 @(RaidErr("PrimaryRiskCategoryId") != null ? "govuk-form-group--error" : null)" data-raid-field="categories" id="PrimaryRiskCategoryId">
+          <label class="govuk-label govuk-label--s" for="PrimaryRiskCategoryId-select">Category</label>
+          <div class="govuk-hint">Select the primary category for this risk.</div>
           @if (RaidErr("PrimaryRiskCategoryId") != null)
           {<p class="govuk-error-message">@RaidErr("PrimaryRiskCategoryId")</p>}
-        </fieldset>
-        <fieldset class="govuk-fieldset govuk-!-margin-bottom-6 @(RaidErr("PrimaryRiskCategoryId") != null || RaidErr("SecondaryRiskCategoryId") != null ? "govuk-form-group--error" : null)" id="SecondaryRiskCategoryId">
-          <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Secondary category (optional)</legend>
-          <div class="govuk-hint">Not required. Must be different from the primary category if selected.</div>
-          <div class="govuk-radios govuk-radios--small" data-module="govuk-radios">
-            <div class="govuk-radios__item">
-              <input class="govuk-radios__input" id="raid-risk-sec-cat-none" name="SecondaryRiskCategoryId" type="radio" value="" @(!Model.SecondaryRiskCategoryId.HasValue || Model.SecondaryRiskCategoryId == 0 ? "checked" : null) />
-              <label class="govuk-label govuk-radios__label" for="raid-risk-sec-cat-none">No secondary category</label>
-            </div>
+          <select class="govuk-select govuk-!-width-one-half" id="PrimaryRiskCategoryId-select" name="PrimaryRiskCategoryId">
+            <option value="">— Select —</option>
             @foreach (var o in cat)
             {
-              <div class="govuk-radios__item">
-                @if (Model.SecondaryRiskCategoryId == o.Id)
-                {<input class="govuk-radios__input" id="raid-risk-sec-cat-@o.Id" name="SecondaryRiskCategoryId" type="radio" value="@o.Id" checked />}
-                else
-                {<input class="govuk-radios__input" id="raid-risk-sec-cat-@o.Id" name="SecondaryRiskCategoryId" type="radio" value="@o.Id" />}
-                <label class="govuk-label govuk-radios__label" for="raid-risk-sec-cat-@o.Id">@o.Name</label>
-              </div>
+              if (Model.PrimaryRiskCategoryId == o.Id) { <option value="@o.Id" selected>@o.Name</option> }
+              else { <option value="@o.Id">@o.Name</option> }
             }
-          </div>
+          </select>
+        </div>
+        @if (isEdit)
+        {
+        <div class="govuk-form-group govuk-!-margin-bottom-6 @(RaidErr("SecondaryRiskCategoryId") != null ? "govuk-form-group--error" : null)" id="SecondaryRiskCategoryId">
+          <label class="govuk-label govuk-label--s" for="SecondaryRiskCategoryId-select">Secondary category (optional)</label>
+          <div class="govuk-hint">Must be different from the primary category if selected.</div>
           @if (RaidErr("SecondaryRiskCategoryId") != null)
           {<p class="govuk-error-message">@RaidErr("SecondaryRiskCategoryId")</p>}
-        </fieldset>
+          <select class="govuk-select govuk-!-width-one-half" id="SecondaryRiskCategoryId-select" name="SecondaryRiskCategoryId">
+            <option value="">— None —</option>
+            @foreach (var o in cat)
+            {
+              if (Model.SecondaryRiskCategoryId == o.Id) { <option value="@o.Id" selected>@o.Name</option> }
+              else { <option value="@o.Id">@o.Name</option> }
+            }
+          </select>
+        </div>
+        }
 
         <fieldset class="govuk-fieldset govuk-!-margin-bottom-4" data-raid-field="divisions">
           <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Divisions</legend>
@@ -473,9 +583,6 @@
         <div class="user-picker-wrapper user-picker-wrapper--full-width" data-raid-field="owner">
           @await Html.PartialAsync("~/Views/Shared/_UserPicker.cshtml", ViewBag.OwnerUserPicker as UserPickerViewModel)
         </div>
-        <div class="user-picker-wrapper user-picker-wrapper--full-width" data-raid-field="sro">
-          @await Html.PartialAsync("~/Views/Shared/_UserPicker.cshtml", ViewBag.SroUserPicker as UserPickerViewModel)
-        </div>
 
         @{
           var identErr = RaidErr("Identified");
@@ -496,6 +603,8 @@
         })
         </div>
 
+        @if (isEdit)
+        {
         <div id="raid-risk-edit-nextreview" data-raid-field="nextReview">
         @await Html.PartialAsync("~/Views/Modern/Raid/_RaidGovUkDateInput.cshtml", new RaidGovUkDateFieldVm
         {
@@ -510,6 +619,7 @@
           ErrorMessage = nextErr,
         })
         </div>
+        }
 
         @if (opsMode)
         {
@@ -555,4 +665,35 @@
     })
   </div>
 </div>
+
+@section Scripts {
+@{
+  var cspNonce = Context.Items["Nonce"]?.ToString() ?? "";
+}
+<script nonce="@cspNonce">
+(function () {
+  var wrap = document.getElementById('risk-kri-rows');
+  var addBtn = document.getElementById('risk-kri-add');
+  var tpl = document.getElementById('risk-kri-row-template');
+  if (addBtn && wrap && tpl) {
+    addBtn.addEventListener('click', function () {
+      var next = parseInt(wrap.getAttribute('data-next-index') || '0', 10);
+      var html = tpl.innerHTML.replace(/__IX__/g, String(next));
+      var d = document.createElement('div');
+      d.innerHTML = html.trim();
+      var node = d.firstElementChild;
+      if (node) {
+        wrap.appendChild(node);
+        wrap.setAttribute('data-next-index', String(next + 1));
+        var rows = wrap.querySelectorAll('[data-risk-kri-row]');
+        rows.forEach(function (row, idx) {
+          var legend = row.querySelector('.govuk-fieldset__legend');
+          if (legend) legend.textContent = 'KRI ' + (idx + 1);
+        });
+      }
+    });
+  }
+})();
+</script>
+}
 </div>

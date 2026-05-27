@@ -306,6 +306,8 @@ public class HomeController : Controller
 
     [AllowAnonymous]
     [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
+    [HttpGet]
+    [HttpHead]
     public IActionResult Error()
     {
         var exception = HttpContext.Features.Get<IExceptionHandlerPathFeature>()?.Error;
@@ -320,13 +322,35 @@ public class HomeController : Controller
 
     [AllowAnonymous]
     [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
+    [HttpGet]
+    [HttpHead]
     public new IActionResult NotFound()
     {
+        var originalPath = HttpContext.Features.Get<IStatusCodeReExecuteFeature>()?.OriginalPath
+            ?? HttpContext.Request.Path.Value
+            ?? "";
+        if (IsStaticAssetPath(originalPath))
+        {
+            return StatusCode(StatusCodes.Status404NotFound);
+        }
+
         var originalStatusCode = HttpContext.Features.Get<IStatusCodeReExecuteFeature>()?.OriginalStatusCode;
         var statusCode = originalStatusCode is >= 400 ? originalStatusCode.Value : StatusCodes.Status404NotFound;
         Response.StatusCode = statusCode;
         ViewData["StatusCode"] = statusCode;
         return View();
+    }
+
+    private static bool IsStaticAssetPath(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return false;
+
+        var p = path.TrimEnd('/').ToLowerInvariant();
+        return p.StartsWith("/css/", StringComparison.Ordinal)
+            || p.StartsWith("/js/", StringComparison.Ordinal)
+            || p.StartsWith("/modern/", StringComparison.Ordinal)
+            || p.StartsWith("/lib/", StringComparison.Ordinal)
+            || p.StartsWith("/_content/", StringComparison.Ordinal);
     }
 
     public IActionResult Support()

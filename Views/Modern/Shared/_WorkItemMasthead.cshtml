@@ -2,6 +2,7 @@
 @using System.Linq
 @using Compass.Models
 @using Compass.Models.Modern.Work
+@using Compass.ViewModels.Modern
 @{
   var work = Model;
   var workNumber = ViewBag.WorkIdShort as string ?? work.Id.ToString("D8", System.Globalization.CultureInfo.InvariantCulture);
@@ -15,6 +16,9 @@
   var currentRagCssClass = ViewBag.CurrentRagCssClass as string;
   var currentRagBgKey = ViewBag.CurrentRagBackgroundColourKey as string;
   var currentRagTextKey = ViewBag.CurrentRagTextColourKey as string;
+  var trackingRegisters = ViewBag.WorkRaidTrackingRegisters as IReadOnlyList<WorkRaidRegisterTrackingVm>
+      ?? Array.Empty<WorkRaidRegisterTrackingVm>();
+  var trackingCount = trackingRegisters.Count;
 
   string DisplayName(User? u)
   {
@@ -48,6 +52,7 @@
             <th scope="col" class="govuk-table__header">Business area</th>
             <th scope="col" class="govuk-table__header">Primary contact</th>
             <th scope="col" class="govuk-table__header">Status</th>
+            <th scope="col" class="govuk-table__header">Tracked</th>
           </tr>
           </thead>
             <tbody class="govuk-table__body">
@@ -102,6 +107,24 @@
               <td class="govuk-table__cell">
                 <span class="@WorkBadgeCss.StatusDfeFrontendBadgeClass(statusDisplay) dfe-f-badge--small">@statusDisplay.ToUpperInvariant()</span>
               </td>
+              <td class="govuk-table__cell">
+                @if (trackingCount == 0)
+                {
+                  <span class="govuk-hint govuk-!-margin-bottom-0">—</span>
+                }
+                else
+                {
+                  <span class="work-item-masthead__tracked-count">@trackingCount</span>
+                  <button type="button"
+                          class="work-item-masthead__tracked-info"
+                          id="work-item-raid-tracking-open"
+                          aria-haspopup="dialog"
+                          aria-controls="work-item-raid-tracking-modal">
+                    <span class="work-item-masthead__tracked-info-icon" aria-hidden="true">i</span>
+                    <span class="govuk-visually-hidden">Show which RAID registers track this work item (@trackingCount)</span>
+                  </button>
+                }
+              </td>
             </tr>
             </tbody>
         </table>
@@ -109,3 +132,50 @@
     </div>
   </div>
 </div>
+
+@if (trackingCount > 0)
+{
+  @await Html.PartialAsync("~/Views/Modern/Shared/_WorkItemRaidTrackingModal.cshtml")
+  <style nonce="@(Context.Items["Nonce"]?.ToString() ?? "")">
+    .work-item-masthead__tracked-count { font-weight: 700; margin-right: 4px; }
+    .work-item-masthead__tracked-info {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 1.25rem;
+      height: 1.25rem;
+      padding: 0;
+      border: 2px solid #1d70b8;
+      border-radius: 50%;
+      background: #fff;
+      color: #1d70b8;
+      font: inherit;
+      font-size: 0.75rem;
+      font-weight: 700;
+      line-height: 1;
+      vertical-align: middle;
+      cursor: pointer;
+    }
+    .work-item-masthead__tracked-info:hover,
+    .work-item-masthead__tracked-info:focus {
+      background: #1d70b8;
+      color: #fff;
+      outline: 3px solid transparent;
+      box-shadow: 0 0 0 3px #ffdd00;
+    }
+    .work-item-masthead__tracked-info-icon { font-style: italic; font-family: Georgia, serif; }
+  </style>
+  <script nonce="@(Context.Items["Nonce"]?.ToString() ?? "")">
+    (function () {
+      var btn = document.getElementById('work-item-raid-tracking-open');
+      var dialog = document.getElementById('work-item-raid-tracking-modal');
+      if (!btn || !dialog) return;
+      btn.addEventListener('click', function () {
+        if (typeof dialog.showModal === 'function') dialog.showModal();
+      });
+      dialog.querySelectorAll('[data-dfe-modal-close]').forEach(function (el) {
+        el.addEventListener('click', function () { dialog.close(); });
+      });
+    })();
+  </script>
+}

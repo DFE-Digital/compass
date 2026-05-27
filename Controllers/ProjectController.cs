@@ -17,6 +17,7 @@ using ClosedXML.Excel;
 namespace Compass.Controllers
 {
     [Authorize]
+    [ServiceFilter(typeof(Compass.Filters.ProjectLegacyRedirectFilter))]
     public class ProjectController : Controller
     {
         private readonly CompassDbContext _context;
