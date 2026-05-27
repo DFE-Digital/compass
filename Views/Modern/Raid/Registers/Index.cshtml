@@ -1,6 +1,7 @@
 @model Compass.ViewModels.Modern.RaidRegisterDashboardViewModel
 @{
   ViewData["Title"] = "RAID registers";
+  var hasAny = Model.YourRegisters.Any() || Model.AllRegisters.Any();
 }
 
 @section Breadcrumbs {
@@ -12,7 +13,7 @@
   @await Html.PartialAsync("~/Views/Modern/Shared/_ModernPageHeader.cshtml", new Compass.ViewModels.Modern.ModernPageHeaderViewModel
   {
     Title = "RAID registers",
-    Lede = new Microsoft.AspNetCore.Html.HtmlString("<p class=\"govuk-body-s govuk-!-margin-bottom-0\">Manage your RAID registers and view summary information across risks, issues, assumptions, dependencies and near misses.</p>"),
+    Lede = new Microsoft.AspNetCore.Html.HtmlString("<p class=\"govuk-body-s govuk-!-margin-bottom-0\">Manage registers you own and browse others visible through your directorate or portfolio.</p>"),
     Actions = new Microsoft.AspNetCore.Html.HtmlString($"<a href=\"{Url.Action("RegisterCreate", "ModernRaid")}\" class=\"govuk-button\" data-module=\"govuk-button\">Create register</a>")
   })
 
@@ -28,7 +29,7 @@
     </div>
   }
 
-  @if (!Model.Registers.Any())
+  @if (!hasAny)
   {
     <div class="govuk-!-margin-top-6">
       <p class="govuk-body">You do not have any RAID registers yet.</p>
@@ -40,157 +41,167 @@
   }
   else
   {
-    <div class="govuk-!-margin-top-4">
-      <table class="govuk-table govuk-table--small-text-until-tablet">
-        <caption class="govuk-table__caption govuk-table__caption--m govuk-visually-hidden">RAID registers</caption>
-        <thead class="govuk-table__head">
-          <tr class="govuk-table__row">
-            <th scope="col" class="govuk-table__header">Register</th>
-            <th scope="col" class="govuk-table__header">Owner</th>
-            <th scope="col" class="govuk-table__header govuk-table__header--numeric">Risks</th>
-            <th scope="col" class="govuk-table__header govuk-table__header--numeric">Issues</th>
-            <th scope="col" class="govuk-table__header govuk-table__header--numeric">Assumptions</th>
-            <th scope="col" class="govuk-table__header govuk-table__header--numeric">Dependencies</th>
-            <th scope="col" class="govuk-table__header govuk-table__header--numeric">Near misses</th>
-            <th scope="col" class="govuk-table__header">Scope</th>
-          </tr>
-        </thead>
-        <tbody class="govuk-table__body">
-          @foreach (var reg in Model.Registers)
-          {
-            <tr class="govuk-table__row">
-              <td class="govuk-table__cell">
-                <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("RegisterDetail", "ModernRaid", new { id = reg.Id })">
-                  <strong>@reg.Name</strong>
-                </a>
-                @if (!string.IsNullOrWhiteSpace(reg.DirectorateName) || !string.IsNullOrWhiteSpace(reg.BusinessAreaName))
-                {
-                  <br />
-                  <span class="govuk-body-s" style="color:#505a5f;">
-                    @if (!string.IsNullOrWhiteSpace(reg.DirectorateName))
-                    {
-                      @reg.DirectorateName
-                    }
-                    @if (!string.IsNullOrWhiteSpace(reg.DirectorateName) && !string.IsNullOrWhiteSpace(reg.BusinessAreaName))
-                    {
-                      <text> &middot; </text>
-                    }
-                    @if (!string.IsNullOrWhiteSpace(reg.BusinessAreaName))
-                    {
-                      @reg.BusinessAreaName
-                    }
-                  </span>
-                }
-              </td>
-              <td class="govuk-table__cell">
-                @(reg.OwnerName ?? "—")
-              </td>
-              <td class="govuk-table__cell govuk-table__cell--numeric">
-                @if (reg.OpenRiskCount > 0)
-                {
-                  <strong>@reg.OpenRiskCount</strong>
-                }
-                else
-                {
-                  <span style="color:#505a5f;">0</span>
-                }
-              </td>
-              <td class="govuk-table__cell govuk-table__cell--numeric">
-                @if (reg.OpenIssueCount > 0)
-                {
-                  <strong>@reg.OpenIssueCount</strong>
-                }
-                else
-                {
-                  <span style="color:#505a5f;">0</span>
-                }
-              </td>
-              <td class="govuk-table__cell govuk-table__cell--numeric">
-                @if (reg.OpenAssumptionCount > 0)
-                {
-                  <strong>@reg.OpenAssumptionCount</strong>
-                }
-                else
-                {
-                  <span style="color:#505a5f;">0</span>
-                }
-              </td>
-              <td class="govuk-table__cell govuk-table__cell--numeric">
-                @if (reg.OpenDependencyCount > 0)
-                {
-                  <strong>@reg.OpenDependencyCount</strong>
-                }
-                else
-                {
-                  <span style="color:#505a5f;">0</span>
-                }
-              </td>
-              <td class="govuk-table__cell govuk-table__cell--numeric">
-                @if (reg.OpenNearMissCount > 0)
-                {
-                  <strong>@reg.OpenNearMissCount</strong>
-                }
-                else
-                {
-                  <span style="color:#505a5f;">0</span>
-                }
-              </td>
-              <td class="govuk-table__cell">
-                @{
-                  var scopeParts = new List<string>();
-                  if (reg.WorkItemNames.Any())
-                  {
-                    scopeParts.Add(reg.WorkItemNames.Count == 1
-                      ? "1 work item"
-                      : $"{reg.WorkItemNames.Count} work items");
-                  }
-                  if (reg.ServiceNames.Any())
-                  {
-                    scopeParts.Add(reg.ServiceNames.Count == 1
-                      ? "1 service"
-                      : $"{reg.ServiceNames.Count} services");
-                  }
-                }
-                @if (scopeParts.Any())
-                {
-                  <span class="govuk-body-s govuk-!-margin-bottom-0">@string.Join(", ", scopeParts)</span>
-                  <details class="govuk-details govuk-details--small govuk-!-margin-bottom-0 govuk-!-margin-top-1" style="font-size: 14px;">
-                    <summary class="govuk-details__summary" style="font-size: 14px;">
-                      <span class="govuk-details__summary-text">View items</span>
-                    </summary>
-                    <div class="govuk-details__text" style="font-size: 14px;">
-                      @if (reg.WorkItemNames.Any())
-                      {
-                        <p class="govuk-body-s govuk-!-margin-bottom-1"><strong>Work items</strong></p>
-                        <ul class="govuk-list govuk-list--bullet govuk-!-margin-bottom-2" style="font-size: 14px;">
-                          @foreach (var name in reg.WorkItemNames)
-                          {
-                            <li>@name</li>
-                          }
-                        </ul>
-                      }
-                      @if (reg.ServiceNames.Any())
-                      {
-                        <p class="govuk-body-s govuk-!-margin-bottom-1"><strong>Services</strong></p>
-                        <ul class="govuk-list govuk-list--bullet govuk-!-margin-bottom-0" style="font-size: 14px;">
-                          @foreach (var name in reg.ServiceNames)
-                          {
-                            <li>@name</li>
-                          }
-                        </ul>
-                      }
-                    </div>
-                  </details>
-                }
-                else
-                {
-                  <span style="color:#505a5f;">—</span>
-                }
-              </td>
-            </tr>
-          }
-        </tbody>
-      </table>
+    <nav class="dfe-f-sub-navigation govuk-!-margin-top-4 govuk-!-margin-bottom-0" aria-label="Register lists" id="raid-registers-tabs">
+      <ul class="dfe-f-sub-navigation__list">
+        <li class="dfe-f-sub-navigation__item dfe-f-sub-navigation__item--current" id="raid-reg-tab-yours">
+          <a class="dfe-f-sub-navigation__link govuk-link govuk-link--no-visited-state" href="#your-registers" data-reg-tab="your-registers" aria-current="page">
+            Your registers <span class="dfe-c-fw-regular">(@Model.YourRegisters.Count)</span>
+          </a>
+        </li>
+        <li class="dfe-f-sub-navigation__item" id="raid-reg-tab-all">
+          <a class="dfe-f-sub-navigation__link govuk-link govuk-link--no-visited-state" href="#all-registers" data-reg-tab="all-registers">
+            All registers <span class="dfe-c-fw-regular">(@Model.AllRegisters.Count)</span>
+          </a>
+        </li>
+      </ul>
+    </nav>
+
+    <div id="panel-your-registers" class="raid-registers-tab-panel raid-registers-tab-active">
+      <p class="govuk-body-s govuk-!-margin-top-4 govuk-!-margin-bottom-0" style="color:#505a5f;">
+        Registers you created or where you are listed as owner, manager or viewer.
+      </p>
+      @await Html.PartialAsync("~/Views/Modern/Raid/Registers/_RegisterListTable.cshtml", Model.YourRegisters, new ViewDataDictionary(ViewData)
+      {
+        { "TableId", "tbl-your-registers" },
+        { "TableCaption", "Your RAID registers" },
+        { "EmptyMessage", "You do not own or belong to any registers yet. Create a register to get started." }
+      })
+    </div>
+
+    <div id="panel-all-registers" class="raid-registers-tab-panel">
+      <p class="govuk-body-s govuk-!-margin-top-4 govuk-!-margin-bottom-0" style="color:#505a5f;">
+        Other registers in your directorate or portfolio that you can view but are not a member of.
+      </p>
+      @await Html.PartialAsync("~/Views/Modern/Raid/Registers/_RegisterListTable.cshtml", Model.AllRegisters, new ViewDataDictionary(ViewData)
+      {
+        { "TableId", "tbl-all-registers" },
+        { "TableCaption", "All RAID registers" },
+        { "EmptyMessage", "No other registers are visible through your organisation structure." }
+      })
     </div>
   }
 </div>
+
+<div id="raid-reg-scope-modal" class="raid-modal-overlay" style="display:none" role="dialog" aria-modal="true" aria-labelledby="raid-reg-scope-modal-title">
+  <div class="raid-modal-panel" style="max-width:640px">
+    <div class="raid-modal-header">
+      <h2 class="govuk-heading-m govuk-!-margin-bottom-0" id="raid-reg-scope-modal-title">Register scope</h2>
+      <button type="button" class="raid-modal-close govuk-link" aria-label="Close">&times;</button>
+    </div>
+    <div class="raid-modal-body" id="raid-reg-scope-modal-body">
+      <p class="govuk-body">Loading…</p>
+    </div>
+    <div class="raid-modal-footer">
+      <button type="button" class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0" id="raid-reg-scope-modal-close">Close</button>
+    </div>
+  </div>
+</div>
+
+@section Styles {
+  <link rel="stylesheet" href="~/css/raid-spreadsheet.css" />
+  <style nonce="@(Context.Items["Nonce"]?.ToString() ?? "")">
+    .raid-registers-tab-panel { display: none; }
+    .raid-registers-tab-panel.raid-registers-tab-active { display: block; }
+  </style>
+}
+
+@section Scripts {
+  <script nonce="@Context.Items["Nonce"]">
+  (function () {
+    var panels = document.querySelectorAll('.raid-registers-tab-panel');
+    var navItems = document.querySelectorAll('#raid-registers-tabs .dfe-f-sub-navigation__item');
+
+    function activateTab(tabId) {
+      var panelId = 'panel-' + tabId;
+      panels.forEach(function (p) {
+        p.classList.toggle('raid-registers-tab-active', p.id === panelId);
+      });
+      navItems.forEach(function (li) {
+        var link = li.querySelector('a');
+        var isCurrent = link && link.getAttribute('data-reg-tab') === tabId;
+        li.classList.toggle('dfe-f-sub-navigation__item--current', isCurrent);
+        if (link) link.toggleAttribute('aria-current', isCurrent);
+      });
+    }
+
+    document.querySelectorAll('#raid-registers-tabs a[data-reg-tab]').forEach(function (link) {
+      link.addEventListener('click', function (e) {
+        e.preventDefault();
+        var tab = link.getAttribute('data-reg-tab');
+        history.pushState(null, '', '#' + tab);
+        activateTab(tab);
+      });
+    });
+
+    var hash = (window.location.hash || '#your-registers').replace('#', '');
+    activateTab(hash === 'all-registers' ? 'all-registers' : 'your-registers');
+    window.addEventListener('hashchange', function () {
+      var h = (window.location.hash || '#your-registers').replace('#', '');
+      activateTab(h === 'all-registers' ? 'all-registers' : 'your-registers');
+    });
+
+    var modal = document.getElementById('raid-reg-scope-modal');
+    var modalTitle = document.getElementById('raid-reg-scope-modal-title');
+    var modalBody = document.getElementById('raid-reg-scope-modal-body');
+
+    function closeScopeModal() {
+      modal.style.display = 'none';
+      document.body.style.overflow = '';
+    }
+
+    function openScopeModal(regName, workItems, services) {
+      modalTitle.textContent = 'Scope: ' + regName;
+      var html = '';
+      if (workItems.length > 0) {
+        html += '<h3 class="govuk-heading-s govuk-!-margin-top-0">Work items (' + workItems.length + ')</h3>';
+        html += '<ul class="govuk-list govuk-list--bullet govuk-!-margin-bottom-4">';
+        workItems.forEach(function (name) {
+          html += '<li>' + escapeHtml(name) + '</li>';
+        });
+        html += '</ul>';
+      }
+      if (services.length > 0) {
+        html += '<h3 class="govuk-heading-s' + (workItems.length === 0 ? ' govuk-!-margin-top-0' : '') + '">Services (' + services.length + ')</h3>';
+        html += '<ul class="govuk-list govuk-list--bullet govuk-!-margin-bottom-0">';
+        services.forEach(function (name) {
+          html += '<li>' + escapeHtml(name) + '</li>';
+        });
+        html += '</ul>';
+      }
+      if (!html) {
+        html = '<p class="govuk-body govuk-!-margin-bottom-0">This register has no work items or services in scope.</p>';
+      }
+      modalBody.innerHTML = html;
+      modal.style.display = 'flex';
+      document.body.style.overflow = 'hidden';
+    }
+
+    function escapeHtml(str) {
+      var d = document.createElement('div');
+      d.textContent = str;
+      return d.innerHTML;
+    }
+
+    document.addEventListener('click', function (e) {
+      var btn = e.target.closest('.raid-reg-scope-btn');
+      if (!btn) return;
+      e.preventDefault();
+      var workItems = [];
+      var services = [];
+      try { workItems = JSON.parse(btn.getAttribute('data-work-items') || '[]'); } catch (err) {}
+      try { services = JSON.parse(btn.getAttribute('data-services') || '[]'); } catch (err) {}
+      openScopeModal(btn.getAttribute('data-reg-name') || 'Register', workItems, services);
+    });
+
+    modal.querySelectorAll('.raid-modal-close, #raid-reg-scope-modal-close').forEach(function (el) {
+      el.addEventListener('click', closeScopeModal);
+    });
+    modal.addEventListener('click', function (e) {
+      if (e.target === modal) closeScopeModal();
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && modal.style.display !== 'none') closeScopeModal();
+    });
+  })();
+  </script>
+}

@@ -49,6 +49,7 @@
 
 <script nonce="@Context.Items["Nonce"]">
 (function() {
+  var registerId = @(Model.RegisterId.HasValue ? Model.RegisterId.Value : 0);
   var allOptions = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.WorkItemOptions.Select(o => new { o.Id, o.Name })));
   var search = document.getElementById('wi-search');
   var suggestions = document.getElementById('wi-suggestions');
@@ -98,6 +99,9 @@
     table.style.display = ''; empty.style.display = 'none';
     search.value = ''; suggestions.style.display = 'none';
     search.focus();
+    if (window.RaidRegisterScope && registerId) {
+      window.RaidRegisterScope.checkWorkItem(registerId, opt.Id, opt.Name);
+    }
   }
 
   function removeItem(id) {
@@ -117,5 +121,19 @@
   document.addEventListener('click', function(e) {
     if (e.target.classList.contains('wi-remove')) { e.preventDefault(); removeItem(parseInt(e.target.getAttribute('data-id'))); }
   });
+
+  function checkExistingWorkItems() {
+    if (!window.RaidRegisterScope || !registerId) return;
+    getSelectedIds().forEach(function(id) {
+      var opt = allOptions.find(function(o) { return o.Id === id; });
+      if (opt) window.RaidRegisterScope.checkWorkItem(registerId, opt.Id, opt.Name);
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', checkExistingWorkItems);
+  } else {
+    checkExistingWorkItems();
+  }
 })();
 </script>

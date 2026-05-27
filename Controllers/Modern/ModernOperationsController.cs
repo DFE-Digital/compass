@@ -824,6 +824,53 @@ public class ModernOperationsController : Controller
         return View("~/Views/Modern/Operations/RaidEscalations.cshtml", vm);
     }
 
+    [HttpPost("raid/soft-delete")]
+    [ValidateAntiForgeryToken]
+    [ServiceFilter(typeof(Compass.Filters.RaidFeatureGateFilter))]
+    public async Task<IActionResult> RaidSoftDelete(
+        [FromForm] string entityType,
+        [FromForm] int entityId,
+        CancellationToken ct)
+    {
+        var userEmail = CurrentUserEmail;
+        if (entityType == "Risk")
+        {
+            var risk = await _db.Risks.FirstOrDefaultAsync(r => r.Id == entityId && !r.IsDeleted, ct);
+            if (risk == null)
+            {
+                TempData["ErrorMessage"] = $"Risk R-{entityId:D4} not found or already deleted.";
+                return RedirectToAction(nameof(RaidEscalations), new { tab = "active" });
+            }
+            risk.IsDeleted = true;
+            risk.UpdatedAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync(ct);
+
+            _logger.LogInformation("Risk {RiskId} soft-deleted by operations user {Email}", entityId, userEmail);
+            TempData["SuccessMessage"] = $"Risk R-{entityId:D4} \"{risk.Title}\" has been deleted.";
+        }
+        else if (entityType == "Issue")
+        {
+            var issue = await _db.Issues.FirstOrDefaultAsync(i => i.Id == entityId && !i.IsDeleted, ct);
+            if (issue == null)
+            {
+                TempData["ErrorMessage"] = $"Issue I-{entityId:D4} not found or already deleted.";
+                return RedirectToAction(nameof(RaidEscalations), new { tab = "active" });
+            }
+            issue.IsDeleted = true;
+            issue.UpdatedAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync(ct);
+
+            _logger.LogInformation("Issue {IssueId} soft-deleted by operations user {Email}", entityId, userEmail);
+            TempData["SuccessMessage"] = $"Issue I-{entityId:D4} \"{issue.Title}\" has been deleted.";
+        }
+        else
+        {
+            TempData["ErrorMessage"] = "Invalid entity type for deletion.";
+        }
+
+        return RedirectToAction(nameof(RaidEscalations), new { tab = "active" });
+    }
+
     [HttpGet("raid/risks/{id:int}/edit")]
     [ServiceFilter(typeof(Compass.Filters.RaidFeatureGateFilter))]
     public async Task<IActionResult> RaidRiskOperationsEdit(int id, CancellationToken ct)

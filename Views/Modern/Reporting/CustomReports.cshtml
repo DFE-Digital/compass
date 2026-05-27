@@ -1,0 +1,164 @@
+@model Compass.ViewModels.Modern.CustomReportsDashboardViewModel
+@using Compass.Models
+@using Compass.ViewModels.Modern
+@{
+    ViewData["Title"] = "Custom reports";
+}
+
+@section Breadcrumbs {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernReporting")">Reporting</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">Custom reports</li>
+}
+
+@await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+    Title = "Custom reports",
+    Actions = await Html.PartialAsync("_CustomReportsHeaderActions")
+})
+
+@if (Model.MyReports.Count == 0 && Model.PublicReports.Count == 0)
+{
+<div class="govuk-!-margin-bottom-6">
+  <p class="govuk-body">You don't have any custom reports yet. Create one to get started.</p>
+  <a href="@Url.Action("CustomReportCreate", "ModernReporting")" class="govuk-button">Create report</a>
+</div>
+}
+else
+{
+<div class="govuk-tabs" data-module="govuk-tabs">
+  <h2 class="govuk-tabs__title">Report library</h2>
+  <ul class="govuk-tabs__list">
+    <li class="govuk-tabs__list-item govuk-tabs__list-item--selected">
+      <a class="govuk-tabs__tab" href="#my-reports">My reports (@Model.MyReports.Count)</a>
+    </li>
+    <li class="govuk-tabs__list-item">
+      <a class="govuk-tabs__tab" href="#public-reports">Public reports (@Model.PublicReports.Count)</a>
+    </li>
+  </ul>
+
+  <div class="govuk-tabs__panel" id="my-reports">
+    @if (Model.MyReports.Count == 0)
+    {
+    <p class="govuk-body">You don't have any custom reports yet.</p>
+    <a href="@Url.Action("CustomReportCreate", "ModernReporting")" class="govuk-button">Create report</a>
+    }
+    else
+    {
+    <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+      <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed">
+        <thead class="govuk-table__head">
+          <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Name</button></th>
+            <th scope="col" class="govuk-table__header">Description</th>
+            <th scope="col" class="govuk-table__header">Visibility</th>
+            <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Last updated</button></th>
+            <th scope="col" class="govuk-table__header">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="govuk-table__body">
+          @foreach (var report in Model.MyReports)
+          {
+          <tr class="govuk-table__row">
+            <td class="govuk-table__cell">
+              <a class="govuk-link" href="@Url.Action("CustomReportView", "ModernReporting", new { id = report.Id })">@report.Name</a>
+            </td>
+            <td class="govuk-table__cell">@(report.Description ?? "—")</td>
+            <td class="govuk-table__cell">
+              @if (report.Visibility == CustomReportVisibility.Public)
+              {
+              <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--green">Public</span>
+              }
+              else
+              {
+              <span class="dfe-f-badge dfe-f-badge--small">Private</span>
+              }
+            </td>
+            <td class="govuk-table__cell">@report.UpdatedAt.ToString("d MMM yyyy")</td>
+            <td class="govuk-table__cell">
+              <a class="govuk-link govuk-!-margin-right-2" href="@Url.Action("CustomReportEdit", "ModernReporting", new { id = report.Id })">Edit</a>
+              <form method="post" action="@Url.Action("CustomReportDelete", "ModernReporting", new { id = report.Id })" style="display:inline" class="cr-delete-form">
+                @Html.AntiForgeryToken()
+                <button type="submit" class="govuk-link cr-delete-link">Delete</button>
+              </form>
+            </td>
+          </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+    }
+  </div>
+
+  <div class="govuk-tabs__panel govuk-tabs__panel--hidden" id="public-reports">
+    @if (Model.PublicReports.Count == 0)
+    {
+    <p class="govuk-body">There are no public reports from other users yet.</p>
+    }
+    else
+    {
+    <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+      <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed">
+        <thead class="govuk-table__head">
+          <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Name</button></th>
+            <th scope="col" class="govuk-table__header">Description</th>
+            <th scope="col" class="govuk-table__header">Created by</th>
+            <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Last updated</button></th>
+            <th scope="col" class="govuk-table__header">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="govuk-table__body">
+          @foreach (var report in Model.PublicReports)
+          {
+          <tr class="govuk-table__row">
+            <td class="govuk-table__cell">
+              <a class="govuk-link" href="@Url.Action("CustomReportView", "ModernReporting", new { id = report.Id })">@report.Name</a>
+            </td>
+            <td class="govuk-table__cell">@(report.Description ?? "—")</td>
+            <td class="govuk-table__cell">@report.OwnerName</td>
+            <td class="govuk-table__cell">@report.UpdatedAt.ToString("d MMM yyyy")</td>
+            <td class="govuk-table__cell">
+              <form method="post" action="@Url.Action("CustomReportDuplicate", "ModernReporting", new { id = report.Id })" style="display:inline">
+                @Html.AntiForgeryToken()
+                <button type="submit" class="govuk-link cr-duplicate-link">Duplicate</button>
+              </form>
+            </td>
+          </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+    }
+  </div>
+</div>
+}
+
+@section Styles {
+<style>
+.cr-delete-link, .cr-duplicate-link {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  font-family: inherit;
+  font-size: inherit;
+  text-decoration: underline;
+}
+.cr-delete-link { color: #d4351c; }
+.cr-delete-link:hover { color: #942514; }
+.cr-duplicate-link { color: #1d70b8; }
+.cr-duplicate-link:hover { color: #003078; }
+</style>
+}
+
+@section Scripts {
+<script nonce="@Context.Items["Nonce"]">
+document.querySelectorAll('.cr-delete-form').forEach(function(form) {
+  form.addEventListener('submit', function(e) {
+    if (!confirm('Are you sure you want to delete this report? This cannot be undone.')) {
+      e.preventDefault();
+    }
+  });
+});
+</script>
+}
