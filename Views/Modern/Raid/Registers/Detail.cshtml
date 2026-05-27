@@ -1,10 +1,38 @@
 @model Compass.ViewModels.Modern.RaidRegisterDetailViewModel
 @using Compass.Models
+@using System.Text.Json
 @{
   ViewData["Title"] = Model.Name;
+  var cspNonce = Context.Items["Nonce"]?.ToString() ?? "";
   var canManage = Model.CurrentUserRole == RaidRegisterRole.Owner || Model.CurrentUserRole == RaidRegisterRole.Manager;
   var settingsUrl = Url.Action("RegisterSettings", "ModernRaid", new { id = Model.Id });
   var totalOpen = Model.OpenRiskCount + Model.OpenIssueCount + Model.OpenAssumptionCount + Model.OpenDependencyCount + Model.OpenNearMissCount;
+  var raidRegisterBootJson = JsonSerializer.Serialize(new
+  {
+    registerId = Model.Id,
+    baseUrl = "/modern/raid",
+    lookups = new
+    {
+      riskStatuses = Model.RiskStatuses.Select(x => new { id = x.Id, name = x.Name }),
+      riskPriorities = Model.RiskPriorities.Select(x => new { id = x.Id, name = x.Name }),
+      riskLikelihoods = Model.RiskLikelihoods.Select(x => new { id = x.Id, name = x.Name }),
+      riskImpactLevels = Model.RiskImpactLevels.Select(x => new { id = x.Id, name = x.Name }),
+      riskProximities = Model.RiskProximities.Select(x => new { id = x.Id, name = x.Name }),
+      riskCategories = Model.RiskCategories.Select(x => new { id = x.Id, name = x.Name }),
+      riskTiers = Model.RiskTiers.Select(x => new { id = x.Id, name = x.Name }),
+      issueStatuses = Model.IssueStatuses.Select(x => new { id = x.Id, name = x.Name }),
+      issuePriorities = Model.IssuePriorities.Select(x => new { id = x.Id, name = x.Name }),
+      issueSeverities = Model.IssueSeverities.Select(x => new { id = x.Id, name = x.Name }),
+      issueCategories = Model.IssueCategories.Select(x => new { id = x.Id, name = x.Name }),
+      nearMissStatuses = Model.NearMissStatuses.Select(x => new { id = x.Id, name = x.Name }),
+      nearMissSeriousnesses = Model.NearMissSeriousnesses.Select(x => new { id = x.Id, name = x.Name }),
+      nearMissTypes = Model.NearMissTypes.Select(x => new { id = x.Id, name = x.Name }),
+      assumptionStatuses = Model.AssumptionStatuses.Select(x => new { id = x.Id, name = x.Name }),
+      assumptionCriticalities = Model.AssumptionCriticalities.Select(x => new { id = x.Id, name = x.Name }),
+      workItems = Model.WorkItemOptions.Select(x => new { id = x.Id, name = x.Name }),
+      fipsProducts = Model.ServiceOptions.Select(x => new { id = x.Id, name = x.Name })
+    }
+  });
 }
 
 @section Breadcrumbs {
@@ -52,26 +80,6 @@
       </li>
     </ul>
   </nav>
-
-  <script nonce="@Context.Items["Nonce"]">
-  (function () {
-    var hash = (window.location.hash || '').replace('#', '');
-    if (hash !== 'view-manage' && hash.indexOf('ss-') !== 0) return;
-
-    var viewDashboard = document.getElementById('view-dashboard');
-    var viewManage = document.getElementById('view-manage');
-    var tabDashboard = document.getElementById('view-tab-dashboard');
-    var tabManage = document.getElementById('view-tab-manage');
-    if (!viewDashboard || !viewManage || !tabDashboard || !tabManage) return;
-
-    viewDashboard.classList.remove('raid-ss-tab-active');
-    viewManage.classList.add('raid-ss-tab-active');
-    tabDashboard.classList.remove('dfe-f-sub-navigation__item--current');
-    tabManage.classList.add('dfe-f-sub-navigation__item--current');
-    tabDashboard.querySelector('a').removeAttribute('aria-current');
-    tabManage.querySelector('a').setAttribute('aria-current', 'page');
-  })();
-  </script>
 
   <!-- ═══ DASHBOARD VIEW ═══ -->
   <div id="view-dashboard" class="raid-ss-tab-panel raid-ss-tab-active">
@@ -450,8 +458,8 @@
 </div>
 
 @section Styles {
-  <link rel="stylesheet" href="~/css/raid-spreadsheet.css" />
-  <style>
+  <link rel="stylesheet" href="~/css/raid-spreadsheet.css" asp-append-version="true" />
+  <style nonce="@cspNonce">
     @@media (min-width: 48rem) {
       .raid-register-stat-grid {
         grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -461,108 +469,10 @@
 }
 
 @section Scripts {
-  <script src="~/js/raid-spreadsheet.js" asp-append-version="true" nonce="@Context.Items["Nonce"]"></script>
-  <script src="~/js/raid-spreadsheet-intro.js" asp-append-version="true" nonce="@Context.Items["Nonce"]"></script>
-  <script nonce="@Context.Items["Nonce"]">
-    (function () {
-      // Serialise lookups from server for client-side dropdowns
-      var lookups = {
-        riskStatuses: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.RiskStatuses.Select(x => new { id = x.Id, name = x.Name }))),
-        riskPriorities: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.RiskPriorities.Select(x => new { id = x.Id, name = x.Name }))),
-        riskLikelihoods: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.RiskLikelihoods.Select(x => new { id = x.Id, name = x.Name }))),
-        riskImpactLevels: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.RiskImpactLevels.Select(x => new { id = x.Id, name = x.Name }))),
-        riskProximities: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.RiskProximities.Select(x => new { id = x.Id, name = x.Name }))),
-        riskCategories: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.RiskCategories.Select(x => new { id = x.Id, name = x.Name }))),
-        riskTiers: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.RiskTiers.Select(x => new { id = x.Id, name = x.Name }))),
-        issueStatuses: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.IssueStatuses.Select(x => new { id = x.Id, name = x.Name }))),
-        issuePriorities: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.IssuePriorities.Select(x => new { id = x.Id, name = x.Name }))),
-        issueSeverities: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.IssueSeverities.Select(x => new { id = x.Id, name = x.Name }))),
-        issueCategories: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.IssueCategories.Select(x => new { id = x.Id, name = x.Name }))),
-        nearMissStatuses: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.NearMissStatuses.Select(x => new { id = x.Id, name = x.Name }))),
-        nearMissSeriousnesses: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.NearMissSeriousnesses.Select(x => new { id = x.Id, name = x.Name }))),
-        nearMissTypes: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.NearMissTypes.Select(x => new { id = x.Id, name = x.Name }))),
-        assumptionStatuses: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.AssumptionStatuses.Select(x => new { id = x.Id, name = x.Name }))),
-        assumptionCriticalities: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.AssumptionCriticalities.Select(x => new { id = x.Id, name = x.Name }))),
-        workItems: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.WorkItemOptions.Select(x => new { id = x.Id, name = x.Name }))),
-        fipsProducts: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.ServiceOptions.Select(x => new { id = x.Id, name = x.Name })))
-      };
-
-      var tokenEl = document.querySelector('input[name="__RequestVerificationToken"]');
-      var csrfToken = tokenEl ? tokenEl.value : '@Html.AntiForgeryToken()'.match(/value="([^"]+)"/)?.[1] || '';
-
-      RaidSpreadsheet.init({
-        lookups: lookups,
-        csrfToken: csrfToken,
-        baseUrl: '/modern/raid',
-        registerId: @Model.Id
-      });
-
-      // ── Primary view switching (Dashboard / Manage) ──
-      document.querySelectorAll('#register-view-tabs a').forEach(function (link) {
-        link.addEventListener('click', function (e) {
-          e.preventDefault();
-          switchView(this.getAttribute('data-view'));
-          window.location.hash = this.getAttribute('href').substring(1);
-        });
-      });
-
-      // Links from stat cards to manage view
-      document.querySelectorAll('[data-view-switch]').forEach(function (link) {
-        link.addEventListener('click', function (e) {
-          e.preventDefault();
-          switchView('manage');
-          var subTab = this.getAttribute('data-tab-switch');
-          if (subTab) activateManageTab(subTab);
-        });
-      });
-
-      // Manage sub-tab clicking
-      document.querySelectorAll('#manage-sub-tabs a').forEach(function (link) {
-        link.addEventListener('click', function (e) {
-          e.preventDefault();
-          var tabName = this.getAttribute('data-tab');
-          activateManageTab(tabName);
-          window.location.hash = 'ss-' + tabName;
-        });
-      });
-
-      function switchView(viewName) {
-        var isDashboard = viewName === 'dashboard';
-        document.getElementById('view-dashboard').classList.toggle('raid-ss-tab-active', isDashboard);
-        document.getElementById('view-manage').classList.toggle('raid-ss-tab-active', !isDashboard);
-        var tabDash = document.getElementById('view-tab-dashboard');
-        var tabManage = document.getElementById('view-tab-manage');
-        tabDash.classList.toggle('dfe-f-sub-navigation__item--current', isDashboard);
-        tabManage.classList.toggle('dfe-f-sub-navigation__item--current', !isDashboard);
-        tabDash.querySelector('a').toggleAttribute('aria-current', isDashboard);
-        tabManage.querySelector('a').toggleAttribute('aria-current', !isDashboard);
-        if (!isDashboard && window.RaidSpreadsheetIntro && window.RaidSpreadsheetIntro.tryAutoOpen) {
-          setTimeout(function () { window.RaidSpreadsheetIntro.tryAutoOpen(); }, 150);
-        }
-      }
-
-      function activateManageTab(tabName) {
-        ['risks', 'issues', 'assumptions', 'nearmisses'].forEach(function (name) {
-          var isCurrent = name === tabName;
-          var li = document.getElementById('manage-tab-' + name);
-          var panel = document.getElementById('ss-panel-' + name);
-          if (li) {
-            li.classList.toggle('dfe-f-sub-navigation__item--current', isCurrent);
-            li.querySelector('a').toggleAttribute('aria-current', isCurrent);
-          }
-          if (panel) panel.classList.toggle('raid-ss-tab-active', isCurrent);
-        });
-      }
-
-      // Handle hash on page load
-      var hash = window.location.hash.replace('#', '');
-      if (hash === 'view-manage' || hash.indexOf('ss-') === 0) {
-        switchView('manage');
-        if (hash.indexOf('ss-') === 0) {
-          activateManageTab(hash.replace('ss-', ''));
-        }
-      }
-    })();
-  </script>
+  <script src="~/js/raid-register-detail.js" asp-append-version="true" nonce="@cspNonce"></script>
+  <script src="~/js/raid-spreadsheet.js" asp-append-version="true" nonce="@cspNonce"></script>
+  <script src="~/js/raid-spreadsheet-intro.js" asp-append-version="true" nonce="@cspNonce"></script>
+  <script type="application/json" id="raid-register-boot" nonce="@cspNonce">@Html.Raw(raidRegisterBootJson)</script>
+  <script src="~/js/raid-register-detail-boot.js" asp-append-version="true" nonce="@cspNonce"></script>
   @Html.AntiForgeryToken()
 }

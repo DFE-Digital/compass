@@ -678,6 +678,7 @@ app.Use(async (context, next) =>
         "'self' " +
         "https://cdnjs.cloudflare.com https://cdn.jsdelivr.net " +
         "https://www.clarity.ms https://*.clarity.ms https://c.bing.com https://*.bing.com " +
+        "https://www.google-analytics.com https://*.google-analytics.com https://region1.google-analytics.com " +
         "https://login.microsoftonline.com https://login.live.com " +
         "https://fonts.googleapis.com https://fonts.gstatic.com " +
         "https://dc.services.visualstudio.com https://rt.services.visualstudio.com " +
