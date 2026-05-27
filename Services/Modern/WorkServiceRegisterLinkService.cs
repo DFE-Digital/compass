@@ -44,6 +44,34 @@ public sealed class WorkServiceRegisterLinkService : IWorkServiceRegisterLinkSer
                 cancellationToken);
     }
 
+    public async Task<bool> CanCreateServiceOfferingFromWorkItemAsync(
+        int projectId,
+        string userEmail,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(userEmail))
+            return false;
+        if (await _permissions.IsOperationConsoleUserAsync(userEmail))
+            return true;
+
+        var emailLower = userEmail.Trim().ToLowerInvariant();
+        var userId = await _db.Users.AsNoTracking()
+            .Where(u => u.Email.ToLower() == emailLower)
+            .Select(u => (int?)u.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return await _db.Projects.AsNoTracking()
+            .Where(p => p.Id == projectId && !p.IsDeleted)
+            .AnyAsync(p =>
+                (userId.HasValue && p.PrimaryContactUserId == userId.Value) ||
+                (p.PrimaryContactUser != null && p.PrimaryContactUser.Email.ToLower() == emailLower) ||
+                (userId.HasValue && p.ServiceOwners.Any(so => so.UserId == userId.Value)) ||
+                p.ServiceOwners.Any(so =>
+                    so.User != null && so.User.Email != null &&
+                    so.User.Email.Trim().ToLower() == emailLower),
+                cancellationToken);
+    }
+
     public async Task<bool> CanLinkFromServiceRegisterProductAsync(
         Guid cmdbProductId,
         string userEmail,

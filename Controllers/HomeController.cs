@@ -306,6 +306,8 @@ public class HomeController : Controller
 
     [AllowAnonymous]
     [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
+    [HttpGet]
+    [HttpHead]
     public IActionResult Error()
     {
         var exception = HttpContext.Features.Get<IExceptionHandlerPathFeature>()?.Error;
@@ -320,6 +322,8 @@ public class HomeController : Controller
 
     [AllowAnonymous]
     [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
+    [HttpGet]
+    [HttpHead]
     public new IActionResult NotFound()
     {
         var originalStatusCode = HttpContext.Features.Get<IStatusCodeReExecuteFeature>()?.OriginalStatusCode;

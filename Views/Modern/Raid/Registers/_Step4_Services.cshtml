@@ -49,6 +49,7 @@
 
 <script nonce="@Context.Items["Nonce"]">
 (function() {
+  var registerId = @(Model.RegisterId.HasValue ? Model.RegisterId.Value : 0);
   var allOptions = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.ServiceOptions.Select(o => new { o.Id, o.Name })));
   var search = document.getElementById('svc-search');
   var suggestions = document.getElementById('svc-suggestions');
@@ -98,6 +99,9 @@
     table.style.display = ''; empty.style.display = 'none';
     search.value = ''; suggestions.style.display = 'none';
     search.focus();
+    if (window.RaidRegisterScope && registerId) {
+      window.RaidRegisterScope.checkService(registerId, opt.Id, opt.Name);
+    }
   }
 
   function removeItem(id) {
@@ -117,5 +121,19 @@
   document.addEventListener('click', function(e) {
     if (e.target.classList.contains('svc-remove')) { e.preventDefault(); removeItem(parseInt(e.target.getAttribute('data-id'))); }
   });
+
+  function checkExistingServices() {
+    if (!window.RaidRegisterScope || !registerId) return;
+    getSelectedIds().forEach(function(id) {
+      var opt = allOptions.find(function(o) { return o.Id === id; });
+      if (opt) window.RaidRegisterScope.checkService(registerId, opt.Id, opt.Name);
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', checkExistingServices);
+  } else {
+    checkExistingServices();
+  }
 })();
 </script>

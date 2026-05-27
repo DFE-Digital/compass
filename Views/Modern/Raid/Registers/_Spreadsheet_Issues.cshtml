@@ -1,0 +1,84 @@
+@model Compass.ViewModels.Modern.RaidRegisterDetailViewModel
+@using Compass.Models.Modern.Work
+
+<div class="raid-spreadsheet-toolbar govuk-!-margin-bottom-3">
+  <div class="raid-ss-toolbar-actions">
+    <button type="button" class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0" data-module="govuk-button" id="btn-add-issue-top" data-entity-type="issue">+ Add issue</button>
+  </div>
+  <div class="raid-ss-toolbar-actions">
+    @await Html.PartialAsync("~/Views/Modern/Raid/Registers/_Spreadsheet_ToolbarIcons.cshtml")
+    <button type="button" class="govuk-button govuk-!-margin-bottom-0 raid-ss-fullscreen-btn" data-module="govuk-button">
+      <span class="btn-fs-expand">Expand table</span>
+      <span class="btn-fs-collapse" style="display:none">Exit full width</span>
+    </button>
+  </div>
+</div>
+
+<div class="raid-spreadsheet-wrap" id="issues-spreadsheet">
+  <div class="raid-spreadsheet-scroll">
+    <table class="govuk-table govuk-table--small-text-until-tablet raid-spreadsheet-table" id="tbl-issues" data-entity-type="issue">
+      <thead class="govuk-table__head">
+        <tr class="govuk-table__row raid-ss-header-row">
+          <th class="govuk-table__header raid-ss-sticky-col raid-ss-sortable raid-ss-filter-text" data-col="ref" style="min-width:110px">Ref</th>
+          <th class="govuk-table__header raid-ss-sortable raid-ss-filter-text" data-col="title" style="min-width:200px">Title</th>
+          <th class="govuk-table__header raid-ss-sortable raid-ss-filterable" data-col="status" style="min-width:130px">Status</th>
+          <th class="govuk-table__header raid-ss-sortable raid-ss-filterable" data-col="severity" style="min-width:130px">Severity</th>
+          <th class="govuk-table__header raid-ss-sortable raid-ss-filterable" data-col="priority" style="min-width:130px">Priority</th>
+          <th class="govuk-table__header raid-ss-sortable raid-ss-filterable" data-col="relation" style="min-width:160px">Relation</th>
+          <th class="govuk-table__header raid-ss-sortable raid-ss-filterable" data-col="category" style="min-width:130px">Category</th>
+          <th class="govuk-table__header raid-ss-sortable raid-ss-filterable" data-col="owner" style="min-width:130px">Owner</th>
+          <th class="govuk-table__header raid-ss-sortable raid-ss-filter-text" data-col="description" style="min-width:150px">Description</th>
+          <th class="govuk-table__header raid-ss-sortable raid-ss-filterable" data-col="identified" style="min-width:110px">Identified</th>
+          <th class="govuk-table__header raid-ss-sortable raid-ss-filterable" data-col="targetDate" style="min-width:110px">Target date</th>
+          <th class="govuk-table__header raid-ss-sortable raid-ss-filterable" data-col="lastEdited" style="min-width:120px">Last edited</th>
+        </tr>
+        <tr class="govuk-table__row raid-ss-filter-row" style="display:none"></tr>
+      </thead>
+      <tbody class="govuk-table__body">
+        @foreach (var issue in Model.Issues)
+        {
+          <tr class="govuk-table__row raid-ss-row" data-entity="issue" data-id="@issue.Id">
+            <td class="govuk-table__cell raid-ss-sticky-col">
+              <div class="raid-ss-ref-cell">
+                <a class="govuk-link govuk-link--no-visited-state raid-ss-ref-link" data-href="@Url.Action("IssueDetail", "ModernRaid", new { id = issue.Id })">@issue.Reference</a>
+                @await Html.PartialAsync("~/Views/Modern/Raid/Registers/_Spreadsheet_CommentToggle.cshtml", ("issue", issue.Id, issue.CommentCount))
+              </div>
+            </td>
+            <td class="govuk-table__cell raid-ss-editable" data-field="title" data-type="modal" data-label="Title">
+              <span class="raid-ss-val">@issue.Title</span>
+            </td>
+            <td class="govuk-table__cell raid-ss-editable raid-ss-badge-cell" data-field="statusId" data-type="select" data-lookup="issueStatuses" data-badge-kind="issueStatus" data-current="@issue.StatusId">
+              @await Html.PartialAsync("~/Views/Modern/Raid/Registers/_Spreadsheet_LookupBadge.cshtml", (WorkBadgeCss.RaidIssueStatusDfeFrontendBadgeClass(issue.Status), RaidRegisterTableFormatting.SpreadsheetBadgeLabel(issue.Status, uppercase: true)))
+            </td>
+            <td class="govuk-table__cell raid-ss-editable raid-ss-badge-cell" data-field="severityId" data-type="select" data-lookup="issueSeverities" data-badge-kind="severity" data-current="@issue.SeverityId">
+              @await Html.PartialAsync("~/Views/Modern/Raid/Registers/_Spreadsheet_LookupBadge.cshtml", (WorkBadgeCss.RaidSeverityLabelDfeFrontendBadgeClass(issue.Severity) + " dfe-f-badge--small", RaidRegisterTableFormatting.SpreadsheetBadgeLabel(issue.Severity, uppercase: true)))
+            </td>
+            <td class="govuk-table__cell raid-ss-editable raid-ss-badge-cell" data-field="priorityId" data-type="select" data-lookup="issuePriorities" data-badge-kind="priority" data-current="@issue.PriorityId">
+              @await Html.PartialAsync("~/Views/Modern/Raid/Registers/_Spreadsheet_LookupBadge.cshtml", (WorkBadgeCss.RaidPriorityLabelDfeFrontendBadgeClass(issue.Priority) + " dfe-f-badge--small", RaidRegisterTableFormatting.SpreadsheetBadgeLabel(issue.Priority, uppercase: true)))
+            </td>
+            @await Html.PartialAsync("~/Views/Modern/Raid/_RaidRegisterRelationCell.cshtml", issue.ToRelationParts("issues"))
+            <td class="govuk-table__cell raid-ss-editable" data-field="categoryId" data-type="select" data-lookup="issueCategories" data-current="@issue.CategoryId">
+              <span class="raid-ss-val">@(issue.Category ?? "—")</span>
+            </td>
+            <td class="govuk-table__cell raid-ss-editable" data-field="ownerUserId" data-type="userlookup" data-current="@issue.OwnerUserId" data-label="Owner">
+              <span class="raid-ss-val">@(issue.Owner ?? "—")</span>
+            </td>
+            <td class="govuk-table__cell raid-ss-editable" data-field="description" data-type="modal" data-label="Description">
+              <span class="raid-ss-val">@(issue.Description ?? "—")</span>
+            </td>
+            <td class="govuk-table__cell">
+              @(issue.IdentifiedDate?.ToString("dd MMM yy") ?? "—")
+            </td>
+            <td class="govuk-table__cell">
+              @(issue.TargetResolutionDate?.ToString("dd MMM yy") ?? "—")
+            </td>
+            <td class="govuk-table__cell raid-ss-last-edited" data-updated="@issue.UpdatedAt.ToString("o")">
+              <span class="raid-ss-val">@issue.UpdatedAt.ToString("dd MMM yy HH:mm")</span>
+            </td>
+          </tr>
+        }
+      </tbody>
+      <tfoot></tfoot>
+    </table>
+  </div>
+</div>

@@ -19,17 +19,14 @@
     if (canManage)
     {
       actions = new Microsoft.AspNetCore.Html.HtmlString(
-        $"<a href=\"{settingsUrl}\" class=\"govuk-button govuk-button--secondary govuk-!-margin-right-2\" data-module=\"govuk-button\">Manage register</a>");
+        $"<a href=\"{settingsUrl}\" class=\"govuk-button govuk-button--secondary govuk-!-margin-right-2\" data-module=\"govuk-button\">Settings</a>");
     }
   }
   @await Html.PartialAsync("~/Views/Modern/Shared/_ModernPageHeader.cshtml", new Compass.ViewModels.Modern.ModernPageHeaderViewModel
   {
-    Caption = "RAID register",
     Title = Model.Name,
-    Lede = !string.IsNullOrWhiteSpace(Model.Description)
-      ? new Microsoft.AspNetCore.Html.HtmlString($"<p class=\"govuk-body-s govuk-!-margin-bottom-0\">{System.Net.WebUtility.HtmlEncode(Model.Description)}</p>")
-      : null,
-    Actions = actions
+    Actions = actions,
+    BottomMarginClass = "govuk-!-margin-bottom-0"
   })
 
   @if (TempData["SuccessMessage"] is string successMsg)
@@ -44,343 +41,528 @@
     </div>
   }
 
-  <!-- Stat cards -->
-  <section class="govuk-!-margin-top-6" aria-labelledby="register-summary-heading">
-    <h2 id="register-summary-heading" class="govuk-visually-hidden">Summary</h2>
-    <div class="dfe-f-card-grid">
-      <div class="dfe-f-stat-card dfe-f-stat-card--tint-red">
-        <p class="govuk-body-s dfe-f-stat-card__label">Open risks</p>
-        <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@Model.OpenRiskCount</p>
-        @if (Model.Risks.Any())
-        {
-          <p class="govuk-body-s govuk-!-margin-top-2 govuk-!-margin-bottom-0">
-            <a class="govuk-link govuk-link--no-visited-state" href="#rd-risks">View risks</a>
-          </p>
-        }
-      </div>
-      <div class="dfe-f-stat-card dfe-f-stat-card--tint-orange">
-        <p class="govuk-body-s dfe-f-stat-card__label">Open issues</p>
-        <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@Model.OpenIssueCount</p>
-        @if (Model.Issues.Any())
-        {
-          <p class="govuk-body-s govuk-!-margin-top-2 govuk-!-margin-bottom-0">
-            <a class="govuk-link govuk-link--no-visited-state" href="#rd-issues">View issues</a>
-          </p>
-        }
-      </div>
-      <div class="dfe-f-stat-card dfe-f-stat-card--tint-blue">
-        <p class="govuk-body-s dfe-f-stat-card__label">Assumptions</p>
-        <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@Model.OpenAssumptionCount</p>
-        @if (Model.Assumptions.Any())
-        {
-          <p class="govuk-body-s govuk-!-margin-top-2 govuk-!-margin-bottom-0">
-            <a class="govuk-link govuk-link--no-visited-state" href="#rd-assumptions">View assumptions</a>
-          </p>
-        }
-      </div>
-      <div class="dfe-f-stat-card dfe-f-stat-card--tint-teal">
-        <p class="govuk-body-s dfe-f-stat-card__label">Dependencies</p>
-        <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@Model.OpenDependencyCount</p>
-        @if (Model.Dependencies.Any())
-        {
-          <p class="govuk-body-s govuk-!-margin-top-2 govuk-!-margin-bottom-0">
-            <a class="govuk-link govuk-link--no-visited-state" href="#rd-dependencies">View dependencies</a>
-          </p>
-        }
-      </div>
-      <div class="dfe-f-stat-card dfe-f-stat-card--tint-grey">
-        <p class="govuk-body-s dfe-f-stat-card__label">Near misses</p>
-        <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@Model.OpenNearMissCount</p>
-        @if (Model.NearMisses.Any())
-        {
-          <p class="govuk-body-s govuk-!-margin-top-2 govuk-!-margin-bottom-0">
-            <a class="govuk-link govuk-link--no-visited-state" href="#rd-nearmisses">View near misses</a>
-          </p>
-        }
-      </div>
-    </div>
-  </section>
+  <!-- Primary view sub-navigation: Dashboard | Manage -->
+  <nav class="dfe-f-sub-navigation govuk-!-margin-bottom-0" aria-label="Register views" id="register-view-tabs">
+    <ul class="dfe-f-sub-navigation__list">
+      <li class="dfe-f-sub-navigation__item dfe-f-sub-navigation__item--current" id="view-tab-dashboard">
+        <a class="dfe-f-sub-navigation__link govuk-link govuk-link--no-visited-state" href="#view-dashboard" data-view="dashboard" aria-current="page">Dashboard</a>
+      </li>
+      <li class="dfe-f-sub-navigation__item" id="view-tab-manage">
+        <a class="dfe-f-sub-navigation__link govuk-link govuk-link--no-visited-state" href="#view-manage" data-view="manage">Manage items</a>
+      </li>
+    </ul>
+  </nav>
 
-  <!-- Scope & register meta -->
-  <section class="govuk-!-margin-top-6">
-    <div class="govuk-grid-row">
-      <div class="govuk-grid-column-one-half">
-        <div class="govuk-summary-card">
-          <div class="govuk-summary-card__title-wrapper">
-            <h2 class="govuk-summary-card__title">Scope</h2>
-            @if (canManage)
-            {
-              <ul class="govuk-summary-card__actions">
-                <li class="govuk-summary-card__action">
-                  <a href="@(settingsUrl)#rs-scope" class="govuk-link govuk-link--no-visited-state">Change<span class="govuk-visually-hidden"> scope</span></a>
-                </li>
-              </ul>
-            }
-          </div>
-          <div class="govuk-summary-card__content">
-            <dl class="govuk-summary-list govuk-!-margin-bottom-0">
-              <div class="govuk-summary-list__row">
-                <dt class="govuk-summary-list__key">Directorate</dt>
-                <dd class="govuk-summary-list__value">@(Model.DirectorateName ?? "—")</dd>
-              </div>
-              <div class="govuk-summary-list__row">
-                <dt class="govuk-summary-list__key">Portfolio</dt>
-                <dd class="govuk-summary-list__value">@(Model.BusinessAreaName ?? "—")</dd>
-              </div>
-              <div class="govuk-summary-list__row">
-                <dt class="govuk-summary-list__key">Work items</dt>
-                <dd class="govuk-summary-list__value">
-                  @if (Model.WorkItemNames.Any())
-                  {
-                    <ul class="govuk-list govuk-!-margin-bottom-0">
-                      @foreach (var name in Model.WorkItemNames)
-                      {
-                        <li>@name</li>
-                      }
-                    </ul>
-                  }
-                  else
-                  {
-                    <text>None</text>
-                  }
-                </dd>
-              </div>
-              <div class="govuk-summary-list__row">
-                <dt class="govuk-summary-list__key">Services</dt>
-                <dd class="govuk-summary-list__value">
-                  @if (Model.ServiceNames.Any())
-                  {
-                    <ul class="govuk-list govuk-!-margin-bottom-0">
-                      @foreach (var name in Model.ServiceNames)
-                      {
-                        <li>@name</li>
-                      }
-                    </ul>
-                  }
-                  else
-                  {
-                    <text>None</text>
-                  }
-                </dd>
-              </div>
-            </dl>
-          </div>
+  <script nonce="@Context.Items["Nonce"]">
+  (function () {
+    var hash = (window.location.hash || '').replace('#', '');
+    if (hash !== 'view-manage' && hash.indexOf('ss-') !== 0) return;
+
+    var viewDashboard = document.getElementById('view-dashboard');
+    var viewManage = document.getElementById('view-manage');
+    var tabDashboard = document.getElementById('view-tab-dashboard');
+    var tabManage = document.getElementById('view-tab-manage');
+    if (!viewDashboard || !viewManage || !tabDashboard || !tabManage) return;
+
+    viewDashboard.classList.remove('raid-ss-tab-active');
+    viewManage.classList.add('raid-ss-tab-active');
+    tabDashboard.classList.remove('dfe-f-sub-navigation__item--current');
+    tabManage.classList.add('dfe-f-sub-navigation__item--current');
+    tabDashboard.querySelector('a').removeAttribute('aria-current');
+    tabManage.querySelector('a').setAttribute('aria-current', 'page');
+  })();
+  </script>
+
+  <!-- ═══ DASHBOARD VIEW ═══ -->
+  <div id="view-dashboard" class="raid-ss-tab-panel raid-ss-tab-active">
+
+    <!-- Stat cards -->
+    <section class="govuk-!-margin-top-4" aria-labelledby="register-summary-heading">
+      <h2 id="register-summary-heading" class="govuk-visually-hidden">Summary</h2>
+      <div class="dfe-f-card-grid raid-register-stat-grid">
+        <div class="dfe-f-stat-card dfe-f-stat-card--tint-red">
+          <p class="govuk-body-s dfe-f-stat-card__label">Open risks</p>
+          <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l" data-register-count="open-risks">@Model.OpenRiskCount</p>
+          @if (Model.Risks.Any())
+          {
+            <p class="govuk-body-s govuk-!-margin-top-2 govuk-!-margin-bottom-0">
+              <a class="govuk-link govuk-link--no-visited-state" href="#view-manage" data-view-switch="manage" data-tab-switch="risks">View risks</a>
+            </p>
+          }
+        </div>
+        <div class="dfe-f-stat-card dfe-f-stat-card--tint-orange">
+          <p class="govuk-body-s dfe-f-stat-card__label">Open issues</p>
+          <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l" data-register-count="open-issues">@Model.OpenIssueCount</p>
+          @if (Model.Issues.Any())
+          {
+            <p class="govuk-body-s govuk-!-margin-top-2 govuk-!-margin-bottom-0">
+              <a class="govuk-link govuk-link--no-visited-state" href="#view-manage" data-view-switch="manage" data-tab-switch="issues">View issues</a>
+            </p>
+          }
+        </div>
+        <div class="dfe-f-stat-card dfe-f-stat-card--tint-grey">
+          <p class="govuk-body-s dfe-f-stat-card__label">Near misses</p>
+          <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l" data-register-count="open-nearmisses">@Model.OpenNearMissCount</p>
+          @if (Model.NearMisses.Any())
+          {
+            <p class="govuk-body-s govuk-!-margin-top-2 govuk-!-margin-bottom-0">
+              <a class="govuk-link govuk-link--no-visited-state" href="#view-manage" data-view-switch="manage" data-tab-switch="nearmisses">View near misses</a>
+            </p>
+          }
+        </div>
+        <div class="dfe-f-stat-card dfe-f-stat-card--tint-blue">
+          <p class="govuk-body-s dfe-f-stat-card__label">Assumptions</p>
+          <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l" data-register-count="open-assumptions">@Model.OpenAssumptionCount</p>
+          @if (Model.Assumptions.Any())
+          {
+            <p class="govuk-body-s govuk-!-margin-top-2 govuk-!-margin-bottom-0">
+              <a class="govuk-link govuk-link--no-visited-state" href="#view-manage" data-view-switch="manage" data-tab-switch="assumptions">View assumptions</a>
+            </p>
+          }
+        </div>
+        <div class="dfe-f-stat-card dfe-f-stat-card--tint-teal">
+          <p class="govuk-body-s dfe-f-stat-card__label">Dependencies</p>
+          <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@Model.OpenDependencyCount</p>
+          @if (Model.Dependencies.Any())
+          {
+            <p class="govuk-body-s govuk-!-margin-top-2 govuk-!-margin-bottom-0">
+              <a class="govuk-link govuk-link--no-visited-state" href="#rd-dependencies">View dependencies</a>
+            </p>
+          }
         </div>
       </div>
-      <div class="govuk-grid-column-one-half">
-        <div class="govuk-summary-card">
-          <div class="govuk-summary-card__title-wrapper">
-            <h2 class="govuk-summary-card__title">Register details</h2>
-            @if (canManage)
-            {
-              <ul class="govuk-summary-card__actions">
-                <li class="govuk-summary-card__action">
-                  <a href="@(settingsUrl)#rs-details" class="govuk-link govuk-link--no-visited-state">Change<span class="govuk-visually-hidden"> details</span></a>
-                </li>
-              </ul>
-            }
+    </section>
+
+    <!-- Scope & register meta -->
+    <section class="govuk-!-margin-top-6">
+      <div class="govuk-grid-row">
+        <div class="govuk-grid-column-two-thirds">
+          <div class="govuk-summary-card">
+            <div class="govuk-summary-card__title-wrapper">
+              <h2 class="govuk-summary-card__title">Scope</h2>
+              @if (canManage)
+              {
+                <ul class="govuk-summary-card__actions">
+                  <li class="govuk-summary-card__action">
+                    <a href="@(settingsUrl)#rs-scope" class="govuk-link govuk-link--no-visited-state">Change<span class="govuk-visually-hidden"> scope</span></a>
+                  </li>
+                </ul>
+              }
+            </div>
+            <div class="govuk-summary-card__content">
+              <dl class="govuk-summary-list govuk-!-margin-bottom-0">
+                <div class="govuk-summary-list__row">
+                  <dt class="govuk-summary-list__key">Directorates</dt>
+                  <dd class="govuk-summary-list__value">@(Model.DirectorateName ?? "—")</dd>
+                </div>
+                <div class="govuk-summary-list__row">
+                  <dt class="govuk-summary-list__key">Portfolios</dt>
+                  <dd class="govuk-summary-list__value">@(Model.BusinessAreaName ?? "—")</dd>
+                </div>
+                <div class="govuk-summary-list__row">
+                  <dt class="govuk-summary-list__key">Work items</dt>
+                  <dd class="govuk-summary-list__value">
+                    @if (Model.WorkItemNames.Any())
+                    {
+                      <ul class="govuk-list govuk-!-margin-bottom-0">
+                        @foreach (var name in Model.WorkItemNames)
+                        {
+                          <li>@name</li>
+                        }
+                      </ul>
+                    }
+                    else
+                    {
+                      <text>None</text>
+                    }
+                  </dd>
+                </div>
+                <div class="govuk-summary-list__row">
+                  <dt class="govuk-summary-list__key">Services</dt>
+                  <dd class="govuk-summary-list__value">
+                    @if (Model.ServiceNames.Any())
+                    {
+                      <ul class="govuk-list govuk-!-margin-bottom-0">
+                        @foreach (var name in Model.ServiceNames)
+                        {
+                          <li>@name</li>
+                        }
+                      </ul>
+                    }
+                    else
+                    {
+                      <text>None</text>
+                    }
+                  </dd>
+                </div>
+              </dl>
+            </div>
           </div>
-          <div class="govuk-summary-card__content">
-            <dl class="govuk-summary-list govuk-!-margin-bottom-0">
-              <div class="govuk-summary-list__row">
-                <dt class="govuk-summary-list__key">Created by</dt>
-                <dd class="govuk-summary-list__value">@Model.CreatedByName</dd>
-              </div>
-              <div class="govuk-summary-list__row">
-                <dt class="govuk-summary-list__key">Created</dt>
-                <dd class="govuk-summary-list__value">@Model.CreatedAt.ToString("d MMMM yyyy")</dd>
-              </div>
-              <div class="govuk-summary-list__row">
-                <dt class="govuk-summary-list__key">Last updated</dt>
-                <dd class="govuk-summary-list__value">@Model.UpdatedAt.ToString("d MMMM yyyy")</dd>
-              </div>
-              <div class="govuk-summary-list__row">
-                <dt class="govuk-summary-list__key">Users</dt>
-                <dd class="govuk-summary-list__value">
-                  @Model.Users.Count
+        </div>
+        <div class="govuk-grid-column-one-third">
+          <div class="govuk-summary-card">
+            <div class="govuk-summary-card__title-wrapper">
+              <h2 class="govuk-summary-card__title">Register details</h2>
+            </div>
+            <div class="govuk-summary-card__content">
+              <dl class="govuk-summary-list govuk-summary-list--no-border govuk-!-margin-bottom-0">
+                <div class="govuk-summary-list__row">
+                  <dt class="govuk-summary-list__key">Created by</dt>
+                  <dd class="govuk-summary-list__value">@Model.CreatedByName</dd>
+                </div>
+                <div class="govuk-summary-list__row">
+                  <dt class="govuk-summary-list__key">Created</dt>
+                  <dd class="govuk-summary-list__value">@Model.CreatedAt.ToString("d MMM yyyy")</dd>
+                </div>
+                <div class="govuk-summary-list__row">
+                  <dt class="govuk-summary-list__key">Updated</dt>
+                  <dd class="govuk-summary-list__value">@Model.UpdatedAt.ToString("d MMM yyyy")</dd>
+                </div>
+                <div class="govuk-summary-list__row">
+                  <dt class="govuk-summary-list__key">Users</dt>
+                  <dd class="govuk-summary-list__value">@Model.Users.Count</dd>
                   @if (canManage)
                   {
-                    <text> &mdash; </text>
-                    <a class="govuk-link govuk-link--no-visited-state" href="@(settingsUrl)#rs-users">Manage</a>
+                    <dd class="govuk-summary-list__actions">
+                      <a class="govuk-link govuk-link--no-visited-state" href="@(settingsUrl)#rs-users">Manage<span class="govuk-visually-hidden"> users</span></a>
+                    </dd>
                   }
-                </dd>
-              </div>
-            </dl>
+                </div>
+              </dl>
+            </div>
           </div>
         </div>
       </div>
-    </div>
-  </section>
+    </section>
 
-  <!-- RAID item tables -->
+    <!-- RAID item summary tables (dashboard mode) -->
 
-  @if (Model.Risks.Any())
-  {
-    <section id="rd-risks" class="govuk-!-margin-top-6">
-      <h2 class="govuk-heading-m">Risks <span class="govuk-body-s" style="color:#505a5f;">(@Model.Risks.Count)</span></h2>
-      <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
-        <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed">
-          <thead class="govuk-table__head">
-            <tr class="govuk-table__row">
-              <th scope="col" class="govuk-table__header">Ref</th>
-              <th scope="col" class="govuk-table__header">Title</th>
-              <th scope="col" class="govuk-table__header">Status</th>
-              <th scope="col" class="govuk-table__header">Owner</th>
-              <th scope="col" class="govuk-table__header">Tier</th>
-              <th scope="col" class="govuk-table__header govuk-table__header--numeric">Score</th>
-            </tr>
-          </thead>
-          <tbody class="govuk-table__body">
-            @foreach (var risk in Model.Risks)
-            {
+    @if (Model.Risks.Any())
+    {
+      <section id="rd-risks" class="govuk-!-margin-top-6">
+        <h2 class="govuk-heading-m">Risks <span class="govuk-body-s" style="color:#505a5f;" data-register-count="total-risks">(@Model.Risks.Count)</span></h2>
+        <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+          <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed">
+            <thead class="govuk-table__head">
               <tr class="govuk-table__row">
-                <td class="govuk-table__cell"><a class="govuk-link" href="@Url.Action("RiskDetail", "ModernRaid", new { id = risk.Id })">@risk.Reference</a></td>
-                <td class="govuk-table__cell">@risk.Title</td>
-                <td class="govuk-table__cell"><span class="dfe-f-badge dfe-f-badge--small">@(risk.Status ?? "Unknown")</span></td>
-                <td class="govuk-table__cell">@(risk.Owner ?? "Unassigned")</td>
-                <td class="govuk-table__cell">@(risk.Tier ?? "—")</td>
-                <td class="govuk-table__cell govuk-table__cell--numeric">@(risk.InherentScore?.ToString("0.0") ?? "—")</td>
+                <th scope="col" class="govuk-table__header">Ref</th>
+                <th scope="col" class="govuk-table__header">Title</th>
+                <th scope="col" class="govuk-table__header">Status</th>
+                <th scope="col" class="govuk-table__header">Owner</th>
+                <th scope="col" class="govuk-table__header">Tier</th>
+                <th scope="col" class="govuk-table__header govuk-table__header--numeric">Orig. Score</th>
+                <th scope="col" class="govuk-table__header govuk-table__header--numeric">Curr. Score</th>
               </tr>
-            }
-          </tbody>
-        </table>
-      </div>
-    </section>
-  }
+            </thead>
+            <tbody class="govuk-table__body">
+              @foreach (var risk in Model.Risks)
+              {
+                <tr class="govuk-table__row">
+                  <td class="govuk-table__cell"><a class="govuk-link" href="@Url.Action("RiskDetail", "ModernRaid", new { id = risk.Id })">@risk.Reference</a></td>
+                  <td class="govuk-table__cell">@risk.Title</td>
+                  <td class="govuk-table__cell"><span class="dfe-f-badge dfe-f-badge--small">@(risk.Status ?? "Unknown")</span></td>
+                  <td class="govuk-table__cell">@(risk.Owner ?? "Unassigned")</td>
+                  <td class="govuk-table__cell">@(risk.Tier ?? "—")</td>
+                  <td class="govuk-table__cell govuk-table__cell--numeric">@(risk.InherentScore?.ToString("0.0") ?? "—")</td>
+                  <td class="govuk-table__cell govuk-table__cell--numeric">@(risk.CurrentScore?.ToString("0.0") ?? "—")</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </section>
+    }
 
-  @if (Model.Issues.Any())
-  {
-    <section id="rd-issues" class="govuk-!-margin-top-6">
-      <h2 class="govuk-heading-m">Issues <span class="govuk-body-s" style="color:#505a5f;">(@Model.Issues.Count)</span></h2>
-      <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
-        <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed">
-          <thead class="govuk-table__head">
-            <tr class="govuk-table__row">
-              <th scope="col" class="govuk-table__header">Ref</th>
-              <th scope="col" class="govuk-table__header">Title</th>
-              <th scope="col" class="govuk-table__header">Status</th>
-              <th scope="col" class="govuk-table__header">Severity</th>
-              <th scope="col" class="govuk-table__header">Owner</th>
-            </tr>
-          </thead>
-          <tbody class="govuk-table__body">
-            @foreach (var issue in Model.Issues)
-            {
+    @if (Model.Issues.Any())
+    {
+      <section id="rd-issues" class="govuk-!-margin-top-6">
+        <h2 class="govuk-heading-m">Issues <span class="govuk-body-s" style="color:#505a5f;" data-register-count="total-issues">(@Model.Issues.Count)</span></h2>
+        <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+          <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed">
+            <thead class="govuk-table__head">
               <tr class="govuk-table__row">
-                <td class="govuk-table__cell"><a class="govuk-link" href="@Url.Action("IssueDetail", "ModernRaid", new { id = issue.Id })">@issue.Reference</a></td>
-                <td class="govuk-table__cell">@issue.Title</td>
-                <td class="govuk-table__cell"><span class="dfe-f-badge dfe-f-badge--small">@(issue.Status ?? "Unknown")</span></td>
-                <td class="govuk-table__cell">@(issue.Severity ?? "—")</td>
-                <td class="govuk-table__cell">@(issue.Owner ?? "Unassigned")</td>
+                <th scope="col" class="govuk-table__header">Ref</th>
+                <th scope="col" class="govuk-table__header">Title</th>
+                <th scope="col" class="govuk-table__header">Status</th>
+                <th scope="col" class="govuk-table__header">Severity</th>
+                <th scope="col" class="govuk-table__header">Owner</th>
               </tr>
-            }
-          </tbody>
-        </table>
-      </div>
-    </section>
-  }
+            </thead>
+            <tbody class="govuk-table__body">
+              @foreach (var issue in Model.Issues)
+              {
+                <tr class="govuk-table__row">
+                  <td class="govuk-table__cell"><a class="govuk-link" href="@Url.Action("IssueDetail", "ModernRaid", new { id = issue.Id })">@issue.Reference</a></td>
+                  <td class="govuk-table__cell">@issue.Title</td>
+                  <td class="govuk-table__cell"><span class="dfe-f-badge dfe-f-badge--small">@(issue.Status ?? "Unknown")</span></td>
+                  <td class="govuk-table__cell">@(issue.Severity ?? "—")</td>
+                  <td class="govuk-table__cell">@(issue.Owner ?? "Unassigned")</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </section>
+    }
 
-  @if (Model.Assumptions.Any())
-  {
-    <section id="rd-assumptions" class="govuk-!-margin-top-6">
-      <h2 class="govuk-heading-m">Assumptions <span class="govuk-body-s" style="color:#505a5f;">(@Model.Assumptions.Count)</span></h2>
-      <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
-        <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed">
-          <thead class="govuk-table__head">
-            <tr class="govuk-table__row">
-              <th scope="col" class="govuk-table__header">Description</th>
-              <th scope="col" class="govuk-table__header">Status</th>
-              <th scope="col" class="govuk-table__header">Criticality</th>
-              <th scope="col" class="govuk-table__header">Owner</th>
-            </tr>
-          </thead>
-          <tbody class="govuk-table__body">
-            @foreach (var assumption in Model.Assumptions)
-            {
+    @if (Model.Assumptions.Any())
+    {
+      <section id="rd-assumptions" class="govuk-!-margin-top-6">
+        <h2 class="govuk-heading-m">Assumptions <span class="govuk-body-s" style="color:#505a5f;" data-register-count="total-assumptions">(@Model.Assumptions.Count)</span></h2>
+        <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+          <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed">
+            <thead class="govuk-table__head">
               <tr class="govuk-table__row">
-                <td class="govuk-table__cell"><a class="govuk-link" href="@Url.Action("AssumptionDetail", "ModernRaid", new { id = assumption.Id })">@assumption.Description</a></td>
-                <td class="govuk-table__cell"><span class="dfe-f-badge dfe-f-badge--small">@(assumption.Status ?? "Unknown")</span></td>
-                <td class="govuk-table__cell">@(assumption.Criticality ?? "—")</td>
-                <td class="govuk-table__cell">@(assumption.Owner ?? "Unassigned")</td>
+                <th scope="col" class="govuk-table__header">Description</th>
+                <th scope="col" class="govuk-table__header">Status</th>
+                <th scope="col" class="govuk-table__header">Criticality</th>
+                <th scope="col" class="govuk-table__header">Owner</th>
               </tr>
-            }
-          </tbody>
-        </table>
-      </div>
-    </section>
-  }
+            </thead>
+            <tbody class="govuk-table__body">
+              @foreach (var assumption in Model.Assumptions)
+              {
+                <tr class="govuk-table__row">
+                  <td class="govuk-table__cell"><a class="govuk-link" href="@Url.Action("AssumptionDetail", "ModernRaid", new { id = assumption.Id })">@assumption.Description</a></td>
+                  <td class="govuk-table__cell"><span class="dfe-f-badge dfe-f-badge--small">@(assumption.Status ?? "Unknown")</span></td>
+                  <td class="govuk-table__cell">@(assumption.Criticality ?? "—")</td>
+                  <td class="govuk-table__cell">@(assumption.Owner ?? "Unassigned")</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </section>
+    }
 
-  @if (Model.Dependencies.Any())
-  {
-    <section id="rd-dependencies" class="govuk-!-margin-top-6">
-      <h2 class="govuk-heading-m">Dependencies <span class="govuk-body-s" style="color:#505a5f;">(@Model.Dependencies.Count)</span></h2>
-      <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
-        <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed">
-          <thead class="govuk-table__head">
-            <tr class="govuk-table__row">
-              <th scope="col" class="govuk-table__header">Description</th>
-              <th scope="col" class="govuk-table__header">Type</th>
-              <th scope="col" class="govuk-table__header">Status</th>
-              <th scope="col" class="govuk-table__header">Owner</th>
-            </tr>
-          </thead>
-          <tbody class="govuk-table__body">
-            @foreach (var dep in Model.Dependencies)
-            {
+    @if (Model.Dependencies.Any())
+    {
+      <section id="rd-dependencies" class="govuk-!-margin-top-6">
+        <h2 class="govuk-heading-m">Dependencies <span class="govuk-body-s" style="color:#505a5f;">(@Model.Dependencies.Count)</span></h2>
+        <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+          <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed">
+            <thead class="govuk-table__head">
               <tr class="govuk-table__row">
-                <td class="govuk-table__cell"><a class="govuk-link" href="@Url.Action("DependencyDetail", "ModernRaid", new { id = dep.Id })">@(dep.Description ?? $"Dependency #{dep.Id}")</a></td>
-                <td class="govuk-table__cell">@(dep.LinkType ?? "—")</td>
-                <td class="govuk-table__cell"><span class="dfe-f-badge dfe-f-badge--small">@(dep.Status ?? "Unknown")</span></td>
-                <td class="govuk-table__cell">@(dep.Owner ?? "Unassigned")</td>
+                <th scope="col" class="govuk-table__header">Description</th>
+                <th scope="col" class="govuk-table__header">Type</th>
+                <th scope="col" class="govuk-table__header">Status</th>
+                <th scope="col" class="govuk-table__header">Owner</th>
               </tr>
-            }
-          </tbody>
-        </table>
-      </div>
-    </section>
-  }
+            </thead>
+            <tbody class="govuk-table__body">
+              @foreach (var dep in Model.Dependencies)
+              {
+                <tr class="govuk-table__row">
+                  <td class="govuk-table__cell"><a class="govuk-link" href="@Url.Action("DependencyDetail", "ModernRaid", new { id = dep.Id })">@(dep.Description ?? $"Dependency #{dep.Id}")</a></td>
+                  <td class="govuk-table__cell">@(dep.LinkType ?? "—")</td>
+                  <td class="govuk-table__cell"><span class="dfe-f-badge dfe-f-badge--small">@(dep.Status ?? "Unknown")</span></td>
+                  <td class="govuk-table__cell">@(dep.Owner ?? "Unassigned")</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </section>
+    }
 
-  @if (Model.NearMisses.Any())
-  {
-    <section id="rd-nearmisses" class="govuk-!-margin-top-6">
-      <h2 class="govuk-heading-m">Near misses <span class="govuk-body-s" style="color:#505a5f;">(@Model.NearMisses.Count)</span></h2>
-      <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
-        <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed">
-          <thead class="govuk-table__head">
-            <tr class="govuk-table__row">
-              <th scope="col" class="govuk-table__header">Ref</th>
-              <th scope="col" class="govuk-table__header">Impact</th>
-              <th scope="col" class="govuk-table__header">Status</th>
-              <th scope="col" class="govuk-table__header">Seriousness</th>
-            </tr>
-          </thead>
-          <tbody class="govuk-table__body">
-            @foreach (var nm in Model.NearMisses)
-            {
+    @if (Model.NearMisses.Any())
+    {
+      <section id="rd-nearmisses" class="govuk-!-margin-top-6">
+        <h2 class="govuk-heading-m">Near misses <span class="govuk-body-s" style="color:#505a5f;" data-register-count="total-nearmisses">(@Model.NearMisses.Count)</span></h2>
+        <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+          <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed">
+            <thead class="govuk-table__head">
               <tr class="govuk-table__row">
-                <td class="govuk-table__cell"><a class="govuk-link" href="@Url.Action("NearMissDetail", "ModernRaid", new { id = nm.Id })">@nm.Reference</a></td>
-                <td class="govuk-table__cell">@(nm.Impact ?? "—")</td>
-                <td class="govuk-table__cell"><span class="dfe-f-badge dfe-f-badge--small">@(nm.Status ?? "Unknown")</span></td>
-                <td class="govuk-table__cell">@(nm.Seriousness ?? "—")</td>
+                <th scope="col" class="govuk-table__header">Ref</th>
+                <th scope="col" class="govuk-table__header">Impact</th>
+                <th scope="col" class="govuk-table__header">Status</th>
+                <th scope="col" class="govuk-table__header">Seriousness</th>
               </tr>
-            }
-          </tbody>
-        </table>
-      </div>
-    </section>
-  }
+            </thead>
+            <tbody class="govuk-table__body">
+              @foreach (var nm in Model.NearMisses)
+              {
+                <tr class="govuk-table__row">
+                  <td class="govuk-table__cell"><a class="govuk-link" href="@Url.Action("NearMissDetail", "ModernRaid", new { id = nm.Id })">@nm.Reference</a></td>
+                  <td class="govuk-table__cell">@(nm.Impact ?? "—")</td>
+                  <td class="govuk-table__cell"><span class="dfe-f-badge dfe-f-badge--small">@(nm.Status ?? "Unknown")</span></td>
+                  <td class="govuk-table__cell">@(nm.Seriousness ?? "—")</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </section>
+    }
 
-  @if (!Model.Risks.Any() && !Model.Issues.Any() && !Model.Assumptions.Any() && !Model.Dependencies.Any() && !Model.NearMisses.Any())
-  {
-    <section class="govuk-!-margin-top-6">
-      <div class="govuk-inset-text">
-        <p class="govuk-body govuk-!-margin-bottom-2">This register has no RAID items yet.</p>
-        <p class="govuk-body govuk-!-margin-bottom-0">
-          You can <a class="govuk-link" href="@Url.Action("RiskCreate", "ModernRaid")">raise a new risk</a>,
-          <a class="govuk-link" href="@Url.Action("IssueCreate", "ModernRaid")">log a new issue</a>,
-          or adopt existing items into this register from the RAID lists.
-        </p>
+    @if (!Model.Risks.Any() && !Model.Issues.Any() && !Model.Assumptions.Any() && !Model.Dependencies.Any() && !Model.NearMisses.Any())
+    {
+      <section class="govuk-!-margin-top-6">
+        <div class="govuk-inset-text">
+          <p class="govuk-body govuk-!-margin-bottom-2">This register has no RAID items yet.</p>
+          <p class="govuk-body govuk-!-margin-bottom-0">
+            You can <a class="govuk-link" href="@Url.Action("RiskCreate", "ModernRaid")">raise a new risk</a>,
+            <a class="govuk-link" href="@Url.Action("IssueCreate", "ModernRaid")">log a new issue</a>,
+            or adopt existing items into this register from the RAID lists.
+          </p>
+        </div>
+      </section>
+    }
+  </div>
+
+  <!-- ═══ MANAGE VIEW (Spreadsheet) ═══ -->
+  <div id="view-manage" class="raid-ss-tab-panel">
+    <section id="raid-manage-section" class="govuk-!-margin-top-2">
+      <nav class="dfe-f-sub-navigation govuk-!-margin-bottom-0" aria-label="Manage item type" id="manage-sub-tabs">
+        <ul class="dfe-f-sub-navigation__list">
+          <li class="dfe-f-sub-navigation__item dfe-f-sub-navigation__item--current" id="manage-tab-risks">
+            <a class="dfe-f-sub-navigation__link govuk-link govuk-link--no-visited-state" href="#ss-risks" data-tab="risks" aria-current="page">Risks <span class="dfe-c-fw-regular" data-register-count="total-risks">(@Model.Risks.Count)</span></a>
+          </li>
+          <li class="dfe-f-sub-navigation__item" id="manage-tab-issues">
+            <a class="dfe-f-sub-navigation__link govuk-link govuk-link--no-visited-state" href="#ss-issues" data-tab="issues">Issues <span class="dfe-c-fw-regular" data-register-count="total-issues">(@Model.Issues.Count)</span></a>
+          </li>
+          <li class="dfe-f-sub-navigation__item" id="manage-tab-assumptions">
+            <a class="dfe-f-sub-navigation__link govuk-link govuk-link--no-visited-state" href="#ss-assumptions" data-tab="assumptions">Assumptions <span class="dfe-c-fw-regular" data-register-count="total-assumptions">(@Model.Assumptions.Count)</span></a>
+          </li>
+          <li class="dfe-f-sub-navigation__item" id="manage-tab-nearmisses">
+            <a class="dfe-f-sub-navigation__link govuk-link govuk-link--no-visited-state" href="#ss-nearmisses" data-tab="nearmisses">Near misses <span class="dfe-c-fw-regular" data-register-count="total-nearmisses">(@Model.NearMisses.Count)</span></a>
+          </li>
+        </ul>
+      </nav>
+
+      <div id="ss-panel-risks" class="raid-ss-tab-panel raid-ss-tab-active" style="padding-top:15px;">
+        @await Html.PartialAsync("~/Views/Modern/Raid/Registers/_Spreadsheet_Risks.cshtml", Model)
+      </div>
+      <div id="ss-panel-issues" class="raid-ss-tab-panel" style="padding-top:15px;">
+        @await Html.PartialAsync("~/Views/Modern/Raid/Registers/_Spreadsheet_Issues.cshtml", Model)
+      </div>
+      <div id="ss-panel-assumptions" class="raid-ss-tab-panel" style="padding-top:15px;">
+        @await Html.PartialAsync("~/Views/Modern/Raid/Registers/_Spreadsheet_Assumptions.cshtml", Model)
+      </div>
+      <div id="ss-panel-nearmisses" class="raid-ss-tab-panel" style="padding-top:15px;">
+        @await Html.PartialAsync("~/Views/Modern/Raid/Registers/_Spreadsheet_NearMisses.cshtml", Model)
       </div>
     </section>
-  }
+
+    @await Html.PartialAsync("~/Views/Modern/Raid/Registers/_Spreadsheet_Modal.cshtml")
+    @await Html.PartialAsync("~/Views/Modern/Raid/Registers/_Spreadsheet_IntroModal.cshtml")
+  </div>
 </div>
+
+@section Styles {
+  <link rel="stylesheet" href="~/css/raid-spreadsheet.css" />
+  <style>
+    @@media (min-width: 48rem) {
+      .raid-register-stat-grid {
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+      }
+    }
+  </style>
+}
+
+@section Scripts {
+  <script src="~/js/raid-spreadsheet.js" asp-append-version="true" nonce="@Context.Items["Nonce"]"></script>
+  <script src="~/js/raid-spreadsheet-intro.js" asp-append-version="true" nonce="@Context.Items["Nonce"]"></script>
+  <script nonce="@Context.Items["Nonce"]">
+    (function () {
+      // Serialise lookups from server for client-side dropdowns
+      var lookups = {
+        riskStatuses: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.RiskStatuses.Select(x => new { id = x.Id, name = x.Name }))),
+        riskPriorities: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.RiskPriorities.Select(x => new { id = x.Id, name = x.Name }))),
+        riskLikelihoods: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.RiskLikelihoods.Select(x => new { id = x.Id, name = x.Name }))),
+        riskImpactLevels: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.RiskImpactLevels.Select(x => new { id = x.Id, name = x.Name }))),
+        riskProximities: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.RiskProximities.Select(x => new { id = x.Id, name = x.Name }))),
+        riskCategories: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.RiskCategories.Select(x => new { id = x.Id, name = x.Name }))),
+        riskTiers: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.RiskTiers.Select(x => new { id = x.Id, name = x.Name }))),
+        issueStatuses: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.IssueStatuses.Select(x => new { id = x.Id, name = x.Name }))),
+        issuePriorities: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.IssuePriorities.Select(x => new { id = x.Id, name = x.Name }))),
+        issueSeverities: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.IssueSeverities.Select(x => new { id = x.Id, name = x.Name }))),
+        issueCategories: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.IssueCategories.Select(x => new { id = x.Id, name = x.Name }))),
+        nearMissStatuses: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.NearMissStatuses.Select(x => new { id = x.Id, name = x.Name }))),
+        nearMissSeriousnesses: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.NearMissSeriousnesses.Select(x => new { id = x.Id, name = x.Name }))),
+        nearMissTypes: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.NearMissTypes.Select(x => new { id = x.Id, name = x.Name }))),
+        assumptionStatuses: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.AssumptionStatuses.Select(x => new { id = x.Id, name = x.Name }))),
+        assumptionCriticalities: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.AssumptionCriticalities.Select(x => new { id = x.Id, name = x.Name }))),
+        workItems: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.WorkItemOptions.Select(x => new { id = x.Id, name = x.Name }))),
+        fipsProducts: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.ServiceOptions.Select(x => new { id = x.Id, name = x.Name })))
+      };
+
+      var tokenEl = document.querySelector('input[name="__RequestVerificationToken"]');
+      var csrfToken = tokenEl ? tokenEl.value : '@Html.AntiForgeryToken()'.match(/value="([^"]+)"/)?.[1] || '';
+
+      RaidSpreadsheet.init({
+        lookups: lookups,
+        csrfToken: csrfToken,
+        baseUrl: '/modern/raid',
+        registerId: @Model.Id
+      });
+
+      // ── Primary view switching (Dashboard / Manage) ──
+      document.querySelectorAll('#register-view-tabs a').forEach(function (link) {
+        link.addEventListener('click', function (e) {
+          e.preventDefault();
+          switchView(this.getAttribute('data-view'));
+          window.location.hash = this.getAttribute('href').substring(1);
+        });
+      });
+
+      // Links from stat cards to manage view
+      document.querySelectorAll('[data-view-switch]').forEach(function (link) {
+        link.addEventListener('click', function (e) {
+          e.preventDefault();
+          switchView('manage');
+          var subTab = this.getAttribute('data-tab-switch');
+          if (subTab) activateManageTab(subTab);
+        });
+      });
+
+      // Manage sub-tab clicking
+      document.querySelectorAll('#manage-sub-tabs a').forEach(function (link) {
+        link.addEventListener('click', function (e) {
+          e.preventDefault();
+          var tabName = this.getAttribute('data-tab');
+          activateManageTab(tabName);
+          window.location.hash = 'ss-' + tabName;
+        });
+      });
+
+      function switchView(viewName) {
+        var isDashboard = viewName === 'dashboard';
+        document.getElementById('view-dashboard').classList.toggle('raid-ss-tab-active', isDashboard);
+        document.getElementById('view-manage').classList.toggle('raid-ss-tab-active', !isDashboard);
+        var tabDash = document.getElementById('view-tab-dashboard');
+        var tabManage = document.getElementById('view-tab-manage');
+        tabDash.classList.toggle('dfe-f-sub-navigation__item--current', isDashboard);
+        tabManage.classList.toggle('dfe-f-sub-navigation__item--current', !isDashboard);
+        tabDash.querySelector('a').toggleAttribute('aria-current', isDashboard);
+        tabManage.querySelector('a').toggleAttribute('aria-current', !isDashboard);
+        if (!isDashboard && window.RaidSpreadsheetIntro && window.RaidSpreadsheetIntro.tryAutoOpen) {
+          setTimeout(function () { window.RaidSpreadsheetIntro.tryAutoOpen(); }, 150);
+        }
+      }
+
+      function activateManageTab(tabName) {
+        ['risks', 'issues', 'assumptions', 'nearmisses'].forEach(function (name) {
+          var isCurrent = name === tabName;
+          var li = document.getElementById('manage-tab-' + name);
+          var panel = document.getElementById('ss-panel-' + name);
+          if (li) {
+            li.classList.toggle('dfe-f-sub-navigation__item--current', isCurrent);
+            li.querySelector('a').toggleAttribute('aria-current', isCurrent);
+          }
+          if (panel) panel.classList.toggle('raid-ss-tab-active', isCurrent);
+        });
+      }
+
+      // Handle hash on page load
+      var hash = window.location.hash.replace('#', '');
+      if (hash === 'view-manage' || hash.indexOf('ss-') === 0) {
+        switchView('manage');
+        if (hash.indexOf('ss-') === 0) {
+          activateManageTab(hash.replace('ss-', ''));
+        }
+      }
+    })();
+  </script>
+  @Html.AntiForgeryToken()
+}

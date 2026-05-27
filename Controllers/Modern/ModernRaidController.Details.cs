@@ -136,6 +136,66 @@ public partial class ModernRaidController
         return (likelihoodRating, impactRating, riskScore, inherentScore);
     }
 
+    private async Task<decimal?> ComputeRaidRiskScoreDecimalAsync(
+        int? likelihoodId,
+        int? impactLevelId,
+        CancellationToken cancellationToken)
+    {
+        if (!likelihoodId.HasValue || !impactLevelId.HasValue)
+            return null;
+
+        var lk = await _db.RiskLikelihoods.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == likelihoodId.Value, cancellationToken);
+        var im = await _db.RiskImpactLevels.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == impactLevelId.Value, cancellationToken);
+
+        if (lk == null || im == null)
+            return null;
+
+        return (decimal)(lk.MatrixScore * im.MatrixScore);
+    }
+
+    private async Task<IReadOnlyList<WorkRaidRegisterTrackingVm>> LoadRaidRegistersTrackingRiskAsync(
+        int riskId,
+        CancellationToken cancellationToken)
+    {
+        var registerIds = await _db.RaidRegisterRisks.AsNoTracking()
+            .Where(rr => rr.RiskId == riskId && !rr.RaidRegister.IsDeleted)
+            .Select(rr => rr.RaidRegisterId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+        if (registerIds.Count == 0)
+            return Array.Empty<WorkRaidRegisterTrackingVm>();
+
+        var registers = await _db.RaidRegisters.AsNoTracking()
+            .Where(r => registerIds.Contains(r.Id))
+            .Include(r => r.Users).ThenInclude(u => u.User)
+            .Include(r => r.CreatedByUser)
+            .OrderBy(r => r.Name)
+            .ToListAsync(cancellationToken);
+
+        return registers.Select(r => new WorkRaidRegisterTrackingVm
+        {
+            RegisterId = r.Id,
+            Name = r.Name,
+            OwnerName = ResolveRaidRegisterOwnerName(r),
+            DetailUrl = Url.Action("RegisterDetail", "ModernRaid", new { id = r.Id }) ?? "#"
+        }).ToList();
+    }
+
+    private static string ResolveRaidRegisterOwnerName(RaidRegister register)
+    {
+        var ownerUser = register.Users
+            .FirstOrDefault(u => u.Role == RaidRegisterRole.Owner)?.User;
+        if (ownerUser != null)
+            return ownerUser.Name ?? ownerUser.Email ?? "Unknown";
+
+        return register.CreatedByUser?.Name
+            ?? register.CreatedByUser?.Email
+            ?? "Unknown";
+    }
+
     private async Task<int?> GetDefaultRaidRiskStatusIdAsync(CancellationToken cancellationToken)
     {
         var id = await _db.RiskStatuses.AsNoTracking()
@@ -613,6 +673,7 @@ public partial class ModernRaidController
         RaidDateFormHelper.SplitDateParts(DateTime.UtcNow.Date, out var idd, out var idm, out var idy);
         var form = new ModernRaidRiskEditorForm
         {
+            AssociationKind = "organisation",
             IdentifiedDay = idd,
             IdentifiedMonth = idm,
             IdentifiedYear = idy
@@ -674,6 +735,12 @@ public partial class ModernRaidController
             .Include(r => r.CreatedByUser)
             .Include(r => r.Likelihood)
             .Include(r => r.ImpactLevel)
+            .Include(r => r.CurrentLikelihood)
+            .Include(r => r.CurrentImpactLevel)
+            .Include(r => r.ResidualLikelihoodLevel)
+            .Include(r => r.ResidualImpactLevel)
+            .Include(r => r.ToleranceLikelihood)
+            .Include(r => r.ToleranceImpactLevel)
             .Include(r => r.Proximity)
             .Include(r => r.RiskCategory)
             .Include(r => r.RiskRiskCategories).ThenInclude(x => x.RiskCategory)
@@ -821,6 +888,7 @@ public partial class ModernRaidController
             .FirstOrDefaultAsync(cancellationToken);
         ViewBag.RiskMaterialisedIssueId = materialisedIssueId;
         ViewBag.RiskCanMakeIssue = !risk.ClosedDate.HasValue && !materialisedIssueId.HasValue;
+        ViewBag.RiskTrackingRegisters = await LoadRaidRegistersTrackingRiskAsync(id, cancellationToken);
 
         return View("~/Views/Modern/Raid/RiskDetail.cshtml", risk);
     }
@@ -989,6 +1057,10 @@ public partial class ModernRaidController
             RiskLikelihoodId = risk.RiskLikelihoodId,
             RiskImpactLevelId = risk.RiskImpactLevelId,
             RiskProximityId = risk.RiskProximityId,
+            ResidualLikelihoodId = risk.ResidualLikelihoodId,
+            ResidualImpactLevelId = risk.ResidualImpactLevelId,
+            ToleranceLikelihoodId = risk.ToleranceLikelihoodId,
+            ToleranceImpactLevelId = risk.ToleranceImpactLevelId,
             RiskTreatmentId = null,
             RiskCategoryIds = catIds,
             PrimaryRiskCategoryId = primaryCat,
@@ -1071,6 +1143,10 @@ public partial class ModernRaidController
 
         var (likelihoodRating, impactRating, riskScore, inherentScore) =
             await ComputeRaidRiskScoresAsync(form.RiskLikelihoodId, form.RiskImpactLevelId, cancellationToken);
+        var residualScore = await ComputeRaidRiskScoreDecimalAsync(
+            form.ResidualLikelihoodId, form.ResidualImpactLevelId, cancellationToken);
+        var toleranceScore = await ComputeRaidRiskScoreDecimalAsync(
+            form.ToleranceLikelihoodId, form.ToleranceImpactLevelId, cancellationToken);
 
         var riskStatusId = form.RiskStatusId ?? await GetDefaultRaidRiskStatusIdAsync(cancellationToken);
         var riskStatusRow = riskStatusId.HasValue
@@ -1092,8 +1168,13 @@ public partial class ModernRaidController
         risk.RiskLikelihoodId = form.RiskLikelihoodId;
         risk.RiskImpactLevelId = form.RiskImpactLevelId;
         risk.RiskProximityId = form.RiskProximityId;
+        risk.ResidualLikelihoodId = form.ResidualLikelihoodId;
+        risk.ResidualImpactLevelId = form.ResidualImpactLevelId;
+        risk.ResidualScore = residualScore;
+        risk.ToleranceLikelihoodId = form.ToleranceLikelihoodId;
+        risk.ToleranceImpactLevelId = form.ToleranceImpactLevelId;
+        risk.ToleranceScore = toleranceScore;
         risk.OwnerUserId = form.OwnerUserId > 0 ? form.OwnerUserId : null;
-        risk.SroUserId = form.SroUserId > 0 ? form.SroUserId : null;
         risk.ImpactRating = impactRating;
         risk.LikelihoodRating = likelihoodRating;
         risk.RiskScore = riskScore;
@@ -1265,7 +1346,7 @@ public partial class ModernRaidController
     {
         SetRaidChrome("raid-issues");
         await PrepareIssueEditorLookupsAsync(cancellationToken);
-        var form = new ModernRaidIssueEditorForm();
+        var form = new ModernRaidIssueEditorForm { AssociationKind = "organisation" };
         var ak = (associationKind ?? "").Trim().ToLowerInvariant();
         if (ak == "product" && primaryProductId is > 0)
         {

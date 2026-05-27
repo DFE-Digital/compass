@@ -1,0 +1,83 @@
+@model Compass.ViewModels.Modern.CustomReportViewViewModel
+@using Compass.Models.Modern.Work
+@if (Model.RagSummaryRows.Count == 0)
+{
+<p class="govuk-body">No RAG data available.</p>
+}
+else
+{
+<div class="mr-dist-grid govuk-!-margin-bottom-4">
+    <div class="mr-card">
+        <h3 class="mr-card__title">RAG distribution</h3>
+        <div class="mr-chart-wrap">
+            <canvas id="cr-rag-chart" aria-label="RAG distribution chart"></canvas>
+        </div>
+    </div>
+    <div class="mr-card">
+        <h3 class="mr-card__title">RAG breakdown</h3>
+        <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+            <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed">
+                <thead class="govuk-table__head">
+                    <tr class="govuk-table__row">
+                        <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">RAG</button></th>
+                        <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Count</button></th>
+                    </tr>
+                </thead>
+                <tbody class="govuk-table__body">
+                    @foreach (var r in Model.RagSummaryRows)
+                    {
+                    <tr class="govuk-table__row">
+                        <td class="govuk-table__cell"><span class="@r.CssClass">@r.Label</span></td>
+                        <td class="govuk-table__cell govuk-table__cell--numeric"><strong>@r.Count</strong></td>
+                    </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script nonce="@Context.Items["Nonce"]">
+(function() {
+    var ctx = document.getElementById('cr-rag-chart');
+    if (!ctx || typeof Chart === 'undefined') return;
+    var data = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(
+        Model.RagSummaryRows.Select(r => new { label = r.Label, count = r.Count })));
+    var colorMap = { 'Green': '#0f7a52', 'Amber/Green': '#f47738', 'Amber-Green': '#f47738', 'Amber': '#f8a100', 'Amber/Red': '#d76868', 'Amber-Red': '#d76868', 'Red': '#ca3535', 'Not set': '#b1b4b6' };
+    var labels = data.filter(function(d) { return d.count > 0; }).map(function(d) { return d.label; });
+    if (!labels.length) return;
+    new Chart(ctx.getContext('2d'), {
+        type: 'doughnut',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: data.filter(function(d) { return d.count > 0; }).map(function(d) { return d.count; }),
+                backgroundColor: labels.map(function(l) { return colorMap[l] || '#505a5f'; }),
+                borderWidth: 3,
+                borderColor: '#fff',
+                hoverBorderWidth: 1,
+                hoverBorderColor: '#0b0c0c'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            cutout: '58%',
+            plugins: {
+                legend: { position: 'bottom', labels: { boxWidth: 14, boxHeight: 14, useBorderRadius: true, borderRadius: 3, font: { size: 12, weight: '600' }, padding: 12 } },
+                tooltip: {
+                    backgroundColor: 'rgba(11,12,12,0.92)',
+                    callbacks: {
+                        label: function(ctx) {
+                            var total = ctx.dataset.data.reduce(function(a, b) { return a + b; }, 0);
+                            var pct = total ? Math.round((ctx.parsed / total) * 100) : 0;
+                            return ' ' + ctx.label + ': ' + ctx.parsed + ' (' + pct + '%)';
+                        }
+                    }
+                }
+            }
+        }
+    });
+})();
+</script>
+}

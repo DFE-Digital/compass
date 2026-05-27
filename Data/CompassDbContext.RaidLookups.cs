@@ -22,6 +22,7 @@ public partial class CompassDbContext
     public DbSet<RiskProximity> RiskProximities { get; set; }
     public DbSet<RiskCategory> RiskCategories { get; set; }
     public DbSet<RiskTreatment> RiskTreatments { get; set; }
+    public DbSet<RiskRatingHistory> RiskRatingHistory { get; set; }
 
     public DbSet<IssueStatus> IssueStatuses { get; set; }
     public DbSet<IssuePriority> IssuePriorities { get; set; }

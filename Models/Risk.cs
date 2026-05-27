@@ -108,6 +108,8 @@ public class Risk
     [ForeignKey(nameof(RiskPriorityId))]
     public RiskPriority? RiskPriority { get; set; }
 
+    // ── Original risk rating (set on first save, not changed after) ──
+
     public int? RiskLikelihoodId { get; set; }
 
     [ForeignKey(nameof(RiskLikelihoodId))]
@@ -118,6 +120,56 @@ public class Risk
     [ForeignKey(nameof(RiskImpactLevelId))]
     public RiskImpactLevel? ImpactLevel { get; set; }
 
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal? InherentScore { get; set; }
+
+    // ── Current risk rating (initially copies Original, updated over time) ──
+
+    public int? CurrentLikelihoodId { get; set; }
+
+    [ForeignKey(nameof(CurrentLikelihoodId))]
+    public RiskLikelihood? CurrentLikelihood { get; set; }
+
+    public int? CurrentImpactLevelId { get; set; }
+
+    [ForeignKey(nameof(CurrentImpactLevelId))]
+    public RiskImpactLevel? CurrentImpactLevel { get; set; }
+
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal? CurrentScore { get; set; }
+
+    // ── Residual risk rating ──
+
+    public int? ResidualLikelihoodId { get; set; }
+
+    [ForeignKey(nameof(ResidualLikelihoodId))]
+    public RiskLikelihood? ResidualLikelihoodLevel { get; set; }
+
+    public int? ResidualImpactLevelId { get; set; }
+
+    [ForeignKey(nameof(ResidualImpactLevelId))]
+    public RiskImpactLevel? ResidualImpactLevel { get; set; }
+
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal? ResidualScore { get; set; }
+
+    // ── Tolerance risk rating ──
+
+    public int? ToleranceLikelihoodId { get; set; }
+
+    [ForeignKey(nameof(ToleranceLikelihoodId))]
+    public RiskLikelihood? ToleranceLikelihood { get; set; }
+
+    public int? ToleranceImpactLevelId { get; set; }
+
+    [ForeignKey(nameof(ToleranceImpactLevelId))]
+    public RiskImpactLevel? ToleranceImpactLevel { get; set; }
+
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal? ToleranceScore { get; set; }
+
+    // ── Other lookups ──
+
     public int? RiskProximityId { get; set; }
 
     [ForeignKey(nameof(RiskProximityId))]
@@ -127,12 +179,6 @@ public class Risk
 
     [ForeignKey(nameof(RiskCategoryId))]
     public RiskCategory? RiskCategory { get; set; }
-
-    [Column(TypeName = "decimal(18,2)")]
-    public decimal? InherentScore { get; set; }
-
-    [Column(TypeName = "decimal(18,2)")]
-    public decimal? ResidualScore { get; set; }
 
     public DateTime? IdentifiedDate { get; set; }
 
@@ -221,5 +267,8 @@ public class Risk
 
     /// <summary>Modern RAID: business areas from admin lookup (multi-select).</summary>
     public ICollection<RiskBusinessArea> RiskBusinessAreas { get; set; } = new List<RiskBusinessArea>();
+
+    /// <summary>Audit trail of rating changes (original → current over time).</summary>
+    public ICollection<RiskRatingHistory> RatingHistory { get; set; } = new List<RiskRatingHistory>();
 }
 

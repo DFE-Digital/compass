@@ -301,6 +301,30 @@ public static class WorkBadgeCss
     public static string RaidOpenClosedDfeFrontendBadgeClass(bool closed)
         => closed ? "dfe-f-badge dfe-f-badge--green" : "dfe-f-badge dfe-f-badge--blue";
 
+    /// <summary>Risk status on RAID registers (escalated, closed, proposed, open).</summary>
+    public static string RaidRiskStatusDfeFrontendBadgeClass(string? status)
+    {
+        if (string.IsNullOrWhiteSpace(status))
+            return "dfe-f-badge dfe-f-badge--small dfe-f-badge--grey";
+        var s = status.ToLowerInvariant();
+        if (s.Contains("escalat"))
+            return "dfe-f-badge dfe-f-badge--small dfe-f-badge--red";
+        if (s.Contains("closed"))
+            return "dfe-f-badge dfe-f-badge--small dfe-f-badge--green";
+        if (s.Contains("proposed"))
+            return "dfe-f-badge dfe-f-badge--small dfe-f-badge--grey";
+        return "dfe-f-badge dfe-f-badge--small dfe-f-badge--blue";
+    }
+
+    /// <summary>Issue status on RAID registers.</summary>
+    public static string RaidIssueStatusDfeFrontendBadgeClass(string? status)
+    {
+        if (string.IsNullOrWhiteSpace(status))
+            return "dfe-f-badge dfe-f-badge--small dfe-f-badge--grey";
+        var closed = status.Contains("closed", StringComparison.OrdinalIgnoreCase);
+        return RaidOpenClosedDfeFrontendBadgeClass(closed) + " dfe-f-badge--small";
+    }
+
     /// <summary>Raid priority text (critical/high/medium/low).</summary>
     public static string RaidPriorityLabelDfeFrontendBadgeClass(string? pri)
     {
@@ -350,6 +374,14 @@ public static class WorkBadgeCss
         if (string.IsNullOrWhiteSpace(tier))
             return "dfe-f-badge dfe-f-badge--small dfe-f-badge--grey";
         var t = tier.Trim().ToLowerInvariant();
+        if (t.Contains("proposed"))
+        {
+            if (t.Contains("1") || t.Contains("tier one") || t == "t1")
+                return "dfe-f-badge dfe-f-badge--small dfe-f-badge--blue";
+            if (t.Contains("2") || t.Contains("tier two") || t == "t2")
+                return "dfe-f-badge dfe-f-badge--small dfe-f-badge--orange";
+            return "dfe-f-badge dfe-f-badge--small dfe-f-badge--grey";
+        }
         if (t.Contains("3") || t.Contains("tier three") || t == "t3")
             return "dfe-f-badge dfe-f-badge--small dfe-f-badge--red";
         if (t.Contains("2") || t.Contains("tier two") || t == "t2")

@@ -1,0 +1,77 @@
+@model Compass.ViewModels.Modern.RaidRegisterDetailViewModel
+@using Compass.ViewModels.Modern
+
+<div class="raid-spreadsheet-toolbar govuk-!-margin-bottom-3">
+  <div class="raid-ss-toolbar-actions">
+    <button type="button" class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0" data-module="govuk-button" id="btn-add-nearmiss-top" data-entity-type="nearmiss">+ Add near miss</button>
+  </div>
+  <div class="raid-ss-toolbar-actions">
+    @await Html.PartialAsync("~/Views/Modern/Raid/Registers/_Spreadsheet_ToolbarIcons.cshtml")
+    <button type="button" class="govuk-button govuk-!-margin-bottom-0 raid-ss-fullscreen-btn" data-module="govuk-button">
+      <span class="btn-fs-expand">Expand table</span>
+      <span class="btn-fs-collapse" style="display:none">Exit full width</span>
+    </button>
+  </div>
+</div>
+
+<div class="raid-spreadsheet-wrap" id="nearmisses-spreadsheet">
+  <div class="raid-spreadsheet-scroll">
+    <table class="govuk-table govuk-table--small-text-until-tablet raid-spreadsheet-table" id="tbl-nearmisses" data-entity-type="nearmiss">
+      <thead class="govuk-table__head">
+        <tr class="govuk-table__row raid-ss-header-row">
+          <th class="govuk-table__header raid-ss-sticky-col raid-ss-sortable raid-ss-filter-text" data-col="ref" style="min-width:110px">Ref</th>
+          <th class="govuk-table__header raid-ss-sortable raid-ss-filter-text" data-col="impact" style="min-width:200px">Impact</th>
+          <th class="govuk-table__header raid-ss-sortable raid-ss-filterable" data-col="status" style="min-width:130px">Status</th>
+          <th class="govuk-table__header raid-ss-sortable raid-ss-filterable" data-col="seriousness" style="min-width:130px">Seriousness</th>
+          <th class="govuk-table__header raid-ss-sortable raid-ss-filterable" data-col="type" style="min-width:130px">Type</th>
+          <th class="govuk-table__header raid-ss-sortable raid-ss-filterable" data-col="scope" style="min-width:160px">Scope</th>
+          <th class="govuk-table__header raid-ss-sortable raid-ss-filterable" data-col="dateLogged" style="min-width:110px">Date logged</th>
+          <th class="govuk-table__header raid-ss-sortable raid-ss-filterable" data-col="lastEdited" style="min-width:120px">Last edited</th>
+        </tr>
+        <tr class="govuk-table__row raid-ss-filter-row" style="display:none"></tr>
+      </thead>
+      <tbody class="govuk-table__body">
+        @foreach (var nm in Model.NearMisses)
+        {
+          var scopeRel = nm.ToRelationParts("nearmisses");
+          string scopeText;
+          if (scopeRel.Kind == RaidRegisterRelationKinds.Organisation)
+            scopeText = string.IsNullOrEmpty(scopeRel.Target) ? "Organisation" : "Organisation · " + scopeRel.Target;
+          else
+            scopeText = "—";
+
+          <tr class="govuk-table__row raid-ss-row" data-entity="nearmiss" data-id="@nm.Id">
+            <td class="govuk-table__cell raid-ss-sticky-col">
+              <div class="raid-ss-ref-cell">
+                <a class="govuk-link govuk-link--no-visited-state raid-ss-ref-link" data-href="@Url.Action("NearMissDetail", "ModernRaid", new { id = nm.Id })">@nm.Reference</a>
+                @await Html.PartialAsync("~/Views/Modern/Raid/Registers/_Spreadsheet_CommentToggle.cshtml", ("nearmiss", nm.Id, nm.CommentCount))
+              </div>
+            </td>
+            <td class="govuk-table__cell raid-ss-editable" data-field="impact" data-type="modal" data-label="Impact">
+              <span class="raid-ss-val">@(nm.Impact ?? "—")</span>
+            </td>
+            <td class="govuk-table__cell raid-ss-editable" data-field="statusId" data-type="select" data-lookup="nearMissStatuses" data-current="@nm.StatusId">
+              <span class="raid-ss-val">@(nm.Status ?? "—")</span>
+            </td>
+            <td class="govuk-table__cell raid-ss-editable" data-field="seriousnessId" data-type="select" data-lookup="nearMissSeriousnesses" data-current="@nm.SeriousnessId">
+              <span class="raid-ss-val">@(nm.Seriousness ?? "—")</span>
+            </td>
+            <td class="govuk-table__cell raid-ss-editable" data-field="typeId" data-type="select" data-lookup="nearMissTypes" data-current="@nm.TypeId">
+              <span class="raid-ss-val">@(nm.Type ?? "—")</span>
+            </td>
+            <td class="govuk-table__cell govuk-body-s">
+              <span class="raid-ss-val">@scopeText</span>
+            </td>
+            <td class="govuk-table__cell">
+              @(nm.DateLogged?.ToString("dd MMM yy") ?? "—")
+            </td>
+            <td class="govuk-table__cell raid-ss-last-edited" data-updated="@nm.UpdatedAt.ToString("o")">
+              <span class="raid-ss-val">@nm.UpdatedAt.ToString("dd MMM yy HH:mm")</span>
+            </td>
+          </tr>
+        }
+      </tbody>
+      <tfoot></tfoot>
+    </table>
+  </div>
+</div>

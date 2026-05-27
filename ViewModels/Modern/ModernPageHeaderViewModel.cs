@@ -21,4 +21,6 @@ public class ModernPageHeaderViewModel
     public IHtmlContent? Actions { get; init; }
     /// <summary>When there are no actions, use <c>govuk-grid-column-two-thirds</c> instead of full width for title and lede.</summary>
     public bool ConstrainToTwoThirds { get; init; }
+    /// <summary>Spacing below the header row (default <c>govuk-!-margin-bottom-6</c>). Use <c>govuk-!-margin-bottom-0</c> when sub-navigation follows immediately.</summary>
+    public string BottomMarginClass { get; init; } = "govuk-!-margin-bottom-6";
 }

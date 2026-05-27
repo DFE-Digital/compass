@@ -27,6 +27,7 @@ public sealed class WorkServiceRegisterLinksPanelViewModel
 {
     public int WorkItemId { get; init; }
     public bool CanLink { get; init; }
+    public bool CanCreateServiceOffering { get; init; }
     public IReadOnlyList<WorkServiceRegisterLinkRow> Links { get; init; } = Array.Empty<WorkServiceRegisterLinkRow>();
     public string PickProductsUrl { get; init; } = "";
     public string LinkUrl { get; init; } = "";

@@ -51,6 +51,12 @@ public class RaidRegister
     public ICollection<RaidRegisterWorkItem> WorkItems { get; set; } = new List<RaidRegisterWorkItem>();
     public ICollection<RaidRegisterService> Services { get; set; } = new List<RaidRegisterService>();
 
+    /// <summary>Organisational scope — directorates (many).</summary>
+    public ICollection<RaidRegisterDirectorate> Directorates { get; set; } = new List<RaidRegisterDirectorate>();
+
+    /// <summary>Organisational scope — portfolios / business areas (many).</summary>
+    public ICollection<RaidRegisterBusinessArea> BusinessAreas { get; set; } = new List<RaidRegisterBusinessArea>();
+
     // Access: explicit user management
     public ICollection<RaidRegisterUser> Users { get; set; } = new List<RaidRegisterUser>();
 

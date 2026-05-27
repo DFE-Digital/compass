@@ -71,6 +71,14 @@ public sealed class ModernRaidRiskEditorForm
     public int? RiskProximityId { get; set; }
     public int? RiskTreatmentId { get; set; }
 
+    // Residual risk rating
+    public int? ResidualLikelihoodId { get; set; }
+    public int? ResidualImpactLevelId { get; set; }
+
+    // Tolerance risk rating
+    public int? ToleranceLikelihoodId { get; set; }
+    public int? ToleranceImpactLevelId { get; set; }
+
     /// <summary>Primary category (single selection).</summary>
     public int? PrimaryRiskCategoryId { get; set; }
 

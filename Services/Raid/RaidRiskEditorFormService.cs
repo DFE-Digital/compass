@@ -149,6 +149,9 @@ public sealed class RaidRiskEditorFormService(CompassDbContext db) : IRaidRiskEd
         var (likelihoodRating, impactRating, riskScore, inherentScore) =
             await ComputeRaidRiskScoresAsync(form.RiskLikelihoodId, form.RiskImpactLevelId, cancellationToken);
 
+        var residualScore = await ComputeRaidRiskScoreDecimalAsync(form.ResidualLikelihoodId, form.ResidualImpactLevelId, cancellationToken);
+        var toleranceScore = await ComputeRaidRiskScoreDecimalAsync(form.ToleranceLikelihoodId, form.ToleranceImpactLevelId, cancellationToken);
+
         var createdByUserId = await ResolveCurrentUserIdAsync(user, cancellationToken);
 
         var riskStatusId = await GetOpenRiskStatusIdAsync(cancellationToken) ?? await GetDefaultRaidRiskStatusIdAsync(cancellationToken);
@@ -181,6 +184,15 @@ public sealed class RaidRiskEditorFormService(CompassDbContext db) : IRaidRiskEd
             LikelihoodRating = likelihoodRating,
             RiskScore = riskScore,
             InherentScore = inherentScore,
+            CurrentLikelihoodId = form.RiskLikelihoodId,
+            CurrentImpactLevelId = form.RiskImpactLevelId,
+            CurrentScore = inherentScore,
+            ResidualLikelihoodId = form.ResidualLikelihoodId,
+            ResidualImpactLevelId = form.ResidualImpactLevelId,
+            ResidualScore = residualScore,
+            ToleranceLikelihoodId = form.ToleranceLikelihoodId,
+            ToleranceImpactLevelId = form.ToleranceImpactLevelId,
+            ToleranceScore = toleranceScore,
             Status = TruncateLowerRaid(riskStatusRow?.Label ?? "new", 20),
             Response = riskTreatment != null ? TruncateRaid(riskTreatment.Label, 20) : null,
             ResponseStrategy = form.ResponseStrategy,
@@ -465,6 +477,22 @@ public sealed class RaidRiskEditorFormService(CompassDbContext db) : IRaidRiskEd
         var riskScore = Math.Clamp(impactRating * likelihoodRating, 1, 25);
         var inherentScore = (decimal)(impactRating * likelihoodRating);
         return (likelihoodRating, impactRating, riskScore, inherentScore);
+    }
+
+    private async Task<decimal?> ComputeRaidRiskScoreDecimalAsync(int? likelihoodId, int? impactLevelId, CancellationToken cancellationToken)
+    {
+        if (!likelihoodId.HasValue || !impactLevelId.HasValue)
+            return null;
+
+        var lk = await db.RiskLikelihoods.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == likelihoodId.Value, cancellationToken);
+        var im = await db.RiskImpactLevels.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == impactLevelId.Value, cancellationToken);
+
+        if (lk == null || im == null)
+            return null;
+
+        return (decimal)(lk.MatrixScore * im.MatrixScore);
     }
 
     private async Task<int?> GetDefaultRaidRiskStatusIdAsync(CancellationToken cancellationToken)

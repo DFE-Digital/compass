@@ -34,3 +34,31 @@ public class RaidRegisterService
     [ForeignKey(nameof(FipsServiceId))]
     public FipsService FipsService { get; set; } = null!;
 }
+
+/// <summary>Links a RAID register to a directorate within its organisational scope.</summary>
+public class RaidRegisterDirectorate
+{
+    public int RaidRegisterId { get; set; }
+
+    [ForeignKey(nameof(RaidRegisterId))]
+    public RaidRegister RaidRegister { get; set; } = null!;
+
+    public int DirectorateLookupId { get; set; }
+
+    [ForeignKey(nameof(DirectorateLookupId))]
+    public DirectorateLookup DirectorateLookup { get; set; } = null!;
+}
+
+/// <summary>Links a RAID register to a portfolio / business area within its organisational scope.</summary>
+public class RaidRegisterBusinessArea
+{
+    public int RaidRegisterId { get; set; }
+
+    [ForeignKey(nameof(RaidRegisterId))]
+    public RaidRegister RaidRegister { get; set; } = null!;
+
+    public int BusinessAreaLookupId { get; set; }
+
+    [ForeignKey(nameof(BusinessAreaLookupId))]
+    public BusinessAreaLookup BusinessAreaLookup { get; set; } = null!;
+}
