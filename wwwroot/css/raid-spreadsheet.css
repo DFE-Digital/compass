@@ -1,0 +1,1002 @@
+/* ── RAID Spreadsheet View ── */
+@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0');
+
+.material-symbols-outlined {
+  font-family: 'Material Symbols Outlined';
+  font-weight: normal;
+  font-style: normal;
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-smoothing: antialiased;
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+
+.raid-spreadsheet-wrap {
+  border: 1px solid #b1b4b6;
+  border-top: none;
+  background: #fff;
+}
+
+.raid-spreadsheet-scroll {
+  position: relative;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  max-height: 70vh;
+  --raid-ss-header-height: 37px;
+}
+
+.raid-spreadsheet-table {
+  margin-bottom: 0;
+  border-collapse: separate;
+  border-spacing: 0;
+  width: max-content;
+  min-width: 100%;
+}
+
+/* ── Sticky header row (vertical scroll) ── */
+.raid-spreadsheet-table .govuk-table__head .govuk-table__header {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: #f3f2f1;
+  background-clip: padding-box;
+  border-bottom: 2px solid #0b0c0c;
+  white-space: nowrap;
+  font-size: 13px;
+  padding: 8px 10px;
+}
+
+.raid-spreadsheet-table .govuk-table__body .govuk-table__cell {
+  padding: 6px 10px;
+  font-size: 14px;
+  vertical-align: middle;
+  border-bottom: 1px solid #d4d4d4;
+  word-break: break-word;
+}
+
+/* ── Frozen ID column (horizontal + vertical sticky) ── */
+.raid-spreadsheet-table .raid-ss-sticky-col {
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  background: #fff !important;
+  background-clip: padding-box;
+  border-right: 2px solid #b1b4b6;
+}
+
+/* Ref header: sticky top + left (corner cell) */
+.raid-spreadsheet-table .govuk-table__head .govuk-table__header.raid-ss-sticky-col {
+  top: 0;
+  left: 0;
+  z-index: 10;
+  background: #f3f2f1 !important;
+  box-shadow: 2px 0 4px rgba(0, 0, 0, 0.06);
+}
+
+/* Filter row cells stick below header row */
+.raid-spreadsheet-table .raid-ss-filter-row td {
+  position: sticky;
+  top: var(--raid-ss-header-height, 37px);
+  z-index: 4;
+  background: #f8f8f8;
+  background-clip: padding-box;
+  border-bottom: 1px solid #b1b4b6;
+}
+
+.raid-spreadsheet-table .raid-ss-filter-row .raid-ss-sticky-col {
+  left: 0;
+  z-index: 11;
+  background: #f8f8f8 !important;
+}
+
+/* Rating group visual separator */
+.raid-ss-group-start {
+  border-left: 2px solid #b1b4b6 !important;
+}
+
+/* ── Editable cell hover ── */
+.raid-ss-editable {
+  cursor: pointer;
+  position: relative;
+}
+
+.raid-ss-editable:hover {
+  background-color: #f0f4f5;
+  outline: 2px solid #1d70b8;
+  outline-offset: -2px;
+}
+
+.raid-ss-editable.raid-ss-editing {
+  padding: 2px 4px;
+  background: #fff;
+  outline: 2px solid #fd0;
+  outline-offset: -2px;
+}
+
+.raid-ss-editable .raid-ss-val {
+  display: block;
+}
+
+.raid-ss-val-truncate {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Editable value cells show a pencil icon (modal, select) */
+.raid-ss-editable[data-type="modal"] .raid-ss-val::after,
+.raid-ss-editable[data-type="select"] .raid-ss-val::after {
+  content: " \270E";
+  color: #1d70b8;
+  font-size: 12px;
+}
+
+/* Relation column: kind label, item link, and separate change action */
+.raid-ss-relation-cell {
+  min-width: 160px;
+  vertical-align: top;
+}
+
+.raid-ss-relation-cell__content {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  line-height: 1.35;
+}
+
+.raid-ss-relation-org-label,
+.raid-ss-relation-name,
+.raid-ss-relation-empty {
+  display: block;
+  font-size: 16px;
+  color: #0b0c0c;
+}
+
+.raid-ss-relation-org-label {
+  color: #505a5f;
+}
+
+.raid-spreadsheet-table .govuk-table__cell .govuk-button,
+.raid-spreadsheet-table .govuk-table__cell .raid-ss-relation-change-btn,
+.raid-spreadsheet-table .govuk-table__cell .raid-ss-relation-view-btn {
+  margin-bottom: 0;
+}
+
+.raid-ss-relation-actions {
+  margin-top: 4px;
+}
+
+.raid-ss-relation-view-btn {
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  font-size: 16px;
+  font-weight: 400;
+  text-decoration: underline;
+  text-underline-offset: 0.1em;
+}
+
+.raid-ss-relation-view-btn:hover {
+  text-decoration-thickness: max(3px, 0.1875rem);
+}
+
+.raid-ss-relation-change-btn {
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  margin-bottom: 0;
+  font-size: 14px;
+  text-decoration: underline;
+  text-underline-offset: 0.1em;
+}
+
+.raid-ss-relation-change-btn:hover {
+  text-decoration-thickness: max(3px, 0.1875rem);
+}
+
+/* User lookup cells show a person icon */
+.raid-ss-editable[data-type="userlookup"] .raid-ss-val::after {
+  content: " \1F464";
+  font-size: 11px;
+}
+
+/* ── Row editing highlight ── */
+.raid-ss-row-editing {
+  background-color: #fef7e5 !important;
+}
+.raid-ss-row-editing > .govuk-table__cell {
+  background-color: #fef7e5 !important;
+}
+.raid-ss-row-editing > .raid-ss-sticky-col {
+  background-color: #fef7e5 !important;
+}
+
+/* ── Inline select ── */
+.raid-ss-inline-select {
+  width: 100%;
+  min-width: 110px;
+  font-size: 14px;
+  padding: 4px 6px;
+  border: 1px solid #0b0c0c;
+  border-radius: 0;
+  background: #fff;
+}
+
+/* ── Save indicator ── */
+.raid-ss-saving {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.raid-ss-saved {
+  animation: raid-ss-flash 0.6s;
+}
+
+@keyframes raid-ss-flash {
+  0% { background-color: #00703c33; }
+  100% { background-color: transparent; }
+}
+
+.raid-ss-error {
+  animation: raid-ss-flash-error 0.6s;
+}
+
+@keyframes raid-ss-flash-error {
+  0% { background-color: #d4351c33; }
+  100% { background-color: transparent; }
+}
+
+/* ── Score badges ── */
+.raid-ss-score {
+  text-align: center;
+  vertical-align: middle;
+}
+
+.raid-ss-score-badge {
+  display: inline-block;
+  min-width: 2.75rem;
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.3;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.raid-ss-score-badge--highest {
+  background: #c00;
+  color: #fff;
+}
+
+.raid-ss-score-badge--elevated {
+  background: #e0761e;
+  color: #0b0c0c;
+}
+
+.raid-ss-score-badge--medium {
+  background: #f5e6c8;
+  color: #0b0c0c;
+}
+
+.raid-ss-score-badge--lower {
+  background: #dceedd;
+  color: #0b0c0c;
+}
+
+/* Lookup value badges (status, priority, tier, severity) */
+.raid-ss-badge-cell {
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.raid-ss-badge-cell .raid-ss-val.dfe-f-badge {
+  display: inline-block;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+/* Current score indicator on ref column */
+.raid-spreadsheet-table .raid-ss-sticky-col.raid-ss-ref-score--highest {
+  box-shadow: inset 8px 0 0 #c00;
+}
+
+.raid-spreadsheet-table .raid-ss-sticky-col.raid-ss-ref-score--elevated {
+  box-shadow: inset 8px 0 0 #e0761e;
+}
+
+.raid-spreadsheet-table .raid-ss-sticky-col.raid-ss-ref-score--medium {
+  box-shadow: inset 8px 0 0 #f47738;
+}
+
+.raid-spreadsheet-table .raid-ss-sticky-col.raid-ss-ref-score--lower {
+  box-shadow: inset 8px 0 0 #00703c;
+}
+
+/* ── Detail button ── */
+.raid-ss-detail-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 2px 6px;
+  color: #1d70b8;
+}
+
+.raid-ss-detail-btn:hover {
+  color: #003078;
+}
+
+/* ── Reference link ── */
+.raid-ss-ref-link {
+  cursor: pointer;
+  font-weight: bold;
+}
+
+/* ── Spreadsheet toolbar ── */
+.raid-spreadsheet-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.raid-ss-toolbar-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.raid-ss-toolbar-actions .govuk-button.raid-ss-btn-icon {
+  min-width: 40px;
+  min-height: 40px;
+  padding: 8px 10px;
+  line-height: 0;
+}
+
+.raid-ss-toolbar-actions .govuk-button.raid-ss-btn-icon svg,
+.raid-ss-toolbar-actions .govuk-button.raid-ss-btn-icon .material-symbols-outlined {
+  display: block;
+  margin: 0;
+}
+
+/* ── Fullscreen mode ── */
+.raid-register-fullscreen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1000;
+  background: #fff;
+  padding: 20px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+
+.raid-register-fullscreen > .dfe-f-sub-navigation,
+.raid-register-fullscreen > .raid-spreadsheet-toolbar {
+  flex-shrink: 0;
+}
+
+.raid-register-fullscreen .raid-ss-tab-panel.raid-ss-tab-active {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  padding-top: 15px;
+}
+
+.raid-register-fullscreen .raid-spreadsheet-wrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.raid-register-fullscreen .raid-spreadsheet-scroll {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+}
+
+/* ── Modal ── */
+.raid-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1100;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 60px;
+}
+
+.raid-modal-panel {
+  background: #fff;
+  border-radius: 4px;
+  width: 90%;
+  max-width: 720px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+}
+
+.raid-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid #b1b4b6;
+}
+
+.raid-modal-close {
+  background: none;
+  border: none;
+  font-size: 28px;
+  cursor: pointer;
+  color: #0b0c0c;
+  line-height: 1;
+  padding: 0 4px;
+}
+
+.raid-modal-body {
+  padding: 20px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.raid-modal-footer {
+  padding: 12px 20px;
+  border-top: 1px solid #b1b4b6;
+  text-align: right;
+}
+
+/* Tab panels for show/hide */
+.raid-ss-tab-panel {
+  display: none;
+  padding-top: 15px;
+}
+
+.raid-ss-tab-panel.raid-ss-tab-active {
+  display: block;
+}
+
+/* ── Sorting indicators (inline after label text) ── */
+.raid-ss-sortable {
+  cursor: pointer;
+  user-select: none;
+  padding-right: 24px !important;
+}
+
+.raid-ss-th-label::after {
+  content: none;
+}
+
+.raid-ss-sortable .raid-ss-th-label::after {
+  content: "\2195";
+  margin-left: 4px;
+  font-size: 11px;
+  line-height: 1;
+  color: #999;
+}
+
+.raid-ss-sort-asc .raid-ss-th-label::after {
+  content: "\25B2";
+  color: #0b0c0c;
+}
+
+.raid-ss-sort-desc .raid-ss-th-label::after {
+  content: "\25BC";
+  color: #0b0c0c;
+}
+
+
+.raid-ss-filter-cell {
+  font-size: 12px !important;
+  padding: 4px 6px !important;
+}
+
+.raid-ss-title-filter {
+  width: 100%;
+  box-sizing: border-box;
+  font-size: 12px;
+  line-height: 1.25;
+  padding: 2px 6px;
+  height: 26px;
+  min-height: 26px;
+  margin-bottom: 0 !important;
+  border: 1px solid #b1b4b6;
+  border-radius: 0;
+  background: #fff;
+  box-shadow: none;
+}
+
+.raid-ss-title-filter:focus {
+  outline: 3px solid #fd0;
+  outline-offset: 0;
+  box-shadow: inset 0 0 0 2px #0b0c0c;
+}
+
+/* ── User lookup ── */
+.raid-ss-user-lookup-wrap {
+  position: relative;
+}
+
+.raid-ss-user-input {
+  width: 100%;
+  min-width: 140px;
+  font-size: 14px;
+  padding: 4px 6px;
+  border: 2px solid #0b0c0c;
+  border-radius: 0;
+  background: #fff;
+}
+
+.raid-ss-user-input:focus {
+  outline: 3px solid #fd0;
+  outline-offset: 0;
+}
+
+.raid-ss-user-results {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  z-index: 20;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  background: #fff;
+  border: 2px solid #0b0c0c;
+  box-shadow: 0 4px 8px rgba(0,0,0,.12);
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.raid-ss-user-result-item {
+  padding: 6px 8px;
+  cursor: pointer;
+  font-size: 14px;
+  border-bottom: 1px solid #d4d4d4;
+}
+
+.raid-ss-user-result-item:last-child {
+  border-bottom: none;
+}
+
+.raid-ss-user-result-item:hover {
+  background: #f0f4f5;
+}
+
+.raid-ss-user-no-results {
+  padding: 6px 8px;
+  font-size: 13px;
+  color: #666;
+  font-style: italic;
+}
+
+/* ── Column resize handle ── */
+.raid-ss-resize-handle {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 22px;
+  cursor: col-resize;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  transition: background-color 0.15s;
+}
+
+.raid-ss-resize-handle .material-symbols-outlined {
+  font-size: 20px;
+  color: #999;
+  pointer-events: none;
+  transition: color 0.15s;
+}
+
+.raid-ss-resize-handle:hover,
+.raid-ss-resize-handle.raid-ss-resizing {
+  background: rgba(29, 112, 184, 0.12);
+}
+
+.raid-ss-resize-handle:hover .material-symbols-outlined,
+.raid-ss-resize-handle.raid-ss-resizing .material-symbols-outlined {
+  color: #1d70b8;
+}
+
+.raid-ss-toolbar-actions .material-symbols-outlined.raid-ss-icon-material {
+  font-size: 20px;
+  color: #505a5f;
+}
+
+.raid-ss-toolbar-actions .govuk-button.raid-ss-btn-active .material-symbols-outlined.raid-ss-icon-material {
+  color: #fff;
+}
+
+
+/* ── New row highlight animation ── */
+.raid-ss-row-highlight {
+  animation: raid-ss-highlight 3s ease-out;
+}
+
+.raid-ss-row-highlight > .govuk-table__cell {
+  animation: raid-ss-highlight 3s ease-out;
+}
+
+@keyframes raid-ss-highlight {
+  0% { background-color: #d4e9c8; }
+  70% { background-color: #d4e9c8; }
+  100% { background-color: transparent; }
+}
+
+/* ── Active filter indicator ── */
+.raid-ss-filter-toggle.raid-ss-filter-active {
+  background: #f0f4f5;
+  border-color: #1d70b8;
+  font-weight: 700;
+}
+
+/* ── Multi-select filter dropdown ── */
+.raid-ss-filter-dropdown {
+  position: relative;
+  display: inline-block;
+  width: 100%;
+}
+
+.raid-ss-filter-toggle {
+  width: 100%;
+  font-size: 12px;
+  padding: 2px 20px 2px 4px;
+  border: 1px solid #b1b4b6;
+  border-radius: 0;
+  background: #fff;
+  min-width: 80px;
+  cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  position: relative;
+  height: 26px;
+}
+
+.raid-ss-filter-toggle::after {
+  content: "\25BC";
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 8px;
+  color: #666;
+  pointer-events: none;
+}
+
+.raid-ss-filter-panel {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 50;
+  background: #fff;
+  border: 1px solid #b1b4b6;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.12);
+  min-width: 160px;
+  max-height: 250px;
+  overflow-y: auto;
+  display: none;
+}
+
+.raid-ss-filter-panel.raid-ss-filter-open {
+  display: block;
+}
+
+.raid-ss-filter-panel label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.raid-ss-filter-panel label:hover {
+  background: #f0f4f5;
+}
+
+.raid-ss-filter-panel input[type="checkbox"] {
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.raid-ss-filter-actions {
+  display: flex;
+  gap: 4px;
+  padding: 4px 8px;
+  border-top: 1px solid #b1b4b6;
+  background: #f8f8f8;
+}
+
+.raid-ss-filter-actions button {
+  font-size: 11px;
+  padding: 2px 8px;
+  border: 1px solid #b1b4b6;
+  background: #fff;
+  cursor: pointer;
+  border-radius: 0;
+}
+
+.raid-ss-filter-actions button:hover {
+  background: #f0f4f5;
+}
+
+/* ── Ref cell: link + comments toggle ── */
+.raid-ss-ref-cell {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.raid-ss-ref-cell .raid-ss-ref-link {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.raid-ss-comment-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  flex-shrink: 0;
+  min-width: 28px;
+  min-height: 28px;
+  padding: 2px 4px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+  color: #505a5f;
+}
+
+.raid-ss-comment-toggle:hover {
+  background: #f3f2f1;
+  border-color: #b1b4b6;
+  color: #0b0c0c;
+}
+
+.raid-ss-comment-toggle--open,
+.raid-ss-comment-toggle--has-comments {
+  color: #1d70b8;
+}
+
+.raid-ss-comment-toggle--open {
+  background: #e8f0f8;
+  border-color: #1d70b8;
+}
+
+.raid-ss-comment-toggle__icon {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.raid-ss-comment-count {
+  display: none;
+  min-width: 16px;
+  padding: 0 4px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+  border-radius: 8px;
+  background: #1d70b8;
+  color: #fff;
+}
+
+.raid-ss-comment-count--visible {
+  display: inline-block;
+}
+
+.raid-ss-comment-toggle--open .raid-ss-comment-count--visible {
+  background: #003078;
+}
+
+/* ── Comments modal (full-width scrollable timeline) ── */
+.raid-ss-comments-modal-panel {
+  width: min(960px, calc(100vw - 32px));
+  max-width: min(960px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  display: flex;
+  flex-direction: column;
+}
+
+.raid-ss-comments-modal-panel .raid-modal-body,
+.raid-ss-comments-modal-body {
+  overflow: hidden;
+  flex: 1 1 auto;
+  min-height: 0;
+  padding-left: 20px;
+  padding-right: 20px;
+}
+
+.raid-ss-comment-timeline {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  width: 100%;
+  max-height: min(65vh, 560px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 8px 4px 12px 28px;
+  margin: 0;
+  box-sizing: border-box;
+}
+
+/* Vertical timeline track */
+.raid-ss-comment-timeline::before {
+  content: "";
+  position: absolute;
+  left: 11px;
+  top: 12px;
+  bottom: 12px;
+  width: 2px;
+  background: #b1b4b6;
+  pointer-events: none;
+}
+
+.raid-ss-comment-timeline .raid-ss-comment-empty,
+.raid-ss-comment-timeline .raid-ss-comment-loading {
+  width: 100%;
+  margin-left: -28px;
+  padding-left: 28px;
+  box-sizing: border-box;
+}
+
+.raid-ss-comment-item {
+  position: relative;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0 0 16px;
+  padding: 12px 16px;
+  background: #f3f2f1;
+  border: 1px solid #b1b4b6;
+  border-radius: 0;
+  box-shadow: none;
+  min-width: 0;
+}
+
+.raid-ss-comment-item:last-child {
+  margin-bottom: 0;
+}
+
+/* Timeline node */
+.raid-ss-comment-item::before {
+  content: "";
+  position: absolute;
+  left: -23px;
+  top: 18px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #1d70b8;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 2px #b1b4b6;
+  z-index: 1;
+}
+
+.raid-ss-comment-meta {
+  font-size: 13px;
+  font-weight: 700;
+  color: #505a5f;
+  margin-bottom: 6px;
+}
+
+.raid-ss-comment-text {
+  font-size: 16px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: #0b0c0c;
+}
+
+.raid-ss-comment-empty,
+.raid-ss-comment-loading {
+  font-size: 14px;
+  color: #505a5f;
+  font-style: italic;
+  padding: 12px 0;
+}
+
+/* ── Last edited cell ── */
+.raid-ss-last-edited {
+  font-size: 12px !important;
+  color: #505a5f;
+  white-space: nowrap;
+}
+
+/* ── Active toolbar button state ── */
+.raid-ss-toolbar-actions .govuk-button.raid-ss-btn-active,
+.raid-ss-toolbar-actions .govuk-button.raid-ss-btn-active:hover {
+  background: #1d70b8 !important;
+  color: #fff !important;
+  border-color: #1d70b8 !important;
+  box-shadow: inset 0 2px 0 #144e81;
+}
+
+.raid-ss-toolbar-actions .govuk-button.raid-ss-btn-active:focus {
+  border-color: #1d70b8 !important;
+  outline-color: #fd0;
+}
+
+.raid-ss-toolbar-actions .govuk-button.raid-ss-btn-active svg {
+  stroke: #fff;
+}
+
+
+/* ── Column drag-and-drop reorder ── */
+.raid-ss-draggable {
+  cursor: grab;
+}
+
+.raid-ss-dragging {
+  opacity: 0.4;
+}
+
+.raid-ss-drag-over {
+  outline: 2px dashed #1d70b8;
+  outline-offset: -2px;
+  background: #f0f4f5 !important;
+}
+
+/* ── Inline add row ── */
+.raid-ss-add-btn {
+  background: none;
+  border: none;
+  padding: 4px 0;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  color: #1d70b8;
+  text-decoration: underline;
+}
+
+.raid-ss-add-btn:hover {
+  color: #003078;
+}
+
+.raid-ss-new-row {
+  background-color: #f0f4f5;
+}
+
+.raid-ss-new-row > .govuk-table__cell {
+  background-color: #f0f4f5;
+}
+
+.raid-ss-add-row > .govuk-table__cell {
+  background-color: #fafafa;
+}
