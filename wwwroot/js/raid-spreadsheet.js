@@ -1090,14 +1090,6 @@
     return '—';
   }
 
-  function relationKindLabel(rel) {
-    if (!rel || rel.relationKind === 'Unknown') return null;
-    if (rel.relationKind === 'Organisation') return 'Organisation';
-    if (rel.relationKind === 'Work') return 'Work item';
-    if (rel.relationKind === 'FIPS') return 'Service';
-    return null;
-  }
-
   function relationTargetName(rel) {
     if (!rel || rel.relationKind === 'Organisation' || rel.relationKind === 'Unknown') return null;
     return (rel.relationRelatedTitle || rel.relationTarget || '').trim() || null;
@@ -1139,36 +1131,30 @@
     var wrap = document.createElement('div');
     wrap.className = 'raid-ss-relation-cell__content';
 
-    var kind = relationKindLabel(data);
     var target = relationTargetName(data);
     var href = (data.relationLinkHref || '').trim();
     var canView = href && data.relationKind !== 'Organisation' && data.relationKind !== 'Unknown';
 
-    if (kind) {
-      var kindEl = document.createElement('span');
-      kindEl.className = 'raid-ss-relation-kind';
-      kindEl.textContent = kind;
-      wrap.appendChild(kindEl);
-    }
-
     if (canView && target) {
-      var link = document.createElement('a');
-      link.className = 'govuk-link govuk-link--no-visited-state raid-ss-relation-item-link';
-      link.href = href;
-      link.target = '_blank';
-      link.rel = 'noopener noreferrer';
+      var link = document.createElement('button');
+      link.type = 'button';
+      link.className = 'govuk-link govuk-link--no-visited-state raid-ss-relation-item-link raid-ss-relation-view-btn';
       link.textContent = target;
-      link.setAttribute('aria-label', 'View ' + target + ' (opens in new tab)');
+      link.setAttribute('aria-label', 'View details for ' + target);
       wrap.appendChild(link);
     } else if (data.relationKind === 'Organisation') {
-      var orgEl = document.createElement('span');
-      orgEl.className = 'raid-ss-relation-org-label';
+      var orgEl = document.createElement('button');
+      orgEl.type = 'button';
+      orgEl.className = 'govuk-link govuk-link--no-visited-state raid-ss-relation-org-label raid-ss-relation-view-btn';
       orgEl.textContent = 'Not linked to a work item or service';
+      orgEl.setAttribute('aria-label', 'View organisational relation details');
       wrap.appendChild(orgEl);
     } else if (target) {
-      var nameEl = document.createElement('span');
-      nameEl.className = 'raid-ss-relation-name';
+      var nameEl = document.createElement('button');
+      nameEl.type = 'button';
+      nameEl.className = 'govuk-link govuk-link--no-visited-state raid-ss-relation-name raid-ss-relation-view-btn';
       nameEl.textContent = target;
+      nameEl.setAttribute('aria-label', 'View relation details for ' + target);
       wrap.appendChild(nameEl);
     } else {
       var emptyEl = document.createElement('span');
@@ -1572,18 +1558,39 @@
     });
   }
 
+  function relationInfoFromCell(cell) {
+    return {
+      kind: cell.getAttribute('data-relation-kind') || '',
+      source: cell.getAttribute('data-relation-source') || '',
+      title: cell.getAttribute('data-relation-title') || '',
+      description: cell.getAttribute('data-relation-description') || '',
+      href: cell.getAttribute('data-relation-href') || ''
+    };
+  }
+
   function bindRelationLinks() {
     document.addEventListener('click', function (e) {
       var changeBtn = e.target.closest('.raid-ss-relation-change-btn');
-      if (!changeBtn) return;
-      e.preventDefault();
-      e.stopPropagation();
+      if (changeBtn) {
+        e.preventDefault();
+        e.stopPropagation();
 
-      var cell = changeBtn.closest('.raid-ss-relation-cell');
+        var editCell = changeBtn.closest('.raid-ss-relation-cell');
+        if (!editCell) return;
+
+        closeAllEditors();
+        openRelationEditor(editCell);
+        return;
+      }
+
+      var viewBtn = e.target.closest('.raid-ss-relation-view-btn');
+      if (!viewBtn) return;
+
+      var cell = viewBtn.closest('.raid-ss-relation-cell');
       if (!cell) return;
 
-      closeAllEditors();
-      openRelationEditor(cell);
+      e.preventDefault();
+      openRelationModal(relationInfoFromCell(cell));
     });
   }
 
