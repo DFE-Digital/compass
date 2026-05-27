@@ -11,9 +11,34 @@
   var STORAGE_PREFIX = 'raid-ss-';
   var a11yReorderTable = null;
 
+  function readCsrfToken() {
+    var tokenEl = document.querySelector('input[name="__RequestVerificationToken"]');
+    return tokenEl ? tokenEl.value : '';
+  }
+
+  function parseJsonResponse(res) {
+    return res.text().then(function (text) {
+      var trimmed = (text || '').trim();
+      if (!trimmed) {
+        if (!res.ok) {
+          throw new Error('Request failed (' + res.status + ')');
+        }
+        return {};
+      }
+      try {
+        return JSON.parse(trimmed);
+      } catch (e) {
+        if (!res.ok) {
+          throw new Error('Request failed (' + res.status + ')');
+        }
+        throw e;
+      }
+    });
+  }
+
   function init(config) {
     lookups = config.lookups || {};
-    csrfToken = config.csrfToken || '';
+    csrfToken = config.csrfToken || readCsrfToken();
     baseUrl = config.baseUrl || '/modern/raid';
     registerId = config.registerId || 0;
 
@@ -904,15 +929,18 @@
 
         fetch(url, {
           method: 'POST',
+          credentials: 'same-origin',
           headers: {
             'Content-Type': 'application/json',
-            'RequestVerificationToken': csrfToken
+            'RequestVerificationToken': csrfToken || readCsrfToken()
           },
           body: JSON.stringify(entityType === 'assumption' ? { description: title } : { title: title })
         })
         .then(function (r) {
-          if (!r.ok) return r.json().then(function (d) { throw new Error(d.error || 'Create failed'); });
-          return r.json();
+          return parseJsonResponse(r).then(function (d) {
+            if (!r.ok) throw new Error(d.error || 'Create failed (' + r.status + ')');
+            return d;
+          });
         })
         .then(function (data) {
           newRow.remove();
