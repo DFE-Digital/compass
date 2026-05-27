@@ -172,6 +172,9 @@ public sealed class RaidRiskEditorFormService(CompassDbContext db) : IRaidRiskEd
             Description = form.Description,
             Cause = string.IsNullOrWhiteSpace(form.Cause) ? null : form.Cause.Trim(),
             ImpactIfRealised = string.IsNullOrWhiteSpace(form.ImpactIfRealised) ? null : form.ImpactIfRealised.Trim(),
+            Contingency = string.IsNullOrWhiteSpace(form.Contingency) ? null : form.Contingency.Trim(),
+            Assurance = string.IsNullOrWhiteSpace(form.Assurance) ? null : form.Assurance.Trim(),
+            FinancialImpact = string.IsNullOrWhiteSpace(form.FinancialImpact) ? null : form.FinancialImpact.Trim(),
             RiskTierId = form.RiskTierId,
             RiskStatusId = riskStatusId,
             RiskPriorityId = form.RiskPriorityId,
@@ -210,8 +213,42 @@ public sealed class RaidRiskEditorFormService(CompassDbContext db) : IRaidRiskEd
         await PersistRiskCategoryLinksAsync(risk, riskCategoryIdList, cancellationToken);
         await PersistRiskDivisionLinksAsync(risk, form.DivisionIds, cancellationToken);
         await PersistRiskBusinessAreaLinksAsync(risk, form.BusinessAreaLookupIds, cancellationToken);
+        await PersistRiskKeyRiskIndicatorsAsync(risk.Id, form.KriItems, cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
         return risk;
+    }
+
+    public async Task PersistRiskKeyRiskIndicatorsAsync(
+        int riskId,
+        List<RiskKriItemForm>? items,
+        CancellationToken cancellationToken)
+    {
+        items ??= new List<RiskKriItemForm>();
+        var existing = await db.RiskKeyRiskIndicators.Where(x => x.RiskId == riskId).ToListAsync(cancellationToken);
+        db.RiskKeyRiskIndicators.RemoveRange(existing);
+
+        var now = DateTime.UtcNow;
+        var sortOrder = 0;
+        foreach (var item in items)
+        {
+            var metric = string.IsNullOrWhiteSpace(item.Metric) ? null : item.Metric.Trim();
+            var threshold = string.IsNullOrWhiteSpace(item.Threshold) ? null : item.Threshold.Trim();
+            if (metric == null && threshold == null)
+                continue;
+
+            sortOrder++;
+            var titleSource = metric ?? threshold ?? "KRI";
+            db.RiskKeyRiskIndicators.Add(new RiskKeyRiskIndicator
+            {
+                RiskId = riskId,
+                Title = TruncateRaid(titleSource, 300),
+                Metric = metric != null ? TruncateRaid(metric, 2000) : null,
+                Threshold = threshold != null ? TruncateRaid(threshold, 2000) : null,
+                SortOrder = sortOrder,
+                CreatedAt = now,
+                UpdatedAt = now
+            });
+        }
     }
 
     private async Task<List<RiskIssueNamedIntOption>> RaidEditorProjectOptionsFullAsync(CancellationToken cancellationToken) =>

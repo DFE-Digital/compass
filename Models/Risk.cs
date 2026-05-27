@@ -216,6 +216,15 @@ public class Risk
     /// <summary>Consequence narrative if the risk materialises.</summary>
     public string? ImpactIfRealised { get; set; }
 
+    /// <summary>Contingency arrangements if the risk materialises.</summary>
+    public string? Contingency { get; set; }
+
+    /// <summary>Assurance arrangements for this risk.</summary>
+    public string? Assurance { get; set; }
+
+    /// <summary>Financial impact narrative.</summary>
+    public string? FinancialImpact { get; set; }
+
     public int? CreatedByUserId { get; set; }
 
     [ForeignKey(nameof(CreatedByUserId))]

@@ -395,6 +395,9 @@ public static class RiskAuditTimelineBuilder
             "Notes" or "HowIdentified" => new ChangeLine($"{Friendly(key)} updated", false),
             "Cause" => new ChangeLine("Cause updated", false),
             "ImpactIfRealised" => new ChangeLine("Impact if realised updated", false),
+            "Contingency" => new ChangeLine("Contingency updated", false),
+            "Assurance" => new ChangeLine("Assurance updated", false),
+            "FinancialImpact" => new ChangeLine("Financial impact updated", false),
             _ => new ChangeLine($"{Friendly(key)} updated", false)
         };
     }

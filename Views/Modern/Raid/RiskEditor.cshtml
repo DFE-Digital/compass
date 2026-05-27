@@ -249,6 +249,24 @@
           <textarea class="govuk-textarea" id="ImpactIfRealised" name="ImpactIfRealised" rows="4">@Model.ImpactIfRealised</textarea>
         </div>
 
+        <div class="govuk-form-group" id="raid-risk-edit-contingency" data-raid-field="contingency">
+          <label class="govuk-label" for="Contingency">Contingency</label>
+          <div class="govuk-hint">Contingency arrangements if the risk materialises.</div>
+          <textarea class="govuk-textarea" id="Contingency" name="Contingency" rows="4">@Model.Contingency</textarea>
+        </div>
+
+        <div class="govuk-form-group" id="raid-risk-edit-assurance" data-raid-field="assurance">
+          <label class="govuk-label" for="Assurance">Assurance</label>
+          <div class="govuk-hint">Assurance arrangements for this risk (boards, reviews, checkpoints).</div>
+          <textarea class="govuk-textarea" id="Assurance" name="Assurance" rows="4">@Model.Assurance</textarea>
+        </div>
+
+        <div class="govuk-form-group" id="raid-risk-edit-financial-impact" data-raid-field="financialImpact">
+          <label class="govuk-label" for="FinancialImpact">Financial impact</label>
+          <div class="govuk-hint">Estimated or known financial impact if the risk materialises.</div>
+          <textarea class="govuk-textarea" id="FinancialImpact" name="FinancialImpact" rows="3">@Model.FinancialImpact</textarea>
+        </div>
+
         <fieldset class="govuk-fieldset govuk-!-margin-bottom-4" data-raid-field="tier">
           <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Tier</legend>
           <div class="govuk-radios govuk-radios--small">
@@ -346,6 +364,61 @@
           <label class="govuk-label" for="ResponseStrategy">How do you intend to mitigate this risk?</label>
           <textarea class="govuk-textarea" id="ResponseStrategy" name="ResponseStrategy" rows="4">@Model.ResponseStrategy</textarea>
         </div>
+
+        <h2 class="govuk-heading-m govuk-!-margin-bottom-3" id="raid-risk-edit-kris">Key risk indicators</h2>
+        <p class="govuk-body govuk-hint govuk-!-margin-bottom-3">What you measure and the threshold at which the risk escalates or is reviewed.</p>
+        @{
+          var kriRows = Model.KriItems ?? new List<RiskKriItemForm>();
+          if (kriRows.Count == 0) { kriRows.Add(new RiskKriItemForm()); }
+        }
+        <div id="risk-kri-rows" data-next-index="@kriRows.Count" data-raid-field="kris">
+          @for (var ki = 0; ki < kriRows.Count; ki++)
+          {
+            var kri = kriRows[ki];
+            <div class="risk-kri-row govuk-!-margin-bottom-4 govuk-!-padding-left-4" data-risk-kri-row style="border-left:4px solid #b1b4b6;">
+              <fieldset class="govuk-fieldset">
+                <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">KRI @(ki + 1)</legend>
+                <div class="govuk-grid-row">
+                  <div class="govuk-grid-column-one-half">
+                    <div class="govuk-form-group govuk-!-margin-bottom-3">
+                      <label class="govuk-label" for="risk-kri-metric-@ki">Metric</label>
+                      <input class="govuk-input" id="risk-kri-metric-@ki" name="KriItems[@ki].Metric" type="text" maxlength="2000" value="@kri.Metric" />
+                    </div>
+                  </div>
+                  <div class="govuk-grid-column-one-half">
+                    <div class="govuk-form-group govuk-!-margin-bottom-0">
+                      <label class="govuk-label" for="risk-kri-threshold-@ki">Threshold</label>
+                      <input class="govuk-input" id="risk-kri-threshold-@ki" name="KriItems[@ki].Threshold" type="text" maxlength="2000" value="@kri.Threshold" />
+                    </div>
+                  </div>
+                </div>
+              </fieldset>
+            </div>
+          }
+        </div>
+        <button type="button" class="govuk-button govuk-button--secondary govuk-!-margin-bottom-6" id="risk-kri-add">Add another KRI</button>
+
+        <template id="risk-kri-row-template">
+          <div class="risk-kri-row govuk-!-margin-bottom-4 govuk-!-padding-left-4" data-risk-kri-row style="border-left:4px solid #b1b4b6;">
+            <fieldset class="govuk-fieldset">
+              <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">KRI</legend>
+              <div class="govuk-grid-row">
+                <div class="govuk-grid-column-one-half">
+                  <div class="govuk-form-group govuk-!-margin-bottom-3">
+                    <label class="govuk-label" for="risk-kri-metric-__IX__">Metric</label>
+                    <input class="govuk-input" id="risk-kri-metric-__IX__" name="KriItems[__IX__].Metric" type="text" maxlength="2000" value="" />
+                  </div>
+                </div>
+                <div class="govuk-grid-column-one-half">
+                  <div class="govuk-form-group govuk-!-margin-bottom-0">
+                    <label class="govuk-label" for="risk-kri-threshold-__IX__">Threshold</label>
+                    <input class="govuk-input" id="risk-kri-threshold-__IX__" name="KriItems[__IX__].Threshold" type="text" maxlength="2000" value="" />
+                  </div>
+                </div>
+              </div>
+            </fieldset>
+          </div>
+        </template>
 
         <fieldset class="govuk-fieldset govuk-!-margin-bottom-6" data-raid-field="residual-rating">
           <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Residual risk rating</legend>
@@ -592,4 +665,35 @@
     })
   </div>
 </div>
+
+@section Scripts {
+@{
+  var cspNonce = Context.Items["Nonce"]?.ToString() ?? "";
+}
+<script nonce="@cspNonce">
+(function () {
+  var wrap = document.getElementById('risk-kri-rows');
+  var addBtn = document.getElementById('risk-kri-add');
+  var tpl = document.getElementById('risk-kri-row-template');
+  if (addBtn && wrap && tpl) {
+    addBtn.addEventListener('click', function () {
+      var next = parseInt(wrap.getAttribute('data-next-index') || '0', 10);
+      var html = tpl.innerHTML.replace(/__IX__/g, String(next));
+      var d = document.createElement('div');
+      d.innerHTML = html.trim();
+      var node = d.firstElementChild;
+      if (node) {
+        wrap.appendChild(node);
+        wrap.setAttribute('data-next-index', String(next + 1));
+        var rows = wrap.querySelectorAll('[data-risk-kri-row]');
+        rows.forEach(function (row, idx) {
+          var legend = row.querySelector('.govuk-fieldset__legend');
+          if (legend) legend.textContent = 'KRI ' + (idx + 1);
+        });
+      }
+    });
+  }
+})();
+</script>
+}
 </div>

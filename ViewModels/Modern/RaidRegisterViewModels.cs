@@ -75,6 +75,9 @@ public class RaidRegisterCardViewModel
 
     public List<string> WorkItemNames { get; set; } = new();
     public List<string> ServiceNames { get; set; } = new();
+
+    /// <summary>User can edit this register (owner or manager). Otherwise read-only.</summary>
+    public bool CanManage { get; set; }
 }
 
 /// <summary>Top-level RAID registers dashboard.</summary>
@@ -136,10 +139,15 @@ public class RaidRegisterDetailViewModel
 
     /// <summary>Service register products for inline relation editing.</summary>
     public List<SelectOption> ServiceOptions { get; set; } = new();
+
+    /// <summary>Admin-configured default column order per spreadsheet entity type (risk, issue, …).</summary>
+    public Dictionary<string, List<string>> SpreadsheetColumnOrders { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 }
 
 public class RaidRegisterRiskRow
 {
+    public int MitigationCount { get; set; }
+    public int KriCount { get; set; }
     public int Id { get; set; }
     public string Reference { get; set; } = string.Empty;
     public string Title { get; set; } = string.Empty;
@@ -159,6 +167,11 @@ public class RaidRegisterRiskRow
     public string? ResponseStrategy { get; set; }
     public string? Cause { get; set; }
     public string? ImpactIfRealised { get; set; }
+    public string? Contingency { get; set; }
+    public string? Assurance { get; set; }
+    public string? FinancialImpact { get; set; }
+    /// <summary>Formatted KRI summary for spreadsheet display.</summary>
+    public string? KrisSummary { get; set; }
     public string? Response { get; set; }
 
     // Original rating

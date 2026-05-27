@@ -676,7 +676,8 @@ public partial class ModernRaidController
             AssociationKind = "organisation",
             IdentifiedDay = idd,
             IdentifiedMonth = idm,
-            IdentifiedYear = idy
+            IdentifiedYear = idy,
+            KriItems = new List<RiskKriItemForm> { new() }
         };
         var ak = (associationKind ?? "").Trim().ToLowerInvariant();
         if (ak == "product" && primaryProductId is > 0)
@@ -1051,6 +1052,10 @@ public partial class ModernRaidController
             Description = risk.Description,
             Cause = risk.Cause,
             ImpactIfRealised = risk.ImpactIfRealised,
+            Contingency = risk.Contingency,
+            Assurance = risk.Assurance,
+            FinancialImpact = risk.FinancialImpact,
+            KriItems = await LoadRiskKriItemFormsAsync(risk.Id, cancellationToken),
             RiskTierId = risk.RiskTierId,
             RiskStatusId = risk.RiskStatusId,
             RiskPriorityId = risk.RiskPriorityId,
@@ -1162,6 +1167,9 @@ public partial class ModernRaidController
         risk.Description = form.Description;
         risk.Cause = string.IsNullOrWhiteSpace(form.Cause) ? null : form.Cause.Trim();
         risk.ImpactIfRealised = string.IsNullOrWhiteSpace(form.ImpactIfRealised) ? null : form.ImpactIfRealised.Trim();
+        risk.Contingency = string.IsNullOrWhiteSpace(form.Contingency) ? null : form.Contingency.Trim();
+        risk.Assurance = string.IsNullOrWhiteSpace(form.Assurance) ? null : form.Assurance.Trim();
+        risk.FinancialImpact = string.IsNullOrWhiteSpace(form.FinancialImpact) ? null : form.FinancialImpact.Trim();
         risk.RiskTierId = form.RiskTierId;
         risk.RiskStatusId = riskStatusId;
         risk.RiskPriorityId = form.RiskPriorityId;
@@ -1190,9 +1198,23 @@ public partial class ModernRaidController
         await PersistRiskCategoryLinksAsync(risk, riskEditCategoryIdList, cancellationToken);
         await PersistRiskDivisionLinksAsync(risk, form.DivisionIds, cancellationToken);
         await PersistRiskBusinessAreaLinksAsync(risk, form.BusinessAreaLookupIds, cancellationToken);
+        await _raidRiskEditorForm.PersistRiskKeyRiskIndicatorsAsync(risk.Id, form.KriItems, cancellationToken);
         await _db.SaveChangesAsync(cancellationToken);
         TempData["Message"] = "Risk updated.";
         return RedirectToAction(nameof(RiskDetail), new { id });
+    }
+
+    private async Task<List<RiskKriItemForm>> LoadRiskKriItemFormsAsync(int riskId, CancellationToken cancellationToken)
+    {
+        var rows = await _db.RiskKeyRiskIndicators.AsNoTracking()
+            .Where(x => x.RiskId == riskId)
+            .OrderBy(x => x.SortOrder)
+            .ThenBy(x => x.Id)
+            .Select(x => new RiskKriItemForm { Metric = x.Metric, Threshold = x.Threshold })
+            .ToListAsync(cancellationToken);
+        if (rows.Count == 0)
+            rows.Add(new RiskKriItemForm());
+        return rows;
     }
 
     [HttpPost("risks/{riskId:int}/key-risk-indicators/add")]
@@ -1202,12 +1224,13 @@ public partial class ModernRaidController
         [FromForm] string? title,
         [FromForm] string? description,
         [FromForm] string? metric,
+        [FromForm] string? threshold,
         CancellationToken cancellationToken = default)
     {
         SetRaidChrome("raid-risks");
-        if (string.IsNullOrWhiteSpace(title))
+        if (string.IsNullOrWhiteSpace(title) && string.IsNullOrWhiteSpace(metric) && string.IsNullOrWhiteSpace(threshold))
         {
-            TempData["ErrorMessage"] = "Enter a title for the key risk indicator.";
+            TempData["ErrorMessage"] = "Enter a title or metric for the key risk indicator.";
             return RedirectToAction(nameof(RiskDetail), new { id = riskId, tab = "kris" });
         }
 
@@ -1216,14 +1239,18 @@ public partial class ModernRaidController
         if (!riskExists)
             return NotFound();
 
-        var t = TruncateRaid(title.Trim(), 300);
+        var metricNorm = string.IsNullOrWhiteSpace(metric) ? null : TruncateRaid(metric.Trim(), 2000);
+        var thresholdNorm = string.IsNullOrWhiteSpace(threshold) ? null : TruncateRaid(threshold.Trim(), 2000);
+        var titleSource = !string.IsNullOrWhiteSpace(title)
+            ? title.Trim()
+            : metricNorm ?? thresholdNorm ?? "KRI";
+        var t = TruncateRaid(titleSource, 300);
         var maxOrder = await _db.RiskKeyRiskIndicators
             .Where(x => x.RiskId == riskId)
             .Select(x => (int?)x.SortOrder)
             .MaxAsync(cancellationToken) ?? 0;
         var now = DateTime.UtcNow;
         var descNorm = string.IsNullOrWhiteSpace(description) ? null : description.Trim();
-        var metricNorm = string.IsNullOrWhiteSpace(metric) ? null : TruncateRaid(metric.Trim(), 2000);
 
         _db.RiskKeyRiskIndicators.Add(new RiskKeyRiskIndicator
         {
@@ -1231,6 +1258,7 @@ public partial class ModernRaidController
             Title = t,
             Description = descNorm,
             Metric = metricNorm,
+            Threshold = thresholdNorm,
             SortOrder = maxOrder + 1,
             CreatedAt = now,
             UpdatedAt = now

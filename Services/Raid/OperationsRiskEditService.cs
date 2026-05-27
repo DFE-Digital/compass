@@ -10,7 +10,9 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 
 namespace Compass.Services.Raid;
 
-public sealed class OperationsRiskEditService(CompassDbContext db) : IOperationsRiskEditService
+public sealed class OperationsRiskEditService(
+    CompassDbContext db,
+    IRaidRiskEditorFormService raidRiskEditorForm) : IOperationsRiskEditService
 {
     private readonly record struct AssociationBind(string StoredKind, int? ProjectId, int? PrimaryProductId);
 
@@ -140,6 +142,9 @@ public sealed class OperationsRiskEditService(CompassDbContext db) : IOperations
             Description = risk.Description,
             Cause = risk.Cause,
             ImpactIfRealised = risk.ImpactIfRealised,
+            Contingency = risk.Contingency,
+            Assurance = risk.Assurance,
+            FinancialImpact = risk.FinancialImpact,
             RiskTierId = risk.RiskTierId,
             RiskStatusId = risk.RiskStatusId,
             RiskPriorityId = risk.RiskPriorityId,
@@ -160,7 +165,8 @@ public sealed class OperationsRiskEditService(CompassDbContext db) : IOperations
             NextReviewDay = nrd,
             NextReviewMonth = nrm,
             NextReviewYear = nry,
-            ResponseStrategy = risk.ResponseStrategy ?? risk.Notes
+            ResponseStrategy = risk.ResponseStrategy ?? risk.Notes,
+            KriItems = await LoadRiskKriItemFormsAsync(risk.Id, cancellationToken)
         };
         if (!string.IsNullOrWhiteSpace(risk.Response))
         {
@@ -277,6 +283,9 @@ public sealed class OperationsRiskEditService(CompassDbContext db) : IOperations
         risk.Description = form.Description;
         risk.Cause = string.IsNullOrWhiteSpace(form.Cause) ? null : form.Cause.Trim();
         risk.ImpactIfRealised = string.IsNullOrWhiteSpace(form.ImpactIfRealised) ? null : form.ImpactIfRealised.Trim();
+        risk.Contingency = string.IsNullOrWhiteSpace(form.Contingency) ? null : form.Contingency.Trim();
+        risk.Assurance = string.IsNullOrWhiteSpace(form.Assurance) ? null : form.Assurance.Trim();
+        risk.FinancialImpact = string.IsNullOrWhiteSpace(form.FinancialImpact) ? null : form.FinancialImpact.Trim();
         risk.RiskTierId = form.RiskTierId;
         risk.RiskStatusId = riskStatusId;
         risk.RiskPriorityId = form.RiskPriorityId;
@@ -301,8 +310,22 @@ public sealed class OperationsRiskEditService(CompassDbContext db) : IOperations
         await PersistRiskCategoryLinksAsync(risk, opCategoryIdList, cancellationToken);
         await PersistRiskDivisionLinksAsync(risk, form.DivisionIds, cancellationToken);
         await PersistRiskBusinessAreaLinksAsync(risk, form.BusinessAreaLookupIds, cancellationToken);
+        await raidRiskEditorForm.PersistRiskKeyRiskIndicatorsAsync(risk.Id, form.KriItems, cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
         return true;
+    }
+
+    private async Task<List<RiskKriItemForm>> LoadRiskKriItemFormsAsync(int riskId, CancellationToken cancellationToken)
+    {
+        var rows = await db.RiskKeyRiskIndicators.AsNoTracking()
+            .Where(x => x.RiskId == riskId)
+            .OrderBy(x => x.SortOrder)
+            .ThenBy(x => x.Id)
+            .Select(x => new RiskKriItemForm { Metric = x.Metric, Threshold = x.Threshold })
+            .ToListAsync(cancellationToken);
+        if (rows.Count == 0)
+            rows.Add(new RiskKriItemForm());
+        return rows;
     }
 
     private static string ToUiAssociationKind(string? storedKind, int? projectId, int? primaryProductId)

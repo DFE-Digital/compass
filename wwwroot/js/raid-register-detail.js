@@ -29,7 +29,9 @@
       lookups: config.lookups || {},
       csrfToken: csrfToken,
       baseUrl: config.baseUrl || '/modern/raid',
-      registerId: config.registerId
+      registerId: config.registerId,
+      tableLayouts: config.tableLayouts || {},
+      readOnly: !!config.readOnly
     });
 
     function switchView(viewName) {

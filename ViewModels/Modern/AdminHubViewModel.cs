@@ -36,6 +36,9 @@ public class AdminHubViewModel
     public List<AdminLookupRow> RiskOrigins { get; set; } = new();
     public List<AdminLookupRow> IssueCategories { get; set; } = new();
 
+    /// <summary>RAID register spreadsheet default column order (<c>raid-register-table-view</c> panel).</summary>
+    public AdminRaidRegisterTableViewPanel? RaidRegisterTableView { get; set; }
+
     // ── Generic RAID lookup rows (for any active RAID panel) ──
     public List<AdminLookupRow> RaidLookupRows { get; set; } = new();
     public string? RaidPanelKey { get; set; }

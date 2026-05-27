@@ -5,12 +5,14 @@
   ViewData["Title"] = Model.Name;
   var cspNonce = Context.Items["Nonce"]?.ToString() ?? "";
   var canManage = Model.CurrentUserRole == RaidRegisterRole.Owner || Model.CurrentUserRole == RaidRegisterRole.Manager;
+  var readOnly = !canManage;
   var settingsUrl = Url.Action("RegisterSettings", "ModernRaid", new { id = Model.Id });
   var totalOpen = Model.OpenRiskCount + Model.OpenIssueCount + Model.OpenAssumptionCount + Model.OpenDependencyCount + Model.OpenNearMissCount;
   var raidRegisterBootJson = JsonSerializer.Serialize(new
   {
     registerId = Model.Id,
     baseUrl = "/modern/raid",
+    readOnly = readOnly,
     lookups = new
     {
       riskStatuses = Model.RiskStatuses.Select(x => new { id = x.Id, name = x.Name }),
@@ -31,7 +33,10 @@
       assumptionCriticalities = Model.AssumptionCriticalities.Select(x => new { id = x.Id, name = x.Name }),
       workItems = Model.WorkItemOptions.Select(x => new { id = x.Id, name = x.Name }),
       fipsProducts = Model.ServiceOptions.Select(x => new { id = x.Id, name = x.Name })
-    }
+    },
+    tableLayouts = Model.SpreadsheetColumnOrders.ToDictionary(
+      kv => kv.Key,
+      kv => new { columnOrder = kv.Value })
   });
 }
 
@@ -56,6 +61,18 @@
     Actions = actions,
     BottomMarginClass = "govuk-!-margin-bottom-0"
   })
+
+  @if (readOnly)
+  {
+    <div class="govuk-notification-banner govuk-!-margin-top-4" role="region" aria-labelledby="raid-register-readonly-title">
+      <div class="govuk-notification-banner__header">
+        <h2 class="govuk-notification-banner__title" id="raid-register-readonly-title">Read-only access</h2>
+      </div>
+      <div class="govuk-notification-banner__content">
+        <p class="govuk-body govuk-!-margin-bottom-0">You can view this register but cannot change items. Only owners and managers can edit.</p>
+      </div>
+    </div>
+  }
 
   @if (TempData["SuccessMessage"] is string successMsg)
   {
@@ -258,7 +275,7 @@
                 <th scope="col" class="govuk-table__header">Status</th>
                 <th scope="col" class="govuk-table__header">Owner</th>
                 <th scope="col" class="govuk-table__header">Tier</th>
-                <th scope="col" class="govuk-table__header govuk-table__header--numeric">Orig. Score</th>
+                <th scope="col" class="govuk-table__header govuk-table__header--numeric">Inherent score</th>
                 <th scope="col" class="govuk-table__header govuk-table__header--numeric">Curr. Score</th>
               </tr>
             </thead>
@@ -419,7 +436,7 @@
   </div>
 
   <!-- ═══ MANAGE VIEW (Spreadsheet) ═══ -->
-  <div id="view-manage" class="raid-ss-tab-panel">
+  <div id="view-manage" class="raid-ss-tab-panel@(readOnly ? " raid-ss-read-only" : "")">
     <section id="raid-manage-section" class="govuk-!-margin-top-2">
       <nav class="dfe-f-sub-navigation govuk-!-margin-bottom-0" aria-label="Manage item type" id="manage-sub-tabs">
         <ul class="dfe-f-sub-navigation__list">
