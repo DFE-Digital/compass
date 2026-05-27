@@ -673,6 +673,9 @@ public sealed partial class EnvironmentSyncService
     target.HowIdentified = src.HowIdentified;
     target.Cause = src.Cause;
     target.ImpactIfRealised = src.ImpactIfRealised;
+    target.Contingency = src.Contingency;
+    target.Assurance = src.Assurance;
+    target.FinancialImpact = src.FinancialImpact;
     target.CreatedByUserId = RemapNullable(src.CreatedByUserId, userMap);
     target.UpdatedByUserId = RemapNullable(src.UpdatedByUserId, userMap);
     target.ClosedByUserId = RemapNullable(src.ClosedByUserId, userMap);

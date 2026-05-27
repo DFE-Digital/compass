@@ -2,6 +2,7 @@ using Compass.Models;
 using Compass.Services.Fips;
 using Compass.Services.Modern;
 using Compass.Services.Raid;
+using Microsoft.Extensions.DependencyInjection;
 using Compass.ViewModels.Modern;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -25,9 +26,10 @@ public partial class ModernRaidController
 
         var userId = await ResolveCurrentUserIdAsync(cancellationToken);
 
-        var registers = await GetAccessibleRegistersAsync(userId, cancellationToken);
+        var yourRegisterEntities = await GetYourRegistersAsync(userId, cancellationToken);
+        var allRegisterEntities = await GetAllRegistersAsync(cancellationToken);
 
-        var registerIds = registers.Select(r => r.Id).ToList();
+        var registerIds = allRegisterEntities.Select(r => r.Id).ToList();
 
         var riskCounts = await _db.RaidRegisterRisks
             .Where(rr => registerIds.Contains(rr.RaidRegisterId) && !rr.Risk.IsDeleted && rr.Risk.Status != "closed")
@@ -59,45 +61,27 @@ public partial class ModernRaidController
             .Select(g => new { g.Key, Count = g.Count() })
             .ToDictionaryAsync(x => x.Key, x => x.Count, cancellationToken);
 
-        var yourRegisters = new List<RaidRegisterCardViewModel>();
-        var allRegisters = new List<RaidRegisterCardViewModel>();
+        var yourRegisters = yourRegisterEntities
+            .Select(r => BuildRegisterCardViewModel(
+                r,
+                userId,
+                riskCounts,
+                issueCounts,
+                assumptionCounts,
+                dependencyCounts,
+                nearMissCounts))
+            .ToList();
 
-        foreach (var r in registers)
-        {
-            var card = new RaidRegisterCardViewModel
-            {
-                Id = r.Id,
-                Name = r.Name,
-                Description = r.Description,
-                DirectorateName = RaidRegisterScopeHelper.FormatDirectorateNames(r),
-                BusinessAreaName = RaidRegisterScopeHelper.FormatBusinessAreaNames(r),
-                OwnerName = ResolveRegisterOwnerName(r),
-                UpdatedAt = r.UpdatedAt,
-                OpenRiskCount = riskCounts.GetValueOrDefault(r.Id),
-                OpenIssueCount = issueCounts.GetValueOrDefault(r.Id),
-                OpenAssumptionCount = assumptionCounts.GetValueOrDefault(r.Id),
-                OpenDependencyCount = dependencyCounts.GetValueOrDefault(r.Id),
-                OpenNearMissCount = nearMissCounts.GetValueOrDefault(r.Id),
-                TotalItemCount = riskCounts.GetValueOrDefault(r.Id)
-                    + issueCounts.GetValueOrDefault(r.Id)
-                    + assumptionCounts.GetValueOrDefault(r.Id)
-                    + dependencyCounts.GetValueOrDefault(r.Id)
-                    + nearMissCounts.GetValueOrDefault(r.Id),
-                WorkItemNames = r.WorkItems
-                    .Select(w => w.Project?.Title ?? "Unknown")
-                    .OrderBy(n => n).ToList(),
-                ServiceNames = r.Services
-                    .Select(s => s.FipsService?.DisplayName ?? "Unknown")
-                    .OrderBy(n => n).ToList()
-            };
-
-            var isYours = userId.HasValue
-                && (r.CreatedByUserId == userId.Value || r.Users.Any(u => u.UserId == userId.Value));
-            if (isYours)
-                yourRegisters.Add(card);
-            else
-                allRegisters.Add(card);
-        }
+        var allRegisters = allRegisterEntities
+            .Select(r => BuildRegisterCardViewModel(
+                r,
+                userId,
+                riskCounts,
+                issueCounts,
+                assumptionCounts,
+                dependencyCounts,
+                nearMissCounts))
+            .ToList();
 
         var vm = new RaidRegisterDashboardViewModel
         {
@@ -116,7 +100,6 @@ public partial class ModernRaidController
         SetRaidChrome("raid-registers");
 
         var userId = await ResolveCurrentUserIdAsync(cancellationToken);
-        var email = (User.Identity?.Name ?? "").Trim().ToLower();
 
         var register = await _db.RaidRegisters
             .AsNoTracking()
@@ -132,159 +115,25 @@ public partial class ModernRaidController
 
         if (register == null) return NotFound();
 
-        if (!CanAccessRegister(register, userId, email))
+        if (!CanViewRegister(userId))
             return Forbid();
 
         await RaidRegisterScopedEntitySync.SyncAsync(_db, id, userId, cancellationToken);
 
-        var currentUserRole = register.Users
-            .Where(u => userId.HasValue && u.UserId == userId.Value)
-            .Select(u => (RaidRegisterRole?)u.Role)
-            .FirstOrDefault();
-        if (register.CreatedByUserId == userId)
-            currentUserRole = RaidRegisterRole.Owner;
+        var currentUserRole = ResolveUserRegisterRole(register, userId);
 
-        var risks = await _db.RaidRegisterRisks.AsNoTracking()
-            .Where(rr => rr.RaidRegisterId == id && !rr.Risk.IsDeleted)
-            .Select(rr => new RaidRegisterRiskRow
-            {
-                Id = rr.Risk.Id,
-                Reference = $"R-{rr.Risk.Id:D4}",
-                Title = rr.Risk.Title,
-                Description = rr.Risk.Description,
-                Status = rr.Risk.RiskStatus != null ? rr.Risk.RiskStatus.Label : rr.Risk.Status,
-                StatusId = rr.Risk.RiskStatusId,
-                Owner = rr.Risk.OwnerUser != null ? rr.Risk.OwnerUser.Name : rr.Risk.OwnerEmail,
-                OwnerUserId = rr.Risk.OwnerUserId,
-                Tier = rr.Risk.RiskTier != null ? rr.Risk.RiskTier.Name : null,
-                TierId = rr.Risk.RiskTierId,
-                Category = rr.Risk.RiskCategory != null ? rr.Risk.RiskCategory.Label : null,
-                CategoryId = rr.Risk.RiskCategoryId,
-                Priority = rr.Risk.RiskPriority != null ? rr.Risk.RiskPriority.Label : null,
-                PriorityId = rr.Risk.RiskPriorityId,
-                Proximity = rr.Risk.Proximity != null ? rr.Risk.Proximity.Label : null,
-                ProximityId = rr.Risk.RiskProximityId,
-                ResponseStrategy = rr.Risk.ResponseStrategy,
-                Cause = rr.Risk.Cause,
-                ImpactIfRealised = rr.Risk.ImpactIfRealised,
-                Response = rr.Risk.Response,
-
-                OriginalImpactId = rr.Risk.RiskImpactLevelId,
-                OriginalImpact = rr.Risk.ImpactLevel != null ? rr.Risk.ImpactLevel.Label : null,
-                OriginalLikelihoodId = rr.Risk.RiskLikelihoodId,
-                OriginalLikelihood = rr.Risk.Likelihood != null ? rr.Risk.Likelihood.Label : null,
-                InherentScore = rr.Risk.InherentScore,
-
-                CurrentImpactId = rr.Risk.CurrentImpactLevelId,
-                CurrentImpact = rr.Risk.CurrentImpactLevel != null ? rr.Risk.CurrentImpactLevel.Label : null,
-                CurrentLikelihoodId = rr.Risk.CurrentLikelihoodId,
-                CurrentLikelihood = rr.Risk.CurrentLikelihood != null ? rr.Risk.CurrentLikelihood.Label : null,
-                CurrentScore = rr.Risk.CurrentScore,
-
-                ResidualImpactId = rr.Risk.ResidualImpactLevelId,
-                ResidualImpact = rr.Risk.ResidualImpactLevel != null ? rr.Risk.ResidualImpactLevel.Label : null,
-                ResidualLikelihoodId = rr.Risk.ResidualLikelihoodId,
-                ResidualLikelihood = rr.Risk.ResidualLikelihoodLevel != null ? rr.Risk.ResidualLikelihoodLevel.Label : null,
-                ResidualScore = rr.Risk.ResidualScore,
-
-                ToleranceImpactId = rr.Risk.ToleranceImpactLevelId,
-                ToleranceImpact = rr.Risk.ToleranceImpactLevel != null ? rr.Risk.ToleranceImpactLevel.Label : null,
-                ToleranceLikelihoodId = rr.Risk.ToleranceLikelihoodId,
-                ToleranceLikelihood = rr.Risk.ToleranceLikelihood != null ? rr.Risk.ToleranceLikelihood.Label : null,
-                ToleranceScore = rr.Risk.ToleranceScore,
-
-                NextReviewDate = rr.Risk.NextReviewDate,
-                CreatedAt = rr.Risk.CreatedAt,
-                IdentifiedDate = rr.Risk.IdentifiedDate,
-                UpdatedAt = rr.Risk.UpdatedAt,
-                CommentCount = _db.Comments.Count(c => c.EntityType == "Risk" && c.EntityId == rr.Risk.Id && !c.IsDeleted)
-            }).ToListAsync(cancellationToken);
-
-        var issues = await _db.RaidRegisterIssues.AsNoTracking()
-            .Where(ri => ri.RaidRegisterId == id && !ri.Issue.IsDeleted)
-            .Select(ri => new RaidRegisterIssueRow
-            {
-                Id = ri.Issue.Id,
-                Reference = $"I-{ri.Issue.Id:D4}",
-                Title = ri.Issue.Title,
-                Description = ri.Issue.Description,
-                Status = ri.Issue.StatusLookup != null ? ri.Issue.StatusLookup.Label : ri.Issue.Status,
-                StatusId = ri.Issue.StatusId,
-                Severity = ri.Issue.SeverityLookup != null ? ri.Issue.SeverityLookup.Label : ri.Issue.Severity,
-                SeverityId = ri.Issue.SeverityId,
-                Priority = ri.Issue.PriorityLookup != null ? ri.Issue.PriorityLookup.Label : null,
-                PriorityId = ri.Issue.PriorityId,
-                Category = ri.Issue.CategoryLookup != null ? ri.Issue.CategoryLookup.Label : null,
-                CategoryId = ri.Issue.IssueCategoryId,
-                Owner = ri.Issue.OwnerUser != null ? ri.Issue.OwnerUser.Name : null,
-                OwnerUserId = ri.Issue.OwnerUserId,
-                IdentifiedDate = ri.Issue.DetectedDate,
-                TargetResolutionDate = ri.Issue.TargetResolutionDate,
-                UpdatedAt = ri.Issue.UpdatedAt,
-                CommentCount = _db.Comments.Count(c => c.EntityType == "Issue" && c.EntityId == ri.Issue.Id && !c.IsDeleted)
-            }).ToListAsync(cancellationToken);
-
-        var assumptions = await _db.RaidRegisterAssumptions.AsNoTracking()
-            .Where(ra => ra.RaidRegisterId == id && !ra.Assumption.IsDeleted)
-            .Select(ra => new RaidRegisterAssumptionRow
-            {
-                Id = ra.Assumption.Id,
-                Reference = $"A-{ra.Assumption.Id:D4}",
-                Description = ra.Assumption.Description,
-                Status = ra.Assumption.StatusLookup != null ? ra.Assumption.StatusLookup.Label : null,
-                StatusId = ra.Assumption.AssumptionStatusId,
-                Criticality = ra.Assumption.CriticalityLookup != null ? ra.Assumption.CriticalityLookup.Label : null,
-                CriticalityId = ra.Assumption.AssumptionCriticalityId,
-                Owner = ra.Assumption.OwnerUser != null ? ra.Assumption.OwnerUser.Name : null,
-                OwnerUserId = ra.Assumption.OwnerUserId,
-                ReviewDate = ra.Assumption.ReviewDate,
-                CreatedAt = ra.Assumption.CreatedAt,
-                UpdatedAt = ra.Assumption.UpdatedAt,
-                CommentCount = _db.Comments.Count(c => c.EntityType == "Assumption" && c.EntityId == ra.Assumption.Id && !c.IsDeleted)
-            }).ToListAsync(cancellationToken);
-
-        var dependencies = await _db.RaidRegisterDependencies.AsNoTracking()
-            .Where(rd => rd.RaidRegisterId == id)
-            .Select(rd => new RaidRegisterDependencyRow
-            {
-                Id = rd.Dependency.Id,
-                Description = rd.Dependency.Description,
-                LinkType = rd.Dependency.LinkTypeLookup != null ? rd.Dependency.LinkTypeLookup.Label : rd.Dependency.DependencyType,
-                Status = rd.Dependency.Status,
-                Owner = rd.Dependency.OwnerUser != null ? rd.Dependency.OwnerUser.Name : null
-            }).ToListAsync(cancellationToken);
-
-        var nearMisses = await _db.RaidRegisterNearMisses.AsNoTracking()
-            .Where(rn => rn.RaidRegisterId == id && !rn.NearMiss.IsDeleted)
-            .Select(rn => new RaidRegisterNearMissRow
-            {
-                Id = rn.NearMiss.Id,
-                Reference = rn.NearMiss.Reference,
-                Impact = rn.NearMiss.Impact,
-                Status = rn.NearMiss.StatusLookup != null ? rn.NearMiss.StatusLookup.Label : null,
-                StatusId = rn.NearMiss.NearMissStatusId,
-                Seriousness = rn.NearMiss.SeriousnessLookup != null ? rn.NearMiss.SeriousnessLookup.Label : null,
-                SeriousnessId = rn.NearMiss.NearMissSeriousnessId,
-                Type = rn.NearMiss.TypeLookup != null ? rn.NearMiss.TypeLookup.Label : null,
-                TypeId = rn.NearMiss.NearMissTypeId,
-                DateLogged = rn.NearMiss.DateLogged,
-                UpdatedAt = rn.NearMiss.UpdatedAt,
-                CommentCount = _db.Comments.Count(c => c.EntityType == "NearMiss" && c.EntityId == rn.NearMiss.Id && !c.IsDeleted)
-            }).ToListAsync(cancellationToken);
-
-        await EnrichRowRelationsAsync(risks, issues, assumptions, nearMisses, cancellationToken);
+        var entityRows = await LoadRaidRegisterEntityRowsAsync(id, cancellationToken);
+        var risks = entityRows.Risks;
+        var issues = entityRows.Issues;
+        var assumptions = entityRows.Assumptions;
+        var dependencies = entityRows.Dependencies;
+        var nearMisses = entityRows.NearMisses;
 
         var allActiveRiskTiers = await _db.RiskTiers.AsNoTracking()
             .Where(x => x.IsActive)
             .OrderBy(x => x.SortOrder).ThenBy(x => x.Id)
             .ToListAsync(cancellationToken);
         var spreadsheetTierRows = RiskTierSpreadsheet.ResolveRows(allActiveRiskTiers);
-        var riskTierById = allActiveRiskTiers.ToDictionary(t => t.Id);
-        foreach (var risk in risks)
-        {
-            if (risk.TierId is int tid && riskTierById.TryGetValue(tid, out var tier))
-                risk.Tier = RiskTierSpreadsheet.GetDisplayName(tier);
-        }
 
         var vm = new RaidRegisterDetailViewModel
         {
@@ -296,7 +145,7 @@ public partial class ModernRaidController
             CreatedAt = register.CreatedAt,
             UpdatedAt = register.UpdatedAt,
             CreatedByName = register.CreatedByUser?.Name ?? register.CreatedByUser?.Email ?? "Unknown",
-            CurrentUserRole = currentUserRole ?? RaidRegisterRole.Viewer,
+            CurrentUserRole = currentUserRole,
             OpenRiskCount = risks.Count(r => r.Status != "closed" && r.Status != "Closed"),
             OpenIssueCount = issues.Count(i => i.Status != "closed" && i.Status != "Closed"),
             OpenAssumptionCount = assumptions.Count,
@@ -340,6 +189,13 @@ public partial class ModernRaidController
                 .Select(x => new SelectOption(x.Id, x.Name))
                 .ToList()
         };
+
+        var layoutService = HttpContext.RequestServices.GetRequiredService<IRaidRegisterSpreadsheetLayoutService>();
+        var columnOrders = await layoutService.GetColumnOrdersAsync(cancellationToken);
+        vm.SpreadsheetColumnOrders = columnOrders.ToDictionary(
+            kv => kv.Key,
+            kv => kv.Value.ToList(),
+            StringComparer.OrdinalIgnoreCase);
 
         return View("~/Views/Modern/Raid/Registers/Detail.cshtml", vm);
     }
@@ -692,19 +548,8 @@ public partial class ModernRaidController
 
     // ── Helpers ──────────────────────────────────────────────────
 
-    private async Task<List<RaidRegister>> GetAccessibleRegistersAsync(int? userId, CancellationToken cancellationToken)
-    {
-        if (!userId.HasValue)
-            return new List<RaidRegister>();
-
-        var uid = userId.Value;
-
-        // Resolve the user's org-structure business area IDs (hybrid access)
-        var adminBaIds = await _businessAreaAdmins.GetAdministeredBusinessAreaLookupIdsAsync(uid, cancellationToken);
-        var leaderBaIds = await _businessAreaLeadership.GetLeadershipBusinessAreaLookupIdsAsync(uid, cancellationToken);
-        var orgBaIds = adminBaIds.Union(leaderBaIds).Distinct().ToList();
-
-        return await _db.RaidRegisters.AsNoTracking()
+    private IQueryable<RaidRegister> RaidRegistersForListQuery() =>
+        _db.RaidRegisters.AsNoTracking()
             .Where(r => !r.IsDeleted)
             .Include(r => r.DirectorateLookup)
             .Include(r => r.BusinessAreaLookup)
@@ -713,23 +558,269 @@ public partial class ModernRaidController
             .Include(r => r.CreatedByUser)
             .Include(r => r.Users).ThenInclude(u => u.User)
             .Include(r => r.WorkItems).ThenInclude(w => w.Project)
-            .Include(r => r.Services).ThenInclude(s => s.FipsService)
-            .Where(r =>
-                r.CreatedByUserId == uid
-                || r.Users.Any(u => u.UserId == uid)
-                || (r.BusinessAreaLookupId != null && orgBaIds.Contains(r.BusinessAreaLookupId.Value))
-                || r.BusinessAreas.Any(b => orgBaIds.Contains(b.BusinessAreaLookupId))
-            )
-            .OrderByDescending(r => r.UpdatedAt)
+            .Include(r => r.Services).ThenInclude(s => s.FipsService);
+
+    private async Task<List<RaidRegister>> GetYourRegistersAsync(int? userId, CancellationToken cancellationToken)
+    {
+        if (!userId.HasValue)
+            return new List<RaidRegister>();
+
+        var uid = userId.Value;
+        return await RaidRegistersForListQuery()
+            .Where(r => r.CreatedByUserId == uid || r.Users.Any(u => u.UserId == uid))
+            .OrderBy(r => r.Name)
             .ToListAsync(cancellationToken);
     }
 
-    private static bool CanAccessRegister(RaidRegister register, int? userId, string emailLower)
+    private async Task<List<RaidRegister>> GetAllRegistersAsync(CancellationToken cancellationToken) =>
+        await RaidRegistersForListQuery()
+            .OrderBy(r => r.Name)
+            .ToListAsync(cancellationToken);
+
+    private RaidRegisterCardViewModel BuildRegisterCardViewModel(
+        RaidRegister r,
+        int? userId,
+        IReadOnlyDictionary<int, int> riskCounts,
+        IReadOnlyDictionary<int, int> issueCounts,
+        IReadOnlyDictionary<int, int> assumptionCounts,
+        IReadOnlyDictionary<int, int> dependencyCounts,
+        IReadOnlyDictionary<int, int> nearMissCounts)
     {
-        if (!userId.HasValue) return false;
-        if (register.CreatedByUserId == userId.Value) return true;
-        if (register.Users.Any(u => u.UserId == userId.Value)) return true;
-        return false;
+        var role = ResolveUserRegisterRole(r, userId);
+        return new RaidRegisterCardViewModel
+        {
+            Id = r.Id,
+            Name = r.Name,
+            Description = r.Description,
+            DirectorateName = RaidRegisterScopeHelper.FormatDirectorateNames(r),
+            BusinessAreaName = RaidRegisterScopeHelper.FormatBusinessAreaNames(r),
+            OwnerName = ResolveRegisterOwnerName(r),
+            UpdatedAt = r.UpdatedAt,
+            OpenRiskCount = riskCounts.GetValueOrDefault(r.Id),
+            OpenIssueCount = issueCounts.GetValueOrDefault(r.Id),
+            OpenAssumptionCount = assumptionCounts.GetValueOrDefault(r.Id),
+            OpenDependencyCount = dependencyCounts.GetValueOrDefault(r.Id),
+            OpenNearMissCount = nearMissCounts.GetValueOrDefault(r.Id),
+            TotalItemCount = riskCounts.GetValueOrDefault(r.Id)
+                + issueCounts.GetValueOrDefault(r.Id)
+                + assumptionCounts.GetValueOrDefault(r.Id)
+                + dependencyCounts.GetValueOrDefault(r.Id)
+                + nearMissCounts.GetValueOrDefault(r.Id),
+            WorkItemNames = r.WorkItems
+                .Select(w => w.Project?.Title ?? "Unknown")
+                .OrderBy(n => n).ToList(),
+            ServiceNames = r.Services
+                .Select(s => s.FipsService?.DisplayName ?? "Unknown")
+                .OrderBy(n => n).ToList(),
+            CanManage = role == RaidRegisterRole.Owner || role == RaidRegisterRole.Manager
+        };
+    }
+
+    private static bool CanViewRegister(int? userId) => userId.HasValue;
+
+    private static RaidRegisterRole ResolveUserRegisterRole(RaidRegister register, int? userId)
+    {
+        if (!userId.HasValue)
+            return RaidRegisterRole.Viewer;
+
+        var membership = register.Users.FirstOrDefault(u => u.UserId == userId.Value);
+        if (membership != null)
+            return membership.Role;
+
+        if (register.CreatedByUserId == userId.Value)
+            return RaidRegisterRole.Owner;
+
+        return RaidRegisterRole.Viewer;
+    }
+
+    private sealed record RaidRegisterEntityRowSet(
+        List<RaidRegisterRiskRow> Risks,
+        List<RaidRegisterIssueRow> Issues,
+        List<RaidRegisterAssumptionRow> Assumptions,
+        List<RaidRegisterDependencyRow> Dependencies,
+        List<RaidRegisterNearMissRow> NearMisses);
+
+    private async Task<RaidRegisterEntityRowSet> LoadRaidRegisterEntityRowsAsync(int registerId, CancellationToken cancellationToken)
+    {
+        var risks = await _db.RaidRegisterRisks.AsNoTracking()
+            .Where(rr => rr.RaidRegisterId == registerId && !rr.Risk.IsDeleted)
+            .Select(rr => new RaidRegisterRiskRow
+            {
+                Id = rr.Risk.Id,
+                Reference = $"R-{rr.Risk.Id:D4}",
+                Title = rr.Risk.Title,
+                Description = rr.Risk.Description,
+                Status = rr.Risk.RiskStatus != null ? rr.Risk.RiskStatus.Label : rr.Risk.Status,
+                StatusId = rr.Risk.RiskStatusId,
+                Owner = rr.Risk.OwnerUser != null ? rr.Risk.OwnerUser.Name : rr.Risk.OwnerEmail,
+                OwnerUserId = rr.Risk.OwnerUserId,
+                Tier = rr.Risk.RiskTier != null ? rr.Risk.RiskTier.Name : null,
+                TierId = rr.Risk.RiskTierId,
+                Category = rr.Risk.RiskCategory != null ? rr.Risk.RiskCategory.Label : null,
+                CategoryId = rr.Risk.RiskCategoryId,
+                Priority = rr.Risk.RiskPriority != null ? rr.Risk.RiskPriority.Label : null,
+                PriorityId = rr.Risk.RiskPriorityId,
+                Proximity = rr.Risk.Proximity != null ? rr.Risk.Proximity.Label : null,
+                ProximityId = rr.Risk.RiskProximityId,
+                ResponseStrategy = rr.Risk.ResponseStrategy,
+                Cause = rr.Risk.Cause,
+                ImpactIfRealised = rr.Risk.ImpactIfRealised,
+                Contingency = rr.Risk.Contingency,
+                Assurance = rr.Risk.Assurance,
+                FinancialImpact = rr.Risk.FinancialImpact,
+                Response = rr.Risk.Response,
+
+                OriginalImpactId = rr.Risk.RiskImpactLevelId,
+                OriginalImpact = rr.Risk.ImpactLevel != null ? rr.Risk.ImpactLevel.Label : null,
+                OriginalLikelihoodId = rr.Risk.RiskLikelihoodId,
+                OriginalLikelihood = rr.Risk.Likelihood != null ? rr.Risk.Likelihood.Label : null,
+                InherentScore = rr.Risk.InherentScore,
+
+                CurrentImpactId = rr.Risk.CurrentImpactLevelId,
+                CurrentImpact = rr.Risk.CurrentImpactLevel != null ? rr.Risk.CurrentImpactLevel.Label : null,
+                CurrentLikelihoodId = rr.Risk.CurrentLikelihoodId,
+                CurrentLikelihood = rr.Risk.CurrentLikelihood != null ? rr.Risk.CurrentLikelihood.Label : null,
+                CurrentScore = rr.Risk.CurrentScore,
+
+                ResidualImpactId = rr.Risk.ResidualImpactLevelId,
+                ResidualImpact = rr.Risk.ResidualImpactLevel != null ? rr.Risk.ResidualImpactLevel.Label : null,
+                ResidualLikelihoodId = rr.Risk.ResidualLikelihoodId,
+                ResidualLikelihood = rr.Risk.ResidualLikelihoodLevel != null ? rr.Risk.ResidualLikelihoodLevel.Label : null,
+                ResidualScore = rr.Risk.ResidualScore,
+
+                ToleranceImpactId = rr.Risk.ToleranceImpactLevelId,
+                ToleranceImpact = rr.Risk.ToleranceImpactLevel != null ? rr.Risk.ToleranceImpactLevel.Label : null,
+                ToleranceLikelihoodId = rr.Risk.ToleranceLikelihoodId,
+                ToleranceLikelihood = rr.Risk.ToleranceLikelihood != null ? rr.Risk.ToleranceLikelihood.Label : null,
+                ToleranceScore = rr.Risk.ToleranceScore,
+
+                NextReviewDate = rr.Risk.NextReviewDate,
+                CreatedAt = rr.Risk.CreatedAt,
+                IdentifiedDate = rr.Risk.IdentifiedDate,
+                UpdatedAt = rr.Risk.UpdatedAt,
+                CommentCount = _db.Comments.Count(c => c.EntityType == "Risk" && c.EntityId == rr.Risk.Id && !c.IsDeleted)
+            }).ToListAsync(cancellationToken);
+
+        var riskIds = risks.Select(r => r.Id).ToList();
+        if (riskIds.Count > 0)
+        {
+            var mitigationCounts = await _db.RiskActions.AsNoTracking()
+                .Where(ra => riskIds.Contains(ra.RiskId) && ra.Action != null && !ra.Action.IsDeleted)
+                .GroupBy(ra => ra.RiskId)
+                .Select(g => new { RiskId = g.Key, Count = g.Count() })
+                .ToListAsync(cancellationToken);
+            var mitigationCountByRiskId = mitigationCounts.ToDictionary(x => x.RiskId, x => x.Count);
+            foreach (var risk in risks)
+                risk.MitigationCount = mitigationCountByRiskId.GetValueOrDefault(risk.Id);
+
+            var kriRows = await _db.RiskKeyRiskIndicators.AsNoTracking()
+                .Where(k => riskIds.Contains(k.RiskId))
+                .OrderBy(k => k.RiskId)
+                .ThenBy(k => k.SortOrder)
+                .ThenBy(k => k.Id)
+                .Select(k => new { k.RiskId, k.Metric, k.Threshold })
+                .ToListAsync(cancellationToken);
+            var kriByRiskId = kriRows
+                .GroupBy(k => k.RiskId)
+                .ToDictionary(
+                    g => g.Key,
+                    g => string.Join("; ", g.Select(k => FormatKriSpreadsheetSummary(k.Metric, k.Threshold)).Where(s => s.Length > 0)));
+            var kriCountByRiskId = kriRows
+                .GroupBy(k => k.RiskId)
+                .ToDictionary(g => g.Key, g => g.Count());
+            foreach (var risk in risks)
+            {
+                risk.KrisSummary = kriByRiskId.GetValueOrDefault(risk.Id);
+                risk.KriCount = kriCountByRiskId.GetValueOrDefault(risk.Id);
+            }
+        }
+
+        var issues = await _db.RaidRegisterIssues.AsNoTracking()
+            .Where(ri => ri.RaidRegisterId == registerId && !ri.Issue.IsDeleted)
+            .Select(ri => new RaidRegisterIssueRow
+            {
+                Id = ri.Issue.Id,
+                Reference = $"I-{ri.Issue.Id:D4}",
+                Title = ri.Issue.Title,
+                Description = ri.Issue.Description,
+                Status = ri.Issue.StatusLookup != null ? ri.Issue.StatusLookup.Label : ri.Issue.Status,
+                StatusId = ri.Issue.StatusId,
+                Severity = ri.Issue.SeverityLookup != null ? ri.Issue.SeverityLookup.Label : ri.Issue.Severity,
+                SeverityId = ri.Issue.SeverityId,
+                Priority = ri.Issue.PriorityLookup != null ? ri.Issue.PriorityLookup.Label : null,
+                PriorityId = ri.Issue.PriorityId,
+                Category = ri.Issue.CategoryLookup != null ? ri.Issue.CategoryLookup.Label : null,
+                CategoryId = ri.Issue.IssueCategoryId,
+                Owner = ri.Issue.OwnerUser != null ? ri.Issue.OwnerUser.Name : null,
+                OwnerUserId = ri.Issue.OwnerUserId,
+                IdentifiedDate = ri.Issue.DetectedDate,
+                TargetResolutionDate = ri.Issue.TargetResolutionDate,
+                UpdatedAt = ri.Issue.UpdatedAt,
+                CommentCount = _db.Comments.Count(c => c.EntityType == "Issue" && c.EntityId == ri.Issue.Id && !c.IsDeleted)
+            }).ToListAsync(cancellationToken);
+
+        var assumptions = await _db.RaidRegisterAssumptions.AsNoTracking()
+            .Where(ra => ra.RaidRegisterId == registerId && !ra.Assumption.IsDeleted)
+            .Select(ra => new RaidRegisterAssumptionRow
+            {
+                Id = ra.Assumption.Id,
+                Reference = $"A-{ra.Assumption.Id:D4}",
+                Description = ra.Assumption.Description,
+                Status = ra.Assumption.StatusLookup != null ? ra.Assumption.StatusLookup.Label : null,
+                StatusId = ra.Assumption.AssumptionStatusId,
+                Criticality = ra.Assumption.CriticalityLookup != null ? ra.Assumption.CriticalityLookup.Label : null,
+                CriticalityId = ra.Assumption.AssumptionCriticalityId,
+                Owner = ra.Assumption.OwnerUser != null ? ra.Assumption.OwnerUser.Name : null,
+                OwnerUserId = ra.Assumption.OwnerUserId,
+                ReviewDate = ra.Assumption.ReviewDate,
+                CreatedAt = ra.Assumption.CreatedAt,
+                UpdatedAt = ra.Assumption.UpdatedAt,
+                CommentCount = _db.Comments.Count(c => c.EntityType == "Assumption" && c.EntityId == ra.Assumption.Id && !c.IsDeleted)
+            }).ToListAsync(cancellationToken);
+
+        var dependencies = await _db.RaidRegisterDependencies.AsNoTracking()
+            .Where(rd => rd.RaidRegisterId == registerId)
+            .Select(rd => new RaidRegisterDependencyRow
+            {
+                Id = rd.Dependency.Id,
+                Description = rd.Dependency.Description,
+                LinkType = rd.Dependency.LinkTypeLookup != null ? rd.Dependency.LinkTypeLookup.Label : rd.Dependency.DependencyType,
+                Status = rd.Dependency.Status,
+                Owner = rd.Dependency.OwnerUser != null ? rd.Dependency.OwnerUser.Name : null
+            }).ToListAsync(cancellationToken);
+
+        var nearMisses = await _db.RaidRegisterNearMisses.AsNoTracking()
+            .Where(rn => rn.RaidRegisterId == registerId && !rn.NearMiss.IsDeleted)
+            .Select(rn => new RaidRegisterNearMissRow
+            {
+                Id = rn.NearMiss.Id,
+                Reference = rn.NearMiss.Reference,
+                Impact = rn.NearMiss.Impact,
+                Status = rn.NearMiss.StatusLookup != null ? rn.NearMiss.StatusLookup.Label : null,
+                StatusId = rn.NearMiss.NearMissStatusId,
+                Seriousness = rn.NearMiss.SeriousnessLookup != null ? rn.NearMiss.SeriousnessLookup.Label : null,
+                SeriousnessId = rn.NearMiss.NearMissSeriousnessId,
+                Type = rn.NearMiss.TypeLookup != null ? rn.NearMiss.TypeLookup.Label : null,
+                TypeId = rn.NearMiss.NearMissTypeId,
+                DateLogged = rn.NearMiss.DateLogged,
+                UpdatedAt = rn.NearMiss.UpdatedAt,
+                CommentCount = _db.Comments.Count(c => c.EntityType == "NearMiss" && c.EntityId == rn.NearMiss.Id && !c.IsDeleted)
+            }).ToListAsync(cancellationToken);
+
+        await EnrichRowRelationsAsync(risks, issues, assumptions, nearMisses, cancellationToken);
+
+        var allActiveRiskTiers = await _db.RiskTiers.AsNoTracking()
+            .Where(x => x.IsActive)
+            .OrderBy(x => x.SortOrder).ThenBy(x => x.Id)
+            .ToListAsync(cancellationToken);
+        var riskTierById = allActiveRiskTiers.ToDictionary(t => t.Id);
+        foreach (var risk in risks)
+        {
+            if (risk.TierId is int tid && riskTierById.TryGetValue(tid, out var tier))
+                risk.Tier = RiskTierSpreadsheet.GetDisplayName(tier);
+        }
+
+        return new RaidRegisterEntityRowSet(risks, issues, assumptions, dependencies, nearMisses);
     }
 
     private static bool IsRegisterOwnerOrManager(RaidRegister register, int? userId)
@@ -1370,8 +1461,43 @@ public partial class ModernRaidController
         return Json(await BuildAssumptionRelationApiPayloadAsync(assumption, ct));
     }
 
+    private async Task EnsureRiskRelationNavigationsAsync(Risk risk, CancellationToken ct)
+    {
+        if (risk.ProjectId is int projectId && risk.Project == null)
+            risk.Project = await _db.Projects.AsNoTracking()
+                .FirstOrDefaultAsync(p => p.Id == projectId, ct);
+
+        if (risk.PrimaryProductId is int productId && risk.PrimaryProduct == null)
+            risk.PrimaryProduct = await _db.Services.AsNoTracking()
+                .FirstOrDefaultAsync(p => p.ServiceId == productId, ct);
+    }
+
+    private async Task EnsureIssueRelationNavigationsAsync(Issue issue, CancellationToken ct)
+    {
+        if (issue.ProjectId is int projectId && issue.Project == null)
+            issue.Project = await _db.Projects.AsNoTracking()
+                .FirstOrDefaultAsync(p => p.Id == projectId, ct);
+
+        if (issue.PrimaryProductId is int productId && issue.PrimaryProduct == null)
+            issue.PrimaryProduct = await _db.Services.AsNoTracking()
+                .FirstOrDefaultAsync(p => p.ServiceId == productId, ct);
+    }
+
+    private async Task EnsureAssumptionRelationNavigationsAsync(Assumption assumption, CancellationToken ct)
+    {
+        if (assumption.ProjectId is int projectId && assumption.Project == null)
+            assumption.Project = await _db.Projects.AsNoTracking()
+                .FirstOrDefaultAsync(p => p.Id == projectId, ct);
+
+        if (assumption.PrimaryProductId is int productId && assumption.PrimaryProduct == null)
+            assumption.PrimaryProduct = await _db.Services.AsNoTracking()
+                .FirstOrDefaultAsync(p => p.ServiceId == productId, ct);
+    }
+
     private async Task<object> BuildRiskRelationApiPayloadAsync(Risk risk, CancellationToken ct)
     {
+        await EnsureRiskRelationNavigationsAsync(risk, ct);
+
         var fipsIds = risk.PrimaryProduct != null
             ? new[] { risk.PrimaryProduct.FipsId }
             : Array.Empty<string>();
@@ -1382,6 +1508,8 @@ public partial class ModernRaidController
 
     private async Task<object> BuildIssueRelationApiPayloadAsync(Issue issue, CancellationToken ct)
     {
+        await EnsureIssueRelationNavigationsAsync(issue, ct);
+
         var fipsIds = issue.PrimaryProduct != null
             ? new[] { issue.PrimaryProduct.FipsId }
             : Array.Empty<string>();
@@ -1392,6 +1520,8 @@ public partial class ModernRaidController
 
     private async Task<object> BuildAssumptionRelationApiPayloadAsync(Assumption assumption, CancellationToken ct)
     {
+        await EnsureAssumptionRelationNavigationsAsync(assumption, ct);
+
         var fipsIds = assumption.PrimaryProduct != null
             ? new[] { assumption.PrimaryProduct.FipsId }
             : Array.Empty<string>();
@@ -1502,6 +1632,15 @@ public partial class ModernRaidController
                 break;
             case "impactifrealised":
                 risk.ImpactIfRealised = req.Value;
+                break;
+            case "contingency":
+                risk.Contingency = req.Value;
+                break;
+            case "assurance":
+                risk.Assurance = req.Value;
+                break;
+            case "financialimpact":
+                risk.FinancialImpact = req.Value;
                 break;
             case "response":
                 risk.ResponseStrategy = req.Value;
@@ -1740,9 +1879,399 @@ public partial class ModernRaidController
             createdDate = risk.CreatedAt.ToString("dd MMM yy"),
             updatedAt = risk.UpdatedAt.ToString("dd MMM yy HH:mm"),
             updatedAtIso = risk.UpdatedAt.ToString("o"),
-            relation
+            relation,
+            mitigationCount = 0,
+            kriCount = 0
         });
     }
+
+    [HttpGet("api/risk/{riskId:int}/mitigations")]
+    public async Task<IActionResult> ApiRiskMitigationsList(int riskId, CancellationToken ct = default)
+    {
+        var risk = await _db.Risks.AsNoTracking()
+            .FirstOrDefaultAsync(r => r.Id == riskId && !r.IsDeleted, ct);
+        if (risk == null) return NotFound(new { error = "Risk not found" });
+
+        var links = await _db.RiskActions.AsNoTracking()
+            .Include(ra => ra.Action!).ThenInclude(a => a.AssignedToUser)
+            .Where(ra => ra.RiskId == riskId && ra.Action != null && !ra.Action.IsDeleted)
+            .OrderBy(ra => ra.Action!.DueDate ?? DateTime.MaxValue)
+            .ThenBy(ra => ra.Action!.Id)
+            .ToListAsync(ct);
+
+        var mitigations = links.Select(ra => MapMitigationApiItem(ra.Action!)).ToList();
+
+        return Json(new { riskId, reference = $"R-{riskId:D4}", title = risk.Title, count = mitigations.Count, mitigations });
+    }
+
+    public class ApiMitigationAddRequest
+    {
+        public string? Title { get; set; }
+        public int? AssignedToUserId { get; set; }
+        public string? TargetDate { get; set; }
+    }
+
+    [HttpPost("api/risk/{riskId:int}/mitigations")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ApiRiskMitigationAdd(int riskId, [FromBody] ApiMitigationAddRequest req, CancellationToken ct = default)
+    {
+        var userId = await ResolveCurrentUserIdAsync(ct);
+        if (!userId.HasValue)
+            return Unauthorized(new { error = "Not signed in" });
+
+        var risk = await _db.Risks.FirstOrDefaultAsync(r => r.Id == riskId && !r.IsDeleted, ct);
+        if (risk == null) return NotFound(new { error = "Risk not found" });
+
+        var title = (req.Title ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(title))
+            return BadRequest(new { error = "Enter the mitigation action." });
+        if (req.AssignedToUserId is null or <= 0)
+            return BadRequest(new { error = "Select an owner." });
+        if (!DateTime.TryParse(req.TargetDate, out var targetDate))
+            return BadRequest(new { error = "Enter a valid target date." });
+
+        if (title.Length > 450)
+            title = title[..450];
+
+        var ownerUser = await _db.Users.AsNoTracking()
+            .FirstOrDefaultAsync(u => u.Id == req.AssignedToUserId.Value, ct);
+        if (ownerUser == null)
+            return BadRequest(new { error = "Select a valid owner." });
+
+        var mitTypeId = await _db.ActionTypes.AsNoTracking()
+            .Where(t => t.IsActive && t.Code == "MIT")
+            .Select(t => (int?)t.Id)
+            .FirstOrDefaultAsync(ct);
+
+        var entity = new Models.Action
+        {
+            Title = title,
+            RiskId = riskId,
+            ProjectId = risk.ProjectId,
+            PrimaryProductId = risk.PrimaryProductId,
+            AssignedToUserId = req.AssignedToUserId,
+            AssignedToEmail = ownerUser.Email,
+            DueDate = targetDate.Date,
+            Status = MitigationStatuses.NotStarted,
+            ActionTypeId = mitTypeId,
+            SourceType = "risk_mitigation",
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow,
+        };
+        _db.Actions.Add(entity);
+        await _db.SaveChangesAsync(ct);
+
+        _db.RiskActions.Add(new RiskAction { RiskId = riskId, ActionId = entity.Id });
+        risk.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync(ct);
+
+        var count = await _db.RiskActions.CountAsync(ra =>
+            ra.RiskId == riskId && ra.Action != null && !ra.Action.IsDeleted, ct);
+
+        return Json(new
+        {
+            success = true,
+            mitigationCount = count,
+            mitigation = MapMitigationApiItem(entity, ownerUser.Name ?? ownerUser.Email)
+        });
+    }
+
+    public class ApiMitigationUpdateRequest
+    {
+        public string? Title { get; set; }
+        public int? AssignedToUserId { get; set; }
+        public string? TargetDate { get; set; }
+        public string? Status { get; set; }
+        public string? UpdateNote { get; set; }
+    }
+
+    [HttpPost("api/risk/{riskId:int}/mitigations/{actionId:int}")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ApiRiskMitigationUpdate(int riskId, int actionId, [FromBody] ApiMitigationUpdateRequest req, CancellationToken ct = default)
+    {
+        var userId = await ResolveCurrentUserIdAsync(ct);
+        if (!userId.HasValue)
+            return Unauthorized(new { error = "Not signed in" });
+
+        var linked = await _db.RiskActions
+            .Include(ra => ra.Action!)
+            .ThenInclude(a => a.AssignedToUser)
+            .FirstOrDefaultAsync(ra => ra.RiskId == riskId && ra.ActionId == actionId, ct);
+        if (linked?.Action == null || linked.Action.IsDeleted)
+            return NotFound(new { error = "Mitigation not found" });
+
+        var mitigationAction = linked.Action;
+        var title = (req.Title ?? "").Trim();
+        var normalizedStatus = NormalizeMitigationInputStatus(req.Status);
+        if (string.IsNullOrWhiteSpace(title))
+            return BadRequest(new { error = "Enter the mitigation action." });
+        if (req.AssignedToUserId is null or <= 0)
+            return BadRequest(new { error = "Select an owner." });
+        if (!MitigationStatuses.Canonical.Contains(normalizedStatus))
+            return BadRequest(new { error = "Select a valid status." });
+        if (!DateTime.TryParse(req.TargetDate, out var parsedTargetDate))
+            return BadRequest(new { error = "Enter a valid target date." });
+
+        var ownerUser = await _db.Users.AsNoTracking()
+            .FirstOrDefaultAsync(u => u.Id == req.AssignedToUserId.Value, ct);
+        if (ownerUser == null)
+            return BadRequest(new { error = "Select a valid owner." });
+
+        if (title.Length > 450)
+            title = title[..450];
+
+        mitigationAction.Title = title;
+        mitigationAction.AssignedToUserId = req.AssignedToUserId;
+        mitigationAction.AssignedToEmail = ownerUser.Email;
+        mitigationAction.DueDate = parsedTargetDate.Date;
+        mitigationAction.Status = normalizedStatus;
+        mitigationAction.UpdatedAt = DateTime.UtcNow;
+        if (normalizedStatus == MitigationStatuses.Complete && mitigationAction.CompletedDate == null)
+            mitigationAction.CompletedDate = DateTime.UtcNow.Date;
+        if (normalizedStatus != MitigationStatuses.Complete)
+            mitigationAction.CompletedDate = null;
+
+        var note = (req.UpdateNote ?? "").Trim();
+        if (!string.IsNullOrEmpty(note))
+        {
+            note = note.Length > 280 ? note[..280] : note;
+            mitigationAction.Notes = AppendMitigationAuditLine(mitigationAction.Notes, note);
+        }
+
+        var risk = await _db.Risks.FirstOrDefaultAsync(r => r.Id == riskId && !r.IsDeleted, ct);
+        if (risk != null)
+            risk.UpdatedAt = DateTime.UtcNow;
+
+        await _db.SaveChangesAsync(ct);
+
+        return Json(new
+        {
+            success = true,
+            mitigation = MapMitigationApiItem(mitigationAction, ownerUser.Name ?? ownerUser.Email)
+        });
+    }
+
+    private static object MapMitigationApiItem(Models.Action a, string? ownerOverride = null)
+    {
+        var owner = ownerOverride;
+        if (string.IsNullOrEmpty(owner))
+            owner = a.AssignedToUser != null ? (a.AssignedToUser.Name ?? a.AssignedToUser.Email) : a.AssignedToEmail;
+        return new
+        {
+            id = a.Id,
+            title = a.Title,
+            status = a.Status,
+            effectiveStatus = MitigationEffectiveStatusForUi(a),
+            dueDate = a.DueDate?.ToString("yyyy-MM-dd"),
+            dueDateDisplay = a.DueDate?.ToString("d MMM yyyy"),
+            assignedToUserId = a.AssignedToUserId,
+            owner,
+            notes = a.Notes
+        };
+    }
+
+    [HttpGet("api/risk/{riskId:int}/kris")]
+    public async Task<IActionResult> ApiRiskKrisList(int riskId, CancellationToken ct = default)
+    {
+        var risk = await _db.Risks.AsNoTracking()
+            .FirstOrDefaultAsync(r => r.Id == riskId && !r.IsDeleted, ct);
+        if (risk == null) return NotFound(new { error = "Risk not found" });
+
+        var kris = await _db.RiskKeyRiskIndicators.AsNoTracking()
+            .Where(k => k.RiskId == riskId)
+            .OrderBy(k => k.SortOrder)
+            .ThenBy(k => k.Id)
+            .ToListAsync(ct);
+
+        var items = kris.Select(MapKriApiItem).ToList();
+        return Json(new
+        {
+            riskId,
+            reference = $"R-{riskId:D4}",
+            title = risk.Title,
+            count = items.Count,
+            krisSummary = BuildKrisSummaryFromRows(kris),
+            kris = items
+        });
+    }
+
+    public class ApiKriSaveRequest
+    {
+        public string? Title { get; set; }
+        public string? Description { get; set; }
+        public string? Metric { get; set; }
+        public string? Threshold { get; set; }
+    }
+
+    [HttpPost("api/risk/{riskId:int}/kris")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ApiRiskKriAdd(int riskId, [FromBody] ApiKriSaveRequest req, CancellationToken ct = default)
+    {
+        var userId = await ResolveCurrentUserIdAsync(ct);
+        if (!userId.HasValue)
+            return Unauthorized(new { error = "Not signed in" });
+
+        var risk = await _db.Risks.FirstOrDefaultAsync(r => r.Id == riskId && !r.IsDeleted, ct);
+        if (risk == null) return NotFound(new { error = "Risk not found" });
+
+        if (!TryNormalizeKriInput(req, out var title, out var description, out var metric, out var threshold, out var error))
+            return BadRequest(new { error });
+
+        var maxOrder = await _db.RiskKeyRiskIndicators
+            .Where(x => x.RiskId == riskId)
+            .Select(x => (int?)x.SortOrder)
+            .MaxAsync(ct) ?? 0;
+        var now = DateTime.UtcNow;
+
+        var entity = new RiskKeyRiskIndicator
+        {
+            RiskId = riskId,
+            Title = title,
+            Description = description,
+            Metric = metric,
+            Threshold = threshold,
+            SortOrder = maxOrder + 1,
+            CreatedAt = now,
+            UpdatedAt = now
+        };
+        _db.RiskKeyRiskIndicators.Add(entity);
+        risk.UpdatedAt = now;
+        await _db.SaveChangesAsync(ct);
+
+        var allKris = await LoadKrisForRiskAsync(riskId, ct);
+        return Json(new
+        {
+            success = true,
+            kriCount = allKris.Count,
+            krisSummary = BuildKrisSummaryFromRows(allKris),
+            kri = MapKriApiItem(entity)
+        });
+    }
+
+    [HttpPost("api/risk/{riskId:int}/kris/{kriId:int}")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ApiRiskKriUpdate(int riskId, int kriId, [FromBody] ApiKriSaveRequest req, CancellationToken ct = default)
+    {
+        var userId = await ResolveCurrentUserIdAsync(ct);
+        if (!userId.HasValue)
+            return Unauthorized(new { error = "Not signed in" });
+
+        var entity = await _db.RiskKeyRiskIndicators
+            .FirstOrDefaultAsync(k => k.Id == kriId && k.RiskId == riskId, ct);
+        if (entity == null)
+            return NotFound(new { error = "Key risk indicator not found" });
+
+        if (!TryNormalizeKriInput(req, out var title, out var description, out var metric, out var threshold, out var error))
+            return BadRequest(new { error });
+
+        entity.Title = title;
+        entity.Description = description;
+        entity.Metric = metric;
+        entity.Threshold = threshold;
+        entity.UpdatedAt = DateTime.UtcNow;
+
+        var risk = await _db.Risks.FirstOrDefaultAsync(r => r.Id == riskId && !r.IsDeleted, ct);
+        if (risk != null)
+            risk.UpdatedAt = DateTime.UtcNow;
+
+        await _db.SaveChangesAsync(ct);
+
+        var allKris = await LoadKrisForRiskAsync(riskId, ct);
+        return Json(new
+        {
+            success = true,
+            kriCount = allKris.Count,
+            krisSummary = BuildKrisSummaryFromRows(allKris),
+            kri = MapKriApiItem(entity)
+        });
+    }
+
+    [HttpPost("api/risk/{riskId:int}/kris/{kriId:int}/remove")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ApiRiskKriRemove(int riskId, int kriId, CancellationToken ct = default)
+    {
+        var userId = await ResolveCurrentUserIdAsync(ct);
+        if (!userId.HasValue)
+            return Unauthorized(new { error = "Not signed in" });
+
+        var entity = await _db.RiskKeyRiskIndicators
+            .FirstOrDefaultAsync(k => k.Id == kriId && k.RiskId == riskId, ct);
+        if (entity == null)
+            return NotFound(new { error = "Key risk indicator not found" });
+
+        _db.RiskKeyRiskIndicators.Remove(entity);
+
+        var risk = await _db.Risks.FirstOrDefaultAsync(r => r.Id == riskId && !r.IsDeleted, ct);
+        if (risk != null)
+            risk.UpdatedAt = DateTime.UtcNow;
+
+        await _db.SaveChangesAsync(ct);
+
+        var allKris = await LoadKrisForRiskAsync(riskId, ct);
+        return Json(new
+        {
+            success = true,
+            kriCount = allKris.Count,
+            krisSummary = BuildKrisSummaryFromRows(allKris)
+        });
+    }
+
+    private async Task<List<RiskKeyRiskIndicator>> LoadKrisForRiskAsync(int riskId, CancellationToken ct) =>
+        await _db.RiskKeyRiskIndicators.AsNoTracking()
+            .Where(k => k.RiskId == riskId)
+            .OrderBy(k => k.SortOrder)
+            .ThenBy(k => k.Id)
+            .ToListAsync(ct);
+
+    private static object MapKriApiItem(RiskKeyRiskIndicator k) => new
+    {
+        id = k.Id,
+        title = k.Title,
+        description = k.Description,
+        metric = k.Metric,
+        threshold = k.Threshold,
+        summary = FormatKriSpreadsheetSummary(k.Metric, k.Threshold)
+    };
+
+    private static string BuildKrisSummaryFromRows(IEnumerable<RiskKeyRiskIndicator> rows) =>
+        string.Join("; ", rows
+            .Select(k => FormatKriSpreadsheetSummary(k.Metric, k.Threshold))
+            .Where(s => s.Length > 0));
+
+    private static bool TryNormalizeKriInput(
+        ApiKriSaveRequest req,
+        out string title,
+        out string? description,
+        out string? metric,
+        out string? threshold,
+        out string error)
+    {
+        var titleRaw = (req.Title ?? "").Trim();
+        var metricNorm = string.IsNullOrWhiteSpace(req.Metric) ? null : TruncateKriField(req.Metric.Trim(), 2000);
+        var thresholdNorm = string.IsNullOrWhiteSpace(req.Threshold) ? null : TruncateKriField(req.Threshold.Trim(), 2000);
+        description = string.IsNullOrWhiteSpace(req.Description) ? null : req.Description.Trim();
+
+        if (string.IsNullOrWhiteSpace(titleRaw) && metricNorm == null && thresholdNorm == null)
+        {
+            error = "Enter a title, metric, or threshold for the key risk indicator.";
+            title = "";
+            metric = null;
+            threshold = null;
+            return false;
+        }
+
+        var titleSource = !string.IsNullOrWhiteSpace(titleRaw)
+            ? titleRaw
+            : metricNorm ?? thresholdNorm ?? "KRI";
+        title = TruncateKriField(titleSource, 300);
+        metric = metricNorm;
+        threshold = thresholdNorm;
+        error = "";
+        return true;
+    }
+
+    private static string TruncateKriField(string value, int max) =>
+        value.Length <= max ? value : value[..max];
 
     public class InlineIssueCreateRequest
     {
@@ -2030,5 +2559,14 @@ public partial class ModernRaidController
             risk.CurrentLikelihoodId = risk.RiskLikelihoodId;
             risk.CurrentScore = risk.InherentScore;
         }
+    }
+
+    private static string FormatKriSpreadsheetSummary(string? metric, string? threshold)
+    {
+        var m = string.IsNullOrWhiteSpace(metric) ? null : metric.Trim();
+        var t = string.IsNullOrWhiteSpace(threshold) ? null : threshold.Trim();
+        if (m != null && t != null)
+            return $"{m} (threshold: {t})";
+        return m ?? t ?? "";
     }
 }

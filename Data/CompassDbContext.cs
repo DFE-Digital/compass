@@ -286,6 +286,7 @@ public partial class CompassDbContext : DbContext
     public DbSet<RaidRegisterAssumption> RaidRegisterAssumptions { get; set; }
     public DbSet<RaidRegisterDependency> RaidRegisterDependencies { get; set; }
     public DbSet<RaidRegisterNearMiss> RaidRegisterNearMisses { get; set; }
+    public DbSet<RaidRegisterSpreadsheetLayout> RaidRegisterSpreadsheetLayouts { get; set; }
 
     /// <summary>CMS access requests (Design histories, DDT manual, etc.) for Operations.</summary>
     public DbSet<CmsAccessRequest> CmsAccessRequests { get; set; }
@@ -1478,6 +1479,14 @@ public partial class CompassDbContext : DbContext
             e.HasOne(x => x.RaidRegister).WithMany(r => r.NearMisses).HasForeignKey(x => x.RaidRegisterId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(x => x.NearMiss).WithMany().HasForeignKey(x => x.NearMissId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(x => x.AddedByUser).WithMany().HasForeignKey(x => x.AddedByUserId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<RaidRegisterSpreadsheetLayout>(e =>
+        {
+            e.HasIndex(x => x.EntityType).IsUnique();
+            e.Property(x => x.EntityType).HasMaxLength(32);
+            e.Property(x => x.ColumnOrderJson).HasColumnType("nvarchar(max)");
+            e.HasOne(x => x.UpdatedByUser).WithMany().HasForeignKey(x => x.UpdatedByUserId).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<Issue>()

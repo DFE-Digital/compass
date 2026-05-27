@@ -4,6 +4,7 @@ using Compass.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Compass.Migrations
 {
     [DbContext(typeof(CompassDbContext))]
-    partial class CompassDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260527165811_EnsureRaidRegisterSpreadsheetLayoutsTable")]
+    partial class EnsureRaidRegisterSpreadsheetLayoutsTable
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -12333,10 +12336,6 @@ namespace Compass.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("Assurance")
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
-
                     b.Property<string>("BusinessArea")
                         .HasMaxLength(450)
                         .HasColumnType("nvarchar(450)");
@@ -12355,10 +12354,6 @@ namespace Compass.Migrations
                     b.Property<DateTime?>("ClosedDate")
                         .HasColumnType("datetime2");
 
-                    b.Property<string>("Contingency")
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
-
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
@@ -12375,10 +12370,6 @@ namespace Compass.Migrations
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<string>("Description")
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<string>("FinancialImpact")
                         .HasMaxLength(450)
                         .HasColumnType("nvarchar(450)");
 
@@ -12799,10 +12790,6 @@ namespace Compass.Migrations
 
                     b.Property<int>("SortOrder")
                         .HasColumnType("int");
-
-                    b.Property<string>("Threshold")
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
 
                     b.Property<string>("Title")
                         .IsRequired()

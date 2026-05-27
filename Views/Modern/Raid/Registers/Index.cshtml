@@ -13,7 +13,7 @@
   @await Html.PartialAsync("~/Views/Modern/Shared/_ModernPageHeader.cshtml", new Compass.ViewModels.Modern.ModernPageHeaderViewModel
   {
     Title = "RAID registers",
-    Lede = new Microsoft.AspNetCore.Html.HtmlString("<p class=\"govuk-body-s govuk-!-margin-bottom-0\">Manage registers you own and browse others visible through your directorate or portfolio.</p>"),
+    Lede = new Microsoft.AspNetCore.Html.HtmlString("<p class=\"govuk-body-s govuk-!-margin-bottom-0\">Manage registers you belong to and browse all registers in the organisation.</p>"),
     Actions = new Microsoft.AspNetCore.Html.HtmlString($"<a href=\"{Url.Action("RegisterCreate", "ModernRaid")}\" class=\"govuk-button\" data-module=\"govuk-button\">Create register</a>")
   })
 
@@ -32,7 +32,7 @@
   @if (!hasAny)
   {
     <div class="govuk-!-margin-top-6">
-      <p class="govuk-body">You do not have any RAID registers yet.</p>
+      <p class="govuk-body">There are no RAID registers yet.</p>
       <p class="govuk-body">
         <a href="@Url.Action("RegisterCreate", "ModernRaid")" class="govuk-link">Create your first RAID register</a>
         to start managing risks, issues, assumptions, dependencies and near misses.
@@ -58,7 +58,7 @@
 
     <div id="panel-your-registers" class="raid-registers-tab-panel raid-registers-tab-active">
       <p class="govuk-body-s govuk-!-margin-top-4 govuk-!-margin-bottom-0" style="color:#505a5f;">
-        Registers you created or where you are listed as owner, manager or viewer.
+        Registers you created or where you are listed as owner, manager or viewer (A–Z).
       </p>
       @await Html.PartialAsync("~/Views/Modern/Raid/Registers/_RegisterListTable.cshtml", Model.YourRegisters, new ViewDataDictionary(ViewData)
       {
@@ -70,13 +70,14 @@
 
     <div id="panel-all-registers" class="raid-registers-tab-panel">
       <p class="govuk-body-s govuk-!-margin-top-4 govuk-!-margin-bottom-0" style="color:#505a5f;">
-        Other registers in your directorate or portfolio that you can view but are not a member of.
+        Every register in the organisation (A–Z). Registers you are not listed on are read-only.
       </p>
       @await Html.PartialAsync("~/Views/Modern/Raid/Registers/_RegisterListTable.cshtml", Model.AllRegisters, new ViewDataDictionary(ViewData)
       {
         { "TableId", "tbl-all-registers" },
         { "TableCaption", "All RAID registers" },
-        { "EmptyMessage", "No other registers are visible through your organisation structure." }
+        { "EmptyMessage", "No registers have been created yet." },
+        { "ShowAccess", true }
       })
     </div>
   }
@@ -133,8 +134,12 @@
       });
     });
 
-    var hash = (window.location.hash || '#your-registers').replace('#', '');
-    activateTab(hash === 'all-registers' ? 'all-registers' : 'your-registers');
+    var defaultTab = @Model.YourRegisters.Any().ToString().ToLower() === 'true' ? 'your-registers' : 'all-registers';
+    var hash = (window.location.hash || '').replace('#', '');
+    if (hash !== 'all-registers' && hash !== 'your-registers') {
+      hash = defaultTab;
+    }
+    activateTab(hash);
     window.addEventListener('hashchange', function () {
       var h = (window.location.hash || '#your-registers').replace('#', '');
       activateTab(h === 'all-registers' ? 'all-registers' : 'your-registers');

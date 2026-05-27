@@ -3751,7 +3751,8 @@ public partial class ModernWorkController : Controller
             ProjectId = id,
             IdentifiedDay = idd,
             IdentifiedMonth = idm,
-            IdentifiedYear = idy
+            IdentifiedYear = idy,
+            KriItems = new List<RiskKriItemForm> { new() }
         };
         ViewBag.RiskTierOptions = (await _raidRiskEditorForm.BuildRiskCreateTierOptionsAsync(cancellationToken)).ToList();
         ViewBag.EditorTitle = "Add risk";

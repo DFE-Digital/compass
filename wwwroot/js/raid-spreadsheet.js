@@ -10,6 +10,8 @@
   var sortState = {};
   var STORAGE_PREFIX = 'raid-ss-';
   var a11yReorderTable = null;
+  var serverTableLayouts = {};
+  var readOnly = false;
 
   function readCsrfToken() {
     var tokenEl = document.querySelector('input[name="__RequestVerificationToken"]');
@@ -41,19 +43,25 @@
     csrfToken = config.csrfToken || readCsrfToken();
     baseUrl = config.baseUrl || '/modern/raid';
     registerId = config.registerId || 0;
+    serverTableLayouts = config.tableLayouts || {};
+    readOnly = !!config.readOnly;
 
-    bindCellClicks();
+    if (!readOnly) {
+      bindCellClicks();
+      bindInlineAdd();
+    }
     bindDetailButtons();
     bindModalClose();
     bindKeyboard();
     bindRefLinks();
-    bindRelationLinks();
-    bindRelationEditModal();
+    if (!readOnly) {
+      bindRelationLinks();
+      bindRelationEditModal();
+    }
     bindFullscreen();
     bindSortHeaders();
     buildFilterRows();
     bindFilterToggleButtons();
-    bindInlineAdd();
     captureDefaultColumnOrders();
     setupColumnResize();
     restoreColumnWidths();
@@ -62,6 +70,11 @@
     bindReorderToggle();
     restoreColumnOrder();
     bindCommentButtons();
+    bindMitigationButtons();
+    bindKriButtons();
+    if (readOnly) {
+      applyReadOnlySpreadsheetUi();
+    }
     bindAccessibleReorder();
     setupHeaderKeyboardResize();
     bindZoomControls();
@@ -139,7 +152,7 @@
 
   // ── Filtering ──
 
-  var TEXT_FILTER_COLUMNS = ['ref', 'title', 'description', 'cause', 'impact', 'mitigations'];
+  var TEXT_FILTER_COLUMNS = ['ref', 'title', 'description', 'cause', 'impact', 'contingency', 'assurance', 'financialImpact', 'kris', 'mitigations'];
 
   function getCellFilterText(cell) {
     if (!cell) return '';
@@ -1090,6 +1103,63 @@
     appendValSpan(td, text || '—');
   }
 
+  function mitigationButtonLabel(count) {
+    if (!count) return 'Add mitigation';
+    return count + ' mitigation' + (count === 1 ? '' : 's');
+  }
+
+  function appendMitigationCell(td, riskId, count, refLabel) {
+    td.classList.add('raid-ss-mitigation-cell');
+    td.setAttribute('data-col', 'mitigations');
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'govuk-link raid-ss-mitigation-open-btn govuk-!-margin-bottom-0';
+    btn.setAttribute('data-risk-id', riskId);
+    btn.setAttribute('data-mitigation-count', count || 0);
+    btn.setAttribute('data-ref-label', refLabel || '');
+    btn.setAttribute('aria-label', (count ? 'View ' + count + ' mitigations for ' : 'Add mitigation for ') + (refLabel || 'risk'));
+    btn.textContent = mitigationButtonLabel(count || 0);
+    td.appendChild(btn);
+  }
+
+  function setMitigationCountForRisk(riskId, count) {
+    document.querySelectorAll('.raid-ss-mitigation-open-btn[data-risk-id="' + riskId + '"]').forEach(function (btn) {
+      btn.setAttribute('data-mitigation-count', count);
+      btn.textContent = mitigationButtonLabel(count);
+      btn.setAttribute('aria-label', (count ? 'View ' + count + ' mitigations for ' : 'Add mitigation for ') + (btn.getAttribute('data-ref-label') || 'risk'));
+    });
+  }
+
+  function kriButtonLabel(count) {
+    if (!count) return 'Add KRI';
+    return count + ' KRI' + (count === 1 ? '' : 's');
+  }
+
+  function appendKriCell(td, riskId, count, refLabel) {
+    td.classList.add('raid-ss-kri-cell');
+    td.setAttribute('data-col', 'kris');
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'govuk-link raid-ss-kri-open-btn govuk-!-margin-bottom-0';
+    btn.setAttribute('data-risk-id', riskId);
+    btn.setAttribute('data-kri-count', count || 0);
+    btn.setAttribute('data-ref-label', refLabel || '');
+    btn.setAttribute('aria-label', (count ? 'View ' + count + ' KRIs for ' : 'Add KRI for ') + (refLabel || 'risk'));
+    btn.textContent = kriButtonLabel(count || 0);
+    td.appendChild(btn);
+  }
+
+  function setKriCountForRisk(riskId, count, summary) {
+    document.querySelectorAll('.raid-ss-kri-open-btn[data-risk-id="' + riskId + '"]').forEach(function (btn) {
+      btn.setAttribute('data-kri-count', count);
+      btn.textContent = kriButtonLabel(count);
+      btn.setAttribute('aria-label', (count ? 'View ' + count + ' KRIs for ' : 'Add KRI for ') + (btn.getAttribute('data-ref-label') || 'risk'));
+      if (summary !== undefined) {
+        btn.setAttribute('data-kris-summary', summary || '');
+      }
+    });
+  }
+
   function appendUserLookupCell(td, field, label, currentUserId, displayText) {
     td.classList.add('raid-ss-editable');
     td.setAttribute('data-type', 'userlookup');
@@ -1118,8 +1188,25 @@
     return '—';
   }
 
+  function enrichRelationFromLookups(rel) {
+    if (!rel) return rel;
+
+    var title = (rel.relationRelatedTitle || '').trim();
+    if (!title && rel.relationKind === 'Work' && rel.projectId && lookups.workItems) {
+      var work = lookups.workItems.find(function (w) { return w.id === rel.projectId; });
+      if (work && work.name) rel.relationRelatedTitle = work.name;
+    }
+    if (!title && rel.relationKind === 'Fips' && rel.primaryProductId && lookups.fipsProducts) {
+      var product = lookups.fipsProducts.find(function (p) { return p.id === rel.primaryProductId; });
+      if (product && product.name) rel.relationRelatedTitle = product.name;
+    }
+
+    return rel;
+  }
+
   function relationTargetName(rel) {
     if (!rel || rel.relationKind === 'Organisation' || rel.relationKind === 'Unknown') return null;
+    rel = enrichRelationFromLookups(rel);
     return (rel.relationRelatedTitle || rel.relationTarget || '').trim() || null;
   }
 
@@ -1150,7 +1237,7 @@
   }
 
   function renderRelationCell(td, rel) {
-    var data = rel || defaultOrganisationRelation();
+    var data = enrichRelationFromLookups(rel || defaultOrganisationRelation());
     td.className = 'govuk-table__cell govuk-body-s raid-ss-relation-cell';
     td.setAttribute('data-type', 'relation');
     applyRelationDataAttributes(td, data);
@@ -1271,8 +1358,6 @@
       } else {
         appendBadgeValSpan(td, data.tier || '—', 'tier');
       }
-    } else if (col === 'priority') {
-      appendSelectCell(td, 'priorityId', 'riskPriorities', data.priorityId, data.priority, 'priority');
     } else if (col === 'relation') {
       appendRelationCell(td, data.relation);
     } else if (col === 'category') {
@@ -1285,8 +1370,18 @@
       appendModalCell(td, 'cause', 'Cause', data.cause);
     } else if (col === 'impact') {
       appendModalCell(td, 'impactIfRealised', 'Impact if realised', data.impactIfRealised);
+    } else if (col === 'contingency') {
+      appendModalCell(td, 'contingency', 'Contingency', data.contingency);
+    } else if (col === 'assurance') {
+      appendModalCell(td, 'assurance', 'Assurance', data.assurance);
+    } else if (col === 'financialImpact') {
+      appendModalCell(td, 'financialImpact', 'Financial impact', data.financialImpact);
+    } else if (col === 'kris') {
+      appendKriCell(td, data.id, data.kriCount || 0, data.reference || formatEntityRef('risk', data.id));
+    } else if (col === 'response') {
+      appendModalCell(td, 'response', 'Response strategy', data.response);
     } else if (col === 'mitigations') {
-      appendModalCell(td, 'response', 'Response / Mitigations', data.response);
+      appendMitigationCell(td, data.id, data.mitigationCount || 0, data.reference || formatEntityRef('risk', data.id));
     } else if (col === 'origImpact') {
       if (th.classList.contains('raid-ss-group-start')) td.classList.add('raid-ss-group-start');
       appendSelectCell(td, 'originalImpactId', 'riskImpactLevels', data.originalImpactId, data.originalImpact);
@@ -1561,7 +1656,7 @@
           return res.json();
         })
         .then(function (rel) {
-          renderRelationCell(ctx.cell, rel);
+          renderRelationCell(ctx.cell, enrichRelationFromLookups(rel));
           ctx.row.classList.remove('raid-ss-row-editing');
           ctx.row.classList.add('raid-ss-saved');
           setTimeout(function () { ctx.row.classList.remove('raid-ss-saved'); }, 600);
@@ -1960,17 +2055,10 @@
           handle.classList.add('raid-ss-resizing');
 
           function onMove(ev) {
-            var newW = Math.max(50, startW + ev.pageX - startX);
-            th.style.width = newW + 'px';
-            th.style.minWidth = newW + 'px';
-            var colIdx = Array.from(th.parentNode.children).indexOf(th);
-            table.querySelectorAll('tbody tr').forEach(function (row) {
-              var cell = row.children[colIdx];
-              if (cell) {
-                cell.style.width = newW + 'px';
-                cell.style.minWidth = newW + 'px';
-              }
-            });
+            var col = th.getAttribute('data-col');
+            var floor = isWideTextColumn(col) ? DEFAULT_WIDE_COL_MIN : COL_RESIZE_MIN;
+            var newW = Math.max(floor, startW + ev.pageX - startX);
+            applyResizedColumnWidth(table, th, newW);
           }
 
           function onUp() {
@@ -1987,6 +2075,59 @@
     });
   }
 
+  var COL_WIDTHS_STORAGE = 'colWidths-v2';
+  var DEFAULT_WIDE_COL_MIN = 300;
+  var DEFAULT_NARROW_COL_MAX = 150;
+  var COL_RESIZE_MIN = 50;
+  var WIDE_TEXT_COLUMNS = { title: true, description: true, cause: true, impact: true };
+
+  function isWideTextColumn(col) {
+    return !!(col && WIDE_TEXT_COLUMNS[col]);
+  }
+
+  function forEachColumnCell(table, colIdx, fn) {
+    var headerRow = table.querySelector('thead .raid-ss-header-row');
+    if (!headerRow || !headerRow.children[colIdx]) return;
+    fn(headerRow.children[colIdx]);
+    table.querySelectorAll('tbody tr, .raid-ss-filter-row').forEach(function (row) {
+      var cell = row.children[colIdx];
+      if (cell) fn(cell);
+    });
+  }
+
+  function applyColumnWidthConfig(table, th, config) {
+    var colIdx = Array.from(th.parentNode.children).indexOf(th);
+    forEachColumnCell(table, colIdx, function (cell) {
+      cell.style.width = config.width != null ? config.width + 'px' : '';
+      cell.style.minWidth = config.minWidth != null ? config.minWidth + 'px' : '';
+      cell.style.maxWidth = config.maxWidth != null ? config.maxWidth + 'px' : '';
+    });
+  }
+
+  function applyResizedColumnWidth(table, th, widthPx) {
+    var colIdx = Array.from(th.parentNode.children).indexOf(th);
+    forEachColumnCell(table, colIdx, function (cell) {
+      cell.style.width = widthPx + 'px';
+      cell.style.minWidth = widthPx + 'px';
+      cell.style.maxWidth = '';
+    });
+  }
+
+  function defaultWidthConfigForColumn(col) {
+    if (isWideTextColumn(col)) {
+      return { width: DEFAULT_WIDE_COL_MIN, minWidth: DEFAULT_WIDE_COL_MIN, maxWidth: null };
+    }
+    return { width: DEFAULT_NARROW_COL_MAX, minWidth: COL_RESIZE_MIN, maxWidth: DEFAULT_NARROW_COL_MAX };
+  }
+
+  function applyDefaultColumnWidths(table) {
+    table.querySelectorAll('thead .raid-ss-header-row th').forEach(function (th) {
+      var col = th.getAttribute('data-col');
+      if (!col) return;
+      applyColumnWidthConfig(table, th, defaultWidthConfigForColumn(col));
+    });
+  }
+
   function storageKey(table, suffix) {
     return STORAGE_PREFIX + registerId + '-' + table.id + '-' + suffix;
   }
@@ -1997,38 +2138,34 @@
     headers.forEach(function (th) {
       var col = th.getAttribute('data-col');
       if (col && th.style.width) {
-        widths[col] = parseInt(th.style.width);
+        widths[col] = parseInt(th.style.width, 10);
       }
     });
     try {
-      localStorage.setItem(storageKey(table, 'colWidths'), JSON.stringify(widths));
+      localStorage.setItem(storageKey(table, COL_WIDTHS_STORAGE), JSON.stringify(widths));
     } catch (e) { /* localStorage unavailable */ }
   }
 
   function restoreColumnWidths() {
     document.querySelectorAll('.raid-spreadsheet-table').forEach(function (table) {
       try {
-        var stored = localStorage.getItem(storageKey(table, 'colWidths'));
-        if (!stored) return;
+        var stored = localStorage.getItem(storageKey(table, COL_WIDTHS_STORAGE));
+        if (!stored) {
+          applyDefaultColumnWidths(table);
+          return;
+        }
         var widths = JSON.parse(stored);
         var headers = table.querySelectorAll('thead .raid-ss-header-row th');
         headers.forEach(function (th) {
           var col = th.getAttribute('data-col');
-          if (col && widths[col]) {
-            var w = widths[col] + 'px';
-            th.style.width = w;
-            th.style.minWidth = w;
-            var colIdx = Array.from(th.parentNode.children).indexOf(th);
-            table.querySelectorAll('tbody tr').forEach(function (row) {
-              var cell = row.children[colIdx];
-              if (cell) {
-                cell.style.width = w;
-                cell.style.minWidth = w;
-              }
-            });
-          }
+          if (!col || !widths[col]) return;
+          var w = widths[col];
+          var minW = isWideTextColumn(col) ? Math.max(w, DEFAULT_WIDE_COL_MIN) : COL_RESIZE_MIN;
+          applyColumnWidthConfig(table, th, { width: w, minWidth: minW, maxWidth: null });
         });
-      } catch (e) { /* parse error or localStorage unavailable */ }
+      } catch (e) {
+        applyDefaultColumnWidths(table);
+      }
     });
   }
 
@@ -2275,7 +2412,7 @@
 
   // ── Word wrap toggle ──
 
-  var TEXT_COLS = ['title', 'description', 'cause', 'impact', 'impactIfRealised', 'mitigations', 'response'];
+  var TEXT_COLS = ['title', 'description', 'cause', 'impact', 'impactIfRealised', 'contingency', 'assurance', 'financialImpact', 'kris', 'mitigations', 'response'];
   var wrapEnabled = false;
 
   function bindWrapToggle() {
@@ -2442,8 +2579,12 @@
     document.querySelectorAll('.raid-spreadsheet-table').forEach(function (table) {
       try {
         var stored = localStorage.getItem(storageKey(table, 'colOrder'));
-        if (!stored) return;
-        var order = JSON.parse(stored);
+        var order = stored ? JSON.parse(stored) : null;
+        if (!order && table.dataset.defaultColOrder) {
+          order = JSON.parse(table.dataset.defaultColOrder);
+        }
+        if (!order || !order.length) return;
+
         var headerRow = table.querySelector('thead .raid-ss-header-row');
         var currentHeaders = headerRow.querySelectorAll('th');
         if (order.length !== currentHeaders.length) return;
@@ -2456,20 +2597,7 @@
         var orderMatch = order.every(function (col, i) { return col === currentOrder[i]; });
         if (orderMatch) return;
 
-        for (var i = 0; i < order.length; i++) {
-          var col = order[i];
-          var currentIdx = -1;
-          var headers = Array.from(headerRow.querySelectorAll('th'));
-          for (var j = i; j < headers.length; j++) {
-            var hCol = headers[j].getAttribute('data-col') || '';
-            if (hCol === col) { currentIdx = j; break; }
-          }
-          if (currentIdx > i) {
-            moveColumn(table, currentIdx, i);
-          }
-        }
-
-        rebuildFilterRow(table);
+        applyColumnOrder(table, order);
       } catch (e) { }
     });
   }
@@ -2618,17 +2746,10 @@
   }
 
   function resizeColumnByDelta(table, th, delta) {
-    var newW = Math.max(50, th.offsetWidth + delta);
-    th.style.width = newW + 'px';
-    th.style.minWidth = newW + 'px';
-    var colIdx = Array.from(th.parentNode.children).indexOf(th);
-    table.querySelectorAll('tbody tr, .raid-ss-filter-row').forEach(function (row) {
-      var cell = row.children[colIdx];
-      if (cell) {
-        cell.style.width = newW + 'px';
-        cell.style.minWidth = newW + 'px';
-      }
-    });
+    var col = th.getAttribute('data-col');
+    var floor = isWideTextColumn(col) ? DEFAULT_WIDE_COL_MIN : COL_RESIZE_MIN;
+    var newW = Math.max(floor, th.offsetWidth + delta);
+    applyResizedColumnWidth(table, th, newW);
     saveColumnWidths(table);
   }
 
@@ -2652,14 +2773,42 @@
   var ZOOM_MAX = 1.5;
   var ZOOM_STEP = 0.1;
 
+  function getDefaultColumnOrderForTable(table) {
+    var entityType = table.getAttribute('data-entity-type');
+    if (entityType && serverTableLayouts[entityType] && serverTableLayouts[entityType].columnOrder) {
+      return serverTableLayouts[entityType].columnOrder.slice();
+    }
+    var order = [];
+    table.querySelectorAll('thead .raid-ss-header-row th').forEach(function (th) {
+      order.push(th.getAttribute('data-col') || '');
+    });
+    return order;
+  }
+
+  function applyColumnOrder(table, order) {
+    if (!order || !order.length) return;
+    var headerRow = table.querySelector('thead .raid-ss-header-row');
+    if (!headerRow) return;
+
+    for (var i = 0; i < order.length; i++) {
+      var col = order[i];
+      var headers = Array.from(headerRow.querySelectorAll('th'));
+      var currentIdx = -1;
+      for (var j = i; j < headers.length; j++) {
+        var hCol = headers[j].getAttribute('data-col') || '';
+        if (hCol === col) { currentIdx = j; break; }
+      }
+      if (currentIdx > i) {
+        moveColumn(table, currentIdx, i);
+      }
+    }
+    rebuildFilterRow(table);
+  }
+
   function captureDefaultColumnOrders() {
     document.querySelectorAll('.raid-spreadsheet-table').forEach(function (table) {
       if (table.dataset.defaultColOrder) return;
-      var order = [];
-      table.querySelectorAll('thead .raid-ss-header-row th').forEach(function (th) {
-        order.push(th.getAttribute('data-col') || '');
-      });
-      table.dataset.defaultColOrder = JSON.stringify(order);
+      table.dataset.defaultColOrder = JSON.stringify(getDefaultColumnOrderForTable(table));
     });
   }
 
@@ -2702,6 +2851,7 @@
 
   function clearColumnWidths(table) {
     try {
+      localStorage.removeItem(storageKey(table, COL_WIDTHS_STORAGE));
       localStorage.removeItem(storageKey(table, 'colWidths'));
     } catch (e) { /* localStorage unavailable */ }
     table.querySelectorAll('thead .raid-ss-header-row th, tbody tr td, .raid-ss-filter-row td').forEach(function (cell) {
@@ -2709,33 +2859,23 @@
       cell.style.minWidth = '';
       cell.style.maxWidth = '';
     });
+    applyDefaultColumnWidths(table);
   }
 
   function resetColumnOrderToDefault(table) {
     var orderJson = table.dataset.defaultColOrder;
+    if (!orderJson) {
+      table.dataset.defaultColOrder = JSON.stringify(getDefaultColumnOrderForTable(table));
+      orderJson = table.dataset.defaultColOrder;
+    }
     if (!orderJson) return;
     try {
       var order = JSON.parse(orderJson);
-      var headerRow = table.querySelector('thead .raid-ss-header-row');
-      if (!headerRow || !order.length) return;
-
-      for (var i = 0; i < order.length; i++) {
-        var col = order[i];
-        var headers = Array.from(headerRow.querySelectorAll('th'));
-        var currentIdx = -1;
-        for (var j = i; j < headers.length; j++) {
-          var hCol = headers[j].getAttribute('data-col') || '';
-          if (hCol === col) { currentIdx = j; break; }
-        }
-        if (currentIdx > i) {
-          moveColumn(table, currentIdx, i);
-        }
-      }
-
+      if (!order.length) return;
+      applyColumnOrder(table, order);
       try {
         localStorage.removeItem(storageKey(table, 'colOrder'));
       } catch (e) { /* localStorage unavailable */ }
-      rebuildFilterRow(table);
     } catch (e) { /* parse error */ }
   }
 
@@ -2817,6 +2957,630 @@
         if (e.target === modal) closeResetTableModal();
       });
     }
+  }
+
+  // ── Mitigations (register spreadsheet) ──
+
+  var mitigationContext = null;
+  var mitigationFormMode = 'add';
+  var mitigationOwnerDebounce = null;
+
+  function applyReadOnlySpreadsheetUi() {
+    document.querySelectorAll('[id^="btn-add-"]').forEach(function (el) {
+      el.style.display = 'none';
+    });
+    document.querySelectorAll('.raid-ss-add-btn, .raid-ss-add-row').forEach(function (el) {
+      el.style.display = 'none';
+    });
+    document.querySelectorAll('.raid-ss-relation-change-btn').forEach(function (el) {
+      el.style.display = 'none';
+    });
+    var mitAdd = document.getElementById('raid-mitigations-modal-add');
+    if (mitAdd) mitAdd.style.display = 'none';
+    var kriAdd = document.getElementById('raid-kris-modal-add');
+    if (kriAdd) kriAdd.style.display = 'none';
+  }
+
+  function bindMitigationButtons() {
+    var listModal = document.getElementById('raid-mitigations-modal');
+    var formModal = document.getElementById('raid-mitigation-form-modal');
+    if (!listModal || !formModal) return;
+
+    document.addEventListener('click', function (e) {
+      var openBtn = e.target.closest('.raid-ss-mitigation-open-btn');
+      if (openBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        openMitigationsModal(
+          parseInt(openBtn.getAttribute('data-risk-id'), 10),
+          openBtn.getAttribute('data-ref-label') || '',
+          openBtn
+        );
+        return;
+      }
+      var editBtn = e.target.closest('[data-raid-mitigation-edit]');
+      if (editBtn && mitigationContext && !readOnly) {
+        e.preventDefault();
+        openMitigationFormModal('edit', {
+          id: parseInt(editBtn.getAttribute('data-action-id'), 10),
+          title: editBtn.getAttribute('data-title') || '',
+          assignedToUserId: editBtn.getAttribute('data-owner-id') || '',
+          owner: editBtn.getAttribute('data-owner') || '',
+          dueDate: editBtn.getAttribute('data-due') || '',
+          status: editBtn.getAttribute('data-status') || 'Not started'
+        });
+      }
+    });
+
+    listModal.querySelectorAll('[data-raid-mitigations-close]').forEach(function (btn) {
+      btn.addEventListener('click', closeMitigationsModal);
+    });
+    formModal.querySelectorAll('[data-raid-mitigation-form-close]').forEach(function (btn) {
+      btn.addEventListener('click', closeMitigationFormModal);
+    });
+
+    var addBtn = document.getElementById('raid-mitigations-modal-add');
+    if (addBtn) {
+      addBtn.addEventListener('click', function () {
+        if (!mitigationContext || readOnly) return;
+        openMitigationFormModal('add');
+      });
+    }
+
+    var saveBtn = document.getElementById('raid-mitigation-form-save');
+    if (saveBtn) saveBtn.addEventListener('click', saveMitigationForm);
+
+    var ownerSearch = document.getElementById('raid-mitigation-form-owner-search');
+    if (ownerSearch) {
+      ownerSearch.addEventListener('input', onMitigationOwnerSearchInput);
+    }
+  }
+
+  function openMitigationsModal(riskId, refLabel, toggleBtn) {
+    var modal = document.getElementById('raid-mitigations-modal');
+    var list = document.getElementById('raid-mitigations-modal-list');
+    var titleEl = document.getElementById('raid-mitigations-modal-title');
+    if (!modal || !list) return;
+
+    mitigationContext = { riskId: riskId, refLabel: refLabel, toggleBtn: toggleBtn };
+    if (titleEl) {
+      titleEl.textContent = refLabel ? 'Mitigations for ' + refLabel : 'Mitigations';
+    }
+    list.innerHTML = '<div class="raid-ss-mitigation-loading">Loading mitigations\u2026</div>';
+    modal.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    loadMitigationsIntoList(riskId, list);
+  }
+
+  function closeMitigationsModal() {
+    var modal = document.getElementById('raid-mitigations-modal');
+    if (modal) modal.style.display = 'none';
+    if (!isMitigationFormModalOpen()) {
+      document.body.style.overflow = '';
+    }
+    mitigationContext = null;
+  }
+
+  function isMitigationsModalOpen() {
+    var modal = document.getElementById('raid-mitigations-modal');
+    return modal && modal.style.display === 'flex';
+  }
+
+  function isMitigationFormModalOpen() {
+    var modal = document.getElementById('raid-mitigation-form-modal');
+    return modal && modal.style.display === 'flex';
+  }
+
+  function loadMitigationsIntoList(riskId, list) {
+    fetch(baseUrl + '/api/risk/' + riskId + '/mitigations')
+      .then(function (r) { return parseJsonResponse(r); })
+      .then(function (data) {
+        list.innerHTML = '';
+        var items = (data && data.mitigations) || [];
+        if (!items.length) {
+          list.innerHTML = '<div class="raid-ss-mitigation-empty">No mitigation actions yet. Use Add mitigation to create one.</div>';
+          return;
+        }
+        items.forEach(function (m) {
+          list.appendChild(renderMitigationListItem(m));
+        });
+      })
+      .catch(function () {
+        list.innerHTML = '<div class="raid-ss-mitigation-empty">Failed to load mitigations.</div>';
+      });
+  }
+
+  function renderMitigationListItem(m) {
+    var card = document.createElement('article');
+    card.className = 'raid-ss-mitigation-card';
+    var status = m.effectiveStatus || m.status || 'Not started';
+    var notesHtml = '';
+    if (m.notes) {
+      notesHtml = '<p class="govuk-body-s govuk-!-margin-top-2 govuk-!-margin-bottom-0 raid-ss-mitigation-notes">' +
+        escapeHtml(m.notes).replace(/\n/g, '<br>') + '</p>';
+    }
+    card.innerHTML =
+      '<div class="raid-ss-mitigation-card-head">' +
+        '<h3 class="govuk-heading-s govuk-!-margin-bottom-1">' + escapeHtml(m.title || '') + '</h3>' +
+        '<span class="dfe-f-badge dfe-f-badge--small">' + escapeHtml(status) + '</span>' +
+      '</div>' +
+      '<dl class="govuk-summary-list govuk-summary-list--no-border raid-ss-mitigation-meta">' +
+        '<div class="govuk-summary-list__row"><dt class="govuk-summary-list__key">Owner</dt><dd class="govuk-summary-list__value">' + escapeHtml(m.owner || '—') + '</dd></div>' +
+        '<div class="govuk-summary-list__row"><dt class="govuk-summary-list__key">Target date</dt><dd class="govuk-summary-list__value">' + escapeHtml(m.dueDateDisplay || '—') + '</dd></div>' +
+      '</dl>' +
+      notesHtml +
+      (readOnly ? '' :
+        '<button type="button" class="govuk-link govuk-!-margin-top-2 govuk-!-margin-bottom-0" data-raid-mitigation-edit' +
+        ' data-action-id="' + m.id + '"' +
+        ' data-title="' + escapeHtmlAttr(m.title || '') + '"' +
+        ' data-owner-id="' + (m.assignedToUserId || '') + '"' +
+        ' data-owner="' + escapeHtmlAttr(m.owner || '') + '"' +
+        ' data-due="' + escapeHtmlAttr(m.dueDate || '') + '"' +
+        ' data-status="' + escapeHtmlAttr(m.effectiveStatus || m.status || 'Not started') + '">Edit or add update</button>');
+    return card;
+  }
+
+  function escapeHtmlAttr(s) {
+    return String(s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+  }
+
+  function openMitigationFormModal(mode, mitigation) {
+    if (!mitigationContext) return;
+    mitigationFormMode = mode;
+    var modal = document.getElementById('raid-mitigation-form-modal');
+    var titleEl = document.getElementById('raid-mitigation-form-modal-title');
+    var statusWrap = document.getElementById('raid-mitigation-form-status-wrap');
+    var noteWrap = document.getElementById('raid-mitigation-form-note-wrap');
+    var titleInput = document.getElementById('raid-mitigation-form-title');
+    var ownerSearch = document.getElementById('raid-mitigation-form-owner-search');
+    var ownerId = document.getElementById('raid-mitigation-form-owner-id');
+    var dueInput = document.getElementById('raid-mitigation-form-due');
+    var statusSelect = document.getElementById('raid-mitigation-form-status');
+    var noteInput = document.getElementById('raid-mitigation-form-note');
+    var errEl = document.getElementById('raid-mitigation-form-error');
+    if (!modal || !titleInput || !ownerSearch || !ownerId || !dueInput) return;
+
+    if (titleEl) {
+      titleEl.textContent = mode === 'edit' ? 'Edit mitigation' : 'Add mitigation';
+    }
+    if (statusWrap) statusWrap.style.display = mode === 'edit' ? '' : 'none';
+    if (noteWrap) noteWrap.style.display = mode === 'edit' ? '' : 'none';
+    if (errEl) { errEl.style.display = 'none'; errEl.textContent = ''; }
+
+    titleInput.value = mitigation && mitigation.title ? mitigation.title : '';
+    ownerSearch.value = mitigation && mitigation.owner ? mitigation.owner : '';
+    ownerId.value = mitigation && mitigation.assignedToUserId ? mitigation.assignedToUserId : '';
+    dueInput.value = mitigation && mitigation.dueDate ? mitigation.dueDate : '';
+    if (statusSelect && mitigation && mitigation.status) statusSelect.value = mitigation.status;
+    if (noteInput) noteInput.value = '';
+
+    modal.setAttribute('data-action-id', mitigation && mitigation.id ? mitigation.id : '');
+    modal.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    titleInput.focus();
+  }
+
+  function closeMitigationFormModal() {
+    var modal = document.getElementById('raid-mitigation-form-modal');
+    if (modal) modal.style.display = 'none';
+    if (!isMitigationsModalOpen()) {
+      document.body.style.overflow = '';
+    }
+  }
+
+  function showMitigationFormError(msg) {
+    var errEl = document.getElementById('raid-mitigation-form-error');
+    if (!errEl) return;
+    errEl.textContent = msg;
+    errEl.style.display = msg ? '' : 'none';
+  }
+
+  function onMitigationOwnerSearchInput() {
+    clearTimeout(mitigationOwnerDebounce);
+    var searchInput = document.getElementById('raid-mitigation-form-owner-search');
+    var listEl = document.getElementById('raid-mitigation-form-owner-list');
+    var ownerId = document.getElementById('raid-mitigation-form-owner-id');
+    var hintEl = document.getElementById('raid-mitigation-form-owner-hint');
+    if (!searchInput || !listEl) return;
+
+    ownerId.value = '';
+    var q = searchInput.value.trim();
+    if (q.length < 2) {
+      listEl.style.display = 'none';
+      listEl.innerHTML = '';
+      if (hintEl) { hintEl.style.display = ''; hintEl.textContent = 'Type at least 2 characters to search.'; }
+      return;
+    }
+    if (hintEl) hintEl.textContent = 'Searching\u2026';
+    mitigationOwnerDebounce = setTimeout(function () {
+      fetch('/api/users/search?q=' + encodeURIComponent(q) + '&top=10')
+        .then(function (r) { return r.json(); })
+        .then(function (users) {
+          if (!Array.isArray(users)) users = users.users || users.value || [];
+          listEl.innerHTML = '';
+          if (!users.length) {
+            listEl.style.display = 'none';
+            if (hintEl) { hintEl.style.display = ''; hintEl.textContent = 'No users found.'; }
+            return;
+          }
+          if (hintEl) hintEl.style.display = 'none';
+          users.forEach(function (u) {
+            var li = document.createElement('li');
+            li.className = 'raid-ss-mitigation-owner-item';
+            var displayName = u.displayName || u.name || u.email;
+            li.textContent = displayName;
+            li.addEventListener('click', function () {
+              ownerId.value = u.id;
+              searchInput.value = displayName;
+              listEl.style.display = 'none';
+            });
+            listEl.appendChild(li);
+          });
+          listEl.style.display = '';
+        })
+        .catch(function () {
+          listEl.style.display = 'none';
+          if (hintEl) { hintEl.style.display = ''; hintEl.textContent = 'Search failed.'; }
+        });
+    }, 300);
+  }
+
+  function saveMitigationForm() {
+    if (!mitigationContext) return;
+    var saveBtn = document.getElementById('raid-mitigation-form-save');
+    var titleInput = document.getElementById('raid-mitigation-form-title');
+    var ownerId = document.getElementById('raid-mitigation-form-owner-id');
+    var dueInput = document.getElementById('raid-mitigation-form-due');
+    var statusSelect = document.getElementById('raid-mitigation-form-status');
+    var noteInput = document.getElementById('raid-mitigation-form-note');
+    var formModal = document.getElementById('raid-mitigation-form-modal');
+    if (!saveBtn || !titleInput || !ownerId || !dueInput || !formModal) return;
+
+    var title = titleInput.value.trim();
+    var assignedToUserId = parseInt(ownerId.value, 10);
+    var targetDate = dueInput.value;
+    if (!title) { showMitigationFormError('Enter the mitigation action.'); titleInput.focus(); return; }
+    if (!assignedToUserId) { showMitigationFormError('Select an owner.'); return; }
+    if (!targetDate) { showMitigationFormError('Enter a target date.'); dueInput.focus(); return; }
+    showMitigationFormError('');
+
+    var riskId = mitigationContext.riskId;
+    var isEdit = mitigationFormMode === 'edit';
+    var actionId = formModal.getAttribute('data-action-id');
+    var url = baseUrl + '/api/risk/' + riskId + '/mitigations';
+    var body = {
+      title: title,
+      assignedToUserId: assignedToUserId,
+      targetDate: targetDate
+    };
+    if (isEdit && actionId) {
+      url += '/' + actionId;
+      body.status = statusSelect ? statusSelect.value : 'Not started';
+      body.updateNote = noteInput ? noteInput.value.trim() : '';
+    }
+
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Saving\u2026';
+
+    fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'RequestVerificationToken': csrfToken
+      },
+      body: JSON.stringify(body)
+    })
+      .then(function (r) { return parseJsonResponse(r); })
+      .then(function (data) {
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Save';
+        if (data.error) {
+          showMitigationFormError(data.error);
+          return;
+        }
+        closeMitigationFormModal();
+        var count = data.mitigationCount;
+        if (typeof count !== 'number' && isEdit) {
+          count = parseInt(document.querySelector('.raid-ss-mitigation-open-btn[data-risk-id="' + riskId + '"]')?.getAttribute('data-mitigation-count') || '0', 10);
+        }
+        if (typeof count === 'number') {
+          setMitigationCountForRisk(riskId, count);
+        } else if (!isEdit) {
+          var prev = parseInt(document.querySelector('.raid-ss-mitigation-open-btn[data-risk-id="' + riskId + '"]')?.getAttribute('data-mitigation-count') || '0', 10);
+          setMitigationCountForRisk(riskId, prev + 1);
+        }
+        var list = document.getElementById('raid-mitigations-modal-list');
+        if (list && isMitigationsModalOpen()) {
+          loadMitigationsIntoList(riskId, list);
+        }
+      })
+      .catch(function (err) {
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Save';
+        showMitigationFormError(err && err.message ? err.message : 'Save failed.');
+      });
+  }
+
+  // ── Key risk indicators (register spreadsheet) ──
+
+  var kriContext = null;
+  var kriFormMode = 'add';
+
+  function bindKriButtons() {
+    var listModal = document.getElementById('raid-kris-modal');
+    var formModal = document.getElementById('raid-kri-form-modal');
+    if (!listModal || !formModal) return;
+
+    document.addEventListener('click', function (e) {
+      var openBtn = e.target.closest('.raid-ss-kri-open-btn');
+      if (openBtn) {
+        e.preventDefault();
+        openKrisModal(
+          parseInt(openBtn.getAttribute('data-risk-id'), 10),
+          openBtn.getAttribute('data-ref-label') || '',
+          openBtn
+        );
+        return;
+      }
+      var editBtn = e.target.closest('[data-raid-kri-edit]');
+      if (editBtn && kriContext && !readOnly) {
+        e.preventDefault();
+        openKriFormModal('edit', {
+          id: parseInt(editBtn.getAttribute('data-kri-id'), 10),
+          title: editBtn.getAttribute('data-kri-title') || '',
+          description: editBtn.getAttribute('data-kri-description') || '',
+          metric: editBtn.getAttribute('data-kri-metric') || '',
+          threshold: editBtn.getAttribute('data-kri-threshold') || ''
+        });
+      }
+    });
+
+    listModal.querySelectorAll('[data-raid-kris-close]').forEach(function (btn) {
+      btn.addEventListener('click', closeKrisModal);
+    });
+    formModal.querySelectorAll('[data-raid-kri-form-close]').forEach(function (btn) {
+      btn.addEventListener('click', closeKriFormModal);
+    });
+
+    var addBtn = document.getElementById('raid-kris-modal-add');
+    if (addBtn) {
+      addBtn.addEventListener('click', function () {
+        if (!kriContext || readOnly) return;
+        openKriFormModal('add');
+      });
+    }
+
+    var saveBtn = document.getElementById('raid-kri-form-save');
+    if (saveBtn) saveBtn.addEventListener('click', saveKriForm);
+
+    var removeBtn = document.getElementById('raid-kri-form-remove');
+    if (removeBtn) removeBtn.addEventListener('click', removeKriForm);
+  }
+
+  function openKrisModal(riskId, refLabel, toggleBtn) {
+    var modal = document.getElementById('raid-kris-modal');
+    var list = document.getElementById('raid-kris-modal-list');
+    var titleEl = document.getElementById('raid-kris-modal-title');
+    if (!modal || !list) return;
+
+    kriContext = { riskId: riskId, refLabel: refLabel, toggleBtn: toggleBtn };
+    if (titleEl) {
+      titleEl.textContent = refLabel ? 'Key risk indicators for ' + refLabel : 'Key risk indicators';
+    }
+    list.innerHTML = '<div class="raid-ss-kri-loading">Loading key risk indicators\u2026</div>';
+    modal.style.display = 'flex';
+    document.body.classList.add('raid-modal-open');
+    loadKrisIntoList(riskId, list);
+  }
+
+  function closeKrisModal() {
+    var modal = document.getElementById('raid-kris-modal');
+    if (modal) modal.style.display = 'none';
+    if (!isKriFormModalOpen()) {
+      document.body.classList.remove('raid-modal-open');
+    }
+    kriContext = null;
+  }
+
+  function isKrisModalOpen() {
+    var modal = document.getElementById('raid-kris-modal');
+    return modal && modal.style.display === 'flex';
+  }
+
+  function isKriFormModalOpen() {
+    var modal = document.getElementById('raid-kri-form-modal');
+    return modal && modal.style.display === 'flex';
+  }
+
+  function loadKrisIntoList(riskId, list) {
+    fetch(baseUrl + '/api/risk/' + riskId + '/kris')
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (kriContext && kriContext.riskId === riskId && data.krisSummary !== undefined) {
+          setKriCountForRisk(riskId, data.count || 0, data.krisSummary);
+        }
+        var items = (data && data.kris) || [];
+        if (!items.length) {
+          list.innerHTML = '<div class="raid-ss-kri-empty">No key risk indicators yet. Use Add KRI to create one.</div>';
+          return;
+        }
+        list.innerHTML = '';
+        items.forEach(function (k) {
+          list.appendChild(renderKriListItem(k));
+        });
+      })
+      .catch(function () {
+        list.innerHTML = '<div class="raid-ss-kri-empty">Failed to load key risk indicators.</div>';
+      });
+  }
+
+  function renderKriListItem(k) {
+    var card = document.createElement('div');
+    card.className = 'raid-ss-kri-card';
+    var desc = (k.description || '').trim();
+    var descHtml = desc
+      ? '<p class="govuk-body-s govuk-!-margin-top-2 govuk-!-margin-bottom-0 raid-ss-kri-notes">' + escapeHtml(desc) + '</p>'
+      : '';
+    card.innerHTML =
+      '<div class="raid-ss-kri-card-head">' +
+      '<h3 class="govuk-heading-s govuk-!-margin-bottom-0">' + escapeHtml(k.title || 'KRI') + '</h3>' +
+      '</div>' +
+      '<dl class="govuk-summary-list govuk-summary-list--no-border raid-ss-kri-meta">' +
+      '<div class="govuk-summary-list__row"><dt class="govuk-summary-list__key">Metric</dt><dd class="govuk-summary-list__value">' + escapeHtml(k.metric || '—') + '</dd></div>' +
+      '<div class="govuk-summary-list__row"><dt class="govuk-summary-list__key">Threshold</dt><dd class="govuk-summary-list__value">' + escapeHtml(k.threshold || '—') + '</dd></div>' +
+      '</dl>' +
+      descHtml +
+      (readOnly ? '' :
+        '<button type="button" class="govuk-link govuk-!-margin-top-2 govuk-!-margin-bottom-0" data-raid-kri-edit' +
+        ' data-kri-id="' + k.id + '"' +
+        ' data-kri-title="' + escapeAttr(k.title || '') + '"' +
+        ' data-kri-description="' + escapeAttr(k.description || '') + '"' +
+        ' data-kri-metric="' + escapeAttr(k.metric || '') + '"' +
+        ' data-kri-threshold="' + escapeAttr(k.threshold || '') + '">Edit</button>');
+    return card;
+  }
+
+  function openKriFormModal(mode, kri) {
+    if (!kriContext) return;
+    kriFormMode = mode;
+    var modal = document.getElementById('raid-kri-form-modal');
+    var titleEl = document.getElementById('raid-kri-form-modal-title');
+    var titleInput = document.getElementById('raid-kri-form-title');
+    var descInput = document.getElementById('raid-kri-form-description');
+    var metricInput = document.getElementById('raid-kri-form-metric');
+    var thresholdInput = document.getElementById('raid-kri-form-threshold');
+    var removeBtn = document.getElementById('raid-kri-form-remove');
+    var errEl = document.getElementById('raid-kri-form-error');
+    if (!modal || !titleInput) return;
+
+    if (titleEl) titleEl.textContent = mode === 'edit' ? 'Edit KRI' : 'Add KRI';
+    titleInput.value = kri && kri.title ? kri.title : '';
+    if (descInput) descInput.value = kri && kri.description ? kri.description : '';
+    if (metricInput) metricInput.value = kri && kri.metric ? kri.metric : '';
+    if (thresholdInput) thresholdInput.value = kri && kri.threshold ? kri.threshold : '';
+    if (removeBtn) removeBtn.style.display = mode === 'edit' ? '' : 'none';
+    if (errEl) { errEl.style.display = 'none'; errEl.textContent = ''; }
+    modal.setAttribute('data-kri-id', kri && kri.id ? kri.id : '');
+    modal.style.display = 'flex';
+    document.body.classList.add('raid-modal-open');
+    titleInput.focus();
+  }
+
+  function closeKriFormModal() {
+    var modal = document.getElementById('raid-kri-form-modal');
+    if (modal) modal.style.display = 'none';
+    if (!isKrisModalOpen()) {
+      document.body.classList.remove('raid-modal-open');
+    }
+  }
+
+  function showKriFormError(msg) {
+    var errEl = document.getElementById('raid-kri-form-error');
+    if (!errEl) return;
+    if (msg) {
+      errEl.textContent = msg;
+      errEl.style.display = 'block';
+    } else {
+      errEl.textContent = '';
+      errEl.style.display = 'none';
+    }
+  }
+
+  function saveKriForm() {
+    if (!kriContext) return;
+    var saveBtn = document.getElementById('raid-kri-form-save');
+    var titleInput = document.getElementById('raid-kri-form-title');
+    var descInput = document.getElementById('raid-kri-form-description');
+    var metricInput = document.getElementById('raid-kri-form-metric');
+    var thresholdInput = document.getElementById('raid-kri-form-threshold');
+    var formModal = document.getElementById('raid-kri-form-modal');
+    var riskId = kriContext.riskId;
+    var isEdit = kriFormMode === 'edit';
+    var kriId = formModal ? formModal.getAttribute('data-kri-id') : '';
+    var payload = {
+      title: titleInput ? titleInput.value : '',
+      description: descInput ? descInput.value : '',
+      metric: metricInput ? metricInput.value : '',
+      threshold: thresholdInput ? thresholdInput.value : ''
+    };
+
+    var url = baseUrl + '/api/risk/' + riskId + '/kris';
+    if (isEdit && kriId) url += '/' + kriId;
+
+    if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving…'; }
+    fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'RequestVerificationToken': csrfToken
+      },
+      body: JSON.stringify(payload)
+    })
+      .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+      .then(function (res) {
+        if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save'; }
+        var data = res.data || {};
+        if (!res.ok) {
+          showKriFormError(data.error || 'Save failed.');
+          return;
+        }
+        closeKriFormModal();
+        if (data.kriCount !== undefined) {
+          setKriCountForRisk(riskId, data.kriCount, data.krisSummary || '');
+        }
+        var list = document.getElementById('raid-kris-modal-list');
+        if (list && isKrisModalOpen()) {
+          loadKrisIntoList(riskId, list);
+        }
+      })
+      .catch(function (err) {
+        if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save'; }
+        showKriFormError(err && err.message ? err.message : 'Save failed.');
+      });
+  }
+
+  function removeKriForm() {
+    if (!kriContext || kriFormMode !== 'edit') return;
+    var formModal = document.getElementById('raid-kri-form-modal');
+    var kriId = formModal ? formModal.getAttribute('data-kri-id') : '';
+    if (!kriId) return;
+    if (!window.confirm('Remove this key risk indicator? This cannot be undone.')) return;
+
+    var removeBtn = document.getElementById('raid-kri-form-remove');
+    var riskId = kriContext.riskId;
+    if (removeBtn) { removeBtn.disabled = true; }
+    fetch(baseUrl + '/api/risk/' + riskId + '/kris/' + kriId + '/remove', {
+      method: 'POST',
+      headers: { 'RequestVerificationToken': csrfToken }
+    })
+      .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+      .then(function (res) {
+        if (removeBtn) { removeBtn.disabled = false; }
+        var data = res.data || {};
+        if (!res.ok) {
+          showKriFormError(data.error || 'Remove failed.');
+          return;
+        }
+        closeKriFormModal();
+        if (data.kriCount !== undefined) {
+          setKriCountForRisk(riskId, data.kriCount, data.krisSummary || '');
+        }
+        var list = document.getElementById('raid-kris-modal-list');
+        if (list && isKrisModalOpen()) {
+          loadKrisIntoList(riskId, list);
+        }
+      })
+      .catch(function (err) {
+        if (removeBtn) { removeBtn.disabled = false; }
+        showKriFormError(err && err.message ? err.message : 'Remove failed.');
+      });
+  }
+
+  function escapeAttr(s) {
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/"/g, '&quot;')
+      .replace(/</g, '&lt;');
   }
 
   // ── Public API ──

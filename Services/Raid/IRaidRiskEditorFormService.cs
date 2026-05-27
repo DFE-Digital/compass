@@ -28,4 +28,10 @@ public interface IRaidRiskEditorFormService
         ModernRaidRiskEditorForm form,
         int? forceWorkProjectId,
         CancellationToken cancellationToken);
+
+    /// <summary>Replaces all KRIs for a risk from editor form rows (metric + threshold).</summary>
+    Task PersistRiskKeyRiskIndicatorsAsync(
+        int riskId,
+        List<RiskKriItemForm>? items,
+        CancellationToken cancellationToken);
 }

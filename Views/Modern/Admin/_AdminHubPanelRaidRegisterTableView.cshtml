@@ -1,0 +1,77 @@
+@model Compass.ViewModels.Modern.AdminRaidRegisterTableViewPanel
+@{
+  var panel = "raid-register-table-view";
+}
+
+<div id="panel-@panel" class="admin-panel">
+  <h2 class="govuk-heading-m">RAID register — table view</h2>
+  <p class="govuk-body">
+    Set the default column order for RAID register spreadsheets (manage view). Users can still reorder columns for themselves; reset table restores these defaults.
+  </p>
+
+  <nav class="govuk-!-margin-bottom-4" aria-label="Register table types">
+    <ul class="govuk-list govuk-!-margin-bottom-0" style="display:flex; flex-wrap:wrap; gap:0.5rem 1rem;">
+      @foreach (var tab in Model.Tabs)
+      {
+        <li>
+          <a class="govuk-link govuk-link--no-visited-state@(tab.IsActive ? " govuk-!-font-weight-bold" : "")"
+             href="@Url.Action("Index", "ModernAdmin", new { panel, entity = tab.EntityType })"
+             @(tab.IsActive ? Html.Raw(" aria-current=\"page\"") : null)>
+            @tab.Label@(tab.HasCustomLayout ? " *" : "")
+          </a>
+        </li>
+      }
+    </ul>
+  </nav>
+
+  @if (Model.HasCustomLayout)
+  {
+    <p class="govuk-body-s govuk-!-margin-bottom-2">
+      Custom layout saved
+      @if (Model.UpdatedAt.HasValue)
+      {
+        <text>on @Model.UpdatedAt.Value.ToString("d MMM yyyy HH:mm") UTC</text>
+      }
+      @if (!string.IsNullOrWhiteSpace(Model.UpdatedByName))
+      {
+        <text>by @Model.UpdatedByName</text>
+      }
+      .
+    </p>
+  }
+  else
+  {
+    <p class="govuk-body-s govuk-!-margin-bottom-2">Using built-in default column order from the application.</p>
+  }
+
+  <form method="post" action="@Url.Action("RaidRegisterTableViewSave", "ModernAdmin")" id="raid-register-table-order-form">
+    @Html.AntiForgeryToken()
+    <input type="hidden" name="entityType" value="@Model.ActiveEntityType" />
+
+    <ol class="raid-admin-col-order-list govuk-!-margin-bottom-4" id="raid-admin-col-order-list">
+      @foreach (var col in Model.Columns)
+      {
+        <li class="raid-admin-col-order-item" data-col-key="@col.Key">
+          <input type="hidden" name="columnOrder" value="@col.Key" />
+          <span class="raid-admin-col-order-item__label">@col.Label</span>
+          <span class="govuk-body-s raid-admin-col-order-item__key">(@col.Key)</span>
+          <span class="raid-admin-col-order-item__actions">
+            <button type="button" class="govuk-link raid-admin-col-move-up" aria-label="Move @col.Label up">Up</button>
+            <button type="button" class="govuk-link raid-admin-col-move-down" aria-label="Move @col.Label down">Down</button>
+          </span>
+        </li>
+      }
+    </ol>
+
+    <div class="govuk-button-group">
+      <button type="submit" class="govuk-button" data-module="govuk-button">Save default order</button>
+    </div>
+  </form>
+
+  <form method="post" action="@Url.Action("RaidRegisterTableViewReset", "ModernAdmin")" class="govuk-!-margin-top-4"
+        onsubmit="return confirm('Reset to the built-in default column order for this table?');">
+    @Html.AntiForgeryToken()
+    <input type="hidden" name="entityType" value="@Model.ActiveEntityType" />
+    <button type="submit" class="govuk-button govuk-button--secondary" data-module="govuk-button">Reset to built-in default</button>
+  </form>
+</div>

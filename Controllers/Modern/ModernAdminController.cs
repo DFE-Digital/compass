@@ -49,7 +49,8 @@ public partial class ModernAdminController : Controller
         "decision-statuses", "decision-priorities", "decision-outcomes", "decision-implementation-statuses",
         "raid-evidence-types", "governance-boards", "demand-request-statuses", "triage-outcome-stages",
         "assumption-statuses", "assumption-criticalities", "dependency-criticalities", "dependency-link-types",
-        "near-miss-types", "near-miss-seriousness", "near-miss-statuses"
+        "near-miss-types", "near-miss-seriousness", "near-miss-statuses",
+        "raid-register-table-view"
     };
 
     public ModernAdminController(
@@ -76,7 +77,7 @@ public partial class ModernAdminController : Controller
 
     [HttpGet("")]
     [HttpGet("index")]
-    public async Task<IActionResult> Index(string? panel = null)
+    public async Task<IActionResult> Index(string? panel = null, string? entity = null)
     {
         SetAdminChrome("admin-index");
 
@@ -245,6 +246,10 @@ public partial class ModernAdminController : Controller
                         IsActive = x.IsActive
                     })
                     .ToListAsync();
+                break;
+
+            case "raid-register-table-view":
+                await PopulateRaidRegisterTableViewPanelAsync(vm, entity, HttpContext.RequestAborted);
                 break;
 
             case "risk-statuses":

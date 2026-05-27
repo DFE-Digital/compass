@@ -62,12 +62,12 @@
 
   var trackingRegisters = ViewBag.RiskTrackingRegisters as IReadOnlyList<WorkRaidRegisterTrackingVm>
       ?? Array.Empty<WorkRaidRegisterTrackingVm>();
-  var originalScoreInt = Model.InherentScore.HasValue
+  var inherentScoreInt = Model.InherentScore.HasValue
       ? (int)Math.Round(Model.InherentScore.Value, MidpointRounding.AwayFromZero)
       : Model.RiskScore;
   var currentScoreInt = Model.CurrentScore.HasValue
       ? (int)Math.Round(Model.CurrentScore.Value, MidpointRounding.AwayFromZero)
-      : originalScoreInt;
+      : inherentScoreInt;
   var score = Model.RiskScore;
   var ratingLabel = ViewBag.RatingLabel as string ?? "—";
   var tierBadgeStep = ViewBag.TierBadgeStep is int ts ? ts : 2;
@@ -413,7 +413,7 @@
             <thead class="govuk-table__head">
               <tr class="govuk-table__row">
                 <th scope="col" class="govuk-table__header">Tier</th>
-                <th scope="col" class="govuk-table__header">Original score</th>
+                <th scope="col" class="govuk-table__header">Inherent score</th>
                 <th scope="col" class="govuk-table__header">Current score</th>
                 <th scope="col" class="govuk-table__header">Owner / Assigned to</th>
                 <th scope="col" class="govuk-table__header">Proximity</th>
@@ -434,9 +434,9 @@
                 </td>
                 <td class="govuk-table__cell">
                   @{
-                    var origSr = $"Original risk score {originalScoreInt} out of {riskScoreMax}";
+                    var inherentSr = $"Inherent risk score {inherentScoreInt} out of {riskScoreMax}";
                   }
-                  <span class="@WorkBadgeCss.RaidRiskScoreDfeFrontendBadgeClass(originalScoreInt) dfe-f-u-tabular-numbers" aria-label="@origSr"><span aria-hidden="true">@originalScoreInt</span></span>
+                  <span class="@WorkBadgeCss.RaidRiskScoreDfeFrontendBadgeClass(inherentScoreInt) dfe-f-u-tabular-numbers" aria-label="@inherentSr"><span aria-hidden="true">@inherentScoreInt</span></span>
                 </td>
                 <td class="govuk-table__cell">
                   @{
@@ -640,7 +640,7 @@
           <div class="govuk-summary-card__content">
             <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
               <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed govuk-!-margin-bottom-0">
-                <caption class="govuk-table__caption govuk-visually-hidden">Original, current, residual and tolerance risk ratings</caption>
+                <caption class="govuk-table__caption govuk-visually-hidden">Inherent, current, residual and tolerance risk ratings</caption>
                 <thead class="govuk-table__head">
                   <tr class="govuk-table__row">
                     <th scope="col" class="govuk-table__header">Rating</th>
@@ -655,7 +655,7 @@
                     decimal? currentScoreDisplay = Model.CurrentScore ?? originalScoreDisplay;
                   }
                   <tr class="govuk-table__row">
-                    <th scope="row" class="govuk-table__header">Original (inherent)</th>
+                    <th scope="row" class="govuk-table__header">Inherent</th>
                     <td class="govuk-table__cell">@(Model.Likelihood?.Label ?? "—")</td>
                     <td class="govuk-table__cell">@(Model.ImpactLevel?.Label ?? "—")</td>
                     <td class="govuk-table__cell govuk-table__cell--numeric">
@@ -689,7 +689,7 @@
                 </tbody>
               </table>
             </div>
-            <p class="govuk-body-s govuk-!-margin-top-3 govuk-!-margin-bottom-0" style="color:#505a5f;">Original rating is set when the risk is first recorded. Current, residual and tolerance ratings can be updated over time.</p>
+            <p class="govuk-body-s govuk-!-margin-top-3 govuk-!-margin-bottom-0" style="color:#505a5f;">Inherent rating is set when the risk is first recorded. Current, residual and tolerance ratings can be updated over time.</p>
           </div>
         </div>
 
@@ -749,6 +749,27 @@
               <dd class="govuk-summary-list__value">@if (string.IsNullOrWhiteSpace(Model.ImpactIfRealised)) { <text>—</text> } else { <span class="govuk-body" style="white-space:pre-wrap;">@Model.ImpactIfRealised</span> }</dd>
               <dd class="govuk-summary-list__actions">
                 <a class="govuk-link govuk-link--no-visited-state" href="@($"{riskEditUrl}#raid-risk-edit-impact-realised")">Change<span class="govuk-visually-hidden"> impact if realised</span></a>
+              </dd>
+            </div>
+            <div class="govuk-summary-list__row">
+              <dt class="govuk-summary-list__key govuk-summary-list__key--width-one-third">Contingency</dt>
+              <dd class="govuk-summary-list__value">@if (string.IsNullOrWhiteSpace(Model.Contingency)) { <text>—</text> } else { <span class="govuk-body" style="white-space:pre-wrap;">@Model.Contingency</span> }</dd>
+              <dd class="govuk-summary-list__actions">
+                <a class="govuk-link govuk-link--no-visited-state" href="@($"{riskEditUrl}#raid-risk-edit-contingency")">Change<span class="govuk-visually-hidden"> contingency</span></a>
+              </dd>
+            </div>
+            <div class="govuk-summary-list__row">
+              <dt class="govuk-summary-list__key govuk-summary-list__key--width-one-third">Assurance</dt>
+              <dd class="govuk-summary-list__value">@if (string.IsNullOrWhiteSpace(Model.Assurance)) { <text>—</text> } else { <span class="govuk-body" style="white-space:pre-wrap;">@Model.Assurance</span> }</dd>
+              <dd class="govuk-summary-list__actions">
+                <a class="govuk-link govuk-link--no-visited-state" href="@($"{riskEditUrl}#raid-risk-edit-assurance")">Change<span class="govuk-visually-hidden"> assurance</span></a>
+              </dd>
+            </div>
+            <div class="govuk-summary-list__row">
+              <dt class="govuk-summary-list__key govuk-summary-list__key--width-one-third">Financial impact</dt>
+              <dd class="govuk-summary-list__value">@if (string.IsNullOrWhiteSpace(Model.FinancialImpact)) { <text>—</text> } else { <span class="govuk-body" style="white-space:pre-wrap;">@Model.FinancialImpact</span> }</dd>
+              <dd class="govuk-summary-list__actions">
+                <a class="govuk-link govuk-link--no-visited-state" href="@($"{riskEditUrl}#raid-risk-edit-financial-impact")">Change<span class="govuk-visually-hidden"> financial impact</span></a>
               </dd>
             </div>
             <div class="govuk-summary-list__row">
@@ -826,9 +847,22 @@
               <textarea class="govuk-textarea govuk-!-width-full" id="raid-kri-desc" name="description" rows="4" aria-describedby="raid-kri-desc-hint"></textarea>
             </div>
             <div class="govuk-form-group">
-              <label class="govuk-label govuk-label--s" for="raid-kri-metric">Metric</label>
-              <div id="raid-kri-metric-hint" class="govuk-hint">What you measure, units, thresholds, or reporting frequency.</div>
-              <textarea class="govuk-textarea govuk-!-width-full" id="raid-kri-metric" name="metric" rows="3" maxlength="2000" aria-describedby="raid-kri-metric-hint"></textarea>
+              <div class="govuk-grid-row">
+                <div class="govuk-grid-column-one-half">
+                  <div class="govuk-form-group govuk-!-margin-bottom-3">
+                    <label class="govuk-label govuk-label--s" for="raid-kri-metric">Metric</label>
+                    <div id="raid-kri-metric-hint" class="govuk-hint">What you measure.</div>
+                    <input class="govuk-input govuk-!-width-full" id="raid-kri-metric" name="metric" type="text" maxlength="2000" aria-describedby="raid-kri-metric-hint" />
+                  </div>
+                </div>
+                <div class="govuk-grid-column-one-half">
+                  <div class="govuk-form-group govuk-!-margin-bottom-0">
+                    <label class="govuk-label govuk-label--s" for="raid-kri-threshold">Threshold</label>
+                    <div id="raid-kri-threshold-hint" class="govuk-hint">When the risk escalates or is reviewed.</div>
+                    <input class="govuk-input govuk-!-width-full" id="raid-kri-threshold" name="threshold" type="text" maxlength="2000" aria-describedby="raid-kri-threshold-hint" />
+                  </div>
+                </div>
+              </div>
             </div>
             <div class="govuk-button-group">
               <button type="submit" class="govuk-button" data-module="govuk-button">Add</button>
@@ -856,6 +890,9 @@
                   <th scope="col" class="govuk-table__header" aria-sort="none">
           <button type="button" class="dfe-f-table-sort-button">Metric</button>
         </th>
+                  <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Threshold</button>
+        </th>
                   <th></th>
                 </tr>
               </thead>
@@ -866,6 +903,7 @@
                   kriIdx++;
                   var descCell = string.IsNullOrWhiteSpace(k.Description) ? "—" : k.Description;
                   var metricCell = string.IsNullOrWhiteSpace(k.Metric) ? "—" : k.Metric;
+                  var thresholdCell = string.IsNullOrWhiteSpace(k.Threshold) ? "—" : k.Threshold;
                   <tr class="govuk-table__row">
                     <td class="govuk-table__cell">@kriIdx</td>
                     <td class="govuk-table__cell">
@@ -876,6 +914,9 @@
                     </td>
                     <td class="govuk-table__cell">
                       <div class="govuk-body-s" style="white-space:pre-wrap;max-width:24rem;">@metricCell</div>
+                    </td>
+                    <td class="govuk-table__cell">
+                      <div class="govuk-body-s" style="white-space:pre-wrap;max-width:24rem;">@thresholdCell</div>
                     </td>
                     <td class="govuk-table__cell">
                       <form method="post"
@@ -895,7 +936,7 @@
         }
         else
         {
-          <p class="govuk-body">No key risk indicators yet. Use <strong>Add KRI</strong> to record title, description, and metric.</p>
+          <p class="govuk-body">No key risk indicators yet. Use <strong>Add KRI</strong> to record metric and threshold, or add them when editing the risk.</p>
         }
 
         <script nonce="@cspNonce">

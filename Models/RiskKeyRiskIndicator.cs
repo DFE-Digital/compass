@@ -21,9 +21,13 @@ public class RiskKeyRiskIndicator
 
     public string? Description { get; set; }
 
-    /// <summary>What is measured (threshold, unit, frequency, etc.).</summary>
+    /// <summary>What is measured.</summary>
     [MaxLength(2000)]
     public string? Metric { get; set; }
+
+    /// <summary>Threshold at which the risk escalates or is reviewed.</summary>
+    [MaxLength(2000)]
+    public string? Threshold { get; set; }
 
     public int SortOrder { get; set; }
 

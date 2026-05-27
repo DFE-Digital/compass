@@ -4,6 +4,7 @@ using Compass.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Compass.Migrations
 {
     [DbContext(typeof(CompassDbContext))]
-    partial class CompassDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260527160754_AddRaidRegisterSpreadsheetLayouts")]
+    partial class AddRaidRegisterSpreadsheetLayouts
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -12108,40 +12111,6 @@ namespace Compass.Migrations
                     b.ToTable("RaidRegisterServices");
                 });
 
-            modelBuilder.Entity("Compass.Models.RaidRegisterSpreadsheetLayout", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("ColumnOrderJson")
-                        .IsRequired()
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("EntityType")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("nvarchar(32)");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int?>("UpdatedByUserId")
-                        .HasColumnType("int");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("EntityType")
-                        .IsUnique();
-
-                    b.HasIndex("UpdatedByUserId");
-
-                    b.ToTable("RaidRegisterSpreadsheetLayouts");
-                });
-
             modelBuilder.Entity("Compass.Models.RaidRegisterUser", b =>
                 {
                     b.Property<int>("RaidRegisterId")
@@ -12333,10 +12302,6 @@ namespace Compass.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("Assurance")
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
-
                     b.Property<string>("BusinessArea")
                         .HasMaxLength(450)
                         .HasColumnType("nvarchar(450)");
@@ -12355,10 +12320,6 @@ namespace Compass.Migrations
                     b.Property<DateTime?>("ClosedDate")
                         .HasColumnType("datetime2");
 
-                    b.Property<string>("Contingency")
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
-
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
@@ -12375,10 +12336,6 @@ namespace Compass.Migrations
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<string>("Description")
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<string>("FinancialImpact")
                         .HasMaxLength(450)
                         .HasColumnType("nvarchar(450)");
 
@@ -12799,10 +12756,6 @@ namespace Compass.Migrations
 
                     b.Property<int>("SortOrder")
                         .HasColumnType("int");
-
-                    b.Property<string>("Threshold")
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
 
                     b.Property<string>("Title")
                         .IsRequired()
@@ -18144,16 +18097,6 @@ namespace Compass.Migrations
                     b.Navigation("FipsService");
 
                     b.Navigation("RaidRegister");
-                });
-
-            modelBuilder.Entity("Compass.Models.RaidRegisterSpreadsheetLayout", b =>
-                {
-                    b.HasOne("Compass.Models.User", "UpdatedByUser")
-                        .WithMany()
-                        .HasForeignKey("UpdatedByUserId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.Navigation("UpdatedByUser");
                 });
 
             modelBuilder.Entity("Compass.Models.RaidRegisterUser", b =>
