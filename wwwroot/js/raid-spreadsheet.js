@@ -2078,6 +2078,7 @@
   var COL_WIDTHS_STORAGE = 'colWidths-v2';
   var DEFAULT_WIDE_COL_MIN = 300;
   var DEFAULT_NARROW_COL_MAX = 150;
+  var DEFAULT_RELATION_COL_WIDTH = 450;
   var COL_RESIZE_MIN = 50;
   var WIDE_TEXT_COLUMNS = { title: true, description: true, cause: true, impact: true };
 
@@ -2114,6 +2115,9 @@
   }
 
   function defaultWidthConfigForColumn(col) {
+    if (col === 'relation') {
+      return { width: DEFAULT_RELATION_COL_WIDTH, minWidth: COL_RESIZE_MIN, maxWidth: null };
+    }
     if (isWideTextColumn(col)) {
       return { width: DEFAULT_WIDE_COL_MIN, minWidth: DEFAULT_WIDE_COL_MIN, maxWidth: null };
     }
@@ -2158,8 +2162,18 @@
         var headers = table.querySelectorAll('thead .raid-ss-header-row th');
         headers.forEach(function (th) {
           var col = th.getAttribute('data-col');
-          if (!col || !widths[col]) return;
+          if (!col) return;
+          if (!widths[col]) {
+            if (col === 'relation') {
+              applyColumnWidthConfig(table, th, defaultWidthConfigForColumn(col));
+            }
+            return;
+          }
           var w = widths[col];
+          if (col === 'relation' && w <= DEFAULT_NARROW_COL_MAX) {
+            applyColumnWidthConfig(table, th, defaultWidthConfigForColumn(col));
+            return;
+          }
           var minW = isWideTextColumn(col) ? Math.max(w, DEFAULT_WIDE_COL_MIN) : COL_RESIZE_MIN;
           applyColumnWidthConfig(table, th, { width: w, minWidth: minW, maxWidth: null });
         });
@@ -2343,17 +2357,27 @@
   }
 
   function loadCommentsIntoGrid(entity, id, grid) {
-    fetch('/api/comments/' + commentEntityType(entity) + '/' + id)
+    var url = entity === 'risk'
+      ? baseUrl + '/api/risk/' + id + '/comment-timeline'
+      : '/api/comments/' + commentEntityType(entity) + '/' + id;
+
+    fetch(url)
       .then(function (r) { return r.json(); })
       .then(function (comments) {
         grid.innerHTML = '';
         if (!comments || comments.length === 0) {
-          grid.innerHTML = '<div class="raid-ss-comment-empty">No comments yet. Use Add comment to leave the first note.</div>';
+          var emptyMsg = entity === 'risk'
+            ? 'No comments or mitigation updates yet. Use Add comment to leave a note on this risk.'
+            : 'No comments yet. Use Add comment to leave the first note.';
+          grid.innerHTML = '<div class="raid-ss-comment-empty">' + emptyMsg + '</div>';
           return;
         }
-        comments.slice().sort(function (a, b) {
-          return new Date(b.createdAt) - new Date(a.createdAt);
-        }).forEach(function (c) {
+        if (entity !== 'risk') {
+          comments = comments.slice().sort(function (a, b) {
+            return new Date(b.createdAt) - new Date(a.createdAt);
+          });
+        }
+        comments.forEach(function (c) {
           appendCommentToGrid(grid, c);
         });
         grid.scrollTop = 0;
@@ -2367,18 +2391,26 @@
     var empty = grid.querySelector('.raid-ss-comment-empty, .raid-ss-comment-loading');
     if (empty) empty.remove();
 
+    var isMitigationUpdate = comment.kind === 'mitigation-update';
     var div = document.createElement('div');
-    div.className = 'raid-ss-comment-item';
+    div.className = 'raid-ss-comment-item' + (isMitigationUpdate ? ' raid-ss-comment-item--mitigation' : '');
     div.setAttribute('role', 'listitem');
-    div.setAttribute('data-comment-id', comment.id);
+    if (comment.id != null) {
+      div.setAttribute('data-comment-id', comment.id);
+    }
 
     var meta = document.createElement('div');
     meta.className = 'raid-ss-comment-meta';
-    var who = comment.createdByUser ? comment.createdByUser.name || comment.createdByUser.email : 'Unknown';
+    var who;
+    if (isMitigationUpdate) {
+      who = 'Mitigation update' + (comment.mitigationTitle ? ': ' + comment.mitigationTitle : '');
+    } else {
+      who = comment.createdByUser ? comment.createdByUser.name || comment.createdByUser.email : 'Unknown';
+    }
     var when = comment.createdAt
       ? new Date(comment.createdAt).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
-      : '';
-    meta.textContent = who + ' \u00b7 ' + when;
+      : (isMitigationUpdate ? 'Date unknown' : '');
+    meta.textContent = when ? who + ' \u00b7 ' + when : who;
 
     var text = document.createElement('div');
     text.className = 'raid-ss-comment-text';
@@ -3292,6 +3324,20 @@
         var list = document.getElementById('raid-mitigations-modal-list');
         if (list && isMitigationsModalOpen()) {
           loadMitigationsIntoList(riskId, list);
+        }
+        if (isEdit && body.updateNote) {
+          var commentToggle = document.querySelector(
+            '.raid-ss-comment-toggle[data-entity="risk"][data-id="' + riskId + '"]');
+          if (commentToggle) {
+            var commentN = parseInt(commentToggle.getAttribute('data-comment-count'), 10) || 0;
+            setCommentCount(commentToggle, commentN + 1);
+          }
+          if (commentContext && commentContext.entity === 'risk' && String(commentContext.id) === String(riskId)) {
+            var commentGrid = document.getElementById('raid-comments-modal-grid');
+            if (commentGrid && isCommentsModalOpen()) {
+              loadCommentsIntoGrid('risk', riskId, commentGrid);
+            }
+          }
         }
       })
       .catch(function (err) {

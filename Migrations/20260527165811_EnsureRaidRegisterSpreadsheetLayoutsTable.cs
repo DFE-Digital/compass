@@ -1,5 +1,4 @@
-﻿using System;
-using Microsoft.EntityFrameworkCore.Migrations;
+﻿using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
@@ -11,38 +10,47 @@ namespace Compass.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.CreateTable(
-                name: "RaidRegisterSpreadsheetLayouts",
-                columns: table => new
-                {
-                    Id = table.Column<int>(type: "int", nullable: false)
-                        .Annotation("SqlServer:Identity", "1, 1"),
-                    EntityType = table.Column<string>(type: "nvarchar(32)", maxLength: 32, nullable: false),
-                    ColumnOrderJson = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    UpdatedByUserId = table.Column<int>(type: "int", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_RaidRegisterSpreadsheetLayouts", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_RaidRegisterSpreadsheetLayouts_Users_UpdatedByUserId",
-                        column: x => x.UpdatedByUserId,
-                        principalTable: "Users",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
+            // Table may already exist from 20260527160754_AddRaidRegisterSpreadsheetLayouts (partial deploy / history drift).
+            migrationBuilder.Sql("""
+                IF OBJECT_ID(N'[RaidRegisterSpreadsheetLayouts]', N'U') IS NULL
+                BEGIN
+                    CREATE TABLE [RaidRegisterSpreadsheetLayouts] (
+                        [Id] int NOT NULL IDENTITY,
+                        [EntityType] nvarchar(32) NOT NULL,
+                        [ColumnOrderJson] nvarchar(max) NOT NULL,
+                        [UpdatedAt] datetime2 NOT NULL,
+                        [UpdatedByUserId] int NULL,
+                        CONSTRAINT [PK_RaidRegisterSpreadsheetLayouts] PRIMARY KEY ([Id])
+                    );
+                END
 
-            migrationBuilder.CreateIndex(
-                name: "IX_RaidRegisterSpreadsheetLayouts_EntityType",
-                table: "RaidRegisterSpreadsheetLayouts",
-                column: "EntityType",
-                unique: true);
+                IF NOT EXISTS (
+                    SELECT 1 FROM sys.foreign_keys
+                    WHERE name = N'FK_RaidRegisterSpreadsheetLayouts_Users_UpdatedByUserId')
+                BEGIN
+                    ALTER TABLE [RaidRegisterSpreadsheetLayouts]
+                    ADD CONSTRAINT [FK_RaidRegisterSpreadsheetLayouts_Users_UpdatedByUserId]
+                        FOREIGN KEY ([UpdatedByUserId]) REFERENCES [Users] ([Id]) ON DELETE NO ACTION;
+                END
 
-            migrationBuilder.CreateIndex(
-                name: "IX_RaidRegisterSpreadsheetLayouts_UpdatedByUserId",
-                table: "RaidRegisterSpreadsheetLayouts",
-                column: "UpdatedByUserId");
+                IF NOT EXISTS (
+                    SELECT 1 FROM sys.indexes
+                    WHERE name = N'IX_RaidRegisterSpreadsheetLayouts_EntityType'
+                      AND object_id = OBJECT_ID(N'[RaidRegisterSpreadsheetLayouts]'))
+                BEGIN
+                    CREATE UNIQUE INDEX [IX_RaidRegisterSpreadsheetLayouts_EntityType]
+                        ON [RaidRegisterSpreadsheetLayouts] ([EntityType]);
+                END
+
+                IF NOT EXISTS (
+                    SELECT 1 FROM sys.indexes
+                    WHERE name = N'IX_RaidRegisterSpreadsheetLayouts_UpdatedByUserId'
+                      AND object_id = OBJECT_ID(N'[RaidRegisterSpreadsheetLayouts]'))
+                BEGIN
+                    CREATE INDEX [IX_RaidRegisterSpreadsheetLayouts_UpdatedByUserId]
+                        ON [RaidRegisterSpreadsheetLayouts] ([UpdatedByUserId]);
+                END
+                """);
         }
 
         /// <inheritdoc />
