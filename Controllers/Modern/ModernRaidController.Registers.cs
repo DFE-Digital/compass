@@ -728,6 +728,27 @@ public partial class ModernRaidController
             var kriCountByRiskId = kriRows
                 .GroupBy(k => k.RiskId)
                 .ToDictionary(g => g.Key, g => g.Count());
+
+            var riskCommentCounts = await _db.Comments.AsNoTracking()
+                .Where(c => c.EntityType == "Risk" && riskIds.Contains(c.EntityId) && !c.IsDeleted)
+                .GroupBy(c => c.EntityId)
+                .Select(g => new { RiskId = g.Key, Count = g.Count() })
+                .ToDictionaryAsync(x => x.RiskId, x => x.Count, cancellationToken);
+
+            var mitigationNotesByRisk = await _db.RiskActions.AsNoTracking()
+                .Where(ra => riskIds.Contains(ra.RiskId) && ra.Action != null && !ra.Action.IsDeleted)
+                .Select(ra => new { ra.RiskId, ra.Action!.Notes })
+                .ToListAsync(cancellationToken);
+
+            foreach (var risk in risks)
+            {
+                var mitigationUpdateLines = mitigationNotesByRisk
+                    .Where(x => x.RiskId == risk.Id)
+                    .Sum(x => RiskCommentTimelineBuilder.CountMitigationUpdateLines(x.Notes));
+                risk.CommentCount = riskCommentCounts.GetValueOrDefault(risk.Id)
+                    + mitigationUpdateLines;
+            }
+
             foreach (var risk in risks)
             {
                 risk.KrisSummary = kriByRiskId.GetValueOrDefault(risk.Id);
@@ -1883,6 +1904,18 @@ public partial class ModernRaidController
             mitigationCount = 0,
             kriCount = 0
         });
+    }
+
+    [HttpGet("api/risk/{riskId:int}/comment-timeline")]
+    public async Task<IActionResult> ApiRiskCommentTimeline(int riskId, CancellationToken ct = default)
+    {
+        var exists = await _db.Risks.AsNoTracking()
+            .AnyAsync(r => r.Id == riskId && !r.IsDeleted, ct);
+        if (!exists)
+            return NotFound(new { error = "Risk not found" });
+
+        var items = await RiskCommentTimelineBuilder.BuildTimelineJsonAsync(_db, riskId, ct);
+        return Json(items);
     }
 
     [HttpGet("api/risk/{riskId:int}/mitigations")]
