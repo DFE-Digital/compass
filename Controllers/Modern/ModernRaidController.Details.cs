@@ -702,19 +702,30 @@ public partial class ModernRaidController
 
     [HttpPost("risks/create")]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> RiskCreatePost([FromForm] ModernRaidRiskEditorForm form, CancellationToken cancellationToken = default)
+    public async Task<IActionResult> RiskCreate([FromForm] ModernRaidRiskEditorForm form, CancellationToken cancellationToken = default)
     {
         SetRaidChrome("raid-risks");
         await PrepareRiskEditorLookupsAsync(cancellationToken, form.OwnerUserId, form.SroUserId);
         ViewBag.RiskTierOptions = (await _raidRiskEditorForm.BuildRiskCreateTierOptionsAsync(cancellationToken)).ToList();
         ViewBag.EditorTitle = "Add risk";
 
-        var risk = await _raidRiskEditorForm.TryCreateRiskFromEditorFormAsync(ModelState, User, form, forceWorkProjectId: null, cancellationToken);
-        if (risk == null)
-            return View("~/Views/Modern/Raid/RiskEditor.cshtml", form);
+        try
+        {
+            var risk = await _raidRiskEditorForm.TryCreateRiskFromEditorFormAsync(
+                ModelState, User, form, forceWorkProjectId: null, cancellationToken);
+            if (risk == null)
+                return View("~/Views/Modern/Raid/RiskEditor.cshtml", form);
 
-        TempData["Message"] = "Risk created.";
-        return RedirectToAction(nameof(RiskDetail), new { id = risk.Id });
+            TempData["Message"] = "Risk created.";
+            return RedirectToAction(nameof(RiskDetail), new { id = risk.Id });
+        }
+        catch (Exception)
+        {
+            ModelState.AddModelError(
+                string.Empty,
+                "Unable to save the risk. Try again or contact support if the problem continues.");
+            return View("~/Views/Modern/Raid/RiskEditor.cshtml", form);
+        }
     }
 
     [HttpGet("risks/{id:int}")]
@@ -1061,6 +1072,8 @@ public partial class ModernRaidController
             RiskPriorityId = risk.RiskPriorityId,
             RiskLikelihoodId = risk.RiskLikelihoodId,
             RiskImpactLevelId = risk.RiskImpactLevelId,
+            CurrentLikelihoodId = risk.CurrentLikelihoodId,
+            CurrentImpactLevelId = risk.CurrentImpactLevelId,
             RiskProximityId = risk.RiskProximityId,
             ResidualLikelihoodId = risk.ResidualLikelihoodId,
             ResidualImpactLevelId = risk.ResidualImpactLevelId,
@@ -1152,6 +1165,10 @@ public partial class ModernRaidController
             form.ResidualLikelihoodId, form.ResidualImpactLevelId, cancellationToken);
         var toleranceScore = await ComputeRaidRiskScoreDecimalAsync(
             form.ToleranceLikelihoodId, form.ToleranceImpactLevelId, cancellationToken);
+        var currentLikelihoodId = form.CurrentLikelihoodId ?? form.RiskLikelihoodId;
+        var currentImpactLevelId = form.CurrentImpactLevelId ?? form.RiskImpactLevelId;
+        var currentScore = await ComputeRaidRiskScoreDecimalAsync(
+            currentLikelihoodId, currentImpactLevelId, cancellationToken);
 
         var riskStatusId = form.RiskStatusId ?? await GetDefaultRaidRiskStatusIdAsync(cancellationToken);
         var riskStatusRow = riskStatusId.HasValue
@@ -1175,6 +1192,9 @@ public partial class ModernRaidController
         risk.RiskPriorityId = form.RiskPriorityId;
         risk.RiskLikelihoodId = form.RiskLikelihoodId;
         risk.RiskImpactLevelId = form.RiskImpactLevelId;
+        risk.CurrentLikelihoodId = currentLikelihoodId;
+        risk.CurrentImpactLevelId = currentImpactLevelId;
+        risk.CurrentScore = currentScore;
         risk.RiskProximityId = form.RiskProximityId;
         risk.ResidualLikelihoodId = form.ResidualLikelihoodId;
         risk.ResidualImpactLevelId = form.ResidualImpactLevelId;

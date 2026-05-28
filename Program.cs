@@ -326,6 +326,19 @@ builder.Logging.ClearProviders();
 builder.Logging.AddConsole();
 builder.Logging.AddFile("logs/compass-{Date}.log");
 
+var applicationInsightsConnectionString = builder.Configuration["ApplicationInsights:ConnectionString"];
+var applicationInsightsInstrumentationKey = builder.Configuration["ApplicationInsights:InstrumentationKey"];
+if (!string.IsNullOrWhiteSpace(applicationInsightsConnectionString)
+    || !string.IsNullOrWhiteSpace(applicationInsightsInstrumentationKey))
+{
+    builder.Services.AddApplicationInsightsTelemetry(options =>
+    {
+        if (!string.IsNullOrWhiteSpace(applicationInsightsConnectionString))
+            options.ConnectionString = applicationInsightsConnectionString;
+    });
+    builder.Logging.AddApplicationInsights();
+}
+
 // Add services to the container
 builder.Services.AddRazorPages();
 
@@ -489,6 +502,8 @@ builder.Services.AddScoped<IUserDirectoryService, UserDirectoryService>();
 builder.Services.AddScoped<IProjectImportService, ProjectImportService>();
 builder.Services.AddScoped<IAuditContextProvider, HttpAuditContextProvider>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
+builder.Services.AddScoped<IHttpErrorEmailSettingsService, HttpErrorEmailSettingsService>();
+builder.Services.AddScoped<IHttpErrorMonitoringService, HttpErrorMonitoringService>();
 builder.Services.AddScoped<INudgingService, NudgingService>();
 builder.Services.AddScoped<INotificationRuleService, NotificationRuleService>();
 builder.Services.AddScoped<IAccessibilityTrainingService, AccessibilityTrainingService>();
@@ -635,6 +650,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseForwardedHeaders();
+
+app.UseMiddleware<HttpErrorMonitoringMiddleware>();
 
 // Configure the HTTP request pipeline
 if (!app.Environment.IsDevelopment())

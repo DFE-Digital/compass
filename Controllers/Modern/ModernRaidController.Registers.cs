@@ -774,7 +774,8 @@ public partial class ModernRaidController
             {
                 if (!lastCommentUpdates.TryGetValue(risk.Id, out var last))
                     continue;
-                risk.LastCommentUpdate = RiskCommentTimelineBuilder.FormatSpreadsheetDisplay(last);
+                risk.LastCommentUpdateText = last.PreviewText;
+                risk.LastCommentUpdateKind = last.KindLabel;
                 risk.LastCommentUpdateAt = last.AtUtc;
             }
         }

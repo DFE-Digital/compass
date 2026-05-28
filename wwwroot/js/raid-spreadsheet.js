@@ -1111,60 +1111,170 @@
     appendValSpan(td, text || '—');
   }
 
-  function mitigationButtonLabel(count) {
-    if (!count) return 'Add mitigation';
-    return count + ' mitigation' + (count === 1 ? '' : 's');
+  function mitigationStatusBadgeClass(status) {
+    var n = String(status || '').trim().toLowerCase();
+    if (n === 'complete' || n === 'completed') return 'dfe-f-badge dfe-f-badge--small dfe-f-badge--green';
+    if (n === 'overdue') return 'dfe-f-badge dfe-f-badge--small dfe-f-badge--red';
+    if (n === 'in progress' || n === 'in_progress') return 'dfe-f-badge dfe-f-badge--small dfe-f-badge--blue';
+    return 'dfe-f-badge dfe-f-badge--small dfe-f-badge--grey';
+  }
+
+  function mitigationCardStatusModifier(status) {
+    var n = String(status || '').trim().toLowerCase();
+    if (n === 'complete' || n === 'completed') return 'raid-ss-mitigation-card--complete';
+    if (n === 'overdue') return 'raid-ss-mitigation-card--overdue';
+    if (n === 'in progress' || n === 'in_progress') return 'raid-ss-mitigation-card--in-progress';
+    return 'raid-ss-mitigation-card--not-started';
+  }
+
+  function parseMitigationNoteLines(notes) {
+    if (!notes || !String(notes).trim()) return [];
+    var lines = [];
+    var auditRe = /^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}) UTC — (.+)$/;
+    String(notes).split('\n').forEach(function (raw) {
+      var line = raw.trim();
+      if (!line) return;
+      var match = auditRe.exec(line);
+      if (match) {
+        lines.push({ when: match[1] + ' UTC', text: match[2].trim() });
+      } else {
+        lines.push({ when: null, text: line });
+      }
+    });
+    return lines.reverse();
+  }
+
+  function createCountBadge(count, label) {
+    var n = Math.max(0, count);
+    if (n <= 0) return null;
+    var badge = document.createElement('span');
+    badge.className = 'dfe-f-count-badge';
+    badge.setAttribute('aria-label', label || (n + ' comments'));
+    badge.textContent = n > 99 ? '99+' : String(n);
+    return badge;
+  }
+
+  function createCellIconToggle(opts) {
+    var n = Math.max(0, opts.count || 0);
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'raid-ss-cell-icon-toggle' + (opts.extraClass ? ' ' + opts.extraClass : '');
+    if (n > 0) btn.classList.add('raid-ss-cell-icon-toggle--has-count');
+    if (opts.extraCountClass && n > 0) btn.classList.add(opts.extraCountClass);
+    btn.setAttribute('aria-label', opts.ariaLabel || '');
+    if (opts.ariaExpanded != null) btn.setAttribute('aria-expanded', opts.ariaExpanded);
+
+    var dataAttrs = opts.dataAttrs || {};
+    Object.keys(dataAttrs).forEach(function (key) {
+      if (dataAttrs[key] != null && dataAttrs[key] !== '') {
+        btn.setAttribute(key, String(dataAttrs[key]));
+      }
+    });
+
+    var icon = document.createElement('span');
+    icon.className = 'material-symbols-outlined raid-ss-cell-icon-toggle__icon';
+    icon.setAttribute('aria-hidden', 'true');
+    icon.textContent = opts.icon || 'info';
+    btn.appendChild(icon);
+
+    var badge = createCountBadge(n, opts.countLabel);
+    if (badge) btn.appendChild(badge);
+
+    var sr = document.createElement('span');
+    sr.className = 'govuk-visually-hidden';
+    sr.textContent = opts.srText || opts.ariaLabel || '';
+    btn.appendChild(sr);
+
+    return btn;
+  }
+
+  function renderMitigationCellContent(td, riskId, count, refLabel) {
+    td.className = 'govuk-table__cell raid-ss-mitigation-cell';
+    td.setAttribute('data-col', 'mitigations');
+    td.innerHTML = '';
+
+    var n = Math.max(0, count || 0);
+    var label = n === 1 ? '1 mitigation' : n + ' mitigations';
+    var ref = refLabel || 'risk';
+    td.appendChild(createCellIconToggle({
+      extraClass: 'raid-ss-mitigation-open-btn',
+      icon: 'task_alt',
+      count: n,
+      countLabel: label,
+      ariaLabel: n ? 'View ' + n + ' mitigations for ' + ref : 'Add mitigation for ' + ref,
+      srText: n ? label + ' for ' + ref : 'Add mitigation for ' + ref,
+      dataAttrs: {
+        'data-risk-id': riskId,
+        'data-mitigation-count': n,
+        'data-ref-label': refLabel || ''
+      }
+    }));
   }
 
   function appendMitigationCell(td, riskId, count, refLabel) {
-    td.classList.add('raid-ss-mitigation-cell');
-    td.setAttribute('data-col', 'mitigations');
-    var btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'govuk-link raid-ss-mitigation-open-btn govuk-!-margin-bottom-0';
-    btn.setAttribute('data-risk-id', riskId);
-    btn.setAttribute('data-mitigation-count', count || 0);
-    btn.setAttribute('data-ref-label', refLabel || '');
-    btn.setAttribute('aria-label', (count ? 'View ' + count + ' mitigations for ' : 'Add mitigation for ') + (refLabel || 'risk'));
-    btn.textContent = mitigationButtonLabel(count || 0);
-    td.appendChild(btn);
+    renderMitigationCellContent(td, riskId, count, refLabel);
   }
 
   function setMitigationCountForRisk(riskId, count) {
-    document.querySelectorAll('.raid-ss-mitigation-open-btn[data-risk-id="' + riskId + '"]').forEach(function (btn) {
-      btn.setAttribute('data-mitigation-count', count);
-      btn.textContent = mitigationButtonLabel(count);
-      btn.setAttribute('aria-label', (count ? 'View ' + count + ' mitigations for ' : 'Add mitigation for ') + (btn.getAttribute('data-ref-label') || 'risk'));
-    });
+    var row = document.querySelector('tr.raid-ss-row[data-entity="risk"][data-id="' + riskId + '"]');
+    var cell = row ? row.querySelector('td.raid-ss-mitigation-cell') : null;
+    var refLabel = '';
+    if (row) {
+      var refLink = row.querySelector('.raid-ss-ref-link');
+      refLabel = refLink ? refLink.textContent.trim() : '';
+    }
+    if (cell) {
+      renderMitigationCellContent(cell, riskId, count, refLabel);
+      return;
+    }
   }
 
-  function kriButtonLabel(count) {
-    if (!count) return 'Add KRI';
-    return count + ' KRI' + (count === 1 ? '' : 's');
+  function renderKriCellContent(td, riskId, count, refLabel) {
+    td.className = 'govuk-table__cell raid-ss-kri-cell';
+    td.setAttribute('data-col', 'kris');
+    td.innerHTML = '';
+
+    var n = Math.max(0, count || 0);
+    var label = n === 1 ? '1 KRI' : n + ' KRIs';
+    var ref = refLabel || 'risk';
+    td.appendChild(createCellIconToggle({
+      extraClass: 'raid-ss-kri-open-btn',
+      icon: 'monitoring',
+      count: n,
+      countLabel: label,
+      ariaLabel: n ? 'View ' + n + ' KRIs for ' + ref : 'Add KRI for ' + ref,
+      srText: n ? label + ' for ' + ref : 'Add KRI for ' + ref,
+      dataAttrs: {
+        'data-risk-id': riskId,
+        'data-kri-count': n,
+        'data-ref-label': refLabel || ''
+      }
+    }));
   }
 
   function appendKriCell(td, riskId, count, refLabel) {
-    td.classList.add('raid-ss-kri-cell');
-    td.setAttribute('data-col', 'kris');
-    var btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'govuk-link raid-ss-kri-open-btn govuk-!-margin-bottom-0';
-    btn.setAttribute('data-risk-id', riskId);
-    btn.setAttribute('data-kri-count', count || 0);
-    btn.setAttribute('data-ref-label', refLabel || '');
-    btn.setAttribute('aria-label', (count ? 'View ' + count + ' KRIs for ' : 'Add KRI for ') + (refLabel || 'risk'));
-    btn.textContent = kriButtonLabel(count || 0);
-    td.appendChild(btn);
+    renderKriCellContent(td, riskId, count, refLabel);
   }
 
   function setKriCountForRisk(riskId, count, summary) {
+    var row = document.querySelector('tr.raid-ss-row[data-entity="risk"][data-id="' + riskId + '"]');
+    var cell = row ? row.querySelector('td.raid-ss-kri-cell') : null;
+    var refLabel = '';
+    if (row) {
+      var refLink = row.querySelector('.raid-ss-ref-link');
+      refLabel = refLink ? refLink.textContent.trim() : '';
+    }
+    if (cell) {
+      renderKriCellContent(cell, riskId, count, refLabel);
+      if (summary !== undefined) {
+        var btn = cell.querySelector('.raid-ss-kri-open-btn');
+        if (btn) btn.setAttribute('data-kris-summary', summary || '');
+      }
+      return;
+    }
     document.querySelectorAll('.raid-ss-kri-open-btn[data-risk-id="' + riskId + '"]').forEach(function (btn) {
       btn.setAttribute('data-kri-count', count);
-      btn.textContent = kriButtonLabel(count);
-      btn.setAttribute('aria-label', (count ? 'View ' + count + ' KRIs for ' : 'Add KRI for ') + (btn.getAttribute('data-ref-label') || 'risk'));
-      if (summary !== undefined) {
-        btn.setAttribute('data-kris-summary', summary || '');
-      }
+      if (summary !== undefined) btn.setAttribute('data-kris-summary', summary || '');
     });
   }
 
@@ -1184,27 +1294,73 @@
     renderScoreBadgeCell(td, score);
   }
 
-  function formatLastCommentUpdateDisplay(text, atIso, kindLabel) {
-    if (!text || !String(text).trim()) return '—';
-    var trimmed = String(text).trim();
-    if (trimmed.length > 120) trimmed = trimmed.slice(0, 119) + '\u2026';
+  function formatLastCommentMeta(atIso, kindLabel) {
+    var parts = [];
+    if (kindLabel) parts.push(kindLabel);
     if (atIso) {
       var d = new Date(atIso);
       if (!isNaN(d.getTime())) {
-        var datePart = d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' });
-        var kind = kindLabel || 'Update';
-        return datePart + ' \u2014 ' + kind + ': ' + trimmed;
+        parts.push(d.toLocaleString('en-GB', {
+          day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+        }) + ' UTC');
       }
     }
-    return kindLabel ? kindLabel + ': ' + trimmed : trimmed;
+    return parts.join(' \u00b7 ');
   }
 
-  function appendLastCommentUpdateCell(td, text, atIso, kindLabel) {
-    td.className = 'govuk-table__cell raid-ss-last-comment-update';
-    var display = formatLastCommentUpdateDisplay(text, atIso, kindLabel);
-    if (atIso) td.setAttribute('data-sort-value', atIso);
-    if (display !== '—') td.setAttribute('title', display);
-    appendValSpan(td, display);
+  function renderLastCommentCellContent(cell, entity, id, refLabel, text, atIso, kindLabel, commentCount) {
+    cell.className = 'govuk-table__cell raid-ss-last-comment-update';
+    cell.setAttribute('data-entity', entity);
+    cell.setAttribute('data-id', String(id));
+    if (refLabel) cell.setAttribute('data-ref', refLabel);
+    if (atIso) cell.setAttribute('data-sort-value', atIso);
+    else cell.removeAttribute('data-sort-value');
+
+    cell.innerHTML = '';
+    var wrap = document.createElement('div');
+    wrap.className = 'raid-ss-last-comment-cell';
+
+    var trimmed = text && String(text).trim();
+    var preview = document.createElement('span');
+    preview.className = 'raid-ss-last-comment-cell__preview';
+    preview.textContent = trimmed || '\u2014';
+    var meta = formatLastCommentMeta(atIso, kindLabel);
+    if (trimmed) {
+      preview.title = meta ? meta + ' \u2014 ' + trimmed : trimmed;
+    }
+    wrap.appendChild(preview);
+
+    var n = Math.max(0, commentCount || 0);
+    var countLabel = n === 1 ? '1 comment' : n + ' comments';
+    var ref = refLabel || 'risk';
+    wrap.appendChild(createCellIconToggle({
+      extraClass: 'raid-ss-last-comment-view-all',
+      icon: 'chat_bubble_outline',
+      count: n,
+      countLabel: countLabel,
+      ariaLabel: n ? 'View ' + countLabel + ' for ' + ref : 'Comments for ' + ref,
+      srText: n ? countLabel + ' for ' + ref : 'Comments for ' + ref,
+      dataAttrs: {
+        'data-entity': entity,
+        'data-id': id,
+        'data-ref': refLabel || ''
+      }
+    }));
+
+    cell.appendChild(wrap);
+  }
+
+  function appendLastCommentUpdateCell(td, text, atIso, kindLabel, commentCount, refLabel, riskId) {
+    renderLastCommentCellContent(
+      td,
+      'risk',
+      riskId,
+      refLabel || '',
+      text,
+      atIso,
+      kindLabel,
+      commentCount || 0
+    );
   }
 
   function setLastCommentUpdateForRisk(riskId, text, atIso, kindLabel) {
@@ -1212,14 +1368,11 @@
     if (!row) return;
     var cell = row.querySelector('td.raid-ss-last-comment-update');
     if (!cell) return;
-    var display = formatLastCommentUpdateDisplay(text, atIso, kindLabel);
-    if (atIso) cell.setAttribute('data-sort-value', atIso);
-    else cell.removeAttribute('data-sort-value');
-    if (display !== '—') cell.setAttribute('title', display);
-    else cell.removeAttribute('title');
-    var val = cell.querySelector('.raid-ss-val');
-    if (val) val.textContent = display;
-    else cell.textContent = display;
+    var refLink = row.querySelector('.raid-ss-ref-link');
+    var refLabel = refLink ? refLink.textContent.trim() : (cell.getAttribute('data-ref') || '');
+    var toggle = row.querySelector('.raid-ss-comment-toggle');
+    var count = toggle ? parseInt(toggle.getAttribute('data-comment-count'), 10) || 0 : 0;
+    renderLastCommentCellContent(cell, 'risk', riskId, refLabel, text, atIso, kindLabel, count);
   }
 
   function relationDisplayText(rel) {
@@ -1344,25 +1497,23 @@
   }
 
   function createCommentToggle(entityType, id, count) {
-    var btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'raid-ss-comment-toggle';
-    btn.setAttribute('data-entity', entityType);
-    btn.setAttribute('data-id', id);
-    btn.setAttribute('aria-expanded', 'false');
-
-    var icon = document.createElement('span');
-    icon.className = 'material-symbols-outlined raid-ss-comment-toggle__icon';
-    icon.setAttribute('aria-hidden', 'true');
-    icon.textContent = 'chat_bubble_outline';
-
-    var countSpan = document.createElement('span');
-    countSpan.className = 'raid-ss-comment-count';
-    countSpan.setAttribute('aria-hidden', 'true');
-
-    btn.appendChild(icon);
-    btn.appendChild(countSpan);
-    setCommentCount(btn, count || 0);
+    var n = Math.max(0, count || 0);
+    var label = n === 1 ? '1 comment' : n + ' comments';
+    var btn = createCellIconToggle({
+      extraClass: 'raid-ss-comment-toggle',
+      extraCountClass: 'raid-ss-comment-toggle--has-comments',
+      icon: 'chat_bubble_outline',
+      count: n,
+      countLabel: label,
+      ariaLabel: n ? label : 'Comments',
+      srText: n ? label : 'Comments',
+      ariaExpanded: 'false',
+      dataAttrs: {
+        'data-entity': entityType,
+        'data-id': id,
+        'data-comment-count': n
+      }
+    });
     return btn;
   }
 
@@ -1430,7 +1581,15 @@
     } else if (col === 'mitigations') {
       appendMitigationCell(td, data.id, data.mitigationCount || 0, data.reference || formatEntityRef('risk', data.id));
     } else if (col === 'lastCommentUpdate') {
-      appendLastCommentUpdateCell(td, data.lastCommentUpdate, data.lastCommentUpdateAt, data.lastCommentUpdateKind);
+      appendLastCommentUpdateCell(
+        td,
+        data.lastCommentUpdateText || data.lastCommentUpdate,
+        data.lastCommentUpdateAt,
+        data.lastCommentUpdateKind,
+        data.commentCount,
+        data.reference || formatEntityRef('risk', data.id),
+        data.id
+      );
     } else if (col === 'origImpact') {
       if (th.classList.contains('raid-ss-group-start')) td.classList.add('raid-ss-group-start');
       appendSelectCell(td, 'originalImpactId', 'riskImpactLevels', data.originalImpactId, data.originalImpact);
@@ -1993,6 +2152,7 @@
     if (!container) return;
 
     var isFS = container.classList.toggle('raid-register-fullscreen');
+    container.classList.toggle('govuk-!-margin-top-2', !isFS);
     document.querySelectorAll('.btn-fs-expand').forEach(function (el) { el.style.display = isFS ? 'none' : ''; });
     document.querySelectorAll('.btn-fs-collapse').forEach(function (el) { el.style.display = isFS ? '' : 'none'; });
     document.querySelectorAll('.raid-ss-fullscreen-btn').forEach(function (btn) {
@@ -2164,14 +2324,15 @@
     });
   }
 
-  var DEFAULT_LAST_COMMENT_COL_WIDTH = 150;
+  var DEFAULT_LAST_COMMENT_COL_WIDTH = 300;
+  var LEGACY_LAST_COMMENT_COL_WIDTH = 150;
 
   function defaultWidthConfigForColumn(col) {
     if (col === 'relation') {
       return { width: DEFAULT_RELATION_COL_WIDTH, minWidth: COL_RESIZE_MIN, maxWidth: null };
     }
     if (col === 'lastCommentUpdate') {
-      return { width: DEFAULT_LAST_COMMENT_COL_WIDTH, minWidth: COL_RESIZE_MIN, maxWidth: DEFAULT_LAST_COMMENT_COL_WIDTH };
+      return { width: DEFAULT_LAST_COMMENT_COL_WIDTH, minWidth: COL_RESIZE_MIN, maxWidth: null };
     }
     if (isWideTextColumn(col)) {
       return { width: DEFAULT_WIDE_COL_MIN, minWidth: DEFAULT_WIDE_COL_MIN, maxWidth: null };
@@ -2219,13 +2380,17 @@
           var col = th.getAttribute('data-col');
           if (!col) return;
           if (!widths[col]) {
-            if (col === 'relation') {
+            if (col === 'relation' || col === 'lastCommentUpdate') {
               applyColumnWidthConfig(table, th, defaultWidthConfigForColumn(col));
             }
             return;
           }
           var w = widths[col];
           if (col === 'relation' && (w <= DEFAULT_NARROW_COL_MAX || w === LEGACY_RELATION_COL_WIDTH)) {
+            applyColumnWidthConfig(table, th, defaultWidthConfigForColumn(col));
+            return;
+          }
+          if (col === 'lastCommentUpdate' && w === LEGACY_LAST_COMMENT_COL_WIDTH) {
             applyColumnWidthConfig(table, th, defaultWidthConfigForColumn(col));
             return;
           }
@@ -2249,6 +2414,19 @@
     if (!commentsModal || !addModal) return;
 
     document.addEventListener('click', function (e) {
+      var viewAll = e.target.closest('.raid-ss-last-comment-view-all');
+      if (viewAll) {
+        e.preventDefault();
+        e.stopPropagation();
+        var entityVa = viewAll.getAttribute('data-entity');
+        var idVa = viewAll.getAttribute('data-id');
+        var refVa = viewAll.getAttribute('data-ref') || '';
+        var rowVa = viewAll.closest('tr.raid-ss-row');
+        var toggleVa = rowVa ? rowVa.querySelector('.raid-ss-comment-toggle') : null;
+        openCommentsModal(entityVa, idVa, toggleVa, refVa);
+        return;
+      }
+
       var toggle = e.target.closest('.raid-ss-comment-toggle');
       if (!toggle) return;
       e.preventDefault();
@@ -2300,8 +2478,10 @@
       b.classList.remove('raid-ss-comment-toggle--open');
       b.setAttribute('aria-expanded', 'false');
     });
-    toggle.classList.add('raid-ss-comment-toggle--open');
-    toggle.setAttribute('aria-expanded', 'true');
+    if (toggle) {
+      toggle.classList.add('raid-ss-comment-toggle--open');
+      toggle.setAttribute('aria-expanded', 'true');
+    }
 
     if (titleEl) {
       titleEl.textContent = refLabel ? 'Comments on ' + refLabel : 'Comments';
@@ -2333,10 +2513,18 @@
     var titleEl = document.getElementById('raid-comment-add-modal-title');
     if (!modal || !input) return;
 
-    if (titleEl && commentContext.toggle) {
-      var refCell = commentContext.toggle.closest('.raid-ss-ref-cell');
-      var refLink = refCell ? refCell.querySelector('.raid-ss-ref-link') : null;
-      var refLabel = refLink ? refLink.textContent.trim() : '';
+    if (titleEl && commentContext) {
+      var refLabel = '';
+      if (commentContext.toggle) {
+        var refCell = commentContext.toggle.closest('.raid-ss-ref-cell');
+        var refLink = refCell ? refCell.querySelector('.raid-ss-ref-link') : null;
+        refLabel = refLink ? refLink.textContent.trim() : '';
+      }
+      if (!refLabel) {
+        var row = document.querySelector('tr.raid-ss-row[data-entity="' + commentContext.entity + '"][data-id="' + commentContext.id + '"]');
+        var lastCell = row ? row.querySelector('td.raid-ss-last-comment-update') : null;
+        refLabel = lastCell ? (lastCell.getAttribute('data-ref') || '') : '';
+      }
       titleEl.textContent = refLabel ? 'Add comment to ' + refLabel : 'Add comment';
     }
 
@@ -2374,7 +2562,9 @@
 
     var entity = commentContext.entity;
     var id = commentContext.id;
-    var toggle = commentContext.toggle;
+    var toggle = commentContext.toggle || document.querySelector(
+      '.raid-ss-comment-toggle[data-entity="' + entity + '"][data-id="' + id + '"]'
+    );
 
     saveBtn.disabled = true;
     saveBtn.textContent = 'Saving\u2026';
@@ -2396,8 +2586,12 @@
       saveBtn.textContent = 'Save comment';
       closeAddCommentModal();
 
-      var current = parseInt(toggle.getAttribute('data-comment-count'), 10) || 0;
-      setCommentCount(toggle, current + 1);
+      var current = toggle ? parseInt(toggle.getAttribute('data-comment-count'), 10) || 0 : 0;
+      if (toggle) {
+        setCommentCount(toggle, current + 1);
+      } else if (entity === 'risk') {
+        syncLastCommentCellCount(id, current + 1);
+      }
 
       if (entity === 'risk' && comment && comment.createdAt) {
         setLastCommentUpdateForRisk(id, comment.commentText || text, comment.createdAt, 'Comment');
@@ -2487,14 +2681,49 @@
   }
 
   function setCommentCount(toggle, count) {
-    var span = toggle.querySelector('.raid-ss-comment-count');
-    if (!span) return;
+    if (!toggle) return;
     var n = Math.max(0, count);
-    span.textContent = String(n);
-    span.classList.toggle('raid-ss-comment-count--visible', n > 0);
-    toggle.classList.toggle('raid-ss-comment-toggle--has-comments', n > 0);
-    toggle.setAttribute('data-comment-count', String(n));
-    toggle.title = n > 0 ? n + ' comment' + (n === 1 ? '' : 's') : 'View comments';
+    var label = n === 1 ? '1 comment' : n + ' comments';
+    var entity = toggle.getAttribute('data-entity');
+    var id = toggle.getAttribute('data-id');
+    var parent = toggle.parentNode;
+    var isRefToggle = toggle.classList.contains('raid-ss-comment-toggle');
+    var replacement = createCellIconToggle({
+      extraClass: isRefToggle ? 'raid-ss-comment-toggle' : 'raid-ss-last-comment-view-all',
+      extraCountClass: isRefToggle ? 'raid-ss-comment-toggle--has-comments' : '',
+      icon: 'chat_bubble_outline',
+      count: n,
+      countLabel: label,
+      ariaLabel: n ? label : (isRefToggle ? 'Comments' : 'Comments for ' + (toggle.getAttribute('data-ref') || 'risk')),
+      srText: n ? label : (isRefToggle ? 'Comments' : 'Comments'),
+      ariaExpanded: isRefToggle ? (toggle.getAttribute('aria-expanded') || 'false') : null,
+      dataAttrs: isRefToggle
+        ? { 'data-entity': entity, 'data-id': id, 'data-comment-count': n }
+        : { 'data-entity': entity, 'data-id': id, 'data-ref': toggle.getAttribute('data-ref') || '' }
+    });
+    if (isRefToggle && toggle.classList.contains('raid-ss-comment-toggle--open')) {
+      replacement.classList.add('raid-ss-comment-toggle--open');
+      replacement.setAttribute('aria-expanded', 'true');
+    }
+    parent.replaceChild(replacement, toggle);
+
+    if (entity === 'risk' && id) {
+      syncLastCommentCellCount(id, n);
+    }
+  }
+
+  function syncLastCommentCellCount(riskId, count) {
+    var row = document.querySelector('tr.raid-ss-row[data-entity="risk"][data-id="' + riskId + '"]');
+    if (!row) return;
+    var viewBtn = row.querySelector('.raid-ss-last-comment-view-all');
+    if (!viewBtn) return;
+    var n = Math.max(0, count);
+    var label = n === 1 ? '1 comment' : n + ' comments';
+    viewBtn.classList.toggle('raid-ss-cell-icon-toggle--has-count', n > 0);
+    viewBtn.setAttribute('aria-label', n ? 'View ' + label + ' for ' + (viewBtn.getAttribute('data-ref') || 'risk') : 'Comments for ' + (viewBtn.getAttribute('data-ref') || 'risk'));
+    var existing = viewBtn.querySelector('.dfe-f-count-badge');
+    if (existing) existing.remove();
+    if (n > 0) viewBtn.appendChild(createCountBadge(n, label));
   }
 
   function capitalise(str) {
@@ -3088,13 +3317,16 @@
       if (openBtn) {
         e.preventDefault();
         e.stopPropagation();
-        openMitigationsModal(
-          parseInt(openBtn.getAttribute('data-risk-id'), 10),
-          openBtn.getAttribute('data-ref-label') || '',
-          openBtn
-        );
+        var riskIdOpen = parseInt(openBtn.getAttribute('data-risk-id'), 10);
+        var refOpen = openBtn.getAttribute('data-ref-label') || '';
+        var mitCount = parseInt(openBtn.getAttribute('data-mitigation-count'), 10) || 0;
+        openMitigationsModal(riskIdOpen, refOpen, openBtn);
+        if (mitCount === 0 && !readOnly) {
+          openMitigationFormModal('add');
+        }
         return;
       }
+
       var editBtn = e.target.closest('[data-raid-mitigation-edit]');
       if (editBtn && mitigationContext && !readOnly) {
         e.preventDefault();
@@ -3189,31 +3421,77 @@
 
   function renderMitigationListItem(m) {
     var card = document.createElement('article');
-    card.className = 'raid-ss-mitigation-card';
     var status = m.effectiveStatus || m.status || 'Not started';
-    var notesHtml = '';
-    if (m.notes) {
-      notesHtml = '<p class="govuk-body-s govuk-!-margin-top-2 govuk-!-margin-bottom-0 raid-ss-mitigation-notes">' +
-        escapeHtml(m.notes).replace(/\n/g, '<br>') + '</p>';
+    card.className = 'raid-ss-mitigation-card ' + mitigationCardStatusModifier(status);
+
+    var head = document.createElement('div');
+    head.className = 'raid-ss-mitigation-card-head';
+
+    var title = document.createElement('h3');
+    title.className = 'govuk-heading-s govuk-!-margin-bottom-0 raid-ss-mitigation-card__title';
+    title.textContent = m.title || '';
+
+    var badge = document.createElement('span');
+    badge.className = mitigationStatusBadgeClass(status);
+    badge.textContent = status;
+
+    head.appendChild(title);
+    head.appendChild(badge);
+    card.appendChild(head);
+
+    var meta = document.createElement('p');
+    meta.className = 'govuk-body-s raid-ss-mitigation-card__meta';
+    var metaParts = [];
+    if (m.owner) metaParts.push('Owner: ' + m.owner);
+    if (m.dueDateDisplay) metaParts.push('Target: ' + m.dueDateDisplay);
+    meta.textContent = metaParts.length ? metaParts.join(' · ') : '—';
+    card.appendChild(meta);
+
+    var noteLines = parseMitigationNoteLines(m.notes);
+    if (noteLines.length) {
+      var updates = document.createElement('div');
+      updates.className = 'raid-ss-mitigation-updates';
+      var updatesTitle = document.createElement('h4');
+      updatesTitle.className = 'govuk-body-s govuk-!-font-weight-bold govuk-!-margin-bottom-1';
+      updatesTitle.textContent = 'Progress updates';
+      updates.appendChild(updatesTitle);
+
+      var list = document.createElement('ol');
+      list.className = 'raid-ss-mitigation-updates__list';
+      noteLines.forEach(function (line) {
+        var item = document.createElement('li');
+        item.className = 'raid-ss-mitigation-updates__item';
+        if (line.when) {
+          var when = document.createElement('span');
+          when.className = 'raid-ss-mitigation-updates__when';
+          when.textContent = line.when;
+          item.appendChild(when);
+        }
+        var text = document.createElement('span');
+        text.className = 'raid-ss-mitigation-updates__text';
+        text.textContent = line.text;
+        item.appendChild(text);
+        list.appendChild(item);
+      });
+      updates.appendChild(list);
+      card.appendChild(updates);
     }
-    card.innerHTML =
-      '<div class="raid-ss-mitigation-card-head">' +
-        '<h3 class="govuk-heading-s govuk-!-margin-bottom-1">' + escapeHtml(m.title || '') + '</h3>' +
-        '<span class="dfe-f-badge dfe-f-badge--small">' + escapeHtml(status) + '</span>' +
-      '</div>' +
-      '<dl class="govuk-summary-list govuk-summary-list--no-border raid-ss-mitigation-meta">' +
-        '<div class="govuk-summary-list__row"><dt class="govuk-summary-list__key">Owner</dt><dd class="govuk-summary-list__value">' + escapeHtml(m.owner || '—') + '</dd></div>' +
-        '<div class="govuk-summary-list__row"><dt class="govuk-summary-list__key">Target date</dt><dd class="govuk-summary-list__value">' + escapeHtml(m.dueDateDisplay || '—') + '</dd></div>' +
-      '</dl>' +
-      notesHtml +
-      (readOnly ? '' :
-        '<button type="button" class="govuk-link govuk-!-margin-top-2 govuk-!-margin-bottom-0" data-raid-mitigation-edit' +
-        ' data-action-id="' + m.id + '"' +
-        ' data-title="' + escapeHtmlAttr(m.title || '') + '"' +
-        ' data-owner-id="' + (m.assignedToUserId || '') + '"' +
-        ' data-owner="' + escapeHtmlAttr(m.owner || '') + '"' +
-        ' data-due="' + escapeHtmlAttr(m.dueDate || '') + '"' +
-        ' data-status="' + escapeHtmlAttr(m.effectiveStatus || m.status || 'Not started') + '">Edit or add update</button>');
+
+    if (!readOnly) {
+      var editBtn = document.createElement('button');
+      editBtn.type = 'button';
+      editBtn.className = 'govuk-link govuk-body-s raid-ss-mitigation-card__edit';
+      editBtn.setAttribute('data-raid-mitigation-edit', '');
+      editBtn.setAttribute('data-action-id', String(m.id));
+      editBtn.setAttribute('data-title', m.title || '');
+      editBtn.setAttribute('data-owner-id', m.assignedToUserId ? String(m.assignedToUserId) : '');
+      editBtn.setAttribute('data-owner', m.owner || '');
+      editBtn.setAttribute('data-due', m.dueDate || '');
+      editBtn.setAttribute('data-status', m.effectiveStatus || m.status || 'Not started');
+      editBtn.textContent = 'Edit or add update';
+      card.appendChild(editBtn);
+    }
+
     return card;
   }
 

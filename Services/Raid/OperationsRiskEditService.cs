@@ -150,6 +150,12 @@ public sealed class OperationsRiskEditService(
             RiskPriorityId = risk.RiskPriorityId,
             RiskLikelihoodId = risk.RiskLikelihoodId,
             RiskImpactLevelId = risk.RiskImpactLevelId,
+            CurrentLikelihoodId = risk.CurrentLikelihoodId,
+            CurrentImpactLevelId = risk.CurrentImpactLevelId,
+            ResidualLikelihoodId = risk.ResidualLikelihoodId,
+            ResidualImpactLevelId = risk.ResidualImpactLevelId,
+            ToleranceLikelihoodId = risk.ToleranceLikelihoodId,
+            ToleranceImpactLevelId = risk.ToleranceImpactLevelId,
             RiskProximityId = risk.RiskProximityId,
             RiskTreatmentId = null,
             RiskCategoryIds = catIds,
@@ -263,6 +269,11 @@ public sealed class OperationsRiskEditService(
 
         var (likelihoodRating, impactRating, riskScore, inherentScore) =
             await ComputeRaidRiskScoresAsync(form.RiskLikelihoodId, form.RiskImpactLevelId, cancellationToken);
+        var currentLikelihoodId = form.CurrentLikelihoodId ?? form.RiskLikelihoodId;
+        var currentImpactLevelId = form.CurrentImpactLevelId ?? form.RiskImpactLevelId;
+        var currentScore = await ComputeRaidRiskScoreDecimalAsync(currentLikelihoodId, currentImpactLevelId, cancellationToken);
+        var residualScore = await ComputeRaidRiskScoreDecimalAsync(form.ResidualLikelihoodId, form.ResidualImpactLevelId, cancellationToken);
+        var toleranceScore = await ComputeRaidRiskScoreDecimalAsync(form.ToleranceLikelihoodId, form.ToleranceImpactLevelId, cancellationToken);
 
         var riskStatusId = form.RiskStatusId ?? await GetDefaultRaidRiskStatusIdAsync(cancellationToken);
         var riskStatusRow = riskStatusId.HasValue
@@ -291,6 +302,15 @@ public sealed class OperationsRiskEditService(
         risk.RiskPriorityId = form.RiskPriorityId;
         risk.RiskLikelihoodId = form.RiskLikelihoodId;
         risk.RiskImpactLevelId = form.RiskImpactLevelId;
+        risk.CurrentLikelihoodId = currentLikelihoodId;
+        risk.CurrentImpactLevelId = currentImpactLevelId;
+        risk.CurrentScore = currentScore;
+        risk.ResidualLikelihoodId = form.ResidualLikelihoodId;
+        risk.ResidualImpactLevelId = form.ResidualImpactLevelId;
+        risk.ResidualScore = residualScore;
+        risk.ToleranceLikelihoodId = form.ToleranceLikelihoodId;
+        risk.ToleranceImpactLevelId = form.ToleranceImpactLevelId;
+        risk.ToleranceScore = toleranceScore;
         risk.RiskProximityId = form.RiskProximityId;
         risk.OwnerUserId = form.OwnerUserId > 0 ? form.OwnerUserId : null;
         risk.ImpactRating = impactRating;
@@ -395,6 +415,22 @@ public sealed class OperationsRiskEditService(
         var riskScore = Math.Clamp(impactRating * likelihoodRating, 1, 25);
         var inherentScore = (decimal)(impactRating * likelihoodRating);
         return (likelihoodRating, impactRating, riskScore, inherentScore);
+    }
+
+    private async Task<decimal?> ComputeRaidRiskScoreDecimalAsync(int? likelihoodId, int? impactLevelId, CancellationToken cancellationToken)
+    {
+        if (!likelihoodId.HasValue || !impactLevelId.HasValue)
+            return null;
+
+        var lk = await db.RiskLikelihoods.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == likelihoodId.Value, cancellationToken);
+        var im = await db.RiskImpactLevels.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == impactLevelId.Value, cancellationToken);
+
+        if (lk == null || im == null)
+            return null;
+
+        return (decimal)(lk.MatrixScore * im.MatrixScore);
     }
 
     private async Task<int?> GetDefaultRaidRiskStatusIdAsync(CancellationToken cancellationToken)

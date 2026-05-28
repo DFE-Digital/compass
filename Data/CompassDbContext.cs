@@ -50,6 +50,7 @@ public partial class CompassDbContext : DbContext
     public DbSet<BusinessAreaLeadershipMember> BusinessAreaLeadershipMembers { get; set; }
     public DbSet<CompassNotificationSetting> CompassNotificationSettings { get; set; }
     public DbSet<CompassNotificationEmailLog> CompassNotificationEmailLogs { get; set; }
+    public DbSet<HttpErrorEmailSettings> HttpErrorEmailSettings { get; set; }
     public DbSet<UserPreference> UserPreferences { get; set; }
 
     // Role-based access control
@@ -444,7 +445,8 @@ public partial class CompassDbContext : DbContext
 
     private List<AuditLog> PrepareAuditEntries()
     {
-        ChangeTracker.DetectChanges();
+        // Do not call ChangeTracker.DetectChanges() here — SaveChanges will detect changes once.
+        // A full-graph DetectChanges is expensive when many entities are tracked (e.g. FIPS product Includes).
         var auditEntries = new List<AuditLog>();
         var timestamp = DateTime.UtcNow;
         var currentUserId = _auditContextProvider.UserId;
@@ -460,7 +462,7 @@ public partial class CompassDbContext : DbContext
                 continue;
             }
 
-            if (entry.State == EntityState.Detached || entry.State == EntityState.Unchanged)
+            if (entry.State is EntityState.Detached or EntityState.Unchanged)
             {
                 continue;
             }
@@ -2190,6 +2192,18 @@ public partial class CompassDbContext : DbContext
         modelBuilder.Entity<AccessibilityEmailConfiguration>()
             .HasIndex(ec => new { ec.Purpose, ec.EmailAddress })
             .IsUnique();
+
+        modelBuilder.Entity<HttpErrorEmailSettings>()
+            .HasKey(s => s.Id);
+        modelBuilder.Entity<HttpErrorEmailSettings>()
+            .Property(s => s.Id)
+            .ValueGeneratedNever();
+        modelBuilder.Entity<HttpErrorEmailSettings>()
+            .Property(s => s.ContactEmail)
+            .HasMaxLength(256);
+        modelBuilder.Entity<HttpErrorEmailSettings>()
+            .Property(s => s.UpdatedByEmail)
+            .HasMaxLength(256);
 
         // StatementTemplate configuration
         modelBuilder.Entity<StatementTemplate>()

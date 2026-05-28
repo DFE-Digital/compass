@@ -208,8 +208,11 @@ public class RaidRegisterRiskRow
     public DateTime UpdatedAt { get; set; }
     public int CommentCount { get; set; }
 
-    /// <summary>Spreadsheet preview of the most recent comment or mitigation update.</summary>
-    public string? LastCommentUpdate { get; set; }
+    /// <summary>Full text of the most recent comment or mitigation update line.</summary>
+    public string? LastCommentUpdateText { get; set; }
+
+    /// <summary>Source label, e.g. Comment or Mitigation update.</summary>
+    public string? LastCommentUpdateKind { get; set; }
 
     public DateTime? LastCommentUpdateAt { get; set; }
 

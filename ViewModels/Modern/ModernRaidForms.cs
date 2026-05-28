@@ -77,6 +77,11 @@ public sealed class ModernRaidRiskEditorForm
     public int? RiskPriorityId { get; set; }
     public int? RiskLikelihoodId { get; set; }
     public int? RiskImpactLevelId { get; set; }
+
+    // Current risk rating
+    public int? CurrentLikelihoodId { get; set; }
+    public int? CurrentImpactLevelId { get; set; }
+
     public int? RiskProximityId { get; set; }
     public int? RiskTreatmentId { get; set; }
 
