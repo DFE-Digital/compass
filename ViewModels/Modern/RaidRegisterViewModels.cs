@@ -208,6 +208,11 @@ public class RaidRegisterRiskRow
     public DateTime UpdatedAt { get; set; }
     public int CommentCount { get; set; }
 
+    /// <summary>Spreadsheet preview of the most recent comment or mitigation update.</summary>
+    public string? LastCommentUpdate { get; set; }
+
+    public DateTime? LastCommentUpdateAt { get; set; }
+
     public string RelationKind { get; set; } = RaidRegisterRelationKinds.Unknown;
     public int? RelationProjectId { get; set; }
     public string? RelationTarget { get; set; }

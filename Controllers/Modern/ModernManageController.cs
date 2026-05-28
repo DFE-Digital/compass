@@ -22,6 +22,7 @@ public partial class ModernManageController : Controller
     private readonly IFipsProductWriteService _fipsProductWrite;
     private readonly IPermissionService _permission;
     private readonly IFipsBusinessAreaLookupSyncService _fipsBusinessAreaLookupSync;
+    private readonly IFipsDirectorateLookupSyncService _fipsDirectorateLookupSync;
     private readonly IGlobalFeatureToggleService _globalFeatureToggle;
     private readonly IProductsApiService _productsApi;
     private readonly IServiceAssessmentApiService _serviceAssessmentApi;
@@ -34,6 +35,7 @@ public partial class ModernManageController : Controller
         IFipsProductWriteService fipsProductWrite,
         IPermissionService permission,
         IFipsBusinessAreaLookupSyncService fipsBusinessAreaLookupSync,
+        IFipsDirectorateLookupSyncService fipsDirectorateLookupSync,
         IGlobalFeatureToggleService globalFeatureToggle,
         IProductsApiService productsApi,
         IServiceAssessmentApiService serviceAssessmentApi,
@@ -45,6 +47,7 @@ public partial class ModernManageController : Controller
         _fipsProductWrite = fipsProductWrite;
         _permission = permission;
         _fipsBusinessAreaLookupSync = fipsBusinessAreaLookupSync;
+        _fipsDirectorateLookupSync = fipsDirectorateLookupSync;
         _globalFeatureToggle = globalFeatureToggle;
         _productsApi = productsApi;
         _serviceAssessmentApi = serviceAssessmentApi;
@@ -209,26 +212,11 @@ public partial class ModernManageController : Controller
 
         SetNav("manage-fips-products");
 
-        // Default to your products; tab "active" = dashboard (see FipsDashboard).
+        // Default to your products.
         var activeTab = string.IsNullOrWhiteSpace(tab) ? "my" : tab.Trim().ToLowerInvariant();
         if (string.Equals(activeTab, "all", StringComparison.OrdinalIgnoreCase)
             && string.IsNullOrWhiteSpace(search))
             activeTab = "active";
-        if (string.Equals(activeTab, "active", StringComparison.OrdinalIgnoreCase))
-        {
-            return RedirectToAction(nameof(FipsDashboard), new
-            {
-                tab = "active",
-                search,
-                businessAreaId,
-                channelId,
-                userGroupId,
-                typeId,
-                phaseId,
-                categorisationItemId,
-                categorisationGroupId
-            });
-        }
         var email = CurrentUserEmail;
 
         var vm = await FipsProductListingHelper.BuildProductsViewModelAsync(
@@ -271,6 +259,7 @@ public partial class ModernManageController : Controller
         var product = await _context.CMDBProducts
             .Include(p => p.Phase)
             .Include(p => p.BusinessAreas).ThenInclude(ba => ba.FipsBusinessArea)
+            .Include(p => p.Directorates).ThenInclude(d => d.FipsDirectorate).ThenInclude(fd => fd.DirectorateLookup)
             .Include(p => p.Channels).ThenInclude(c => c.FipsChannel)
             .Include(p => p.UserGroups).ThenInclude(ug => ug.FipsUserGroup)
             .Include(p => p.Types).ThenInclude(t => t.FipsType)
@@ -323,8 +312,13 @@ public partial class ModernManageController : Controller
         if (editMode)
         {
             await _fipsBusinessAreaLookupSync.SyncFromBusinessAreaLookupsAsync(ct);
+            await _fipsDirectorateLookupSync.SyncFromDirectorateLookupsAsync(ct);
             vm.PhaseOptions = await _context.PhaseLookups
                 .Where(x => x.IsActive).OrderBy(x => x.SortOrder).ToListAsync(ct);
+            vm.DirectorateLookupOptions =
+                await FipsDirectorateLookupUiHelper.LoadDirectorateLookupOptionsForEditAsync(_context, product, ct);
+            vm.SelectedDirectorateLookupIds =
+                FipsDirectorateLookupUiHelper.GetSelectedDirectorateLookupIds(product, vm.DirectorateLookupOptions);
             vm.BusinessAreaLookupOptions =
                 await FipsBusinessAreaLookupUiHelper.LoadBusinessAreaLookupOptionsForEditAsync(_context, product, ct);
             vm.SelectedBusinessAreaLookupIds =
@@ -449,7 +443,7 @@ public partial class ModernManageController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> FipsProductUpdate(Guid id, string? nc, string? userDescription,
         int? phaseId, string? productURL,
-        int[]? businessAreaLookupIds, int[]? channelIds, int[]? userGroupIds, int[]? typeIds,
+        int[]? directorateLookupIds, int[]? businessAreaLookupIds, int[]? channelIds, int[]? userGroupIds, int[]? typeIds,
         int[]? categorisationItemIds,
         bool isEnterpriseService,
         CancellationToken ct)
@@ -484,6 +478,8 @@ public partial class ModernManageController : Controller
             requireMgr = false;
         }
 
+        var resolvedDirectorateIds =
+            await _fipsDirectorateLookupSync.ResolveToFipsDirectorateIdsAsync(directorateLookupIds ?? Array.Empty<int>(), ct);
         var resolvedBusinessAreaIds =
             await _fipsBusinessAreaLookupSync.ResolveToFipsBusinessAreaIdsAsync(businessAreaLookupIds ?? Array.Empty<int>(), ct);
 
@@ -500,6 +496,7 @@ public partial class ModernManageController : Controller
             channelIds,
             userGroupIds,
             typeIds,
+            resolvedDirectorateIds,
             categorisationItemIds,
             null,
             isEnterpriseService: isEnterpriseService,

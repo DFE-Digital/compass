@@ -326,6 +326,22 @@ public partial class ModernRaidController
                 return RedirectToAction(nameof(RegisterCreate), new { step = 5, id = register.Id });
 
             case 5:
+                SyncRegisterUsers(register, vm.RegisterUsers, userId.Value);
+                if (!register.Users.Any(u => u.Role == RaidRegisterRole.Owner))
+                {
+                    var creatorRow = register.Users.FirstOrDefault(u => u.UserId == userId.Value);
+                    if (creatorRow != null)
+                        creatorRow.Role = RaidRegisterRole.Owner;
+                    else
+                    {
+                        register.Users.Add(new RaidRegisterUser
+                        {
+                            UserId = userId.Value,
+                            Role = RaidRegisterRole.Owner,
+                            CreatedAt = DateTime.UtcNow
+                        });
+                    }
+                }
                 register.UpdatedAt = DateTime.UtcNow;
                 await _db.SaveChangesAsync(cancellationToken);
                 return RedirectToAction(nameof(RegisterCreate), new { step = 6, id = register.Id });
@@ -467,13 +483,10 @@ public partial class ModernRaidController
                 register.Name = vm.Name.Trim();
                 register.Description = vm.Description?.Trim();
 
-                if (isRegisterOwner)
+                if (isRegisterOwner
+                    && vm.OwnerUserId.HasValue
+                    && vm.OwnerUserId.Value != currentOwnerUserId)
                 {
-                    if (!vm.OwnerUserId.HasValue)
-                    {
-                        TempData["ErrorMessage"] = "Select a register owner.";
-                        return RedirectToAction(nameof(RegisterSettings), new { id });
-                    }
                     var ownerExists = await _db.Users.AsNoTracking()
                         .AnyAsync(u => u.Id == vm.OwnerUserId.Value, cancellationToken);
                     if (!ownerExists)
@@ -483,7 +496,7 @@ public partial class ModernRaidController
                     }
                     SyncRegisterOwner(register, vm.OwnerUserId.Value);
                 }
-                else if (vm.OwnerUserId.HasValue && vm.OwnerUserId.Value != currentOwnerUserId)
+                else if (!isRegisterOwner && vm.OwnerUserId.HasValue && vm.OwnerUserId.Value != currentOwnerUserId)
                 {
                     TempData["ErrorMessage"] = "Only the register owner can change the owner.";
                     return RedirectToAction(nameof(RegisterSettings), new { id });
@@ -753,6 +766,16 @@ public partial class ModernRaidController
             {
                 risk.KrisSummary = kriByRiskId.GetValueOrDefault(risk.Id);
                 risk.KriCount = kriCountByRiskId.GetValueOrDefault(risk.Id);
+            }
+
+            var lastCommentUpdates =
+                await RiskCommentTimelineBuilder.GetLastCommentUpdateByRiskIdsAsync(_db, riskIds, cancellationToken);
+            foreach (var risk in risks)
+            {
+                if (!lastCommentUpdates.TryGetValue(risk.Id, out var last))
+                    continue;
+                risk.LastCommentUpdate = RiskCommentTimelineBuilder.FormatSpreadsheetDisplay(last);
+                risk.LastCommentUpdateAt = last.AtUtc;
             }
         }
 

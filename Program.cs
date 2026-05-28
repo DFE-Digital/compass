@@ -531,6 +531,7 @@ builder.Services.AddScoped<Compass.Services.Fips.IFipsProductWriteService, Compa
 builder.Services.AddScoped<Compass.Services.Fips.IFipsCompletionBulkImportService, Compass.Services.Fips.FipsCompletionBulkImportService>();
 builder.Services.AddScoped<Compass.Services.Fips.IFipsStrapiLegacyImportService, Compass.Services.Fips.FipsStrapiLegacyImportService>();
 builder.Services.AddScoped<Compass.Services.Fips.IFipsBusinessAreaLookupSyncService, Compass.Services.Fips.FipsBusinessAreaLookupSyncService>();
+builder.Services.AddScoped<Compass.Services.Fips.IFipsDirectorateLookupSyncService, Compass.Services.Fips.FipsDirectorateLookupSyncService>();
 builder.Services.Configure<Compass.Configuration.EnvironmentSyncOptions>(
     builder.Configuration.GetSection(Compass.Configuration.EnvironmentSyncOptions.SectionName));
 builder.Services.AddScoped<Compass.Services.EnvironmentSync.IEnvironmentSyncService, Compass.Services.EnvironmentSync.EnvironmentSyncService>();

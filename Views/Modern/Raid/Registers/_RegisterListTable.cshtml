@@ -3,7 +3,6 @@
   var tableId = ViewData["TableId"] as string ?? "raid-registers-table";
   var caption = ViewData["TableCaption"] as string ?? "RAID registers";
   var emptyMessage = ViewData["EmptyMessage"] as string ?? "No registers to show.";
-  var showAccess = ViewData["ShowAccess"] as bool? == true;
 }
 
 @if (!Model.Any())
@@ -27,24 +26,24 @@ else
           <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Near misses</button></th>
           <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Directorate</button></th>
           <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Portfolio</button></th>
-          <th scope="col" class="govuk-table__header"><span class="govuk-visually-hidden">Scope</span></th>
-          @if (showAccess)
-          {
-            <th scope="col" class="govuk-table__header">Access</th>
-          }
         </tr>
       </thead>
       <tbody class="govuk-table__body">
         @foreach (var reg in Model)
         {
-          var scopeItemCount = reg.WorkItemNames.Count + reg.ServiceNames.Count;
+          var scopeParts = new List<string>();
+          if (!string.IsNullOrWhiteSpace(reg.DirectorateName))
+            scopeParts.Add(reg.DirectorateName);
+          if (!string.IsNullOrWhiteSpace(reg.BusinessAreaName))
+            scopeParts.Add(reg.BusinessAreaName);
+          var scopeSubtitle = scopeParts.Count > 0 ? string.Join(" / ", scopeParts) : null;
           <tr class="govuk-table__row">
             <td class="govuk-table__cell">
               <a class="govuk-link govuk-link--no-visited-state govuk-!-font-weight-bold" href="@($"{Url.Action("RegisterDetail", "ModernRaid", new { id = reg.Id })}#view-manage")">@reg.Name</a>
-              @if (!string.IsNullOrWhiteSpace(reg.Description))
+              @if (!string.IsNullOrWhiteSpace(scopeSubtitle))
               {
                 <br />
-                <span class="govuk-body-s" style="color:#505a5f;">@(reg.Description.Length > 80 ? reg.Description[..80] + "…" : reg.Description)</span>
+                <span class="govuk-body-s" style="color:#505a5f;">@scopeSubtitle</span>
               }
             </td>
             <td class="govuk-table__cell">@(reg.OwnerName ?? "—")</td>
@@ -55,28 +54,6 @@ else
             <td class="govuk-table__cell govuk-table__cell--numeric">@reg.OpenNearMissCount</td>
             <td class="govuk-table__cell">@(reg.DirectorateName ?? "—")</td>
             <td class="govuk-table__cell">@(reg.BusinessAreaName ?? "—")</td>
-            <td class="govuk-table__cell">
-              @if (scopeItemCount > 0)
-              {
-                <button type="button"
-                        class="govuk-link govuk-link--no-visited-state raid-reg-scope-btn"
-                        data-reg-name="@reg.Name"
-                        data-work-items='@Html.Raw(Json.Serialize(reg.WorkItemNames))'
-                        data-services='@Html.Raw(Json.Serialize(reg.ServiceNames))'>
-                  View scope (@scopeItemCount)
-                </button>
-              }
-              else
-              {
-                <span class="govuk-body-s" style="color:#505a5f;">No scope items</span>
-              }
-            </td>
-            @if (showAccess)
-            {
-              <td class="govuk-table__cell">
-                @(reg.CanManage ? "Can edit" : "Read only")
-              </td>
-            }
           </tr>
         }
       </tbody>

@@ -45,6 +45,7 @@ public class CMDBProduct
     public PhaseLookup? Phase { get; set; }
 
     public ICollection<CMDBProductBusinessArea> BusinessAreas { get; set; } = new List<CMDBProductBusinessArea>();
+    public ICollection<CMDBProductDirectorate> Directorates { get; set; } = new List<CMDBProductDirectorate>();
     public ICollection<CMDBProductChannel> Channels { get; set; } = new List<CMDBProductChannel>();
     public ICollection<CMDBProductUserGroup> UserGroups { get; set; } = new List<CMDBProductUserGroup>();
     public ICollection<CMDBProductType> Types { get; set; } = new List<CMDBProductType>();
@@ -66,6 +67,16 @@ public class CMDBProductBusinessArea
     public CMDBProduct CMDBProduct { get; set; } = null!;
     public int FipsBusinessAreaId { get; set; }
     public FipsBusinessArea FipsBusinessArea { get; set; } = null!;
+}
+
+public class CMDBProductDirectorate
+{
+    [Key]
+    public int Id { get; set; }
+    public Guid CMDBProductId { get; set; }
+    public CMDBProduct CMDBProduct { get; set; } = null!;
+    public int FipsDirectorateId { get; set; }
+    public FipsDirectorate FipsDirectorate { get; set; } = null!;
 }
 
 public class CMDBProductChannel

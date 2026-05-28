@@ -369,6 +369,7 @@ public partial class CompassDbContext : DbContext
     // FIPS CMDB products
     public DbSet<CMDBProduct> CMDBProducts { get; set; }
     public DbSet<CMDBProductBusinessArea> CMDBProductBusinessAreas { get; set; }
+    public DbSet<CMDBProductDirectorate> CMDBProductDirectorates { get; set; }
     public DbSet<CMDBProductChannel> CMDBProductChannels { get; set; }
     public DbSet<CMDBProductUserGroup> CMDBProductUserGroups { get; set; }
     public DbSet<CMDBProductType> CMDBProductTypes { get; set; }
@@ -378,6 +379,7 @@ public partial class CompassDbContext : DbContext
 
     // FIPS configuration
     public DbSet<FipsBusinessArea> FipsBusinessAreas { get; set; }
+    public DbSet<FipsDirectorate> FipsDirectorates { get; set; }
     public DbSet<FipsChannel> FipsChannels { get; set; }
     public DbSet<FipsType> FipsTypes { get; set; }
     public DbSet<FipsUserGroup> FipsUserGroups { get; set; }
@@ -3590,6 +3592,23 @@ public partial class CompassDbContext : DbContext
         {
             e.HasOne(x => x.CMDBProduct).WithMany(p => p.BusinessAreas).HasForeignKey(x => x.CMDBProductId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(x => x.FipsBusinessArea).WithMany().HasForeignKey(x => x.FipsBusinessAreaId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<FipsDirectorate>(e =>
+        {
+            e.HasIndex(x => x.DirectorateLookupId)
+                .IsUnique()
+                .HasFilter("[DirectorateLookupId] IS NOT NULL");
+            e.HasOne(x => x.DirectorateLookup)
+                .WithMany()
+                .HasForeignKey(x => x.DirectorateLookupId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<CMDBProductDirectorate>(e =>
+        {
+            e.HasOne(x => x.CMDBProduct).WithMany(p => p.Directorates).HasForeignKey(x => x.CMDBProductId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.FipsDirectorate).WithMany().HasForeignKey(x => x.FipsDirectorateId).OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<CMDBProductChannel>(e =>

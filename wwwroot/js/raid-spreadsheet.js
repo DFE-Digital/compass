@@ -145,6 +145,8 @@
   }
 
   function getCellSortValue(cell) {
+    var sortAttr = cell.getAttribute('data-sort-value');
+    if (sortAttr) return sortAttr;
     var val = cell.querySelector('.raid-ss-val');
     var text = val ? val.textContent.trim() : cell.textContent.trim();
     return text === '—' ? '' : text;
@@ -152,7 +154,7 @@
 
   // ── Filtering ──
 
-  var TEXT_FILTER_COLUMNS = ['ref', 'title', 'description', 'cause', 'impact', 'contingency', 'assurance', 'financialImpact', 'kris', 'mitigations'];
+  var TEXT_FILTER_COLUMNS = ['ref', 'title', 'description', 'cause', 'impact', 'contingency', 'assurance', 'financialImpact', 'kris', 'mitigations', 'lastCommentUpdate'];
 
   function getCellFilterText(cell) {
     if (!cell) return '';
@@ -300,6 +302,12 @@
 
         if (th.classList.contains('raid-ss-sticky-col')) {
           td.classList.add('raid-ss-sticky-col');
+        }
+        if (th.classList.contains('raid-ss-group-start')) {
+          td.classList.add('raid-ss-group-start');
+        }
+        if (th.classList.contains('raid-ss-group-end')) {
+          td.classList.add('raid-ss-group-end');
         }
 
         filterRow.appendChild(td);
@@ -1169,10 +1177,49 @@
     appendValSpan(td, displayText || '—');
   }
 
-  function appendScoreCell(td, scoreField, score) {
+  function appendScoreCell(td, scoreField, score, th) {
     td.className = 'govuk-table__cell govuk-table__cell--numeric raid-ss-score';
+    if (th && th.classList.contains('raid-ss-group-end')) td.classList.add('raid-ss-group-end');
     td.setAttribute('data-score-field', scoreField);
     renderScoreBadgeCell(td, score);
+  }
+
+  function formatLastCommentUpdateDisplay(text, atIso, kindLabel) {
+    if (!text || !String(text).trim()) return '—';
+    var trimmed = String(text).trim();
+    if (trimmed.length > 120) trimmed = trimmed.slice(0, 119) + '\u2026';
+    if (atIso) {
+      var d = new Date(atIso);
+      if (!isNaN(d.getTime())) {
+        var datePart = d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' });
+        var kind = kindLabel || 'Update';
+        return datePart + ' \u2014 ' + kind + ': ' + trimmed;
+      }
+    }
+    return kindLabel ? kindLabel + ': ' + trimmed : trimmed;
+  }
+
+  function appendLastCommentUpdateCell(td, text, atIso, kindLabel) {
+    td.className = 'govuk-table__cell raid-ss-last-comment-update';
+    var display = formatLastCommentUpdateDisplay(text, atIso, kindLabel);
+    if (atIso) td.setAttribute('data-sort-value', atIso);
+    if (display !== '—') td.setAttribute('title', display);
+    appendValSpan(td, display);
+  }
+
+  function setLastCommentUpdateForRisk(riskId, text, atIso, kindLabel) {
+    var row = document.querySelector('tr.raid-ss-row[data-entity="risk"][data-id="' + riskId + '"]');
+    if (!row) return;
+    var cell = row.querySelector('td.raid-ss-last-comment-update');
+    if (!cell) return;
+    var display = formatLastCommentUpdateDisplay(text, atIso, kindLabel);
+    if (atIso) cell.setAttribute('data-sort-value', atIso);
+    else cell.removeAttribute('data-sort-value');
+    if (display !== '—') cell.setAttribute('title', display);
+    else cell.removeAttribute('title');
+    var val = cell.querySelector('.raid-ss-val');
+    if (val) val.textContent = display;
+    else cell.textContent = display;
   }
 
   function relationDisplayText(rel) {
@@ -1382,34 +1429,36 @@
       appendModalCell(td, 'response', 'Response strategy', data.response);
     } else if (col === 'mitigations') {
       appendMitigationCell(td, data.id, data.mitigationCount || 0, data.reference || formatEntityRef('risk', data.id));
+    } else if (col === 'lastCommentUpdate') {
+      appendLastCommentUpdateCell(td, data.lastCommentUpdate, data.lastCommentUpdateAt, data.lastCommentUpdateKind);
     } else if (col === 'origImpact') {
       if (th.classList.contains('raid-ss-group-start')) td.classList.add('raid-ss-group-start');
       appendSelectCell(td, 'originalImpactId', 'riskImpactLevels', data.originalImpactId, data.originalImpact);
     } else if (col === 'origLikelihood') {
       appendSelectCell(td, 'originalLikelihoodId', 'riskLikelihoods', data.originalLikelihoodId, data.originalLikelihood);
     } else if (col === 'origScore') {
-      appendScoreCell(td, RISK_SCORE_COLS.origScore, data.inherentScore);
+      appendScoreCell(td, RISK_SCORE_COLS.origScore, data.inherentScore, th);
     } else if (col === 'currImpact') {
       if (th.classList.contains('raid-ss-group-start')) td.classList.add('raid-ss-group-start');
       appendSelectCell(td, 'currentImpactId', 'riskImpactLevels', data.currentImpactId, data.currentImpact);
     } else if (col === 'currLikelihood') {
       appendSelectCell(td, 'currentLikelihoodId', 'riskLikelihoods', data.currentLikelihoodId, data.currentLikelihood);
     } else if (col === 'currScore') {
-      appendScoreCell(td, RISK_SCORE_COLS.currScore, data.currentScore);
+      appendScoreCell(td, RISK_SCORE_COLS.currScore, data.currentScore, th);
     } else if (col === 'residImpact') {
       if (th.classList.contains('raid-ss-group-start')) td.classList.add('raid-ss-group-start');
       appendSelectCell(td, 'residualImpactId', 'riskImpactLevels', data.residualImpactId, data.residualImpact);
     } else if (col === 'residLikelihood') {
       appendSelectCell(td, 'residualLikelihoodId', 'riskLikelihoods', data.residualLikelihoodId, data.residualLikelihood);
     } else if (col === 'residScore') {
-      appendScoreCell(td, RISK_SCORE_COLS.residScore, data.residualScore);
+      appendScoreCell(td, RISK_SCORE_COLS.residScore, data.residualScore, th);
     } else if (col === 'tolImpact') {
       if (th.classList.contains('raid-ss-group-start')) td.classList.add('raid-ss-group-start');
       appendSelectCell(td, 'toleranceImpactId', 'riskImpactLevels', data.toleranceImpactId, data.toleranceImpact);
     } else if (col === 'tolLikelihood') {
       appendSelectCell(td, 'toleranceLikelihoodId', 'riskLikelihoods', data.toleranceLikelihoodId, data.toleranceLikelihood);
     } else if (col === 'tolScore') {
-      appendScoreCell(td, RISK_SCORE_COLS.tolScore, data.toleranceScore);
+      appendScoreCell(td, RISK_SCORE_COLS.tolScore, data.toleranceScore, th);
     } else if (col === 'proximity') {
       appendSelectCell(td, 'proximityId', 'riskProximities', data.proximityId, data.proximity);
     } else if (col === 'createdDate') {
@@ -2078,7 +2127,8 @@
   var COL_WIDTHS_STORAGE = 'colWidths-v2';
   var DEFAULT_WIDE_COL_MIN = 300;
   var DEFAULT_NARROW_COL_MAX = 150;
-  var DEFAULT_RELATION_COL_WIDTH = 450;
+  var DEFAULT_RELATION_COL_WIDTH = 250;
+  var LEGACY_RELATION_COL_WIDTH = 450;
   var COL_RESIZE_MIN = 50;
   var WIDE_TEXT_COLUMNS = { title: true, description: true, cause: true, impact: true };
 
@@ -2114,9 +2164,14 @@
     });
   }
 
+  var DEFAULT_LAST_COMMENT_COL_WIDTH = 150;
+
   function defaultWidthConfigForColumn(col) {
     if (col === 'relation') {
       return { width: DEFAULT_RELATION_COL_WIDTH, minWidth: COL_RESIZE_MIN, maxWidth: null };
+    }
+    if (col === 'lastCommentUpdate') {
+      return { width: DEFAULT_LAST_COMMENT_COL_WIDTH, minWidth: COL_RESIZE_MIN, maxWidth: DEFAULT_LAST_COMMENT_COL_WIDTH };
     }
     if (isWideTextColumn(col)) {
       return { width: DEFAULT_WIDE_COL_MIN, minWidth: DEFAULT_WIDE_COL_MIN, maxWidth: null };
@@ -2170,7 +2225,7 @@
             return;
           }
           var w = widths[col];
-          if (col === 'relation' && w <= DEFAULT_NARROW_COL_MAX) {
+          if (col === 'relation' && (w <= DEFAULT_NARROW_COL_MAX || w === LEGACY_RELATION_COL_WIDTH)) {
             applyColumnWidthConfig(table, th, defaultWidthConfigForColumn(col));
             return;
           }
@@ -2343,6 +2398,10 @@
 
       var current = parseInt(toggle.getAttribute('data-comment-count'), 10) || 0;
       setCommentCount(toggle, current + 1);
+
+      if (entity === 'risk' && comment && comment.createdAt) {
+        setLastCommentUpdateForRisk(id, comment.commentText || text, comment.createdAt, 'Comment');
+      }
 
       var grid = document.getElementById('raid-comments-modal-grid');
       if (grid && isCommentsModalOpen()) {
@@ -2651,6 +2710,12 @@
 
       if (th.classList.contains('raid-ss-sticky-col')) {
         td.classList.add('raid-ss-sticky-col');
+      }
+      if (th.classList.contains('raid-ss-group-start')) {
+        td.classList.add('raid-ss-group-start');
+      }
+      if (th.classList.contains('raid-ss-group-end')) {
+        td.classList.add('raid-ss-group-end');
       }
 
       filterRow.appendChild(td);
@@ -3326,6 +3391,8 @@
           loadMitigationsIntoList(riskId, list);
         }
         if (isEdit && body.updateNote) {
+          var noteText = body.updateNote;
+          setLastCommentUpdateForRisk(riskId, noteText, new Date().toISOString(), 'Mitigation update');
           var commentToggle = document.querySelector(
             '.raid-ss-comment-toggle[data-entity="risk"][data-id="' + riskId + '"]');
           if (commentToggle) {
