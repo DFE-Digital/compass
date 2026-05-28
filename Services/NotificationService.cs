@@ -27,7 +27,6 @@ public class NotificationService : INotificationService
 
         var apiKey = _configuration["GovUkNotify:ApiKey"];
         var compassKey = _configuration["GovUkNotify:CompassKey"];
-        var templateId = _configuration["GovUkNotify:TemplateId"];
 
         if (string.IsNullOrWhiteSpace(apiKey))
         {
@@ -38,12 +37,7 @@ public class NotificationService : INotificationService
         _notifyClientCompass = CreateNotificationClient(compassKey, "GovUkNotify:CompassKey");
 
         if (_notifyClientCompass != null)
-            _logger.LogInformation("GOV.UK Notify CompassKey client initialised (used for CMS access request emails).");
-
-        if (string.IsNullOrWhiteSpace(templateId))
-        {
-            _logger.LogWarning("GOV.UK Notify template ID is not configured. Using default template.");
-        }
+            _logger.LogInformation("GOV.UK Notify CompassKey client initialised (used for CMS access grant emails).");
     }
 
     private object? CreateNotificationClient(string? apiKey, string configKeyName)
@@ -162,8 +156,6 @@ public class NotificationService : INotificationService
         string? triggerCode = null,
         int? notificationRuleId = null,
         Dictionary<string, object>? contextData = null,
-        string? notifyTemplateId = null,
-        IReadOnlyDictionary<string, object>? notifyPersonalisationExtras = null,
         CancellationToken cancellationToken = default)
     {
         var result = new NotificationResult();
@@ -209,14 +201,8 @@ public class NotificationService : INotificationService
                 return result;
             }
 
-            // Template: explicit override, then GovUkNotify:TemplateId, then SubjectBodyEmailTemplateId / CmsAccessRequestTemplateId
-            var templateId = notifyTemplateId;
-            if (string.IsNullOrWhiteSpace(templateId))
-                templateId = _configuration["GovUkNotify:TemplateId"];
-            if (string.IsNullOrWhiteSpace(templateId))
-                templateId = _configuration["GovUkNotify:SubjectBodyEmailTemplateId"];
-            if (string.IsNullOrWhiteSpace(templateId))
-                templateId = _configuration["GovUkNotify:CmsAccessRequestTemplateId"];
+            // Generic Notify template: subject and body personalisation only.
+            var templateId = _configuration["GovUkNotify:SubjectBodyEmailTemplateId"];
             if (string.IsNullOrWhiteSpace(templateId))
             {
                 notificationLog.Status = "failed";
@@ -226,21 +212,15 @@ public class NotificationService : INotificationService
                 result.Success = false;
                 result.ErrorMessage = "Template ID not configured";
                 _logger.LogWarning(
-                    "Notification not sent - set GovUkNotify:TemplateId, GovUkNotify:SubjectBodyEmailTemplateId, or GovUkNotify:CmsAccessRequestTemplateId (subject/body personalisation; CMS grants may also send cms_name, registration_link, requestor_first_name).");
+                    "Notification not sent - set GovUkNotify:SubjectBodyEmailTemplateId (subject/body personalisation).");
                 return result;
             }
 
-            // Prepare personalisation for GOV.UK Notify — required keys: subject, body (see GovUkNotify:CmsAccessRequestTemplateId for CMS-specific templates).
             var personalisation = new Dictionary<string, dynamic>
             {
                 { "subject", subject },
                 { "body", body }
             };
-            if (notifyPersonalisationExtras != null)
-            {
-                foreach (var kvp in notifyPersonalisationExtras)
-                    personalisation[kvp.Key] = kvp.Value;
-            }
 
             // Send email via GOV.UK Notify using reflection
             object? notifyResponse = null;
@@ -373,203 +353,6 @@ public class NotificationService : INotificationService
             _logger.LogError(
                 root,
                 "Unexpected error sending notification to {Email}",
-                recipientEmail);
-        }
-
-        return result;
-    }
-
-    public async Task<NotificationResult> SendEmailWithTemplateAsync(
-        string recipientEmail,
-        string templateId,
-        Dictionary<string, dynamic> personalisation,
-        string? triggerCode = null,
-        int? notificationRuleId = null,
-        Dictionary<string, object>? contextData = null,
-        CancellationToken cancellationToken = default)
-    {
-        var result = new NotificationResult();
-
-        // Validate email address
-        if (string.IsNullOrWhiteSpace(recipientEmail) || !recipientEmail.Contains('@'))
-        {
-            result.Success = false;
-            result.ErrorMessage = "Invalid email address";
-            _logger.LogWarning("Attempted to send notification to invalid email: {Email}", recipientEmail);
-            return result;
-        }
-
-        // Validate template ID
-        if (string.IsNullOrWhiteSpace(templateId))
-        {
-            result.Success = false;
-            result.ErrorMessage = "Template ID is required";
-            _logger.LogWarning("Attempted to send notification without template ID");
-            return result;
-        }
-
-        // Log the notification attempt
-        var notificationLog = new NotificationLog
-        {
-            NotificationRuleId = notificationRuleId,
-            TriggerCode = triggerCode ?? "contact_change",
-            RecipientEmail = recipientEmail,
-            Subject = "Contact Change Notification",
-            Body = System.Text.Json.JsonSerializer.Serialize(personalisation),
-            Status = "pending",
-            CreatedAt = DateTime.UtcNow,
-            ContextData = contextData != null ? System.Text.Json.JsonSerializer.Serialize(contextData) : null
-        };
-
-        try
-        {
-            _context.NotificationLogs.Add(notificationLog);
-            await _context.SaveChangesAsync(cancellationToken);
-
-            // If Notify client is not available, mark as failed
-            if (_notifyClient == null)
-            {
-                notificationLog.Status = "failed";
-                notificationLog.StatusMessage = "GOV.UK Notify client not initialized";
-                await _context.SaveChangesAsync(cancellationToken);
-
-                result.Success = false;
-                result.ErrorMessage = "Notification service not configured";
-                _logger.LogWarning("Notification not sent - GOV.UK Notify client not initialized");
-                return result;
-            }
-
-            // Send email via GOV.UK Notify using reflection
-            object? notifyResponse = null;
-            try
-            {
-                var sendEmailMethod = ResolveGovUkNotifySendMethod(_notifyClient.GetType());
-
-                if (sendEmailMethod != null)
-                {
-                    // Convert Dictionary<string, dynamic> to the expected type
-                    var methodParams = sendEmailMethod.GetParameters();
-                    object[] invokeParams;
-                    
-                    if (methodParams.Length == 2)
-                    {
-                        invokeParams = new object[] { recipientEmail, templateId };
-                    }
-                    else if (methodParams.Length == 3)
-                    {
-                        // Convert personalisation to match the method's expected type
-                        if (methodParams[2].ParameterType == typeof(Dictionary<string, object>))
-                        {
-                            var personalisationObj = new Dictionary<string, object>();
-                            foreach (var kvp in personalisation)
-                            {
-                                personalisationObj[kvp.Key] = kvp.Value;
-                            }
-                            invokeParams = new object[] { recipientEmail, templateId, personalisationObj };
-                        }
-                        else
-                        {
-                            invokeParams = new object[] { recipientEmail, templateId, personalisation };
-                        }
-                    }
-                    else if (methodParams.Length >= 4)
-                    {
-                        // GOV.UK Notify v7+ signature:
-                        // SendEmail(emailAddress, templateId, personalisation, clientReference, emailReplyToId)
-                        // Pass null for all optional parameters beyond personalisation
-                        var personalisationObj = new Dictionary<string, object>();
-                        foreach (var kvp in personalisation)
-                        {
-                            personalisationObj[kvp.Key] = kvp.Value;
-                        }
-                        invokeParams = new object[methodParams.Length];
-                        invokeParams[0] = recipientEmail;
-                        invokeParams[1] = templateId;
-                        invokeParams[2] = methodParams[2].ParameterType == typeof(Dictionary<string, object>)
-                            ? (object)personalisationObj
-                            : personalisation;
-                        for (int i = 3; i < methodParams.Length; i++)
-                        {
-                            invokeParams[i] = Type.Missing;
-                        }
-                    }
-                    else
-                    {
-                        throw new InvalidOperationException($"SendEmail method has unexpected number of parameters: {methodParams.Length}");
-                    }
-                    
-                    var rawInvoke = sendEmailMethod.Invoke(_notifyClient, invokeParams);
-                    notifyResponse = await AwaitNotifySendResultAsync(rawInvoke, cancellationToken);
-                }
-                else
-                {
-                    var availableMethods = string.Join(", ", _notifyClient.GetType().GetMethods().Select(m => m.Name));
-                    throw new InvalidOperationException($"SendEmail/SendEmailAsync not found on NotificationClient. Available methods: {availableMethods}");
-                }
-
-                if (notifyResponse == null)
-                {
-                    notificationLog.Status = "failed";
-                    notificationLog.StatusMessage = "No response from GOV.UK Notify";
-                    await _context.SaveChangesAsync(cancellationToken);
-
-                    result.Success = false;
-                    result.ErrorMessage = "No response from GOV.UK Notify";
-                    return result;
-                }
-
-                var messageId = TryGetNotifyResponseMessageId(notifyResponse);
-
-                notificationLog.Status = "sent";
-                notificationLog.StatusMessage = "Email sent successfully";
-                notificationLog.NotifyMessageId = messageId;
-                notificationLog.SentAt = DateTime.UtcNow;
-                await _context.SaveChangesAsync(cancellationToken);
-
-                result.Success = true;
-                result.MessageId = messageId;
-                result.SentAt = DateTime.UtcNow;
-
-                if (string.IsNullOrEmpty(messageId))
-                    _logger.LogWarning("GOV.UK Notify response had no message id; send still treated as success for {Email}", recipientEmail);
-                else
-                    _logger.LogInformation(
-                        "Contact change notification sent successfully to {Email} via GOV.UK Notify. Message ID: {MessageId}",
-                        recipientEmail,
-                        messageId);
-            }
-            catch (Exception ex)
-            {
-                var root = UnwrapReflectionException(ex);
-                notificationLog.Status = "failed";
-                notificationLog.StatusMessage = root.Message;
-                await _context.SaveChangesAsync(cancellationToken);
-
-                result.Success = false;
-                result.ErrorMessage = root.Message;
-
-                _logger.LogError(
-                    root,
-                    "Failed to send contact change notification via GOV.UK Notify to {Email}",
-                    recipientEmail);
-
-                return result;
-            }
-        }
-        catch (Exception ex)
-        {
-            // Handle general errors
-            var root = UnwrapReflectionException(ex);
-            notificationLog.Status = "failed";
-            notificationLog.StatusMessage = root.Message;
-            await _context.SaveChangesAsync(cancellationToken);
-
-            result.Success = false;
-            result.ErrorMessage = root.Message;
-
-            _logger.LogError(
-                root,
-                "Unexpected error sending contact change notification to {Email}",
                 recipientEmail);
         }
 

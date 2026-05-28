@@ -2300,6 +2300,11 @@ public partial class CompassDbContext : DbContext
         modelBuilder.Entity<ProjectRagHistory>()
             .HasIndex(prh => prh.ChangedAt);
 
+        ConfigureMonthlyReportTextColumns(modelBuilder.Entity<ProjectMonthlyUpdate>());
+        ConfigureMonthlyReportTextColumns(modelBuilder.Entity<MonthlyUpdateNarrative>());
+        ConfigureMonthlyReportTextColumns(modelBuilder.Entity<Project>());
+        ConfigureMonthlyReportTextColumns(modelBuilder.Entity<ProjectRagHistory>());
+
         // ProjectSuccess configuration
         modelBuilder.Entity<ProjectSuccess>()
             .HasOne(ps => ps.Project)
@@ -3944,6 +3949,29 @@ public partial class CompassDbContext : DbContext
         e.Property(i => i.Severity).HasMaxLength(10).HasColumnType("nvarchar(10)");
         e.Property(i => i.Priority).HasMaxLength(10).HasColumnType("nvarchar(10)");
         e.Property(i => i.Status).HasMaxLength(20).HasColumnType("nvarchar(20)");
+    }
+
+    private static void ConfigureMonthlyReportTextColumns(EntityTypeBuilder<ProjectMonthlyUpdate> e)
+    {
+        ConfigureRaidNarrativeColumns(e.Property(x => x.Narrative));
+        ConfigureRaidNarrativeColumns(e.Property(x => x.PeopleNarrative));
+        ConfigureRaidNarrativeColumns(e.Property(x => x.DraftRagJustification));
+        ConfigureRaidNarrativeColumns(e.Property(x => x.DraftPathToGreen));
+    }
+
+    private static void ConfigureMonthlyReportTextColumns(EntityTypeBuilder<MonthlyUpdateNarrative> e) =>
+        ConfigureRaidNarrativeColumns(e.Property(x => x.Narrative));
+
+    private static void ConfigureMonthlyReportTextColumns(EntityTypeBuilder<Project> e)
+    {
+        ConfigureRaidNarrativeColumns(e.Property(x => x.RagJustification));
+        ConfigureRaidNarrativeColumns(e.Property(x => x.PathToGreen));
+    }
+
+    private static void ConfigureMonthlyReportTextColumns(EntityTypeBuilder<ProjectRagHistory> e)
+    {
+        ConfigureRaidNarrativeColumns(e.Property(x => x.Justification));
+        ConfigureRaidNarrativeColumns(e.Property(x => x.PathToGreen));
     }
 }
 
