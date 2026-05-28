@@ -170,6 +170,48 @@ if (args.Length > 0 && args[0] == "--seed-dev-risk-register")
     return;
 }
 
+if (args.Length > 0 && args[0] == "--load-test-risks")
+{
+    var environment = "Development";
+    var count = 100;
+    var concurrency = 2;
+    var delayMs = 2000;
+    var baseUrl = "http://localhost:5500";
+    var ownerEmail = "andy.jones@education.gov.uk";
+    string? apiToken = null;
+
+    for (var i = 1; i < args.Length - 1; i++)
+    {
+        switch (args[i])
+        {
+            case "--environment":
+                environment = args[i + 1];
+                break;
+            case "--count":
+                count = int.Parse(args[i + 1]);
+                break;
+            case "--concurrency":
+                concurrency = int.Parse(args[i + 1]);
+                break;
+            case "--delay-ms":
+                delayMs = int.Parse(args[i + 1]);
+                break;
+            case "--base-url":
+                baseUrl = args[i + 1];
+                break;
+            case "--token":
+                apiToken = args[i + 1];
+                break;
+            case "--owner-email":
+                ownerEmail = args[i + 1];
+                break;
+        }
+    }
+
+    await Compass.LoadTestRiskCreation.RunAsync(environment, count, concurrency, delayMs, baseUrl, apiToken, ownerEmail);
+    return;
+}
+
 if (args.Length > 0 && args[0] == "--seed-fips-user-groups")
 {
     var environment = "Development";
@@ -651,6 +693,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseForwardedHeaders();
 
+app.UseMiddleware<HeadRequestAsGetMiddleware>();
 app.UseMiddleware<HttpErrorMonitoringMiddleware>();
 
 // Configure the HTTP request pipeline
