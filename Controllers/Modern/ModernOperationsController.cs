@@ -547,22 +547,11 @@ public class ModernOperationsController : Controller
                 + linkText
                 + "\n\nIf you have any problems, reply to this email, or contact design.ops@education.gov.uk";
 
-            var cmsTemplateId = _configuration["GovUkNotify:CmsAccessRequestTemplateId"]?.Trim();
-            var templateOverride = string.IsNullOrWhiteSpace(cmsTemplateId) ? null : cmsTemplateId;
-            var notifyExtras = new Dictionary<string, object>(StringComparer.Ordinal)
-            {
-                ["cms_name"] = entity.CmsName ?? "",
-                ["registration_link"] = linkText,
-                ["requestor_first_name"] = entity.RequestorFirstName ?? ""
-            };
-
             var send = await _notificationService.SendEmailAsync(
                 entity.RequestorEmail,
                 subject,
                 body,
                 triggerCode: "cms_access_request",
-                notifyTemplateId: templateOverride,
-                notifyPersonalisationExtras: notifyExtras,
                 cancellationToken: ct);
 
             if (!send.Success)

@@ -24,10 +24,10 @@ public class ProjectRagHistory
     [Obsolete("Use RagStatusLookupId instead. This property is kept for backward compatibility.")]
     public string RagStatus { get; set; } = string.Empty; // Deprecated: Use RagStatusLookupId
 
-    [MaxLength(1000)]
+    [MaxLength(4000)]
     public string? Justification { get; set; }
 
-    [MaxLength(1000)]
+    [MaxLength(4000)]
     public string? PathToGreen { get; set; }
 
     [Required]

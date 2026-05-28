@@ -2452,10 +2452,9 @@ public class FipsManagerController : Controller
             {
                 try
                 {
-                    var templateId = _configuration["GovUkNotify:ContactChangeTemplateId"];
                     var recipientEmail = _configuration["GovUkNotify:ContactChangeRecipientEmail"];
 
-                    if (!string.IsNullOrWhiteSpace(templateId) && !string.IsNullOrWhiteSpace(recipientEmail))
+                    if (!string.IsNullOrWhiteSpace(recipientEmail))
                     {
                         // Format contact changes for email
                         var formattedChanges = new List<string>();
@@ -2505,16 +2504,19 @@ public class FipsManagerController : Controller
                             }
                         }
 
-                        var personalisation = new Dictionary<string, dynamic>
-                        {
-                            { "product", product.Title ?? product.FipsId ?? "Unknown Product" },
-                            { "changes", string.Join("\n", formattedChanges) }
-                        };
+                        var productTitle = product.Title ?? product.FipsId ?? "Unknown Product";
+                        var subject = $"FIPS contact changes: {productTitle}";
+                        var body =
+                            "Contact changes were submitted during a product data quality review.\n\n"
+                            + $"Product: {productTitle}\n"
+                            + $"Reviewed by: {userEmail}\n\n"
+                            + "Changes:\n"
+                            + string.Join("\n", formattedChanges);
 
-                        var notificationResult = await _notificationService.SendEmailWithTemplateAsync(
+                        var notificationResult = await _notificationService.SendEmailAsync(
                             recipientEmail,
-                            templateId,
-                            personalisation,
+                            subject,
+                            body,
                             triggerCode: "dq_review_contact_change",
                             contextData: new Dictionary<string, object>
                             {
@@ -2542,9 +2544,7 @@ public class FipsManagerController : Controller
                     else
                     {
                         _logger.LogWarning(
-                            "Contact change notification not sent - template ID or recipient email not configured. TemplateId: {TemplateId}, RecipientEmail: {RecipientEmail}",
-                            templateId ?? "not set",
-                            recipientEmail ?? "not set");
+                            "Contact change notification not sent - recipient email not configured.");
                     }
                 }
                 catch (Exception ex)
@@ -2564,9 +2564,7 @@ public class FipsManagerController : Controller
             // Send confirmation email to the reviewer with all changes
             try
             {
-                var confirmationTemplateId = _configuration["GovUkNotify:ReviewConfirmationTemplateId"];
-
-                if (!string.IsNullOrWhiteSpace(confirmationTemplateId) && !string.IsNullOrWhiteSpace(userEmail))
+                if (!string.IsNullOrWhiteSpace(userEmail))
                 {
                     // Format all changes for the reviewer email
                     var allChangesFormatted = new List<string>();
@@ -2666,16 +2664,18 @@ public class FipsManagerController : Controller
                     // If there are any changes, send the email
                     if (allChangesFormatted.Any())
                     {
-                        var personalisation = new Dictionary<string, dynamic>
-                        {
-                            { "product", product.Title ?? product.FipsId ?? "Unknown Product" },
-                            { "changes", string.Join("\n", allChangesFormatted) }
-                        };
+                        var productTitle = product.Title ?? product.FipsId ?? "Unknown Product";
+                        var subject = $"FIPS review confirmation: {productTitle}";
+                        var body =
+                            "Your product data quality review has been submitted.\n\n"
+                            + $"Product: {productTitle}\n\n"
+                            + "Changes made:\n"
+                            + string.Join("\n", allChangesFormatted);
 
-                        var notificationResult = await _notificationService.SendEmailWithTemplateAsync(
+                        var notificationResult = await _notificationService.SendEmailAsync(
                             userEmail,
-                            confirmationTemplateId,
-                            personalisation,
+                            subject,
+                            body,
                             triggerCode: "dq_review_confirmation",
                             contextData: new Dictionary<string, object>
                             {
@@ -2713,9 +2713,7 @@ public class FipsManagerController : Controller
                 else
                 {
                     _logger.LogWarning(
-                        "Review confirmation email not sent - template ID not configured or user email not available. TemplateId: {TemplateId}, UserEmail: {UserEmail}",
-                        confirmationTemplateId ?? "not set",
-                        userEmail ?? "not set");
+                        "Review confirmation email not sent - user email not available.");
                 }
             }
             catch (Exception ex)
