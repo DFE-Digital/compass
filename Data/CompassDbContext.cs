@@ -1,6 +1,7 @@
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using System.Data;
 using System.Text.Json;
 using Compass.Models;
@@ -1209,7 +1210,12 @@ public partial class CompassDbContext : DbContext
                 .OnDelete(DeleteBehavior.Cascade);
             e.HasIndex(x => x.RiskId);
             e.HasIndex(x => new { x.RiskId, x.SortOrder });
+            ConfigureRaidNarrativeColumns(e.Property(x => x.Description));
+            ConfigureRaidNarrativeColumns(e.Property(x => x.Metric));
+            ConfigureRaidNarrativeColumns(e.Property(x => x.Threshold));
         });
+
+        ConfigureRaidRiskNarrativeColumns(modelBuilder.Entity<Risk>());
 
         // Issue configuration
         modelBuilder.Entity<Issue>()
@@ -1509,7 +1515,7 @@ public partial class CompassDbContext : DbContext
         {
             e.Property(x => x.Title).HasMaxLength(500);
             e.Property(x => x.EventKind).HasMaxLength(50);
-            e.Property(x => x.DecisionSummary).HasColumnType("nvarchar(max)");
+            ConfigureRaidNarrativeColumns(e.Property(x => x.DecisionSummary));
             e.HasOne(x => x.Issue)
                 .WithMany(i => i.AssuranceEvents)
                 .HasForeignKey(x => x.IssueId)
@@ -1518,13 +1524,7 @@ public partial class CompassDbContext : DbContext
             e.HasIndex(x => new { x.IssueId, x.SortOrder });
         });
 
-        modelBuilder.Entity<Issue>()
-            .Property(i => i.DetailedCause)
-            .HasColumnType("nvarchar(max)");
-
-        modelBuilder.Entity<Issue>()
-            .Property(i => i.AssuranceArrangements)
-            .HasColumnType("nvarchar(max)");
+        ConfigureRaidIssueNarrativeColumns(modelBuilder.Entity<Issue>());
 
         // Milestone configuration
         modelBuilder.Entity<Milestone>()
@@ -1737,6 +1737,16 @@ public partial class CompassDbContext : DbContext
 
         modelBuilder.Entity<Models.Action>()
             .HasIndex(a => new { a.Status, a.Priority });
+
+        modelBuilder.Entity<Models.Action>()
+            .Property(a => a.Title)
+            .HasMaxLength(RaidNarrativeMaxLength)
+            .HasColumnType("nvarchar(4000)");
+
+        modelBuilder.Entity<Models.Action>()
+            .Property(a => a.Notes)
+            .HasMaxLength(RaidNarrativeMaxLength)
+            .HasColumnType("nvarchar(4000)");
 
         modelBuilder.Entity<Models.Action>()
             .HasIndex(a => a.DueDate);
@@ -3898,6 +3908,42 @@ public partial class CompassDbContext : DbContext
             e.Property(x => x.Reason).HasColumnType("nvarchar(max)");
         });
 
+    }
+
+    private const int RaidNarrativeMaxLength = 4000;
+
+    private static void ConfigureRaidNarrativeColumns<T>(PropertyBuilder<T> property) =>
+        property.HasMaxLength(RaidNarrativeMaxLength).HasColumnType("nvarchar(4000)");
+
+    private static void ConfigureRaidRiskNarrativeColumns(EntityTypeBuilder<Risk> e)
+    {
+        e.Property(r => r.Title).HasMaxLength(200).HasColumnType("nvarchar(200)");
+        ConfigureRaidNarrativeColumns(e.Property(r => r.Description));
+        ConfigureRaidNarrativeColumns(e.Property(r => r.Cause));
+        ConfigureRaidNarrativeColumns(e.Property(r => r.ImpactIfRealised));
+        ConfigureRaidNarrativeColumns(e.Property(r => r.Contingency));
+        ConfigureRaidNarrativeColumns(e.Property(r => r.Assurance));
+        ConfigureRaidNarrativeColumns(e.Property(r => r.FinancialImpact));
+        ConfigureRaidNarrativeColumns(e.Property(r => r.Notes));
+        ConfigureRaidNarrativeColumns(e.Property(r => r.ResponseStrategy));
+        ConfigureRaidNarrativeColumns(e.Property(r => r.HowIdentified));
+        e.Property(r => r.Status).HasMaxLength(20).HasColumnType("nvarchar(20)");
+        e.Property(r => r.Response).HasMaxLength(20).HasColumnType("nvarchar(20)");
+    }
+
+    private static void ConfigureRaidIssueNarrativeColumns(EntityTypeBuilder<Issue> e)
+    {
+        e.Property(i => i.Title).HasMaxLength(200).HasColumnType("nvarchar(200)");
+        ConfigureRaidNarrativeColumns(e.Property(i => i.Description));
+        ConfigureRaidNarrativeColumns(e.Property(i => i.Workaround));
+        ConfigureRaidNarrativeColumns(e.Property(i => i.ResolutionSummary));
+        ConfigureRaidNarrativeColumns(e.Property(i => i.UserImpactSummary));
+        ConfigureRaidNarrativeColumns(e.Property(i => i.ServiceImpactSummary));
+        ConfigureRaidNarrativeColumns(e.Property(i => i.DetailedCause));
+        ConfigureRaidNarrativeColumns(e.Property(i => i.AssuranceArrangements));
+        e.Property(i => i.Severity).HasMaxLength(10).HasColumnType("nvarchar(10)");
+        e.Property(i => i.Priority).HasMaxLength(10).HasColumnType("nvarchar(10)");
+        e.Property(i => i.Status).HasMaxLength(20).HasColumnType("nvarchar(20)");
     }
 }
 

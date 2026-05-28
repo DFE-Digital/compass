@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using Compass.Models.Raid;
 
 namespace Compass.Models;
 
@@ -31,9 +32,10 @@ public class Risk
     public string? ProductDocumentId { get; set; } // Product DocumentID from CMS (primary identifier)
 
     [Required]
-    [MaxLength(200)]
+    [MaxLength(RaidFieldLimits.TitleMaxLength)]
     public string Title { get; set; } = string.Empty;
 
+    [MaxLength(RaidFieldLimits.NarrativeMaxLength)]
     public string? Description { get; set; }
 
     [MaxLength(100)]
@@ -79,6 +81,7 @@ public class Risk
 
     public DateTime? ClosedDate { get; set; }
 
+    [MaxLength(RaidFieldLimits.NarrativeMaxLength)]
     public string? Notes { get; set; }
 
     #endregion
@@ -205,24 +208,30 @@ public class Risk
     [ForeignKey(nameof(SroUserId))]
     public User? SroUser { get; set; }
 
+    [MaxLength(RaidFieldLimits.NarrativeMaxLength)]
     public string? ResponseStrategy { get; set; }
 
-    [MaxLength(1000)]
+    [MaxLength(RaidFieldLimits.NarrativeMaxLength)]
     public string? HowIdentified { get; set; }
 
     /// <summary>Root cause or drivers (narrative).</summary>
+    [MaxLength(RaidFieldLimits.NarrativeMaxLength)]
     public string? Cause { get; set; }
 
     /// <summary>Consequence narrative if the risk materialises.</summary>
+    [MaxLength(RaidFieldLimits.NarrativeMaxLength)]
     public string? ImpactIfRealised { get; set; }
 
     /// <summary>Contingency arrangements if the risk materialises.</summary>
+    [MaxLength(RaidFieldLimits.NarrativeMaxLength)]
     public string? Contingency { get; set; }
 
     /// <summary>Assurance arrangements for this risk.</summary>
+    [MaxLength(RaidFieldLimits.NarrativeMaxLength)]
     public string? Assurance { get; set; }
 
     /// <summary>Financial impact narrative.</summary>
+    [MaxLength(RaidFieldLimits.NarrativeMaxLength)]
     public string? FinancialImpact { get; set; }
 
     public int? CreatedByUserId { get; set; }

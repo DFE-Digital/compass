@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using Compass.Models.Raid;
 
 namespace Compass.Models;
 
@@ -19,14 +20,15 @@ public class RiskKeyRiskIndicator
     [MaxLength(300)]
     public string Title { get; set; } = string.Empty;
 
+    [MaxLength(RaidFieldLimits.NarrativeMaxLength)]
     public string? Description { get; set; }
 
     /// <summary>What is measured.</summary>
-    [MaxLength(2000)]
+    [MaxLength(RaidFieldLimits.NarrativeMaxLength)]
     public string? Metric { get; set; }
 
     /// <summary>Threshold at which the risk escalates or is reviewed.</summary>
-    [MaxLength(450)]
+    [MaxLength(RaidFieldLimits.NarrativeMaxLength)]
     public string? Threshold { get; set; }
 
     public int SortOrder { get; set; }

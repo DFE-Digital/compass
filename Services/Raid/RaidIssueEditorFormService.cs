@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Compass.Data;
 using Compass.Models;
+using Compass.Models.Raid;
 using Compass.Models.Modern.Work;
 using Compass.Services.Fips;
 using Compass.ViewModels.Modern;
@@ -109,8 +110,8 @@ public sealed class RaidIssueEditorFormService(CompassDbContext db) : IRaidIssue
             ProjectId = assoc.ProjectId,
             PrimaryProductId = assoc.PrimaryProductId,
             RaidAssociationKind = assoc.StoredKind,
-            Title = form.Title.Trim(),
-            Description = form.Description ?? "",
+            Title = TruncateRaid(form.Title.Trim(), RaidFieldLimits.TitleMaxLength),
+            Description = RaidFieldLimits.NormalizeNarrative(form.Description) ?? "",
             StatusId = issueStatusId,
             SeverityId = form.SeverityId,
             PriorityId = form.PriorityId,
@@ -120,9 +121,9 @@ public sealed class RaidIssueEditorFormService(CompassDbContext db) : IRaidIssue
             Priority = priRow != null ? TruncateRaid(priRow.Label, 10) : null,
             Status = TruncateLowerRaid(stRow?.Label ?? "open", 20),
             TargetResolutionDate = targetResolutionDt,
-            Workaround = form.Workaround,
-            DetailedCause = form.DetailedCause,
-            AssuranceArrangements = form.AssuranceArrangements,
+            Workaround = RaidFieldLimits.NormalizeNarrative(form.Workaround),
+            DetailedCause = RaidFieldLimits.NormalizeNarrative(form.DetailedCause),
+            AssuranceArrangements = RaidFieldLimits.NormalizeNarrative(form.AssuranceArrangements),
             DetectedDate = DateTime.UtcNow.Date,
             CreatedByUserId = createdByUserId,
             CreatedAt = now,
@@ -207,8 +208,9 @@ public sealed class RaidIssueEditorFormService(CompassDbContext db) : IRaidIssue
             PrimaryProductId = risk.PrimaryProductId,
             RaidAssociationKind = risk.RaidAssociationKind,
             Title = risk.Title.Trim(),
-            Description = descParts.Count > 0 ? string.Join("\n\n", descParts) : risk.Title,
-            DetailedCause = risk.Cause,
+            Description = RaidFieldLimits.NormalizeNarrative(
+                descParts.Count > 0 ? string.Join("\n\n", descParts) : risk.Title) ?? risk.Title,
+            DetailedCause = RaidFieldLimits.NormalizeNarrative(risk.Cause),
             StatusId = issueStatusId,
             SeverityId = severityId,
             PriorityId = priorityId,
@@ -550,7 +552,7 @@ public sealed class RaidIssueEditorFormService(CompassDbContext db) : IRaidIssue
                 EventKind = kindNorm,
                 Title = titleSafe,
                 EventDate = eventDt,
-                DecisionSummary = string.IsNullOrWhiteSpace(decision) ? null : decision,
+                DecisionSummary = RaidFieldLimits.NormalizeNarrative(decision),
                 SortOrder = sortOrder++
             });
         }
