@@ -184,6 +184,26 @@ public class RisksController : ControllerBase
             });
         }
 
+        string? ownerEmail = dto.OwnerEmail;
+        if (dto.OwnerUserId is > 0)
+        {
+            var ownerUser = await _context.Users.AsNoTracking()
+                .FirstOrDefaultAsync(u => u.Id == dto.OwnerUserId.Value);
+            if (ownerUser == null)
+            {
+                return BadRequest(new
+                {
+                    error = new
+                    {
+                        code = "VALIDATION_ERROR",
+                        message = $"Owner user with ID {dto.OwnerUserId} not found"
+                    }
+                });
+            }
+
+            ownerEmail = ownerUser.Email ?? ownerEmail;
+        }
+
         var risk = new Risk
         {
             Title = dto.Title,
@@ -194,7 +214,8 @@ public class RisksController : ControllerBase
             ImpactRating = dto.ImpactRating,
             LikelihoodRating = dto.LikelihoodRating,
             RiskScore = dto.ImpactRating * dto.LikelihoodRating,
-            OwnerEmail = dto.OwnerEmail,
+            OwnerUserId = dto.OwnerUserId is > 0 ? dto.OwnerUserId : null,
+            OwnerEmail = ownerEmail,
             Status = dto.Status ?? "new",
             Category = dto.Category,
             BusinessArea = dto.BusinessArea,
@@ -303,6 +324,7 @@ public class RiskCreateDto
     [System.ComponentModel.DataAnnotations.Range(1, 5)]
     public int LikelihoodRating { get; set; }
     public string? OwnerEmail { get; set; }
+    public int? OwnerUserId { get; set; }
     public string? Status { get; set; }
     public string? Category { get; set; }
     public string? BusinessArea { get; set; }

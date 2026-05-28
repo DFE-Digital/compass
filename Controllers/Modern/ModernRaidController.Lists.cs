@@ -376,7 +376,9 @@ public partial class ModernRaidController
     }
 
     [HttpGet("risks")]
+    [HttpHead("risks")]
     [HttpGet("/ModernRaid/Risks")]
+    [HttpHead("/ModernRaid/Risks")]
     public async Task<IActionResult> Risks(
         string? search,
         int? projectId,

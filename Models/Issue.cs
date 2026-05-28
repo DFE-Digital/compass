@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using Compass.Models.Raid;
 
 namespace Compass.Models;
 
@@ -31,9 +32,10 @@ public class Issue
     public string? ProductDocumentId { get; set; } // Product DocumentID from CMS (primary identifier)
 
     [Required]
-    [MaxLength(200)]
+    [MaxLength(RaidFieldLimits.TitleMaxLength)]
     public string Title { get; set; } = string.Empty;
 
+    [MaxLength(RaidFieldLimits.NarrativeMaxLength)]
     public string? Description { get; set; }
 
     [MaxLength(100)]
@@ -63,8 +65,10 @@ public class Issue
     [MaxLength(20)]
     public string Status { get; set; } = "open";
 
+    [MaxLength(RaidFieldLimits.NarrativeMaxLength)]
     public string? ResolutionSummary { get; set; }
 
+    [MaxLength(RaidFieldLimits.NarrativeMaxLength)]
     public string? Workaround { get; set; }
 
     [MaxLength(100)]
@@ -121,8 +125,10 @@ public class Issue
     [ForeignKey(nameof(SroUserId))]
     public User? SroUser { get; set; }
 
+    [MaxLength(RaidFieldLimits.NarrativeMaxLength)]
     public string? UserImpactSummary { get; set; }
 
+    [MaxLength(RaidFieldLimits.NarrativeMaxLength)]
     public string? ServiceImpactSummary { get; set; }
 
     [NotMapped]
@@ -208,9 +214,11 @@ public class Issue
     public ICollection<IssueBusinessArea> IssueBusinessAreas { get; set; } = new List<IssueBusinessArea>();
 
     /// <summary>Detailed root cause narrative for RAID issues.</summary>
+    [MaxLength(RaidFieldLimits.NarrativeMaxLength)]
     public string? DetailedCause { get; set; }
 
     /// <summary>Summary of significant assurance arrangements (narrative).</summary>
+    [MaxLength(RaidFieldLimits.NarrativeMaxLength)]
     public string? AssuranceArrangements { get; set; }
 
     public ICollection<IssueAssuranceEvent> AssuranceEvents { get; set; } = new List<IssueAssuranceEvent>();
