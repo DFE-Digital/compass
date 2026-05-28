@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using Compass.Models.Raid;
 
 namespace Compass.ViewModels.Modern;
 
@@ -52,21 +53,27 @@ public sealed class ModernRaidRiskEditorForm
     public int? PrimaryProductId { get; set; }
 
     [Required]
-    [MaxLength(200)]
+    [MaxLength(RaidFieldLimits.TitleMaxLength)]
     public string Title { get; set; } = "";
 
+    [MaxLength(RaidFieldLimits.NarrativeMaxLength)]
     public string? Description { get; set; }
 
     /// <summary>Cause / drivers (distinct from description).</summary>
+    [MaxLength(RaidFieldLimits.NarrativeMaxLength)]
     public string? Cause { get; set; }
 
     /// <summary>Impact if the risk materialises.</summary>
+    [MaxLength(RaidFieldLimits.NarrativeMaxLength)]
     public string? ImpactIfRealised { get; set; }
 
+    [MaxLength(RaidFieldLimits.NarrativeMaxLength)]
     public string? Contingency { get; set; }
 
+    [MaxLength(RaidFieldLimits.NarrativeMaxLength)]
     public string? Assurance { get; set; }
 
+    [MaxLength(RaidFieldLimits.NarrativeMaxLength)]
     public string? FinancialImpact { get; set; }
 
     /// <summary>Key risk indicators (metric and threshold pairs).</summary>
@@ -77,6 +84,11 @@ public sealed class ModernRaidRiskEditorForm
     public int? RiskPriorityId { get; set; }
     public int? RiskLikelihoodId { get; set; }
     public int? RiskImpactLevelId { get; set; }
+
+    // Current risk rating
+    public int? CurrentLikelihoodId { get; set; }
+    public int? CurrentImpactLevelId { get; set; }
+
     public int? RiskProximityId { get; set; }
     public int? RiskTreatmentId { get; set; }
 
@@ -115,13 +127,16 @@ public sealed class ModernRaidRiskEditorForm
     public int? NextReviewMonth { get; set; }
     public int? NextReviewYear { get; set; }
 
+    [MaxLength(RaidFieldLimits.NarrativeMaxLength)]
     public string? ResponseStrategy { get; set; }
 }
 
 public sealed class RiskKriItemForm
 {
+    [MaxLength(RaidFieldLimits.NarrativeMaxLength)]
     public string? Metric { get; set; }
 
+    [MaxLength(RaidFieldLimits.NarrativeMaxLength)]
     public string? Threshold { get; set; }
 }
 
@@ -137,6 +152,7 @@ public sealed class IssueAssuranceItemForm
     public int? EventYear { get; set; }
 
     /// <summary>Decision taken or expected.</summary>
+    [MaxLength(RaidFieldLimits.NarrativeMaxLength)]
     public string? DecisionSummary { get; set; }
 }
 
@@ -177,9 +193,10 @@ public sealed class ModernRaidIssueEditorForm
     public int? PrimaryProductId { get; set; }
 
     [Required]
-    [MaxLength(200)]
+    [MaxLength(RaidFieldLimits.TitleMaxLength)]
     public string Title { get; set; } = "";
 
+    [MaxLength(RaidFieldLimits.NarrativeMaxLength)]
     public string? Description { get; set; }
 
     public int? StatusId { get; set; }
@@ -204,11 +221,14 @@ public sealed class ModernRaidIssueEditorForm
     public int? TargetResolutionYear { get; set; }
 
     /// <summary>Mitigation / workaround text.</summary>
+    [MaxLength(RaidFieldLimits.NarrativeMaxLength)]
     public string? Workaround { get; set; }
 
+    [MaxLength(RaidFieldLimits.NarrativeMaxLength)]
     public string? DetailedCause { get; set; }
 
     /// <summary>Narrative listing significant assurance arrangements.</summary>
+    [MaxLength(RaidFieldLimits.NarrativeMaxLength)]
     public string? AssuranceArrangements { get; set; }
 
     /// <summary>Boards, reviews, events with dates and decisions.</summary>

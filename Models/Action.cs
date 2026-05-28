@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using Compass.Models.Raid;
 
 namespace Compass.Models;
 
@@ -36,7 +37,7 @@ public class Action
     public string? ProductDocumentId { get; set; } // Product DocumentID from CMS (primary identifier)
 
     [Required]
-    [MaxLength(450)]
+    [MaxLength(RaidFieldLimits.NarrativeMaxLength)]
     public string Title { get; set; } = string.Empty;
 
     public string? Description { get; set; }
@@ -82,6 +83,7 @@ public class Action
     [MaxLength(500)]
     public string? EvidenceUrl { get; set; }
 
+    [MaxLength(RaidFieldLimits.NarrativeMaxLength)]
     public string? Notes { get; set; }
 
     #endregion

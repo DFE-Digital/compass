@@ -1066,7 +1066,27 @@ public partial class ModernWorkController : Controller
             update.SubmittedAt = DateTime.UtcNow;
 
         project.UpdatedAt = DateTime.UtcNow;
-        await _context.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "MonthlyReportPost SaveChanges failed for project {ProjectId} {Year}/{Month}", id, year, month);
+            ModelState.AddModelError(string.Empty, "Unable to save the monthly report. Try again or contact support if the problem continues.");
+            var postedOnError = new MonthlyReportPostedForm(
+                narrative,
+                peopleNarrative,
+                permFte,
+                mspFte,
+                ragStatusId,
+                ragJustification,
+                pathToGreen);
+            var vmOnError = await LoadMonthlyReportViewModelAsync(id, year, month, postedOnError, cancellationToken);
+            if (vmOnError == null)
+                return NotFound();
+            return await MonthlyReportViewResultAsync(vmOnError, cancellationToken);
+        }
 
         TempData["MonthlyReportMessage"] = isSubmit
             ? "Monthly update submitted successfully."

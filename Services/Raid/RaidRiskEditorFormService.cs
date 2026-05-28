@@ -2,6 +2,7 @@ using System.Security.Claims;
 using System.Text.Json;
 using Compass.Data;
 using Compass.Models;
+using Compass.Models.Raid;
 using Compass.Models.Modern.Work;
 using Compass.Services.Fips;
 using Compass.ViewModels.Modern;
@@ -151,6 +152,9 @@ public sealed class RaidRiskEditorFormService(CompassDbContext db) : IRaidRiskEd
 
         var residualScore = await ComputeRaidRiskScoreDecimalAsync(form.ResidualLikelihoodId, form.ResidualImpactLevelId, cancellationToken);
         var toleranceScore = await ComputeRaidRiskScoreDecimalAsync(form.ToleranceLikelihoodId, form.ToleranceImpactLevelId, cancellationToken);
+        var currentLikelihoodId = form.CurrentLikelihoodId ?? form.RiskLikelihoodId;
+        var currentImpactLevelId = form.CurrentImpactLevelId ?? form.RiskImpactLevelId;
+        var currentScore = await ComputeRaidRiskScoreDecimalAsync(currentLikelihoodId, currentImpactLevelId, cancellationToken);
 
         var createdByUserId = await ResolveCurrentUserIdAsync(user, cancellationToken);
 
@@ -168,13 +172,14 @@ public sealed class RaidRiskEditorFormService(CompassDbContext db) : IRaidRiskEd
             ProjectId = assoc.ProjectId,
             PrimaryProductId = assoc.PrimaryProductId,
             RaidAssociationKind = assoc.StoredKind,
-            Title = form.Title.Trim(),
-            Description = form.Description,
-            Cause = string.IsNullOrWhiteSpace(form.Cause) ? null : form.Cause.Trim(),
-            ImpactIfRealised = string.IsNullOrWhiteSpace(form.ImpactIfRealised) ? null : form.ImpactIfRealised.Trim(),
-            Contingency = string.IsNullOrWhiteSpace(form.Contingency) ? null : form.Contingency.Trim(),
-            Assurance = string.IsNullOrWhiteSpace(form.Assurance) ? null : form.Assurance.Trim(),
-            FinancialImpact = string.IsNullOrWhiteSpace(form.FinancialImpact) ? null : form.FinancialImpact.Trim(),
+            Title = TruncateRaid(form.Title.Trim(), RaidFieldLimits.TitleMaxLength),
+            Description = RaidFieldLimits.NormalizeNarrative(form.Description),
+            Cause = RaidFieldLimits.NormalizeNarrative(form.Cause),
+            ImpactIfRealised = RaidFieldLimits.NormalizeNarrative(form.ImpactIfRealised),
+            Contingency = RaidFieldLimits.NormalizeNarrative(form.Contingency),
+            Assurance = RaidFieldLimits.NormalizeNarrative(form.Assurance),
+            FinancialImpact = RaidFieldLimits.NormalizeNarrative(form.FinancialImpact),
+            ResponseStrategy = RaidFieldLimits.NormalizeNarrative(form.ResponseStrategy),
             RiskTierId = form.RiskTierId,
             RiskStatusId = riskStatusId,
             RiskPriorityId = form.RiskPriorityId,
@@ -187,9 +192,9 @@ public sealed class RaidRiskEditorFormService(CompassDbContext db) : IRaidRiskEd
             LikelihoodRating = likelihoodRating,
             RiskScore = riskScore,
             InherentScore = inherentScore,
-            CurrentLikelihoodId = form.RiskLikelihoodId,
-            CurrentImpactLevelId = form.RiskImpactLevelId,
-            CurrentScore = inherentScore,
+            CurrentLikelihoodId = currentLikelihoodId,
+            CurrentImpactLevelId = currentImpactLevelId,
+            CurrentScore = currentScore,
             ResidualLikelihoodId = form.ResidualLikelihoodId,
             ResidualImpactLevelId = form.ResidualImpactLevelId,
             ResidualScore = residualScore,
@@ -198,8 +203,7 @@ public sealed class RaidRiskEditorFormService(CompassDbContext db) : IRaidRiskEd
             ToleranceScore = toleranceScore,
             Status = TruncateLowerRaid(riskStatusRow?.Label ?? "new", 20),
             Response = riskTreatment != null ? TruncateRaid(riskTreatment.Label, 20) : null,
-            ResponseStrategy = form.ResponseStrategy,
-            Notes = form.ResponseStrategy,
+            Notes = RaidFieldLimits.NormalizeNarrative(form.ResponseStrategy),
             IdentifiedDate = identifiedVal,
             NextReviewDate = nextReviewDt,
             HowIdentified = "RAID register",
@@ -242,8 +246,8 @@ public sealed class RaidRiskEditorFormService(CompassDbContext db) : IRaidRiskEd
             {
                 RiskId = riskId,
                 Title = TruncateRaid(titleSource, 300),
-                Metric = metric != null ? TruncateRaid(metric, 2000) : null,
-                Threshold = threshold != null ? TruncateRaid(threshold, 2000) : null,
+                Metric = RaidFieldLimits.NormalizeNarrative(metric),
+                Threshold = RaidFieldLimits.NormalizeNarrative(threshold),
                 SortOrder = sortOrder,
                 CreatedAt = now,
                 UpdatedAt = now

@@ -350,8 +350,8 @@ namespace Compass.Migrations
                         .HasColumnType("int");
 
                     b.Property<string>("Notes")
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
 
                     b.Property<int?>("ObjectiveId")
                         .HasColumnType("int");
@@ -429,8 +429,8 @@ namespace Compass.Migrations
 
                     b.Property<string>("Title")
                         .IsRequired()
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
 
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("datetime2");
@@ -6647,6 +6647,29 @@ namespace Compass.Migrations
                     b.ToTable("CMDBProductContacts");
                 });
 
+            modelBuilder.Entity("Compass.Models.Fips.CMDBProductDirectorate", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<Guid>("CMDBProductId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("FipsDirectorateId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CMDBProductId");
+
+                    b.HasIndex("FipsDirectorateId");
+
+                    b.ToTable("CMDBProductDirectorates");
+                });
+
             modelBuilder.Entity("Compass.Models.Fips.CMDBProductFipsCategorisationItem", b =>
                 {
                     b.Property<int>("Id")
@@ -6923,6 +6946,41 @@ namespace Compass.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("FipsContactRoles");
+                });
+
+            modelBuilder.Entity("Compass.Models.Fips.FipsDirectorate", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("Active")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int?>("DirectorateLookupId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("DisplayOrder")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DirectorateLookupId")
+                        .IsUnique()
+                        .HasFilter("[DirectorateLookupId] IS NOT NULL");
+
+                    b.ToTable("FipsDirectorates");
                 });
 
             modelBuilder.Entity("Compass.Models.Fips.FipsType", b =>
@@ -7600,6 +7658,30 @@ namespace Compass.Migrations
                     b.ToTable("HOPS");
                 });
 
+            modelBuilder.Entity("Compass.Models.HttpErrorEmailSettings", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ContactEmail")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<bool>("IsEnabled")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedByEmail")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("HttpErrorEmailSettings");
+                });
+
             modelBuilder.Entity("Compass.Models.Issue", b =>
                 {
                     b.Property<int>("Id")
@@ -7609,8 +7691,8 @@ namespace Compass.Migrations
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<string>("AssuranceArrangements")
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
 
                     b.Property<bool>("BlockedFlag")
                         .HasColumnType("bit");
@@ -7639,12 +7721,12 @@ namespace Compass.Migrations
                         .HasColumnType("int");
 
                     b.Property<string>("Description")
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
 
                     b.Property<string>("DetailedCause")
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
 
                     b.Property<DateTime>("DetectedDate")
                         .HasColumnType("datetime2");
@@ -7672,8 +7754,8 @@ namespace Compass.Migrations
                         .HasColumnType("int");
 
                     b.Property<string>("Priority")
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
 
                     b.Property<int?>("PriorityId")
                         .HasColumnType("int");
@@ -7690,8 +7772,8 @@ namespace Compass.Migrations
                         .HasColumnType("nvarchar(450)");
 
                     b.Property<string>("ResolutionSummary")
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
 
                     b.Property<DateTime?>("ResolvedDate")
                         .HasColumnType("datetime2");
@@ -7700,13 +7782,13 @@ namespace Compass.Migrations
                         .HasColumnType("int");
 
                     b.Property<string>("ServiceImpactSummary")
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
 
                     b.Property<string>("Severity")
                         .IsRequired()
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
 
                     b.Property<int?>("SeverityId")
                         .HasColumnType("int");
@@ -7739,8 +7821,8 @@ namespace Compass.Migrations
 
                     b.Property<string>("Status")
                         .IsRequired()
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<int?>("StatusId")
                         .HasColumnType("int");
@@ -7750,8 +7832,8 @@ namespace Compass.Migrations
 
                     b.Property<string>("Title")
                         .IsRequired()
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
 
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("datetime2");
@@ -7760,12 +7842,12 @@ namespace Compass.Migrations
                         .HasColumnType("int");
 
                     b.Property<string>("UserImpactSummary")
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
 
                     b.Property<string>("Workaround")
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
 
                     b.HasKey("Id");
 
@@ -7836,8 +7918,8 @@ namespace Compass.Migrations
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<string>("DecisionSummary")
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
 
                     b.Property<DateTime?>("EventDate")
                         .HasColumnType("datetime2");
@@ -12334,8 +12416,8 @@ namespace Compass.Migrations
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<string>("Assurance")
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
 
                     b.Property<string>("BusinessArea")
                         .HasMaxLength(450)
@@ -12346,8 +12428,8 @@ namespace Compass.Migrations
                         .HasColumnType("nvarchar(450)");
 
                     b.Property<string>("Cause")
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
 
                     b.Property<int?>("ClosedByUserId")
                         .HasColumnType("int");
@@ -12356,8 +12438,8 @@ namespace Compass.Migrations
                         .HasColumnType("datetime2");
 
                     b.Property<string>("Contingency")
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
@@ -12375,12 +12457,12 @@ namespace Compass.Migrations
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<string>("Description")
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
 
                     b.Property<string>("FinancialImpact")
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
 
                     b.Property<string>("FipsId")
                         .HasMaxLength(450)
@@ -12390,15 +12472,15 @@ namespace Compass.Migrations
                         .HasColumnType("int");
 
                     b.Property<string>("HowIdentified")
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
 
                     b.Property<DateTime?>("IdentifiedDate")
                         .HasColumnType("datetime2");
 
                     b.Property<string>("ImpactIfRealised")
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
 
                     b.Property<int>("ImpactRating")
                         .HasColumnType("int");
@@ -12419,8 +12501,8 @@ namespace Compass.Migrations
                         .HasColumnType("datetime2");
 
                     b.Property<string>("Notes")
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
 
                     b.Property<int?>("ObjectiveId")
                         .HasColumnType("int");
@@ -12465,12 +12547,12 @@ namespace Compass.Migrations
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<string>("Response")
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<string>("ResponseStrategy")
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
 
                     b.Property<int?>("RiskCategoryId")
                         .HasColumnType("int");
@@ -12509,16 +12591,16 @@ namespace Compass.Migrations
 
                     b.Property<string>("Status")
                         .IsRequired()
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<DateTime?>("TargetDate")
                         .HasColumnType("datetime2");
 
                     b.Property<string>("Title")
                         .IsRequired()
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
 
                     b.Property<int?>("ToleranceImpactLevelId")
                         .HasColumnType("int");
@@ -12787,12 +12869,12 @@ namespace Compass.Migrations
                         .HasColumnType("datetime2");
 
                     b.Property<string>("Description")
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
 
                     b.Property<string>("Metric")
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
 
                     b.Property<int>("RiskId")
                         .HasColumnType("int");
@@ -12801,8 +12883,8 @@ namespace Compass.Migrations
                         .HasColumnType("int");
 
                     b.Property<string>("Threshold")
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
 
                     b.Property<string>("Title")
                         .IsRequired()
@@ -16515,6 +16597,25 @@ namespace Compass.Migrations
                     b.Navigation("FipsContactRole");
                 });
 
+            modelBuilder.Entity("Compass.Models.Fips.CMDBProductDirectorate", b =>
+                {
+                    b.HasOne("Compass.Models.Fips.CMDBProduct", "CMDBProduct")
+                        .WithMany("Directorates")
+                        .HasForeignKey("CMDBProductId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Compass.Models.Fips.FipsDirectorate", "FipsDirectorate")
+                        .WithMany()
+                        .HasForeignKey("FipsDirectorateId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("CMDBProduct");
+
+                    b.Navigation("FipsDirectorate");
+                });
+
             modelBuilder.Entity("Compass.Models.Fips.CMDBProductFipsCategorisationItem", b =>
                 {
                     b.HasOne("Compass.Models.Fips.CMDBProduct", "CMDBProduct")
@@ -16591,6 +16692,16 @@ namespace Compass.Migrations
                         .IsRequired();
 
                     b.Navigation("Group");
+                });
+
+            modelBuilder.Entity("Compass.Models.Fips.FipsDirectorate", b =>
+                {
+                    b.HasOne("Compass.Models.DirectorateLookup", "DirectorateLookup")
+                        .WithMany()
+                        .HasForeignKey("DirectorateLookupId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("DirectorateLookup");
                 });
 
             modelBuilder.Entity("Compass.Models.Fips.FipsUserGroup", b =>
@@ -19287,6 +19398,8 @@ namespace Compass.Migrations
                     b.Navigation("Channels");
 
                     b.Navigation("Contacts");
+
+                    b.Navigation("Directorates");
 
                     b.Navigation("Types");
 

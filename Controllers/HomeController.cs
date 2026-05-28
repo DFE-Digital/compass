@@ -312,7 +312,10 @@ public class HomeController : Controller
     {
         var exception = HttpContext.Features.Get<IExceptionHandlerPathFeature>()?.Error;
         if (exception != null)
+        {
             _logger.LogError(exception, "Unhandled exception on {Path}", HttpContext.Request.Path);
+            HttpContext.Items["HttpErrorCapturedException"] = exception;
+        }
 
         return View(new ErrorViewModel
         {
@@ -348,9 +351,18 @@ public class HomeController : Controller
         var p = path.TrimEnd('/').ToLowerInvariant();
         return p.StartsWith("/css/", StringComparison.Ordinal)
             || p.StartsWith("/js/", StringComparison.Ordinal)
-            || p.StartsWith("/modern/", StringComparison.Ordinal)
             || p.StartsWith("/lib/", StringComparison.Ordinal)
-            || p.StartsWith("/_content/", StringComparison.Ordinal);
+            || p.StartsWith("/_content/", StringComparison.Ordinal)
+            || p.StartsWith("/modern/css/", StringComparison.Ordinal)
+            || p.StartsWith("/modern/js/", StringComparison.Ordinal)
+            || p.StartsWith("/modern/assets/", StringComparison.Ordinal)
+            || p.EndsWith(".css", StringComparison.Ordinal)
+            || p.EndsWith(".js", StringComparison.Ordinal)
+            || p.EndsWith(".map", StringComparison.Ordinal)
+            || p.EndsWith(".ico", StringComparison.Ordinal)
+            || p.EndsWith(".png", StringComparison.Ordinal)
+            || p.EndsWith(".svg", StringComparison.Ordinal)
+            || p.EndsWith(".woff2", StringComparison.Ordinal);
     }
 
     public IActionResult Support()

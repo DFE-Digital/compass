@@ -1,4 +1,5 @@
 using Compass.Models;
+using Compass.Models.Raid;
 using Compass.Services.Fips;
 using Compass.Services.Modern;
 using Compass.Services.Raid;
@@ -326,6 +327,22 @@ public partial class ModernRaidController
                 return RedirectToAction(nameof(RegisterCreate), new { step = 5, id = register.Id });
 
             case 5:
+                SyncRegisterUsers(register, vm.RegisterUsers, userId.Value);
+                if (!register.Users.Any(u => u.Role == RaidRegisterRole.Owner))
+                {
+                    var creatorRow = register.Users.FirstOrDefault(u => u.UserId == userId.Value);
+                    if (creatorRow != null)
+                        creatorRow.Role = RaidRegisterRole.Owner;
+                    else
+                    {
+                        register.Users.Add(new RaidRegisterUser
+                        {
+                            UserId = userId.Value,
+                            Role = RaidRegisterRole.Owner,
+                            CreatedAt = DateTime.UtcNow
+                        });
+                    }
+                }
                 register.UpdatedAt = DateTime.UtcNow;
                 await _db.SaveChangesAsync(cancellationToken);
                 return RedirectToAction(nameof(RegisterCreate), new { step = 6, id = register.Id });
@@ -467,13 +484,10 @@ public partial class ModernRaidController
                 register.Name = vm.Name.Trim();
                 register.Description = vm.Description?.Trim();
 
-                if (isRegisterOwner)
+                if (isRegisterOwner
+                    && vm.OwnerUserId.HasValue
+                    && vm.OwnerUserId.Value != currentOwnerUserId)
                 {
-                    if (!vm.OwnerUserId.HasValue)
-                    {
-                        TempData["ErrorMessage"] = "Select a register owner.";
-                        return RedirectToAction(nameof(RegisterSettings), new { id });
-                    }
                     var ownerExists = await _db.Users.AsNoTracking()
                         .AnyAsync(u => u.Id == vm.OwnerUserId.Value, cancellationToken);
                     if (!ownerExists)
@@ -483,7 +497,7 @@ public partial class ModernRaidController
                     }
                     SyncRegisterOwner(register, vm.OwnerUserId.Value);
                 }
-                else if (vm.OwnerUserId.HasValue && vm.OwnerUserId.Value != currentOwnerUserId)
+                else if (!isRegisterOwner && vm.OwnerUserId.HasValue && vm.OwnerUserId.Value != currentOwnerUserId)
                 {
                     TempData["ErrorMessage"] = "Only the register owner can change the owner.";
                     return RedirectToAction(nameof(RegisterSettings), new { id });
@@ -753,6 +767,17 @@ public partial class ModernRaidController
             {
                 risk.KrisSummary = kriByRiskId.GetValueOrDefault(risk.Id);
                 risk.KriCount = kriCountByRiskId.GetValueOrDefault(risk.Id);
+            }
+
+            var lastCommentUpdates =
+                await RiskCommentTimelineBuilder.GetLastCommentUpdateByRiskIdsAsync(_db, riskIds, cancellationToken);
+            foreach (var risk in risks)
+            {
+                if (!lastCommentUpdates.TryGetValue(risk.Id, out var last))
+                    continue;
+                risk.LastCommentUpdateText = last.PreviewText;
+                risk.LastCommentUpdateKind = last.KindLabel;
+                risk.LastCommentUpdateAt = last.AtUtc;
             }
         }
 
@@ -1955,16 +1980,13 @@ public partial class ModernRaidController
         var risk = await _db.Risks.FirstOrDefaultAsync(r => r.Id == riskId && !r.IsDeleted, ct);
         if (risk == null) return NotFound(new { error = "Risk not found" });
 
-        var title = (req.Title ?? "").Trim();
+        var title = RaidFieldLimits.NormalizeNarrative(req.Title) ?? "";
         if (string.IsNullOrWhiteSpace(title))
             return BadRequest(new { error = "Enter the mitigation action." });
         if (req.AssignedToUserId is null or <= 0)
             return BadRequest(new { error = "Select an owner." });
         if (!DateTime.TryParse(req.TargetDate, out var targetDate))
             return BadRequest(new { error = "Enter a valid target date." });
-
-        if (title.Length > 450)
-            title = title[..450];
 
         var ownerUser = await _db.Users.AsNoTracking()
             .FirstOrDefaultAsync(u => u.Id == req.AssignedToUserId.Value, ct);
@@ -2034,7 +2056,7 @@ public partial class ModernRaidController
             return NotFound(new { error = "Mitigation not found" });
 
         var mitigationAction = linked.Action;
-        var title = (req.Title ?? "").Trim();
+        var title = RaidFieldLimits.NormalizeNarrative(req.Title) ?? "";
         var normalizedStatus = NormalizeMitigationInputStatus(req.Status);
         if (string.IsNullOrWhiteSpace(title))
             return BadRequest(new { error = "Enter the mitigation action." });
@@ -2050,9 +2072,6 @@ public partial class ModernRaidController
         if (ownerUser == null)
             return BadRequest(new { error = "Select a valid owner." });
 
-        if (title.Length > 450)
-            title = title[..450];
-
         mitigationAction.Title = title;
         mitigationAction.AssignedToUserId = req.AssignedToUserId;
         mitigationAction.AssignedToEmail = ownerUser.Email;
@@ -2064,10 +2083,9 @@ public partial class ModernRaidController
         if (normalizedStatus != MitigationStatuses.Complete)
             mitigationAction.CompletedDate = null;
 
-        var note = (req.UpdateNote ?? "").Trim();
+        var note = RaidFieldLimits.NormalizeNarrative(req.UpdateNote);
         if (!string.IsNullOrEmpty(note))
         {
-            note = note.Length > 280 ? note[..280] : note;
             mitigationAction.Notes = AppendMitigationAuditLine(mitigationAction.Notes, note);
         }
 
@@ -2280,9 +2298,9 @@ public partial class ModernRaidController
         out string error)
     {
         var titleRaw = (req.Title ?? "").Trim();
-        var metricNorm = string.IsNullOrWhiteSpace(req.Metric) ? null : TruncateKriField(req.Metric.Trim(), 2000);
-        var thresholdNorm = string.IsNullOrWhiteSpace(req.Threshold) ? null : TruncateKriField(req.Threshold.Trim(), 2000);
-        description = string.IsNullOrWhiteSpace(req.Description) ? null : req.Description.Trim();
+        var metricNorm = RaidFieldLimits.NormalizeNarrative(req.Metric);
+        var thresholdNorm = RaidFieldLimits.NormalizeNarrative(req.Threshold);
+        description = RaidFieldLimits.NormalizeNarrative(req.Description);
 
         if (string.IsNullOrWhiteSpace(titleRaw) && metricNorm == null && thresholdNorm == null)
         {

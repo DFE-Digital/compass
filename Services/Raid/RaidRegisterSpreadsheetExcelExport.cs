@@ -37,6 +37,7 @@ public static class RaidRegisterSpreadsheetExcelExport
         {
             "Ref", "Title", "Status", "Tier", "Relation", "Category", "Owner", "Description", "Cause", "Impact",
             "Contingency", "Assurance", "Financial impact", "KRIs", "Response strategy", "Mitigations",
+            "Last comment / update",
             "Inherent impact", "Inherent likelihood", "Inherent score",
             "Current impact", "Current likelihood", "Current score",
             "Residual impact", "Residual likelihood", "Residual score",
@@ -65,6 +66,7 @@ public static class RaidRegisterSpreadsheetExcelExport
             worksheet.Cell(rowNumber, col++).Value = risk.KrisSummary ?? "";
             worksheet.Cell(rowNumber, col++).Value = risk.Response ?? risk.ResponseStrategy ?? "";
             worksheet.Cell(rowNumber, col++).Value = risk.MitigationCount;
+            worksheet.Cell(rowNumber, col++).Value = risk.LastCommentUpdateText ?? "";
             worksheet.Cell(rowNumber, col++).Value = risk.OriginalImpact ?? "";
             worksheet.Cell(rowNumber, col++).Value = risk.OriginalLikelihood ?? "";
             SetDecimalCell(worksheet.Cell(rowNumber, col++), risk.InherentScore);

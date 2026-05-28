@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using Compass.Models.Raid;
 
 namespace Compass.Models;
 
@@ -28,6 +29,7 @@ public class IssueAssuranceEvent
 
     public DateTime? EventDate { get; set; }
 
+    [MaxLength(RaidFieldLimits.NarrativeMaxLength)]
     public string? DecisionSummary { get; set; }
 
     public int SortOrder { get; set; }
