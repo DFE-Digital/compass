@@ -44,6 +44,8 @@ public class FipsProductsViewModel
 
     /// <summary>Active <see cref="BusinessAreaLookup"/> rows (for bulk checkboxes on the new products tab).</summary>
     public List<BusinessAreaLookup> BusinessAreaLookups { get; set; } = new();
+    /// <summary>Active <see cref="DirectorateLookup"/> rows (for bulk management).</summary>
+    public List<DirectorateLookup> DirectorateLookups { get; set; } = new();
 
     // Current filter values
     public string? Search { get; set; }
@@ -209,6 +211,7 @@ public class FipsProductDetailViewModel
     public List<FipsProductDependencyListItem> ProductDependencies { get; set; } = new();
 
     public string BusinessAreasDisplay => string.Join(", ", Product.BusinessAreas.Select(ba => ba.FipsBusinessArea.Name));
+    public string DirectoratesDisplay => string.Join(", ", Product.Directorates.Select(d => d.FipsDirectorate.Name));
     public string ChannelsDisplay => string.Join(", ", Product.Channels.Select(c => c.FipsChannel.Name));
     public string UserGroupsDisplay => string.Join(", ", Product.UserGroups.Select(ug => ug.FipsUserGroup.Name));
     public string TypesDisplay => string.Join(", ", Product.Types.Select(t => t.FipsType.Name));
@@ -220,6 +223,9 @@ public class FipsProductDetailViewModel
 
     /// <summary>Set in edit mode: lookup IDs currently linked to the product (for checkbox state).</summary>
     public HashSet<int> SelectedBusinessAreaLookupIds { get; set; } = new();
+    /// <summary>Admin directorate lookups (same source as organisation admin).</summary>
+    public List<DirectorateLookup> DirectorateLookupOptions { get; set; } = new();
+    public HashSet<int> SelectedDirectorateLookupIds { get; set; } = new();
     public List<FipsChannel> ChannelOptions { get; set; } = new();
     public List<FipsUserGroup> UserGroupOptions { get; set; } = new();
     /// <summary>Active user groups in hierarchy order for edit checkboxes.</summary>

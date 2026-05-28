@@ -326,6 +326,19 @@ builder.Logging.ClearProviders();
 builder.Logging.AddConsole();
 builder.Logging.AddFile("logs/compass-{Date}.log");
 
+var applicationInsightsConnectionString = builder.Configuration["ApplicationInsights:ConnectionString"];
+var applicationInsightsInstrumentationKey = builder.Configuration["ApplicationInsights:InstrumentationKey"];
+if (!string.IsNullOrWhiteSpace(applicationInsightsConnectionString)
+    || !string.IsNullOrWhiteSpace(applicationInsightsInstrumentationKey))
+{
+    builder.Services.AddApplicationInsightsTelemetry(options =>
+    {
+        if (!string.IsNullOrWhiteSpace(applicationInsightsConnectionString))
+            options.ConnectionString = applicationInsightsConnectionString;
+    });
+    builder.Logging.AddApplicationInsights();
+}
+
 // Add services to the container
 builder.Services.AddRazorPages();
 
@@ -489,6 +502,8 @@ builder.Services.AddScoped<IUserDirectoryService, UserDirectoryService>();
 builder.Services.AddScoped<IProjectImportService, ProjectImportService>();
 builder.Services.AddScoped<IAuditContextProvider, HttpAuditContextProvider>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
+builder.Services.AddScoped<IHttpErrorEmailSettingsService, HttpErrorEmailSettingsService>();
+builder.Services.AddScoped<IHttpErrorMonitoringService, HttpErrorMonitoringService>();
 builder.Services.AddScoped<INudgingService, NudgingService>();
 builder.Services.AddScoped<INotificationRuleService, NotificationRuleService>();
 builder.Services.AddScoped<IAccessibilityTrainingService, AccessibilityTrainingService>();
@@ -531,6 +546,7 @@ builder.Services.AddScoped<Compass.Services.Fips.IFipsProductWriteService, Compa
 builder.Services.AddScoped<Compass.Services.Fips.IFipsCompletionBulkImportService, Compass.Services.Fips.FipsCompletionBulkImportService>();
 builder.Services.AddScoped<Compass.Services.Fips.IFipsStrapiLegacyImportService, Compass.Services.Fips.FipsStrapiLegacyImportService>();
 builder.Services.AddScoped<Compass.Services.Fips.IFipsBusinessAreaLookupSyncService, Compass.Services.Fips.FipsBusinessAreaLookupSyncService>();
+builder.Services.AddScoped<Compass.Services.Fips.IFipsDirectorateLookupSyncService, Compass.Services.Fips.FipsDirectorateLookupSyncService>();
 builder.Services.Configure<Compass.Configuration.EnvironmentSyncOptions>(
     builder.Configuration.GetSection(Compass.Configuration.EnvironmentSyncOptions.SectionName));
 builder.Services.AddScoped<Compass.Services.EnvironmentSync.IEnvironmentSyncService, Compass.Services.EnvironmentSync.EnvironmentSyncService>();
@@ -634,6 +650,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseForwardedHeaders();
+
+app.UseMiddleware<HttpErrorMonitoringMiddleware>();
 
 // Configure the HTTP request pipeline
 if (!app.Environment.IsDevelopment())

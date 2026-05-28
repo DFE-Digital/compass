@@ -212,10 +212,11 @@ public sealed class FipsStrapiLegacyImportService : IFipsStrapiLegacyImportServi
                 targetChannels.ToArray(),
                 preserveUserGroups,
                 targetTypes.ToArray(),
-                preserveCategories,
+                directorateIds: null,
+                categorisationItemIds: preserveCategories,
                 reportingContactUserId: null,
                 isEnterpriseService: null,
-                cancellationToken);
+                cancellationToken: cancellationToken);
 
             if (outcome.NotFound || outcome.Forbidden)
             {

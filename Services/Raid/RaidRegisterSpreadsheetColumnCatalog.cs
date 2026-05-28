@@ -34,6 +34,7 @@ public static class RaidRegisterSpreadsheetColumnCatalog
                 new("kris", "KRIs"),
                 new("response", "Response strategy"),
                 new("mitigations", "Mitigations"),
+                new("lastCommentUpdate", "Last comment / update"),
                 new("origImpact", "Inherent impact"),
                 new("origLikelihood", "Inherent likelihood"),
                 new("origScore", "Inherent score"),

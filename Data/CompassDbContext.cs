@@ -50,6 +50,7 @@ public partial class CompassDbContext : DbContext
     public DbSet<BusinessAreaLeadershipMember> BusinessAreaLeadershipMembers { get; set; }
     public DbSet<CompassNotificationSetting> CompassNotificationSettings { get; set; }
     public DbSet<CompassNotificationEmailLog> CompassNotificationEmailLogs { get; set; }
+    public DbSet<HttpErrorEmailSettings> HttpErrorEmailSettings { get; set; }
     public DbSet<UserPreference> UserPreferences { get; set; }
 
     // Role-based access control
@@ -369,6 +370,7 @@ public partial class CompassDbContext : DbContext
     // FIPS CMDB products
     public DbSet<CMDBProduct> CMDBProducts { get; set; }
     public DbSet<CMDBProductBusinessArea> CMDBProductBusinessAreas { get; set; }
+    public DbSet<CMDBProductDirectorate> CMDBProductDirectorates { get; set; }
     public DbSet<CMDBProductChannel> CMDBProductChannels { get; set; }
     public DbSet<CMDBProductUserGroup> CMDBProductUserGroups { get; set; }
     public DbSet<CMDBProductType> CMDBProductTypes { get; set; }
@@ -378,6 +380,7 @@ public partial class CompassDbContext : DbContext
 
     // FIPS configuration
     public DbSet<FipsBusinessArea> FipsBusinessAreas { get; set; }
+    public DbSet<FipsDirectorate> FipsDirectorates { get; set; }
     public DbSet<FipsChannel> FipsChannels { get; set; }
     public DbSet<FipsType> FipsTypes { get; set; }
     public DbSet<FipsUserGroup> FipsUserGroups { get; set; }
@@ -442,7 +445,8 @@ public partial class CompassDbContext : DbContext
 
     private List<AuditLog> PrepareAuditEntries()
     {
-        ChangeTracker.DetectChanges();
+        // Do not call ChangeTracker.DetectChanges() here — SaveChanges will detect changes once.
+        // A full-graph DetectChanges is expensive when many entities are tracked (e.g. FIPS product Includes).
         var auditEntries = new List<AuditLog>();
         var timestamp = DateTime.UtcNow;
         var currentUserId = _auditContextProvider.UserId;
@@ -458,7 +462,7 @@ public partial class CompassDbContext : DbContext
                 continue;
             }
 
-            if (entry.State == EntityState.Detached || entry.State == EntityState.Unchanged)
+            if (entry.State is EntityState.Detached or EntityState.Unchanged)
             {
                 continue;
             }
@@ -2189,6 +2193,18 @@ public partial class CompassDbContext : DbContext
             .HasIndex(ec => new { ec.Purpose, ec.EmailAddress })
             .IsUnique();
 
+        modelBuilder.Entity<HttpErrorEmailSettings>()
+            .HasKey(s => s.Id);
+        modelBuilder.Entity<HttpErrorEmailSettings>()
+            .Property(s => s.Id)
+            .ValueGeneratedNever();
+        modelBuilder.Entity<HttpErrorEmailSettings>()
+            .Property(s => s.ContactEmail)
+            .HasMaxLength(256);
+        modelBuilder.Entity<HttpErrorEmailSettings>()
+            .Property(s => s.UpdatedByEmail)
+            .HasMaxLength(256);
+
         // StatementTemplate configuration
         modelBuilder.Entity<StatementTemplate>()
             .HasIndex(st => new { st.Name, st.Version })
@@ -3590,6 +3606,23 @@ public partial class CompassDbContext : DbContext
         {
             e.HasOne(x => x.CMDBProduct).WithMany(p => p.BusinessAreas).HasForeignKey(x => x.CMDBProductId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(x => x.FipsBusinessArea).WithMany().HasForeignKey(x => x.FipsBusinessAreaId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<FipsDirectorate>(e =>
+        {
+            e.HasIndex(x => x.DirectorateLookupId)
+                .IsUnique()
+                .HasFilter("[DirectorateLookupId] IS NOT NULL");
+            e.HasOne(x => x.DirectorateLookup)
+                .WithMany()
+                .HasForeignKey(x => x.DirectorateLookupId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<CMDBProductDirectorate>(e =>
+        {
+            e.HasOne(x => x.CMDBProduct).WithMany(p => p.Directorates).HasForeignKey(x => x.CMDBProductId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.FipsDirectorate).WithMany().HasForeignKey(x => x.FipsDirectorateId).OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<CMDBProductChannel>(e =>

@@ -5,11 +5,15 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Compass.Services.Raid;
 
+/// <summary>Latest risk comment or mitigation progress line for register spreadsheet display.</summary>
+public sealed record RiskLastCommentUpdate(string? PreviewText, string? KindLabel, DateTime? AtUtc);
+
 /// <summary>
 /// Builds a unified timeline of risk comments and mitigation progress updates (stored in action notes).
 /// </summary>
 public static class RiskCommentTimelineBuilder
 {
+    private const int SpreadsheetPreviewMaxLength = 120;
     private static readonly Regex AuditLineRegex = new(
         @"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}) UTC — (.+)$",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
@@ -109,6 +113,99 @@ public static class RiskCommentTimelineBuilder
             .OrderByDescending(x => x.SortAt)
             .Select(x => x.Payload)
             .ToList();
+    }
+
+    public static string? FormatSpreadsheetDisplay(RiskLastCommentUpdate? item)
+    {
+        if (item == null || string.IsNullOrWhiteSpace(item.PreviewText))
+            return null;
+
+        var text = TruncateForSpreadsheet(item.PreviewText);
+        if (item.AtUtc.HasValue)
+        {
+            var kind = string.IsNullOrWhiteSpace(item.KindLabel) ? "Update" : item.KindLabel;
+            return $"{item.AtUtc.Value:dd MMM yy} — {kind}: {text}";
+        }
+
+        var labelOnly = string.IsNullOrWhiteSpace(item.KindLabel) ? text : $"{item.KindLabel}: {text}";
+        return labelOnly;
+    }
+
+    public static async Task<IReadOnlyDictionary<int, RiskLastCommentUpdate>> GetLastCommentUpdateByRiskIdsAsync(
+        CompassDbContext db,
+        IReadOnlyCollection<int> riskIds,
+        CancellationToken cancellationToken = default)
+    {
+        if (riskIds.Count == 0)
+            return new Dictionary<int, RiskLastCommentUpdate>();
+
+        var idList = riskIds.Distinct().ToList();
+        var bestByRisk = idList.ToDictionary(id => id, _ => (RiskLastCommentUpdate?)null);
+
+        var comments = await db.Comments.AsNoTracking()
+            .Where(c => c.EntityType == "Risk" && idList.Contains(c.EntityId) && !c.IsDeleted)
+            .Select(c => new { c.EntityId, c.CommentText, c.CreatedAt })
+            .ToListAsync(cancellationToken);
+
+        foreach (var c in comments)
+        {
+            ConsiderCandidate(bestByRisk, c.EntityId, c.CreatedAt, c.CommentText, "Comment");
+        }
+
+        var mitigationNotes = await db.RiskActions.AsNoTracking()
+            .Where(ra => idList.Contains(ra.RiskId) && ra.Action != null && !ra.Action.IsDeleted)
+            .Select(ra => new { ra.RiskId, ra.Action!.Notes })
+            .ToListAsync(cancellationToken);
+
+        foreach (var m in mitigationNotes)
+        {
+            foreach (var (when, text) in ParseMitigationUpdateLines(m.Notes))
+            {
+                if (when == DateTime.MinValue)
+                    ConsiderCandidate(bestByRisk, m.RiskId, null, text, "Mitigation update");
+                else
+                    ConsiderCandidate(bestByRisk, m.RiskId, when, text, "Mitigation update");
+            }
+        }
+
+        return bestByRisk.ToDictionary(
+            kv => kv.Key,
+            kv => kv.Value ?? new RiskLastCommentUpdate(null, null, null));
+    }
+
+    private static void ConsiderCandidate(
+        Dictionary<int, RiskLastCommentUpdate?> bestByRisk,
+        int riskId,
+        DateTime? atUtc,
+        string? text,
+        string kindLabel)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return;
+
+        var candidate = new RiskLastCommentUpdate(
+            text.Trim(),
+            kindLabel,
+            atUtc);
+
+        if (!bestByRisk.TryGetValue(riskId, out var current) || current == null)
+        {
+            bestByRisk[riskId] = candidate;
+            return;
+        }
+
+        var currentSort = current.AtUtc ?? DateTime.MinValue;
+        var candidateSort = candidate.AtUtc ?? DateTime.MinValue;
+        if (candidateSort >= currentSort)
+            bestByRisk[riskId] = candidate;
+    }
+
+    private static string TruncateForSpreadsheet(string text)
+    {
+        var trimmed = text.Trim();
+        if (trimmed.Length <= SpreadsheetPreviewMaxLength)
+            return trimmed;
+        return trimmed[..(SpreadsheetPreviewMaxLength - 1)] + "…";
     }
 
     public static async Task<int> CountTimelineItemsAsync(

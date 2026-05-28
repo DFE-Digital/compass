@@ -312,7 +312,10 @@ public class HomeController : Controller
     {
         var exception = HttpContext.Features.Get<IExceptionHandlerPathFeature>()?.Error;
         if (exception != null)
+        {
             _logger.LogError(exception, "Unhandled exception on {Path}", HttpContext.Request.Path);
+            HttpContext.Items["HttpErrorCapturedException"] = exception;
+        }
 
         return View(new ErrorViewModel
         {

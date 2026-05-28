@@ -169,6 +169,13 @@ public static class FipsProductListingHelper
                 .FirstOrDefaultAsync(cancellationToken);
         }
 
+        var directorateLookups = await context.DirectorateLookups
+            .AsNoTracking()
+            .Where(x => x.IsActive)
+            .OrderBy(x => x.SortOrder)
+            .ThenBy(x => x.Name)
+            .ToListAsync(cancellationToken);
+
         var businessAreaLookups = await context.BusinessAreaLookups
             .AsNoTracking()
             .Where(x => x.IsActive)
@@ -256,6 +263,7 @@ public static class FipsProductListingHelper
             TypeOptions = await context.FipsTypes.Where(x => x.Active).OrderBy(x => x.DisplayOrder).ToListAsync(cancellationToken),
             PhaseOptions = await context.PhaseLookups.Where(x => x.IsActive).OrderBy(x => x.SortOrder).ToListAsync(cancellationToken),
             BusinessAreaLookups = businessAreaLookups,
+            DirectorateLookups = directorateLookups,
         };
     }
 

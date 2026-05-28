@@ -1,0 +1,38 @@
+@model (int RiskId, string Reference, string? Text, string? Kind, DateTime? At, int CommentCount)
+@{
+  var count = Model.CommentCount;
+  var countLabel = count == 1 ? "1 comment" : count + " comments";
+  var hasComment = !string.IsNullOrWhiteSpace(Model.Text);
+  var metaParts = new List<string>();
+  if (!string.IsNullOrWhiteSpace(Model.Kind))
+    metaParts.Add(Model.Kind);
+  if (Model.At.HasValue)
+    metaParts.Add(Model.At.Value.ToString("d MMM yyyy HH:mm") + " UTC");
+  var tooltip = hasComment
+    ? (metaParts.Count > 0 ? string.Join(" · ", metaParts) + " — " + Model.Text : Model.Text)
+    : null;
+  var preview = hasComment ? Model.Text : "—";
+  var viewAria = count > 0 ? $"View {countLabel} for {Model.Reference}" : $"Comments for {Model.Reference}";
+}
+<td class="govuk-table__cell raid-ss-last-comment-update"
+    data-sort-value="@(Model.At.HasValue ? Model.At.Value.ToString("o") : "")"
+    data-entity="risk"
+    data-id="@Model.RiskId"
+    data-ref="@Model.Reference">
+  <div class="raid-ss-last-comment-cell">
+    <span class="raid-ss-last-comment-cell__preview"@(tooltip != null ? Html.Raw($" title=\"{System.Net.WebUtility.HtmlEncode(tooltip)}\"") : null)>@preview</span>
+    <button type="button"
+            class="raid-ss-cell-icon-toggle raid-ss-last-comment-view-all@(count > 0 ? " raid-ss-cell-icon-toggle--has-count" : "")"
+            data-entity="risk"
+            data-id="@Model.RiskId"
+            data-ref="@Model.Reference"
+            aria-label="@viewAria">
+      <span class="material-symbols-outlined raid-ss-cell-icon-toggle__icon" aria-hidden="true">chat_bubble_outline</span>
+      @if (count > 0)
+      {
+        <span class="dfe-f-count-badge" aria-label="@countLabel">@(count > 99 ? "99+" : count.ToString())</span>
+      }
+      <span class="govuk-visually-hidden">@viewAria</span>
+    </button>
+  </div>
+</td>

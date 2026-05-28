@@ -42,6 +42,7 @@ public class ModernOperationsController : Controller
     private readonly IModernWorkService _modernWork;
     private readonly IProductsApiService _productsApi;
     private readonly IFipsBusinessAreaLookupSyncService _fipsBusinessAreaLookupSync;
+    private readonly IFipsDirectorateLookupSyncService _fipsDirectorateLookupSync;
     private readonly IFipsCompletionBulkImportService _fipsCompletionBulkImport;
     private readonly IFipsStrapiLegacyImportService _fipsStrapiLegacyImport;
     private readonly IOperationsRiskEditService _operationsRiskEdit;
@@ -58,6 +59,7 @@ public class ModernOperationsController : Controller
         IModernWorkService modernWork,
         IProductsApiService productsApi,
         IFipsBusinessAreaLookupSyncService fipsBusinessAreaLookupSync,
+        IFipsDirectorateLookupSyncService fipsDirectorateLookupSync,
         IFipsCompletionBulkImportService fipsCompletionBulkImport,
         IFipsStrapiLegacyImportService fipsStrapiLegacyImport,
         IOperationsRiskEditService operationsRiskEdit,
@@ -73,6 +75,7 @@ public class ModernOperationsController : Controller
         _modernWork = modernWork;
         _productsApi = productsApi;
         _fipsBusinessAreaLookupSync = fipsBusinessAreaLookupSync;
+        _fipsDirectorateLookupSync = fipsDirectorateLookupSync;
         _fipsCompletionBulkImport = fipsCompletionBulkImport;
         _fipsStrapiLegacyImport = fipsStrapiLegacyImport;
         _operationsRiskEdit = operationsRiskEdit;
@@ -1329,9 +1332,9 @@ public class ModernOperationsController : Controller
             : f.BulkEnterpriseAction;
         var applyEnterprise = TryParseBulkEnterpriseAction(bulkEnterpriseAction, out var bulkEnterpriseValue);
 
-        if (!f.ApplyStatus && !f.ApplyPhase && !f.ApplyBusinessArea && !f.ApplyChannel && !f.ApplyType && !applyEnterprise)
+        if (!f.ApplyStatus && !f.ApplyPhase && !f.ApplyBusinessArea && !f.ApplyDirectorate && !f.ApplyChannel && !f.ApplyType && !applyEnterprise)
         {
-            TempData["Error"] = "Select at least one action (status, phase, enterprise, business area, channels, or types).";
+            TempData["Error"] = "Select at least one action (status, phase, enterprise, directorate, business area, channels, or types).";
             return RedirectBack();
         }
 
@@ -1354,10 +1357,18 @@ public class ModernOperationsController : Controller
                 f.BusinessAreaLookupIds ?? Array.Empty<int>(), ct);
         }
 
+        int[]? resolvedDirsFromLookups = null;
+        if (f.ApplyDirectorate)
+        {
+            resolvedDirsFromLookups = await _fipsDirectorateLookupSync.ResolveToFipsDirectorateIdsAsync(
+                f.DirectorateLookupIds ?? Array.Empty<int>(), ct);
+        }
+
         var isNewTabOnly = string.Equals(f.SourceTab, "new", StringComparison.OrdinalIgnoreCase);
         var productsQ = _db.CMDBProducts
             .AsNoTracking()
             .Include(p => p.BusinessAreas)
+            .Include(p => p.Directorates)
             .Include(p => p.Channels)
             .Include(p => p.UserGroups)
             .Include(p => p.Types)
@@ -1382,12 +1393,15 @@ public class ModernOperationsController : Controller
         {
             try
             {
-                if (f.ApplyPhase || f.ApplyBusinessArea || f.ApplyChannel || f.ApplyType || applyEnterprise)
+                if (f.ApplyPhase || f.ApplyBusinessArea || f.ApplyDirectorate || f.ApplyChannel || f.ApplyType || applyEnterprise)
                 {
                     var phase = f.ApplyPhase ? f.BulkPhaseId : p.PhaseId;
                     var bas = f.ApplyBusinessArea
                         ? (resolvedBasFromLookups ?? Array.Empty<int>())
                         : p.BusinessAreas.Select(b => b.FipsBusinessAreaId).ToArray();
+                    var dirs = f.ApplyDirectorate
+                        ? (resolvedDirsFromLookups ?? Array.Empty<int>())
+                        : p.Directorates.Select(d => d.FipsDirectorateId).ToArray();
                     var ch = f.ApplyChannel
                         ? (f.BulkChannelIds ?? Array.Empty<int>())
                         : p.Channels.Select(c => c.FipsChannelId).ToArray();
@@ -1410,6 +1424,7 @@ public class ModernOperationsController : Controller
                         ch,
                         ug,
                         ty,
+                        dirs,
                         cat,
                         null,
                         isEnterprise,
@@ -1591,6 +1606,7 @@ public class ModernOperationsController : Controller
         var product = await _db.CMDBProducts
             .Include(p => p.Phase)
             .Include(p => p.BusinessAreas).ThenInclude(ba => ba.FipsBusinessArea)
+            .Include(p => p.Directorates).ThenInclude(d => d.FipsDirectorate).ThenInclude(fd => fd.DirectorateLookup)
             .Include(p => p.Channels).ThenInclude(c => c.FipsChannel)
             .Include(p => p.UserGroups).ThenInclude(ug => ug.FipsUserGroup)
             .Include(p => p.Types).ThenInclude(t => t.FipsType)
@@ -1639,8 +1655,13 @@ public class ModernOperationsController : Controller
         if (editMode)
         {
             await _fipsBusinessAreaLookupSync.SyncFromBusinessAreaLookupsAsync(ct);
+            await _fipsDirectorateLookupSync.SyncFromDirectorateLookupsAsync(ct);
             vm.PhaseOptions = await _db.PhaseLookups
                 .Where(x => x.IsActive).OrderBy(x => x.SortOrder).ToListAsync(ct);
+            vm.DirectorateLookupOptions =
+                await FipsDirectorateLookupUiHelper.LoadDirectorateLookupOptionsForEditAsync(_db, product, ct);
+            vm.SelectedDirectorateLookupIds =
+                FipsDirectorateLookupUiHelper.GetSelectedDirectorateLookupIds(product, vm.DirectorateLookupOptions);
             vm.BusinessAreaLookupOptions =
                 await FipsBusinessAreaLookupUiHelper.LoadBusinessAreaLookupOptionsForEditAsync(_db, product, ct);
             vm.SelectedBusinessAreaLookupIds =
@@ -1665,7 +1686,7 @@ public class ModernOperationsController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> ServiceRegisterProductUpdate(Guid id, string? userDescription,
         int? phaseId, string? productURL,
-        int[]? businessAreaLookupIds, int[]? channelIds, int[]? userGroupIds, int[]? typeIds,
+        int[]? directorateLookupIds, int[]? businessAreaLookupIds, int[]? channelIds, int[]? userGroupIds, int[]? typeIds,
         int[]? categorisationItemIds,
         int? reportingContactUserId,
         bool isEnterpriseService,
@@ -1675,6 +1696,8 @@ public class ModernOperationsController : Controller
         if (blocked != null)
             return blocked;
 
+        var resolvedDirectorateIds =
+            await _fipsDirectorateLookupSync.ResolveToFipsDirectorateIdsAsync(directorateLookupIds ?? Array.Empty<int>(), ct);
         var resolvedBusinessAreaIds =
             await _fipsBusinessAreaLookupSync.ResolveToFipsBusinessAreaIdsAsync(businessAreaLookupIds ?? Array.Empty<int>(), ct);
 
@@ -1692,6 +1715,7 @@ public class ModernOperationsController : Controller
             channelIds,
             userGroupIds,
             typeIds,
+            resolvedDirectorateIds,
             categorisationItemIds,
             reportingContactUserId,
             isEnterpriseService: isEnterpriseService,

@@ -26,7 +26,7 @@ public class RiskKeyRiskIndicator
     public string? Metric { get; set; }
 
     /// <summary>Threshold at which the risk escalates or is reviewed.</summary>
-    [MaxLength(2000)]
+    [MaxLength(450)]
     public string? Threshold { get; set; }
 
     public int SortOrder { get; set; }
