@@ -26,6 +26,7 @@ public class ProjectMonthlyUpdate
     public int Month { get; set; }
 
     [Required]
+    [MaxLength(4000)]
     public string Narrative { get; set; } = string.Empty;
 
     // EntraUser fields
