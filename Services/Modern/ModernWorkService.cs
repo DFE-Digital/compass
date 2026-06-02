@@ -791,8 +791,6 @@ public partial class ModernWorkService : IModernWorkService
     {
         var emailLower = EmailLower(userEmail);
         var now = DateTime.UtcNow;
-        var startOfThisMonth = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc);
-        var nextMonth = startOfThisMonth.AddMonths(1);
         var in14Days = now.AddDays(14);
 
         var assignedProjects = await WhereAssignedToUser(
@@ -872,8 +870,9 @@ public partial class ModernWorkService : IModernWorkService
                 .ToListAsync(cancellationToken);
         var watchedItems = watchedProjects.Select(MapProjectToWorkItem).ToList();
 
+        var (dashboardReportYear, dashboardReportMonth) = _monthlyUpdateService.ResolveDashboardReportingPeriod(now);
         var workIdsWithCurrentMonthUpdate = await _db.ProjectMonthlyUpdates.AsNoTracking()
-            .Where(m => m.Year == startOfThisMonth.Year && m.Month == startOfThisMonth.Month && m.SubmittedAt != null)
+            .Where(m => m.Year == dashboardReportYear && m.Month == dashboardReportMonth && m.SubmittedAt != null)
             .Select(m => m.ProjectId)
             .Distinct()
             .ToListAsync(cancellationToken);
@@ -938,6 +937,7 @@ public partial class ModernWorkService : IModernWorkService
         var monthlyDash = WorkRegisterMonthlyContext.Create(_monthlyUpdateService, DateTime.UtcNow);
         var reportY = monthlyDash.ReportYear;
         var reportM = monthlyDash.ReportMonth;
+        var dashboardPeriodStart = new DateTime(reportY, reportM, 1, 0, 0, 0, DateTimeKind.Utc);
         var explicitMr = monthlyDash.ExplicitPeriod;
         var mrPeriodLabel = monthlyDash.CurrentPeriodLabel;
         var mrPeriodTitle = monthlyDash.RegisterMonthlyColumnHeader;
@@ -954,7 +954,7 @@ public partial class ModernWorkService : IModernWorkService
         foreach (var w in assignedActivePaused.Where(x => x.Status == "Active" || x.Status == "Paused").OrderBy(x => x.Title))
         {
             var p = assignedProjects.First(ap => ap.Id == w.Id);
-            var periodUpdate = p.MonthlyUpdates.FirstOrDefault(m => m.Year == startOfThisMonth.Year && m.Month == startOfThisMonth.Month);
+            var periodUpdate = p.MonthlyUpdates.FirstOrDefault(m => m.Year == dashboardPeriodStart.Year && m.Month == dashboardPeriodStart.Month);
             var submitted = periodUpdate?.SubmittedAt.HasValue == true;
             var draft = periodUpdate != null && periodUpdate.SubmittedAt == null;
             if (submitted) mrSubmitted++;
@@ -968,7 +968,7 @@ public partial class ModernWorkService : IModernWorkService
             var ragNm = w.RagHistory.OrderByDescending(r => r.UpdatedAt).FirstOrDefault()?.RagStatus?.Name;
 
             var detailUpdatesUrl = (controller.Url.Action("Detail", "ModernWork", new { id = w.Id }) ?? "") + "#wd-updates";
-            var monthlyReportUrl = controller.Url.Action("MonthlyReport", "ModernWork", new { id = w.Id, year = startOfThisMonth.Year, month = startOfThisMonth.Month }) ?? detailUpdatesUrl;
+            var monthlyReportUrl = controller.Url.Action("MonthlyReport", "ModernWork", new { id = w.Id, year = dashboardPeriodStart.Year, month = dashboardPeriodStart.Month }) ?? detailUpdatesUrl;
 
             string rowKind;
             string actionUrl;
