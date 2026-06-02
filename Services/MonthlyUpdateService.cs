@@ -25,11 +25,12 @@ public class MonthlyUpdateService : IMonthlyUpdateService
     public bool IsMonthlyReportEditingAllowed(int reportingYear, int reportingMonth)
     {
         var d = DateTime.UtcNow.Date;
-        var opens = GetSubmissionWindowOpens(reportingYear, reportingMonth);
-        var closes = GetSubmissionWindowCloses(reportingYear, reportingMonth);
-        if (TryGetActiveExplicitPeriodRow(reportingYear, reportingMonth) == null)
-            return true;
+        var explicitRow = TryGetActiveExplicitPeriodRow(reportingYear, reportingMonth);
+        if (explicitRow == null)
+            return !HasAnyActiveExplicitPeriods();
 
+        var opens = explicitRow.SubmissionOpens.Date;
+        var closes = explicitRow.SubmissionCloses.Date;
         return d >= opens && d <= closes;
     }
 
@@ -93,6 +94,11 @@ public class MonthlyUpdateService : IMonthlyUpdateService
 
     public (int Year, int Month) ResolveDashboardReportingPeriod(DateTime utcNow)
     {
+        var nowDate = utcNow.Date;
+        var activeExplicitByDate = TryGetActiveExplicitPeriodRowForDate(nowDate);
+        if (activeExplicitByDate != null)
+            return (activeExplicitByDate.PeriodStart.Year, activeExplicitByDate.PeriodStart.Month);
+
         var reportYear = utcNow.Year;
         var reportMonth = utcNow.Month;
 
@@ -154,10 +160,7 @@ public class MonthlyUpdateService : IMonthlyUpdateService
 
     private WorkReportingCyclePeriod? TryGetActiveExplicitPeriodRow(int reportingYear, int reportingMonth)
     {
-        var cycleId = _context.WorkReportingCycles.AsNoTracking()
-            .Where(c => c.Code == WorkReportingMonthlyCycleCodes.MonthlyWorkUpdates)
-            .Select(c => (int?)c.Id)
-            .FirstOrDefault();
+        var cycleId = TryGetMonthlyWorkUpdatesCycleId();
         if (!cycleId.HasValue)
             return null;
 
@@ -171,6 +174,40 @@ public class MonthlyUpdateService : IMonthlyUpdateService
                 (p.PeriodKey == kUnpadded || p.PeriodKey == kPaddedMonth))
             .FirstOrDefault();
     }
+
+    private bool HasAnyActiveExplicitPeriods()
+    {
+        var cycleId = TryGetMonthlyWorkUpdatesCycleId();
+        if (!cycleId.HasValue)
+            return false;
+
+        return _context.WorkReportingCyclePeriods.AsNoTracking()
+            .Any(p => p.ReportingCycleId == cycleId.Value && p.IsActive);
+    }
+
+    private WorkReportingCyclePeriod? TryGetActiveExplicitPeriodRowForDate(DateTime utcDate)
+    {
+        var cycleId = TryGetMonthlyWorkUpdatesCycleId();
+        if (!cycleId.HasValue)
+            return null;
+
+        var day = utcDate.Date;
+        return _context.WorkReportingCyclePeriods.AsNoTracking()
+            .Where(p =>
+                p.ReportingCycleId == cycleId.Value &&
+                p.IsActive &&
+                p.SubmissionOpens <= day &&
+                p.SubmissionCloses >= day)
+            .OrderBy(p => p.SubmissionCloses)
+            .ThenBy(p => p.PeriodStart)
+            .FirstOrDefault();
+    }
+
+    private int? TryGetMonthlyWorkUpdatesCycleId() =>
+        _context.WorkReportingCycles.AsNoTracking()
+            .Where(c => c.Code == WorkReportingMonthlyCycleCodes.MonthlyWorkUpdates)
+            .Select(c => (int?)c.Id)
+            .FirstOrDefault();
 
     private MonthlyUpdateDeadlineConfig? GetConfigForReportingPeriod(int year, int month)
     {

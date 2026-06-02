@@ -729,7 +729,8 @@ public partial class ModernWorkController : Controller
         }
 
         var now = DateTime.UtcNow;
-        return RedirectToAction(nameof(MonthlyReport), new { id, year = now.Year, month = now.Month });
+        var (year, month) = _monthlyUpdateService.ResolveDashboardReportingPeriod(now);
+        return RedirectToAction(nameof(MonthlyReport), new { id, year, month });
     }
 
     /// <summary>View a submitted monthly update (modern UI). Matches <c>/ModernWork/ViewMonthlyUpdate/{id}?updateId=</c> from default MVC routes.</summary>

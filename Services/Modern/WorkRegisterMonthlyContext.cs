@@ -22,8 +22,7 @@ public sealed class WorkRegisterMonthlyContext
     public static WorkRegisterMonthlyContext Create(IMonthlyUpdateService monthlyUpdateService, DateTime utcNow)
     {
         var nowDate = utcNow.Date;
-        var reportY = nowDate.Year;
-        var reportM = nowDate.Month;
+        var (reportY, reportM) = monthlyUpdateService.ResolveDashboardReportingPeriod(utcNow);
         var explicitPeriod = monthlyUpdateService.TryGetActiveExplicitReportingPeriod(reportY, reportM);
 
         DateTime opens;

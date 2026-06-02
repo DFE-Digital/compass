@@ -405,8 +405,7 @@ public partial class ModernWorkService
             .ToListAsync(cancellationToken);
 
         var nowDate = DateTime.UtcNow.Date;
-        var reportY = nowDate.Year;
-        var reportM = nowDate.Month;
+        var (reportY, reportM) = _monthlyUpdateService.ResolveDashboardReportingPeriod(DateTime.UtcNow);
         var currentDueDate = _monthlyUpdateService.GetMonthlyUpdateDueDate(reportY, reportM);
         var currentPeriodLabel = new DateTime(reportY, reportM, 1).ToString("MMMM yyyy", CultureInfo.GetCultureInfo("en-GB"));
 
@@ -473,7 +472,7 @@ public partial class ModernWorkService
         var periodDueByKey = new Dictionary<string, (DateTime DueDate, string Label)>();
         var updatesByYearMonth = p.MonthlyUpdates
             .ToLookup(mu => (mu.Year, mu.Month));
-        var currentMonth = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1);
+        var currentMonth = new DateTime(reportY, reportM, 1);
         for (var i = -18; i <= 1; i++)
         {
             var dt = new DateTime(reportY, reportM, 1).AddMonths(i);
