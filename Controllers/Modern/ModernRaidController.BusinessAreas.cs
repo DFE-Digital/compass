@@ -80,7 +80,11 @@ public partial class ModernRaidController
         var riskQuery = RaidTierReportingRiskQuery(search, projectId, directorateId, effectiveBusinessAreaId);
         var risks = await riskQuery.ToListAsync(cancellationToken);
 
-        var issueQuery = IssueQueryableAlignedToRiskRegisterFilters(projectId, directorateId, effectiveBusinessAreaId, search);
+        var issueQuery = IssueQueryableAlignedToRiskRegisterFilters(
+            projectId,
+            MergeRaidRegisterFilterIds(directorateId, null),
+            MergeRaidRegisterFilterIds(effectiveBusinessAreaId, null),
+            search);
         var issues = await issueQuery
             .Include(i => i.SeverityLookup)
             .Include(i => i.IssueBusinessAreas)
@@ -360,7 +364,11 @@ public partial class ModernRaidController
 
         if (slice.StartsWith("issue-", StringComparison.Ordinal))
         {
-            var issueList = await IssueQueryableAlignedToRiskRegisterFilters(projectId, divisionId, effectiveBa, search)
+            var issueList = await IssueQueryableAlignedToRiskRegisterFilters(
+                    projectId,
+                    MergeRaidRegisterFilterIds(divisionId, null),
+                    MergeRaidRegisterFilterIds(effectiveBa, null),
+                    search)
                 .Include(i => i.SeverityLookup)
                 .Include(i => i.Project).ThenInclude(p => p!.BusinessAreaLookup)
                 .Include(i => i.PrimaryProduct)

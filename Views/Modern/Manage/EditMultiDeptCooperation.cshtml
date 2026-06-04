@@ -1,0 +1,317 @@
+@model FipsProductDetailViewModel
+@using Compass.Models.Fips
+@using Compass.ViewModels.Modern
+@{
+  var p = Model.Product;
+  var currentDepts = (List<FipsProductGovernmentDepartmentRow>)ViewBag.GovernmentDepartments ?? new List<FipsProductGovernmentDepartmentRow>();
+  var cancelUrl = Url.Action("FipsProduct", "ModernManage", new { id = p.Id, tab = "strategic-alignment" }) ?? "#";
+  ViewData["Title"] = "Edit multi-dept cooperation — " + p.Title;
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("FipsDashboard", "ModernManage")">Service register</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("FipsProduct", "ModernManage", new { id = p.Id })">@p.Title</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">Edit multi-dept cooperation</li>
+}
+
+@await Html.PartialAsync("~/Views/Modern/Manage/_FipsProductMasthead.cshtml", Model)
+
+<div class="fips-product-detail">
+  <div class="govuk-grid-row fips-product-detail-layout govuk-!-margin-top-2">
+    <div class="govuk-grid-column-one-quarter-from-desktop fips-product-detail-layout__nav">
+      <div class="dfe-f-u-sticky govuk-!-margin-bottom-4 fips-product-detail-layout__nav-inner" style="--dfe-f-sticky-top: 1rem;">
+        @await Html.PartialAsync("~/Views/Modern/Manage/_FipsProductSideNav.cshtml", Model)
+      </div>
+    </div>
+    <div class="govuk-grid-column-three-quarters-from-desktop">
+      @{
+        var lede = await Html.PartialAsync("_GovukBodyParagraph", "Add or remove government departments that are cooperating on this service outside the lead organisation.");
+      }
+      @await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+        Caption = "Service register",
+        Title = "Edit multi-dept cooperation",
+        HeadingTag = "h2",
+        HeadingClass = "govuk-heading-l",
+        Lede = lede
+      })
+
+      <div class="dfe-c-card dfe-c-card--plain">
+        <form asp-controller="ModernManage" asp-action="FipsProductEditMultiDeptCooperation" asp-route-id="@p.Id" method="post" class="dfe-c-mb-0" id="multi-dept-form">
+          @Html.AntiForgeryToken()
+          <div id="GovernmentDepartmentIdsContainer">
+            @foreach (var g in currentDepts)
+            {
+              <input type="hidden" name="governmentDepartmentIds" value="@g.Id" data-name="@g.Title" />
+            }
+          </div>
+
+          <div class="govuk-form-group">
+            <label class="govuk-label" for="gov-dept-search">Add department</label>
+            <div class="govuk-hint" id="gov-dept-search-hint">Type to search by name or abbreviation. Select from the list to add.</div>
+            <div class="linked-entities-autocomplete govuk-!-margin-bottom-0" style="position:relative;max-width:40em;">
+              <input type="text" id="gov-dept-search" placeholder="Type to search departments…" class="govuk-input govuk-!-width-two-thirds" autocomplete="off" aria-label="Search government departments" aria-autocomplete="list" aria-expanded="false" aria-controls="gov-dept-results" aria-describedby="gov-dept-search-hint" role="combobox" aria-haspopup="listbox" />
+              <div id="gov-dept-results" class="govuk-!-margin-top-0 ep-multidept-ac-results" style="display:none;position:absolute;top:100%;left:0;width:100%;max-width:40em;z-index:100;max-height:280px;overflow-y:auto;background:#fff;border:1px solid #0b0c0c;border-top:none;box-shadow:0 4px 12px rgba(0,0,0,0.15);" role="listbox" aria-label="Search results"></div>
+            </div>
+          </div>
+
+          <div class="govuk-form-group">
+            <span class="govuk-label" id="gov-dept-table-label">Cooperating departments</span>
+            <div class="dfe-f-table-wrapper ep-multidept-tablewrap govuk-!-margin-top-2" data-module="dfe-f-table">
+              <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+              <table class="govuk-table ep-multidept-table" id="gov-dept-table" aria-labelledby="gov-dept-table-label">
+                <thead class="govuk-table__head">
+                  <tr class="govuk-table__row">
+                    <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Department</button></th>
+                    <th scope="col" class="govuk-table__header ep-multidept-table__action-head" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Remove</button></th>
+                  </tr>
+                </thead>
+                <tbody id="gov-dept-table-body">
+                  @if (currentDepts.Count == 0)
+                  {
+                    <tr class="govuk-table__row" id="gov-dept-empty-row">
+                      <td colspan="2" class="govuk-table__cell dfe-c-text-muted">No departments added. Use the search above to add.</td>
+                    </tr>
+                  }
+                  else
+                  {
+                    @foreach (var g in currentDepts)
+                    {
+                      <tr class="govuk-table__row" data-id="@g.Id">
+                        <td class="govuk-table__cell ep-multidept-table__name">@g.Title</td>
+                        <td class="govuk-table__cell ep-multidept-table__action">
+                          <a href="#" class="govuk-link ep-multidept-remove-link remove-dept govuk-link--no-visited-state" data-id="@g.Id" data-name="@g.Title" aria-label="Remove @g.Title from list">Remove</a>
+                        </td>
+                      </tr>
+                    }
+                  }
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="govuk-button-group govuk-!-margin-top-6 govuk-!-margin-bottom-0">
+            <button type="submit" class="govuk-button" data-module="govuk-button">Save changes</button>
+            <a href="@cancelUrl" class="govuk-link govuk-link--no-visited-state govuk-!-margin-left-3">Cancel</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<dialog class="risk-detail-dialog" id="dlg-remove-gov-dept" aria-labelledby="dlg-remove-gov-dept-h">
+  <div class="wo-dialog__header">
+    <h2 id="dlg-remove-gov-dept-h">Remove department</h2>
+    <button type="button" class="wo-dialog__close" id="dlg-remove-gov-dept-close" aria-label="Close">&times;</button>
+  </div>
+  <div class="wo-dialog__body">
+    <p class="govuk-body govuk-!-margin-bottom-0">
+      Remove <strong id="dlg-remove-gov-dept-name"></strong> from cooperating departments? This list will not be saved until you click <strong>Save changes</strong>.
+    </p>
+  </div>
+  <div class="wo-dialog__footer">
+    <button type="button" class="govuk-button govuk-button--warning" id="dlg-remove-gov-dept-confirm">Remove department</button>
+    <button type="button" class="govuk-button govuk-button--secondary" id="dlg-remove-gov-dept-cancel">Cancel</button>
+  </div>
+</dialog>
+
+@section Scripts {
+  <script nonce="@Context.Items["Nonce"]">
+    (function() {
+      var container = document.getElementById('GovernmentDepartmentIdsContainer');
+      var tableBody = document.getElementById('gov-dept-table-body');
+      var searchInput = document.getElementById('gov-dept-search');
+      var resultsEl = document.getElementById('gov-dept-results');
+      var searchTimeout = null;
+      var highlightedIdx = -1;
+      var lastOptions = [];
+      var dialog = document.getElementById('dlg-remove-gov-dept');
+      var dlgName = document.getElementById('dlg-remove-gov-dept-name');
+      var pendingRemoveId = null;
+      var dlgConfirm = document.getElementById('dlg-remove-gov-dept-confirm');
+      var dlgCancel = document.getElementById('dlg-remove-gov-dept-cancel');
+      var dlgClose = document.getElementById('dlg-remove-gov-dept-close');
+
+      function getSelectedIds() {
+        return Array.from(container.querySelectorAll('input[name="governmentDepartmentIds"]')).map(function(inp) { return parseInt(inp.value, 10); });
+      }
+
+      function renderTable() {
+        if (!tableBody) return;
+        var items = Array.from(container.querySelectorAll('input[name="governmentDepartmentIds"]'));
+        tableBody.innerHTML = '';
+        if (items.length === 0) {
+          var tr = document.createElement('tr');
+          tr.className = 'govuk-table__row';
+          tr.id = 'gov-dept-empty-row';
+          var td = document.createElement('td');
+          td.colSpan = 2;
+          td.className = 'govuk-table__cell dfe-c-text-muted';
+          td.textContent = 'No departments added. Use the search above to add.';
+          tr.appendChild(td);
+          tableBody.appendChild(tr);
+          return;
+        }
+        items.forEach(function(inp) {
+          var id = parseInt(inp.value, 10);
+          var name = inp.getAttribute('data-name') || ('Department ' + id);
+          var tr = document.createElement('tr');
+          tr.className = 'govuk-table__row';
+          tr.setAttribute('data-id', id);
+          var tdName = document.createElement('td');
+          tdName.className = 'govuk-table__cell ep-multidept-table__name';
+          tdName.textContent = name;
+          var tdAct = document.createElement('td');
+          tdAct.className = 'govuk-table__cell ep-multidept-table__action';
+          var link = document.createElement('a');
+          link.href = '#';
+          link.className = 'govuk-link ep-multidept-remove-link remove-dept govuk-link--no-visited-state';
+          link.setAttribute('data-id', id);
+          link.setAttribute('data-name', name);
+          link.setAttribute('aria-label', 'Remove ' + name + ' from list');
+          link.textContent = 'Remove';
+          tdAct.appendChild(link);
+          tr.appendChild(tdName);
+          tr.appendChild(tdAct);
+          tableBody.appendChild(tr);
+        });
+      }
+
+      function openRemoveDialog(id, name) {
+        pendingRemoveId = id;
+        if (dlgName) dlgName.textContent = name;
+        if (dialog && typeof dialog.showModal === 'function') {
+          dialog.showModal();
+          dlgConfirm && dlgConfirm.focus();
+        }
+      }
+
+      function closeRemoveDialog() {
+        pendingRemoveId = null;
+        if (dialog && typeof dialog.close === 'function') dialog.close();
+      }
+
+      function confirmRemove() {
+        if (pendingRemoveId == null) return;
+        var inp = container.querySelector('input[name="governmentDepartmentIds"][value="' + pendingRemoveId + '"]');
+        if (inp) inp.remove();
+        renderTable();
+        closeRemoveDialog();
+      }
+
+      function addId(id, name) {
+        if (container.querySelector('input[name="governmentDepartmentIds"][value="' + id + '"]')) return;
+        var inp = document.createElement('input');
+        inp.type = 'hidden';
+        inp.name = 'governmentDepartmentIds';
+        inp.value = String(id);
+        inp.setAttribute('data-name', name || '');
+        container.appendChild(inp);
+        renderTable();
+        if (searchInput) searchInput.value = '';
+        closeResults();
+      }
+
+      function closeResults() {
+        if (resultsEl) { resultsEl.style.display = 'none'; resultsEl.innerHTML = ''; highlightedIdx = -1; if (searchInput) searchInput.setAttribute('aria-expanded', 'false'); }
+      }
+
+      function showResults(data) {
+        if (!resultsEl) return;
+        resultsEl.innerHTML = '';
+        var selected = getSelectedIds();
+        var selectedSet = {};
+        selected.forEach(function(i) { selectedSet[i] = true; });
+        lastOptions = (data || []).filter(function(item) { return !selectedSet[item.id]; });
+        lastOptions.forEach(function(item, idx) {
+          var opt = document.createElement('div');
+          opt.setAttribute('role', 'option');
+          opt.setAttribute('data-index', idx);
+          opt.textContent = item.name;
+          opt.style.padding = '10px 12px';
+          opt.style.cursor = 'pointer';
+          opt.style.borderBottom = '1px solid #f3f2f1';
+          opt.addEventListener('click', function(e) { e.preventDefault(); addId(item.id, item.name); });
+          opt.addEventListener('mouseenter', function() {
+            highlightedIdx = idx;
+            resultsEl.querySelectorAll('[role="option"]').forEach(function(el, i) {
+              el.style.background = i === idx ? '#f3f2f1' : '';
+              el.setAttribute('aria-selected', i === idx);
+            });
+          });
+          resultsEl.appendChild(opt);
+        });
+        resultsEl.style.display = lastOptions.length ? 'block' : 'none';
+        if (searchInput) searchInput.setAttribute('aria-expanded', lastOptions.length > 0);
+        highlightedIdx = -1;
+      }
+
+      function doSearch() {
+        var q = (searchInput && searchInput.value || '').trim();
+        if (q.length < 2) {
+          closeResults();
+          return;
+        }
+        fetch('@Url.Action("SearchGovernmentDepartments", "ModernWork")?q=' + encodeURIComponent(q))
+          .then(function(r) { return r.json(); })
+          .then(showResults)
+          .catch(function() { closeResults(); });
+      }
+
+      if (searchInput) {
+        searchInput.addEventListener('input', function() {
+          if (searchTimeout) clearTimeout(searchTimeout);
+          searchTimeout = setTimeout(doSearch, 280);
+        });
+        searchInput.addEventListener('focus', function() {
+          var q = (searchInput.value || '').trim();
+          if (q.length >= 2) doSearch();
+        });
+        searchInput.addEventListener('keydown', function(e) {
+          if (e.key === 'Escape') { closeResults(); searchInput.blur(); return; }
+          var opts = resultsEl && resultsEl.querySelectorAll('[role="option"]');
+          if (!opts || !opts.length) return;
+          if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            highlightedIdx = highlightedIdx < opts.length - 1 ? highlightedIdx + 1 : 0;
+            opts.forEach(function(el, i) { el.style.background = i === highlightedIdx ? '#f3f2f1' : ''; el.setAttribute('aria-selected', i === highlightedIdx); });
+            opts[highlightedIdx].scrollIntoView({ block: 'nearest' });
+            return;
+          }
+          if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            highlightedIdx = highlightedIdx <= 0 ? opts.length - 1 : highlightedIdx - 1;
+            opts.forEach(function(el, i) { el.style.background = i === highlightedIdx ? '#f3f2f1' : ''; el.setAttribute('aria-selected', i === highlightedIdx); });
+            opts[highlightedIdx].scrollIntoView({ block: 'nearest' });
+            return;
+          }
+          if (e.key === 'Enter' && highlightedIdx >= 0 && lastOptions[highlightedIdx]) {
+            e.preventDefault();
+            addId(lastOptions[highlightedIdx].id, lastOptions[highlightedIdx].name);
+            return;
+          }
+        });
+      }
+      document.addEventListener('click', function(e) {
+        if (resultsEl && searchInput && !resultsEl.contains(e.target) && e.target !== searchInput) closeResults();
+      });
+
+      if (tableBody) {
+        tableBody.addEventListener('click', function(e) {
+          var el = e.target && e.target.closest ? e.target.closest('a.remove-dept') : null;
+          if (!el || !tableBody.contains(el)) return;
+          e.preventDefault();
+          var id = parseInt(el.getAttribute('data-id'), 10);
+          var name = el.getAttribute('data-name') || '';
+          openRemoveDialog(id, name);
+        });
+      }
+
+      if (dlgConfirm) dlgConfirm.addEventListener('click', confirmRemove);
+      if (dlgCancel) dlgCancel.addEventListener('click', closeRemoveDialog);
+      if (dlgClose) dlgClose.addEventListener('click', closeRemoveDialog);
+      if (dialog) dialog.addEventListener('close', function() { pendingRemoveId = null; });
+    })();
+  </script>
+}

@@ -2,13 +2,19 @@ using System.Globalization;
 using ClosedXML.Excel;
 using Compass.Models;
 using Compass.Models.Modern.Work;
+using Compass.ViewModels;
 
 namespace Compass.Services.Modern;
 
 /// <summary>Shared Excel writers for modern work register and milestone exports.</summary>
 public static class WorkRegisterExcelExport
 {
-    public static void WriteWorkListSheet(IXLWorksheet worksheet, IEnumerable<WorkRegisterRow> rows)
+    private const int FixedColumnCount = 18;
+
+    public static void WriteWorkListSheet(
+        IXLWorksheet worksheet,
+        IEnumerable<WorkRegisterRow> rows,
+        IReadOnlyList<SubmissionTrendMonthColumn>? monthlyPeriodColumns = null)
     {
         worksheet.Cell(1, 1).Value = "Work item";
         worksheet.Cell(1, 2).Value = "Reference";
@@ -25,7 +31,15 @@ public static class WorkRegisterExcelExport
         worksheet.Cell(1, 13).Value = "Risk ref";
         worksheet.Cell(1, 14).Value = "Completed";
         worksheet.Cell(1, 15).Value = "Cancelled reason";
-        worksheet.Cell(1, 16).Value = "Tags";
+        worksheet.Cell(1, 16).Value = "Mission pillars";
+        worksheet.Cell(1, 17).Value = "Priority outcomes";
+        worksheet.Cell(1, 18).Value = "Thematic tags";
+
+        var periodColumns = monthlyPeriodColumns ?? Array.Empty<SubmissionTrendMonthColumn>();
+        for (var i = 0; i < periodColumns.Count; i++)
+            worksheet.Cell(1, FixedColumnCount + 1 + i).Value = periodColumns[i].Label;
+
+        var totalColumns = FixedColumnCount + periodColumns.Count;
 
         var rowNumber = 2;
         foreach (var row in rows)
@@ -45,13 +59,24 @@ public static class WorkRegisterExcelExport
             worksheet.Cell(rowNumber, 13).Value = row.FirstRiskReference ?? "";
             worksheet.Cell(rowNumber, 14).Value = row.CompletedAt ?? "";
             worksheet.Cell(rowNumber, 15).Value = row.CancelledReason ?? "";
-            worksheet.Cell(rowNumber, 16).Value = row.TagNamesSummary ?? "";
+            worksheet.Cell(rowNumber, 16).Value = row.MissionPillarsSummary ?? "";
+            worksheet.Cell(rowNumber, 17).Value = row.PriorityOutcomesSummary ?? "";
+            worksheet.Cell(rowNumber, 18).Value = row.TagNamesSummary ?? "";
+
+            for (var i = 0; i < periodColumns.Count; i++)
+            {
+                var status = i < row.MonthlyPeriodStatuses.Count ? row.MonthlyPeriodStatuses[i] : "—";
+                worksheet.Cell(rowNumber, FixedColumnCount + 1 + i).Value = status;
+            }
+
             rowNumber++;
         }
 
-        worksheet.Range(1, 1, 1, 16).Style.Font.Bold = true;
+        worksheet.Range(1, 1, 1, totalColumns).Style.Font.Bold = true;
         worksheet.SheetView.FreezeRows(1);
-        worksheet.Columns(1, 16).AdjustToContents();
+        if (periodColumns.Count > 0)
+            worksheet.SheetView.FreezeColumns(FixedColumnCount);
+        worksheet.Columns(1, totalColumns).AdjustToContents();
     }
 
     public static void WriteMilestonesSheet(

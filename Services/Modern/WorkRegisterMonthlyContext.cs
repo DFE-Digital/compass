@@ -61,7 +61,7 @@ public sealed class WorkRegisterMonthlyContext
             ExplicitPeriod = explicitPeriod,
             SubmissionWindowOpens = opens,
             SubmissionWindowCloses = closes,
-            SubmissionWindowOpen = nowDate >= opens && nowDate <= closes,
+            SubmissionWindowOpen = monthlyUpdateService.IsMonthlyReportEditingAllowed(reportY, reportM),
             CurrentDueDate = currentDueDate,
             CurrentPeriodLabel = currentPeriodLabel,
             RegisterMonthlyColumnHeader = monthHeader,

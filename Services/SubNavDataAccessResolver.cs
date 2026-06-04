@@ -397,6 +397,23 @@ public sealed class SubNavDataAccessResolver
             return links.Count == 0 ? null : Panel("Report exports", links);
         }
 
+        if (string.Equals(action, "Assessments", StringComparison.OrdinalIgnoreCase))
+        {
+            var all = c.Url.Action("ExportAssessmentsReport", "ModernReporting");
+            if (all == null)
+                return null;
+
+            return Panel(
+                "Service assessment exports",
+                new List<SubNavExportLink>
+                {
+                    Link(
+                        "All assessment data (Excel)",
+                        all,
+                        "Published assessments, all actions, and actions by service standard.")
+                });
+        }
+
         if (action is "Dashboard" or "MonthlyUpdate" or "MonthlySubmissionProgress")
         {
             var links = new List<SubNavExportLink>();

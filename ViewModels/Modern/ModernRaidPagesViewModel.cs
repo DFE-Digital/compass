@@ -60,8 +60,46 @@ public sealed class ModernRaidRisksPageViewModel
     /// <summary>Filter to projects linked to this division (<see cref="ProjectDirectorate"/>).</summary>
     public int? DivisionId { get; init; }
 
+    /// <summary>Multi-select division filter (OR within dimension).</summary>
+    public IReadOnlyList<int> DivisionIds { get; init; } = Array.Empty<int>();
+
     /// <summary>Filter to projects with this business area (<see cref="BusinessAreaLookup"/>).</summary>
     public int? BusinessAreaId { get; init; }
+
+    /// <summary>Multi-select business area filter (OR within dimension).</summary>
+    public IReadOnlyList<int> BusinessAreaIds { get; init; } = Array.Empty<int>();
+
+    /// <summary>Query fragment preserving division and business area filters for tab/pagination links.</summary>
+    public string RaidRegisterAreaFilterQueryFragment
+    {
+        get
+        {
+            var parts = new List<string>();
+            if (DivisionIds.Count > 0)
+            {
+                foreach (var id in DivisionIds)
+                    parts.Add($"divisionIds={id}");
+            }
+            else if (DivisionId is > 0)
+            {
+                parts.Add($"divisionId={DivisionId.Value}");
+            }
+
+            if (BusinessAreaIds.Count > 0)
+            {
+                foreach (var id in BusinessAreaIds)
+                    parts.Add($"businessAreaIds={id}");
+            }
+            else
+            {
+                var ba = RaidBusinessAreaQueryFragment;
+                if (!string.IsNullOrEmpty(ba))
+                    parts.Add(ba);
+            }
+
+            return parts.Count == 0 ? "" : "&" + string.Join("&", parts);
+        }
+    }
 
     /// <summary>True when the request included <c>businessAreaId=0</c> (all areas; do not re-apply saved preference when building URLs).</summary>
     public bool RaidBusinessAreaExplicitNone { get; init; }

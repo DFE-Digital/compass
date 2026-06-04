@@ -24,31 +24,49 @@ public sealed class ModernAdminNotificationSettingsController : Controller
             Key: CompassNotificationEventKeys.RiskIssueCreated,
             Label: "Created",
             Help: "When a new risk or issue is raised in RAID.",
-            Fips: true, Primary: true, Ops: true, Owner: true),
+            Fips: true, Primary: true, Pmo: false, Creator: false, Ops: true, Owner: true),
         new(
             Category: "Risk and issues",
             Key: CompassNotificationEventKeys.RiskIssueEscalated,
             Label: "Escalated",
             Help: "When escalation tier or status moves to a higher tier.",
-            Fips: true, Primary: true, Ops: true, Owner: true),
+            Fips: true, Primary: true, Pmo: false, Creator: false, Ops: true, Owner: true),
         new(
             Category: "Risk and issues",
             Key: CompassNotificationEventKeys.RiskIssueDeescalated,
             Label: "De-escalated",
             Help: "When escalation tier or status moves to a lower tier.",
-            Fips: true, Primary: true, Ops: true, Owner: true),
+            Fips: true, Primary: true, Pmo: false, Creator: false, Ops: true, Owner: true),
         new(
             Category: "Risk and issues",
             Key: CompassNotificationEventKeys.RiskIssueClosed,
             Label: "Closed",
             Help: "When a risk or issue is closed.",
-            Fips: true, Primary: true, Ops: true, Owner: true),
+            Fips: true, Primary: true, Pmo: false, Creator: false, Ops: true, Owner: true),
+        new(
+            Category: "Work items",
+            Key: CompassNotificationEventKeys.WorkItemCreated,
+            Label: "Work item created",
+            Help: "When a new work item is created in COMPASS.",
+            Fips: false, Primary: false, Pmo: false, Creator: true, Ops: true, Owner: false),
         new(
             Category: "Work reporting",
             Key: CompassNotificationEventKeys.WorkReportingMonthlyOpen,
             Label: "Monthly reporting open",
             Help: "When a monthly work reporting period is open for submission.",
-            Fips: false, Primary: true, Ops: false, Owner: false),
+            Fips: false, Primary: true, Pmo: true, Creator: false, Ops: false, Owner: false),
+        new(
+            Category: "Work reporting",
+            Key: CompassNotificationEventKeys.WorkReportingMonthlyDueReminder,
+            Label: "Monthly return due reminder",
+            Help: "One day before the due date when a monthly return has not been submitted.",
+            Fips: false, Primary: true, Pmo: true, Creator: false, Ops: false, Owner: false),
+        new(
+            Category: "Work reporting",
+            Key: CompassNotificationEventKeys.WorkReportingMonthlyOverdue,
+            Label: "Monthly return overdue",
+            Help: "The day after the due date when a monthly return has not been submitted.",
+            Fips: false, Primary: true, Pmo: true, Creator: false, Ops: false, Owner: false),
     ];
 
     private sealed record NotificationMeta(
@@ -58,6 +76,8 @@ public sealed class ModernAdminNotificationSettingsController : Controller
         string Help,
         bool Fips,
         bool Primary,
+        bool Pmo,
+        bool Creator,
         bool Ops,
         bool Owner);
 
@@ -97,11 +117,15 @@ public sealed class ModernAdminNotificationSettingsController : Controller
                 Help = m.Help,
                 ShowFipsServiceOwner = m.Fips,
                 ShowPrimaryWorkContact = m.Primary,
+                ShowPmoContact = m.Pmo,
+                ShowWorkItemCreator = m.Creator,
                 ShowCentralOps = m.Ops,
                 ShowRiskIssueOwnerOrCreator = m.Owner,
                 IsEnabled = dbRow?.IsEnabled ?? false,
                 SendToFipsServiceOwner = flags.HasFlag(CompassNotificationRecipientFlags.FipsServiceOwner),
                 SendToPrimaryWorkContact = flags.HasFlag(CompassNotificationRecipientFlags.PrimaryWorkContact),
+                SendToPmoContact = flags.HasFlag(CompassNotificationRecipientFlags.PmoContact),
+                SendToWorkItemCreator = flags.HasFlag(CompassNotificationRecipientFlags.WorkItemCreator),
                 SendToCentralOps = flags.HasFlag(CompassNotificationRecipientFlags.CentralOps),
                 SendToRiskIssueOwnerOrCreator = flags.HasFlag(CompassNotificationRecipientFlags.RiskIssueOwnerOrCreator),
             });
@@ -118,41 +142,83 @@ public sealed class ModernAdminNotificationSettingsController : Controller
     [HttpPost("notification-settings")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> NotificationSettings(
-        CompassNotificationSettingsPageViewModel model,
+        [FromForm] CompassNotificationSettingsPageViewModel model,
         CancellationToken cancellationToken = default)
     {
         ViewData["Title"] = "Notification settings";
         SetChrome("admin-notification-settings");
         await EnsureSettingsRowsAsync(cancellationToken);
-        var dbRows = await _db.CompassNotificationSettings.ToDictionaryAsync(s => s.EventKey, cancellationToken);
 
-        foreach (var row in model.Rows)
+        var postedByKey = (model.Rows ?? [])
+            .Where(r => !string.IsNullOrWhiteSpace(r.EventKey))
+            .ToDictionary(r => r.EventKey, StringComparer.Ordinal);
+
+        if (postedByKey.Count != Metadata.Length)
         {
-            if (!dbRows.TryGetValue(row.EventKey, out var entity))
+            _logger.LogWarning(
+                "Notification settings POST bound {BoundCount} of {ExpectedCount} rows",
+                postedByKey.Count,
+                Metadata.Length);
+            TempData["AdminError"] = "Could not read all notification settings from the form. Please try again.";
+            return RedirectToAction(nameof(NotificationSettings));
+        }
+
+        var dbRows = await _db.CompassNotificationSettings.ToDictionaryAsync(s => s.EventKey, cancellationToken);
+        var now = DateTime.UtcNow;
+        var updated = 0;
+
+        foreach (var meta in Metadata)
+        {
+            if (!postedByKey.TryGetValue(meta.Key, out var row))
                 continue;
 
-            var meta = Metadata.FirstOrDefault(m => m.Key == row.EventKey);
-            if (meta == null)
-                continue;
+            if (!dbRows.TryGetValue(meta.Key, out var entity))
+            {
+                entity = new CompassNotificationSetting
+                {
+                    EventKey = meta.Key,
+                    UpdatedAtUtc = now,
+                };
+                _db.CompassNotificationSettings.Add(entity);
+                dbRows[meta.Key] = entity;
+            }
 
             entity.IsEnabled = row.IsEnabled;
-            CompassNotificationRecipientFlags f = 0;
-            if (meta.Fips && row.SendToFipsServiceOwner)
-                f |= CompassNotificationRecipientFlags.FipsServiceOwner;
-            if (meta.Primary && row.SendToPrimaryWorkContact)
-                f |= CompassNotificationRecipientFlags.PrimaryWorkContact;
-            if (meta.Ops && row.SendToCentralOps)
-                f |= CompassNotificationRecipientFlags.CentralOps;
-            if (meta.Owner && row.SendToRiskIssueOwnerOrCreator)
-                f |= CompassNotificationRecipientFlags.RiskIssueOwnerOrCreator;
-            entity.RecipientFlags = (int)f;
-            entity.UpdatedAtUtc = DateTime.UtcNow;
+            entity.RecipientFlags = (int)BuildRecipientFlags(meta, row);
+            entity.UpdatedAtUtc = now;
+            updated++;
+        }
+
+        if (updated == 0)
+        {
+            TempData["AdminError"] = "No notification settings were saved. Please try again.";
+            return RedirectToAction(nameof(NotificationSettings));
         }
 
         await _db.SaveChangesAsync(cancellationToken);
         TempData["AdminMessage"] = "Notification settings saved.";
-        _logger.LogInformation("Compass notification settings updated by admin");
+        _logger.LogInformation("Compass notification settings updated by admin ({Count} rows)", updated);
         return RedirectToAction(nameof(NotificationSettings));
+    }
+
+    private static CompassNotificationRecipientFlags BuildRecipientFlags(
+        NotificationMeta meta,
+        CompassNotificationSettingRowViewModel row)
+    {
+        CompassNotificationRecipientFlags f = 0;
+        if (meta.Fips && row.SendToFipsServiceOwner)
+            f |= CompassNotificationRecipientFlags.FipsServiceOwner;
+        if (meta.Primary && row.SendToPrimaryWorkContact)
+            f |= CompassNotificationRecipientFlags.PrimaryWorkContact;
+        if (meta.Pmo && row.SendToPmoContact)
+            f |= CompassNotificationRecipientFlags.PmoContact;
+        if (meta.Creator && row.SendToWorkItemCreator)
+            f |= CompassNotificationRecipientFlags.WorkItemCreator;
+        if (meta.Ops && row.SendToCentralOps)
+            f |= CompassNotificationRecipientFlags.CentralOps;
+        if (meta.Owner && row.SendToRiskIssueOwnerOrCreator)
+            f |= CompassNotificationRecipientFlags.RiskIssueOwnerOrCreator;
+        return f;
     }
 
     [HttpGet("notification-settings/email-log")]

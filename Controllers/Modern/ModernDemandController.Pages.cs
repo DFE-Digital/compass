@@ -666,6 +666,23 @@ public partial class ModernDemandController
             demand.TriageCreatedProjectId = project.Id;
             demand.TriageOutcome = DemandTriageDecisions.ProgressedToDelivery;
             demand.Status = "Progressed to delivery";
+
+            try
+            {
+                var creatorEmail = User.Identity?.Name ?? string.Empty;
+                var creatorName = await _db.Users.AsNoTracking()
+                    .Where(u => u.Email.ToLower() == creatorEmail.ToLower())
+                    .Select(u => u.Name)
+                    .FirstOrDefaultAsync();
+                await _workItemNotifications.TrySendWorkItemCreatedAsync(
+                    project.Id,
+                    creatorEmail,
+                    creatorName);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to send work item created notification for project {ProjectId}", project.Id);
+            }
         }
         else
         {

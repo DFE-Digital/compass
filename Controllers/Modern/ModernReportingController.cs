@@ -293,6 +293,23 @@ public partial class ModernReportingController : Controller
         }
     }
 
+    /// <summary>Excel export for monthly submission progress (work items with historical period submission status).</summary>
+    [HttpGet("monthly-submission-progress/export")]
+    public async Task<IActionResult> ExportMonthlySubmissionProgress(
+        int? year,
+        int? month,
+        int? businessAreaId,
+        int? directorateId,
+        CancellationToken cancellationToken = default)
+    {
+        var model = await _monthlyReportService.BuildSubmissionProgressAsync(
+            year, month, businessAreaId, directorateId, cancellationToken);
+        var bytes = MonthlySubmissionProgressExcelExport.BuildWorkbook(model);
+        var periodLabel = model.MonthName.Replace(" ", "-", StringComparison.Ordinal);
+        return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            $"monthly-submission-progress-{periodLabel}-{DateTime.UtcNow:yyyyMMdd-HHmm}.xlsx");
+    }
+
     /// <summary>RAID monthly review progress — chart and league tables for review completion.</summary>
     [HttpGet("raid-review-progress")]
     [ServiceFilter(typeof(Compass.Filters.RaidFeatureGateFilter))]

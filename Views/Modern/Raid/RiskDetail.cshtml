@@ -90,7 +90,8 @@
   var ownerForHeader = ViewBag.OwnerForDisplay as User ?? Model.OwnerUser;
   var ownerNameDisplay = UserDisplayNameOnly(ownerForHeader);
   var ownerEmailForLink = UserContactEmail(ownerForHeader, Model.OwnerEmail);
-  var sroDisplay = UserDisplayLine(Model.SroUser);
+  var sroNameDisplay = UserDisplayNameOnly(Model.SroUser);
+  var sroEmailForLink = UserContactEmail(Model.SroUser);
   var createdByDisplay = UserDisplayLine(Model.CreatedByUser);
 
   var riskStatusLabelForDisplay = (Model.RiskStatus?.Label ?? Model.Status ?? "").Trim();
@@ -566,6 +567,27 @@
               </dd>
             </div>
             <div class="govuk-summary-list__row govuk-summary-list__row--no-actions">
+              <dt class="govuk-summary-list__key govuk-summary-list__key--width-one-third">SRO</dt>
+              <dd class="govuk-summary-list__value">
+                @if (!string.IsNullOrWhiteSpace(sroNameDisplay) && !string.IsNullOrWhiteSpace(sroEmailForLink))
+                {
+                  <a href="mailto:@sroEmailForLink" class="govuk-link govuk-link--no-visited-state">@sroNameDisplay</a>
+                }
+                else if (!string.IsNullOrWhiteSpace(sroNameDisplay))
+                {
+                  @sroNameDisplay
+                }
+                else if (!string.IsNullOrWhiteSpace(sroEmailForLink))
+                {
+                  <a href="mailto:@sroEmailForLink" class="govuk-link govuk-link--no-visited-state">@sroEmailForLink</a>
+                }
+                else
+                {
+                  @:—
+                }
+              </dd>
+            </div>
+            <div class="govuk-summary-list__row govuk-summary-list__row--no-actions">
               <dt class="govuk-summary-list__key govuk-summary-list__key--width-one-third">Created by</dt>
               <dd class="govuk-summary-list__value">@createdByDisplay</dd>
             </div>
@@ -745,10 +767,10 @@
               </dd>
             </div>
             <div class="govuk-summary-list__row">
-              <dt class="govuk-summary-list__key govuk-summary-list__key--width-one-third">Impact if realised</dt>
+              <dt class="govuk-summary-list__key govuk-summary-list__key--width-one-third">Impact</dt>
               <dd class="govuk-summary-list__value">@if (string.IsNullOrWhiteSpace(Model.ImpactIfRealised)) { <text>—</text> } else { <span class="govuk-body" style="white-space:pre-wrap;">@Model.ImpactIfRealised</span> }</dd>
               <dd class="govuk-summary-list__actions">
-                <a class="govuk-link govuk-link--no-visited-state" href="@($"{riskEditUrl}#raid-risk-edit-impact-realised")">Change<span class="govuk-visually-hidden"> impact if realised</span></a>
+                <a class="govuk-link govuk-link--no-visited-state" href="@($"{riskEditUrl}#raid-risk-edit-impact-realised")">Change<span class="govuk-visually-hidden"> impact</span></a>
               </dd>
             </div>
             <div class="govuk-summary-list__row">
@@ -783,6 +805,7 @@
                 {
                   <span class="govuk-body" style="white-space:pre-wrap;">@Model.ResponseStrategy</span>
                 }
+                <p class="govuk-body-s govuk-!-margin-top-2 govuk-!-margin-bottom-0"><a class="govuk-link govuk-link--no-visited-state" href="@mitigationsTabUrl">View or add mitigation actions</a> on the Mitigations tab.</p>
               </dd>
               <dd class="govuk-summary-list__actions">
                 <a class="govuk-link govuk-link--no-visited-state" href="@($"{riskEditUrl}#raid-risk-edit-mitigation")">Change<span class="govuk-visually-hidden"> mitigation approach</span></a>
@@ -1385,38 +1408,13 @@
             <h2 id="risk-linked-actions-heading" class="govuk-heading-s govuk-!-margin-bottom-2">Mitigation actions (@mitigationRows.Count)</h2>
             @if (mitigationRows.Count > 0)
             {
-              <div class="raid-linked-record-list">
-                @foreach (var ra in mitigationRows)
-                {
-                  var act = ra.Action!;
-                  var due = act.DueDate?.ToString("d MMM yyyy", CultureInfo.InvariantCulture) ?? "—";
-                  var progDisp = MitigationEffectiveSelectValue(act);
-                  <div class="raid-linked-record raid-linked-record--mitigation">
-                    <div class="raid-linked-record__grid">
-                      <div class="raid-linked-record__main">
-                        <div class="raid-linked-record__meta">Mitigation action</div>
-                        <div>
-                          <span class="raid-linked-record__title">@act.Title</span><span class="raid-linked-record__ref">A-@(act.Id.ToString("D4"))</span>
-                        </div>
-                        <div class="raid-linked-record__tag-row govuk-!-margin-top-2">
-                          <span class="@MitigationProgressBadgeClass(progDisp)">@progDisp.ToUpperInvariant()</span>
-                          <span class="govuk-body-s govuk-!-margin-bottom-0" style="color:#505a5f;">Due @due · @act.ProgressPercent%</span>
-                        </div>
-                      </div>
-                      <div class="raid-linked-record__aside">
-                        <a class="govuk-link govuk-link--no-visited-state govuk-!-font-weight-bold" href="@Url.Action("MitigationEdit", "ModernRaid", new { riskId = Model.Id, actionId = act.Id })">Edit<span class="govuk-visually-hidden"> mitigation</span></a>
-                      </div>
-                    </div>
-                  </div>
-                }
-              </div>
-              <p class="govuk-body-s govuk-!-margin-top-3 govuk-!-margin-bottom-0">
-                <a class="govuk-link govuk-link--no-visited-state" href="@mitigationsTabUrl">Edit actions on the Mitigations tab</a>
+              <p class="govuk-body govuk-!-margin-bottom-0">
+                <a class="govuk-link govuk-link--no-visited-state" href="@mitigationsTabUrl">@mitigationRows.Count mitigation action@(mitigationRows.Count == 1 ? "" : "s") — view on Mitigations tab</a>
               </p>
             }
             else
             {
-              <p class="govuk-body-s govuk-!-margin-bottom-0" style="color:var(--grey-4);">No mitigation actions are linked yet.</p>
+              <p class="govuk-body-s govuk-!-margin-bottom-0" style="color:var(--grey-4);">No mitigation actions are linked yet. <a class="govuk-link govuk-link--no-visited-state" href="@mitigationsTabUrl">Add on the Mitigations tab</a>.</p>
             }
           </section>
 

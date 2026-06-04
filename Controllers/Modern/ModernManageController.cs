@@ -114,6 +114,8 @@ public partial class ModernManageController : Controller
             _ when string.Equals(tab, "assurance", StringComparison.OrdinalIgnoreCase) => "assurance",
             _ when string.Equals(tab, "work", StringComparison.OrdinalIgnoreCase) => "work",
             _ when string.Equals(tab, "workitems", StringComparison.OrdinalIgnoreCase) => "work",
+            _ when string.Equals(tab, "strategic-alignment", StringComparison.OrdinalIgnoreCase) => "strategic-alignment",
+            _ when string.Equals(tab, "strategicalignment", StringComparison.OrdinalIgnoreCase) => "strategic-alignment",
             _ when string.Equals(tab, "details", StringComparison.OrdinalIgnoreCase) => "information",
             _ => "information"
         };
@@ -265,6 +267,10 @@ public partial class ModernManageController : Controller
             .Include(p => p.Types).ThenInclude(t => t.FipsType)
             .Include(p => p.CategorisationItems).ThenInclude(ci => ci.FipsCategorisationItem).ThenInclude(i => i.Group)
             .Include(p => p.Contacts).ThenInclude(c => c.FipsContactRole)
+            .Include(p => p.Objectives).ThenInclude(o => o.Objective)
+            .Include(p => p.Missions).ThenInclude(m => m.Mission)
+            .Include(p => p.WorkItemTags).ThenInclude(t => t.WorkItemTagLookup)
+            .Include(p => p.RiskAppetiteLookup)
             .FirstOrDefaultAsync(p => p.Id == id, ct);
 
         if (product == null)
@@ -335,6 +341,8 @@ public partial class ModernManageController : Controller
             vm,
             editMode,
             ct);
+
+        await FipsProductStrategicAlignmentPresentation.PopulateAsync(_context, vm, product, ct);
 
         await FipsProductRaidQuery.PopulateRaidListsAsync(_context, vm, product, ct);
 
