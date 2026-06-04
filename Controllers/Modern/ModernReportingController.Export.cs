@@ -266,6 +266,42 @@ public partial class ModernReportingController
         return ReturnExcelFile(excel, $"thematic-report-all-{Timestamp()}.xlsx");
     }
 
+    /// <summary>Full service assessments export: summary, assessments, actions, and actions by standard.</summary>
+    [HttpGet("assessments/export")]
+    public async Task<IActionResult> ExportAssessmentsReport(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var summaryTask = _serviceAssessmentApi.GetPublishedSummaryAsync(cancellationToken);
+            var byStandardTask = _serviceAssessmentApi.GetPublishedActionsByStandardAsync(cancellationToken);
+            var allWithActionsTask = _serviceAssessmentApi.GetActionsByStandardAsync();
+            await Task.WhenAll(summaryTask, byStandardTask, allWithActionsTask);
+
+            var summary = await summaryTask;
+            var byStandard = await byStandardTask;
+            var allWithActions = await allWithActionsTask;
+
+            var (stdRows, outcomeDetail) = ServiceAssessmentStandardActionOutcomeBuilder.Build(
+                byStandard,
+                allWithActions,
+                summary?.Assessments);
+
+            var bytes = ServiceAssessmentsReportExcelExport.BuildWorkbook(
+                summary,
+                allWithActions,
+                stdRows,
+                outcomeDetail);
+
+            return ReturnExcelFile(bytes, $"service-assessments-{Timestamp()}.xlsx");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error exporting service assessments report");
+            TempData["ErrorMessage"] = "Could not export service assessments. Please try again.";
+            return RedirectToAction(nameof(Assessments));
+        }
+    }
+
     [HttpGet("resourcing/export")]
     public async Task<IActionResult> ExportResourcingReport(
         int? year,
@@ -352,7 +388,9 @@ public partial class ModernReportingController
                 tagIds: tagIds,
                 cancellationToken: cancellationToken);
 
-            WorkRegisterExcelExport.WriteWorkListSheet(workbook.Worksheets.Add("Work items"), rows);
+            var periodColumns = await WorkRegisterMonthlySubmissionExportHelper.EnrichRegisterRowsWithMonthlyPeriodsAsync(
+                _context, _monthlyUpdateService, rows, cancellationToken);
+            WorkRegisterExcelExport.WriteWorkListSheet(workbook.Worksheets.Add("Work items"), rows, periodColumns);
         }
 
         using var stream = new MemoryStream();

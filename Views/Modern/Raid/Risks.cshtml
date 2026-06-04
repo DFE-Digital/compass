@@ -30,7 +30,8 @@
     ? (mode is "risks" or "tier" or "directorate" or "business-areas" ? "my" : "all")
     : Model.ActiveTab;
   var baQ = Model.RaidBusinessAreaQueryFragment;
-  var baSuffix = string.IsNullOrEmpty(baQ) ? "" : "&" + baQ;
+  var areaFilterSuffix = Model.RaidRegisterAreaFilterQueryFragment;
+  var showOpenClosedColumn = activeTab is "my" or "all";
   var modeTitle = mode switch
   {
     "tier" => "Risks by tier",
@@ -153,46 +154,43 @@
         <div class="filter-panel__grid">
           @if (Model.DivisionOptions.Count > 0)
           {
-            <div>
-              <label for="raid-risks-division">@(mode == "directorate" ? "Directorate" : "Division")</label>
-              <select name="divisionId" id="raid-risks-division" class="govuk-select">
-                <option value="">@(mode == "directorate" ? "All directorates" : "All divisions")</option>
+            <div class="filter-panel__checkbox-group">
+              <span class="govuk-label">@(mode == "directorate" ? "Directorate" : "Division")</span>
+              <div class="govuk-hint govuk-!-margin-bottom-2">Select one or more.</div>
+              <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes">
                 @foreach (var o in Model.DivisionOptions)
                 {
-                  if (Model.DivisionId == o.Id) { <option value="@o.Id" selected>@o.Name</option> }
-                  else { <option value="@o.Id">@o.Name</option> }
+                  var divSelected = Model.DivisionIds.Contains(o.Id) || (Model.DivisionIds.Count == 0 && Model.DivisionId == o.Id);
+                  <div class="govuk-checkboxes__item">
+                    @if (divSelected)
+                    { <input class="govuk-checkboxes__input" id="raid-risks-division-@o.Id" name="divisionIds" type="checkbox" value="@o.Id" checked /> }
+                    else
+                    { <input class="govuk-checkboxes__input" id="raid-risks-division-@o.Id" name="divisionIds" type="checkbox" value="@o.Id" /> }
+                    <label class="govuk-label govuk-checkboxes__label" for="raid-risks-division-@o.Id">@o.Name</label>
+                  </div>
                 }
-              </select>
+              </div>
             </div>
           }
           @if (Model.BusinessAreaOptions.Count > 0)
           {
-            <div>
-              <label for="raid-risks-ba">Business area</label>
-              <select name="businessAreaId" id="raid-risks-ba" class="govuk-select">
-                @if (mode == "risks")
+            <div class="filter-panel__checkbox-group">
+              <span class="govuk-label">Business area</span>
+              <div class="govuk-hint govuk-!-margin-bottom-2">Select one or more.</div>
+              <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes">
+                @foreach (var o in Model.BusinessAreaOptions)
                 {
-                  if (Model.RaidBusinessAreaExplicitNone || Model.BusinessAreaId is not > 0)
-                  { <option value="0" selected>All business areas</option> }
-                  else
-                  { <option value="0">All business areas</option> }
-                  @foreach (var o in Model.BusinessAreaOptions)
-                  {
-                    var optSelected = !Model.RaidBusinessAreaExplicitNone && Model.BusinessAreaId == o.Id;
-                    if (optSelected) { <option value="@o.Id" selected>@o.Name</option> }
-                    else { <option value="@o.Id">@o.Name</option> }
-                  }
+                  var baSelected = Model.BusinessAreaIds.Contains(o.Id)
+                    || (Model.BusinessAreaIds.Count == 0 && !Model.RaidBusinessAreaExplicitNone && Model.BusinessAreaId == o.Id);
+                  <div class="govuk-checkboxes__item">
+                    @if (baSelected)
+                    { <input class="govuk-checkboxes__input" id="raid-risks-ba-@o.Id" name="businessAreaIds" type="checkbox" value="@o.Id" checked /> }
+                    else
+                    { <input class="govuk-checkboxes__input" id="raid-risks-ba-@o.Id" name="businessAreaIds" type="checkbox" value="@o.Id" /> }
+                    <label class="govuk-label govuk-checkboxes__label" for="raid-risks-ba-@o.Id">@o.Name</label>
+                  </div>
                 }
-                else
-                {
-                  <option value="">All business areas</option>
-                  @foreach (var o in Model.BusinessAreaOptions)
-                  {
-                    if (Model.BusinessAreaId == o.Id) { <option value="@o.Id" selected>@o.Name</option> }
-                    else { <option value="@o.Id">@o.Name</option> }
-                  }
-                }
-              </select>
+              </div>
             </div>
           }
           <div>
@@ -257,28 +255,28 @@
         {
           TabKey = "my",
           Label = "Your risks",
-          Href = $"{listPath}?tab=my&page=1&search={Uri.EscapeDataString(Model.Search ?? "")}&divisionId={Model.DivisionId}&projectId={Model.ProjectId}&riskStatusId={Model.RiskStatusId}&riskTierId={Model.RiskTierId}{baSuffix}",
+          Href = $"{listPath}?tab=my&page=1&search={Uri.EscapeDataString(Model.Search ?? "")}&projectId={Model.ProjectId}&riskStatusId={Model.RiskStatusId}&riskTierId={Model.RiskTierId}{areaFilterSuffix}",
           Count = Model.MyCount
         },
         new RaidRegisterScopeNavLink
         {
           TabKey = "open",
           Label = "Open risks",
-          Href = $"{listPath}?tab=open&page=1&search={Uri.EscapeDataString(Model.Search ?? "")}&divisionId={Model.DivisionId}&projectId={Model.ProjectId}&riskStatusId={Model.RiskStatusId}&riskTierId={Model.RiskTierId}{baSuffix}",
+          Href = $"{listPath}?tab=open&page=1&search={Uri.EscapeDataString(Model.Search ?? "")}&projectId={Model.ProjectId}&riskStatusId={Model.RiskStatusId}&riskTierId={Model.RiskTierId}{areaFilterSuffix}",
           Count = Model.OpenCount
         },
         new RaidRegisterScopeNavLink
         {
           TabKey = "closed",
           Label = "Closed risks",
-          Href = $"{listPath}?tab=closed&page=1&search={Uri.EscapeDataString(Model.Search ?? "")}&divisionId={Model.DivisionId}&projectId={Model.ProjectId}&riskStatusId={Model.RiskStatusId}&riskTierId={Model.RiskTierId}{baSuffix}",
+          Href = $"{listPath}?tab=closed&page=1&search={Uri.EscapeDataString(Model.Search ?? "")}&projectId={Model.ProjectId}&riskStatusId={Model.RiskStatusId}&riskTierId={Model.RiskTierId}{areaFilterSuffix}",
           Count = Model.ClosedCount
         },
         new RaidRegisterScopeNavLink
         {
           TabKey = "all",
           Label = "All risks",
-          Href = $"{listPath}?tab=all&page=1&search={Uri.EscapeDataString(Model.Search ?? "")}&divisionId={Model.DivisionId}&projectId={Model.ProjectId}&riskStatusId={Model.RiskStatusId}&riskTierId={Model.RiskTierId}{baSuffix}",
+          Href = $"{listPath}?tab=all&page=1&search={Uri.EscapeDataString(Model.Search ?? "")}&projectId={Model.ProjectId}&riskStatusId={Model.RiskStatusId}&riskTierId={Model.RiskTierId}{areaFilterSuffix}",
           Count = Model.AllCount
         }
       }
@@ -302,6 +300,12 @@
             <th scope="col" class="govuk-table__header" aria-sort="none">
               <button type="button" class="dfe-f-table-sort-button">Risk</button>
             </th>
+            @if (showOpenClosedColumn)
+            {
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+              <button type="button" class="dfe-f-table-sort-button">State</button>
+            </th>
+            }
             <th scope="col" class="govuk-table__header" aria-sort="none">
               <button type="button" class="dfe-f-table-sort-button">Tier</button>
             </th>
@@ -327,7 +331,7 @@
             {
               var heading = string.IsNullOrEmpty(r.Tier) ? "Unassigned tier" : r.Tier;
               <tr class="govuk-table__row raid-risks-tier-group">
-                <td class="govuk-table__cell" colspan="5"><h2 class="govuk-heading-s govuk-!-margin-bottom-0">@heading</h2></td>
+                <td class="govuk-table__cell" colspan="@(showOpenClosedColumn ? 6 : 5)"><h2 class="govuk-heading-s govuk-!-margin-bottom-0">@heading</h2></td>
               </tr>
               prevTierKey = tierKey;
             }
@@ -336,6 +340,12 @@
                 var riskDetailUrl = Url.Action("RiskDetail", "ModernRaid", new { id = r.Id }) ?? "#";
               }
               @await Html.PartialAsync("~/Views/Modern/Raid/_RaidRegisterItemTitleCell.cshtml", new RaidRegisterItemTitleVm(riskDetailUrl, r.Title, $"R-{r.Id:D4}"))
+              @if (showOpenClosedColumn)
+              {
+              <td class="govuk-table__cell govuk-body-s raid-risks-badge-cell">
+                <span class="@WorkBadgeCss.RaidOpenClosedDfeFrontendBadgeClass(r.IsClosed) dfe-f-badge--small">@(r.IsClosed ? "Closed" : "Open")</span>
+              </td>
+              }
               <td class="govuk-table__cell govuk-body-s raid-risks-badge-cell">
                 <span class="@WorkBadgeCss.RaidTierDfeFrontendBadgeClass(r.Tier)">@(string.IsNullOrWhiteSpace(r.Tier) ? "—" : r.Tier)</span>
               </td>
@@ -358,7 +368,7 @@
   @if (Model.TotalPages > 1)
   {
     Func<int, string> risksPageUrl = p =>
-      $"{listPath}?tab={activeTab}&search={Uri.EscapeDataString(Model.Search ?? "")}&divisionId={Model.DivisionId}&projectId={Model.ProjectId}&riskStatusId={Model.RiskStatusId}&riskTierId={Model.RiskTierId}{baSuffix}&page={p}";
+      $"{listPath}?tab={activeTab}&search={Uri.EscapeDataString(Model.Search ?? "")}&projectId={Model.ProjectId}&riskStatusId={Model.RiskStatusId}&riskTierId={Model.RiskTierId}{areaFilterSuffix}&page={p}";
     <div class="govuk-!-margin-top-6">
       @await Html.PartialAsync("~/Views/Modern/Shared/_GovUkPagination.cshtml", new GovUkPaginationViewModel {
         CurrentPage = Model.Page,

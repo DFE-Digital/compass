@@ -3,6 +3,8 @@ using ClosedXML.Excel;
 using Compass.Data;
 using Compass.Models;
 using Compass.Models.Modern.Work;
+using Compass.Services;
+using Compass.ViewModels;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -15,11 +17,16 @@ public class WorkScopedExcelExportService : IWorkScopedExcelExportService
 {
     private readonly CompassDbContext _db;
     private readonly IModernWorkService _modernWork;
+    private readonly IMonthlyUpdateService _monthlyUpdateService;
 
-    public WorkScopedExcelExportService(CompassDbContext db, IModernWorkService modernWork)
+    public WorkScopedExcelExportService(
+        CompassDbContext db,
+        IModernWorkService modernWork,
+        IMonthlyUpdateService monthlyUpdateService)
     {
         _db = db;
         _modernWork = modernWork;
+        _monthlyUpdateService = monthlyUpdateService;
     }
 
     public async Task<byte[]> BuildWorkbookAsync(
@@ -42,7 +49,9 @@ public class WorkScopedExcelExportService : IWorkScopedExcelExportService
         using var workbook = new XLWorkbook();
 
         var registerRows = await BuildRegisterRowsAsync(ids, currentUser, userEmail, urlHelper, cancellationToken);
-        WorkRegisterExcelExport.WriteWorkListSheet(workbook.Worksheets.Add("Work"), registerRows);
+        var periodColumns = await WorkRegisterMonthlySubmissionExportHelper.EnrichRegisterRowsWithMonthlyPeriodsAsync(
+            _db, _monthlyUpdateService, registerRows, cancellationToken);
+        WorkRegisterExcelExport.WriteWorkListSheet(workbook.Worksheets.Add("Work"), registerRows, periodColumns);
 
         var titleByProjectId = registerRows.ToDictionary(r => r.Id, r => r.Title ?? "");
 

@@ -13,7 +13,8 @@ public sealed record ModernRaidRiskRow(
     /// <summary>Risk tier display name from <c>RiskTier.Name</c> when set; also used as the sub-heading key when the register groups by tier.</summary>
     string? Tier,
     /// <summary>Plain-text description snippet for quick views (e.g. business area dashboard modal).</summary>
-    string? DescriptionSummary = null);
+    string? DescriptionSummary = null,
+    bool IsClosed = false);
 
 public sealed record ModernRaidIssueRow(
     int Id,

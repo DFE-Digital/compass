@@ -1567,7 +1567,7 @@
     } else if (col === 'cause') {
       appendModalCell(td, 'cause', 'Cause', data.cause);
     } else if (col === 'impact') {
-      appendModalCell(td, 'impactIfRealised', 'Impact if realised', data.impactIfRealised);
+      appendModalCell(td, 'impactIfRealised', 'Impact', data.impactIfRealised);
     } else if (col === 'contingency') {
       appendModalCell(td, 'contingency', 'Contingency', data.contingency);
     } else if (col === 'assurance') {

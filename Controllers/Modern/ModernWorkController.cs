@@ -89,6 +89,7 @@ public partial class ModernWorkController : Controller
     private readonly IRaidIssueEditorFormService _raidIssueEditorForm;
     private readonly IPermissionService _permissions;
     private readonly IWorkServiceRegisterLinkService _workServiceRegisterLinks;
+    private readonly IWorkItemNotificationService _workItemNotifications;
 
     public ModernWorkController(
         CompassDbContext context,
@@ -100,7 +101,8 @@ public partial class ModernWorkController : Controller
         IRaidRiskEditorFormService raidRiskEditorForm,
         IRaidIssueEditorFormService raidIssueEditorForm,
         IPermissionService permissions,
-        IWorkServiceRegisterLinkService workServiceRegisterLinks)
+        IWorkServiceRegisterLinkService workServiceRegisterLinks,
+        IWorkItemNotificationService workItemNotifications)
     {
         _context = context;
         _modernWork = modernWork;
@@ -112,6 +114,7 @@ public partial class ModernWorkController : Controller
         _raidIssueEditorForm = raidIssueEditorForm;
         _permissions = permissions;
         _workServiceRegisterLinks = workServiceRegisterLinks;
+        _workItemNotifications = workItemNotifications;
     }
 
     private static readonly HashSet<string> ValidMilestoneStatuses = new(StringComparer.OrdinalIgnoreCase)
@@ -642,6 +645,19 @@ public partial class ModernWorkController : Controller
         }
 
         await _context.SaveChangesAsync(cancellationToken);
+
+        try
+        {
+            await _workItemNotifications.TrySendWorkItemCreatedAsync(
+                project.Id,
+                userEmail,
+                currentUser.Name,
+                cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to send work item created notification for project {ProjectId}", project.Id);
+        }
 
         return RedirectToAction(nameof(Detail), new { id = project.Id });
     }
@@ -1318,7 +1334,7 @@ public partial class ModernWorkController : Controller
         {
             WorkItemId = id,
             WorkItemTitle = project.Title,
-            WorkItemReference = project.ProjectCode,
+            WorkItemReference = "WI-" + id.ToString("D8", CultureInfo.InvariantCulture),
             Year = year,
             Month = month,
             UpdateId = update?.Id,
@@ -1520,6 +1536,14 @@ public partial class ModernWorkController : Controller
                 PickProductsUrl = Url.Action(nameof(PickServiceRegisterProducts), new { id }) ?? "",
                 LinkUrl = Url.Action(nameof(LinkServiceRegisterProduct), new { id }) ?? "",
             };
+        }
+
+        var showWorkHistory = await _permissions.IsCentralOperationsAdminOrSuperAdminAsync(userEmail);
+        ViewBag.ShowWorkHistoryNav = showWorkHistory;
+        if (showWorkHistory)
+        {
+            ViewBag.WorkHistoryTimeline =
+                await WorkItemAuditTimelineBuilder.BuildAsync(_context, id, cancellationToken);
         }
 
         return View("~/Views/Modern/Work/Detail.cshtml", work);
@@ -2180,8 +2204,75 @@ public partial class ModernWorkController : Controller
 
         ViewBag.WorkItem = work;
         ViewBag.WorkChromeSubPage = true;
+        await LoadMilestoneUpdatesForViewAsync(milestoneId, cancellationToken);
 
         return View("~/Views/Modern/Work/EditMilestone.cshtml", milestone);
+    }
+
+    [HttpPost("{id:int}/milestone/{milestoneId:int}/progress-update")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> AddMilestoneUpdate(
+        int id,
+        int milestoneId,
+        [FromForm] string updateDetails,
+        [FromForm] string? newStatus,
+        [FromForm] int? newProgress,
+        CancellationToken cancellationToken = default)
+    {
+        var milestone = await _context.Milestones
+            .FirstOrDefaultAsync(m => m.Id == milestoneId && m.ProjectId == id && !m.IsDeleted, cancellationToken);
+        if (milestone == null)
+            return NotFound();
+
+        updateDetails = updateDetails?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(updateDetails))
+        {
+            TempData["ErrorMessage"] = "Enter progress update details.";
+            return RedirectToAction(nameof(EditMilestone), new { id, milestoneId });
+        }
+
+        newStatus = newStatus?.Trim().ToLowerInvariant();
+        if (!string.IsNullOrWhiteSpace(newStatus) && !ValidMilestoneStatuses.Contains(newStatus))
+        {
+            TempData["ErrorMessage"] = "Select a valid status for the progress update.";
+            return RedirectToAction(nameof(EditMilestone), new { id, milestoneId });
+        }
+
+        if (newProgress is < 0 or > 100)
+        {
+            TempData["ErrorMessage"] = "Progress must be between 0 and 100.";
+            return RedirectToAction(nameof(EditMilestone), new { id, milestoneId });
+        }
+
+        var userEmail = User.Identity?.Name ?? "system@example.com";
+        var userName = User.Claims.FirstOrDefault(c => c.Type == "name")?.Value;
+
+        var milestoneUpdate = new MilestoneUpdate
+        {
+            MilestoneId = milestoneId,
+            UpdateDetails = updateDetails,
+            PreviousStatus = milestone.Status,
+            NewStatus = !string.IsNullOrEmpty(newStatus) ? newStatus : null,
+            PreviousProgress = milestone.ProgressPercent,
+            NewProgress = newProgress,
+            UpdatedByEmail = userEmail,
+            UpdatedByName = userName,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        _context.MilestoneUpdates.Add(milestoneUpdate);
+
+        if (!string.IsNullOrEmpty(newStatus))
+            milestone.Status = newStatus;
+
+        if (newProgress.HasValue)
+            milestone.ProgressPercent = newProgress;
+
+        milestone.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync(cancellationToken);
+
+        TempData["SuccessMessage"] = "Progress update added.";
+        return RedirectToAction(nameof(EditMilestone), new { id, milestoneId });
     }
 
     [HttpPost("{id:int}/milestone/{milestoneId:int}/update")]
@@ -2216,6 +2307,7 @@ public partial class ModernWorkController : Controller
             milestone.Status = status;
             if (!await TryPopulateEditMilestoneViewBagsAsync(id, cancellationToken))
                 return NotFound();
+            await LoadMilestoneUpdatesForViewAsync(milestoneId, cancellationToken);
             return View("~/Views/Modern/Work/EditMilestone.cshtml", milestone);
         }
 
@@ -2255,6 +2347,17 @@ public partial class ModernWorkController : Controller
         }
 
         return RedirectToAction(nameof(Detail), new { id, tab = "milestones" });
+    }
+
+    private async Task LoadMilestoneUpdatesForViewAsync(int milestoneId, CancellationToken cancellationToken)
+    {
+        var updates = await _context.MilestoneUpdates
+            .AsNoTracking()
+            .Where(u => u.MilestoneId == milestoneId)
+            .OrderByDescending(u => u.UpdatedAt)
+            .Take(10)
+            .ToListAsync(cancellationToken);
+        ViewBag.MilestoneUpdates = updates;
     }
 
     private async Task<bool> TryPopulateEditMilestoneViewBagsAsync(int id, CancellationToken cancellationToken = default)

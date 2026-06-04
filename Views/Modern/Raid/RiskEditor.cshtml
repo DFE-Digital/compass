@@ -244,7 +244,7 @@
         </div>
 
         <div class="govuk-form-group" id="raid-risk-edit-impact-realised" data-raid-field="impactIfRealised">
-          <label class="govuk-label" for="ImpactIfRealised">Impact if realised</label>
+          <label class="govuk-label" for="ImpactIfRealised">Impact</label>
           <div class="govuk-hint">The consequence for users, the service, or the organisation if the risk materialises.</div>
           <textarea class="govuk-textarea" id="ImpactIfRealised" name="ImpactIfRealised" rows="4" maxlength="4000">@Model.ImpactIfRealised</textarea>
         </div>
@@ -395,9 +395,26 @@
           </div>
         </fieldset>
 
-        <div class="govuk-form-group" id="raid-risk-edit-mitigation" data-raid-field="mitigation">
+        <h2 class="govuk-heading-m govuk-!-margin-top-6 govuk-!-margin-bottom-3" id="raid-risk-edit-mitigation-section">Mitigation</h2>
+        <p class="govuk-body govuk-hint govuk-!-margin-bottom-4">Describe your overall approach and treatment type here. Track individual mitigation actions on the <strong>Mitigations</strong> tab after saving.</p>
+
+        <div class="govuk-form-group govuk-!-margin-bottom-4" id="raid-risk-edit-mitigation" data-raid-field="mitigation">
           <label class="govuk-label" for="ResponseStrategy">How do you intend to mitigate this risk?</label>
+          <div class="govuk-hint">Your overall mitigation approach in narrative form.</div>
           <textarea class="govuk-textarea" id="ResponseStrategy" name="ResponseStrategy" rows="4" maxlength="4000">@Model.ResponseStrategy</textarea>
+        </div>
+
+        <div class="govuk-form-group govuk-!-margin-bottom-6" data-raid-field="treatment" id="raid-risk-edit-treatment">
+          <label class="govuk-label govuk-label--s" for="RiskTreatmentId">Treatment</label>
+          <div class="govuk-hint">The primary treatment type for this risk (for example accept, avoid, reduce, transfer).</div>
+          <select class="govuk-select govuk-!-width-one-half" id="RiskTreatmentId" name="RiskTreatmentId">
+            <option value="">— Select —</option>
+            @foreach (var o in rt)
+            {
+              if (Model.RiskTreatmentId == o.Id) { <option value="@o.Id" selected>@o.Name</option> }
+              else { <option value="@o.Id">@o.Name</option> }
+            }
+          </select>
         </div>
 
         <h2 class="govuk-heading-m govuk-!-margin-bottom-3" id="raid-risk-edit-kris">Key risk indicators</h2>
@@ -534,19 +551,6 @@
           </select>
         </div>
 
-        <div class="govuk-form-group govuk-!-margin-bottom-4" data-raid-field="treatment" id="raid-risk-edit-treatment">
-          <label class="govuk-label govuk-label--s" for="RiskTreatmentId">Treatment</label>
-          <div class="govuk-hint">The primary treatment approach for this risk.</div>
-          <select class="govuk-select govuk-!-width-one-half" id="RiskTreatmentId" name="RiskTreatmentId">
-            <option value="">— Select —</option>
-            @foreach (var o in rt)
-            {
-              if (Model.RiskTreatmentId == o.Id) { <option value="@o.Id" selected>@o.Name</option> }
-              else { <option value="@o.Id">@o.Name</option> }
-            }
-          </select>
-        </div>
-
         <div class="govuk-form-group govuk-!-margin-bottom-4 @(RaidErr("PrimaryRiskCategoryId") != null ? "govuk-form-group--error" : null)" data-raid-field="categories" id="PrimaryRiskCategoryId">
           <label class="govuk-label govuk-label--s" for="PrimaryRiskCategoryId-select">Category</label>
           <div class="govuk-hint">Select the primary category for this risk.</div>
@@ -619,6 +623,10 @@
           @await Html.PartialAsync("~/Views/Shared/_UserPicker.cshtml", ViewBag.OwnerUserPicker as UserPickerViewModel)
         </div>
 
+        <div class="user-picker-wrapper user-picker-wrapper--full-width" data-raid-field="sro">
+          @await Html.PartialAsync("~/Views/Shared/_UserPicker.cshtml", ViewBag.SroUserPicker as UserPickerViewModel)
+        </div>
+
         @{
           var identErr = RaidErr("Identified");
           var nextErr = RaidErr("NextReview");
@@ -675,6 +683,15 @@
           </div>
         }
 
+        @if (isEdit && Model.Id.HasValue)
+        {
+          @await Html.PartialAsync("~/Views/Modern/Raid/_RaidEntityCommentsPanel.cshtml", new RaidEntityCommentsPanelVm
+          {
+            EntityType = "Risk",
+            EntityId = Model.Id.Value
+          })
+        }
+
         <div class="govuk-button-group">
           <button type="submit" class="govuk-button" data-module="govuk-button">@(opsMode ? "Save (Operations)" : (isEdit ? "Save changes" : "Create risk"))</button>
           @if (isEdit)
@@ -704,6 +721,10 @@
 @section Scripts {
 @{
   var cspNonce = Context.Items["Nonce"]?.ToString() ?? "";
+}
+@if (isEdit && Model.Id.HasValue)
+{
+<script src="~/modern/js/raid-entity-comments.js" asp-append-version="true" nonce="@cspNonce"></script>
 }
 <script nonce="@cspNonce">
 (function () {

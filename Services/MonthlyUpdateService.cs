@@ -7,6 +7,9 @@ namespace Compass.Services;
 public class MonthlyUpdateService : IMonthlyUpdateService
 {
     private readonly CompassDbContext _context;
+    private bool _cycleIdResolved;
+    private int? _cachedCycleId;
+    private readonly Dictionary<(int Year, int Month), WorkReportingCyclePeriod?> _explicitPeriodCache = new();
 
     public MonthlyUpdateService(CompassDbContext context)
     {
@@ -31,7 +34,20 @@ public class MonthlyUpdateService : IMonthlyUpdateService
 
         var opens = explicitRow.SubmissionOpens.Date;
         var closes = explicitRow.SubmissionCloses.Date;
-        return d >= opens && d <= closes;
+        if (d >= opens && d <= closes)
+            return true;
+
+        // Grace period: after this period's window closes, allow late submission until the next period opens.
+        if (d > closes)
+        {
+            var nextPeriod = TryGetNextExplicitPeriodRow(reportingYear, reportingMonth);
+            if (nextPeriod == null)
+                return true;
+
+            return d < nextPeriod.SubmissionOpens.Date;
+        }
+
+        return false;
     }
 
     public DateTime GetSubmissionWindowOpens(int reportingYear, int reportingMonth)
@@ -160,19 +176,29 @@ public class MonthlyUpdateService : IMonthlyUpdateService
 
     private WorkReportingCyclePeriod? TryGetActiveExplicitPeriodRow(int reportingYear, int reportingMonth)
     {
+        var cacheKey = (reportingYear, reportingMonth);
+        if (_explicitPeriodCache.TryGetValue(cacheKey, out var cached))
+            return cached;
+
         var cycleId = TryGetMonthlyWorkUpdatesCycleId();
         if (!cycleId.HasValue)
+        {
+            _explicitPeriodCache[cacheKey] = null;
             return null;
+        }
 
         var kUnpadded = $"{reportingYear}-{reportingMonth}";
         var kPaddedMonth = $"{reportingYear}-{reportingMonth:D2}";
 
-        return _context.WorkReportingCyclePeriods.AsNoTracking()
+        var row = _context.WorkReportingCyclePeriods.AsNoTracking()
             .Where(p =>
                 p.ReportingCycleId == cycleId.Value &&
                 p.IsActive &&
                 (p.PeriodKey == kUnpadded || p.PeriodKey == kPaddedMonth))
             .FirstOrDefault();
+
+        _explicitPeriodCache[cacheKey] = row;
+        return row;
     }
 
     private bool HasAnyActiveExplicitPeriods()
@@ -183,6 +209,22 @@ public class MonthlyUpdateService : IMonthlyUpdateService
 
         return _context.WorkReportingCyclePeriods.AsNoTracking()
             .Any(p => p.ReportingCycleId == cycleId.Value && p.IsActive);
+    }
+
+    private WorkReportingCyclePeriod? TryGetNextExplicitPeriodRow(int reportingYear, int reportingMonth)
+    {
+        var cycleId = TryGetMonthlyWorkUpdatesCycleId();
+        if (!cycleId.HasValue)
+            return null;
+
+        var currentStart = new DateTime(reportingYear, reportingMonth, 1);
+        return _context.WorkReportingCyclePeriods.AsNoTracking()
+            .Where(p =>
+                p.ReportingCycleId == cycleId.Value &&
+                p.IsActive &&
+                p.PeriodStart > currentStart)
+            .OrderBy(p => p.PeriodStart)
+            .FirstOrDefault();
     }
 
     private WorkReportingCyclePeriod? TryGetActiveExplicitPeriodRowForDate(DateTime utcDate)
@@ -203,11 +245,18 @@ public class MonthlyUpdateService : IMonthlyUpdateService
             .FirstOrDefault();
     }
 
-    private int? TryGetMonthlyWorkUpdatesCycleId() =>
-        _context.WorkReportingCycles.AsNoTracking()
+    private int? TryGetMonthlyWorkUpdatesCycleId()
+    {
+        if (_cycleIdResolved)
+            return _cachedCycleId;
+
+        _cachedCycleId = _context.WorkReportingCycles.AsNoTracking()
             .Where(c => c.Code == WorkReportingMonthlyCycleCodes.MonthlyWorkUpdates)
             .Select(c => (int?)c.Id)
             .FirstOrDefault();
+        _cycleIdResolved = true;
+        return _cachedCycleId;
+    }
 
     private MonthlyUpdateDeadlineConfig? GetConfigForReportingPeriod(int year, int month)
     {

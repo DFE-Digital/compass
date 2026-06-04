@@ -377,6 +377,9 @@ public partial class CompassDbContext : DbContext
     public DbSet<CMDBProductType> CMDBProductTypes { get; set; }
     public DbSet<CMDBProductFipsCategorisationItem> CMDBProductFipsCategorisationItems { get; set; }
     public DbSet<CMDBProductContact> CMDBProductContacts { get; set; }
+    public DbSet<CMDBProductObjective> CMDBProductObjectives { get; set; }
+    public DbSet<CMDBProductMission> CMDBProductMissions { get; set; }
+    public DbSet<CMDBProductWorkItemTag> CMDBProductWorkItemTags { get; set; }
     public DbSet<FipsCmdbSyncRule> FipsCmdbSyncRules { get; set; }
 
     // FIPS configuration
@@ -422,6 +425,7 @@ public partial class CompassDbContext : DbContext
 
         var auditEntries = PrepareAuditEntries();
         var result = base.SaveChanges(acceptAllChangesOnSuccess);
+        RefreshAuditEntityIds(auditEntries);
         AppendAuditEntries(auditEntries, acceptAllChangesOnSuccess);
         return result;
     }
@@ -437,6 +441,7 @@ public partial class CompassDbContext : DbContext
 
         var auditEntries = PrepareAuditEntries();
         var result = await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+        RefreshAuditEntityIds(auditEntries);
         await AppendAuditEntriesAsync(auditEntries, acceptAllChangesOnSuccess, cancellationToken);
         return result;
     }
@@ -444,11 +449,17 @@ public partial class CompassDbContext : DbContext
     public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
         => SaveChangesAsync(true, cancellationToken);
 
-    private List<AuditLog> PrepareAuditEntries()
+    private sealed class PendingAuditEntry
+    {
+        public required AuditLog Audit { get; init; }
+        public required EntityEntry Entry { get; init; }
+    }
+
+    private List<PendingAuditEntry> PrepareAuditEntries()
     {
         // Do not call ChangeTracker.DetectChanges() here — SaveChanges will detect changes once.
         // A full-graph DetectChanges is expensive when many entities are tracked (e.g. FIPS product Includes).
-        var auditEntries = new List<AuditLog>();
+        var auditEntries = new List<PendingAuditEntry>();
         var timestamp = DateTime.UtcNow;
         var currentUserId = _auditContextProvider.UserId;
         var currentUserName = _auditContextProvider.UserName;
@@ -504,10 +515,27 @@ public partial class CompassDbContext : DbContext
                     break;
             }
 
-            auditEntries.Add(audit);
+            auditEntries.Add(new PendingAuditEntry { Audit = audit, Entry = entry });
         }
 
         return auditEntries;
+    }
+
+    private void RefreshAuditEntityIds(IEnumerable<PendingAuditEntry> auditEntries)
+    {
+        foreach (var pending in auditEntries)
+        {
+            if (pending.Entry.State == EntityState.Detached)
+            {
+                continue;
+            }
+
+            var entityId = GetPrimaryKey(pending.Entry);
+            if (!string.IsNullOrWhiteSpace(entityId))
+            {
+                pending.Audit.EntityId = entityId;
+            }
+        }
     }
 
     private string SerializePropertyValues(IEnumerable<PropertyEntry> properties, bool includeOriginalValues)
@@ -620,9 +648,9 @@ public partial class CompassDbContext : DbContext
         return IsMissingAuditColumnException(exception.InnerException);
     }
 
-    private void AppendAuditEntries(IEnumerable<AuditLog> auditEntries, bool acceptAllChangesOnSuccess)
+    private void AppendAuditEntries(IEnumerable<PendingAuditEntry> auditEntries, bool acceptAllChangesOnSuccess)
     {
-        var entries = auditEntries.ToList();
+        var entries = auditEntries.Select(p => p.Audit).ToList();
         if (!entries.Any())
         {
             return;
@@ -649,9 +677,9 @@ public partial class CompassDbContext : DbContext
         }
     }
 
-    private async Task AppendAuditEntriesAsync(IEnumerable<AuditLog> auditEntries, bool acceptAllChangesOnSuccess, CancellationToken cancellationToken)
+    private async Task AppendAuditEntriesAsync(IEnumerable<PendingAuditEntry> auditEntries, bool acceptAllChangesOnSuccess, CancellationToken cancellationToken)
     {
-        var entries = auditEntries.ToList();
+        var entries = auditEntries.Select(p => p.Audit).ToList();
         if (!entries.Any())
         {
             return;
@@ -3594,7 +3622,9 @@ public partial class CompassDbContext : DbContext
             e.Property(x => x.CMDBDescription).HasColumnType("nvarchar(max)");
             e.Property(x => x.UserDescription).HasColumnType("nvarchar(max)");
             e.Property(x => x.LastCmdbSnapshotJson).HasColumnType("nvarchar(max)");
+            e.Property(x => x.OtherDepartments).HasColumnType("nvarchar(max)");
             e.HasOne(x => x.Phase).WithMany().HasForeignKey(x => x.PhaseId).OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(x => x.RiskAppetiteLookup).WithMany().HasForeignKey(x => x.RiskAppetiteLookupId).OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<FipsCmdbSyncRule>(e =>
@@ -3676,6 +3706,33 @@ public partial class CompassDbContext : DbContext
         {
             e.HasOne(x => x.CMDBProduct).WithMany(p => p.Contacts).HasForeignKey(x => x.CMDBProductId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(x => x.FipsContactRole).WithMany().HasForeignKey(x => x.FipsContactRoleId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<CMDBProductObjective>(e =>
+        {
+            e.HasOne(x => x.CMDBProduct).WithMany(p => p.Objectives).HasForeignKey(x => x.CMDBProductId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Objective).WithMany().HasForeignKey(x => x.ObjectiveId).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(x => new { x.CMDBProductId, x.ObjectiveId }).IsUnique();
+        });
+
+        modelBuilder.Entity<CMDBProductMission>(e =>
+        {
+            e.HasOne(x => x.CMDBProduct).WithMany(p => p.Missions).HasForeignKey(x => x.CMDBProductId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Mission).WithMany().HasForeignKey(x => x.MissionId).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(x => new { x.CMDBProductId, x.MissionId }).IsUnique();
+        });
+
+        modelBuilder.Entity<CMDBProductWorkItemTag>(e =>
+        {
+            e.HasKey(x => new { x.CMDBProductId, x.WorkItemTagLookupId });
+            e.HasOne(x => x.CMDBProduct)
+                .WithMany(p => p.WorkItemTags)
+                .HasForeignKey(x => x.CMDBProductId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.WorkItemTagLookup)
+                .WithMany()
+                .HasForeignKey(x => x.WorkItemTagLookupId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<FipsUserGroup>(e =>

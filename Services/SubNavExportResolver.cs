@@ -215,9 +215,16 @@ public sealed class SubNavExportResolver
             return Options(current, all);
         }
 
+        if (string.Equals(action, "MonthlySubmissionProgress", StringComparison.OrdinalIgnoreCase))
+        {
+            var keys = new[] { "year", "month", "businessAreaId", "directorateId" };
+            var current = ActionWithQuery(c, "ExportMonthlySubmissionProgress", "ModernReporting", keys, ctx);
+            return Options(current, workAll);
+        }
+
         return action switch
         {
-            "Dashboard" or "MonthlyUpdate" or "MonthlySubmissionProgress" or "Performance" or "Assessments" or "Accessibility" or "RaidReviewProgress"
+            "Dashboard" or "MonthlyUpdate" or "Performance" or "Assessments" or "Accessibility" or "RaidReviewProgress"
                 => Options(null, workAll),
             _ => null
         };

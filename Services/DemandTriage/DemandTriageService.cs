@@ -10,11 +10,16 @@ public class DemandTriageService : IDemandTriageService
 {
     private readonly CompassDbContext _db;
     private readonly ILogger<DemandTriageService> _logger;
+    private readonly IWorkItemNotificationService _workItemNotifications;
 
-    public DemandTriageService(CompassDbContext db, ILogger<DemandTriageService> logger)
+    public DemandTriageService(
+        CompassDbContext db,
+        ILogger<DemandTriageService> logger,
+        IWorkItemNotificationService workItemNotifications)
     {
         _db = db;
         _logger = logger;
+        _workItemNotifications = workItemNotifications;
     }
 
     // ── Reference generation ─────────────────────────────────────────────────
@@ -598,6 +603,18 @@ public class DemandTriageService : IDemandTriageService
 
         await WriteAuditAsync(id, DemandAuditActions.ProjectCreated, request.Status, request.Status,
             actorEmail, actorName, null, $"Project ID: {project.Id}");
+
+        try
+        {
+            await _workItemNotifications.TrySendWorkItemCreatedAsync(
+                project.Id,
+                actorEmail,
+                actorName);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to send work item created notification for project {ProjectId}", project.Id);
+        }
 
         return project.Id;
     }

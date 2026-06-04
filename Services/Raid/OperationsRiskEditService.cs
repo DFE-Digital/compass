@@ -314,6 +314,7 @@ public sealed class OperationsRiskEditService(
         risk.ToleranceScore = toleranceScore;
         risk.RiskProximityId = form.RiskProximityId;
         risk.OwnerUserId = form.OwnerUserId > 0 ? form.OwnerUserId : null;
+        risk.SroUserId = form.SroUserId > 0 ? form.SroUserId : null;
         risk.ImpactRating = impactRating;
         risk.LikelihoodRating = likelihoodRating;
         risk.RiskScore = riskScore;

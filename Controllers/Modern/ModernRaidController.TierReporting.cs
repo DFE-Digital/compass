@@ -127,7 +127,11 @@ public partial class ModernRaidController
             .ToListAsync(cancellationToken);
 
         var riskQuery = RaidTierReportingRiskQuery(search, projectId, directorateId, effectiveBa);
-        var issueQuery = IssueQueryableAlignedToRiskRegisterFilters(projectId, directorateId, effectiveBa, search);
+        var issueQuery = IssueQueryableAlignedToRiskRegisterFilters(
+            projectId,
+            MergeRaidRegisterFilterIds(directorateId, null),
+            MergeRaidRegisterFilterIds(effectiveBa, null),
+            search);
 
         var risks = await riskQuery
             .Include(r => r.RiskTier)
@@ -297,7 +301,11 @@ public partial class ModernRaidController
             return Json(new RaidTierReportingDrillResponseVm { Title = "Tier not found", Items = Array.Empty<RaidTierReportingDrillItemVm>() });
 
         var riskQuery = RaidTierReportingRiskQuery(search, projectId, directorateId, effectiveBa);
-        var issueBase = IssueQueryableAlignedToRiskRegisterFilters(projectId, directorateId, effectiveBa, search);
+        var issueBase = IssueQueryableAlignedToRiskRegisterFilters(
+            projectId,
+            MergeRaidRegisterFilterIds(directorateId, null),
+            MergeRaidRegisterFilterIds(effectiveBa, null),
+            search);
 
         var levelToOperationalTierId = new Dictionary<int, int>();
         foreach (var t in allTiers.Where(x => !x.IsProposedTier))
@@ -444,7 +452,11 @@ public partial class ModernRaidController
             .OrderBy(r => r.RiskTierId).ThenBy(r => r.Id)
             .ToListAsync(cancellationToken);
 
-        var issues = await IssueQueryableAlignedToRiskRegisterFilters(projectId, directorateId, effectiveBa, search)
+        var issues = await IssueQueryableAlignedToRiskRegisterFilters(
+                projectId,
+                MergeRaidRegisterFilterIds(directorateId, null),
+                MergeRaidRegisterFilterIds(effectiveBa, null),
+                search)
             .Include(i => i.SeverityLookup)
             .Include(i => i.Project)
             .Include(i => i.StatusLookup)
