@@ -24,6 +24,13 @@ public partial class ModernRaidController
 
     private string GetCurrentUserEmailNormalized()
     {
+        if (_viewAsUser.IsActive(HttpContext))
+        {
+            var active = _viewAsUser.GetActive(HttpContext);
+            if (!string.IsNullOrWhiteSpace(active?.Email))
+                return active.Email.Trim().ToLowerInvariant();
+        }
+
         var email = User.Identity?.Name
             ?? User.FindFirst(ClaimTypes.Email)?.Value
             ?? User.FindFirst("preferred_username")?.Value;

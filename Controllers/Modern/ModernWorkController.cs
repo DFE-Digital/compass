@@ -90,6 +90,7 @@ public partial class ModernWorkController : Controller
     private readonly IPermissionService _permissions;
     private readonly IWorkServiceRegisterLinkService _workServiceRegisterLinks;
     private readonly IWorkItemNotificationService _workItemNotifications;
+    private readonly IViewAsUserService _viewAsUser;
 
     public ModernWorkController(
         CompassDbContext context,
@@ -102,7 +103,8 @@ public partial class ModernWorkController : Controller
         IRaidIssueEditorFormService raidIssueEditorForm,
         IPermissionService permissions,
         IWorkServiceRegisterLinkService workServiceRegisterLinks,
-        IWorkItemNotificationService workItemNotifications)
+        IWorkItemNotificationService workItemNotifications,
+        IViewAsUserService viewAsUser)
     {
         _context = context;
         _modernWork = modernWork;
@@ -115,6 +117,7 @@ public partial class ModernWorkController : Controller
         _permissions = permissions;
         _workServiceRegisterLinks = workServiceRegisterLinks;
         _workItemNotifications = workItemNotifications;
+        _viewAsUser = viewAsUser;
     }
 
     private static readonly HashSet<string> ValidMilestoneStatuses = new(StringComparer.OrdinalIgnoreCase)
@@ -143,21 +146,14 @@ public partial class ModernWorkController : Controller
     [HttpGet("dashboard")]
     public async Task<IActionResult> Dashboard(string? tab)
     {
-        var userEmail = User.Identity?.Name;
-        if (string.IsNullOrEmpty(userEmail))
+        var scope = await ResolveViewScopeUserAsync();
+        if (scope == null)
         {
             TempData["ErrorMessage"] = "Unable to identify the current user.";
             return View("~/Views/Modern/Work/Dashboard.cshtml");
         }
 
-        var currentUser = await _context.Users
-            .FirstOrDefaultAsync(u => u.Email.ToLower() == userEmail.ToLower());
-        if (currentUser == null)
-        {
-            TempData["ErrorMessage"] = "User account not found.";
-            return View("~/Views/Modern/Work/Dashboard.cshtml");
-        }
-
+        var (currentUser, userEmail) = scope.Value;
         await _modernWork.PopulateWorkDashboardAsync(this, currentUser, userEmail, tab);
         return View("~/Views/Modern/Work/Dashboard.cshtml");
     }
@@ -182,13 +178,11 @@ public partial class ModernWorkController : Controller
         ViewBag.MainNavSection = "work";
         ViewBag.SubNavItem = "work-all";
 
-        var userEmail = User.Identity?.Name;
-        if (string.IsNullOrEmpty(userEmail))
+        var scope = await ResolveViewScopeUserAsync(cancellationToken);
+        if (scope == null)
             return Unauthorized();
 
-        var currentUser = await _context.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == userEmail.ToLower(), cancellationToken);
-        if (currentUser == null)
-            return Unauthorized();
+        var (currentUser, userEmail) = scope.Value;
 
         var mergedTags = MergeWorkTagQuery(tagId, tagIds);
 
@@ -240,13 +234,11 @@ public partial class ModernWorkController : Controller
         ViewBag.MainNavSection = "work";
         ViewBag.SubNavItem = "work-allwork";
 
-        var userEmail = User.Identity?.Name;
-        if (string.IsNullOrEmpty(userEmail))
+        var scope = await ResolveViewScopeUserAsync(cancellationToken);
+        if (scope == null)
             return Unauthorized();
 
-        var currentUser = await _context.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == userEmail.ToLower(), cancellationToken);
-        if (currentUser == null)
-            return Unauthorized();
+        var (currentUser, userEmail) = scope.Value;
 
         var activeTab = (tab?.ToLowerInvariant()) switch
         {
@@ -315,13 +307,11 @@ public partial class ModernWorkController : Controller
         CancellationToken cancellationToken = default)
     {
         var scopeLabel = string.IsNullOrWhiteSpace(scope) ? "allwork" : scope.Trim().ToLowerInvariant();
-        var userEmail = User.Identity?.Name;
-        if (string.IsNullOrEmpty(userEmail))
+        var scopeUser = await ResolveViewScopeUserAsync(cancellationToken);
+        if (scopeUser == null)
             return Unauthorized();
 
-        var currentUser = await _context.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == userEmail.ToLower(), cancellationToken);
-        if (currentUser == null)
-            return Unauthorized();
+        var (currentUser, userEmail) = scopeUser.Value;
 
         var normalizedTab = (tab ?? "active").Trim().ToLowerInvariant();
         var exportTab = normalizedTab is "completed" or "cancelled" or "all" ? normalizedTab : "active";
@@ -1494,14 +1484,12 @@ public partial class ModernWorkController : Controller
         string? milestonestab = null,
         CancellationToken cancellationToken = default)
     {
-        var userEmail = User.Identity?.Name;
-        if (string.IsNullOrEmpty(userEmail))
+        var scope = await ResolveViewScopeUserAsync(cancellationToken);
+        if (scope == null)
             return Unauthorized();
 
-        var currentUser = await _context.Users
-            .FirstOrDefaultAsync(u => u.Email.ToLower() == userEmail.ToLower(), cancellationToken);
-        if (currentUser == null)
-            return Unauthorized();
+        var (currentUser, userEmail) = scope.Value;
+        var realUserEmail = User.Identity?.Name ?? userEmail;
 
         var work = await _modernWork.PopulateWorkDetailAsync(
             this,
@@ -1538,7 +1526,8 @@ public partial class ModernWorkController : Controller
             };
         }
 
-        var showWorkHistory = await _permissions.IsCentralOperationsAdminOrSuperAdminAsync(userEmail);
+        var showWorkHistory = !_viewAsUser.IsActive(HttpContext)
+            && await _permissions.IsCentralOperationsAdminOrSuperAdminAsync(realUserEmail);
         ViewBag.ShowWorkHistoryNav = showWorkHistory;
         if (showWorkHistory)
         {
@@ -2092,6 +2081,33 @@ public partial class ModernWorkController : Controller
             .FirstOrDefaultAsync(u => u.Email.ToLower() == userEmail.ToLower(), cancellationToken);
     }
 
+    /// <summary>Effective user for read/scoped views — view-as target when active, otherwise signed-in user.</summary>
+    private async Task<(User User, string Email)?> ResolveViewScopeUserAsync(CancellationToken cancellationToken = default)
+    {
+        if (_viewAsUser.IsActive(HttpContext))
+        {
+            var active = _viewAsUser.GetActive(HttpContext);
+            if (active != null)
+            {
+                var viewAsUser = await _context.Users
+                    .FirstOrDefaultAsync(u => u.Id == active.UserId, cancellationToken);
+                if (viewAsUser != null)
+                    return (viewAsUser, viewAsUser.Email);
+            }
+        }
+
+        var userEmail = User.Identity?.Name;
+        if (string.IsNullOrEmpty(userEmail))
+            return null;
+
+        var currentUser = await _context.Users
+            .FirstOrDefaultAsync(u => u.Email.ToLower() == userEmail.ToLower(), cancellationToken);
+        if (currentUser == null)
+            return null;
+
+        return (currentUser, userEmail);
+    }
+
     private async Task<WorkRegisterSubNavViewModel?> BuildWorkRegisterSubNavForScopeAsync(
         int? businessAreaId,
         int? directorateId,
@@ -2106,10 +2122,11 @@ public partial class ModernWorkController : Controller
         string? themeFilterKey = null,
         CancellationToken cancellationToken = default)
     {
-        var currentUser = await GetCurrentUserAsync(cancellationToken);
-        var userEmail = User.Identity?.Name;
-        if (currentUser == null || string.IsNullOrEmpty(userEmail))
+        var scope = await ResolveViewScopeUserAsync(cancellationToken);
+        if (scope == null)
             return null;
+
+        var (currentUser, userEmail) = scope.Value;
 
         var tabKey = NormalizeWorkRegisterTab(activeTab);
 

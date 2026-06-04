@@ -17,17 +17,20 @@ public class NavigationViewFilter : IAsyncActionFilter
 {
     private readonly IPermissionService _permissionService;
     private readonly IGlobalFeatureToggleService _globalFeatures;
+    private readonly IViewAsUserService _viewAsUser;
     private readonly SubNavExportResolver _subNavExport;
     private readonly SubNavDataAccessResolver _subNavDataAccess;
 
     public NavigationViewFilter(
         IPermissionService permissionService,
         IGlobalFeatureToggleService globalFeatures,
+        IViewAsUserService viewAsUser,
         SubNavExportResolver subNavExport,
         SubNavDataAccessResolver subNavDataAccess)
     {
         _permissionService = permissionService;
         _globalFeatures = globalFeatures;
+        _viewAsUser = viewAsUser;
         _subNavExport = subNavExport;
         _subNavDataAccess = subNavDataAccess;
     }
@@ -74,6 +77,13 @@ public class NavigationViewFilter : IAsyncActionFilter
                     // Same gate as <see cref="Attributes.RequireAdminAttribute"/> (modern admin hub).
                     controller.ViewBag.CanAccessModernAdmin =
                         await _permissionService.IsCentralOperationsAdminOrSuperAdminAsync(userEmail);
+
+                    var canUseViewAs = await _viewAsUser.CanEnableViewAsAsync(userEmail);
+                    var activeViewAs = _viewAsUser.GetActive(context.HttpContext);
+                    controller.ViewBag.CanUseViewAs = canUseViewAs;
+                    controller.ViewBag.ViewAsActive = activeViewAs != null;
+                    controller.ViewBag.ViewAsUserName = activeViewAs?.Name;
+                    controller.ViewBag.ViewAsUserEmail = activeViewAs?.Email;
                 }
                 catch
                 {
@@ -85,6 +95,8 @@ public class NavigationViewFilter : IAsyncActionFilter
                     controller.ViewBag.ShowRaidNavigation = false;
                     controller.ViewBag.ShowDdrNavigation = false;
                     controller.ViewBag.CanAccessModernAdmin = false;
+                    controller.ViewBag.CanUseViewAs = false;
+                    controller.ViewBag.ViewAsActive = false;
                 }
             }
         }
