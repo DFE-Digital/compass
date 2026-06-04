@@ -534,6 +534,9 @@ builder.Services.AddScoped<IBusinessAreaLeadershipService, BusinessAreaLeadershi
 builder.Services.AddScoped<IDirectorateLeadershipService, DirectorateLeadershipService>();
 builder.Services.AddScoped<ICompassNotificationEmailLogService, CompassNotificationEmailLogService>();
 builder.Services.AddScoped<ICompassNotificationSettingsService, CompassNotificationSettingsService>();
+builder.Services.AddScoped<IWorkReportingNotificationService, WorkReportingNotificationService>();
+builder.Services.AddScoped<IWorkItemNotificationService, WorkItemNotificationService>();
+builder.Services.AddHostedService<WorkReportingNotificationHostedService>();
 builder.Services.AddScoped<IGlobalFeatureToggleService, GlobalFeatureToggleService>();
 builder.Services.AddScoped<Compass.Filters.DemandFeatureGateFilter>();
 builder.Services.AddScoped<Compass.Filters.StandardsFeatureGateFilter>();

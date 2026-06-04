@@ -3,6 +3,7 @@ using Compass.Data;
 using Compass.Models;
 using Compass.Models.Fips;
 using Compass.Services.Aiss;
+using Compass.Services.Modern;
 using Compass.ViewModels;
 using Compass.ViewModels.Modern;
 using Microsoft.EntityFrameworkCore;
@@ -1972,10 +1973,16 @@ public class ModernMonthlyReportService
         List<Project> projects,
         int year,
         int month,
-        IMonthlyUpdateService monthlyUpdateService)
+        IMonthlyUpdateService monthlyUpdateService) =>
+        CalculateMonthlyUpdateStats(projects, year, month, monthlyUpdateService.GetMonthlyUpdateDueDate(year, month));
+
+    private static MonthlyUpdateStats CalculateMonthlyUpdateStats(
+        List<Project> projects,
+        int year,
+        int month,
+        DateTime dueDate)
     {
         var totalProjects = projects.Count;
-        var dueDate = monthlyUpdateService.GetMonthlyUpdateDueDate(year, month);
         var currentDate = DateTime.UtcNow;
 
         var submitted = 0;
@@ -2352,7 +2359,7 @@ public class ModernMonthlyReportService
             .ThenBy(d => d.Name)
             .ToListAsync(cancellationToken);
 
-        var monthlyUpdateStats = CalculateMonthlyUpdateStats(allProjects, reportYear, reportMonth, _monthlyUpdateService);
+        var monthlyUpdateStats = CalculateMonthlyUpdateStats(allProjects, reportYear, reportMonth, dueDate);
         var expectedProgressToday = ComputeExpectedProgressPercent(submissionWindowStart, submissionWindowEnd, DateTime.UtcNow.Date);
 
         var submittedDates = allProjects
@@ -2369,12 +2376,17 @@ public class ModernMonthlyReportService
             submittedDates);
 
         var businessAreaLeague = BuildSubmissionLeagueByBusinessArea(
-            allProjects, reportYear, reportMonth, expectedProgressToday, _monthlyUpdateService);
+            allProjects, reportYear, reportMonth, expectedProgressToday, dueDate);
         var directorateLeague = BuildSubmissionLeagueByDirectorate(
-            allProjects, directorates, reportYear, reportMonth, expectedProgressToday, _monthlyUpdateService);
+            allProjects, directorates, reportYear, reportMonth, expectedProgressToday, dueDate);
 
         var (trendColumns, businessAreaTrendRows) = BuildBusinessAreaSixMonthTrends(
             allProjects, reportYear, reportMonth);
+
+        var exportPeriodColumns = await LoadExportPeriodColumnsAsync(
+            reportYear, reportMonth, minReportYear, cancellationToken);
+        var exportRows = BuildSubmissionProgressExportRows(
+            allProjects, directorates, reportYear, reportMonth, dueDate, exportPeriodColumns);
 
         var nextMonthDate = monthStart.AddMonths(1);
         var nextMonthAllowed =
@@ -2411,6 +2423,8 @@ public class ModernMonthlyReportService
             DirectorateLeague = directorateLeague,
             TrendMonthColumns = trendColumns,
             BusinessAreaTrendRows = businessAreaTrendRows,
+            ExportPeriodColumns = exportPeriodColumns,
+            ExportRows = exportRows,
             HasPreviousMonthNav = hasPreviousMonthNav,
             HasNextMonthNav = nextMonthAllowed,
             PreviousNavYear = hasPreviousMonthNav ? prevMonthDate.Year : null,
@@ -2547,20 +2561,8 @@ public class ModernMonthlyReportService
         return (columns, rows);
     }
 
-    private static bool IsProjectInReportingScopeForMonth(Project project, int year, int month)
-    {
-        if (project.IsDeleted)
-            return false;
-        if (string.Equals(project.Status, "Cancelled", StringComparison.OrdinalIgnoreCase))
-            return false;
-
-        var hasPeriodUpdate = project.MonthlyUpdates?.Any(u => u.Year == year && u.Month == month) == true;
-        if (hasPeriodUpdate)
-            return true;
-
-        return string.Equals(project.Status, "Active", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(project.Status, "Paused", StringComparison.OrdinalIgnoreCase);
-    }
+    private static bool IsProjectInReportingScopeForMonth(Project project, int year, int month) =>
+        WorkRegisterMonthlySubmissionExportHelper.IsProjectInReportingScopeForMonth(project, year, month);
 
     private static (int Submitted, int TotalInScope) CountSubmissionForMonth(
         IEnumerable<Project> projects,
@@ -2649,7 +2651,7 @@ public class ModernMonthlyReportService
         int reportYear,
         int reportMonth,
         decimal expectedProgressPercent,
-        IMonthlyUpdateService monthlyUpdateService)
+        DateTime dueDate)
     {
         return projects
             .GroupBy(p => p.BusinessAreaId)
@@ -2660,9 +2662,8 @@ public class ModernMonthlyReportService
                 reportYear,
                 reportMonth,
                 expectedProgressPercent,
-                monthlyUpdateService))
-            .OrderByDescending(r => r.ActualProgressPercent)
-            .ThenBy(r => r.Name == "Not set" ? "zzzzzz" : r.Name)
+                dueDate))
+            .OrderBy(r => r.Name == "Not set" ? "zzzzzz" : r.Name, StringComparer.OrdinalIgnoreCase)
             .ToList();
     }
 
@@ -2672,7 +2673,7 @@ public class ModernMonthlyReportService
         int reportYear,
         int reportMonth,
         decimal expectedProgressPercent,
-        IMonthlyUpdateService monthlyUpdateService)
+        DateTime dueDate)
     {
         var dirNameById = directorateLookups.ToDictionary(d => d.Id, d => d.Name);
 
@@ -2683,10 +2684,9 @@ public class ModernMonthlyReportService
                 var name = g.Key.HasValue && dirNameById.TryGetValue(g.Key.Value, out var n)
                     ? n
                     : "Not set";
-                return BuildSubmissionLeagueRow(name, g.Key, g.ToList(), reportYear, reportMonth, expectedProgressPercent, monthlyUpdateService);
+                return BuildSubmissionLeagueRow(name, g.Key, g.ToList(), reportYear, reportMonth, expectedProgressPercent, dueDate);
             })
-            .OrderByDescending(r => r.ActualProgressPercent)
-            .ThenBy(r => r.Name == "Not set" ? "zzzzzz" : r.Name)
+            .OrderBy(r => r.Name == "Not set" ? "zzzzzz" : r.Name, StringComparer.OrdinalIgnoreCase)
             .ToList();
     }
 
@@ -2706,9 +2706,8 @@ public class ModernMonthlyReportService
         int reportYear,
         int reportMonth,
         decimal expectedProgressPercent,
-        IMonthlyUpdateService monthlyUpdateService)
+        DateTime dueDate)
     {
-        var dueDate = monthlyUpdateService.GetMonthlyUpdateDueDate(reportYear, reportMonth);
         var nowUtc = DateTime.UtcNow;
         var submitted = 0;
         var inProgress = 0;
@@ -2742,7 +2741,7 @@ public class ModernMonthlyReportService
             NotStarted = notStarted,
             ActualProgressPercent = actual,
             ExpectedProgressPercent = expectedProgressPercent,
-            WorkItems = BuildSubmissionProgressWorkItems(projects, reportYear, reportMonth, monthlyUpdateService)
+            WorkItems = BuildSubmissionProgressWorkItems(projects, reportYear, reportMonth, dueDate)
         };
     }
 
@@ -2750,37 +2749,95 @@ public class ModernMonthlyReportService
         List<Project> projects,
         int reportYear,
         int reportMonth,
-        IMonthlyUpdateService monthlyUpdateService)
+        DateTime dueDate)
     {
-        var dueDate = monthlyUpdateService.GetMonthlyUpdateDueDate(reportYear, reportMonth);
+        return projects
+            .OrderBy(p => p.Title, StringComparer.OrdinalIgnoreCase)
+            .Select(p => BuildSubmissionProgressWorkItemRow(p, reportYear, reportMonth, dueDate))
+            .ToList();
+    }
+
+    private static SubmissionProgressWorkItemRow BuildSubmissionProgressWorkItemRow(
+        Project p,
+        int reportYear,
+        int reportMonth,
+        DateTime dueDate)
+    {
+        var (status, submittedAt) = ResolveDetailedSubmissionStatus(p, reportYear, reportMonth, dueDate);
+        return new SubmissionProgressWorkItemRow
+        {
+            ProjectId = p.Id,
+            Title = p.Title,
+            SubmissionStatus = status,
+            SubmittedAt = submittedAt
+        };
+    }
+
+    private static (string Status, DateTime? SubmittedAt) ResolveDetailedSubmissionStatus(
+        Project project,
+        int reportYear,
+        int reportMonth,
+        DateTime dueDate)
+    {
         var nowUtc = DateTime.UtcNow;
+        var update = project.MonthlyUpdates?.FirstOrDefault(u => u.Year == reportYear && u.Month == reportMonth);
+
+        if (update != null && update.SubmittedAt.HasValue)
+            return ("Submitted", update.SubmittedAt);
+
+        if (nowUtc > dueDate)
+            return ("Late", null);
+
+        if (update != null && !update.SubmittedAt.HasValue)
+            return ("In progress", null);
+
+        return ("Not started", null);
+    }
+
+    private static string ResolveExportPeriodSubmissionStatus(
+        Project project,
+        int reportYear,
+        int reportMonth) =>
+        WorkRegisterMonthlySubmissionExportHelper.ResolvePeriodSubmissionStatus(project, reportYear, reportMonth);
+
+    private Task<List<SubmissionTrendMonthColumn>> LoadExportPeriodColumnsAsync(
+        int reportYear,
+        int reportMonth,
+        int minReportYear,
+        CancellationToken cancellationToken) =>
+        WorkRegisterMonthlySubmissionExportHelper.LoadPeriodColumnsAsync(
+            _db, reportYear, reportMonth, minReportYear, cancellationToken);
+
+    private static List<SubmissionProgressExportRow> BuildSubmissionProgressExportRows(
+        List<Project> projects,
+        List<Division> directorateLookups,
+        int reportYear,
+        int reportMonth,
+        DateTime dueDate,
+        IReadOnlyList<SubmissionTrendMonthColumn> periodColumns)
+    {
+        var dirNameById = directorateLookups.ToDictionary(d => d.Id, d => d.Name);
 
         return projects
             .OrderBy(p => p.Title, StringComparer.OrdinalIgnoreCase)
             .Select(p =>
             {
-                var update = p.MonthlyUpdates?.FirstOrDefault(u => u.Year == reportYear && u.Month == reportMonth);
-                string status;
-                DateTime? submittedAt = null;
+                var dirId = GetPrimaryDirectorateId(p);
+                var dirName = dirId.HasValue && dirNameById.TryGetValue(dirId.Value, out var n) ? n : "Not set";
+                var (currentStatus, submittedAt) = ResolveDetailedSubmissionStatus(
+                    p, reportYear, reportMonth, dueDate);
 
-                if (update != null && update.SubmittedAt.HasValue)
-                {
-                    status = "Submitted";
-                    submittedAt = update.SubmittedAt;
-                }
-                else if (nowUtc > dueDate)
-                    status = "Late";
-                else if (update != null && !update.SubmittedAt.HasValue)
-                    status = "In progress";
-                else
-                    status = "Not started";
-
-                return new SubmissionProgressWorkItemRow
+                return new SubmissionProgressExportRow
                 {
                     ProjectId = p.Id,
                     Title = p.Title,
-                    SubmissionStatus = status,
-                    SubmittedAt = submittedAt
+                    BusinessAreaName = p.BusinessAreaLookup?.Name ?? "Not set",
+                    DirectorateName = dirName,
+                    CurrentPeriodStatus = currentStatus,
+                    CurrentPeriodSubmittedAt = submittedAt,
+                    PeriodStatuses = periodColumns
+                        .Select(col => ResolveExportPeriodSubmissionStatus(p, col.Year, col.Month))
+                        .ToList()
                 };
             })
             .ToList();

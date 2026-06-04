@@ -84,6 +84,34 @@ public partial class ModernWorkService : IModernWorkService
         return u.Email ?? "";
     }
 
+    private static string? FormatThematicTagsSummary(Project p) =>
+        p.ProjectWorkItemTags == null || p.ProjectWorkItemTags.Count == 0
+            ? null
+            : string.Join(", ", p.ProjectWorkItemTags
+                .Where(l => l.WorkItemTagLookup != null && l.WorkItemTagLookup.IsActive)
+                .OrderBy(l => l.WorkItemTagLookup!.SortOrder).ThenBy(l => l.WorkItemTagLookup!.Name)
+                .Select(l => l.WorkItemTagLookup!.Name));
+
+    private static string? FormatMissionPillarsSummary(Project p) =>
+        p.ProjectMissions == null || p.ProjectMissions.Count == 0
+            ? null
+            : string.Join(", ", p.ProjectMissions
+                .Where(pm => pm.Mission != null && !pm.Mission.IsDeleted)
+                .Select(pm => pm.Mission!.Title.Trim())
+                .Where(t => t.Length > 0)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(t => t, StringComparer.OrdinalIgnoreCase));
+
+    private static string? FormatPriorityOutcomesSummary(Project p) =>
+        p.ProjectObjectives == null || p.ProjectObjectives.Count == 0
+            ? null
+            : string.Join(", ", p.ProjectObjectives
+                .Where(po => po.Objective != null && !po.Objective.IsDeleted)
+                .Select(po => po.Objective!.Title.Trim())
+                .Where(t => t.Length > 0)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(t => t, StringComparer.OrdinalIgnoreCase));
+
     private static string? ComputeMonthlyUpdateFilterKey(string? status, DateTime nowDate, DateTime? periodDueDate)
     {
         if (string.IsNullOrWhiteSpace(status) || status == "—") return "";
@@ -97,8 +125,8 @@ public partial class ModernWorkService : IModernWorkService
 
     private static string EmailLower(string email) => email.Trim().ToLowerInvariant();
 
-    /// <summary>Sets monthly reporting badge fields for the current calendar month (aligned with work dashboard).</summary>
-    private static void FillLatestMonthlyDueForRegisterRow(
+    /// <summary>Sets monthly reporting badge fields for the applicable reporting period (aligned with work dashboard).</summary>
+    private void FillLatestMonthlyDueForRegisterRow(
         WorkRegisterRow row,
         Project p,
         WorkRegisterMonthlyContext monthly,
@@ -125,10 +153,12 @@ public partial class ModernWorkService : IModernWorkService
             ? explicitPeriod.PeriodStart.ToString("MMM", CultureInfo.GetCultureInfo("en-GB")) + " Update"
             : new DateTime(reportY, reportM, 1).ToString("MMM", CultureInfo.GetCultureInfo("en-GB")) + " Update";
 
-        var windowOpen = monthly.SubmissionWindowOpen;
         var mu = p.MonthlyUpdates?.FirstOrDefault(m => m.Year == reportY && m.Month == reportM);
         var submitted = mu?.SubmittedAt != null;
         var draft = mu != null && mu.SubmittedAt == null;
+        var editingAllowed = _monthlyUpdateService.IsMonthlyReportEditingAllowed(reportY, reportM);
+        var updateStatus = _monthlyUpdateService.CalculateUpdateStatus(reportY, reportM, mu?.SubmittedAt);
+        var monthlyReportUrl = url.Action("MonthlyReport", "ModernWork", new { id = p.Id, year = reportY, month = reportM });
 
         if (submitted)
         {
@@ -139,7 +169,7 @@ public partial class ModernWorkService : IModernWorkService
             return;
         }
 
-        if (!windowOpen && monthly.NowDate < monthly.SubmissionWindowOpens)
+        if (updateStatus == UpdateSubmissionStatus.Upcoming)
         {
             row.LatestMonthlyDueAction = "not-due";
             row.LatestMonthlyDueUrl = null;
@@ -148,7 +178,7 @@ public partial class ModernWorkService : IModernWorkService
             return;
         }
 
-        if (!windowOpen)
+        if (!editingAllowed)
         {
             row.LatestMonthlyDueAction = "late";
             row.LatestMonthlyDueUrl = null;
@@ -158,8 +188,12 @@ public partial class ModernWorkService : IModernWorkService
         }
 
         row.LatestMonthlyDueAction = "complete";
-        row.LatestMonthlyDueUrl = url.Action("MonthlyReport", "ModernWork", new { id = p.Id, year = reportY, month = reportM });
-        row.LatestMonthlyStatusLabel = draft ? "Draft" : "Not started";
+        row.LatestMonthlyDueUrl = monthlyReportUrl;
+        row.LatestMonthlyStatusLabel = draft
+            ? "Draft"
+            : updateStatus == UpdateSubmissionStatus.Late
+                ? "Late"
+                : "Not started";
         row.LatestMonthlyActionLabel = "Complete";
     }
 
@@ -203,12 +237,9 @@ public partial class ModernWorkService : IModernWorkService
                 : (!string.IsNullOrWhiteSpace(p.PrimaryOrganizationalGroup?.Name)
                     ? p.PrimaryOrganizationalGroup!.Name.Trim()
                     : null),
-            TagNamesSummary = p.ProjectWorkItemTags == null || p.ProjectWorkItemTags.Count == 0
-                ? null
-                : string.Join(", ", p.ProjectWorkItemTags
-                    .Where(l => l.WorkItemTagLookup != null && l.WorkItemTagLookup.IsActive)
-                    .OrderBy(l => l.WorkItemTagLookup!.SortOrder).ThenBy(l => l.WorkItemTagLookup!.Name)
-                    .Select(l => l.WorkItemTagLookup!.Name))
+            TagNamesSummary = FormatThematicTagsSummary(p),
+            MissionPillarsSummary = FormatMissionPillarsSummary(p),
+            PriorityOutcomesSummary = FormatPriorityOutcomesSummary(p)
         };
 
         if (p.RagStatusLookup != null)
@@ -443,6 +474,8 @@ public partial class ModernWorkService : IModernWorkService
                 .Include(p => p.Milestones)
                 .Include(p => p.SeniorResponsibleOfficers).ThenInclude(s => s.User)
                 .Include(p => p.ProjectWorkItemTags).ThenInclude(l => l.WorkItemTagLookup)
+                .Include(p => p.ProjectMissions).ThenInclude(pm => pm.Mission)
+                .Include(p => p.ProjectObjectives).ThenInclude(po => po.Objective)
                 .Include(p => p.MonthlyUpdates).ThenInclude(mu => mu.DraftRagStatusLookup)
                 .ToListAsync(cancellationToken);
         }
@@ -453,6 +486,8 @@ public partial class ModernWorkService : IModernWorkService
                 .Include(p => p.Milestones)
                 .Include(p => p.SeniorResponsibleOfficers).ThenInclude(s => s.User)
                 .Include(p => p.ProjectWorkItemTags).ThenInclude(l => l.WorkItemTagLookup)
+                .Include(p => p.ProjectMissions).ThenInclude(pm => pm.Mission)
+                .Include(p => p.ProjectObjectives).ThenInclude(po => po.Objective)
                 .ToListAsync(cancellationToken);
         }
         else
@@ -517,7 +552,7 @@ public partial class ModernWorkService : IModernWorkService
         if (proj == null)
             return false;
 
-        if (await _permissionService.IsCentralOperationsAdminOrSuperAdminAsync(userEmail))
+        if (await _permissionService.IsOperationConsoleUserAsync(userEmail))
             return true;
 
         var emailLower = EmailLower(userEmail);
@@ -531,6 +566,15 @@ public partial class ModernWorkService : IModernWorkService
                 emailLower,
                 uid)
             .AnyAsync(cancellationToken))
+            return true;
+
+        var creatorEmail = await _db.ProjectProblemStatements.AsNoTracking()
+            .Where(ps => ps.ProjectId == projectId)
+            .OrderBy(ps => ps.CreatedAt)
+            .Select(ps => ps.CreatedByEmail)
+            .FirstOrDefaultAsync(cancellationToken);
+        if (!string.IsNullOrEmpty(creatorEmail)
+            && EmailLower(creatorEmail) == emailLower)
             return true;
 
         if (!uid.HasValue)

@@ -40,7 +40,7 @@ public static class DocsSpecificationsCatalog
                 "/modern/work/{id}",
                 "Hub for delivery metadata, strategic alignment summary, monthly updates, milestones, RAID tabs, contacts and service register links.",
                 "Project, ProjectContact, ProjectMission, ProjectObjective, monthly updates, milestones, RAID assignments, FIPS product links (when fips feature on).",
-                "Signed-in user. Mutations require CanUserEditWorkItemAsync (project contact, SRO, service owner, PMO, business-area admin/leader, directorate leader, or Central Operations Admin / super admin). RAID tabs also require FeatureCodes.Raid.",
+                "Signed-in user. Mutations require CanUserEditWorkItemAsync (project contact, creator, SRO, service owner, PMO, business-area admin/leader, directorate leader, or Admin / Central Operations Admin / super admin). RAID tabs also require FeatureCodes.Raid.",
                 "Detail is the source of truth for monthly reporting narratives, RAID context on work, and commission performance attribution.",
                 "See work-register API notes. Milestones: GET/POST /api/v1/milestones. Risks/issues on work: UI only unless assigned records exposed via Risks/Issues API."),
 

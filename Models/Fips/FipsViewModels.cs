@@ -175,8 +175,11 @@ public class FipsProductDetailViewModel
     /// <summary>True when the information tab shows the editable form (named contacts or operations console users on manage pages).</summary>
     public bool EditMode { get; set; }
 
-    /// <summary><c>information</c>, <c>history</c>, <c>risks</c>, <c>issues</c>, <c>assumptions</c>, <c>dependencies</c>, <c>accessibility</c>, <c>assurance</c>, <c>work</c>, or <c>performance</c>.</summary>
+    /// <summary><c>information</c>, <c>history</c>, <c>risks</c>, <c>issues</c>, <c>assumptions</c>, <c>dependencies</c>, <c>accessibility</c>, <c>assurance</c>, <c>work</c>, <c>strategic-alignment</c>, or <c>performance</c>.</summary>
     public string ActiveDetailTab { get; set; } = "information";
+
+    /// <summary>Strategic alignment summary for the product detail tab.</summary>
+    public FipsProductStrategicAlignmentPanel? StrategicAlignment { get; set; }
 
     /// <summary>Linked delivery work items (from <see cref="ProjectProduct"/>).</summary>
     public FipsProductWorkItemsPanelViewModel? WorkItemsPanel { get; set; }
@@ -243,6 +246,30 @@ public class FipsProductDetailViewModel
 }
 
 public sealed record FipsCategorisationSummaryLine(string GroupName, string ItemsDisplay);
+
+public sealed class FipsProductStrategicAlignmentPanel
+{
+    public List<string> PriorityOutcomeNames { get; init; } = new();
+    public List<string> MissionPillarNames { get; init; } = new();
+    public List<FipsProductStrategicAlignmentTag> Tags { get; init; } = new();
+    public List<string> GovernmentDepartmentNames { get; init; } = new();
+    public bool SubjectToSpendControl { get; init; }
+    public int? RiskAppetiteId { get; init; }
+    public string RiskAppetiteName { get; init; } = "—";
+    public List<LookupOption> RiskAppetiteOptions { get; init; } = new();
+
+    public bool HasAnyValues =>
+        PriorityOutcomeNames.Count > 0
+        || MissionPillarNames.Count > 0
+        || Tags.Count > 0
+        || GovernmentDepartmentNames.Count > 0
+        || SubjectToSpendControl
+        || RiskAppetiteId.HasValue;
+}
+
+public sealed record FipsProductStrategicAlignmentTag(int Id, string Name);
+
+public sealed record FipsProductGovernmentDepartmentRow(int Id, string Title);
 
 public sealed class FipsCategorisationGroupEditSection
 {

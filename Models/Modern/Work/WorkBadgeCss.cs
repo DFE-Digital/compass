@@ -208,6 +208,7 @@ public static class WorkBadgeCss
             "Draft" => "dfe-f-badge dfe-f-badge--orange",
             "Not due" => "dfe-f-badge dfe-f-badge--grey",
             "Not started" => "dfe-f-badge dfe-f-badge--red",
+            "Late" => "dfe-f-badge dfe-f-badge--red",
             _ => "dfe-f-badge dfe-f-badge--grey",
         };
     }

@@ -111,7 +111,7 @@ public class SasStandardAnalysisPointVm
     public int ActionsFromGreen { get; set; }
     public int ActionsFromOther { get; set; }
     public IReadOnlyList<SasRepeatedActionThemeVm> RepeatedThemes { get; set; } = Array.Empty<SasRepeatedActionThemeVm>();
-    public IReadOnlyList<SasActionSampleVm> SampleActions { get; set; } = Array.Empty<SasActionSampleVm>();
+    public IReadOnlyList<SasStandardActionDetailVm> Actions { get; set; } = Array.Empty<SasStandardActionDetailVm>();
 }
 
 public class SasRepeatedActionThemeVm
@@ -135,13 +135,16 @@ public class SasReportPanelViewModel
     public Microsoft.AspNetCore.Html.IHtmlContent? TableContent { get; set; }
 }
 
-public class SasActionSampleVm
+public class SasStandardActionDetailVm
 {
     public int AssessmentId { get; set; }
     public string AssessmentName { get; set; } = "";
     public string? Outcome { get; set; }
     public string? Status { get; set; }
-    public string CommentSnippet { get; set; } = "";
+    public string? ActionId { get; set; }
+    public int Standard { get; set; }
+    public DateTime? Created { get; set; }
+    public string Comment { get; set; } = "";
 }
 
 public class SasAssessmentsTypeGroup

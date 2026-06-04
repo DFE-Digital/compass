@@ -6519,7 +6519,17 @@ namespace Compass.Migrations
                     b.Property<bool>("IsEnterpriseService")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("IsMultiDepartmentProduct")
+                        .HasColumnType("bit");
+
+                    b.Property<bool?>("IsSubjectToSpendControl")
+                        .HasColumnType("bit");
+
                     b.Property<string>("LastCmdbSnapshotJson")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("OtherDepartments")
                         .HasMaxLength(450)
                         .HasColumnType("nvarchar(max)");
 
@@ -6529,6 +6539,9 @@ namespace Compass.Migrations
                     b.Property<string>("ProductURL")
                         .HasMaxLength(450)
                         .HasColumnType("nvarchar(450)");
+
+                    b.Property<int?>("RiskAppetiteLookupId")
+                        .HasColumnType("int");
 
                     b.Property<int>("Status")
                         .HasColumnType("int");
@@ -6558,6 +6571,8 @@ namespace Compass.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("PhaseId");
+
+                    b.HasIndex("RiskAppetiteLookupId");
 
                     b.HasIndex("Status");
 
@@ -6693,6 +6708,60 @@ namespace Compass.Migrations
                     b.ToTable("CMDBProductFipsCategorisationItems");
                 });
 
+            modelBuilder.Entity("Compass.Models.Fips.CMDBProductMission", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<Guid>("CMDBProductId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("MissionId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MissionId");
+
+                    b.HasIndex("CMDBProductId", "MissionId")
+                        .IsUnique();
+
+                    b.ToTable("CMDBProductMissions");
+                });
+
+            modelBuilder.Entity("Compass.Models.Fips.CMDBProductObjective", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<Guid>("CMDBProductId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("ObjectiveId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ObjectiveId");
+
+                    b.HasIndex("CMDBProductId", "ObjectiveId")
+                        .IsUnique();
+
+                    b.ToTable("CMDBProductObjectives");
+                });
+
             modelBuilder.Entity("Compass.Models.Fips.CMDBProductType", b =>
                 {
                     b.Property<int>("Id")
@@ -6737,6 +6806,21 @@ namespace Compass.Migrations
                     b.HasIndex("FipsUserGroupId");
 
                     b.ToTable("CMDBProductUserGroups");
+                });
+
+            modelBuilder.Entity("Compass.Models.Fips.CMDBProductWorkItemTag", b =>
+                {
+                    b.Property<Guid>("CMDBProductId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("WorkItemTagLookupId")
+                        .HasColumnType("int");
+
+                    b.HasKey("CMDBProductId", "WorkItemTagLookupId");
+
+                    b.HasIndex("WorkItemTagLookupId");
+
+                    b.ToTable("CMDBProductWorkItemTags");
                 });
 
             modelBuilder.Entity("Compass.Models.Fips.FipsBusinessArea", b =>
@@ -16537,7 +16621,14 @@ namespace Compass.Migrations
                         .HasForeignKey("PhaseId")
                         .OnDelete(DeleteBehavior.SetNull);
 
+                    b.HasOne("Compass.Models.RiskAppetiteLookup", "RiskAppetiteLookup")
+                        .WithMany()
+                        .HasForeignKey("RiskAppetiteLookupId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.Navigation("Phase");
+
+                    b.Navigation("RiskAppetiteLookup");
                 });
 
             modelBuilder.Entity("Compass.Models.Fips.CMDBProductBusinessArea", b =>
@@ -16635,6 +16726,44 @@ namespace Compass.Migrations
                     b.Navigation("FipsCategorisationItem");
                 });
 
+            modelBuilder.Entity("Compass.Models.Fips.CMDBProductMission", b =>
+                {
+                    b.HasOne("Compass.Models.Fips.CMDBProduct", "CMDBProduct")
+                        .WithMany("Missions")
+                        .HasForeignKey("CMDBProductId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Compass.Models.Mission", "Mission")
+                        .WithMany()
+                        .HasForeignKey("MissionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("CMDBProduct");
+
+                    b.Navigation("Mission");
+                });
+
+            modelBuilder.Entity("Compass.Models.Fips.CMDBProductObjective", b =>
+                {
+                    b.HasOne("Compass.Models.Fips.CMDBProduct", "CMDBProduct")
+                        .WithMany("Objectives")
+                        .HasForeignKey("CMDBProductId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Compass.Models.Objective", "Objective")
+                        .WithMany()
+                        .HasForeignKey("ObjectiveId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("CMDBProduct");
+
+                    b.Navigation("Objective");
+                });
+
             modelBuilder.Entity("Compass.Models.Fips.CMDBProductType", b =>
                 {
                     b.HasOne("Compass.Models.Fips.CMDBProduct", "CMDBProduct")
@@ -16671,6 +16800,25 @@ namespace Compass.Migrations
                     b.Navigation("CMDBProduct");
 
                     b.Navigation("FipsUserGroup");
+                });
+
+            modelBuilder.Entity("Compass.Models.Fips.CMDBProductWorkItemTag", b =>
+                {
+                    b.HasOne("Compass.Models.Fips.CMDBProduct", "CMDBProduct")
+                        .WithMany("WorkItemTags")
+                        .HasForeignKey("CMDBProductId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Compass.Models.WorkItemTagLookup", "WorkItemTagLookup")
+                        .WithMany()
+                        .HasForeignKey("WorkItemTagLookupId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("CMDBProduct");
+
+                    b.Navigation("WorkItemTagLookup");
                 });
 
             modelBuilder.Entity("Compass.Models.Fips.FipsBusinessArea", b =>
@@ -19401,9 +19549,15 @@ namespace Compass.Migrations
 
                     b.Navigation("Directorates");
 
+                    b.Navigation("Missions");
+
+                    b.Navigation("Objectives");
+
                     b.Navigation("Types");
 
                     b.Navigation("UserGroups");
+
+                    b.Navigation("WorkItemTags");
                 });
 
             modelBuilder.Entity("Compass.Models.Fips.FipsCategorisationGroup", b =>

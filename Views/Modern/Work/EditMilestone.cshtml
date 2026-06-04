@@ -1,11 +1,26 @@
 @model Compass.Models.Milestone
+@using Compass.Models
 @using Compass.Models.Modern.Work
+@using System.Globalization
 @using System.Linq
 @{
     var work = ViewBag.WorkItem as WorkItem;
+    var milestoneUpdates = ViewBag.MilestoneUpdates as List<MilestoneUpdate> ?? new List<MilestoneUpdate>();
     ViewData["Title"] = "Edit milestone";
     bool HasErr(string field) => ViewData.ModelState[field]?.Errors?.Any() == true;
     string? ErrMsg(string field) => ViewData.ModelState[field]?.Errors?.FirstOrDefault()?.ErrorMessage;
+    var statusOpts = new (string Value, string Label)[]
+    {
+      ("not_started", "Not started"),
+      ("in_progress", "In progress"),
+      ("on_track", "On track"),
+      ("at_risk", "At risk"),
+      ("delayed", "Delayed"),
+      ("complete", "Complete"),
+      ("cancelled", "Cancelled")
+    };
+    string StatusLabel(string? value) =>
+      statusOpts.FirstOrDefault(o => string.Equals(o.Value, value, StringComparison.OrdinalIgnoreCase)).Label ?? value ?? "—";
 }
 @section Breadcrumbs {
  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="/">Home</a></li>
@@ -89,18 +104,6 @@
  <p id="status-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span>@ErrMsg("status")</p>
               }
  <select class="govuk-select @(HasErr("status") ? "govuk-select--error" : "")" id="status" name="status" aria-describedby="@(HasErr("status") ? "status-error" : null)">
-                  @{
-                    var statusOpts = new (string Value, string Label)[]
-                    {
-                      ("not_started", "Not started"),
-                      ("in_progress", "In progress"),
-                      ("on_track", "On track"),
-                      ("at_risk", "At risk"),
-                      ("delayed", "Delayed"),
-                      ("complete", "Complete"),
-                      ("cancelled", "Cancelled")
-                    };
-                  }
                   @foreach (var o in statusOpts)
                   {
                     if (string.Equals(Model.Status, o.Value, StringComparison.OrdinalIgnoreCase))
@@ -120,6 +123,84 @@
  <button type="submit" class="govuk-button" data-module="govuk-button">Save changes</button>
  <a href="@Url.Action("Detail", "ModernWork", new { id = Model.ProjectId, tab = "milestones" })#wd-milestones" class="govuk-link govuk-link--no-visited-state govuk-!-margin-left-3">Cancel</a>
           </div>
+        </form>
+
+        @if (TempData["SuccessMessage"] is string successMsg && !string.IsNullOrWhiteSpace(successMsg))
+        {
+          <div class="govuk-notification-banner govuk-notification-banner--success govuk-!-margin-top-4" role="region" aria-labelledby="milestone-edit-success-title">
+            <div class="govuk-notification-banner__header">
+              <h2 class="govuk-notification-banner__title" id="milestone-edit-success-title">Success</h2>
+            </div>
+            <div class="govuk-notification-banner__content">
+              <p class="govuk-notification-banner__heading govuk-!-margin-bottom-0">@successMsg</p>
+            </div>
+          </div>
+        }
+        @if (TempData["ErrorMessage"] is string errorMsg && !string.IsNullOrWhiteSpace(errorMsg))
+        {
+          <div class="govuk-error-summary govuk-!-margin-top-4" tabindex="-1">
+            <h2 class="govuk-error-summary__title">There is a problem</h2>
+            <div class="govuk-error-summary__body">@errorMsg</div>
+          </div>
+        }
+
+        <hr class="govuk-section-break govuk-section-break--l govuk-section-break--visible govuk-!-margin-top-6 govuk-!-margin-bottom-6" />
+
+        <h2 class="govuk-heading-m govuk-!-margin-top-0 govuk-!-margin-bottom-2" id="milestone-progress-update-heading">Progress update</h2>
+        <p class="govuk-body govuk-hint govuk-!-margin-bottom-4">Record a free-text progress note for PMOs and delivery teams. This is saved separately from milestone details.</p>
+
+        @if (milestoneUpdates.Count > 0)
+        {
+          <h3 class="govuk-heading-s govuk-!-margin-bottom-2">Recent updates</h3>
+          <div class="raid-entity-comments-timeline govuk-!-margin-bottom-4" role="list" aria-label="Milestone progress history">
+            @foreach (var update in milestoneUpdates)
+            {
+              <div class="raid-entity-comments-timeline__item" role="listitem">
+                <p class="raid-entity-comments-timeline__meta govuk-body-s govuk-!-margin-bottom-1">
+                  @(update.UpdatedByName ?? update.UpdatedByEmail) · @update.UpdatedAt.ToString("d MMM yyyy HH:mm", CultureInfo.GetCultureInfo("en-GB"))
+                  @if (!string.IsNullOrWhiteSpace(update.NewStatus) && !string.Equals(update.NewStatus, update.PreviousStatus, StringComparison.OrdinalIgnoreCase))
+                  {
+                    <text> · Status: @StatusLabel(update.PreviousStatus) → @StatusLabel(update.NewStatus)</text>
+                  }
+                  @if (update.NewProgress.HasValue && update.NewProgress != update.PreviousProgress)
+                  {
+                    <text> · Progress: @(update.PreviousProgress?.ToString() ?? "—")% → @update.NewProgress%</text>
+                  }
+                </p>
+                <p class="govuk-body govuk-!-margin-bottom-0" style="white-space:pre-wrap;">@update.UpdateDetails</p>
+              </div>
+            }
+          </div>
+        }
+
+        <form asp-controller="ModernWork" asp-action="AddMilestoneUpdate" asp-route-id="@Model.ProjectId" asp-route-milestoneId="@Model.Id" method="post" novalidate aria-labelledby="milestone-progress-update-heading">
+          @Html.AntiForgeryToken()
+          <div class="govuk-form-group govuk-!-margin-bottom-4">
+            <label class="govuk-label" for="updateDetails">Update details</label>
+            <div class="govuk-hint">Required — describe progress, blockers, or next steps.</div>
+            <textarea class="govuk-textarea" id="updateDetails" name="updateDetails" rows="4" required maxlength="4000"></textarea>
+          </div>
+          <div class="govuk-grid-row">
+            <div class="govuk-grid-column-one-half">
+              <div class="govuk-form-group govuk-!-margin-bottom-4">
+                <label class="govuk-label" for="newStatus">New status (optional)</label>
+                <select class="govuk-select" id="newStatus" name="newStatus">
+                  <option value="">Keep current (@StatusLabel(Model.Status))</option>
+                  @foreach (var o in statusOpts)
+                  {
+                    <option value="@o.Value">@o.Label</option>
+                  }
+                </select>
+              </div>
+            </div>
+            <div class="govuk-grid-column-one-half">
+              <div class="govuk-form-group govuk-!-margin-bottom-4">
+                <label class="govuk-label" for="newProgress">New progress % (optional)</label>
+                <input class="govuk-input govuk-input--width-4" id="newProgress" name="newProgress" type="number" min="0" max="100" value="@Model.ProgressPercent" />
+              </div>
+            </div>
+          </div>
+          <button type="submit" class="govuk-button" data-module="govuk-button">Add progress update</button>
         </form>
 
  <hr class="govuk-section-break govuk-section-break--l govuk-section-break--visible govuk-!-margin-top-6 govuk-!-margin-bottom-6" />

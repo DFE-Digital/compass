@@ -22,14 +22,43 @@
 
   var fipsServiceRegisterEnabled = ViewBag.FipsServiceRegisterEnabled as bool? == true;
   var dashboardServiceRegisterByCmdbKey = ViewBag.DashboardServiceRegisterProductIdByCmdbKey as IReadOnlyDictionary<string, Guid>;
+  var today = DateTime.Today;
+  var openPerformanceReturns = Model.ProductsNeedingCommissionReporting.ToList();
+
+  var performanceCommissionsHref = Url.Action("Index", "ModernPerformance") ?? "/modern/performance/commissions";
 
   string PerformanceReportingUrl(ProductDto pr)
   {
     var needle = (pr.DocumentId ?? pr.FipsId)?.Trim();
-    if (string.IsNullOrEmpty(needle))
-      return Url.Action("PerformanceMetrics", "ProductReporting", new { view = "mine" }) ?? "#";
-    return Url.Action("PerformanceMetrics", "ProductReporting", new { view = "mine", search = needle }) ?? "#";
+    var openReturn = Model.ProductsNeedingCommissionReporting
+        .FirstOrDefault(r => string.Equals(r.Product.DocumentId ?? r.Product.FipsId, needle, StringComparison.OrdinalIgnoreCase));
+    if (openReturn.Product != null && !string.IsNullOrEmpty(needle))
+    {
+      return Url.Action("Commission", "ModernPerformance", new
+      {
+        commissionId = openReturn.Commission.Id,
+        search = needle
+      }) ?? performanceCommissionsHref;
+    }
+    return performanceCommissionsHref;
   }
+
+  string CommissionProductHref(ProductDto product, Commission commission)
+  {
+    var needle = (product.DocumentId ?? product.FipsId)?.Trim();
+    return Url.Action("Commission", "ModernPerformance", new
+    {
+      commissionId = commission.Id,
+      search = needle
+    }) ?? performanceCommissionsHref;
+  }
+
+  string CommissionStatusLabel(CommissionSubmissionStatus status, DateTime dueDate) =>
+      status == CommissionSubmissionStatus.Late || (status != CommissionSubmissionStatus.Submitted && dueDate.Date < today)
+          ? "Late"
+          : status == CommissionSubmissionStatus.InProgress
+              ? "In progress"
+              : "Due";
 
   string? ServiceRegisterProductUrl(ProductDto pr)
   {
@@ -103,7 +132,6 @@
     Url.Action("FipsProduct", "ModernManage", new { id = productId }) ?? "#";
 
   var workDashboardHref = Url.Action("Dashboard", "ModernWork") ?? "/modern/work/dashboard";
-  var today = DateTime.Today;
 
   var milestoneTasks = new List<(string Title, string Hint, string Href, string StatusTag, int? CompletionPercent)>();
 
@@ -157,27 +185,6 @@
         issueLate ? "Late" : "Due",
         null));
     }
-  }
-
-  foreach (var (product, retStatus, due) in Model.ProductsNeedingReturns.Take(8))
-  {
-    otherTasks.Add((
-      product.Title,
-      "Performance return",
-      ProductRegisterOrPerformanceHref(product),
-      retStatus == ReturnStatus.Late ? "Late" : "Due",
-      null));
-  }
-
-  foreach (var (product, commission, subStatus, due) in Model.ProductsNeedingCommissionReporting.Take(8))
-  {
-    var commissionLate = due.Date < today;
-    otherTasks.Add((
-      product.Title,
-      $"{commission.Name} · {subStatus}",
-      Url.Action("Commission", "ModernPerformance", new { commissionId = commission.Id }) ?? "#",
-      commissionLate ? "Late" : "Due",
-      null));
   }
 
   foreach (var a in Model.AssignedActions.Take(15))
@@ -387,6 +394,61 @@
     {
       <p class="govuk-body govuk-!-margin-top-3 govuk-!-margin-bottom-0">
         <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("AllWork", "ModernWork")">View more</a>
+      </p>
+    }
+  </section>
+}
+
+@if (openPerformanceReturns.Any())
+{
+  <section class="modern-dashboard__section" aria-labelledby="dashboard-performance-heading">
+    <h2 id="dashboard-performance-heading" class="govuk-heading-m govuk-!-margin-top-0 modern-dashboard__section-heading">Performance returns</h2>
+    <p class="govuk-body modern-dashboard__section-desc">Open commission periods that still need a product return from you.</p>
+    <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+      <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+      <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed modern-dashboard__table">
+        <caption class="govuk-table__caption govuk-table__caption--m govuk-visually-hidden">Performance returns due</caption>
+        <thead class="govuk-table__head">
+          <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+              <button type="button" class="dfe-f-table-sort-button">Product</button>
+            </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+              <button type="button" class="dfe-f-table-sort-button">Commission</button>
+            </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+              <button type="button" class="dfe-f-table-sort-button">Status</button>
+            </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+              <button type="button" class="dfe-f-table-sort-button">Due</button>
+            </th>
+          </tr>
+        </thead>
+        <tbody class="govuk-table__body">
+          @foreach (var item in openPerformanceReturns.Take(12))
+          {
+            var statusLabel = CommissionStatusLabel(item.Status, item.DueDate);
+            var statusBadgeClass = statusLabel == "Late"
+              ? "dfe-f-badge dfe-f-badge--small dfe-f-badge--red"
+              : statusLabel == "In progress"
+                ? "dfe-f-badge dfe-f-badge--small dfe-f-badge--orange"
+                : "dfe-f-badge dfe-f-badge--small dfe-f-badge--blue";
+            <tr class="govuk-table__row">
+              <td class="govuk-table__cell">
+                <a class="govuk-link govuk-link--no-visited-state govuk-!-font-weight-bold" href="@CommissionProductHref(item.Product, item.Commission)">@Trunc(item.Product.Title, 80)</a>
+              </td>
+              <td class="govuk-table__cell">@Trunc(item.Commission.Name, 60)</td>
+              <td class="govuk-table__cell"><span class="@statusBadgeClass">@statusLabel</span></td>
+              <td class="govuk-table__cell">@item.DueDate.ToString("d MMM yyyy", CultureInfo.GetCultureInfo("en-GB"))</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+    @if (openPerformanceReturns.Count > 12)
+    {
+      <p class="govuk-body govuk-!-margin-top-3 govuk-!-margin-bottom-0">
+        <a class="govuk-link govuk-link--no-visited-state" href="@performanceCommissionsHref">View all commissions</a>
       </p>
     }
   </section>

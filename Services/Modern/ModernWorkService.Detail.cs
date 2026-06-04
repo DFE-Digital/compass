@@ -362,22 +362,7 @@ public partial class ModernWorkService
             });
         }
 
-        var assignedCanEdit = await WhereAssignedToUser(
-                _db.Projects.Where(proj => proj.Id == projectId && !proj.IsDeleted),
-                emailLower,
-                currentUser.Id)
-            .AnyAsync(cancellationToken);
-        var opsFullAccess = await _permissionService.IsCentralOperationsAdminOrSuperAdminAsync(userEmail);
-        var baIds = BusinessAreaAdminHelper.GetBusinessAreaLookupIdsForProject(p);
-        var baAdmin = baIds.Count > 0
-                      && (await _businessAreaAdmins.IsUserAdminForAnyBusinessAreaAsync(
-                              currentUser.Id, baIds, cancellationToken)
-                          || await _businessAreaLeadership.IsUserLeaderForAnyBusinessAreaAsync(
-                              currentUser.Id, baIds, cancellationToken));
-        var divIds = p.Directorates?.Select(d => d.DivisionId).ToList() ?? new List<int>();
-        var dirLeader = await _directorateLeadership.IsUserDirectorateLeaderForProjectContextAsync(
-            currentUser.Id, divIds, baIds, cancellationToken);
-        var canEdit = assignedCanEdit || opsFullAccess || baAdmin || dirLeader;
+        var canEdit = await CanUserEditWorkItemAsync(projectId, userEmail, cancellationToken);
 
         var isWatching = await _db.ProjectWatchlists.AsNoTracking()
             .AnyAsync(w => w.UserId == currentUser.Id && w.ProjectId == projectId, cancellationToken);
@@ -485,10 +470,14 @@ public partial class ModernWorkService
 
             var hasUpdate = updatesByYearMonth[(y, m)].Any();
             var isCurrentOrFuture = dt >= currentMonth;
-            if (!hasUpdate && !isCurrentOrFuture)
-                continue;
-
             var explicitPeriod = _monthlyUpdateService.TryGetActiveExplicitReportingPeriod(y, m);
+            if (!hasUpdate && !isCurrentOrFuture)
+            {
+                var graceEditingAllowed = explicitPeriod != null
+                    && _monthlyUpdateService.IsMonthlyReportEditingAllowed(y, m);
+                if (!graceEditingAllowed)
+                    continue;
+            }
             var muForPeriod = updatesByYearMonth[(y, m)].FirstOrDefault();
             var rollup = _monthlyUpdateService.CalculateUpdateStatus(y, m, muForPeriod?.SubmittedAt);
             reportingPeriods.Add(new ReportingCyclePeriod
@@ -534,6 +523,7 @@ public partial class ModernWorkService
             "strategicalignment" => "strategicalignment",
             "dependencies" => "dependencies",
             "assumptions" => "assumptions",
+            "history" => "history",
             "links" => "dependencies",
             _ => "overview"
         };

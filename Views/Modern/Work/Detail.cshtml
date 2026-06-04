@@ -562,8 +562,10 @@
               var isDraft = submittedUpdate != null && !submittedUpdate.SubmittedAt.HasValue;
               var isSubmitted = submittedUpdate != null && submittedUpdate.SubmittedAt.HasValue;
               var isUpcoming = submittedUpdate == null;
-              var canSubmit = isUpcoming && string.Equals(period.UpdateStatus, "Due", System.StringComparison.OrdinalIgnoreCase) && period.WindowAllowsEditing;
+              var canSubmit = isUpcoming && period.WindowAllowsEditing
+                  && !string.Equals(period.UpdateStatus, "Upcoming", System.StringComparison.OrdinalIgnoreCase);
               var canContinueDraft = isDraft && period.WindowAllowsEditing;
+              var isLate = string.Equals(period.UpdateStatus, "Late", System.StringComparison.OrdinalIgnoreCase);
               var effectiveRagId = submittedUpdate != null ? (submittedUpdate.RagStatusId ?? (fallbackRagByUpdateId.TryGetValue(submittedUpdate.Id, out var fid) ? fid : (int?)null)) : null;
               var uRagName = MonthlyUpdateRagLabel(submittedUpdate, effectiveRagId, ragStatusesDict);
               var uRagCss = submittedUpdate?.RagCssClass
@@ -574,7 +576,7 @@
               <tr class="govuk-table__row" style="cursor:default;">
  <td class="govuk-table__cell">@if (isSubmitted) { <a href="@Url.Action("ViewMonthlyUpdate", "ModernWork", new { id = Model.Id, updateId = submittedUpdate!.Id })" class="govuk-link govuk-link--no-visited-state govuk-!-font-weight-bold">@period.PeriodLabel</a> } else if (canContinueDraft) { <a href="@Url.Action("MonthlyReport", "ModernWork", new { id = Model.Id, year = submittedUpdate!.ReportMonth.Year, month = submittedUpdate.ReportMonth.Month })" class="govuk-link govuk-link--no-visited-state govuk-!-font-weight-bold">@period.PeriodLabel</a> } else if (canSubmit) { <a href="@Url.Action("AddMonthlyUpdate", "ModernWork", new { id = Model.Id, periodKey = period.PeriodKey })" class="govuk-link govuk-link--no-visited-state govuk-!-font-weight-bold">@period.PeriodLabel</a> } else { @period.PeriodLabel }</td>
                 <td class="govuk-table__cell">@(period.SubmissionCloses?.ToString("d MMM yyyy") ?? period.DueDate.ToString("d MMM yyyy"))</td>
- <td class="govuk-table__cell">@if (isSubmitted) { <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--green">Submitted</span> } else if (isDraft && canContinueDraft) { <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--blue">Continue return</span> } else if (isDraft && !canContinueDraft) { <span class="govuk-hint govuk-!-margin-bottom-0">Outside submission window</span> } else if (canSubmit) { <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--red">Not submitted</span> } else { <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--grey">@period.UpdateStatus</span> }</td>
+ <td class="govuk-table__cell">@if (isSubmitted) { <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--green">Submitted</span> } else if (isDraft && canContinueDraft) { <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--blue">Continue return</span> } else if (isDraft && !canContinueDraft) { <span class="govuk-hint govuk-!-margin-bottom-0">Outside submission window</span> } else if (canSubmit) { <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--red">@(isLate ? "Late" : "Not submitted")</span> } else if (isLate) { <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--red">Late</span> } else { <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--grey">@period.UpdateStatus</span> }</td>
  <td class="govuk-table__cell">@if (isSubmitted) { <span class="@WorkBadgeCss.RagCompactBadgeClass(uRagName == "—" ? null : uRagName)">@(string.IsNullOrEmpty(uRagName) || uRagName == "—" ? "—" : uRagName.ToUpperInvariant())</span> } else if (isDraft && !string.IsNullOrWhiteSpace(uRagName) && uRagName != "—") { <span class="@WorkBadgeCss.RagCompactBadgeClass(uRagName)">@uRagName.ToUpperInvariant()</span> } else { <text>—</text> }</td>
                 <td class="govuk-table__cell">@(submittedUpdate?.SubmittedAt?.ToString("d MMM yyyy") ?? "—")</td>
                 <td class="govuk-table__cell">@submittedByDisplay</td>
@@ -1104,6 +1106,48 @@
       }
  <p class="govuk-body-s govuk-!-margin-top-2 govuk-!-margin-bottom-0"><a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("Assumptions", "ModernRaid")">View assumptions register</a></p>
  </div>
+
+  @if (ViewBag.ShowWorkHistoryNav as bool? == true)
+  {
+    var historyEntries = ViewBag.WorkHistoryTimeline as IReadOnlyList<LifecycleAuditEntry>
+        ?? Array.Empty<LifecycleAuditEntry>();
+    <div id="wd-history" class="tab-pane">
+      <h2 class="govuk-heading-m govuk-!-margin-top-0">History</h2>
+      <p class="govuk-body govuk-!-margin-bottom-4">Audit trail for this work item and related records. Visible to Central Operations Admin and Super admin users only.</p>
+      @if (historyEntries.Count == 0)
+      {
+        <p class="govuk-body govuk-!-margin-bottom-0">No history recorded yet.</p>
+      }
+      else
+      {
+        <div class="dfe-f-table-wrapper govuk-!-margin-bottom-0" data-module="dfe-f-table">
+          <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed">
+            <caption class="govuk-table__caption govuk-table__caption--m govuk-visually-hidden">Work item history</caption>
+            <thead class="govuk-table__head">
+              <tr class="govuk-table__row">
+                <th scope="col" class="govuk-table__header">Action</th>
+                <th scope="col" class="govuk-table__header">Date</th>
+                <th scope="col" class="govuk-table__header">Who</th>
+              </tr>
+            </thead>
+            <tbody class="govuk-table__body">
+              @foreach (var row in historyEntries)
+              {
+                var whenIso = row.When.ToString("yyyy-MM-ddTHH:mm:ss");
+                <tr class="govuk-table__row">
+                  <td class="govuk-table__cell">@row.Event</td>
+                  <td class="govuk-table__cell">
+                    <time datetime="@whenIso">@row.When.ToString("d MMM yyyy HH:mm")</time>
+                  </td>
+                  <td class="govuk-table__cell">@row.Who</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </div>
+  }
 
 </div>
 </div>

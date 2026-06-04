@@ -1204,6 +1204,7 @@ public partial class ModernRaidController
         risk.ToleranceImpactLevelId = form.ToleranceImpactLevelId;
         risk.ToleranceScore = toleranceScore;
         risk.OwnerUserId = form.OwnerUserId > 0 ? form.OwnerUserId : null;
+        risk.SroUserId = form.SroUserId > 0 ? form.SroUserId : null;
         risk.ImpactRating = impactRating;
         risk.LikelihoodRating = likelihoodRating;
         risk.RiskScore = riskScore;
@@ -1211,7 +1212,6 @@ public partial class ModernRaidController
         risk.Status = TruncateLowerRaid(riskStatusRow?.Label ?? risk.Status, 20);
         risk.Response = riskTreatment != null ? TruncateRaid(riskTreatment.Label, 20) : null;
         risk.ResponseStrategy = RaidFieldLimits.NormalizeNarrative(form.ResponseStrategy);
-        risk.Notes = RaidFieldLimits.NormalizeNarrative(form.ResponseStrategy);
         risk.IdentifiedDate = identifiedVal;
         risk.NextReviewDate = nextReviewDt;
         risk.UpdatedAt = DateTime.UtcNow;

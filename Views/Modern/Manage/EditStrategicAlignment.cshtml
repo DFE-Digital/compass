@@ -1,0 +1,173 @@
+@model FipsProductDetailViewModel
+@using Compass.Models.Modern.Work
+@using Compass.ViewModels.Modern
+@using System.Linq
+@{
+  var p = Model.Product;
+  var sa = Model.StrategicAlignment;
+  var priorityOutcomes = (List<WorkLookupOption>)ViewBag.PriorityOutcomes ?? new List<WorkLookupOption>();
+  var missionPillars = (List<WorkLookupOption>)ViewBag.MissionPillars ?? new List<WorkLookupOption>();
+  var riskAppetiteOptions = (List<LookupOption>)ViewBag.RiskAppetiteOptions ?? new List<LookupOption>();
+  var workTagOptions = (List<LookupOption>)ViewBag.WorkTagOptions ?? new List<LookupOption>();
+  var selectedWorkTagIds = (int[])ViewBag.SelectedWorkTagIds ?? Array.Empty<int>();
+  var selectedPo = (int[])ViewBag.SelectedPriorityOutcomeIds ?? Array.Empty<int>();
+  var selectedMp = (int[])ViewBag.SelectedMissionPillarIds ?? Array.Empty<int>();
+  var selectedPoSet = selectedPo.ToHashSet();
+  var selectedMpSet = selectedMp.ToHashSet();
+  var cancelUrl = Url.Action("FipsProduct", "ModernManage", new { id = p.Id, tab = "strategic-alignment" }) ?? "#";
+  ViewData["Title"] = "Edit strategic alignment — " + p.Title;
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("FipsDashboard", "ModernManage")">Service register</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("FipsProduct", "ModernManage", new { id = p.Id })">@p.Title</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">Edit strategic alignment</li>
+}
+
+@await Html.PartialAsync("~/Views/Modern/Manage/_FipsProductMasthead.cshtml", Model)
+
+<div class="fips-product-detail">
+  <div class="govuk-grid-row fips-product-detail-layout govuk-!-margin-top-2">
+    <div class="govuk-grid-column-one-quarter-from-desktop fips-product-detail-layout__nav">
+      <div class="dfe-f-u-sticky govuk-!-margin-bottom-4 fips-product-detail-layout__nav-inner" style="--dfe-f-sticky-top: 1rem;">
+        @await Html.PartialAsync("~/Views/Modern/Manage/_FipsProductSideNav.cshtml", Model)
+      </div>
+    </div>
+    <div class="govuk-grid-column-three-quarters-from-desktop">
+      @{
+        var lede = await Html.PartialAsync("_GovukBodyParagraph", "Update strategic alignment and governance flags for this service register entry.");
+      }
+      @await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+        Caption = "Service register",
+        Title = "Edit strategic alignment",
+        HeadingTag = "h2",
+        HeadingClass = "govuk-heading-l",
+        Lede = lede
+      })
+
+      <div class="dfe-c-card dfe-c-card--plain">
+        <form asp-controller="ModernManage" asp-action="FipsProductEditStrategicAlignment" asp-route-id="@p.Id" method="post" class="dfe-c-mb-0" novalidate>
+          @Html.AntiForgeryToken()
+
+          <fieldset id="edit-priority-outcomes" class="govuk-fieldset govuk-!-margin-bottom-6">
+            <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Priority outcomes</legend>
+            <div class="govuk-hint govuk-!-margin-bottom-3">Select all priority outcomes this service contributes to.</div>
+            <div class="govuk-checkboxes" data-module="govuk-checkboxes">
+              @foreach (var po in priorityOutcomes)
+              {
+                <div class="govuk-checkboxes__item">
+                  <input class="govuk-checkboxes__input" id="po_@po.Id" name="priorityOutcomeIds" type="checkbox" value="@po.Id" @(selectedPoSet.Contains(po.Id) ? "checked" : "") />
+                  <label class="govuk-label govuk-checkboxes__label" for="po_@po.Id">@po.Name</label>
+                </div>
+              }
+            </div>
+            @if (!priorityOutcomes.Any())
+            {
+              <p class="govuk-body govuk-!-margin-bottom-0">No priority outcomes configured. Ask an administrator to add them.</p>
+            }
+          </fieldset>
+
+          <fieldset id="edit-mission-pillars" class="govuk-fieldset govuk-!-margin-bottom-6">
+            <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Mission pillars</legend>
+            <div class="govuk-hint govuk-!-margin-bottom-3">Select the mission pillars this service aligns to.</div>
+            <div class="govuk-checkboxes" data-module="govuk-checkboxes">
+              @foreach (var mp in missionPillars)
+              {
+                <div class="govuk-checkboxes__item">
+                  <input class="govuk-checkboxes__input" id="mp_@mp.Id" name="missionPillarIds" type="checkbox" value="@mp.Id" @(selectedMpSet.Contains(mp.Id) ? "checked" : "") />
+                  <label class="govuk-label govuk-checkboxes__label" for="mp_@mp.Id">@mp.Name</label>
+                </div>
+              }
+            </div>
+            @if (!missionPillars.Any())
+            {
+              <p class="govuk-body govuk-!-margin-bottom-0">No mission pillars configured. Ask an administrator to add them.</p>
+            }
+          </fieldset>
+
+          <fieldset id="edit-flagship" class="govuk-fieldset govuk-!-margin-bottom-6">
+            <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Thematic tags</legend>
+            <div class="govuk-hint govuk-!-margin-bottom-3" id="wt-hint">Select all that apply.</div>
+            @if (workTagOptions.Count == 0)
+            {
+              <p class="govuk-body govuk-!-margin-bottom-0">No thematic tags configured.</p>
+            }
+            else
+            {
+              <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes" aria-describedby="wt-hint">
+                @foreach (var wt in workTagOptions)
+                {
+                  var wtChecked = selectedWorkTagIds.Contains(wt.Id);
+                  var wtHintId = $"wt-{wt.Id}-hint";
+                  <div class="govuk-checkboxes__item">
+                    <input class="govuk-checkboxes__input" type="checkbox" name="workTagIds" value="@wt.Id" id="wt-@wt.Id" checked="@wtChecked" @if (!string.IsNullOrWhiteSpace(wt.Value)) { <text>aria-describedby="@wtHintId"</text> } />
+                    <label class="govuk-label govuk-checkboxes__label" for="wt-@wt.Id">@wt.Name</label>
+                    @if (!string.IsNullOrWhiteSpace(wt.Value))
+                    {
+                      <div id="@wtHintId" class="govuk-hint govuk-checkboxes__hint">@wt.Value</div>
+                    }
+                  </div>
+                }
+              </div>
+            }
+          </fieldset>
+
+          <fieldset class="govuk-fieldset govuk-!-margin-bottom-6">
+            <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Governance flags</legend>
+            <div id="edit-spend-control" class="govuk-form-group govuk-!-margin-bottom-0">
+              <fieldset class="govuk-fieldset">
+                <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Subject to spend control?</legend>
+                <div class="govuk-radios govuk-radios--inline" data-module="govuk-radios">
+                  <div class="govuk-radios__item">
+                    <input class="govuk-radios__input" type="radio" name="subjectToSpendControl" id="edit-ssc-yes" value="true" @(p.IsSubjectToSpendControl == true ? "checked" : null) />
+                    <label class="govuk-label govuk-radios__label" for="edit-ssc-yes">Yes</label>
+                  </div>
+                  <div class="govuk-radios__item">
+                    <input class="govuk-radios__input" type="radio" name="subjectToSpendControl" id="edit-ssc-no" value="false" @(p.IsSubjectToSpendControl != true ? "checked" : null) />
+                    <label class="govuk-label govuk-radios__label" for="edit-ssc-no">No</label>
+                  </div>
+                </div>
+              </fieldset>
+            </div>
+          </fieldset>
+
+          <div id="edit-risk-appetite" class="govuk-form-group govuk-!-margin-top-6 govuk-!-margin-bottom-6">
+            <fieldset class="govuk-fieldset">
+              <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Risk appetite</legend>
+              <div class="govuk-hint govuk-!-margin-bottom-3" id="risk-app-hint">The level of risk tolerance for this service.</div>
+              <div class="govuk-radios" data-module="govuk-radios" aria-describedby="risk-app-hint">
+                <div class="govuk-radios__item">
+                  <input class="govuk-radios__input" type="radio" name="riskAppetiteId" id="risk-appetite-none" value="" @(!p.RiskAppetiteLookupId.HasValue ? "checked" : "") />
+                  <label class="govuk-label govuk-radios__label" for="risk-appetite-none">Not set</label>
+                </div>
+                @foreach (var opt in riskAppetiteOptions)
+                {
+                  var raHintId = $"risk-appetite-{opt.Id}-hint";
+                  var raChecked = p.RiskAppetiteLookupId == opt.Id;
+                  <div class="govuk-radios__item">
+                    <input class="govuk-radios__input" type="radio" name="riskAppetiteId" id="risk-appetite-@opt.Id" value="@opt.Id" @(raChecked ? "checked" : null) @if (!string.IsNullOrWhiteSpace(opt.Value)) { <text>aria-describedby="@raHintId"</text> } />
+                    <label class="govuk-label govuk-radios__label" for="risk-appetite-@opt.Id">@opt.Name</label>
+                    @if (!string.IsNullOrWhiteSpace(opt.Value))
+                    {
+                      <div id="@raHintId" class="govuk-hint govuk-radios__hint">@opt.Value</div>
+                    }
+                  </div>
+                }
+              </div>
+              @if (!riskAppetiteOptions.Any())
+              {
+                <p class="govuk-body govuk-!-margin-bottom-0">No risk appetite options configured. Ask an administrator to add them.</p>
+              }
+            </fieldset>
+          </div>
+
+          <div class="govuk-button-group govuk-!-margin-top-6 govuk-!-margin-bottom-0">
+            <button type="submit" class="govuk-button" data-module="govuk-button">Save changes</button>
+            <a href="@cancelUrl" class="govuk-link govuk-link--no-visited-state govuk-!-margin-left-3">Cancel</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
