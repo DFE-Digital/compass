@@ -107,4 +107,11 @@ public static class DdtStandardsListingHelper
         var standard = list.FirstOrDefault(s => s.Id == standardId);
         return standard is { Stage: "Draft" } ? standardId : null;
     }
+
+    /// <summary>Withdrawn standards — unpublished by publishers or legacy archived rows.</summary>
+    public static bool IsWithdrawn(DdtStandard standard) =>
+        standard.Stage is "Unpublished" or "Archived";
+
+    public static IEnumerable<DdtStandard> WithdrawnOnly(IEnumerable<DdtStandard> standards) =>
+        standards.Where(IsWithdrawn);
 }

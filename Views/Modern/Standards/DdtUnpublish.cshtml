@@ -1,0 +1,110 @@
+@model Compass.Models.DdtStandard
+@using Compass.ViewModels.Modern
+@{
+  ViewData["Title"] = "Unpublish standard";
+  var returnUrl = ViewContext.HttpContext.Request.Query["returnUrl"].ToString();
+  if (string.IsNullOrWhiteSpace(returnUrl))
+  {
+    returnUrl = Url.Action("DdtDetail", "ModernStandards", new { id = Model.Id }) ?? "";
+  }
+  var displayVersion = !string.IsNullOrWhiteSpace(Model.PreviousVersion) && Model.Stage == "Draft"
+    ? Model.PreviousVersion
+    : Model.Version;
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernStandards")">Standards</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("DdtStandards", "ModernStandards")">DDT standards register</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("DdtDetail", "ModernStandards", new { id = Model.Id })">@Model.Title</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">Unpublish</li>
+}
+
+@await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+  BackLinkHref = returnUrl,
+  BackLinkText = "Back",
+  Caption = "Standards",
+  Title = "Unpublish standard",
+  Lede = await Html.PartialAsync("_GovukBodyParagraph", "Withdraw this standard from the published register. This action is recorded in the audit log.")
+})
+
+@if (TempData["ErrorMessage"] != null)
+{
+  <div class="govuk-error-summary govuk-!-margin-bottom-4" role="alert">
+    <h2 class="govuk-error-summary__title">There is a problem</h2>
+    <div class="govuk-error-summary__body"><p>@TempData["ErrorMessage"]</p></div>
+  </div>
+}
+
+<div class="govuk-grid-row">
+  <div class="govuk-grid-column-two-thirds">
+    <dl class="govuk-summary-list govuk-!-margin-bottom-6">
+      <div class="govuk-summary-list__row">
+        <dt class="govuk-summary-list__key">Title</dt>
+        <dd class="govuk-summary-list__value">@Model.Title</dd>
+      </div>
+      <div class="govuk-summary-list__row">
+        <dt class="govuk-summary-list__key">Version</dt>
+        <dd class="govuk-summary-list__value">@displayVersion</dd>
+      </div>
+      <div class="govuk-summary-list__row">
+        <dt class="govuk-summary-list__key">Reference</dt>
+        <dd class="govuk-summary-list__value">DDT-@Model.Id</dd>
+      </div>
+    </dl>
+
+    <div class="govuk-warning-text govuk-!-margin-bottom-6">
+      <span class="govuk-warning-text__icon" aria-hidden="true">!</span>
+      <strong class="govuk-warning-text__text">
+        <span class="govuk-visually-hidden">Warning</span>
+        Unpublishing removes this standard from the published register. It will no longer be visible to users browsing published standards.
+      </strong>
+    </div>
+
+    <form method="post" action="@Url.Action("DdtUnpublishPost", "ModernStandards", new { id = Model.Id })">
+      @Html.AntiForgeryToken()
+      <input type="hidden" name="returnUrl" value="@returnUrl" />
+      <div class="govuk-form-group">
+        <label class="govuk-label" for="unpublish-reason">Reason for unpublishing</label>
+        <div class="govuk-hint">This will be recorded in the audit log.</div>
+        <textarea class="govuk-textarea" id="unpublish-reason" name="reason" rows="5" required maxlength="2000"></textarea>
+      </div>
+      <div class="govuk-button-group">
+        <button type="submit" class="govuk-button govuk-button--warning"
+                data-confirm-title="Unpublish this standard?"
+                data-confirm-message="This will withdraw the standard from the published register.">
+          Unpublish standard
+        </button>
+        <a class="govuk-link" href="@returnUrl">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+@section Scripts {
+  <script nonce="@(Context.Items["Nonce"]?.ToString() ?? "")">
+  (function () {
+    var form = document.querySelector('form[action*="unpublish"]');
+    if (!form || typeof window.showConfirmModal !== 'function') return;
+    var allowSubmit = false;
+    form.addEventListener('submit', function (e) {
+      if (allowSubmit) return;
+      var btn = e.submitter;
+      if (!btn || !btn.hasAttribute('data-confirm-title')) return;
+      e.preventDefault();
+      window.showConfirmModal(
+        btn.getAttribute('data-confirm-title') || 'Unpublish this standard?',
+        btn.getAttribute('data-confirm-message') || 'Are you sure?',
+        function () {
+          allowSubmit = true;
+          if (typeof form.requestSubmit === 'function') {
+            form.requestSubmit(btn);
+          } else {
+            form.submit();
+          }
+        }
+      );
+    });
+  })();
+  </script>
+}
