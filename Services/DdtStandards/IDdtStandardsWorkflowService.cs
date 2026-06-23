@@ -25,6 +25,8 @@ public interface IDdtStandardsWorkflowService
 
     Task<WorkflowOperationResult> PublishAsync(int id, ClaimsPrincipal user, CancellationToken ct = default);
 
+    Task<WorkflowOperationResult> UnpublishAsync(int id, string reason, ClaimsPrincipal user, CancellationToken ct = default);
+
     Task<WorkflowOperationResult> DeleteDraftAsync(int id, ClaimsPrincipal user, CancellationToken ct = default);
 }
 

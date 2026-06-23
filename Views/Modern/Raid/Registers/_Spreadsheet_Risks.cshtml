@@ -1,10 +1,18 @@
 @model Compass.ViewModels.Modern.RaidRegisterDetailViewModel
+@using Compass.Models
 @using Compass.Models.Modern.Work
+@{
+  var canManageRisks = Model.CurrentUserRole == RaidRegisterRole.Owner || Model.CurrentUserRole == RaidRegisterRole.Manager;
+}
 
 <div class="raid-spreadsheet-toolbar govuk-!-margin-bottom-3">
-  <div class="raid-ss-toolbar-actions">
-    <button type="button" class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0" data-module="govuk-button" id="btn-add-risk-top" data-entity-type="risk">+ Add risk</button>
-  </div>
+  @if (canManageRisks)
+  {
+    <div class="raid-ss-toolbar-actions">
+      <button type="button" class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0" data-module="govuk-button" id="btn-add-risk-top" data-entity-type="risk">+ Add new risk</button>
+      <button type="button" class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0" data-module="govuk-button" id="btn-link-risk-top">+ Link existing risk</button>
+    </div>
+  }
   <div class="raid-ss-toolbar-actions">
     @await Html.PartialAsync("~/Views/Modern/Raid/Registers/_Spreadsheet_ToolbarIcons.cshtml", Model.Id)
     <button type="button" class="govuk-button govuk-!-margin-bottom-0 raid-ss-fullscreen-btn" data-module="govuk-button">
@@ -110,10 +118,14 @@
               (risk.Id, risk.Reference, risk.LastCommentUpdateText, risk.LastCommentUpdateKind, risk.LastCommentUpdateAt, risk.CommentCount))
 
             @* ── Inherent rating ── *@
-            <td class="govuk-table__cell raid-ss-editable raid-ss-group-start" data-field="originalImpactId" data-type="select" data-lookup="riskImpactLevels" data-current="@risk.OriginalImpactId">
+            @{
+              var inherentImpactLocked = risk.OriginalImpactId.HasValue && !Model.CanEditLockedInherentRatings;
+              var inherentLikelihoodLocked = risk.OriginalLikelihoodId.HasValue && !Model.CanEditLockedInherentRatings;
+            }
+            <td class="govuk-table__cell@(inherentImpactLocked ? "" : " raid-ss-editable") raid-ss-group-start" data-field="originalImpactId" data-type="select" data-lookup="riskImpactLevels" data-current="@risk.OriginalImpactId"@(inherentImpactLocked ? " data-inherent-locked=\"true\"" : "")>
               <span class="raid-ss-val">@(risk.OriginalImpact ?? "—")</span>
             </td>
-            <td class="govuk-table__cell raid-ss-editable" data-field="originalLikelihoodId" data-type="select" data-lookup="riskLikelihoods" data-current="@risk.OriginalLikelihoodId">
+            <td class="govuk-table__cell@(inherentLikelihoodLocked ? "" : " raid-ss-editable")" data-field="originalLikelihoodId" data-type="select" data-lookup="riskLikelihoods" data-current="@risk.OriginalLikelihoodId"@(inherentLikelihoodLocked ? " data-inherent-locked=\"true\"" : "")>
               <span class="raid-ss-val">@(risk.OriginalLikelihood ?? "—")</span>
             </td>
             <td class="govuk-table__cell govuk-table__cell--numeric raid-ss-score raid-ss-group-end" data-score-field="inherentScore">

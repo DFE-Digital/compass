@@ -142,6 +142,9 @@ public class RaidRegisterDetailViewModel
 
     /// <summary>Admin-configured default column order per spreadsheet entity type (risk, issue, …).</summary>
     public Dictionary<string, List<string>> SpreadsheetColumnOrders { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Central Ops / Super admin may edit inherent impact and likelihood after first save.</summary>
+    public bool CanEditLockedInherentRatings { get; set; }
 }
 
 public class RaidRegisterRiskRow
@@ -154,6 +157,7 @@ public class RaidRegisterRiskRow
     public string? Description { get; set; }
     public string? Status { get; set; }
     public int? StatusId { get; set; }
+    public DateTime? ClosedDate { get; set; }
     public string? Owner { get; set; }
     public int? OwnerUserId { get; set; }
     public string? Tier { get; set; }
@@ -240,6 +244,7 @@ public class RaidRegisterIssueRow
     public string? Description { get; set; }
     public string? Status { get; set; }
     public int? StatusId { get; set; }
+    public DateTime? ClosedDate { get; set; }
     public string? Severity { get; set; }
     public int? SeverityId { get; set; }
     public string? Priority { get; set; }

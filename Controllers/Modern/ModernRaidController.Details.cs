@@ -28,7 +28,8 @@ public partial class ModernRaidController
     private async Task<bool> CurrentUserMayEditIssueAsync(Issue issue, CancellationToken cancellationToken)
     {
         var email = GetCurrentUserEmailRaw();
-        if (!string.IsNullOrWhiteSpace(email)
+        if (!_viewAsUser.IsActive(HttpContext)
+            && !string.IsNullOrWhiteSpace(email)
             && await _permissions.IsCentralOperationsAdminOrSuperAdminAsync(email.Trim()))
             return true;
 
