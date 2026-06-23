@@ -1,0 +1,67 @@
+@{
+  var viewAsActive = ViewBag.ViewAsActive as bool? == true;
+  var viewAsUserName = ViewBag.ViewAsUserName as string ?? "";
+  var returnUrl = ViewContext.HttpContext.Request.Path + ViewContext.HttpContext.Request.QueryString;
+}
+<dialog id="view-as-modal"
+        class="dfe-f-modal govuk-!-margin-0 app-view-as-modal"
+        data-module="dfe-f-modal"
+        aria-labelledby="view-as-modal-title"
+        aria-modal="true">
+  <div class="dfe-f-modal__panel">
+    <header class="dfe-f-modal__header">
+      <h2 id="view-as-modal-title" class="govuk-heading-m dfe-f-modal__title">View as user</h2>
+      <button type="button" class="dfe-f-modal__close" data-dfe-modal-close aria-label="Close">
+        <span class="dfe-f-modal__close-x" aria-hidden="true">×</span>
+      </button>
+    </header>
+    <div class="dfe-f-modal__body">
+      @if (viewAsActive)
+      {
+        <p class="govuk-body">
+          You are viewing Compass as <strong>@viewAsUserName</strong>.
+          Work and RAID views show what this person would see. You cannot make changes on their behalf.
+        </p>
+        <form method="post" action="@Url.Action("Clear", "ModernViewAs")" class="govuk-!-margin-bottom-4">
+          @Html.AntiForgeryToken()
+          <input type="hidden" name="returnUrl" value="@returnUrl" />
+          <button type="submit" class="govuk-button">Exit view-as mode</button>
+        </form>
+        <p class="govuk-body-s govuk-!-margin-bottom-2">Or choose a different user:</p>
+      }
+      else
+      {
+        <p class="govuk-body">
+          See Work and RAID as another user would. This is read-only — you cannot make changes on their behalf.
+        </p>
+      }
+      <form method="post" action="@Url.Action("Set", "ModernViewAs")" id="view-as-set-form">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="returnUrl" value="@returnUrl" />
+        <div class="govuk-form-group">
+          <label class="govuk-label" for="view-as-user-search">Search for a user</label>
+          <div id="view-as-user-search" class="user-picker" data-user-picker data-search-url="/api/users/search" data-select-url="/api/users/select">
+            <div class="position-relative">
+              <input type="text"
+                     class="govuk-input js-user-picker-input"
+                     id="view-as-user-input"
+                     autocomplete="off"
+                     placeholder="e.g. Alex Smith or alex.smith@@education.gov.uk" />
+              <span class="user-picker__spinner js-user-picker-spinner" aria-hidden="true">Searching…</span>
+              <div class="user-picker__results js-user-picker-results" role="listbox" aria-live="polite"></div>
+            </div>
+            <p class="govuk-body-s js-user-picker-message" style="margin-top:0.25rem;display:none;"></p>
+            <input type="hidden" name="userId" class="js-user-picker-value" required />
+            <div class="user-picker__selected js-user-picker-summary" data-default-text="No user selected." style="margin-top:0.5rem;">
+              <span class="govuk-body-s">No user selected.</span>
+            </div>
+          </div>
+        </div>
+        <button type="submit" class="govuk-button">View as this user</button>
+      </form>
+    </div>
+    <footer class="dfe-f-modal__footer">
+      <button type="button" class="govuk-link govuk-link--no-visited-state" data-dfe-modal-close>Close</button>
+    </footer>
+  </div>
+</dialog>

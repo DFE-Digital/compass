@@ -403,6 +403,7 @@ builder.Services.AddAuthentication(OpenIdConnectDefaults.AuthenticationScheme)
 builder.Services.AddControllersWithViews(options =>
 {
     options.Filters.Add<Compass.Filters.NavigationViewFilter>();
+    options.Filters.Add<Compass.Filters.ViewAsWriteProtectionFilter>();
 })
     .AddMicrosoftIdentityUI();
 
@@ -529,6 +530,8 @@ builder.Services.AddScoped<IApiTokenService, ApiTokenService>();
 builder.Services.AddScoped<Compass.Services.Api.IApiTokenPortalService, Compass.Services.Api.ApiTokenPortalService>();
 builder.Services.AddScoped<IAuditLogger, AuditLogger>();
 builder.Services.AddScoped<IPermissionService, PermissionService>();
+builder.Services.AddScoped<IViewAsUserService, ViewAsUserService>();
+builder.Services.AddScoped<Compass.Filters.ViewAsWriteProtectionFilter>();
 builder.Services.AddScoped<IBusinessAreaAdminService, BusinessAreaAdminService>();
 builder.Services.AddScoped<IBusinessAreaLeadershipService, BusinessAreaLeadershipService>();
 builder.Services.AddScoped<IDirectorateLeadershipService, DirectorateLeadershipService>();

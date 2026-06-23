@@ -32,6 +32,7 @@ public partial class ModernRaidController : Controller
     private readonly IRaidRiskEditorFormService _raidRiskEditorForm;
     private readonly IRaidIssueEditorFormService _raidIssueEditorForm;
     private readonly IReturnStatusService _returnStatus;
+    private readonly IViewAsUserService _viewAsUser;
 
     public ModernRaidController(
         CompassDbContext db,
@@ -41,7 +42,8 @@ public partial class ModernRaidController : Controller
         IPermissionService permissions,
         IRaidRiskEditorFormService raidRiskEditorForm,
         IRaidIssueEditorFormService raidIssueEditorForm,
-        IReturnStatusService returnStatus)
+        IReturnStatusService returnStatus,
+        IViewAsUserService viewAsUser)
     {
         _db = db;
         _businessAreaAdmins = businessAreaAdmins;
@@ -51,6 +53,7 @@ public partial class ModernRaidController : Controller
         _raidRiskEditorForm = raidRiskEditorForm;
         _raidIssueEditorForm = raidIssueEditorForm;
         _returnStatus = returnStatus;
+        _viewAsUser = viewAsUser;
     }
 
     private void SetRaidChrome(string subItem)
@@ -667,6 +670,13 @@ public partial class ModernRaidController : Controller
 
     private async Task<int?> ResolveCurrentUserIdAsync(CancellationToken cancellationToken)
     {
+        if (_viewAsUser.IsActive(HttpContext))
+        {
+            var active = _viewAsUser.GetActive(HttpContext);
+            if (active != null)
+                return active.UserId;
+        }
+
         var email = User.Identity?.Name
             ?? User.FindFirst(ClaimTypes.Email)?.Value
             ?? User.FindFirst("preferred_username")?.Value;

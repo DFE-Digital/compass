@@ -13,6 +13,9 @@
       StringComparison.OrdinalIgnoreCase);
   var isAuthenticated = User?.Identity?.IsAuthenticated == true;
   var showAdminCog = ViewBag.CanAccessModernAdmin == true && isAuthenticated;
+  var showViewAs = isAuthenticated && (ViewBag.CanUseViewAs == true || ViewBag.ViewAsActive == true);
+  var viewAsActive = ViewBag.ViewAsActive as bool? == true;
+  var viewAsUserName = ViewBag.ViewAsUserName as string ?? "";
   var showHeaderProfile = isAuthenticated;
   var showSignIn = !isAuthenticated;
   var inverseServiceNav = ViewBag.InverseServiceNav as bool? == true;
@@ -29,10 +32,32 @@
         <img class="govuk-header__logotype dfe-f-header__logo-img dfe-f-header__logo-img--black" src="@dfeLogoBlack" alt="" decoding="async" asp-append-version="true" aria-hidden="true" />
       </a>
     </div>
-    @if (showAdminCog || showHeaderProfile || showSignIn)
+    @if (showAdminCog || showViewAs || showHeaderProfile || showSignIn)
     {
       <div class="govuk-header__content">
         <div class="dfe-c-header-util">
+          @if (showViewAs)
+          {
+            <button type="button"
+                    class="dfe-c-header-util__link dfe-c-header-util__link--view-as@(viewAsActive ? " dfe-c-header-util__link--view-as-active" : "")"
+                    data-view-as-open
+                    aria-haspopup="dialog"
+                    aria-controls="view-as-modal">
+              <span class="material-symbols-sharp dfe-c-header-util__icon dfe-c-header-util__icon--material" aria-hidden="true">visibility</span>
+              @if (viewAsActive)
+              {
+                <span class="dfe-c-header-util__view-as-label">Viewing as @viewAsUserName</span>
+              }
+              else
+              {
+                <span class="govuk-visually-hidden">View as user</span>
+              }
+            </button>
+          }
+          @if (showViewAs && (showAdminCog || showHeaderProfile))
+          {
+            <span class="dfe-c-header-util__sep" aria-hidden="true"></span>
+          }
           @if (showAdminCog)
           {
             <a href="@Url.Action("Index", "ModernAdmin")" class="dfe-c-header-util__link@(onAdmin ? " dfe-c-header-util__link--active" : "")" @if (onAdmin) { <text>aria-current="page"</text> }>
@@ -95,6 +120,7 @@ else
 }
  
 @await Html.PartialAsync("~/Views/Modern/Shared/_SubNavigation.cshtml")
+@await Html.PartialAsync("~/Views/Modern/Shared/_ViewAsBanner.cshtml")
 @if (ViewBag.ShowReportingScope == true)
 {
   @await Html.PartialAsync("~/Views/Modern/Shared/_ReportingScopeBar.cshtml")

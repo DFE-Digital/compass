@@ -33,13 +33,13 @@ public partial class ModernRaidController
         var registerIds = allRegisterEntities.Select(r => r.Id).ToList();
 
         var riskCounts = await _db.RaidRegisterRisks
-            .Where(rr => registerIds.Contains(rr.RaidRegisterId) && !rr.Risk.IsDeleted && rr.Risk.Status != "closed")
+            .Where(rr => registerIds.Contains(rr.RaidRegisterId) && !rr.Risk.IsDeleted && rr.Risk.ClosedDate == null)
             .GroupBy(rr => rr.RaidRegisterId)
             .Select(g => new { g.Key, Count = g.Count() })
             .ToDictionaryAsync(x => x.Key, x => x.Count, cancellationToken);
 
         var issueCounts = await _db.RaidRegisterIssues
-            .Where(ri => registerIds.Contains(ri.RaidRegisterId) && !ri.Issue.IsDeleted && ri.Issue.Status != "closed")
+            .Where(ri => registerIds.Contains(ri.RaidRegisterId) && !ri.Issue.IsDeleted && ri.Issue.ClosedDate == null)
             .GroupBy(ri => ri.RaidRegisterId)
             .Select(g => new { g.Key, Count = g.Count() })
             .ToDictionaryAsync(x => x.Key, x => x.Count, cancellationToken);
@@ -136,6 +136,12 @@ public partial class ModernRaidController
             .ToListAsync(cancellationToken);
         var spreadsheetTierRows = RiskTierSpreadsheet.ResolveRows(allActiveRiskTiers);
 
+        var userEmail = User.Identity?.Name
+            ?? User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value
+            ?? User.FindFirst("preferred_username")?.Value;
+        var canEditLockedInherentRatings = !string.IsNullOrWhiteSpace(userEmail)
+            && await _permissions.IsCentralOperationsAdminOrSuperAdminAsync(userEmail.Trim());
+
         var vm = new RaidRegisterDetailViewModel
         {
             Id = register.Id,
@@ -147,11 +153,12 @@ public partial class ModernRaidController
             UpdatedAt = register.UpdatedAt,
             CreatedByName = register.CreatedByUser?.Name ?? register.CreatedByUser?.Email ?? "Unknown",
             CurrentUserRole = currentUserRole,
-            OpenRiskCount = risks.Count(r => r.Status != "closed" && r.Status != "Closed"),
-            OpenIssueCount = issues.Count(i => i.Status != "closed" && i.Status != "Closed"),
+            OpenRiskCount = risks.Count(r => r.ClosedDate == null),
+            OpenIssueCount = issues.Count(i => i.ClosedDate == null),
             OpenAssumptionCount = assumptions.Count,
             OpenDependencyCount = dependencies.Count(d => d.Status != "Resolved" && d.Status != "Cancelled"),
             OpenNearMissCount = nearMisses.Count,
+            CanEditLockedInherentRatings = canEditLockedInherentRatings,
             Risks = risks,
             Issues = issues,
             Assumptions = assumptions,
@@ -632,6 +639,15 @@ public partial class ModernRaidController
 
     private static bool CanViewRegister(int? userId) => userId.HasValue;
 
+    private async Task<bool> CanEditLockedInherentRatingsAsync(CancellationToken ct)
+    {
+        var email = User.Identity?.Name
+            ?? User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value
+            ?? User.FindFirst("preferred_username")?.Value;
+        return !string.IsNullOrWhiteSpace(email)
+            && await _permissions.IsCentralOperationsAdminOrSuperAdminAsync(email.Trim());
+    }
+
     private static RaidRegisterRole ResolveUserRegisterRole(RaidRegister register, int? userId)
     {
         if (!userId.HasValue)
@@ -666,6 +682,7 @@ public partial class ModernRaidController
                 Description = rr.Risk.Description,
                 Status = rr.Risk.RiskStatus != null ? rr.Risk.RiskStatus.Label : rr.Risk.Status,
                 StatusId = rr.Risk.RiskStatusId,
+                ClosedDate = rr.Risk.ClosedDate,
                 Owner = rr.Risk.OwnerUser != null ? rr.Risk.OwnerUser.Name : rr.Risk.OwnerEmail,
                 OwnerUserId = rr.Risk.OwnerUserId,
                 Tier = rr.Risk.RiskTier != null ? rr.Risk.RiskTier.Name : null,
@@ -791,6 +808,7 @@ public partial class ModernRaidController
                 Description = ri.Issue.Description,
                 Status = ri.Issue.StatusLookup != null ? ri.Issue.StatusLookup.Label : ri.Issue.Status,
                 StatusId = ri.Issue.StatusId,
+                ClosedDate = ri.Issue.ClosedDate,
                 Severity = ri.Issue.SeverityLookup != null ? ri.Issue.SeverityLookup.Label : ri.Issue.Severity,
                 SeverityId = ri.Issue.SeverityId,
                 Priority = ri.Issue.PriorityLookup != null ? ri.Issue.PriorityLookup.Label : null,
@@ -1335,7 +1353,12 @@ public partial class ModernRaidController
                 await _db.SaveChangesAsync(ct);
             }
 
-            return Json(new { success = true, alreadyLinked });
+            var entityRows = await LoadRaidRegisterEntityRowsAsync(registerId, ct);
+            var row = entityRows.Risks.FirstOrDefault(r => r.Id == entityId);
+            if (row == null)
+                return Json(new { success = true, alreadyLinked });
+
+            return Json(new { success = true, alreadyLinked, risk = MapRiskRowToSpreadsheetApiPayload(row) });
         }
 
         if (type == "issue")
@@ -1363,6 +1386,131 @@ public partial class ModernRaidController
 
         return BadRequest(new { error = "Type must be 'risk' or 'issue'" });
     }
+
+    [HttpGet("api/register/{registerId:int}/risks/search")]
+    public async Task<IActionResult> ApiSearchRisksForRegister(
+        int registerId,
+        [FromQuery] string? q,
+        [FromQuery] int limit = 15,
+        CancellationToken ct = default)
+    {
+        var userId = await ResolveCurrentUserIdAsync(ct);
+        if (!userId.HasValue)
+            return Unauthorized(new { error = "Not signed in" });
+
+        var register = await _db.RaidRegisters
+            .Include(r => r.Users)
+            .AsNoTracking()
+            .FirstOrDefaultAsync(r => r.Id == registerId && !r.IsDeleted, ct);
+        if (register == null)
+            return NotFound(new { error = "Register not found" });
+
+        if (!IsRegisterOwnerOrManager(register, userId))
+            return Forbid();
+
+        var term = (q ?? "").Trim();
+        if (term.Length < 2)
+            return Json(new { results = Array.Empty<object>() });
+
+        var linkedRiskIds = _db.RaidRegisterRisks
+            .Where(rr => rr.RaidRegisterId == registerId)
+            .Select(rr => rr.RiskId);
+
+        var risksQuery = _db.Risks.AsNoTracking()
+            .Where(r => !r.IsDeleted && !linkedRiskIds.Contains(r.Id));
+
+        if (int.TryParse(term.TrimStart('R', 'r', '-'), out var riskId))
+        {
+            risksQuery = risksQuery.Where(r =>
+                r.Id == riskId ||
+                (r.Title != null && r.Title.Contains(term)));
+        }
+        else
+        {
+            risksQuery = risksQuery.Where(r => r.Title != null && r.Title.Contains(term));
+        }
+
+        var take = Math.Clamp(limit, 1, 30);
+        var results = await risksQuery
+            .OrderBy(r => r.Title)
+            .Take(take)
+            .Select(r => new
+            {
+                id = r.Id,
+                reference = $"R-{r.Id:D4}",
+                title = r.Title,
+                status = r.RiskStatus != null ? r.RiskStatus.Label : r.Status
+            })
+            .ToListAsync(ct);
+
+        return Json(new { results });
+    }
+
+    private static object MapRiskRowToSpreadsheetApiPayload(RaidRegisterRiskRow row) => new
+    {
+        id = row.Id,
+        reference = row.Reference,
+        title = row.Title,
+        status = row.Status,
+        statusId = row.StatusId,
+        closedDate = row.ClosedDate,
+        tier = row.Tier,
+        tierId = row.TierId,
+        category = row.Category,
+        categoryId = row.CategoryId,
+        owner = row.Owner,
+        ownerUserId = row.OwnerUserId,
+        description = row.Description,
+        cause = row.Cause,
+        impactIfRealised = row.ImpactIfRealised,
+        contingency = row.Contingency,
+        assurance = row.Assurance,
+        financialImpact = row.FinancialImpact,
+        response = row.Response,
+        originalImpactId = row.OriginalImpactId,
+        originalImpact = row.OriginalImpact,
+        originalLikelihoodId = row.OriginalLikelihoodId,
+        originalLikelihood = row.OriginalLikelihood,
+        inherentScore = row.InherentScore,
+        currentImpactId = row.CurrentImpactId,
+        currentImpact = row.CurrentImpact,
+        currentLikelihoodId = row.CurrentLikelihoodId,
+        currentLikelihood = row.CurrentLikelihood,
+        currentScore = row.CurrentScore,
+        residualImpactId = row.ResidualImpactId,
+        residualImpact = row.ResidualImpact,
+        residualLikelihoodId = row.ResidualLikelihoodId,
+        residualLikelihood = row.ResidualLikelihood,
+        residualScore = row.ResidualScore,
+        toleranceImpactId = row.ToleranceImpactId,
+        toleranceImpact = row.ToleranceImpact,
+        toleranceLikelihoodId = row.ToleranceLikelihoodId,
+        toleranceLikelihood = row.ToleranceLikelihood,
+        toleranceScore = row.ToleranceScore,
+        proximityId = row.ProximityId,
+        proximity = row.Proximity,
+        createdDate = row.CreatedAt.ToString("dd MMM yy"),
+        updatedAt = row.UpdatedAt.ToString("dd MMM yy HH:mm"),
+        updatedAtIso = row.UpdatedAt.ToString("o"),
+        mitigationCount = row.MitigationCount,
+        kriCount = row.KriCount,
+        commentCount = row.CommentCount,
+        lastCommentUpdateText = row.LastCommentUpdateText,
+        lastCommentUpdateKind = row.LastCommentUpdateKind,
+        lastCommentUpdateAt = row.LastCommentUpdateAt,
+        relation = new
+        {
+            relationKind = row.RelationKind,
+            relationTarget = row.RelationTarget,
+            associationUiKind = row.AssociationUiKind,
+            projectId = row.RelationProjectId,
+            primaryProductId = row.PrimaryProductId,
+            relationSourceLabel = row.RelationSourceLabel,
+            relationRelatedTitle = row.RelationRelatedTitle,
+            relationRelatedDescription = row.RelationRelatedDescription,
+            relationLinkHref = row.RelationLinkHref
+        }
+    };
 
     public class TrackInRegisterRequest
     {
@@ -1637,14 +1785,22 @@ public partial class ModernRaidController
                 risk.ResponseStrategy = req.Value;
                 break;
 
-            // Original rating (only settable if not yet set — first save)
+            // Original rating (only settable if not yet set — Central Ops may correct)
             case "originalimpactid":
                 if (!risk.RiskImpactLevelId.HasValue)
                     risk.RiskImpactLevelId = intVal;
+                else if (await CanEditLockedInherentRatingsAsync(ct))
+                    risk.RiskImpactLevelId = intVal;
+                else
+                    return BadRequest(new { error = "Inherent impact cannot be changed once set. Contact Central Operations if this is wrong." });
                 break;
             case "originallikelihoodid":
                 if (!risk.RiskLikelihoodId.HasValue)
                     risk.RiskLikelihoodId = intVal;
+                else if (await CanEditLockedInherentRatingsAsync(ct))
+                    risk.RiskLikelihoodId = intVal;
+                else
+                    return BadRequest(new { error = "Inherent likelihood cannot be changed once set. Contact Central Operations if this is wrong." });
                 break;
 
             // Current rating (tracks history)

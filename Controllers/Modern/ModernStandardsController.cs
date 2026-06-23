@@ -203,7 +203,7 @@ public partial class ModernStandardsController : Controller
         var draftCount = DdtStandardsListingHelper.ActiveDraftsOnly(allNonDeleted).Count();
         var reviewCount = allNonDeleted.Count(s => s.Stage == "For Approval");
         var awaitingPublishCount = allNonDeleted.Count(s => s.Stage == "Awaiting Publication");
-        var withdrawnCount = allNonDeleted.Count(s => !s.IsPublished && s.Stage == "Archived");
+        var withdrawnCount = DdtStandardsListingHelper.WithdrawnOnly(allNonDeleted).Count();
 
         IEnumerable<DdtStandard> filtered = tabLower switch
         {
@@ -212,7 +212,7 @@ public partial class ModernStandardsController : Controller
             "draft" => DdtStandardsListingHelper.ActiveDraftsOnly(allNonDeleted),
             "review" => allNonDeleted.Where(s => s.Stage == "For Approval"),
             "awaiting" => allNonDeleted.Where(s => s.Stage == "Awaiting Publication"),
-            "withdrawn" => allNonDeleted.Where(s => !s.IsPublished && s.Stage == "Archived"),
+            "withdrawn" => DdtStandardsListingHelper.WithdrawnOnly(allNonDeleted),
             "published" => DdtStandardsListingHelper.LatestPublishedOnly(allNonDeleted),
             _ => DdtStandardsListingHelper.LatestPublishedOnly(allNonDeleted)
         };
@@ -240,6 +240,12 @@ public partial class ModernStandardsController : Controller
                 s.Owners.Any(o => o.UserId == owner.Value));
         }
 
+        var unpublishReasonByStandardId = await _context.DdtStandardUnpublishAudits.AsNoTracking()
+            .OrderByDescending(a => a.UnpublishedAt)
+            .GroupBy(a => a.DdtStandardId)
+            .Select(g => new { StandardId = g.Key, Reason = g.First().Reason })
+            .ToDictionaryAsync(x => x.StandardId, x => x.Reason);
+
         var items = filtered
             .OrderBy(s => s.Title, StringComparer.OrdinalIgnoreCase)
             .Select(s => new DdtStandardsRegisterRow
@@ -253,7 +259,8 @@ public partial class ModernStandardsController : Controller
                 OwnerDisplay = string.Join(", ", s.Owners.Select(o => o.User.Name)),
                 PublishedAt = s.PublishedAt,
                 DraftCreated = s.DraftCreated,
-                IsPublished = s.IsPublished
+                IsPublished = s.IsPublished,
+                WithdrawalNote = unpublishReasonByStandardId.GetValueOrDefault(s.Id)
             })
             .ToList();
 
@@ -553,6 +560,50 @@ public partial class ModernStandardsController : Controller
         var result = await _ddtWorkflow.PublishAsync(id, User);
         SetFlash(result);
         return RedirectToAction(result.Success ? nameof(DdtDetail) : nameof(DdtDetail), new { id });
+    }
+
+    [HttpGet("ddt/{id:int}/unpublish")]
+    public async Task<IActionResult> DdtUnpublish(int id)
+    {
+        SetChrome("standards-ddt");
+
+        var standard = await _context.DdtStandards.AsNoTracking()
+            .FirstOrDefaultAsync(s => s.Id == id && !s.IsDeleted);
+        if (standard == null)
+            return NotFound();
+
+        var toolbar = await _ddtWorkflow.BuildDetailToolbarAsync(id, User);
+        var editVm = await _ddtWorkflow.BuildEditViewModelAsync(id, User);
+        if (!toolbar.CanUnpublish && !editVm.CanUnpublish)
+        {
+            TempData["ErrorMessage"] = "You do not have permission to unpublish this standard.";
+            return RedirectToAction(nameof(DdtDetail), new { id });
+        }
+
+        var isPublished = standard.IsPublished && standard.Stage == "Published";
+        var isInPlaceEditDraft = standard.Stage == "Draft" && standard.FirstPublished.HasValue;
+        if (!isPublished && !isInPlaceEditDraft)
+        {
+            TempData["ErrorMessage"] = "This standard cannot be unpublished in its current stage.";
+            return RedirectToAction(nameof(DdtDetail), new { id });
+        }
+
+        return View("~/Views/Modern/Standards/DdtUnpublish.cshtml", standard);
+    }
+
+    [HttpPost("ddt/{id:int}/unpublish")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> DdtUnpublishPost(int id, string reason, string? returnUrl)
+    {
+        var result = await _ddtWorkflow.UnpublishAsync(id, reason, User);
+        SetFlash(result);
+        if (!result.Success)
+            return RedirectToAction(nameof(DdtUnpublish), new { id });
+
+        if (!string.IsNullOrWhiteSpace(returnUrl) && Url.IsLocalUrl(returnUrl))
+            return Redirect(returnUrl);
+
+        return RedirectToAction(nameof(DdtDetail), new { id = result.StandardId ?? id });
     }
 
     [HttpPost("ddt/{id:int}/delete")]
@@ -885,14 +936,24 @@ public partial class ModernStandardsController : Controller
             .Include(a => a.CriteriaResponses)
             .FirstOrDefaultAsync(a => a.Id == assessmentId);
 
-        if (assessment != null)
+        if (assessment == null)
         {
-            _context.AssessmentCriteriaResponses.RemoveRange(assessment.CriteriaResponses);
-            _context.FunctionalStandardAssessments.Remove(assessment);
-            await _context.SaveChangesAsync();
-            TempData["SuccessMessage"] = $"Assessment '{assessment.AssessmentName}' deleted";
+            TempData["ErrorMessage"] = "Assessment not found.";
+            return RedirectToAction(nameof(FunctionalStandardDashboard), new { id = standardId });
         }
 
+        if (assessment.SubmittedAt.HasValue)
+        {
+            TempData["ErrorMessage"] = "Submitted assessments cannot be deleted.";
+            return RedirectToAction(nameof(AssessmentSummary), new { assessmentId });
+        }
+
+        var assessmentName = assessment.AssessmentName;
+        _context.AssessmentCriteriaResponses.RemoveRange(assessment.CriteriaResponses);
+        _context.FunctionalStandardAssessments.Remove(assessment);
+        await _context.SaveChangesAsync();
+
+        TempData["SuccessMessage"] = $"Assessment '{assessmentName}' deleted.";
         return RedirectToAction(nameof(FunctionalStandardDashboard), new { id = standardId });
     }
 
