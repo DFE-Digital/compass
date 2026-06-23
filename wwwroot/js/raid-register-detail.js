@@ -31,7 +31,8 @@
       baseUrl: config.baseUrl || '/modern/raid',
       registerId: config.registerId,
       tableLayouts: config.tableLayouts || {},
-      readOnly: !!config.readOnly
+      readOnly: !!config.readOnly,
+      canEditLockedInherentRatings: !!config.canEditLockedInherentRatings
     });
 
     function switchView(viewName) {
@@ -50,7 +51,7 @@
     }
 
     function activateManageTab(tabName) {
-      ['risks', 'issues', 'assumptions', 'nearmisses'].forEach(function (name) {
+      ['risks', 'issues', 'assumptions', 'nearmisses', 'dependencies'].forEach(function (name) {
         var isCurrent = name === tabName;
         var li = document.getElementById('manage-tab-' + name);
         var panel = document.getElementById('ss-panel-' + name);

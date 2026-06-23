@@ -128,9 +128,6 @@
     _ => "dfe-f-badge dfe-f-badge--small dfe-f-badge--orange"
   };
 
-  string ServiceRegisterProductHref(Guid productId) =>
-    Url.Action("FipsProduct", "ModernManage", new { id = productId }) ?? "#";
-
   var workDashboardHref = Url.Action("Dashboard", "ModernWork") ?? "/modern/work/dashboard";
 
   var milestoneTasks = new List<(string Title, string Hint, string Href, string StatusTag, int? CompletionPercent)>();
@@ -158,17 +155,6 @@
       "Due",
       null));
   }
-
-  var serviceRegisterTasks = fipsServiceRegisterEnabled
-    ? Model.IncompleteServiceRegisterProducts
-        .Select(sr => (
-          Title: sr.Title,
-          Hint: $"Service register · {sr.MissingFieldsHint}",
-          Href: ServiceRegisterProductHref(sr.ProductId),
-          StatusTag: $"{sr.CompletionPercent}% complete",
-          CompletionPercent: (int?)sr.CompletionPercent))
-        .ToList()
-    : new List<(string Title, string Hint, string Href, string StatusTag, int? CompletionPercent)>();
 
   var otherTasks = new List<(string Title, string Hint, string Href, string StatusTag, int? CompletionPercent)>();
 
@@ -199,7 +185,6 @@
   }
 
   var orderedHomeTasks = milestoneTasks
-    .Concat(serviceRegisterTasks)
     .Concat(otherTasks)
     .ToList();
 

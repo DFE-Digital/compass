@@ -12,6 +12,7 @@
   var a11yReorderTable = null;
   var serverTableLayouts = {};
   var readOnly = false;
+  var canEditLockedInherentRatings = false;
 
   function readCsrfToken() {
     var tokenEl = document.querySelector('input[name="__RequestVerificationToken"]');
@@ -45,11 +46,11 @@
     registerId = config.registerId || 0;
     serverTableLayouts = config.tableLayouts || {};
     readOnly = !!config.readOnly;
+    canEditLockedInherentRatings = !!config.canEditLockedInherentRatings;
 
-    if (!readOnly) {
-      bindCellClicks();
-      bindInlineAdd();
-    }
+    bindCellClicks();
+    bindInlineAdd();
+    bindLinkExistingRisk();
     bindDetailButtons();
     bindModalClose();
     bindKeyboard();
@@ -455,10 +456,26 @@
 
   // ── Inline editing (select dropdowns and user lookup) ──
 
+  function isInherentRatingLocked(field, currentId) {
+    if (canEditLockedInherentRatings) return false;
+    return !!currentId;
+  }
+
+  function lockInherentRatingCellIfNeeded(cell, field, newVal) {
+    if (!newVal || canEditLockedInherentRatings) return;
+    var f = (field || '').toLowerCase();
+    if (f !== 'originalimpactid' && f !== 'originallikelihoodid') return;
+    cell.classList.remove('raid-ss-editable');
+    cell.setAttribute('data-inherent-locked', 'true');
+  }
+
   function bindCellClicks() {
+    if (readOnly) return;
     document.addEventListener('click', function (e) {
       var cell = e.target.closest('.raid-ss-editable');
       if (!cell || cell.classList.contains('raid-ss-editing')) return;
+
+      if (cell.getAttribute('data-inherent-locked') === 'true') return;
 
       var type = cell.getAttribute('data-type');
       if (type === 'modal') {
@@ -517,6 +534,7 @@
           } else {
             valSpan.textContent = newVal ? newText : '—';
           }
+          lockInherentRatingCellIfNeeded(cell, field, newVal);
           closeEditor(cell);
           updateScoresFromResponse(row);
         }, function () {
@@ -825,6 +843,11 @@
     return s !== 'closed';
   }
 
+  function isOpenRaidItem(data) {
+    if (data && data.closedDate) return false;
+    return isOpenRaidStatus(data && data.status);
+  }
+
   function adjustRegisterCount(key, delta) {
     if (!delta) return;
     document.querySelectorAll('[data-register-count="' + key + '"]').forEach(function (el) {
@@ -850,7 +873,7 @@
 
     adjustRegisterCount(totalKey, 1);
 
-    if (isOpenRaidStatus(data.status)) {
+    if (isOpenRaidItem(data)) {
       var openKey = entityType === 'risk' ? 'open-risks'
         : entityType === 'issue' ? 'open-issues'
           : entityType === 'nearmiss' ? 'open-nearmisses'
@@ -860,12 +883,235 @@
     }
   }
 
+  function onRegisterItemLinked(entityType, data) {
+    onRegisterItemCreated(entityType, data);
+  }
+
+  // ── Link existing risk ──
+
+  var linkRiskSearchTimer = null;
+
+  function closeLinkRiskModal() {
+    var modal = document.getElementById('raid-link-risk-modal');
+    if (!modal) return;
+    modal.style.display = 'none';
+    document.body.style.overflow = '';
+    var search = document.getElementById('raid-link-risk-search');
+    var list = document.getElementById('raid-link-risk-list');
+    var hint = document.getElementById('raid-link-risk-hint');
+    var errorEl = document.getElementById('raid-link-risk-error');
+    if (search) search.value = '';
+    if (list) {
+      list.innerHTML = '';
+      list.style.display = 'none';
+    }
+    if (hint) {
+      hint.textContent = 'Type at least 2 characters to search.';
+      hint.style.display = '';
+    }
+    if (errorEl) {
+      errorEl.style.display = 'none';
+      errorEl.textContent = '';
+    }
+  }
+
+  function renderLinkRiskResults(results) {
+    var list = document.getElementById('raid-link-risk-list');
+    var hint = document.getElementById('raid-link-risk-hint');
+    if (!list || !hint) return;
+
+    list.innerHTML = '';
+    if (!results || results.length === 0) {
+      list.style.display = 'none';
+      hint.textContent = 'No matching risks found.';
+      hint.style.display = '';
+      return;
+    }
+
+    hint.style.display = 'none';
+    list.style.display = '';
+    results.forEach(function (item) {
+      var li = document.createElement('li');
+      li.className = 'govuk-!-margin-bottom-2';
+
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'govuk-link govuk-link--no-visited-state raid-link-risk-result';
+      btn.style.cssText = 'text-align:left; border:none; background:none; padding:0; cursor:pointer;';
+      btn.setAttribute('data-risk-id', item.id);
+      btn.innerHTML = '<strong>' + (item.reference || '') + '</strong> — ' + (item.title || '') +
+        (item.status ? ' <span class="govuk-body-s" style="color:#505a5f;">(' + item.status + ')</span>' : '');
+
+      li.appendChild(btn);
+      list.appendChild(li);
+    });
+  }
+
+  function searchRisksToLink(term) {
+    var url = baseUrl + '/api/register/' + registerId + '/risks/search?q=' + encodeURIComponent(term) + '&limit=15';
+    return fetch(url, { credentials: 'same-origin' })
+      .then(function (r) { return parseJsonResponse(r).then(function (d) {
+        if (!r.ok) throw new Error(d.error || 'Search failed (' + r.status + ')');
+        return d;
+      }); });
+  }
+
+  function linkRiskToRegister(riskId) {
+    var errorEl = document.getElementById('raid-link-risk-error');
+    if (errorEl) {
+      errorEl.style.display = 'none';
+      errorEl.textContent = '';
+    }
+
+    var table = document.getElementById('tbl-risks');
+    var tbody = table ? table.querySelector('tbody') : null;
+    if (!tbody) return;
+
+    if (tbody.querySelector('tr.raid-ss-row[data-entity="risk"][data-id="' + riskId + '"]')) {
+      if (errorEl) {
+        errorEl.textContent = 'This risk is already in the register.';
+        errorEl.style.display = '';
+      }
+      return;
+    }
+
+    var url = baseUrl + '/api/register/' + registerId + '/track';
+    fetch(url, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: {
+        'Content-Type': 'application/json',
+        'RequestVerificationToken': csrfToken || readCsrfToken()
+      },
+      body: JSON.stringify({ type: 'risk', entityId: riskId })
+    })
+    .then(function (r) {
+      return parseJsonResponse(r).then(function (d) {
+        if (!r.ok) throw new Error(d.error || 'Link failed (' + r.status + ')');
+        return d;
+      });
+    })
+    .then(function (data) {
+      if (data.alreadyLinked && !data.risk) {
+        if (errorEl) {
+          errorEl.textContent = 'This risk is already linked to the register.';
+          errorEl.style.display = '';
+        }
+        return;
+      }
+
+      var riskData = data.risk;
+      if (!riskData) {
+        window.location.reload();
+        return;
+      }
+
+      if (tbody.querySelector('tr.raid-ss-row[data-entity="risk"][data-id="' + riskData.id + '"]')) {
+        closeLinkRiskModal();
+        return;
+      }
+
+      var dataRow = buildNewDataRow(table, riskData, 'risk');
+      if (dataRow) {
+        tbody.insertBefore(dataRow, tbody.firstChild);
+        dataRow.classList.add('raid-ss-row-highlight');
+        dataRow.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        setTimeout(function () { dataRow.classList.remove('raid-ss-row-highlight'); }, 3000);
+        onRegisterItemLinked('risk', riskData);
+        rebuildFilterRow(table);
+        closeLinkRiskModal();
+      } else {
+        window.location.reload();
+      }
+    })
+    .catch(function (err) {
+      if (errorEl) {
+        errorEl.textContent = err.message || 'Could not link risk.';
+        errorEl.style.display = '';
+      }
+    });
+  }
+
+  function openLinkRiskModal() {
+    if (readOnly) return;
+    var modal = document.getElementById('raid-link-risk-modal');
+    var searchInput = document.getElementById('raid-link-risk-search');
+    if (!modal || !searchInput) return;
+    modal.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    searchInput.focus();
+  }
+
+  function bindLinkExistingRisk() {
+    var modal = document.getElementById('raid-link-risk-modal');
+    var searchInput = document.getElementById('raid-link-risk-search');
+    if (!modal || !searchInput) return;
+
+    document.addEventListener('click', function (e) {
+      var openBtn = e.target.closest('#btn-link-risk-top');
+      if (!openBtn) return;
+      e.preventDefault();
+      openLinkRiskModal();
+    });
+
+    modal.querySelectorAll('[data-raid-link-risk-close]').forEach(function (btn) {
+      btn.addEventListener('click', closeLinkRiskModal);
+    });
+
+    searchInput.addEventListener('input', function () {
+      if (readOnly) return;
+      clearTimeout(linkRiskSearchTimer);
+      var term = searchInput.value.trim();
+      var hint = document.getElementById('raid-link-risk-hint');
+      var list = document.getElementById('raid-link-risk-list');
+
+      if (term.length < 2) {
+        if (list) {
+          list.innerHTML = '';
+          list.style.display = 'none';
+        }
+        if (hint) {
+          hint.textContent = 'Type at least 2 characters to search.';
+          hint.style.display = '';
+        }
+        return;
+      }
+
+      linkRiskSearchTimer = setTimeout(function () {
+        if (hint) hint.textContent = 'Searching…';
+        searchRisksToLink(term)
+          .then(function (data) { renderLinkRiskResults(data.results || []); })
+          .catch(function () {
+            if (hint) hint.textContent = 'Search failed. Try again.';
+          });
+      }, 300);
+    });
+
+    modal.addEventListener('click', function (e) {
+      if (readOnly) return;
+      var resultBtn = e.target.closest('.raid-link-risk-result');
+      if (!resultBtn) return;
+      e.preventDefault();
+      var riskId = parseInt(resultBtn.getAttribute('data-risk-id'), 10);
+      if (!riskId) return;
+      linkRiskToRegister(riskId);
+    });
+  }
+
   // ── Inline add new row ──
 
   function bindInlineAdd() {
     document.addEventListener('click', function (e) {
-      var btn = e.target.closest('.raid-ss-add-btn') || e.target.closest('#btn-add-risk-top, #btn-add-issue-top, #btn-add-nearmiss-top, #btn-add-assumption-top');
+      if (readOnly) return;
+
+      var btn = e.target.closest('#btn-add-risk-top')
+        || e.target.closest('#btn-add-issue-top')
+        || e.target.closest('#btn-add-nearmiss-top')
+        || e.target.closest('#btn-add-assumption-top')
+        || e.target.closest('.raid-ss-add-btn');
       if (!btn) return;
+
+      e.preventDefault();
 
       var entityType = btn.getAttribute('data-entity-type');
       var table = btn.closest('table') || document.querySelector('table[data-entity-type="' + entityType + '"]');
@@ -1592,9 +1838,19 @@
       );
     } else if (col === 'origImpact') {
       if (th.classList.contains('raid-ss-group-start')) td.classList.add('raid-ss-group-start');
-      appendSelectCell(td, 'originalImpactId', 'riskImpactLevels', data.originalImpactId, data.originalImpact);
+      if (isInherentRatingLocked('originalImpactId', data.originalImpactId)) {
+        td.setAttribute('data-inherent-locked', 'true');
+        appendValSpan(td, data.originalImpact || '—');
+      } else {
+        appendSelectCell(td, 'originalImpactId', 'riskImpactLevels', data.originalImpactId, data.originalImpact);
+      }
     } else if (col === 'origLikelihood') {
-      appendSelectCell(td, 'originalLikelihoodId', 'riskLikelihoods', data.originalLikelihoodId, data.originalLikelihood);
+      if (isInherentRatingLocked('originalLikelihoodId', data.originalLikelihoodId)) {
+        td.setAttribute('data-inherent-locked', 'true');
+        appendValSpan(td, data.originalLikelihood || '—');
+      } else {
+        appendSelectCell(td, 'originalLikelihoodId', 'riskLikelihoods', data.originalLikelihoodId, data.originalLikelihood);
+      }
     } else if (col === 'origScore') {
       appendScoreCell(td, RISK_SCORE_COLS.origScore, data.inherentScore, th);
     } else if (col === 'currImpact') {
@@ -1921,17 +2177,26 @@
       if (!cell) return;
 
       e.preventDefault();
-      openRelationModal(relationInfoFromCell(cell));
+      var row = cell.closest('tr.raid-ss-row');
+      var entityDetailHref = null;
+      if (row) {
+        var refLink = row.querySelector('.raid-ss-ref-link');
+        if (refLink) entityDetailHref = refLink.getAttribute('data-href');
+      }
+      openRelationModal(relationInfoFromCell(cell), entityDetailHref);
     });
   }
 
-  function openRelationModal(info) {
+  function openRelationModal(info, entityDetailHref) {
     var modal = document.getElementById('raid-relation-modal');
     if (!modal) return;
 
     var isOrganisation = info.kind === 'Organisation';
     var href = (info.href || '').trim();
-    var canOpen = !isOrganisation && href.length > 0;
+    if (isOrganisation) {
+      href = (entityDetailHref || '').trim();
+    }
+    var canOpen = href.length > 0;
 
     var titleEl = document.getElementById('raid-relation-modal-title');
     var sourceEl = document.getElementById('raid-relation-modal-source');
@@ -1979,7 +2244,9 @@
     if (promptEl) {
       promptEl.hidden = !canOpen;
       promptEl.textContent = canOpen
-        ? 'Open this related item in a new tab?'
+        ? (isOrganisation
+          ? 'Open this item in a new tab?'
+          : 'Open this related item in a new tab?')
         : '';
     }
     if (yesBtn) {
@@ -3292,7 +3559,7 @@
   var mitigationOwnerDebounce = null;
 
   function applyReadOnlySpreadsheetUi() {
-    document.querySelectorAll('[id^="btn-add-"]').forEach(function (el) {
+    document.querySelectorAll('[id^="btn-add-"], #btn-link-risk-top').forEach(function (el) {
       el.style.display = 'none';
     });
     document.querySelectorAll('.raid-ss-add-btn, .raid-ss-add-row').forEach(function (el) {
