@@ -21,6 +21,7 @@ public sealed class FipsBusinessAreaLookupSyncService : IFipsBusinessAreaLookupS
             .ToListAsync(cancellationToken);
 
         var tracked = await _db.FipsBusinessAreas.ToListAsync(cancellationToken);
+        var changed = false;
 
         foreach (var l in lookups)
         {
@@ -39,18 +40,25 @@ public sealed class FipsBusinessAreaLookupSyncService : IFipsBusinessAreaLookupS
                     DisplayOrder = l.SortOrder,
                     Active = l.IsActive
                 });
+                changed = true;
             }
-            else
+            else if (row.BusinessAreaLookupId != l.Id
+                     || row.Name != l.Name.Trim()
+                     || row.Description != l.Description?.Trim()
+                     || row.DisplayOrder != l.SortOrder
+                     || row.Active != l.IsActive)
             {
                 row.BusinessAreaLookupId = l.Id;
                 row.Name = l.Name.Trim();
                 row.Description = l.Description?.Trim();
                 row.DisplayOrder = l.SortOrder;
                 row.Active = l.IsActive;
+                changed = true;
             }
         }
 
-        await _db.SaveChangesAsync(cancellationToken);
+        if (changed)
+            await _db.SaveChangesAsync(cancellationToken);
     }
 
     public async Task<int[]> ResolveToFipsBusinessAreaIdsAsync(int[] businessAreaLookupIds,
@@ -60,11 +68,13 @@ public sealed class FipsBusinessAreaLookupSyncService : IFipsBusinessAreaLookupS
             return Array.Empty<int>();
 
         var requested = businessAreaLookupIds.Distinct().ToArray();
-        await SyncFromBusinessAreaLookupsAsync(cancellationToken);
+        var idByLookup = await LookupFipsBusinessAreaIdsAsync(requested, cancellationToken);
 
-        var idByLookup = await _db.FipsBusinessAreas.AsNoTracking()
-            .Where(f => f.BusinessAreaLookupId != null && requested.Contains(f.BusinessAreaLookupId.Value))
-            .ToDictionaryAsync(f => f.BusinessAreaLookupId!.Value, f => f.Id, cancellationToken);
+        if (!requested.All(idByLookup.ContainsKey))
+        {
+            await SyncFromBusinessAreaLookupsAsync(cancellationToken);
+            idByLookup = await LookupFipsBusinessAreaIdsAsync(requested, cancellationToken);
+        }
 
         return businessAreaLookupIds
             .Where(lid => idByLookup.ContainsKey(lid))
@@ -72,4 +82,11 @@ public sealed class FipsBusinessAreaLookupSyncService : IFipsBusinessAreaLookupS
             .Distinct()
             .ToArray();
     }
+
+    private Task<Dictionary<int, int>> LookupFipsBusinessAreaIdsAsync(
+        int[] requested,
+        CancellationToken cancellationToken) =>
+        _db.FipsBusinessAreas.AsNoTracking()
+            .Where(f => f.BusinessAreaLookupId != null && requested.Contains(f.BusinessAreaLookupId.Value))
+            .ToDictionaryAsync(f => f.BusinessAreaLookupId!.Value, f => f.Id, cancellationToken);
 }

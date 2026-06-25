@@ -52,10 +52,6 @@
 
 <div id="d-fips-accessibility" class="tab-pane @(Model.ActiveDetailTab == "accessibility" ? "on" : "")" role="tabpanel">
   <h2 class="govuk-heading-m govuk-!-margin-top-0">Accessibility</h2>
-  <p class="govuk-body govuk-!-margin-bottom-6">
-    Live accessibility statement and issue data from
-    <a class="govuk-link govuk-link--no-visited-state" href="@(aiss?.AissWebBaseUrl ?? "#")" target="_blank" rel="noopener noreferrer">AISS<span class="govuk-visually-hidden"> (opens in new tab)</span></a>.
-  </p>
 
   @if (aiss == null)
   {
@@ -70,15 +66,36 @@
   }
   else if (aiss.NotFound || aiss.Service == null)
   {
-    <p class="govuk-body govuk-!-margin-bottom-0">
-      No AISS service matched this service register product (FIPS id @Model.Product.UniqueID).
-      Onboard the product in AISS from the COMPASS service register.
-    </p>
+    var onboardUrl = aiss.OnboardPageUrl(Model.Product.Id, Model.Product.UniqueID);
+    <div class="govuk-notification-banner govuk-!-margin-bottom-6" role="region" aria-labelledby="aiss-not-onboarded-title">
+      <div class="govuk-notification-banner__header">
+        <h3 class="govuk-notification-banner__title" id="aiss-not-onboarded-title">Service not onboarded</h3>
+      </div>
+      <div class="govuk-notification-banner__content">
+        <p class="govuk-body govuk-!-margin-bottom-4">
+          This service is not onboarded to Accessibility Issues and Statement Service. In order to meet the accessibility standard, it must be onboarded.
+        </p>
+        @if (!string.IsNullOrEmpty(onboardUrl))
+        {
+          <a class="govuk-button" href="@onboardUrl" target="_blank" rel="noopener noreferrer" data-module="govuk-button">
+            Onboard this service<span class="govuk-visually-hidden"> in Accessibility Issues and Statement Service (opens in new tab)</span>
+          </a>
+        }
+        else
+        {
+          <p class="govuk-body govuk-!-margin-bottom-0">Onboarding is not available — AISS is not configured.</p>
+        }
+      </div>
+    </div>
   }
   else
   {
     var svc = aiss.Service;
     var summary = aiss.Summary;
+    <p class="govuk-body govuk-!-margin-bottom-6">
+      Live accessibility statement and issue data from
+      <a class="govuk-link govuk-link--no-visited-state" href="@aiss.AissWebBaseUrl" target="_blank" rel="noopener noreferrer">AISS<span class="govuk-visually-hidden"> (opens in new tab)</span></a>.
+    </p>
     @if (!string.IsNullOrWhiteSpace(aiss.ErrorMessage))
     {
       <div class="govuk-inset-text govuk-!-margin-bottom-4" role="status">@aiss.ErrorMessage</div>

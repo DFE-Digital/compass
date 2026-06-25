@@ -38,6 +38,8 @@ public sealed class FipsProductWorkItemsPanelViewModel
     public Guid ProductId { get; init; }
     public bool CanLink { get; init; }
     public IReadOnlyList<ServiceRegisterWorkLinkRow> Links { get; init; } = Array.Empty<ServiceRegisterWorkLinkRow>();
+    /// <summary>Side nav badge count when <see cref="Links"/> is not loaded.</summary>
+    public int? LinkCount { get; init; }
     public string PickWorkUrl { get; init; } = "";
     public string LinkUrl { get; init; } = "";
 }

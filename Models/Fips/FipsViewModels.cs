@@ -124,14 +124,34 @@ public sealed class FipsProductAissAccessibility
     public bool IsOnboarded => Service != null && !NotFound;
 
     public string AccessibilityBadgeLabel =>
-        !IsOnboarded ? "No data"
+        NotFound ? "Not onboarded"
+        : !IsOnboarded ? "No data"
         : OpenIssueCount > 0 ? "Non-Compliant"
         : "No issues";
 
     public string AccessibilityBadgeColor =>
-        !IsOnboarded ? "grey"
+        NotFound ? "orange"
+        : !IsOnboarded ? "grey"
         : OpenIssueCount > 0 ? "red"
         : "green";
+
+    /// <summary>
+    /// AISS onboarding URL for a Compass service register product.
+    /// Matches AISS <c>/services/onboard</c> query parameters (register GUID preferred, then numeric unique id).
+    /// </summary>
+    public string OnboardPageUrl(Guid registerProductId, int registerUniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(AissWebBaseUrl))
+            return "";
+
+        if (registerProductId != Guid.Empty)
+            return $"{AissWebBaseUrl}/services/onboard?registerId={registerProductId:D}";
+
+        if (registerUniqueId > 0)
+            return $"{AissWebBaseUrl}/services/onboard?registerUniqueId={registerUniqueId}";
+
+        return "";
+    }
 
     public string ServicePageUrl =>
         Service is { Id: > 0 } ? $"{AissWebBaseUrl}/services/{Service.Id}" : "";
@@ -245,7 +265,7 @@ public class FipsProductDetailViewModel
     public List<FipsCategorisationGroupEditSection> CategorisationGroupSections { get; set; } = new();
 }
 
-public sealed record FipsCategorisationSummaryLine(string GroupName, string ItemsDisplay);
+public sealed record FipsCategorisationSummaryLine(int GroupId, string GroupName, string ItemsDisplay);
 
 public sealed class FipsProductStrategicAlignmentPanel
 {

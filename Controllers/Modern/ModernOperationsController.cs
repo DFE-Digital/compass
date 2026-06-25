@@ -1609,6 +1609,8 @@ public class ModernOperationsController : Controller
         var detailTab = NormalizeServiceRegisterProductTab(tab);
         if (detailTab == "cmdb")
             edit = false;
+        if (edit && detailTab == "information")
+            return RedirectToAction("FipsProductEditInformation", "ModernManage", new { id, nc = "operations" });
 
         var email = CurrentUserEmail;
         var productIdStr = product.Id.ToString();
@@ -1626,12 +1628,13 @@ public class ModernOperationsController : Controller
             })
             .ToListAsync(ct);
 
-        var editMode = edit && detailTab == "information";
+        var editMode = false;
 
         var vm = new FipsProductDetailViewModel
         {
             Product = product,
             CanManage = true,
+            CanEditInformation = true,
             CurrentUserEmail = email,
             AuditHistory = auditHistory,
             NavContext = null,
@@ -1640,27 +1643,6 @@ public class ModernOperationsController : Controller
             EditMode = editMode,
             ActiveDetailTab = detailTab,
         };
-
-        if (editMode)
-        {
-            await _fipsBusinessAreaLookupSync.SyncFromBusinessAreaLookupsAsync(ct);
-            await _fipsDirectorateLookupSync.SyncFromDirectorateLookupsAsync(ct);
-            vm.PhaseOptions = await _db.PhaseLookups
-                .Where(x => x.IsActive).OrderBy(x => x.SortOrder).ToListAsync(ct);
-            vm.DirectorateLookupOptions =
-                await FipsDirectorateLookupUiHelper.LoadDirectorateLookupOptionsForEditAsync(_db, product, ct);
-            vm.SelectedDirectorateLookupIds =
-                FipsDirectorateLookupUiHelper.GetSelectedDirectorateLookupIds(product, vm.DirectorateLookupOptions);
-            vm.BusinessAreaLookupOptions =
-                await FipsBusinessAreaLookupUiHelper.LoadBusinessAreaLookupOptionsForEditAsync(_db, product, ct);
-            vm.SelectedBusinessAreaLookupIds =
-                FipsBusinessAreaLookupUiHelper.GetSelectedBusinessAreaLookupIds(product, vm.BusinessAreaLookupOptions);
-            vm.ChannelOptions = await _db.FipsChannels
-                .Where(x => x.Active).OrderBy(x => x.DisplayOrder).ToListAsync(ct);
-            vm.UserGroupTreeOptions = await FipsUserGroupUiHelper.LoadActiveTreeAsync(_db, ct);
-            vm.TypeOptions = await _db.FipsTypes
-                .Where(x => x.Active).OrderBy(x => x.DisplayOrder).ToListAsync(ct);
-        }
 
         await FipsProductCategorisationPresentation.PopulateAsync(_db, vm, editMode, ct);
 
