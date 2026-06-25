@@ -21,6 +21,7 @@ public sealed class FipsDirectorateLookupSyncService : IFipsDirectorateLookupSyn
             .ToListAsync(cancellationToken);
 
         var tracked = await _db.FipsDirectorates.ToListAsync(cancellationToken);
+        var changed = false;
 
         foreach (var l in lookups)
         {
@@ -39,18 +40,25 @@ public sealed class FipsDirectorateLookupSyncService : IFipsDirectorateLookupSyn
                     DisplayOrder = l.SortOrder,
                     Active = l.IsActive
                 });
+                changed = true;
             }
-            else
+            else if (row.DirectorateLookupId != l.Id
+                     || row.Name != l.Name.Trim()
+                     || row.Description != l.Description?.Trim()
+                     || row.DisplayOrder != l.SortOrder
+                     || row.Active != l.IsActive)
             {
                 row.DirectorateLookupId = l.Id;
                 row.Name = l.Name.Trim();
                 row.Description = l.Description?.Trim();
                 row.DisplayOrder = l.SortOrder;
                 row.Active = l.IsActive;
+                changed = true;
             }
         }
 
-        await _db.SaveChangesAsync(cancellationToken);
+        if (changed)
+            await _db.SaveChangesAsync(cancellationToken);
     }
 
     public async Task<int[]> ResolveToFipsDirectorateIdsAsync(int[] directorateLookupIds,
@@ -60,11 +68,13 @@ public sealed class FipsDirectorateLookupSyncService : IFipsDirectorateLookupSyn
             return Array.Empty<int>();
 
         var requested = directorateLookupIds.Distinct().ToArray();
-        await SyncFromDirectorateLookupsAsync(cancellationToken);
+        var idByLookup = await LookupFipsDirectorateIdsAsync(requested, cancellationToken);
 
-        var idByLookup = await _db.FipsDirectorates.AsNoTracking()
-            .Where(f => f.DirectorateLookupId != null && requested.Contains(f.DirectorateLookupId.Value))
-            .ToDictionaryAsync(f => f.DirectorateLookupId!.Value, f => f.Id, cancellationToken);
+        if (!requested.All(idByLookup.ContainsKey))
+        {
+            await SyncFromDirectorateLookupsAsync(cancellationToken);
+            idByLookup = await LookupFipsDirectorateIdsAsync(requested, cancellationToken);
+        }
 
         return directorateLookupIds
             .Where(lid => idByLookup.ContainsKey(lid))
@@ -72,4 +82,11 @@ public sealed class FipsDirectorateLookupSyncService : IFipsDirectorateLookupSyn
             .Distinct()
             .ToArray();
     }
+
+    private Task<Dictionary<int, int>> LookupFipsDirectorateIdsAsync(
+        int[] requested,
+        CancellationToken cancellationToken) =>
+        _db.FipsDirectorates.AsNoTracking()
+            .Where(f => f.DirectorateLookupId != null && requested.Contains(f.DirectorateLookupId.Value))
+            .ToDictionaryAsync(f => f.DirectorateLookupId!.Value, f => f.Id, cancellationToken);
 }

@@ -27,6 +27,7 @@ public sealed class AissProductAccessibilityService : IAissProductAccessibilityS
     public async Task<FipsProductAissAccessibility> LoadForProductAsync(
         int registerNumericUniqueId,
         Guid registerProductId,
+        int openIssuesLimit = 40,
         CancellationToken cancellationToken = default)
     {
         var webBase = _aiss.ResolveWebBaseUrl();
@@ -43,17 +44,20 @@ public sealed class AissProductAccessibilityService : IAissProductAccessibilityS
         AissServiceAccessibilityApiResponse? payload = null;
         string? error = null;
 
+        var issuesLimit = Math.Max(0, openIssuesLimit);
+        var issuesQuery = $"openIssuesLimit={issuesLimit}";
+
         if (registerProductId != Guid.Empty)
         {
             (payload, error) = await GetAccessibilityAsync(
-                $"v1/services/by-register/{registerProductId:N}/accessibility?openIssuesLimit=40",
+                $"v1/services/by-register/{registerProductId:N}/accessibility?{issuesQuery}",
                 cancellationToken);
         }
 
         if (payload?.Service == null && registerNumericUniqueId > 0)
         {
             (payload, error) = await GetAccessibilityAsync(
-                $"v1/services/by-register-unique-id/{registerNumericUniqueId}/accessibility?openIssuesLimit=40",
+                $"v1/services/by-register-unique-id/{registerNumericUniqueId}/accessibility?{issuesQuery}",
                 cancellationToken);
         }
 

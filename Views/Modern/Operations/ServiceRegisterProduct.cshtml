@@ -5,7 +5,6 @@
     ViewData["Title"] = Model.Product.Title + " — Service register";
     var p = Model.Product;
     var detailTab = Model.ActiveDetailTab;
-    var editInfoUrl = Url.Action("ServiceRegisterProduct", "ModernOperations", new { id = p.Id, tab = "information", edit = true }) ?? "#";
 }
 
 @section Breadcrumbs {
@@ -54,337 +53,15 @@
 <div class="govuk-grid-column-three-quarters-from-desktop">
     @await Html.PartialAsync("~/Views/Modern/Shared/_ServiceRegisterProductRecordCard.cshtml", Model)
 
-    @if (Model.EditMode && Model.CanManage && detailTab == "information")
-    {
-        var reportingRoleNames = new[] { "Reporting contact", "Reporting user" };
-        var existingReportingContacts = p.Contacts
-            .Where(c => reportingRoleNames.Contains(c.FipsContactRole.Name))
-            .OrderBy(c => c.UserName)
-            .ThenBy(c => c.UserEmail)
-            .ToList();
-        var reportingContactPicker = new Compass.Models.UserPickerViewModel
+    <div id="d-ops-fips-information" class="tab-pane @(detailTab == "information" ? "on" : "")" role="tabpanel">
+        @if (detailTab == "information")
         {
-            FieldName = "reportingContactUserId",
-            Label = "Reporting contact",
-            Hint = "Search and select a user from Entra.",
-            DefaultSummaryText = "No user selected."
-        };
-        <p class="govuk-body-s govuk-!-margin-bottom-4" style="color:#505a5f;">Run <strong>Sync this product from CMDB</strong> (top right) to refresh title, description, contacts, and the JSON snapshot on the CMDB tab.</p>
- <div class="dfe-c-card dfe-c-card--plain govuk-!-margin-bottom-4">
- <div id="d-ops-fips-information" class="tab-pane on" role="tabpanel">
-                        <form method="post" novalidate asp-controller="ModernOperations" asp-action="ServiceRegisterProductUpdate" asp-route-id="@p.Id">
-                            @Html.AntiForgeryToken()
+            ViewBag.FipsNavContext = "operations";
+            @await Html.PartialAsync("~/Views/Modern/Manage/_FipsProductInformationSummary.cshtml", Model)
+        }
+    </div>
 
- <fieldset class="govuk-fieldset govuk-!-margin-bottom-6">
- <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">CMDB reference</legend>
- <p class="govuk-body-s govuk-!-margin-bottom-3" style="color:#505a5f;">Synced from CMDB.</p>
- <dl class="govuk-summary-list govuk-!-margin-bottom-0">
- <div class="govuk-summary-list__row">
- <dt class="govuk-summary-list__key">CMDB description</dt>
- <dd class="govuk-summary-list__value">@(string.IsNullOrWhiteSpace(p.CMDBDescription) ? "—" : p.CMDBDescription)</dd>
-                                    </div>
-                                </dl>
-                            </fieldset>
-
- <fieldset class="govuk-fieldset govuk-!-margin-bottom-6">
- <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Product details</legend>
-
- <div class="govuk-form-group">
- <label class="govuk-label" for="userDescription">User description</label>
- <div class="govuk-hint" id="userDescription-hint">Plain-language description for colleagues and the service register.</div>
- <textarea class="govuk-textarea" id="userDescription" name="userDescription" rows="4" aria-describedby="userDescription-hint">@p.UserDescription</textarea>
-                                </div>
-
- <div class="govuk-form-group">
- <label class="govuk-label" for="phaseId">Phase</label>
- <select class="govuk-select govuk-!-width-full" id="phaseId" name="phaseId">
-                                        <option value="">— Select —</option>
-                                        @foreach (var opt in Model.PhaseOptions)
-                                        {
-                                            var isPhaseSelected = opt.Id == p.PhaseId;
-                                            if (isPhaseSelected)
-                                            {
-                                                <option value="@opt.Id" selected>@opt.Name</option>
-                                            }
-                                            else
-                                            {
-                                                <option value="@opt.Id">@opt.Name</option>
-                                            }
-                                        }
-                                    </select>
-                                </div>
-
- <div class="govuk-form-group">
- <fieldset class="govuk-fieldset">
- <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Directorate</legend>
- <div class="govuk-hint" id="dir-hint">Select all that apply.</div>
- <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes" aria-describedby="dir-hint">
-                                            @foreach (var dir in Model.DirectorateLookupOptions)
-                                            {
-                                                var isDirChecked = Model.SelectedDirectorateLookupIds.Contains(dir.Id);
- <div class="govuk-checkboxes__item">
- <input class="govuk-checkboxes__input" id="dir-lkp-@dir.Id" name="directorateLookupIds" type="checkbox" value="@dir.Id" @(isDirChecked ? "checked" : "")>
- <label class="govuk-label govuk-checkboxes__label" for="dir-lkp-@dir.Id">@dir.Name</label>
-                                                </div>
-                                            }
-                                        </div>
-                                    </fieldset>
-                                </div>
-
- <div class="govuk-form-group">
- <fieldset class="govuk-fieldset">
- <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Business area</legend>
- <div class="govuk-hint" id="ba-hint">Select all that apply.</div>
- <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes" aria-describedby="ba-hint">
-                                            @foreach (var ba in Model.BusinessAreaLookupOptions)
-                                            {
-                                                var isChecked = Model.SelectedBusinessAreaLookupIds.Contains(ba.Id);
- <div class="govuk-checkboxes__item">
- <input class="govuk-checkboxes__input" id="ba-lkp-@ba.Id" name="businessAreaLookupIds" type="checkbox" value="@ba.Id" @(isChecked ? "checked" : "")>
- <label class="govuk-label govuk-checkboxes__label" for="ba-lkp-@ba.Id">@ba.Name</label>
-                                                </div>
-                                            }
-                                        </div>
-                                    </fieldset>
-                                </div>
-
- <div class="govuk-form-group">
- <fieldset class="govuk-fieldset">
- <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Channel</legend>
- <div class="govuk-hint" id="ch-hint">Select all that apply.</div>
- <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes" aria-describedby="ch-hint">
-                                            @foreach (var ch in Model.ChannelOptions)
-                                            {
-                                                var isChecked = p.Channels.Any(x => x.FipsChannelId == ch.Id);
- <div class="govuk-checkboxes__item">
- <input class="govuk-checkboxes__input" id="ch-@ch.Id" name="channelIds" type="checkbox" value="@ch.Id" @(isChecked ? "checked" : "")>
- <label class="govuk-label govuk-checkboxes__label" for="ch-@ch.Id">@ch.Name</label>
-                                                </div>
-                                            }
-                                        </div>
-                                    </fieldset>
-                                </div>
-
- <div class="govuk-form-group">
- <fieldset class="govuk-fieldset">
- <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">User group</legend>
- <div class="govuk-hint" id="ug-hint">Select all that apply.</div>
- <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes" aria-describedby="ug-hint">
-                                            @foreach (var ug in Model.UserGroupTreeOptions)
-                                            {
-                                                var isChecked = p.UserGroups.Any(x => x.FipsUserGroupId == ug.Id);
- <div class="govuk-checkboxes__item">
- <input class="govuk-checkboxes__input" id="ug-@ug.Id" name="userGroupIds" type="checkbox" value="@ug.Id" @(isChecked ? "checked" : "")>
- <label class="govuk-label govuk-checkboxes__label" for="ug-@ug.Id">@AdminFipsUserGroupTreeHelper.FormatIndentedLabel(ug.Name, ug.Depth)</label>
-                                                </div>
-                                            }
-                                        </div>
-                                    </fieldset>
-                                </div>
-
- <div class="govuk-form-group">
- <fieldset class="govuk-fieldset">
- <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Type</legend>
- <div class="govuk-hint" id="tp-hint">Select all that apply.</div>
- <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes" aria-describedby="tp-hint">
-                                            @foreach (var tp in Model.TypeOptions)
-                                            {
-                                                var isChecked = p.Types.Any(x => x.FipsTypeId == tp.Id);
- <div class="govuk-checkboxes__item">
- <input class="govuk-checkboxes__input" id="tp-@tp.Id" name="typeIds" type="checkbox" value="@tp.Id" @(isChecked ? "checked" : "")>
- <label class="govuk-label govuk-checkboxes__label" for="tp-@tp.Id">@tp.Name</label>
-                                                </div>
-                                            }
-                                        </div>
-                                    </fieldset>
-                                </div>
-
-                                @await Html.PartialAsync("~/Views/Modern/Shared/_FipsProductCategorisationFields.cshtml", Model)
-
- <div class="govuk-form-group">
- <fieldset class="govuk-fieldset">
- <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Enterprise service</legend>
- <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes">
- <div class="govuk-checkboxes__item">
- <input class="govuk-checkboxes__input" id="isEnterpriseService" name="isEnterpriseService" type="checkbox" value="true" @(p.IsEnterpriseService ? "checked" : "")>
- <label class="govuk-label govuk-checkboxes__label" for="isEnterpriseService">Mark as enterprise service for reporting and integrations</label>
- </div>
- </div>
- </fieldset>
- </div>
-
- <div class="govuk-form-group govuk-!-margin-bottom-0">
- <label class="govuk-label" for="productURL">Product URL</label>
- <div class="govuk-hint" id="productURL-hint">Public or internal URL for the live product or service.</div>
- <input class="govuk-input govuk-!-width-full" id="productURL" name="productURL" type="url" value="@p.ProductURL" aria-describedby="productURL-hint">
-                                </div>
-                            </fieldset>
-
- <fieldset class="govuk-fieldset govuk-!-margin-bottom-6">
- <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Reporting contact</legend>
- <p class="govuk-body-s govuk-!-margin-bottom-3" style="color:#505a5f;">Add one reporting contact using Entra user lookup.</p>
-
-                                @if (existingReportingContacts.Any())
-                                {
- <div class="govuk-inset-text govuk-!-margin-top-0 govuk-!-margin-bottom-3">
- <strong>Current reporting contacts:</strong>
-                                        @foreach (var rc in existingReportingContacts)
-                                        {
- <div class="govuk-body-s govuk-!-margin-bottom-1">@(!string.IsNullOrWhiteSpace(rc.UserName) ? rc.UserName : "—") · @(!string.IsNullOrWhiteSpace(rc.UserEmail) ? rc.UserEmail : "—")</div>
-                                        }
-                                    </div>
-                                }
-
-                                @await Html.PartialAsync("~/Views/Modern/Shared/_UserPicker.cshtml", reportingContactPicker)
-                            </fieldset>
-
- <div class="govuk-button-group govuk-!-margin-top-6 govuk-!-margin-bottom-0">
- <button type="submit" class="govuk-button" data-module="govuk-button">Save changes</button>
-                                <a href="@Url.Action("ServiceRegisterProduct", "ModernOperations", new { id = p.Id, tab = "information", edit = false })"
- class="govuk-button govuk-button--secondary">Cancel editing</a>
-                            </div>
-                        </form>
-                    </div>
- </div>
-
- <div class="dfe-c-card dfe-c-card--plain govuk-!-margin-bottom-0">
- <h2 class="govuk-heading-s govuk-!-margin-top-0 govuk-!-margin-bottom-3">People</h2>
-                    @if (p.Contacts.Count == 0)
-                    {
- <p class="govuk-body govuk-!-margin-bottom-0">No contacts assigned.</p>
-                    }
-                    else
-                    {
- <dl class="govuk-summary-list govuk-!-margin-bottom-0">
-                            @foreach (var c in p.Contacts.OrderBy(c => c.FipsContactRole.DisplayOrder))
-                            {
- <div class="govuk-summary-list__row">
- <dt class="govuk-summary-list__key">@c.FipsContactRole.Name</dt>
- <dd class="govuk-summary-list__value">
-                                        @if (!string.IsNullOrWhiteSpace(c.UserName))
-                                        {
- <div class="govuk-body govuk-!-margin-bottom-1">@c.UserName</div>
-                                        }
-                                        @if (!string.IsNullOrWhiteSpace(c.UserEmail))
-                                        {
- <div class="govuk-body">
- <a href="mailto:@c.UserEmail" class="govuk-link govuk-link--no-visited-state">@c.UserEmail</a>
-                                            </div>
-                                        }
-                                        else if (string.IsNullOrWhiteSpace(c.UserName))
-                                        {
-                                            <span>—</span>
-                                        }
-                                    </dd>
-                                </div>
-                            }
-                        </dl>
-                    }
-                </div>
-    }
-    else
-    {
-
- <div id="d-ops-fips-information" class="tab-pane @(detailTab == "information" ? "on" : "")" role="tabpanel">
- @if (detailTab == "information")
- {
-   <div class="dfe-c-card dfe-c-card--plain govuk-!-margin-bottom-4">
-     <h2 class="govuk-heading-s govuk-!-margin-top-0 govuk-!-margin-bottom-3">Overview</h2>
-     <dl class="govuk-summary-list govuk-!-margin-bottom-0">
-                    @{ var readOnlyFields = new (string Label, string? Value, bool IsUrl, string ChangeVisuallyHidden)[] {
-                        ("CMDB description", p.CMDBDescription, false, "CMDB description"),
-                        ("User description", p.UserDescription, false, "user description"),
-                        ("Phase", p.Phase?.Name, false, "phase"),
-                        ("Directorate", Model.DirectoratesDisplay, false, "directorate"),
-                        ("Business area", Model.BusinessAreasDisplay, false, "business area"),
-                        ("Channel", Model.ChannelsDisplay, false, "channel"),
-                        ("User group", Model.UserGroupsDisplay, false, "user group"),
-                        ("Type", Model.TypesDisplay, false, "type"),
-                        ("Enterprise service", p.IsEnterpriseService ? "Yes" : "No", false, "enterprise service"),
-                        ("Product URL", p.ProductURL, true, "product URL")
-                    }; }
-                    @foreach (var f in readOnlyFields)
-                    {
- <div class="govuk-summary-list__row">
- <dt class="govuk-summary-list__key">@f.Label</dt>
- <dd class="govuk-summary-list__value">
-                                @if (f.IsUrl && !string.IsNullOrWhiteSpace(f.Value))
-                                {
- <a href="@f.Value" class="govuk-link" target="_blank" rel="noopener">@f.Value</a>
-                                }
-                                else
-                                {
-                                    @(string.IsNullOrWhiteSpace(f.Value) ? "—" : f.Value)
-                                }
-                            </dd>
- @if (Model.CanManage)
- {
- <dd class="govuk-summary-list__actions">
-   <a class="govuk-link" href="@editInfoUrl">Change<span class="govuk-visually-hidden"> @f.ChangeVisuallyHidden</span></a>
- </dd>
- }
-                        </div>
-                    }
-                    @foreach (var cat in Model.CategorisationSummaryLines)
-                    {
- <div class="govuk-summary-list__row">
- <dt class="govuk-summary-list__key">@cat.GroupName</dt>
- <dd class="govuk-summary-list__value">@cat.ItemsDisplay</dd>
- @if (Model.CanManage)
- {
- <dd class="govuk-summary-list__actions">
-   <a class="govuk-link" href="@editInfoUrl">Change<span class="govuk-visually-hidden"> @cat.GroupName</span></a>
- </dd>
- }
-                        </div>
-                    }
-                </dl>
-   </div>
-
-   <div class="dfe-c-card dfe-c-card--plain govuk-!-margin-bottom-0">
- <h2 class="govuk-heading-s govuk-!-margin-top-0 govuk-!-margin-bottom-3">People</h2>
-                @if (p.Contacts.Count == 0)
-                {
- <p class="govuk-body govuk-!-margin-bottom-0">No contacts assigned.</p>
-                }
-                else
-                {
- <dl class="govuk-summary-list govuk-!-margin-bottom-0">
-                        @foreach (var c in p.Contacts.OrderBy(c => c.FipsContactRole.DisplayOrder))
-                        {
- <div class="govuk-summary-list__row">
- <dt class="govuk-summary-list__key">@c.FipsContactRole.Name</dt>
- <dd class="govuk-summary-list__value">
-                                    @if (!string.IsNullOrWhiteSpace(c.UserName))
-                                    {
- <div class="govuk-body govuk-!-margin-bottom-1">@c.UserName</div>
-                                    }
-                                    @if (!string.IsNullOrWhiteSpace(c.UserEmail))
-                                    {
- <div class="govuk-body">
- <a href="mailto:@c.UserEmail" class="govuk-link govuk-link--no-visited-state">@c.UserEmail</a>
-                                        </div>
-                                    }
-                                    else if (string.IsNullOrWhiteSpace(c.UserName))
-                                    {
-                                        <span>—</span>
-                                    }
-                                </dd>
- @if (Model.CanManage)
- {
- <dd class="govuk-summary-list__actions">
-   <a class="govuk-link" href="@editInfoUrl">Change<span class="govuk-visually-hidden"> @c.FipsContactRole.Name</span></a>
- </dd>
- }
-                            </div>
-                        }
-                    </dl>
-                }
-   </div>
- }
-            </div>
-
- <div id="d-ops-fips-history" class="tab-pane @(detailTab == "history" ? "on" : "")" role="tabpanel">
+    <div id="d-ops-fips-history" class="tab-pane @(detailTab == "history" ? "on" : "")" role="tabpanel">
  <h2 class="govuk-heading-m">Change history</h2>
                 @if (Model.AuditHistory.Count == 0)
                 {
@@ -443,7 +120,6 @@
               <partial name="~/Views/Modern/Shared/_FipsProductRaidPanes.cshtml" model="Model" />
             }
 
-    }
 </div>
 </div>
 </div>
@@ -475,6 +151,10 @@
 </dialog>
 
 @section Scripts {
+    @if (detailTab == "information" && Model.CanManage)
+    {
+        <script src="~/modern/js/fips-product-detail-edit-modal.js" asp-append-version="true" nonce="@(Context.Items["Nonce"]?.ToString() ?? "")"></script>
+    }
     <script nonce="@Context.Items["Nonce"]">
         (function () {
             var jsonUrl = @Html.Raw(Json.Serialize(Url.Action("ServiceRegisterProductSyncCmdbJson", "ModernOperations", new { id = p.Id })));
