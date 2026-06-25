@@ -1,0 +1,256 @@
+@model FipsProductDetailViewModel
+@using Compass.Services.Fips
+@using Compass.ViewModels.Modern
+@{
+  var p = Model.Product;
+  var nc = ViewBag.FipsNavContext as string;
+  var postUrl = Url.Action("FipsProductEditInformation", "ModernManage", new { id = p.Id, nc }) ?? "#";
+  var showFieldActions = ViewBag.FipsInformationEditEmbed as bool? != true;
+  var onlyField = ViewBag.FipsInformationEditOnlyField as string;
+  bool ShowField(string fieldKey) => string.IsNullOrEmpty(onlyField) || string.Equals(onlyField, fieldKey, StringComparison.OrdinalIgnoreCase);
+  bool ShowCategorisationField(int groupId) =>
+    string.IsNullOrEmpty(onlyField) ||
+    string.Equals(onlyField, FipsProductInformationFieldKeys.Categorisation(groupId), StringComparison.OrdinalIgnoreCase);
+}
+
+<form method="post" novalidate action="@postUrl" id="fips-information-edit-form">
+  @Html.AntiForgeryToken()
+
+  @if (ShowField(FipsProductInformationFieldKeys.Description))
+  {
+  <fieldset class="govuk-fieldset govuk-!-margin-bottom-6" id="@FipsProductInformationFieldKeys.HashForField(FipsProductInformationFieldKeys.Description)">
+    <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Description</legend>
+    <div class="govuk-form-group govuk-!-margin-bottom-0">
+      <label class="govuk-label" for="userDescription">Description</label>
+      <div class="govuk-hint" id="userDescription-hint">Plain-language description for colleagues and the service register.</div>
+      <textarea class="govuk-textarea" id="userDescription" name="userDescription" rows="4" aria-describedby="userDescription-hint">@p.UserDescription</textarea>
+    </div>
+    @if (showFieldActions)
+    {
+      <div class="govuk-button-group govuk-!-margin-top-4 govuk-!-margin-bottom-0">
+        <button type="submit" class="govuk-button" name="field" value="@FipsProductInformationFieldKeys.Description">Save description</button>
+      </div>
+    }
+  </fieldset>
+  }
+
+  @if (ShowField(FipsProductInformationFieldKeys.Phase))
+  {
+  <fieldset class="govuk-fieldset govuk-!-margin-bottom-6" id="@FipsProductInformationFieldKeys.HashForField(FipsProductInformationFieldKeys.Phase)">
+    <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Phase</legend>
+    <div class="govuk-form-group govuk-!-margin-bottom-0">
+      <label class="govuk-label" for="phaseId">Phase</label>
+      <select class="govuk-select govuk-!-width-full" id="phaseId" name="phaseId">
+        <option value="">— Select —</option>
+        @foreach (var opt in Model.PhaseOptions)
+        {
+          if (opt.Id == p.PhaseId)
+          {
+            <option value="@opt.Id" selected>@opt.Name</option>
+          }
+          else
+          {
+            <option value="@opt.Id">@opt.Name</option>
+          }
+        }
+      </select>
+    </div>
+    @if (showFieldActions)
+    {
+      <div class="govuk-button-group govuk-!-margin-top-4 govuk-!-margin-bottom-0">
+        <button type="submit" class="govuk-button" name="field" value="@FipsProductInformationFieldKeys.Phase">Save phase</button>
+      </div>
+    }
+  </fieldset>
+  }
+
+  @if (ShowField(FipsProductInformationFieldKeys.Directorate))
+  {
+  <fieldset class="govuk-fieldset govuk-!-margin-bottom-6" id="@FipsProductInformationFieldKeys.HashForField(FipsProductInformationFieldKeys.Directorate)">
+    <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Directorate</legend>
+    <div class="govuk-hint" id="dir-hint">Select all that apply.</div>
+    <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes" aria-describedby="dir-hint">
+      @foreach (var dir in Model.DirectorateLookupOptions)
+      {
+        var isDirChecked = Model.SelectedDirectorateLookupIds.Contains(dir.Id);
+        <div class="govuk-checkboxes__item">
+          <input class="govuk-checkboxes__input" id="dir-lkp-@dir.Id" name="directorateLookupIds" type="checkbox" value="@dir.Id" @(isDirChecked ? "checked" : "")>
+          <label class="govuk-label govuk-checkboxes__label" for="dir-lkp-@dir.Id">@dir.Name</label>
+        </div>
+      }
+    </div>
+    @if (showFieldActions)
+    {
+      <div class="govuk-button-group govuk-!-margin-top-4 govuk-!-margin-bottom-0">
+        <button type="submit" class="govuk-button" name="field" value="@FipsProductInformationFieldKeys.Directorate">Save directorate</button>
+      </div>
+    }
+  </fieldset>
+  }
+
+  @if (ShowField(FipsProductInformationFieldKeys.BusinessArea))
+  {
+  <fieldset class="govuk-fieldset govuk-!-margin-bottom-6" id="@FipsProductInformationFieldKeys.HashForField(FipsProductInformationFieldKeys.BusinessArea)">
+    <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Business area</legend>
+    <div class="govuk-hint" id="ba-hint">Select all that apply.</div>
+    <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes" aria-describedby="ba-hint">
+      @foreach (var ba in Model.BusinessAreaLookupOptions)
+      {
+        var isChecked = Model.SelectedBusinessAreaLookupIds.Contains(ba.Id);
+        <div class="govuk-checkboxes__item">
+          <input class="govuk-checkboxes__input" id="ba-lkp-@ba.Id" name="businessAreaLookupIds" type="checkbox" value="@ba.Id" @(isChecked ? "checked" : "")>
+          <label class="govuk-label govuk-checkboxes__label" for="ba-lkp-@ba.Id">@ba.Name</label>
+        </div>
+      }
+    </div>
+    @if (showFieldActions)
+    {
+      <div class="govuk-button-group govuk-!-margin-top-4 govuk-!-margin-bottom-0">
+        <button type="submit" class="govuk-button" name="field" value="@FipsProductInformationFieldKeys.BusinessArea">Save business area</button>
+      </div>
+    }
+  </fieldset>
+  }
+
+  @if (ShowField(FipsProductInformationFieldKeys.Channel))
+  {
+  <fieldset class="govuk-fieldset govuk-!-margin-bottom-6" id="@FipsProductInformationFieldKeys.HashForField(FipsProductInformationFieldKeys.Channel)">
+    <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Channel</legend>
+    <div class="govuk-hint" id="ch-hint">Select all that apply.</div>
+    <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes" aria-describedby="ch-hint">
+      @foreach (var ch in Model.ChannelOptions)
+      {
+        var isChecked = p.Channels.Any(x => x.FipsChannelId == ch.Id);
+        <div class="govuk-checkboxes__item">
+          <input class="govuk-checkboxes__input" id="ch-@ch.Id" name="channelIds" type="checkbox" value="@ch.Id" @(isChecked ? "checked" : "")>
+          <label class="govuk-label govuk-checkboxes__label" for="ch-@ch.Id">@ch.Name</label>
+        </div>
+      }
+    </div>
+    @if (showFieldActions)
+    {
+      <div class="govuk-button-group govuk-!-margin-top-4 govuk-!-margin-bottom-0">
+        <button type="submit" class="govuk-button" name="field" value="@FipsProductInformationFieldKeys.Channel">Save channel</button>
+      </div>
+    }
+  </fieldset>
+  }
+
+  @if (ShowField(FipsProductInformationFieldKeys.UserGroup))
+  {
+  <fieldset class="govuk-fieldset govuk-!-margin-bottom-6" id="@FipsProductInformationFieldKeys.HashForField(FipsProductInformationFieldKeys.UserGroup)">
+    <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">User group</legend>
+    <div class="govuk-hint" id="ug-hint">Select all that apply.</div>
+    <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes" aria-describedby="ug-hint">
+      @foreach (var ug in Model.UserGroupTreeOptions)
+      {
+        var isChecked = p.UserGroups.Any(x => x.FipsUserGroupId == ug.Id);
+        <div class="govuk-checkboxes__item">
+          <input class="govuk-checkboxes__input" id="ug-@ug.Id" name="userGroupIds" type="checkbox" value="@ug.Id" @(isChecked ? "checked" : "")>
+          <label class="govuk-label govuk-checkboxes__label" for="ug-@ug.Id">@AdminFipsUserGroupTreeHelper.FormatIndentedLabel(ug.Name, ug.Depth)</label>
+        </div>
+      }
+    </div>
+    @if (showFieldActions)
+    {
+      <div class="govuk-button-group govuk-!-margin-top-4 govuk-!-margin-bottom-0">
+        <button type="submit" class="govuk-button" name="field" value="@FipsProductInformationFieldKeys.UserGroup">Save user group</button>
+      </div>
+    }
+  </fieldset>
+  }
+
+  @if (ShowField(FipsProductInformationFieldKeys.Type))
+  {
+  <fieldset class="govuk-fieldset govuk-!-margin-bottom-6" id="@FipsProductInformationFieldKeys.HashForField(FipsProductInformationFieldKeys.Type)">
+    <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Type</legend>
+    <div class="govuk-hint" id="tp-hint">Select all that apply.</div>
+    <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes" aria-describedby="tp-hint">
+      @foreach (var tp in Model.TypeOptions)
+      {
+        var isChecked = p.Types.Any(x => x.FipsTypeId == tp.Id);
+        <div class="govuk-checkboxes__item">
+          <input class="govuk-checkboxes__input" id="tp-@tp.Id" name="typeIds" type="checkbox" value="@tp.Id" @(isChecked ? "checked" : "")>
+          <label class="govuk-label govuk-checkboxes__label" for="tp-@tp.Id">@tp.Name</label>
+        </div>
+      }
+    </div>
+    @if (showFieldActions)
+    {
+      <div class="govuk-button-group govuk-!-margin-top-4 govuk-!-margin-bottom-0">
+        <button type="submit" class="govuk-button" name="field" value="@FipsProductInformationFieldKeys.Type">Save type</button>
+      </div>
+    }
+  </fieldset>
+  }
+
+  @foreach (var sec in Model.CategorisationGroupSections)
+  {
+    if (!ShowCategorisationField(sec.GroupId))
+    {
+      continue;
+    }
+    var catField = FipsProductInformationFieldKeys.Categorisation(sec.GroupId);
+    var catHash = FipsProductInformationFieldKeys.CategorisationElementId(sec.GroupId);
+    var hintId = $"cat-hint-{sec.GroupId}";
+    <fieldset class="govuk-fieldset govuk-!-margin-bottom-6" id="@catHash">
+      <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">@sec.GroupName</legend>
+      <div class="govuk-hint" id="@hintId">Select all values that apply for this service.</div>
+      <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes" aria-describedby="@hintId">
+        @foreach (var it in sec.Items)
+        {
+          var cbId = $"cat-{sec.GroupId}-{it.ItemId}";
+          var isChecked = p.CategorisationItems.Any(x => x.FipsCategorisationItemId == it.ItemId);
+          <div class="govuk-checkboxes__item">
+            <input class="govuk-checkboxes__input" id="@cbId" name="categorisationItemIds" type="checkbox" value="@it.ItemId" @(isChecked ? "checked" : "")>
+            <label class="govuk-label govuk-checkboxes__label" for="@cbId">@it.Name</label>
+          </div>
+        }
+      </div>
+      @if (showFieldActions)
+      {
+        <div class="govuk-button-group govuk-!-margin-top-4 govuk-!-margin-bottom-0">
+          <button type="submit" class="govuk-button" name="field" value="@catField">Save @sec.GroupName</button>
+        </div>
+      }
+    </fieldset>
+  }
+
+  @if (ShowField(FipsProductInformationFieldKeys.EnterpriseService))
+  {
+  <fieldset class="govuk-fieldset govuk-!-margin-bottom-6" id="@FipsProductInformationFieldKeys.HashForField(FipsProductInformationFieldKeys.EnterpriseService)">
+    <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Enterprise service</legend>
+    <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes">
+      <input type="hidden" name="isEnterpriseService" value="false">
+      <div class="govuk-checkboxes__item">
+        <input class="govuk-checkboxes__input" id="isEnterpriseService" name="isEnterpriseService" type="checkbox" value="true" @(p.IsEnterpriseService ? "checked" : "")>
+        <label class="govuk-label govuk-checkboxes__label" for="isEnterpriseService">Mark as enterprise service for reporting and integrations</label>
+      </div>
+    </div>
+    @if (showFieldActions)
+    {
+      <div class="govuk-button-group govuk-!-margin-top-4 govuk-!-margin-bottom-0">
+        <button type="submit" class="govuk-button" name="field" value="@FipsProductInformationFieldKeys.EnterpriseService">Save enterprise service</button>
+      </div>
+    }
+  </fieldset>
+  }
+
+  @if (ShowField(FipsProductInformationFieldKeys.ProductUrl))
+  {
+  <fieldset class="govuk-fieldset govuk-!-margin-bottom-0" id="@FipsProductInformationFieldKeys.HashForField(FipsProductInformationFieldKeys.ProductUrl)">
+    <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Product URL</legend>
+    <div class="govuk-form-group govuk-!-margin-bottom-0">
+      <label class="govuk-label" for="productURL">Product URL</label>
+      <div class="govuk-hint" id="productURL-hint">Public or internal URL for the live product or service.</div>
+      <input class="govuk-input govuk-!-width-full" id="productURL" name="productURL" type="url" value="@p.ProductURL" aria-describedby="productURL-hint">
+    </div>
+    @if (showFieldActions)
+    {
+      <div class="govuk-button-group govuk-!-margin-top-4 govuk-!-margin-bottom-0">
+        <button type="submit" class="govuk-button" name="field" value="@FipsProductInformationFieldKeys.ProductUrl">Save product URL</button>
+      </div>
+    }
+  </fieldset>
+  }
+</form>

@@ -11,5 +11,6 @@ public interface IAissProductAccessibilityService
     Task<FipsProductAissAccessibility> LoadForProductAsync(
         int registerNumericUniqueId,
         Guid registerProductId,
+        int openIssuesLimit = 40,
         CancellationToken cancellationToken = default);
 }

@@ -1,0 +1,515 @@
+@using Compass.ViewModels.Modern
+@model CmsCompassServiceDataViewModel
+@{
+    ViewData["Title"] = "Service data";
+    var filter = ViewBag.ServiceDataFilter as string ?? "differences";
+    string FilterUrl(string value) => Url.Action("ServiceData", "ModernAdmin", new { filter = value }) ?? "#";
+    string MatchBadgeClass(CmsCompassProductMatchStatus status) => status switch
+    {
+        CmsCompassProductMatchStatus.MatchedIdentical => "dfe-f-badge--green",
+        CmsCompassProductMatchStatus.MatchedWithDifferences => "dfe-f-badge--yellow",
+        CmsCompassProductMatchStatus.CmsOnly => "dfe-f-badge--blue",
+        CmsCompassProductMatchStatus.CompassOnly => "dfe-f-badge--purple",
+        _ => ""
+    };
+    string MatchLabel(CmsCompassProductMatchStatus status) => status switch
+    {
+        CmsCompassProductMatchStatus.MatchedIdentical => "Matched",
+        CmsCompassProductMatchStatus.MatchedWithDifferences => "Differences",
+        CmsCompassProductMatchStatus.CmsOnly => "CMS only",
+        CmsCompassProductMatchStatus.CompassOnly => "COMPASS only",
+        _ => status.ToString()
+    };
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernAdmin")">Admin</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">Service data</li>
+}
+
+<div class="admin-hub" id="sc-admin-service-data">
+  @await Html.PartialAsync("~/Views/Modern/Shared/_ModernPageHeader.cshtml", new ModernPageHeaderViewModel
+  {
+    Caption = "Administration",
+    Title = "Service data",
+    Lede = new Microsoft.AspNetCore.Html.HtmlString("<p class=\"govuk-body govuk-!-margin-bottom-0\">Compare live FIPS CMS product and category data with the COMPASS service register, then selectively copy CMS values into COMPASS during migration. Products are matched on CMDB ID (<code>cmdb_sys_id</code> in CMS, <code>CMDBID</code> in COMPASS). CMS category values map to COMPASS lookups — for phase, use <a class=\"govuk-link govuk-link--no-visited-state\" href=\"" + (Url.Action("Index", "ModernAdmin", new { panel = "phases" }) ?? "#") + "\">admin Phases</a> and related FIPS lookups.</p>")
+  })
+
+  @if (TempData["AdminMessage"] is string adminMsg)
+  {
+    <div class="govuk-notification-banner govuk-notification-banner--success govuk-!-margin-bottom-3" role="region" aria-labelledby="sd-notif-title">
+      <div class="govuk-notification-banner__header"><h2 class="govuk-notification-banner__title" id="sd-notif-title">Success</h2></div>
+      <div class="govuk-notification-banner__content"><p class="govuk-notification-banner__heading">@adminMsg</p></div>
+    </div>
+  }
+  @if (TempData["AdminError"] is string adminErr)
+  {
+    <div class="govuk-error-summary govuk-!-margin-bottom-4" data-module="govuk-error-summary">
+      <div role="alert">
+        <h2 class="govuk-error-summary__title">There is a problem</h2>
+        <div class="govuk-error-summary__body"><p class="govuk-body govuk-!-margin-bottom-0">@adminErr</p></div>
+      </div>
+    </div>
+  }
+
+  @if (!Model.CmsFetchSucceeded)
+  {
+    <div class="govuk-error-summary govuk-!-margin-bottom-4" data-module="govuk-error-summary">
+      <div role="alert">
+        <h2 class="govuk-error-summary__title">There is a problem</h2>
+        <div class="govuk-error-summary__body">
+          <p class="govuk-body">Could not load data from the FIPS CMS@(string.IsNullOrWhiteSpace(Model.CmsApiBaseUrl) ? "" : $" at {Model.CmsApiBaseUrl}").</p>
+          @if (!string.IsNullOrWhiteSpace(Model.CmsFetchError))
+          {
+            <p class="govuk-body govuk-!-margin-bottom-0">@Model.CmsFetchError</p>
+          }
+        </div>
+      </div>
+    </div>
+  }
+  else
+  {
+    <p class="govuk-body-s govuk-hint govuk-!-margin-bottom-4">
+      Report generated @Model.GeneratedAtUtc.ToString("dd MMM yyyy HH:mm") UTC.
+      @if (!string.IsNullOrWhiteSpace(Model.CmsApiBaseUrl))
+      {
+        <span>CMS source: @Model.CmsApiBaseUrl.</span>
+      }
+      Live CMS products are Active and published. Live COMPASS products are Active status.
+    </p>
+
+    <section class="govuk-!-margin-bottom-6" aria-labelledby="sd-summary-heading">
+      <h2 id="sd-summary-heading" class="govuk-heading-m govuk-!-margin-bottom-3">Summary</h2>
+      <dl class="govuk-summary-list govuk-!-margin-bottom-0">
+        <div class="govuk-summary-list__row">
+          <dt class="govuk-summary-list__key">Live CMS products with CMDB ID</dt>
+          <dd class="govuk-summary-list__value"><strong>@Model.Summary.CmsLiveWithCmdbId</strong></dd>
+        </div>
+        <div class="govuk-summary-list__row">
+          <dt class="govuk-summary-list__key">Live COMPASS products with CMDB ID</dt>
+          <dd class="govuk-summary-list__value"><strong>@Model.Summary.CompassLiveWithCmdbId</strong></dd>
+        </div>
+        <div class="govuk-summary-list__row">
+          <dt class="govuk-summary-list__key">Matched on CMDB ID</dt>
+          <dd class="govuk-summary-list__value">
+            <strong>@Model.Summary.Matched</strong>
+            · <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--green">@Model.Summary.MatchedIdentical identical</span>
+            · <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--yellow">@Model.Summary.MatchedWithDifferences with differences</span>
+          </dd>
+        </div>
+        <div class="govuk-summary-list__row">
+          <dt class="govuk-summary-list__key">CMS only / COMPASS only</dt>
+          <dd class="govuk-summary-list__value">
+            <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--blue">@Model.Summary.CmsOnly CMS only</span>
+            · <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--purple">@Model.Summary.CompassOnly COMPASS only</span>
+          </dd>
+        </div>
+        <div class="govuk-summary-list__row">
+          <dt class="govuk-summary-list__key">Live products missing CMDB ID</dt>
+          <dd class="govuk-summary-list__value">@Model.Summary.CmsLiveMissingCmdbId in CMS · @Model.Summary.CompassLiveMissingCmdbId in COMPASS</dd>
+        </div>
+      </dl>
+    </section>
+
+    <section class="govuk-!-margin-bottom-6" aria-labelledby="sd-lookups-heading">
+      <h2 id="sd-lookups-heading" class="govuk-heading-m govuk-!-margin-bottom-3">Category and lookup comparison</h2>
+      <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+        <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed">
+          <caption class="govuk-table__caption govuk-visually-hidden">Category and lookup counts between CMS and COMPASS</caption>
+          <thead class="govuk-table__head">
+            <tr class="govuk-table__row">
+              <th scope="col" class="govuk-table__header">Lookup</th>
+              <th scope="col" class="govuk-table__header govuk-table__header--numeric">CMS</th>
+              <th scope="col" class="govuk-table__header govuk-table__header--numeric">COMPASS</th>
+              <th scope="col" class="govuk-table__header">CMS only</th>
+              <th scope="col" class="govuk-table__header">COMPASS only</th>
+            </tr>
+          </thead>
+          <tbody class="govuk-table__body">
+            @foreach (var row in Model.LookupComparisons)
+            {
+              <tr class="govuk-table__row">
+                <td class="govuk-table__cell"><strong>@row.Label</strong></td>
+                <td class="govuk-table__cell govuk-table__cell--numeric">@row.CmsCount</td>
+                <td class="govuk-table__cell govuk-table__cell--numeric">@row.CompassCount</td>
+                <td class="govuk-table__cell">
+                  @if (row.CmsOnlyNames.Count == 0)
+                  {
+                    <span class="dfe-c-text-muted">—</span>
+                  }
+                  else
+                  {
+                    @string.Join(", ", row.CmsOnlyNames)
+                  }
+                </td>
+                <td class="govuk-table__cell">
+                  @if (row.CompassOnlyNames.Count == 0)
+                  {
+                    <span class="dfe-c-text-muted">—</span>
+                  }
+                  else
+                  {
+                    @string.Join(", ", row.CompassOnlyNames)
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="govuk-!-margin-bottom-6" aria-labelledby="sd-sync-heading">
+      <h2 id="sd-sync-heading" class="govuk-heading-m govuk-!-margin-bottom-2">Update COMPASS from CMS</h2>
+      <p class="govuk-body govuk-hint govuk-!-margin-bottom-4">
+        Map CMS category values to COMPASS lookups, choose which fields to copy, then apply to selected matched products.
+        Use dry run first to preview changes. COMPASS remains the system of record — this tool helps migrate legacy CMS categorisation.
+      </p>
+
+      @if (Model.LastSyncResult != null)
+      {
+        <div class="govuk-inset-text govuk-!-margin-bottom-4">
+          <p class="govuk-body govuk-!-margin-bottom-1">
+            <strong>Last @(Model.LastSyncResult.DryRun ? "dry run" : "sync"):</strong>
+            @Model.LastSyncResult.UpdatedCount updated,
+            @Model.LastSyncResult.SkippedCount unchanged,
+            @Model.LastSyncResult.FailedCount failed.
+          </p>
+          @if (Model.LastSyncResult.Results.Any(r => !r.Success || r.Changes.Count > 0 || r.Skipped))
+          {
+            <ul class="govuk-list govuk-list--bullet govuk-!-margin-bottom-0">
+              @foreach (var r in Model.LastSyncResult.Results.Take(20))
+              {
+                <li>
+                  <code>@r.CmdbId</code> @(string.IsNullOrWhiteSpace(r.ProductTitle) ? "" : r.ProductTitle)
+                  @if (!r.Success) { <text> — @string.Join("; ", r.Errors)</text> }
+                  else if (r.Skipped) { <text> — @r.SkipReason</text> }
+                  else if (r.Changes.Count > 0) { <text> — @string.Join(", ", r.Changes)</text> }
+                </li>
+              }
+            </ul>
+          }
+        </div>
+      }
+
+      <form method="post" action="@Url.Action("ServiceDataSync", "ModernAdmin")" id="sd-sync-form">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="filter" value="@filter" />
+
+        <details class="govuk-details govuk-!-margin-bottom-4" data-module="govuk-details" open>
+          <summary class="govuk-details__summary">
+            <span class="govuk-details__summary-text">CMS to COMPASS value mappings</span>
+          </summary>
+          <div class="govuk-details__text">
+            @{
+              var mapIndex = 0;
+            }
+            @foreach (var group in Model.ValueMappingGroups)
+            {
+              if (group.Rows.Count == 0) { continue; }
+              <h3 class="govuk-heading-s govuk-!-margin-bottom-2">@group.FieldLabel → @group.CompassLookupLabel</h3>
+              <div class="dfe-f-table-wrapper govuk-!-margin-bottom-4" data-module="dfe-f-table">
+                <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed">
+                  <caption class="govuk-table__caption govuk-visually-hidden">@group.FieldLabel value mappings</caption>
+                  <thead class="govuk-table__head">
+                    <tr class="govuk-table__row">
+                      <th scope="col" class="govuk-table__header">CMS value</th>
+                      <th scope="col" class="govuk-table__header">COMPASS value</th>
+                      <th scope="col" class="govuk-table__header">Match</th>
+                    </tr>
+                  </thead>
+                  <tbody class="govuk-table__body">
+                    @foreach (var mapRow in group.Rows)
+                    {
+                      <tr class="govuk-table__row">
+                        <td class="govuk-table__cell">
+                          @mapRow.CmsValueName
+                          <input type="hidden" name="mapFieldKey" value="@group.FieldKey" />
+                          <input type="hidden" name="mapCmsValue" value="@mapRow.CmsValueName" />
+                        </td>
+                        <td class="govuk-table__cell">
+                          <select class="govuk-select" name="mapCompassId" id="map-@group.FieldKey-@mapIndex">
+                            <option value="">Do not map</option>
+                            @foreach (var opt in mapRow.CompassOptions)
+                            {
+                              if (mapRow.SuggestedCompassId == opt.Id)
+                              {
+                                <option value="@opt.Id" selected="selected">@opt.Name</option>
+                              }
+                              else
+                              {
+                                <option value="@opt.Id">@opt.Name</option>
+                              }
+                            }
+                          </select>
+                        </td>
+                        <td class="govuk-table__cell">
+                          @if (mapRow.HasExactNameMatch)
+                          {
+                            <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--green">Exact name</span>
+                          }
+                          else if (mapRow.SuggestedCompassId.HasValue)
+                          {
+                            <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--yellow">Manual</span>
+                          }
+                          else
+                          {
+                            <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--red">Unmapped</span>
+                          }
+                        </td>
+                      </tr>
+                      mapIndex++;
+                    }
+                  </tbody>
+                </table>
+              </div>
+            }
+          </div>
+        </details>
+
+        <fieldset class="govuk-fieldset govuk-!-margin-bottom-4">
+          <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Fields to copy from CMS</legend>
+          <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes">
+            <div class="govuk-checkboxes__item">
+              <input class="govuk-checkboxes__input" type="checkbox" name="syncPhase" value="true" id="sync-phase" checked />
+              <label class="govuk-label govuk-checkboxes__label" for="sync-phase">Phase</label>
+            </div>
+            <div class="govuk-checkboxes__item">
+              <input class="govuk-checkboxes__input" type="checkbox" name="syncChannel" value="true" id="sync-channel" />
+              <label class="govuk-label govuk-checkboxes__label" for="sync-channel">Channel</label>
+            </div>
+            <div class="govuk-checkboxes__item">
+              <input class="govuk-checkboxes__input" type="checkbox" name="syncType" value="true" id="sync-type" />
+              <label class="govuk-label govuk-checkboxes__label" for="sync-type">Type</label>
+            </div>
+            <div class="govuk-checkboxes__item">
+              <input class="govuk-checkboxes__input" type="checkbox" name="syncBusinessArea" value="true" id="sync-business-area" />
+              <label class="govuk-label govuk-checkboxes__label" for="sync-business-area">Business area</label>
+            </div>
+            <div class="govuk-checkboxes__item">
+              <input class="govuk-checkboxes__input" type="checkbox" name="syncUserGroup" value="true" id="sync-user-group" />
+              <label class="govuk-label govuk-checkboxes__label" for="sync-user-group">User group</label>
+            </div>
+          </div>
+        </fieldset>
+
+        <h3 class="govuk-heading-s govuk-!-margin-bottom-2">Select products to update</h3>
+        @if (!Model.SyncableProducts.Any())
+        {
+          <p class="govuk-body govuk-!-margin-bottom-4">No matched CMS and COMPASS products are available to update.</p>
+        }
+        else
+        {
+          <p class="govuk-body-s govuk-hint govuk-!-margin-bottom-2">
+            @Model.SyncableProducts.Count matched product(s) available. Products with differences are pre-selected.
+          </p>
+          <div class="dfe-f-table-wrapper govuk-!-margin-bottom-4" data-module="dfe-f-table">
+            <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed">
+              <caption class="govuk-table__caption govuk-visually-hidden">Products available for CMS to COMPASS sync</caption>
+              <thead class="govuk-table__head">
+                <tr class="govuk-table__row">
+                  <th scope="col" class="govuk-table__header">
+                    <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes">
+                      <div class="govuk-checkboxes__item">
+                        <input class="govuk-checkboxes__input" type="checkbox" id="sd-select-all" />
+                        <label class="govuk-label govuk-checkboxes__label govuk-visually-hidden" for="sd-select-all">Select all</label>
+                      </div>
+                    </div>
+                  </th>
+                  <th scope="col" class="govuk-table__header">CMDB ID</th>
+                  <th scope="col" class="govuk-table__header">COMPASS title</th>
+                  <th scope="col" class="govuk-table__header">CMS phase</th>
+                  <th scope="col" class="govuk-table__header">COMPASS phase</th>
+                  <th scope="col" class="govuk-table__header">Differences</th>
+                </tr>
+              </thead>
+              <tbody class="govuk-table__body">
+                @{
+                  var syncIndex = 0;
+                }
+                @foreach (var row in Model.SyncableProducts)
+                {
+                  var preselect = row.MatchStatus == CmsCompassProductMatchStatus.MatchedWithDifferences;
+                  syncIndex++;
+                  <tr class="govuk-table__row">
+                    <td class="govuk-table__cell">
+                      <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes">
+                        <div class="govuk-checkboxes__item">
+                          <input class="govuk-checkboxes__input sd-product-checkbox" type="checkbox" name="selectedCmdbIds" value="@row.CmdbId" id="sd-prod-@syncIndex" @(preselect ? "checked" : null) />
+                          <label class="govuk-label govuk-checkboxes__label govuk-visually-hidden" for="sd-prod-@syncIndex">Select @row.CompassTitle</label>
+                        </div>
+                      </div>
+                    </td>
+                    <td class="govuk-table__cell"><code>@row.CmdbId</code></td>
+                    <td class="govuk-table__cell">@row.CompassTitle</td>
+                    <td class="govuk-table__cell">@(row.CmsPhase ?? "—")</td>
+                    <td class="govuk-table__cell">@(row.CompassPhase ?? "—")</td>
+                    <td class="govuk-table__cell">@string.Join(", ", row.Differences)</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+
+        <div class="govuk-checkboxes govuk-checkboxes--small govuk-!-margin-bottom-4" data-module="govuk-checkboxes">
+          <div class="govuk-checkboxes__item">
+            <input class="govuk-checkboxes__input" type="checkbox" name="dryRun" value="true" id="sd-dry-run" checked />
+            <label class="govuk-label govuk-checkboxes__label" for="sd-dry-run">Dry run (preview changes without saving)</label>
+          </div>
+        </div>
+
+        <button type="submit" class="govuk-button" data-module="govuk-button">Apply selected CMS values to COMPASS</button>
+      </form>
+    </section>
+
+    <section aria-labelledby="sd-products-heading">
+      <h2 id="sd-products-heading" class="govuk-heading-m govuk-!-margin-bottom-2">Product comparison</h2>
+
+      <nav class="dfe-f-sub-navigation govuk-!-margin-bottom-4" aria-label="Product comparison filters">
+        <ul class="dfe-f-sub-navigation__list">
+          <li class="dfe-f-sub-navigation__item">
+            <a class="dfe-f-sub-navigation__link govuk-link" href="@FilterUrl("differences")"@if (filter == "differences") { <text> aria-current="page"</text> }>With differences (@Model.Summary.MatchedWithDifferences)</a>
+          </li>
+          <li class="dfe-f-sub-navigation__item">
+            <a class="dfe-f-sub-navigation__link govuk-link" href="@FilterUrl("all")"@if (filter == "all") { <text> aria-current="page"</text> }>All products (@(Model.Summary.Matched + Model.Summary.CmsOnly + Model.Summary.CompassOnly))</a>
+          </li>
+          <li class="dfe-f-sub-navigation__item">
+            <a class="dfe-f-sub-navigation__link govuk-link" href="@FilterUrl("identical")"@if (filter == "identical") { <text> aria-current="page"</text> }>Identical (@Model.Summary.MatchedIdentical)</a>
+          </li>
+          <li class="dfe-f-sub-navigation__item">
+            <a class="dfe-f-sub-navigation__link govuk-link" href="@FilterUrl("cms-only")"@if (filter == "cms-only") { <text> aria-current="page"</text> }>CMS only (@Model.Summary.CmsOnly)</a>
+          </li>
+          <li class="dfe-f-sub-navigation__item">
+            <a class="dfe-f-sub-navigation__link govuk-link" href="@FilterUrl("compass-only")"@if (filter == "compass-only") { <text> aria-current="page"</text> }>COMPASS only (@Model.Summary.CompassOnly)</a>
+          </li>
+        </ul>
+      </nav>
+
+      @if (!Model.Products.Any())
+      {
+        <p class="govuk-body govuk-!-margin-bottom-0">No products match this filter.</p>
+      }
+      else
+      {
+        <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+          <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+          <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed">
+            <caption class="govuk-table__caption govuk-visually-hidden">CMS and COMPASS product comparison by CMDB ID</caption>
+            <thead class="govuk-table__head">
+              <tr class="govuk-table__row">
+                <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">CMDB ID</button></th>
+                <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Match</button></th>
+                <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">CMS title</button></th>
+                <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">COMPASS title</button></th>
+                <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">FIPS ID</button></th>
+                <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Differences</button></th>
+              </tr>
+            </thead>
+            <tbody class="govuk-table__body">
+              @foreach (var row in Model.Products)
+              {
+                <tr class="govuk-table__row">
+                  <td class="govuk-table__cell"><code>@row.CmdbId</code></td>
+                  <td class="govuk-table__cell">
+                    <span class="dfe-f-badge dfe-f-badge--small @MatchBadgeClass(row.MatchStatus)">@MatchLabel(row.MatchStatus)</span>
+                  </td>
+                  <td class="govuk-table__cell">@(row.CmsTitle ?? "—")</td>
+                  <td class="govuk-table__cell">@(row.CompassTitle ?? "—")</td>
+                  <td class="govuk-table__cell">@(row.CmsFipsId ?? "—")</td>
+                  <td class="govuk-table__cell">
+                    @if (row.Differences.Count == 0)
+                    {
+                      <span class="dfe-c-text-muted">—</span>
+                    }
+                    else
+                    {
+                      @string.Join(", ", row.Differences)
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+
+        <details class="govuk-details govuk-!-margin-top-4" data-module="govuk-details">
+          <summary class="govuk-details__summary">
+            <span class="govuk-details__summary-text">Show detailed field comparison for filtered products</span>
+          </summary>
+          <div class="govuk-details__text">
+            <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+              <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed">
+                <caption class="govuk-table__caption govuk-visually-hidden">Detailed CMS and COMPASS field values</caption>
+                <thead class="govuk-table__head">
+                  <tr class="govuk-table__row">
+                    <th scope="col" class="govuk-table__header">CMDB ID</th>
+                    <th scope="col" class="govuk-table__header">Field</th>
+                    <th scope="col" class="govuk-table__header">CMS</th>
+                    <th scope="col" class="govuk-table__header">COMPASS</th>
+                  </tr>
+                </thead>
+                <tbody class="govuk-table__body">
+                  @foreach (var row in Model.Products)
+                  {
+                    <tr class="govuk-table__row">
+                      <td class="govuk-table__cell" rowspan="7"><code>@row.CmdbId</code></td>
+                      <td class="govuk-table__cell">Product URL</td>
+                      <td class="govuk-table__cell">@(row.CmsProductUrl ?? "—")</td>
+                      <td class="govuk-table__cell">@(row.CompassProductUrl ?? "—")</td>
+                    </tr>
+                    <tr class="govuk-table__row">
+                      <td class="govuk-table__cell">Phase</td>
+                      <td class="govuk-table__cell">@(row.CmsPhase ?? "—")</td>
+                      <td class="govuk-table__cell">@(row.CompassPhase ?? "—")</td>
+                    </tr>
+                    <tr class="govuk-table__row">
+                      <td class="govuk-table__cell">Channels</td>
+                      <td class="govuk-table__cell">@(string.IsNullOrWhiteSpace(row.CmsChannels) ? "—" : row.CmsChannels)</td>
+                      <td class="govuk-table__cell">@(string.IsNullOrWhiteSpace(row.CompassChannels) ? "—" : row.CompassChannels)</td>
+                    </tr>
+                    <tr class="govuk-table__row">
+                      <td class="govuk-table__cell">Types</td>
+                      <td class="govuk-table__cell">@(string.IsNullOrWhiteSpace(row.CmsTypes) ? "—" : row.CmsTypes)</td>
+                      <td class="govuk-table__cell">@(string.IsNullOrWhiteSpace(row.CompassTypes) ? "—" : row.CompassTypes)</td>
+                    </tr>
+                    <tr class="govuk-table__row">
+                      <td class="govuk-table__cell">User groups</td>
+                      <td class="govuk-table__cell">@(string.IsNullOrWhiteSpace(row.CmsUserGroups) ? "—" : row.CmsUserGroups)</td>
+                      <td class="govuk-table__cell">@(string.IsNullOrWhiteSpace(row.CompassUserGroups) ? "—" : row.CompassUserGroups)</td>
+                    </tr>
+                    <tr class="govuk-table__row">
+                      <td class="govuk-table__cell">Business areas</td>
+                      <td class="govuk-table__cell">@(string.IsNullOrWhiteSpace(row.CmsBusinessAreas) ? "—" : row.CmsBusinessAreas)</td>
+                      <td class="govuk-table__cell">@(string.IsNullOrWhiteSpace(row.CompassBusinessAreas) ? "—" : row.CompassBusinessAreas)</td>
+                    </tr>
+                    <tr class="govuk-table__row">
+                      <td class="govuk-table__cell">Status</td>
+                      <td class="govuk-table__cell">@(row.CmsState ?? "—")</td>
+                      <td class="govuk-table__cell">@(row.CompassStatus ?? "—")</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </details>
+      }
+    </section>
+  }
+</div>
+
+@section Scripts {
+  <script nonce="@Context.Items["csp-nonce"]">
+    (function () {
+      var selectAll = document.getElementById('sd-select-all');
+      if (!selectAll) return;
+      selectAll.addEventListener('change', function () {
+        document.querySelectorAll('.sd-product-checkbox').forEach(function (cb) {
+          cb.checked = selectAll.checked;
+        });
+      });
+    })();
+  </script>
+}

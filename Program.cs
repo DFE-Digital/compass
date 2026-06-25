@@ -598,6 +598,8 @@ builder.Services.AddScoped<Compass.Services.Fips.IFipsDirectorateLookupSyncServi
 builder.Services.Configure<Compass.Configuration.EnvironmentSyncOptions>(
     builder.Configuration.GetSection(Compass.Configuration.EnvironmentSyncOptions.SectionName));
 builder.Services.AddScoped<Compass.Services.EnvironmentSync.IEnvironmentSyncService, Compass.Services.EnvironmentSync.EnvironmentSyncService>();
+builder.Services.AddScoped<Compass.Services.ICmsCompassServiceDataComparisonService, Compass.Services.CmsCompassServiceDataComparisonService>();
+builder.Services.AddScoped<Compass.Services.ICmsCompassServiceDataSyncService, Compass.Services.CmsCompassServiceDataSyncService>();
 builder.Services.AddHttpClient<Compass.Services.Aiss.IAissSummaryService, Compass.Services.Aiss.AissSummaryService>()
     .SetHandlerLifetime(TimeSpan.FromMinutes(5));
 builder.Services.AddHttpClient<Compass.Services.Aiss.IAissProductAccessibilityService, Compass.Services.Aiss.AissProductAccessibilityService>()

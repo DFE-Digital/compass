@@ -45,9 +45,30 @@
               <td class="govuk-table__cell">
                 @if (aiss != null)
                 {
-                  <a href="@accessibilityTabUrl" class="govuk-link govuk-link--no-visited-state">
+                  string accessibilityHref;
+                  string accessibilityLinkHint;
+                  if (aiss.IsOnboarded && !string.IsNullOrEmpty(aiss.ServicePageUrl))
+                  {
+                    accessibilityHref = aiss.ServicePageUrl;
+                    accessibilityLinkHint = " — view in AISS (opens in new tab)";
+                  }
+                  else if (aiss.NotFound)
+                  {
+                    var onboardUrl = aiss.OnboardPageUrl(p.Id, p.UniqueID);
+                    accessibilityHref = !string.IsNullOrEmpty(onboardUrl) ? onboardUrl : accessibilityTabUrl;
+                    accessibilityLinkHint = !string.IsNullOrEmpty(onboardUrl)
+                      ? " — onboard in AISS (opens in new tab)"
+                      : " — view accessibility details";
+                  }
+                  else
+                  {
+                    accessibilityHref = accessibilityTabUrl;
+                    accessibilityLinkHint = " — view accessibility details";
+                  }
+                  var accessibilityExternal = accessibilityHref.StartsWith("http", StringComparison.OrdinalIgnoreCase);
+                  <a href="@accessibilityHref" class="govuk-link govuk-link--no-visited-state"@if (accessibilityExternal) { <text> target="_blank" rel="noopener noreferrer"</text> }>
                     <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--@aiss.AccessibilityBadgeColor">@aiss.AccessibilityBadgeLabel</span>
-                    <span class="govuk-visually-hidden"> — view accessibility details</span>
+                    <span class="govuk-visually-hidden">@accessibilityLinkHint</span>
                   </a>
                 }
                 else
