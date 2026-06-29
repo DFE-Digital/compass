@@ -3970,6 +3970,11 @@ public partial class CompassDbContext : DbContext
             e.Property(x => x.Reason).HasColumnType("nvarchar(max)");
         });
 
+        modelBuilder.Entity<Comment>(e =>
+        {
+            ConfigureRaidNarrativeColumns(e.Property(c => c.CommentText));
+        });
+
     }
 
     private const int RaidNarrativeMaxLength = 4000;

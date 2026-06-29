@@ -536,7 +536,7 @@ public partial class ModernWorkController : Controller
             RagStatusLookupId = model.RagStatusId,
             ActivityTypeLookupId = model.ActivityTypeId,
             RiskAppetiteLookupId = model.RiskAppetiteId,
-            IsFlagship = model.FlagshipProject,
+            IsFlagship = false,
             IsAiInitiative = false,
             IsSubjectToSpendControl = model.SubjectToSpendControl,
             RagJustification = string.IsNullOrWhiteSpace(initialRagJustification) ? null : initialRagJustification.Trim(),
@@ -2970,7 +2970,7 @@ public partial class ModernWorkController : Controller
             project.DeliveryPriorityId = model.PriorityId;
         project.ActivityTypeLookupId = model.ActivityTypeId;
         project.RiskAppetiteLookupId = model.RiskAppetiteId;
-        project.IsFlagship = model.FlagshipProject;
+        project.IsFlagship = false;
         project.IsSubjectToSpendControl = model.SubjectToSpendControl;
         project.StartDate = model.StartDate;
         project.TargetDeliveryDate = model.TargetEndDate;
